@@ -4,19 +4,21 @@
  * have none), the paper title as the weak second line, and the per-document
  * actions (the `\cite{}` copy for the BibTeX family, the single-document
  * download) outside the toggle. The verbatim entry body sits behind the
- * toggle, drawn by the host code block and bounded by `.exportCode`; its
- * header names the format in the user's language, which is why `lang` carries
- * the localized label here while the tool card's code block carries the raw
- * format id beside its own format tag. The key stays the row's visible title:
+ * toggle, drawn by the host code block and bounded by `.exportCode`; `lang`
+ * carries the raw translator id as the grammar hint, matching the tool card
+ * and the export artifact card, while the localized format name rides in a
+ * tag beside the row actions. The key stays the row's visible title:
  * `DisclosureRow` takes no title, so the old native key tooltip has no home.
  * @module dsh-zotero/client/components/ExportDocumentRow
  */
 
 import { useMemo, useState } from 'react'
 import {
+  Button,
   CodeBlock,
   DisclosureRow,
   IconChevronDownOutlineRegular,
+  Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { shortKeyOf } from '../../sources/presenters.js'
@@ -26,7 +28,6 @@ import { downloadBlob } from '../download.ts'
 import { extensionOf, formatLabelOf, mimeOf, sanitizeFileStem } from '../export-formats.ts'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
-import quiet from './quiet.module.css'
 
 interface ExportDocumentRowProps {
   readonly doc: ExportedDocument
@@ -63,19 +64,20 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
         }}
         headerAccessory={
           <span className={css.lineActions}>
+            <Tag tone="info">{formatLabelOf(doc.format, t)}</Tag>
             {citeCommand !== '' && (
               <CopyButton value={citeCommand} label={t('copyCite')} copiedLabel={t('copied')} />
             )}
-            <button type="button" className={quiet.quiet} onClick={download}>
+            <Button variant="outline" size="sm" onClick={download}>
               {`${t('downloadArtifact')} ${extensionOf(doc.format)}`}
-            </button>
+            </Button>
           </span>
         }
       >
         <div className={css.exportBody}>
           <CodeBlock
             code={doc.text}
-            lang={formatLabelOf(doc.format, t)}
+            lang={doc.format}
             copyLabel={t('copyExport')}
             copiedLabel={t('copied')}
             className={css.exportCode}
@@ -87,14 +89,18 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
       )}
       {doc.citationKey !== undefined && (
         <p className={css.documentTitle}>
-          Zotero citation key{doc.citationKeySource ? ` (${doc.citationKeySource})` : ''}:{' '}
-          {doc.citationKey}
+          {t('toolZoteroCitationKeyLine', {
+            source: doc.citationKeySource ? ` (${doc.citationKeySource})` : '',
+            key: doc.citationKey,
+          })}
         </p>
       )}
       {doc.citationKeyConflict !== undefined && (
         <p className={css.documentTitle}>
-          Citation key conflict: native={doc.citationKeyConflict.native}; extra=
-          {doc.citationKeyConflict.extra}
+          {t('toolCitationKeyConflict', {
+            native: doc.citationKeyConflict.native,
+            extra: doc.citationKeyConflict.extra,
+          })}
         </p>
       )}
     </section>

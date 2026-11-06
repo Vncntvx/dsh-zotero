@@ -17,6 +17,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { PdfCapability } from '../../sources/source-capabilities.ts'
 import css from './open.module.css'
+import linkCss from '../link.module.css'
 
 interface PdfReadButtonProps {
   /** Optional structured PDF capability; extracts ref, filePath, or webUrl automatically. */
@@ -148,13 +149,13 @@ export function PdfReadButton({
     return (
       <button
         type="button"
-        className={clsx(css.link, className, resolving && css.resolving)}
+        className={clsx(linkCss.link, className, resolving && css.resolving)}
         onClick={handleClick}
         aria-label={unavailableReason ?? displayLabel}
         title={unavailableReason ?? tooltip}
         disabled={disabled}
       >
-        <IconDeliverDocRegular className={css.linkIcon} />
+        <IconDeliverDocRegular className={linkCss.linkIcon} />
         {displayLabel}
       </button>
     )

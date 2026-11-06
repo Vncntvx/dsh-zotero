@@ -51,12 +51,14 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('0 matched of 1')).toBeTruthy()
+    expect(
+      screen.getByText(mockT('toolSummaryMatchReferences', { matched: 0, input: 1 })),
+    ).toBeTruthy()
     expect(screen.getByText('entry-1')).toBeTruthy()
     expect(screen.getByText(/citationKey=nativeKey/)).toBeTruthy()
-    expect(screen.getByText(/Citation key conflict/).textContent).toContain(
-      'Citation key conflict: native=nativeKey; extra=oldKey',
-    )
+    expect(
+      screen.getByText(mockT('toolCitationKeyConflict', { native: 'nativeKey', extra: 'oldKey' })),
+    ).toBeTruthy()
     expect(screen.getByText('Review the citation-key source conflict.')).toBeTruthy()
   })
 
@@ -88,7 +90,9 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('1 matched of 2')).toBeTruthy()
+    expect(
+      screen.getByText(mockT('toolSummaryMatchReferences', { matched: 1, input: 2 })),
+    ).toBeTruthy()
     expect(screen.getByText('entry-2')).toBeTruthy()
     expect(screen.getByText(/Selected paper/)).toBeTruthy()
     expect(screen.getByText('Raw match payload')).toBeTruthy()
@@ -123,7 +127,9 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('5 matched of 25')).toBeTruthy()
+    expect(
+      screen.getByText(mockT('toolSummaryMatchReferences', { matched: 5, input: 25 })),
+    ).toBeTruthy()
   })
 
   it('shows the empty-result state and raw fallback when no match rows arrive', () => {
@@ -141,7 +147,7 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('No reference matches returned.')).toBeTruthy()
+    expect(screen.getByText(mockT('toolMatchCandidatesEmpty'))).toBeTruthy()
     unmount()
 
     const raw = settled({
@@ -173,6 +179,6 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(screen.getAllByText('Matching local references')).toHaveLength(2)
+    expect(screen.getAllByText(mockT('toolMatchReferencesRunning'))).toHaveLength(2)
   })
 })

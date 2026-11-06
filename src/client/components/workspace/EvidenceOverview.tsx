@@ -9,6 +9,7 @@
  * @module dsh-zotero/client/components/workspace/EvidenceOverview
  */
 
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -38,9 +39,9 @@ export function EvidenceOverview({
   const sources = filterSources(workspace.sources, 'evidence')
   return (
     <div className={css.evidencePage}>
-      <button type="button" className={css.backAction} onClick={onBack}>
+      <Button variant="outline" size="sm" className={css.backSeat} onClick={onBack}>
         {t('backToSources')}
-      </button>
+      </Button>
       {sources.length === 0 ? (
         <p className={css.emptyNote}>{t('evidenceEmptyNote')}</p>
       ) : (

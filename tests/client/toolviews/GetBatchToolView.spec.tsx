@@ -50,7 +50,9 @@ describe('GetBatchToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('1 of 2 read · 1 failed')).toBeTruthy()
+    expect(
+      screen.getByText(mockT('toolSummaryGetBatchDone', { succeeded: 1, requested: 2, failed: 1 })),
+    ).toBeTruthy()
     expect(screen.getByText('A Paper')).toBeTruthy()
     expect(screen.getByText('paperA')).toBeTruthy()
     expect(screen.getByText('Item not found')).toBeTruthy()
@@ -83,9 +85,11 @@ describe('GetBatchToolView', () => {
         })}
       />,
     )
-    expect(screen.getByText('1 of 2 read · 0 failed')).toBeTruthy()
-    expect(screen.getByText('Read')).toBeTruthy()
-    expect(screen.getByText('Error')).toBeTruthy()
+    expect(
+      screen.getByText(mockT('toolSummaryGetBatchDone', { succeeded: 1, requested: 2, failed: 0 })),
+    ).toBeTruthy()
+    expect(screen.getByText(mockT('toolGetBatchRowOk'))).toBeTruthy()
+    expect(screen.getByText(mockT('toolGetBatchRowError'))).toBeTruthy()
     expect(screen.queryByText('Discarded row')).toBeNull()
   })
 
@@ -119,6 +123,6 @@ describe('GetBatchToolView', () => {
         })}
       />,
     )
-    expect(screen.getAllByText('Reading Zotero items')).toHaveLength(2)
+    expect(screen.getAllByText(mockT('toolGetBatchRunning'))).toHaveLength(2)
   })
 })

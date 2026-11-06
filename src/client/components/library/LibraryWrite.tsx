@@ -1,7 +1,12 @@
 /** The write form: a submission opens the session approval and plan card of the matching write tool. */
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  DisclosureRow,
+  IconEditOutlineRegular,
+  Input,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
@@ -109,6 +114,7 @@ export function LibraryWrite({
   readonly searchRef?: string
   readonly refreshAffected: (kind: 'items' | 'collections' | 'savedSearches') => void
 }) {
+  const [open, setOpen] = useState(false)
   const [operation, setOperation] = useState<Operation>('updateItem')
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [conditions, setConditions] = useState([{ condition: '', operator: '', value: '' }])
@@ -248,8 +254,14 @@ export function LibraryWrite({
     }
   }
   return (
-    <details className={css.writeCard}>
-      <summary>{t('libraryWriteActions')}</summary>
+    <DisclosureRow
+      icon={<IconEditOutlineRegular />}
+      title={t('libraryWriteActions')}
+      open={open}
+      expandable
+      onToggle={() => setOpen((value) => !value)}
+      className={css.writeCard}
+    >
       <p className={css.listNote}>{t('libraryWriteApprovalHint')}</p>
       {!sessionRunning && (
         <p className={css.listNote} role="status">
@@ -265,7 +277,13 @@ export function LibraryWrite({
         <fieldset disabled={busy || !sessionRunning || !writeAllowed} className={css.writeForm}>
           <label className={css.writeField}>
             <span className={css.caption}>{t('libraryWriteSession')}</span>
-            <input className={css.writeInput} value={sessionId} readOnly aria-readonly="true" />
+            <Input
+              className={css.writeInputSeat}
+              value={sessionId}
+              readOnly
+              aria-readonly="true"
+              aria-label={t('libraryWriteSession')}
+            />
           </label>
           <label className={css.writeField}>
             <span className={css.caption}>{t('libraryWriteOperation')}</span>
@@ -303,9 +321,16 @@ export function LibraryWrite({
                                 ? t('libraryWriteOperator')
                                 : t('libraryWriteValue')}
                           </span>
-                          <input
-                            className={css.writeInput}
+                          <Input
+                            className={css.writeInputSeat}
                             value={row[part]}
+                            aria-label={
+                              part === 'condition'
+                                ? t('libraryWriteCondition')
+                                : part === 'operator'
+                                  ? t('libraryWriteOperator')
+                                  : t('libraryWriteValue')
+                            }
                             onChange={(event) =>
                               setConditions((rows) =>
                                 rows.map((entry, i) =>
@@ -379,13 +404,13 @@ export function LibraryWrite({
                   ? t('libraryWriteFailed')
                   : t('libraryWriteApplied')}
           </strong>
-          <pre>
+          <div className={css.writeResultText}>
             {result.code}
             {result.code ? '\n' : ''}
             {result.message}
-          </pre>
+          </div>
         </div>
       )}
-    </details>
+    </DisclosureRow>
   )
 }

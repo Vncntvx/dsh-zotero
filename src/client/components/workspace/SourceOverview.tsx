@@ -26,7 +26,6 @@ import { BlockedReadAction } from '../open/BlockedReadAction.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../open/ZoteroLocateActions.tsx'
 import css from './workspace.module.css'
-import quiet from '../quiet.module.css'
 
 /** The display label of one search mode. */
 export function modeLabelOf(mode: 'metadata' | 'everything', t: TranslateNS<'zotero'>): string {
@@ -111,7 +110,7 @@ export function SourceOverview({
       <div className={css.actionRow}>
         {pdfCapability !== null &&
           (evidenceMatch === 'mismatch' ? (
-            <BlockedReadAction label={t('readPdf')} t={t} className={quiet.quiet} />
+            <BlockedReadAction label={t('readPdf')} t={t} />
           ) : (
             <PdfReadButton
               capability={pdfCapability}
@@ -119,14 +118,12 @@ export function SourceOverview({
               resolveAttachment={resolveAttachment}
               label={t('readPdf')}
               t={t}
-              className={quiet.quiet}
             />
           ))}
         <ZoteroLocateActions
           title={item.title}
           itemRef={item.ref}
           t={t}
-          className={quiet.quiet}
           openProtocol={openProtocol}
         />
         {setDraft !== undefined && (
@@ -168,16 +165,16 @@ export function SourceOverview({
       ) : (
         <p className={css.note}>{t('overviewNoSearch')}</p>
       )}
-      <button
-        type="button"
-        className={css.detailToggle}
+      <Button
+        variant="ghost"
+        size="sm"
         aria-expanded={detailOpen}
         onClick={() => {
           setDetailOpen(!detailOpen)
         }}
       >
         {detailOpen ? t('searchDetailClose') : t('searchDetailOpen')}
-      </button>
+      </Button>
       {detailOpen && (
         <div className={css.section}>
           <p className={css.note}>{`${t('refLine')} ${item.ref}`}</p>

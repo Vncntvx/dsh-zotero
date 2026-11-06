@@ -6,13 +6,21 @@
  * `label` doubles as the accessible name. The feedback lane itself lives in
  * {@link useCopyFeedback}, so the citation action row and this button share
  * one stale-answer rule.
+ *
+ * The control is the host `Button`; `link` renders the shared text-link button
+ * because the host has no link-button primitive. `className` carries layout
+ * only.
  * @module dsh-zotero/client/components/CopyButton
  */
 
 import { type MouseEvent, type ReactNode } from 'react'
+import clsx from 'clsx'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCopyFeedback } from './useCopyFeedback.ts'
-import quiet from './quiet.module.css'
+import linkCss from './link.module.css'
+
+/** Which host control the copy action wears. */
+export type CopyButtonVariant = 'outline' | 'ghost' | 'link'
 
 interface CopyButtonProps {
   readonly value: string
@@ -20,19 +28,15 @@ interface CopyButtonProps {
   readonly label: string
   /** The visible text while the copied-feedback window is open. */
   readonly copiedLabel: string
-  /**
-   * Placement class from the caller's own surface. Defaults to the row/card
-   * text button; the inspector's action row passes its bordered pill so a copy
-   * beside the other actions keeps the row's rhythm.
-   */
+  /** Layout-only placement class; the host Button owns all geometry. */
   readonly className?: string
   /** Optional hover tooltip for extra guidance. */
   readonly title?: string
   /** Whether the copy action is disabled. */
   readonly disabled?: boolean
-  /** Renders as official Button variant="outline" size="sm". */
-  readonly asButton?: boolean
-  /** Optional leading icon node when rendered as Button. */
+  /** Which control to render; defaults to the outlined host Button. */
+  readonly variant?: CopyButtonVariant
+  /** Optional leading icon node. */
   readonly icon?: ReactNode
 }
 
@@ -43,45 +47,37 @@ export function CopyButton({
   className,
   title,
   disabled,
-  asButton = false,
+  variant = 'outline',
   icon,
 }: CopyButtonProps) {
   const { phase, copyText } = useCopyFeedback(value)
   const copied = phase === 'done'
+  const text = copied ? copiedLabel : label
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation()
     copyText(value)
   }
 
-  if (asButton) {
+  const shared = {
+    'aria-label': label,
+    title: title ?? label,
+    disabled,
+    onClick: handleClick,
+  }
+
+  if (variant === 'link') {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        className={className}
-        aria-label={label}
-        title={title ?? label}
-        disabled={disabled}
-        icon={icon}
-        onClick={handleClick}
-      >
-        {copied ? copiedLabel : label}
-      </Button>
+      <button type="button" className={clsx(linkCss.link, className)} {...shared}>
+        {icon}
+        <span>{text}</span>
+      </button>
     )
   }
 
   return (
-    <button
-      type="button"
-      className={className ?? quiet.quiet}
-      aria-label={label}
-      title={title ?? label}
-      disabled={disabled}
-      onClick={handleClick}
-    >
-      {icon}
-      <span>{copied ? copiedLabel : label}</span>
-    </button>
+    <Button variant={variant} size="sm" icon={icon} className={className} {...shared}>
+      {text}
+    </Button>
   )
 }

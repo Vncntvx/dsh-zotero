@@ -11,7 +11,7 @@
  */
 
 import { type ReactNode } from 'react'
-import { Checkbox, RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
 
@@ -71,14 +71,9 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
         {props.overridden ? (
           <span className={css.badges}>
             <Tag tone="neutral">{props.overriddenLabel}</Tag>
-            <button
-              type="button"
-              className={css.reset}
-              disabled={props.disabled}
-              onClick={props.onReset}
-            >
+            <Button variant="ghost" size="sm" disabled={props.disabled} onClick={props.onReset}>
               {props.resetLabel}
-            </button>
+            </Button>
           </span>
         ) : null}
       </div>

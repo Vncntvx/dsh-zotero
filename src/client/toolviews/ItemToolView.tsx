@@ -21,6 +21,7 @@ import {
 } from '../../sources/presenters.js'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import linkCss from '../components/link.module.css'
 
 type ItemToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_get'> & PropsLocale<'zotero'>
 
@@ -161,13 +162,13 @@ export function ItemToolView(props: ItemToolViewProps) {
                     label={t('readPdf')}
                     t={t}
                     variant="link"
-                    className={css.actionLink}
+                    className={linkCss.linkDense}
                   />
                 )}
                 <ZoteroLocateActions
                   itemRef={preview.ref}
                   variant="link"
-                  className={css.actionLink}
+                  className={linkCss.linkDense}
                   t={t}
                   openProtocol={client.openProtocol}
                 />
@@ -212,14 +213,18 @@ export function ItemToolView(props: ItemToolViewProps) {
               {getItemView?.venue && <div className={css.itemMeta}>{getItemView.venue}</div>}
               {getItemView?.citationKey && (
                 <div className={css.itemMeta}>
-                  Citation key ({getItemView.citationKeySource ?? 'unknown'}):{' '}
-                  {getItemView.citationKey}
+                  {t('toolCitationKeyLine', {
+                    source: getItemView.citationKeySource ?? t('toolStatusUnknown'),
+                    key: getItemView.citationKey,
+                  })}
                 </div>
               )}
               {getItemView?.citationKeyConflict && (
                 <div className={css.coverageNotice}>
-                  Citation key conflict: native={getItemView.citationKeyConflict.native}; extra=
-                  {getItemView.citationKeyConflict.extra}
+                  {t('toolCitationKeyConflict', {
+                    native: getItemView.citationKeyConflict.native,
+                    extra: getItemView.citationKeyConflict.extra,
+                  })}
                 </div>
               )}
 
@@ -267,7 +272,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                     label={t('readPdf')}
                     t={t}
                     variant="link"
-                    className={css.actionLink}
+                    className={linkCss.linkDense}
                   />
                 )}
                 <ZoteroLocateActions
@@ -275,7 +280,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                   itemRef={ref}
                   t={t}
                   variant="link"
-                  className={css.actionLink}
+                  className={linkCss.linkDense}
                   openProtocol={client.openProtocol}
                 />
               </div>
@@ -284,7 +289,9 @@ export function ItemToolView(props: ItemToolViewProps) {
             {previewSection(t(CHILD_KIND_LABEL.note), notePreviews)}
             {previewSection(t(CHILD_KIND_LABEL.annotation), annotationPreviews)}
 
-            {rawText && <RawTextFallback text={rawText} />}
+            {rawText && (
+              <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
+            )}
 
             {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
           </>

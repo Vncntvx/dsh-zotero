@@ -7,6 +7,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroLibraryIcon } from '../library/ZoteroLibraryIcon.tsx'
+import { IconButton } from '../IconButton.tsx'
 import css from './composer.module.css'
 
 export interface ZoteroComposerButtonProps {
@@ -18,15 +19,14 @@ export function ZoteroComposerButton({ t, onClick }: ZoteroComposerButtonProps) 
   const label = t('tabLibrary')
   return (
     <Tooltip label={label} side="top" delayMs={400}>
-      <button
-        type="button"
-        className={css.composerButton}
+      <IconButton
+        shape="round"
+        icon={<ZoteroLibraryIcon size={16} />}
+        className={css.composerTone}
         onClick={onClick}
         aria-label={label}
         title={label}
-      >
-        <ZoteroLibraryIcon size={16} />
-      </button>
+      />
     </Tooltip>
   )
 }

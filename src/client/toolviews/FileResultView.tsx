@@ -6,7 +6,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { downloadBlob } from '../download.ts'
 import { RESULT_PREVIEW_CHARS, fileNameForFormat, mimeOf } from '../export-formats.ts'
 import css from './toolviews.module.css'
-import quiet from '../components/quiet.module.css'
+import { Button, CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 
 type Props = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
 export function FileResultView(props: Props) {
@@ -28,16 +28,16 @@ function FileResultBody(props: Props & { sessionId: string }) {
       <div className={css.coverageNotice}>
         {typeof meta?.summary === 'string' ? meta.summary : props.t('resultStored')}
       </div>
-      <button
-        type="button"
-        className={quiet.quietDense}
+      <Button
+        variant="outline"
+        size="sm"
         disabled={state.loading}
         onClick={() => {
           void load()
         }}
       >
         {props.t('readCompleteResult')}
-      </button>
+      </Button>
       {state.error && <div role="alert">{state.error}</div>}
       {state.body !== undefined && (
         <>
@@ -45,11 +45,10 @@ function FileResultBody(props: Props & { sessionId: string }) {
             value={state.body.text}
             label={props.t('copy')}
             copiedLabel={props.t('copied')}
-            className={quiet.quietDense}
           />
-          <button
-            type="button"
-            className={quiet.quietDense}
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() =>
               downloadBlob(
                 state.body!.text,
@@ -59,11 +58,18 @@ function FileResultBody(props: Props & { sessionId: string }) {
             }
           >
             {props.t('downloadArtifact')}
-          </button>
+          </Button>
           {state.body.text.length > RESULT_PREVIEW_CHARS && (
             <div>{props.t('exportDisplayPreview')}</div>
           )}
-          <pre className={css.codeBox}>{state.body.text.slice(0, RESULT_PREVIEW_CHARS)}</pre>
+          <CodeBlock
+            code={state.body.text.slice(0, RESULT_PREVIEW_CHARS)}
+            lang={state.body.format}
+            showHeader={false}
+            copyLabel={props.t('copy')}
+            copiedLabel={props.t('copied')}
+            className={css.rawCode}
+          />
         </>
       )}
     </div>

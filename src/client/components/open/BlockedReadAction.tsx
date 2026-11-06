@@ -16,7 +16,7 @@ import clsx from 'clsx'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './open.module.css'
-import quiet from '../quiet.module.css'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 
 interface BlockedReadActionProps {
   readonly label: string
@@ -32,9 +32,10 @@ export function BlockedReadAction({ label, t, className }: BlockedReadActionProp
   return (
     <>
       <Tooltip label={reason}>
-        <button
-          type="button"
-          className={clsx(className ?? quiet.quiet, css.blocked)}
+        <Button
+          variant="outline"
+          size="sm"
+          className={clsx(className, css.blocked)}
           aria-disabled="true"
           aria-describedby={reasonId}
           onClick={(event) => {
@@ -43,7 +44,7 @@ export function BlockedReadAction({ label, t, className }: BlockedReadActionProp
           }}
         >
           {label}
-        </button>
+        </Button>
       </Tooltip>
       <span id={reasonId} className={css.srOnly}>
         {reason}

@@ -51,8 +51,12 @@ export function GetBatchToolView(props: Props) {
 
   const summary =
     view.succeeded === undefined
-      ? `${view.requested} refs`
-      : `${view.succeeded} of ${view.requested} read · ${view.failed ?? 0} failed`
+      ? t('toolSummaryGetBatch', { requested: view.requested })
+      : t('toolSummaryGetBatchDone', {
+          succeeded: view.succeeded,
+          requested: view.requested,
+          failed: view.failed ?? 0,
+        })
 
   return (
     <ZoteroToolRow
@@ -62,13 +66,13 @@ export function GetBatchToolView(props: Props) {
       inspect={inspect}
       t={t}
       icon={icon}
-      title="Read Zotero items"
-      summary={isToolRunning(block) ? 'Reading Zotero items' : summary}
+      title={t('toolTitleGetBatch')}
+      summary={isToolRunning(block) ? t('toolGetBatchRunning') : summary}
       errorSummary={view.error}
     >
       {({ isRunning }) =>
         isRunning ? (
-          <RunningNotice text="Reading Zotero items" />
+          <RunningNotice text={t('toolGetBatchRunning')} />
         ) : view.rows.length > 0 ? (
           <div className={css.cardList}>
             {view.rows.map((row, index) => (
@@ -76,7 +80,9 @@ export function GetBatchToolView(props: Props) {
                 <div className={css.itemHeader}>
                   <span className={css.itemTitle}>{row.title ?? row.ref}</span>
                   <span className={css.itemMeta}>
-                    {row.status === 'ok' ? (row.citationKey ?? 'Read') : (row.code ?? 'Error')}
+                    {row.status === 'ok'
+                      ? (row.citationKey ?? t('toolGetBatchRowOk'))
+                      : (row.code ?? t('toolGetBatchRowError'))}
                   </span>
                 </div>
                 {row.status === 'error' && row.message && (
@@ -87,7 +93,7 @@ export function GetBatchToolView(props: Props) {
             ))}
           </div>
         ) : view.raw ? (
-          <RawTextFallback text={view.raw} />
+          <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
         ) : null
       }
     </ZoteroToolRow>

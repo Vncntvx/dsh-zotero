@@ -19,6 +19,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
+  Button,
   IconChevronDownOutlineRegular,
   IconChevronsUpDownOutlineMedium,
   IconEllipsisOutlineMedium,
@@ -31,6 +32,7 @@ import {
   Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton } from '../IconButton.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -355,14 +357,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               open={diagMenuOpen}
               anchor={
                 <Tooltip label={t('detailsLabel')} side="bottom" delayMs={500}>
-                  <button
-                    type="button"
-                    className={css.toolButton}
+                  <IconButton
+                    shape="square"
+                    icon={<IconEllipsisOutlineMedium className={css.actionIcon} />}
                     aria-label={t('detailsLabel')}
                     onClick={() => setDiagMenuOpen(!diagMenuOpen)}
-                  >
-                    <IconEllipsisOutlineMedium className={css.actionIcon} />
-                  </button>
+                  />
                 </Tooltip>
               }
               items={diagnosticMenuItems}
@@ -375,14 +375,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
 
         <div className={css.refreshWrap}>
           <Tooltip label={t('refresh')} side="bottom" delayMs={500}>
-            <button
-              type="button"
-              className={css.toolButton}
+            <IconButton
+              shape="square"
+              icon={<IconRefreshOutlineMedium className={css.actionIcon} />}
               onClick={() => feed.refresh()}
               aria-label={t('refresh')}
-            >
-              <IconRefreshOutlineMedium className={css.actionIcon} />
-            </button>
+            />
           </Tooltip>
         </div>
 
@@ -582,9 +580,10 @@ function LibrarySelect({
       onClose={() => setOpen(false)}
       anchor={
         <Tooltip label={`${t('librarySelectLibrary')}: ${currentName}`} side="bottom" delayMs={500}>
-          <button
-            type="button"
-            className={css.selectorButton}
+          <Button
+            variant="outline"
+            size="sm"
+            className={css.selectorSeat}
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={t('librarySelectLibrary')}
@@ -593,7 +592,7 @@ function LibrarySelect({
           >
             <span className={css.selectorLabel}>{currentName}</span>
             <IconChevronDownOutlineRegular size={12} className={css.dropdownChevron} />
-          </button>
+          </Button>
         </Tooltip>
       }
       items={items}
@@ -640,9 +639,10 @@ function SortSelect({
       onClose={() => setOpen(false)}
       anchor={
         <Tooltip label={`${t('librarySortLabel')}: ${currentLabel}`} side="bottom" delayMs={500}>
-          <button
-            type="button"
-            className={css.selectorButton}
+          <Button
+            variant="outline"
+            size="sm"
+            className={css.selectorSeat}
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={t('librarySortLabel')}
@@ -651,7 +651,7 @@ function SortSelect({
           >
             <IconChevronsUpDownOutlineMedium size={14} className={css.sortIcon} />
             <span className={css.sortLabel}>{currentLabel}</span>
-          </button>
+          </Button>
         </Tooltip>
       }
       items={items}

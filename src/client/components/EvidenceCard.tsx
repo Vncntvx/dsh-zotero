@@ -28,6 +28,7 @@ import { BlockedReadAction } from './open/BlockedReadAction.tsx'
 import { PdfReadButton } from './open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from './open/ZoteroLocateActions.tsx'
 import css from './cards.module.css'
+import linkCss from './link.module.css'
 
 /** One deduplicated passage with its tags and optional annotation deep link. */
 function PassageRow({
@@ -66,7 +67,7 @@ function PassageRow({
         )}
         {targetPdfRef !== null &&
           (evidenceMatch === 'mismatch' ? (
-            <BlockedReadAction label={t('readPdf')} t={t} className={css.link} />
+            <BlockedReadAction label={t('readPdf')} t={t} className={linkCss.link} />
           ) : (
             <PdfReadButton
               attachmentRef={targetPdfRef}
@@ -75,21 +76,21 @@ function PassageRow({
               resolveAttachment={resolveAttachment}
               t={t}
               variant="link"
-              className={css.link}
+              className={linkCss.link}
             />
           ))}
         {annotationUrl !== null && (
           <>
             <button
               type="button"
-              className={css.link}
+              className={linkCss.link}
               onClick={() => {
                 if (openProtocol !== undefined) void openProtocol(annotationUrl)
               }}
               title={t('openInZoteroTooltip')}
               aria-label={t('openInZotero')}
             >
-              <IconLinkOutlineRegular size={12} className={css.linkIcon} />
+              <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
               <span>{t('openInZotero')}</span>
             </button>
             <CopyButton
@@ -97,7 +98,7 @@ function PassageRow({
               label={t('copyZoteroLink')}
               copiedLabel={t('copied')}
               title={t('copyZoteroLinkTooltip')}
-              className={css.link}
+              className={linkCss.link}
             />
           </>
         )}
@@ -153,7 +154,7 @@ export function EvidenceCard({
         <span className={css.note}>{joinNonEmpty(item.creators, item.year)}</span>
         {pdfCapability !== null &&
           (evidenceMatch === 'mismatch' ? (
-            <BlockedReadAction label={t('readPdf')} t={t} className={css.link} />
+            <BlockedReadAction label={t('readPdf')} t={t} className={linkCss.link} />
           ) : (
             <PdfReadButton
               capability={pdfCapability}
@@ -161,7 +162,7 @@ export function EvidenceCard({
               resolveAttachment={resolveAttachment}
               t={t}
               variant="link"
-              className={css.link}
+              className={linkCss.link}
             />
           ))}
         {selectUrl !== null && (
@@ -171,7 +172,7 @@ export function EvidenceCard({
             selectUrl={selectUrl}
             t={t}
             variant="link"
-            className={css.link}
+            className={linkCss.link}
             openProtocol={openProtocol}
           />
         )}

@@ -22,7 +22,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { bibTexKeysOf, citeCommandOf } from '../../sources/bibtex.js'
 import type { ExportArtifact } from '../../sources/model.js'
 import { downloadBlob } from '../download.ts'
-import quiet from './quiet.module.css'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CopyButton } from './CopyButton.tsx'
 import css from './cards.module.css'
 import { useCompleteResult } from './useCompleteResult.ts'
@@ -105,22 +105,22 @@ function ExportCardBody({
         headerAccessory={
           <span className={css.lineActions}>
             {text === undefined ? (
-              <button
-                type="button"
-                className={quiet.quiet}
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={state.loading || !sessionId}
                 onClick={() => {
                   void load()
                 }}
               >
                 {t('readCompleteResult')}
-              </button>
+              </Button>
             ) : (
               <>
                 <CopyButton value={text} label={t('copyExport')} copiedLabel={t('copied')} />
-                <button type="button" className={quiet.quiet} onClick={download}>
+                <Button variant="outline" size="sm" onClick={download}>
                   {`${t('downloadArtifact')} ${extensionOf(artifact.format)}`}
-                </button>
+                </Button>
               </>
             )}
           </span>

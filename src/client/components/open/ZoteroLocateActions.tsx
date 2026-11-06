@@ -7,17 +7,17 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
-import css from './open.module.css'
-import quiet from '../quiet.module.css'
+import linkCss from '../link.module.css'
 
 interface ZoteroLocateActionsProps {
   readonly title?: string | null
   readonly itemRef?: string
   readonly selectUrl?: string | null
   readonly t: TranslateNS<'zotero'>
+  /** Layout-only class; geometry comes from the host Button or link.module.css. */
   readonly className?: string
   readonly variant?: 'button' | 'link'
   /** The shared client face's Host-backed launcher; absent only in bare tests. */
@@ -34,8 +34,8 @@ export function ZoteroLocateActions({
   openProtocol,
 }: ZoteroLocateActionsProps) {
   const canonicalUrl = selectUrl !== undefined ? selectUrl : itemRef ? selectUrlOf(itemRef) : null
-  const baseClass = variant === 'link' ? css.link : quiet.quiet
-  const buttonClass = clsx(baseClass, className)
+  const isLink = variant === 'link'
+  const copyVariant = isLink ? 'link' : 'outline'
 
   const handleOpen = () => {
     if (canonicalUrl && openProtocol !== undefined) {
@@ -51,28 +51,45 @@ export function ZoteroLocateActions({
           label={t('copyTitle')}
           copiedLabel={t('copied')}
           title={t('copyTitleTooltip')}
-          className={buttonClass}
+          variant={copyVariant}
+          className={className}
         />
       )}
       {canonicalUrl && (
         <>
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={handleOpen}
-            disabled={openProtocol === undefined}
-            title={t('openInZoteroTooltip')}
-            aria-label={t('openInZotero')}
-          >
-            <IconLinkOutlineRegular size={12} className={css.linkIcon} />
-            <span>{t('openInZotero')}</span>
-          </button>
+          {isLink ? (
+            <button
+              type="button"
+              className={clsx(linkCss.link, className)}
+              onClick={handleOpen}
+              disabled={openProtocol === undefined}
+              title={t('openInZoteroTooltip')}
+              aria-label={t('openInZotero')}
+            >
+              <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
+              <span>{t('openInZotero')}</span>
+            </button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className={className}
+              icon={<IconLinkOutlineRegular size={12} />}
+              onClick={handleOpen}
+              disabled={openProtocol === undefined}
+              title={t('openInZoteroTooltip')}
+              aria-label={t('openInZotero')}
+            >
+              {t('openInZotero')}
+            </Button>
+          )}
           <CopyButton
             value={canonicalUrl}
             label={t('copyZoteroLink')}
             copiedLabel={t('copied')}
             title={t('copyZoteroLinkTooltip')}
-            className={buttonClass}
+            variant={copyVariant}
+            className={className}
           />
         </>
       )}

@@ -33,7 +33,6 @@ import {
 import { CopyButton } from '../components/CopyButton.tsx'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
-import quiet from '../components/quiet.module.css'
 
 type BrowseToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_browse' | 'zotero_changes'> &
   PropsLocale<'zotero'>
@@ -230,7 +229,6 @@ function ChangesBody({
               })}
               label={t('copy')}
               copiedLabel={t('copied')}
-              className={quiet.quietDense}
             />
           </div>
         </div>
@@ -383,7 +381,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
             )
           }
           return rawText ? (
-            <RawTextFallback text={rawText} />
+            <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
           ) : (
             <div className={css.coverageNotice}>{t('toolNoResults')}</div>
           )
@@ -399,7 +397,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
             <>
               {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
               {rawText ? (
-                <RawTextFallback text={rawText} />
+                <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
               ) : (
                 <div className={css.coverageNotice}>{t('toolNoResults')}</div>
               )}

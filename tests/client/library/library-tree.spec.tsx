@@ -182,6 +182,9 @@ describe('collection tree navigation', () => {
       }),
     )
     expect(props.retryTree).toHaveBeenCalledWith(rootRef)
+    for (const trigger of screen.getAllByRole('button', { name: zh.librarySearchConditions })) {
+      fireEvent.click(trigger)
+    }
     expect(screen.getByText('title · contains · term')).toBeTruthy()
   })
 

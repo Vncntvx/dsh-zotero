@@ -6,7 +6,7 @@
  * @module tests/client/library/access
  */
 
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
 import { CONNECTED, mountPanel } from '../helpers/library-panel-harness.tsx'
@@ -33,6 +33,9 @@ describe('the library panel access gate', () => {
       { useAccess: () => false },
     )
     expect(await screen.findByText(zh.libraryConnected)).toBeDefined()
+    // The drawer is a controlled DisclosureRow: open it before reading its
+    // body, as a reader would.
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryWriteActions }))
     // The drawer stays mounted with the summary visible, but main's write
     // plumbing states the refusal and disables the form instead of hiding it.
     expect(await screen.findByText(zh.libraryWriteNeedsAccess)).toBeDefined()

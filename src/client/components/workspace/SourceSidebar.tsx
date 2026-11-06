@@ -37,6 +37,8 @@ import {
 } from '../../sources/selectors.ts'
 import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspaceView.tsx'
 import { SourceListItem } from './SourceListItem.tsx'
+import { IconButton } from '../IconButton.tsx'
+import linkCss from '../link.module.css'
 import css from './workspace.module.css'
 
 interface SourceSidebarProps {
@@ -194,16 +196,16 @@ export function SourceSidebar({
         aria-label={t('filterBarLabel')}
       >
         {filterEdges.left && (
-          <button
-            type="button"
-            className={clsx(css.filterArrow, css.filterArrowLeft)}
+          <IconButton
+            shape="round"
+            size="sm"
+            icon={<IconChevronLeftOutlineMedium />}
+            className={clsx(css.filterArrowSeat, css.filterArrowLeft)}
             aria-label={t('filterScrollLeft')}
             onClick={() => {
               pageFilters(-1)
             }}
-          >
-            <IconChevronLeftOutlineMedium />
-          </button>
+          />
         )}
         {shownFiltersOf(filter, counts).map((entry) => {
           const count = counts[entry.id]
@@ -221,16 +223,16 @@ export function SourceSidebar({
           )
         })}
         {filterEdges.right && (
-          <button
-            type="button"
-            className={clsx(css.filterArrow, css.filterArrowRight)}
+          <IconButton
+            shape="round"
+            size="sm"
+            icon={<IconChevronRightOutlineMedium />}
+            className={clsx(css.filterArrowSeat, css.filterArrowRight)}
             aria-label={t('filterScrollRight')}
             onClick={() => {
               pageFilters(1)
             }}
-          >
-            <IconChevronRightOutlineMedium />
-          </button>
+          />
         )}
       </div>
       {/* The aggregate passage board needs at least two evidence-bearing
@@ -238,7 +240,11 @@ export function SourceSidebar({
           detail rows, and the entry shows the true passage sum, not the
           source count. */}
       {counts.evidence >= 2 && (
-        <button type="button" className={css.evidenceEntry} onClick={onOpenEvidence}>
+        <button
+          type="button"
+          className={clsx(linkCss.link, css.evidenceEntrySeat)}
+          onClick={onOpenEvidence}
+        >
           {t('evidenceEntryLabel', {
             count: evidencePassageTotal,
           })}

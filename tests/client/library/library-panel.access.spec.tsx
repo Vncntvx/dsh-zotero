@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { zh } from '../../../src/client/locales.ts'
 import { mountPanel, CONNECTED } from '../helpers/library-panel-harness.tsx'
 
@@ -38,6 +38,8 @@ describe('the library panel access gate', () => {
       { ids: ['s1'], byId: { s1: { cwd: '/tmp/ws', running: true } } },
       { useAccess: (() => false) as never },
     )
+    expect(await screen.findByText(zh.libraryWriteActions)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryWriteActions }))
     expect(await screen.findByText(zh.libraryWriteNeedsAccess)).toBeTruthy()
     const fieldset = document.querySelector('fieldset')
     expect(fieldset?.disabled).toBe(true)

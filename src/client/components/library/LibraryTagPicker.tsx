@@ -62,7 +62,7 @@ export function LibraryTagPicker({
   // The CSS anchor name is unique per picker: multiple library panels can be
   // mounted in different sidebar tabs, and duplicate anchor names would make
   // each panel follow the wrong trigger.
-  const anchorName = `--dsh-zotero-tags-${useId().replaceAll(':', '')}`
+  const anchorName = `--zotero-tags-${useId().replaceAll(':', '')}`
 
   const requestPage = (search: string, offset: number, append: boolean): void => {
     const ticket = seq.current + 1
@@ -170,7 +170,7 @@ export function LibraryTagPicker({
   const options = useMemo(
     () =>
       rows.map((tag) => (
-        <li key={tag}>
+        <li key={tag} role="presentation">
           <button
             type="button"
             role="option"
@@ -221,10 +221,17 @@ export function LibraryTagPicker({
               onChange={(event) => search(event.target.value)}
               autoFocus
             />
-            <ul className={css.tagOptions}>
+            <ul
+              className={css.tagOptions}
+              role="listbox"
+              aria-multiselectable="true"
+              aria-label={t('libraryFilterTags')}
+            >
               {options}
               {rows.length === 0 && !loading && (
-                <li className={css.tagPanelNote}>{t('libraryEmptyList')}</li>
+                <li className={css.tagPanelNote} role="presentation">
+                  {t('libraryEmptyList')}
+                </li>
               )}
             </ul>
             <div className={css.tagPanelFoot}>

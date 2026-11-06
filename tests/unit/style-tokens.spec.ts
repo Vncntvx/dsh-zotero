@@ -71,6 +71,13 @@ describe('collectThemeTokens', () => {
       '--dsw-alias-label-primary',
     ])
   })
+
+  it('collects the --ds-* base namespace without sweeping up --dsw-* or --dsh-*', () => {
+    const css =
+      ':root { --ds-ease-in-out: ease; --dsw-alias-bg-base: #fff; --dsh-content-font-size: 14px; }'
+    expect(collectThemeTokens(css, '--ds-')).toEqual(['--ds-ease-in-out'])
+    expect(mergeThemeTokens(() => css, ['base.css'], '--ds-')).toEqual(['--ds-ease-in-out'])
+  })
 })
 
 describe('diffTokens', () => {
@@ -88,20 +95,33 @@ describe('diffTokens', () => {
 })
 
 describe('snapshotOf', () => {
-  it('carries the hand-maintained seam list across a regeneration', () => {
-    const current = { harness: '0.0.0', dsw: ['--dsw-old'], dsh: ['--dsh-content-font-size'] }
-    expect(snapshotOf(current, { harness: '1.0.0', dsw: ['--dsw-new'] })).toEqual({
+  it('carries the hand-maintained seam list and the base tokens across a regeneration', () => {
+    const current = {
+      harness: '0.0.0',
+      dsw: ['--dsw-old'],
+      dsh: ['--dsh-content-font-size'],
+      ds: ['--ds-old'],
+    }
+    expect(
+      snapshotOf(current, {
+        harness: '1.0.0',
+        dsw: ['--dsw-new'],
+        ds: ['--ds-ease-in-out'],
+      }),
+    ).toEqual({
       harness: '1.0.0',
       dsw: ['--dsw-new'],
       dsh: ['--dsh-content-font-size'],
+      ds: ['--ds-ease-in-out'],
     })
   })
 
-  it('starts an absent seam list empty rather than undefined', () => {
+  it('starts an absent seam list and base list empty rather than undefined', () => {
     expect(snapshotOf(undefined, { harness: '1.0.0', dsw: [] })).toEqual({
       harness: '1.0.0',
       dsw: [],
       dsh: [],
+      ds: [],
     })
   })
 })
@@ -114,11 +134,16 @@ describe('the committed snapshot', () => {
     ).toBe(pinnedHarness(manifest))
   })
 
-  it('is sorted and unique on both halves', () => {
-    for (const half of ['dsw', 'dsh']) {
+  it('is sorted and unique on every half', () => {
+    for (const half of ['dsw', 'dsh', 'ds']) {
       const names = snapshot[half]
       expect(names).toEqual([...new Set(names)].sort())
     }
+  })
+
+  it('publishes the host base tokens the client stylesheets consume', () => {
+    expect(snapshot.ds).toContain('--ds-ease-in-out')
+    expect(snapshot.ds.length).toBeGreaterThan(0)
   })
 
   it('publishes a palette worth guarding', () => {

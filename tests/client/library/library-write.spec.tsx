@@ -4,6 +4,7 @@
  * @module tests/client/library/library-write
  */
 
+import type { ReactElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibraryWrite } from '../../../src/client/components/library/LibraryWrite.tsx'
@@ -18,6 +19,13 @@ afterEach(() => {
 
 const translate = makeTranslate(zh)
 
+/** Render the write drawer and open its host DisclosureRow, as a reader would. */
+function renderWrite(ui: ReactElement): ReturnType<typeof render> {
+  const view = render(ui)
+  fireEvent.click(screen.getByRole('button', { name: zh.libraryWriteActions }))
+  return view
+}
+
 describe('LibraryWrite component', () => {
   it.each(['updateCollection', 'deleteCollection', 'updateSavedSearch', 'deleteSavedSearch'])(
     'anchors %s to the selected scope without needing a manually entered ref',
@@ -26,7 +34,7 @@ describe('LibraryWrite component', () => {
         .fn()
         .mockResolvedValue({ ok: true, value: { kind: 'applied', message: 'updated' } })
       const refresh = vi.fn()
-      render(
+      renderWrite(
         <LibraryWrite
           t={translate}
           write={write}
@@ -66,7 +74,7 @@ describe('LibraryWrite component', () => {
     const write = vi.fn(() => pending.promise),
       refresh = vi.fn()
     const props = { t: translate, write, refreshAffected: refresh }
-    const view = render(
+    const view = renderWrite(
       <LibraryWrite {...props} sessionId="s1" sessionRunning={false} writeAllowed />,
     )
     fireEvent.submit(document.querySelector('form')!)
@@ -94,7 +102,7 @@ describe('LibraryWrite component', () => {
     const write = vi
       .fn()
       .mockResolvedValue({ ok: true, value: { kind: 'applied', message: 'created' } })
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={write}
@@ -132,7 +140,7 @@ describe('LibraryWrite component', () => {
 
   it('refuses an all-empty create and a partly filled row locally', async () => {
     const write = vi.fn()
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={write}
@@ -162,7 +170,7 @@ describe('LibraryWrite component', () => {
     const write = vi
       .fn()
       .mockResolvedValue({ ok: true, value: { kind: 'applied', message: 'updated' } })
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={write}
@@ -188,7 +196,7 @@ describe('LibraryWrite component', () => {
   })
   it('renders the failure message when the write call rejects', async () => {
     const write = vi.fn().mockRejectedValue(new Error('loopback reset'))
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={write}
@@ -212,7 +220,7 @@ describe('LibraryWrite component', () => {
     const write = vi
       .fn()
       .mockResolvedValue({ ok: true, value: { kind: 'applied', message: 'updated' } })
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={write}
@@ -240,7 +248,7 @@ describe('LibraryWrite component', () => {
     const writeSpy = vi.fn()
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -261,7 +269,7 @@ describe('LibraryWrite component', () => {
     const writeSpy = vi.fn()
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -290,7 +298,7 @@ describe('LibraryWrite component', () => {
     const writeSpy = vi.fn()
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -333,7 +341,7 @@ describe('LibraryWrite component', () => {
     const writeSpy = vi.fn()
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -363,7 +371,7 @@ describe('LibraryWrite component', () => {
     })
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -415,7 +423,7 @@ describe('LibraryWrite component', () => {
     })
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -471,7 +479,7 @@ describe('LibraryWrite component', () => {
 
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}
@@ -525,7 +533,7 @@ describe('LibraryWrite component', () => {
     })
     const appliedSpy = vi.fn()
 
-    render(
+    renderWrite(
       <LibraryWrite
         t={translate}
         write={writeSpy}

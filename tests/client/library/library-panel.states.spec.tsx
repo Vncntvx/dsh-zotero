@@ -52,6 +52,7 @@ describe('the settled panel', () => {
       sessions,
     )
     fireEvent.click(await screen.findByText('LLM Papers'))
+    fireEvent.click(await screen.findByRole('button', { name: zh.libraryWriteActions }))
     fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
       target: { value: 'updateCollection' },
     })
@@ -61,6 +62,9 @@ describe('the settled panel', () => {
       target: { value: 'Unsaved collection draft' },
     })
     fireEvent.click(screen.getByText('Unread'))
+    // The drawer is re-keyed on scope changes, so its controlled disclosure
+    // starts closed again after the selection moves.
+    fireEvent.click(await screen.findByRole('button', { name: zh.libraryWriteActions }))
     fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
       target: { value: 'updateSavedSearch' },
     })
@@ -70,7 +74,13 @@ describe('the settled panel', () => {
     expect((screen.getByLabelText(zh.libraryWriteName) as HTMLTextAreaElement).value).toBe('')
     sessions.byId.s1.running = false
     fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
-    expect(screen.getByText(zh.libraryWriteNeedsSession)).toBeTruthy()
+    // The refresh re-keys the drawer, so its controlled disclosure may start
+    // closed again; open it once the re-render has settled.
+    await waitFor(() => {
+      const trigger = screen.getByRole('button', { name: zh.libraryWriteActions })
+      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
+      expect(screen.getByText(zh.libraryWriteNeedsSession)).toBeTruthy()
+    })
     expect(face.write).not.toHaveBeenCalled()
   })
   it('closes the library, sort and connection-detail menus with Escape', async () => {
@@ -472,6 +482,7 @@ describe('lane states', () => {
       { ids: [], byId: {} },
     )
     expect(await screen.findByText(zh.libraryWriteActions)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryWriteActions }))
     expect(await screen.findByText(zh.libraryWriteNeedsSession)).toBeTruthy()
     expect(await screen.findByText('FlashAttention-2')).toBeTruthy()
   })

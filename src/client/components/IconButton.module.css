@@ -1,0 +1,45 @@
+/* Geometry only: the host Button owns fill, hover, focus and typography.
+ * Every selector is doubled so it outranks `Button.module.css`'s `.button`/`.sm`
+ * (0,1,0) without depending on stylesheet injection order — ui-primitives is
+ * external to this bundle and the host injects its CSS separately. */
+.iconButton.iconButton {
+  box-sizing: border-box;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+
+.round.round {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  corner-shape: round;
+}
+
+.square.square {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.sm.sm {
+  width: 20px;
+  height: 20px;
+}
+
+.md.md {
+  width: 28px;
+  height: 28px;
+}
+
+@media (hover: hover) {
+  .iconButton.iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconButton.iconButton {
+    transition: none;
+  }
+}

@@ -23,7 +23,8 @@ import {
 } from '../../sources/presenters.js'
 import { RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
-import quiet from '../components/quiet.module.css'
+import linkCss from '../components/link.module.css'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 
 type ExportToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_export'> &
   PropsLocale<'zotero'>
@@ -130,9 +131,9 @@ export function ExportToolView(props: ExportToolViewProps) {
                     {locale !== null && <Tag tone="neutral">{locale}</Tag>}
                   </div>
                   <div className={css.itemActions}>
-                    <button
-                      type="button"
-                      className={quiet.quietDense}
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         // The translator id, not the display label: the
                         // extension and MIME type are the format's, and a
@@ -141,14 +142,16 @@ export function ExportToolView(props: ExportToolViewProps) {
                       }}
                     >
                       {`${t('downloadArtifact')} ${extensionOf(format)}`}
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <CodeBlock
                   code={rawText}
                   lang={format}
+                  showHeader={false}
                   copyLabel={t('copy')}
                   copiedLabel={t('copied')}
+                  className={css.rawCode}
                 />
               </div>
             ) : (
@@ -168,25 +171,30 @@ export function ExportToolView(props: ExportToolViewProps) {
                           itemRef={item.ref}
                           t={t}
                           variant="link"
-                          className={css.actionLink}
+                          className={linkCss.linkDense}
                           openProtocol={client.openProtocol}
                         />
                       </div>
-                      <div className={css.itemMeta}>ref: {item.ref}</div>
+                      <div className={css.itemMeta}>{t('toolRefLine', { ref: item.ref })}</div>
                       {item.exportKey && (
-                        <div className={css.itemMeta}>exportKey: {item.exportKey}</div>
+                        <div className={css.itemMeta}>
+                          {t('toolExportKeyLine', { key: item.exportKey })}
+                        </div>
                       )}
                       {item.citationKey && (
                         <div className={css.itemMeta}>
-                          Zotero citationKey
-                          {item.citationKeySource ? ` (${item.citationKeySource})` : ''}:{' '}
-                          {item.citationKey}
+                          {t('toolExportCitationKeyLine', {
+                            source: item.citationKeySource ? ` (${item.citationKeySource})` : '',
+                            key: item.citationKey,
+                          })}
                         </div>
                       )}
                       {item.citationKeyConflict && (
                         <div className={css.coverageNotice}>
-                          Citation key conflict: native={item.citationKeyConflict.native}; extra=
-                          {item.citationKeyConflict.extra}
+                          {t('toolCitationKeyConflict', {
+                            native: item.citationKeyConflict.native,
+                            extra: item.citationKeyConflict.extra,
+                          })}
                         </div>
                       )}
                     </div>

@@ -66,8 +66,7 @@
   flex: 1 1 auto;
 }
 
-/* The diagnostic menu trigger: the shared 24px quiet row, tightened to its
- * icon-and-count content. Geometry: `../../quiet.module.css`. */
+/* The diagnostic menu trigger is the host IconButton; this is its seat. */
 .menuButton {
   flex: none;
 }
@@ -145,30 +144,20 @@
   display: none;
 }
 
-/* The paging arrows, mirroring the composer attachment rail: a small circle
- * anchored to the strip's edge, visible only on the sides that still hold
- * hidden pills. */
-.filterArrow {
+/* The paging arrows are the host IconButton; only the anchored seat and the
+ * rail's own surface colour belong here. */
+.filterArrowSeat.filterArrowSeat {
   position: absolute;
   top: 50%;
   z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  corner-shape: round;
   background: var(--dsw-specific-input-major);
   color: var(--dsw-alias-label-secondary);
   box-shadow: var(--dsw-elevation-panel);
-  cursor: pointer;
   transform: translateY(-50%);
 }
 
 @media (hover: hover) {
-  .filterArrow:hover {
+  .filterArrowSeat.filterArrowSeat:hover {
     background: var(--dsw-alias-interactive-bg-hover-solid);
   }
 }
@@ -181,36 +170,10 @@
   right: 2px;
 }
 
-/* The quiet passages entry: a text link to the cross-source board. Uses the
- * harness clickable-link alias (as `ProducedFiles` file buttons do for
- * button-as-link surfaces), with dotted hover per the link spec. */
-.evidenceEntry {
+/* The passages entry is a text link; link.module.css owns its geometry. */
+.evidenceEntrySeat {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0;
   margin-left: 8px;
-  font: var(--dsw-font-xxs-12);
-  font-weight: 500;
-  color: var(--dsw-alias-link);
-  background: transparent;
-  border: none;
-  border-radius: var(--dsw-radius-sm);
-  cursor: pointer;
-  text-decoration: none;
-}
-
-@media (hover: hover) {
-  .evidenceEntry:hover {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-  }
-}
-
-.evidenceEntry:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
-  outline-offset: 1px;
 }
 
 /* The evidence overview page: the cross-source board. */
@@ -315,9 +278,9 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* The back action exists for narrow surfaces; hidden on the wide two-pane
- * layout, where the sidebar is always visible. */
-.backAction {
+/* The back action is a host Button, shown only on narrow surfaces where the
+ * sidebar is hidden. Doubled selectors outrank the host Button's own display. */
+.backSeat.backSeat {
   display: none;
 }
 
@@ -410,9 +373,7 @@
 }
 
 /* The guarded action row: open buttons, copy, and the composer prefills.
- * `.action` geometry intentionally duplicated with
- * `../open/open.module.css` `.button` and `../cards.module.css` `.lineAction`,
- * so change all three together. */
+ * Every control draws itself; this rule only places them. */
 .actionRow {
   display: flex;
   align-items: center;
@@ -547,31 +508,9 @@
     display: none;
   }
 
-  .backAction {
+  .backSeat.backSeat {
     display: inline-flex;
-    align-items: center;
     align-self: flex-start;
-    height: 24px;
-    padding: 0 8px;
-    font: var(--dsw-font-xxs-12);
-    color: var(--dsw-alias-label-secondary);
-    background: transparent;
-    border: 0.5px solid var(--dsw-alias-border-l2);
-    border-radius: var(--dsw-radius-sm);
-    cursor: pointer;
-  }
-
-  @media (hover: hover) {
-    .backAction:hover {
-      background: var(--dsw-alias-interactive-bg-hover);
-      color: var(--dsw-alias-label-primary);
-    }
-  }
-
-  .backAction:focus-visible {
-    outline: var(--dsw-focus-ring-width, 1px) solid
-      var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-    outline-offset: 1px;
   }
 }
 

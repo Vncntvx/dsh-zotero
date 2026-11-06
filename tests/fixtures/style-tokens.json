@@ -424,5 +424,12 @@
     "--dsh-content-font-size-secondary",
     "--dsh-scrollbar-thumb",
     "--dsh-scrollbar-thumb-hover"
+  ],
+  "ds": [
+    "--ds-ease-in-out",
+    "--ds-font-family-code",
+    "--ds-transition-duration",
+    "--ds-transition-duration-fast",
+    "--ds-transition-duration-slow"
   ]
 }

@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -90,15 +90,16 @@ export function SourceInspector({
   return (
     <main className={css.inspector}>
       <div className={css.inspectorHead}>
-        <button
-          type="button"
-          className={css.backAction}
+        <Button
+          variant="outline"
+          size="sm"
+          className={css.backSeat}
           onClick={() => {
             setMobilePane('list')
           }}
         >
           {t('backToList')}
-        </button>
+        </Button>
         <div className={css.inspectorTitleWrap}>
           <span className={css.inspectorTitle}>{selected.title ?? selected.ref}</span>
           <span className={css.inspectorMeta}>

@@ -17,8 +17,7 @@
 }
 
 /* Line-end actions sit outside a disclosure toggle: a copy or download
- * never expands the row. The bordered-quiet geometry itself lives in
- * `../quiet.module.css`. */
+ * never expands the row. The controls themselves are the host Button. */
 .lineActions {
   flex: none;
   display: inline-flex;
@@ -52,41 +51,8 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Text-link language (mirrors the harness clickable-link spec:
- * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
- * `ui-primitives/src/WebBlock.module.css` source/fetch links, and
- * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons: link-blue
- * at rest, dotted underline + 3px offset on hover/focus. Keep in sync with
- * `open/open.module.css` `.link`: the esbuild css-modules pipeline resolves each
- * file independently, so `composes` across files would drop the base rules). */
-.link {
-  font: var(--dsw-font-xxs-12);
-  font-weight: 500;
-  color: var(--dsw-alias-link);
-  text-decoration: none;
-}
-
-.link:focus-visible {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
-  outline-offset: 1px;
-}
-
-@media (hover: hover) {
-  .link:hover {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-  }
-}
-
-.linkIcon {
-  flex: none;
-  width: 1.1em;
-  height: 1.1em;
-  vertical-align: -0.25em;
-  margin-right: 4px;
-}
+/* Text-link language lives in `./link.module.css`, shared with the open
+ * actions; there is one definition, not one per surface. */
 
 .passages {
   margin: 0;

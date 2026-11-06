@@ -7,12 +7,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   Button,
   IconCloseOutlineRegular,
   IconChevronDownOutlineMedium,
+  Input,
   Menu,
   Pill,
   Tag,
@@ -25,7 +25,6 @@ import { LIBRARY_PAGE_SIZE, type LibraryFilters as Filters } from './library-mod
 import { LibraryTagPicker } from './LibraryTagPicker.tsx'
 import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'
-import quiet from '../quiet.module.css'
 
 const YEAR_COMMIT_DEBOUNCE_MS = 300
 
@@ -290,9 +289,9 @@ export function LibraryFilters({
 
       {yearOpen && (
         <div className={css.filterYearRow}>
-          <input
+          <Input
             type="number"
-            className={css.filterNumberInput}
+            className={css.filterNumberSeat}
             placeholder={t('libraryYearFromShort')}
             aria-label={t('libraryYearFrom')}
             min={ZOTERO_YEAR_MIN}
@@ -305,9 +304,9 @@ export function LibraryFilters({
             }}
           />
           <span>–</span>
-          <input
+          <Input
             type="number"
-            className={css.filterNumberInput}
+            className={css.filterNumberSeat}
             placeholder={t('libraryYearToShort')}
             aria-label={t('libraryYearTo')}
             min={ZOTERO_YEAR_MIN}
@@ -329,9 +328,9 @@ export function LibraryFilters({
 
       {/* Clear All Filters Button */}
       {hasFilters && (
-        <button type="button" className={clsx(quiet.quiet, css.filterClear)} onClick={clearAll}>
+        <Button variant="outline" size="sm" className={css.filterClear} onClick={clearAll}>
           {t('libraryClearFilters')}
-        </button>
+        </Button>
       )}
 
       {/* Error Retry banner */}

@@ -63,28 +63,9 @@
   display: none;
 }
 
-.selectorButton {
-  flex: 0 1 auto;
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  box-sizing: border-box;
+/* The library/sort pickers are the host Button; this caps their label width. */
+.selectorSeat {
   max-width: 220px;
-  height: 28px;
-  padding: 0 6px 0 8px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  font: var(--dsw-font-xxs-12);
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.selectorButton[aria-expanded='true'] {
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .selectorLabel {
@@ -153,34 +134,7 @@
   flex: 1 1 auto;
 }
 
-/* The quiet borderless tool button (refresh, diagnostics), following the
- * standard 28px right sidebar tool geometry. */
-.toolButton {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-  border: none;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  line-height: 1;
-  cursor: pointer;
-  box-sizing: border-box;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.toolButton:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-}
-
+/* The refresh/diagnostics triggers are the host IconButton. */
 .actionIcon {
   width: 15px;
   height: 15px;
@@ -285,8 +239,8 @@
   position: fixed;
   position-area: none;
   position-try-fallbacks:
-    --dsh-zotero-tags-above, --dsh-zotero-tags-end, --dsh-zotero-tags-above-end,
-    --dsh-zotero-tags-window, --dsh-zotero-tags-viewport;
+    --zotero-tags-above, --zotero-tags-end, --zotero-tags-above-end, --zotero-tags-window,
+    --zotero-tags-viewport;
   top: max(12px, calc(anchor(bottom) + 4px));
   bottom: 12px;
   left: max(12px, anchor(left));
@@ -313,20 +267,20 @@
 }
 
 /* Flip above the trigger while preserving the 12px window margin. */
-@position-try --dsh-zotero-tags-above {
+@position-try --zotero-tags-above {
   top: 12px;
   bottom: max(12px, calc(anchor(top) + 4px));
   align-self: end;
 }
 
 /* Open toward the start edge when the trigger is near the right edge. */
-@position-try --dsh-zotero-tags-end {
+@position-try --zotero-tags-end {
   left: 12px;
   right: max(12px, anchor(right));
   justify-self: end;
 }
 
-@position-try --dsh-zotero-tags-above-end {
+@position-try --zotero-tags-above-end {
   top: 12px;
   bottom: max(12px, calc(anchor(top) + 4px));
   left: 12px;
@@ -335,14 +289,14 @@
   justify-self: end;
 }
 
-@position-try --dsh-zotero-tags-window {
+@position-try --zotero-tags-window {
   top: 12px;
   bottom: 12px;
   margin: 0;
   align-self: safe end;
 }
 
-@position-try --dsh-zotero-tags-viewport {
+@position-try --zotero-tags-viewport {
   position-area: none;
   inset: 12px;
   margin: 0;
@@ -463,26 +417,13 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.filterNumberInput {
+/* The year fields are host Inputs; only their width belongs here. */
+.filterNumberSeat {
   width: 60px;
-  height: 24px;
-  padding: 0 6px;
-  font: var(--dsw-font-xxs-12);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  box-sizing: border-box;
+  flex: none;
 }
 
-.filterNumberInput:focus {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-/* Geometry comes from `../../quiet.module.css`; only the row's own seat
- * belongs here. */
+/* The control is the host Button; this is its seat in the filter rail. */
 .filterClear {
   margin-left: auto;
 }
@@ -658,8 +599,8 @@
   cursor: pointer;
   padding: 0;
   transition:
-    transform 150ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms;
+    transform 150ms var(--ds-ease-in-out),
+    color 120ms var(--ds-ease-in-out);
 }
 
 .treeExpander:focus-visible {
@@ -746,11 +687,6 @@
 /* One saved search's stored conditions, folded under its row. */
 .searchConditions {
   padding-left: 22px;
-}
-
-.searchConditions summary {
-  cursor: pointer;
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .searchConditions ol {
@@ -1092,32 +1028,9 @@
   white-space: nowrap;
 }
 
-/* The abstract's expand/collapse toggle: the workspace `.detailToggle`
- * pattern — a quiet text button under the clamped paragraph. */
-.abstractToggle {
+/* The expand/collapse controls are host Buttons; this is their seat. */
+.toggleSeat {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 2px;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .abstractToggle:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.abstractToggle:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
 }
 
 .toggleChevron {
@@ -1211,21 +1124,10 @@
   overflow-wrap: break-word;
 }
 
-.copyInline {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dsw-alias-link);
-  font: var(--dsw-font-xxs-12);
-  cursor: pointer;
+/* The metadata copy controls are host Buttons; this is their seat. */
+.copySeat {
+  min-width: 0;
   text-align: left;
-  white-space: normal;
-  word-break: break-word;
-}
-
-.copyInline:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
-  outline-offset: 1px;
 }
 
 .section {
@@ -1273,31 +1175,11 @@
   min-width: 0;
 }
 
-.childRowClickable {
-  border: 0;
+/* The clickable attachment row is a host Button; this keeps the row layout. */
+.childRowSeat.childRowSeat {
   width: 100%;
+  justify-content: space-between;
   text-align: left;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.childRowClickable:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-@media (hover: hover) {
-  .childRowClickable:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-  .childRowClickable:hover .childTitle {
-    color: var(--dsw-alias-link);
-  }
 }
 
 .childInfo {
@@ -1321,35 +1203,15 @@
   min-width: 0;
 }
 
-/* Collapsible child section header button */
-.sectionHeaderBtn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* Collapsible child section header: the host Button plus its seat. */
+.sectionHeaderSeat.sectionHeaderSeat {
   width: 100%;
-  padding: 2px 0;
-  margin: 0 0 6px 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
+  justify-content: space-between;
   text-align: left;
 }
 
-.sectionHeaderBtn .sectionTitle {
+.sectionHeaderSeat .sectionTitle {
   margin: 0;
-}
-
-@media (hover: hover) {
-  .sectionHeaderBtn:hover .sectionTitle {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.sectionHeaderBtn:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-  border-radius: var(--dsw-radius-xs);
 }
 
 /* Multiline clamped text block with fade mask */
@@ -1459,7 +1321,6 @@
 
 .commentIcon {
   flex: none;
-  font: var(--dsw-font-xxs-12);
   user-select: none;
   opacity: 0.8;
 }
@@ -1481,32 +1342,6 @@
   min-width: 0;
 }
 
-.cardToggle {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 2px;
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-caption);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .cardToggle:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
-.cardToggle:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-}
-
 .cardActions {
   display: flex;
   align-items: center;
@@ -1515,33 +1350,9 @@
   flex: none;
 }
 
-.cardActionBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 5px;
-  background: transparent;
-  border: none;
-  border-radius: var(--dsw-radius-xs);
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-caption);
-  cursor: pointer;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .cardActionBtn:hover {
-    color: var(--dsw-alias-label-primary);
-    background: var(--dsw-alias-bg-layer-3);
-  }
-}
-
-.cardActionBtn:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
+/* The card-footer controls are host Buttons; this is their seat. */
+.actionSeat {
+  flex: none;
 }
 
 /* One child listing's pager: a quiet inline row, not a full-bleed footer. */
@@ -1554,23 +1365,10 @@
 
 /* ── Write drawer ─────────────────────────────────────────────────────── */
 
+/* The write drawer is the host DisclosureRow; only its seat belongs here. */
 .writeCard {
   flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   margin-bottom: 12px;
-  padding: 8px 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
-  box-sizing: border-box;
-}
-
-.writeCard > summary {
-  cursor: pointer;
-  font: var(--dsw-font-xxs-12);
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
 }
 
 .writeForm {
@@ -1593,7 +1391,12 @@
   min-width: 0;
 }
 
-.writeInput,
+/* The host Input owns single-line fields; select/textarea are Zotero-specific
+ * form controls with no host primitive, so they keep their geometry here. */
+.writeInputSeat {
+  width: 100%;
+}
+
 .writeSelect,
 .writeTextarea {
   font: var(--dsw-font-xxs-12);
@@ -1609,7 +1412,6 @@
   resize: vertical;
 }
 
-.writeInput:focus,
 .writeSelect:focus,
 .writeTextarea:focus {
   outline: var(--dsw-focus-ring-width, 1px) solid
@@ -1644,7 +1446,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.writeResult pre {
+.writeResultText {
   margin: 0;
   padding: 6px 8px;
   border-radius: var(--dsw-radius-sm);
@@ -1670,15 +1472,6 @@
  * each step lands before the next needs it. */
 
 @media (hover: hover) {
-  .selectorButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-
-  .toolButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
-  }
-
   .tagRemoveButton:hover {
     color: var(--dsw-alias-label-primary);
   }
@@ -1698,24 +1491,14 @@
   .itemRow:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
-
-  .writeCard > summary:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-
-  .copyInline:hover {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-  }
 }
 
 /* The composer's own convention: a coarse pointer raises the input floor so
  * the visual viewport never zooms on focus. */
 @media (pointer: coarse) {
   .searchInputWrap input,
-  .filterNumberInput,
+  .filterNumberSeat input,
   .tagSearchInput input,
-  .writeInput,
   .writeSelect,
   .writeTextarea {
     font-size: 16px;
@@ -1845,18 +1628,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .selectorButton,
-  .toolButton,
   .treeRowWrap,
   .treeExpander,
   .treeRow,
   .itemRow,
   .tagOption,
   .toggleChevron,
-  .childRowClickable,
   .noteCard,
-  .annotationCard,
-  .cardActionBtn {
+  .annotationCard {
     transition: none;
   }
 }

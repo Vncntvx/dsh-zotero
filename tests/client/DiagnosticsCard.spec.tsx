@@ -268,7 +268,8 @@ describe('DiagnosticsCard', () => {
       />,
     )
     await waitFor(() => expect(container.textContent).toContain('×3'))
-    expect(container.querySelector('details')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.diagnosticsDetail }))
+    expect(container.querySelector('[data-open]')).toBeTruthy()
     expect(container.textContent).toContain('kind:"trashed"')
     expect(container.textContent).toContain(zh.diagnosticsDetail)
   })
@@ -337,7 +338,8 @@ describe('DiagnosticsCard', () => {
       />,
     )
     await waitFor(() => expect(container.textContent).toContain('string.event'))
-    expect(container.querySelector('details')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.diagnosticsDetail }))
+    expect(container.querySelector('[data-open]')).toBeTruthy()
     expect(container.textContent).toContain('value')
     expect(container.textContent).toContain('"plain string detail"')
   })

@@ -299,7 +299,7 @@ describe('ExportDocumentRow', () => {
         t={t}
       />,
     )
-    expect(screen.getByText('RIS')).toBeDefined()
+    expect(screen.getAllByText('RIS').length).toBeGreaterThan(0)
     expect(screen.queryByLabelText(zh.copyCite)).toBeNull()
   })
 })
@@ -322,8 +322,8 @@ describe('sectionTextOf', () => {
 describe('ExportSections', () => {
   it('groups documents into format sections with the count and section-wide actions', () => {
     render(<ExportSections exports={[itemizedBibtex(), itemizedRis()]} t={t} />)
-    expect(screen.getByText('BibTeX')).toBeDefined()
-    expect(screen.getByText('RIS')).toBeDefined()
+    expect(screen.getAllByText('BibTeX').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('RIS').length).toBeGreaterThan(0)
     // The section count is the deduplicated document count, one per section.
     expect(screen.getAllByText('1')).toHaveLength(2)
     expect(screen.getAllByLabelText(zh.copyAll)).toHaveLength(2)

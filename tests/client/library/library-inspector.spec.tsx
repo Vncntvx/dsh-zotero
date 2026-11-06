@@ -394,7 +394,9 @@ describe('library inspector', () => {
     // Quote in chat action
     const quoteBtn = screen.getByRole('button', { name: zh.libraryInsertQuote })
     fireEvent.click(quoteBtn)
-    expect(insertQuote).toHaveBeenCalledWith(`"${longQuote}" (P. 5)`)
+    expect(insertQuote).toHaveBeenCalledWith(
+      `"${longQuote}"${mockT('annotationPageSuffix', { page: 5 })}`,
+    )
   })
 
   it('displays annotation page as plain provenance text', async () => {

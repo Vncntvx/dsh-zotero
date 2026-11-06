@@ -82,11 +82,25 @@ describe('ExportToolView', () => {
       useDisclosure: mockUseDisclosure(true),
       t: mockT,
     })
-    expect(screen.getByText('ref: zotero://user/0/item/ABCD1234')).toBeTruthy()
-    expect(screen.getByText('exportKey: doe2024translator')).toBeTruthy()
-    expect(screen.getByText('Zotero citationKey (native): doe2024native')).toBeTruthy()
     expect(
-      screen.getByText('Citation key conflict: native=doe2024native; extra=doe2024legacy'),
+      screen.getByText(mockT('toolRefLine', { ref: 'zotero://user/0/item/ABCD1234' })),
+    ).toBeTruthy()
+    expect(screen.getByText(mockT('toolExportKeyLine', { key: 'doe2024translator' }))).toBeTruthy()
+    expect(
+      screen.getByText(
+        mockT('toolExportCitationKeyLine', {
+          source: ' (native)',
+          key: 'doe2024native',
+        }),
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(
+        mockT('toolCitationKeyConflict', {
+          native: 'doe2024native',
+          extra: 'doe2024legacy',
+        }),
+      ),
     ).toBeTruthy()
   })
 

@@ -18,6 +18,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   Button,
+  DisclosureRow,
+  IconInspectOutlineRegular,
   JsonTree,
   type JsonTreeLabels,
   SegmentedControl,
@@ -193,7 +195,6 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
             value={data !== undefined ? bundleOf(data, probeState.data, t) : ''}
             label={t('diagnosticsCopyBundle')}
             copiedLabel={t('copied')}
-            asButton
             disabled={data === undefined}
           />
         </div>
@@ -221,19 +222,7 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
                   {entry.count > 1 ? <span className={css.diagCount}>×{entry.count}</span> : null}
                   <p className={css.diagMessage}>{entry.message}</p>
                   {entry.detail === undefined ? null : (
-                    <details className={css.diagDetail}>
-                      <summary>{t('diagnosticsDetail')}</summary>
-                      <JsonTree
-                        data={
-                          typeof entry.detail === 'object' && entry.detail !== null
-                            ? (entry.detail as object)
-                            : { value: entry.detail }
-                        }
-                        label={t('diagnosticsDetail')}
-                        labels={jsonLabels}
-                        collapsedStringLines={3}
-                      />
-                    </details>
+                    <DiagnosticsDetail detail={entry.detail} jsonLabels={jsonLabels} t={t} />
                   )}
                 </div>
               </div>
@@ -253,5 +242,37 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
         ) : null}
       </div>
     </section>
+  )
+}
+
+/** One log entry's detail JSON, behind its own controlled disclosure. */
+function DiagnosticsDetail({
+  detail,
+  jsonLabels,
+  t,
+}: {
+  readonly detail: ZoteroDiagnosticEntry['detail']
+  readonly jsonLabels: JsonTreeLabels
+  readonly t: TranslateNS<'zotero'>
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <DisclosureRow
+      icon={<IconInspectOutlineRegular />}
+      title={t('diagnosticsDetail')}
+      open={open}
+      expandable
+      onToggle={() => setOpen((value) => !value)}
+      className={css.diagDetail}
+    >
+      <JsonTree
+        data={
+          typeof detail === 'object' && detail !== null ? (detail as object) : { value: detail }
+        }
+        label={t('diagnosticsDetail')}
+        labels={jsonLabels}
+        collapsedStringLines={3}
+      />
+    </DisclosureRow>
   )
 }

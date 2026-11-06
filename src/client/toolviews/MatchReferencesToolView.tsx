@@ -72,17 +72,17 @@ export function MatchReferencesToolView(props: Props) {
       inspect={inspect}
       t={t}
       icon={icon}
-      title="Match Zotero references"
+      title={t('toolTitleMatchReferences')}
       summary={
         isToolRunning(block)
-          ? 'Matching local references'
-          : `${view.matched} matched of ${view.input}`
+          ? t('toolMatchReferencesRunning')
+          : t('toolSummaryMatchReferences', { matched: view.matched, input: view.input })
       }
       errorSummary={view.error}
     >
       {({ isRunning }) =>
         isRunning ? (
-          <RunningNotice text="Matching local references" />
+          <RunningNotice text={t('toolMatchReferencesRunning')} />
         ) : view.rows.length > 0 ? (
           <div className={css.cardList}>
             {view.rows.map((row) => (
@@ -93,12 +93,14 @@ export function MatchReferencesToolView(props: Props) {
                 </div>
                 {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
                 {row.candidates.map((candidate, index) => (
-                  <div key={`${candidate.ref ?? 'candidate'}-${index}`}>
+                  <div key={`${candidate.ref ?? ''}-${index}`}>
                     <div className={css.itemMeta}>
                       {[
                         candidate.ref,
-                        candidate.citationKey && `citationKey=${candidate.citationKey}`,
-                        candidate.exportKey && `exportKey=${candidate.exportKey}`,
+                        candidate.citationKey &&
+                          t('toolCitationKeyField', { key: candidate.citationKey }),
+                        candidate.exportKey &&
+                          t('toolExportKeyField', { key: candidate.exportKey }),
                         candidate.title,
                         candidate.matchMethod,
                         candidate.confidence,
@@ -109,20 +111,24 @@ export function MatchReferencesToolView(props: Props) {
                     {candidate.citationKeyConflict?.native &&
                       candidate.citationKeyConflict.extra && (
                         <div className={css.coverageNotice}>
-                          Citation key conflict: native={candidate.citationKeyConflict.native};
-                          extra={candidate.citationKeyConflict.extra}
+                          {t('toolCitationKeyConflict', {
+                            native: candidate.citationKeyConflict.native,
+                            extra: candidate.citationKeyConflict.extra,
+                          })}
                         </div>
                       )}
                   </div>
                 ))}
               </div>
             ))}
-            {view.raw && <RawTextFallback text={view.raw} />}
+            {view.raw && (
+              <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
+            )}
           </div>
         ) : view.raw ? (
-          <RawTextFallback text={view.raw} />
+          <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
         ) : (
-          <div className={css.coverageNotice}>No reference matches returned.</div>
+          <div className={css.coverageNotice}>{t('toolMatchCandidatesEmpty')}</div>
         )
       }
     </ZoteroToolRow>

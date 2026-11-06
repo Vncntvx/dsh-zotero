@@ -15,7 +15,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../../sources/presenters.js'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
-import quiet from '../components/quiet.module.css'
+import linkCss from '../components/link.module.css'
 
 type RetrieveToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_retrieve'> &
   PropsLocale<'zotero'>
@@ -121,7 +121,6 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           value={item.preview}
                           label={t('copy')}
                           copiedLabel={t('copied')}
-                          className={quiet.quietDense}
                         />
                         {item.attachmentRef && (
                           <PdfReadButton
@@ -131,14 +130,14 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                             label={t('readPdf')}
                             t={t}
                             variant="link"
-                            className={css.actionLink}
+                            className={linkCss.linkDense}
                           />
                         )}
                         <ZoteroLocateActions
                           itemRef={item.sourceRef}
                           t={t}
                           variant="link"
-                          className={css.actionLink}
+                          className={linkCss.linkDense}
                           openProtocol={client.openProtocol}
                         />
                       </div>
@@ -151,7 +150,7 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                 ))}
               </div>
             ) : rawText ? (
-              <RawTextFallback text={rawText} />
+              <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
             ) : (
               <div className={css.coverageNotice}>{t('toolNoResults')}</div>
             )}

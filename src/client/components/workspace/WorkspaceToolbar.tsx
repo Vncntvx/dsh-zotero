@@ -10,12 +10,12 @@
  */
 
 import { useState } from 'react'
-import clsx from 'clsx'
 import { IconEllipsisOutlineMedium, Menu, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { buildInfoOf } from '../../build-info.ts'
 import { writeStatusLabel } from '../write-label.ts'
-import quiet from '../quiet.module.css'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton } from '../IconButton.tsx'
 import { connectionDiagnosisOf, type ConnectionView } from './connection.ts'
 import css from './workspace.module.css'
 
@@ -112,16 +112,15 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
       <Menu
         open={menuOpen}
         anchor={
-          <button
-            type="button"
-            className={clsx(quiet.quiet, quiet.tight, css.menuButton)}
+          <IconButton
+            shape="square"
+            icon={<IconEllipsisOutlineMedium size={14} />}
+            className={css.menuButton}
             aria-label={t('detailsLabel')}
             onClick={() => {
               setMenuOpen(!menuOpen)
             }}
-          >
-            <IconEllipsisOutlineMedium size={14} />
-          </button>
+          />
         }
         items={menuItems}
         onSelect={() => {
@@ -134,14 +133,15 @@ export function WorkspaceToolbar({ connection, onRefresh, t }: WorkspaceToolbarP
         autoFocus
         align="end"
       />
-      <button
-        type="button"
-        className={clsx(quiet.quiet, css.refresh)}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={css.refresh}
         onClick={onRefresh}
         disabled={connection.kind === 'loading' || connection.kind === 'no-access'}
       >
         {t('refresh')}
-      </button>
+      </Button>
     </div>
   )
 }

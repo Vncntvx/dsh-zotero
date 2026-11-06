@@ -20,6 +20,7 @@ import {
 } from '../../sources/presenters.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import linkCss from '../components/link.module.css'
 
 type SearchToolViewProps = PropsRuntime<'tool.call.toolview', 'zotero_search'> &
   PropsLocale<'zotero'>
@@ -108,8 +109,10 @@ export function SearchToolView(props: SearchToolViewProps) {
                       )}
                       {row.citationKeyConflict && (
                         <div className={css.coverageNotice}>
-                          Citation key conflict: native={row.citationKeyConflict.native}; extra=
-                          {row.citationKeyConflict.extra}
+                          {t('toolCitationKeyConflict', {
+                            native: row.citationKeyConflict.native,
+                            extra: row.citationKeyConflict.extra,
+                          })}
                         </div>
                       )}
                       <div className={css.itemActions}>
@@ -121,7 +124,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                             label={t('readPdf')}
                             t={t}
                             variant="link"
-                            className={css.actionLink}
+                            className={linkCss.linkDense}
                           />
                         )}
                         <ZoteroLocateActions
@@ -129,7 +132,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                           itemRef={row.ref}
                           t={t}
                           variant="link"
-                          className={css.actionLink}
+                          className={linkCss.linkDense}
                           openProtocol={client.openProtocol}
                         />
                       </div>
@@ -143,7 +146,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                 )}
               </>
             ) : rawText ? (
-              <RawTextFallback text={rawText} />
+              <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
             ) : (
               <div className={css.coverageNotice}>{t('toolNoResults')}</div>
             )}

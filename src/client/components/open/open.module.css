@@ -1,48 +1,7 @@
-/* Open actions shared by the sources and evidence surfaces: an in-body text
- * link and the blocked variant. The action-area control's geometry lives in
- * `../quiet.module.css`. Tokens only, no theme selectors; light/dark resolves
- * through the inherited aliases. */
-
-/* Text-link language (mirrors the harness clickable-link spec:
- * `ui-primitives/src/markdown/MarkdownText.module.css` anchor + `.linkIcon`,
- * `ui-primitives/src/WebBlock.module.css` source/fetch links, and
- * `ui-deliverables/src/client/ProducedFiles.module.css` file buttons: link-blue
- * at rest, dotted underline + 3px offset on hover/focus, 1.1em/-0.25em/5px glyph
- * seat. Keep in sync with `../cards.module.css` `.link`: the esbuild css-modules
- * pipeline resolves each file independently, so `composes` across files would
- * drop the base rules). */
-.link {
-  font: var(--dsw-font-xxs-12);
-  font-weight: 500;
-  color: var(--dsw-alias-link);
-  text-decoration: none;
-}
-
-.link:focus-visible {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
-  outline-offset: 1px;
-}
-
-@media (hover: hover) {
-  .link:hover {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-  }
-}
-
-/* Leading link-category glyph seat for `<LinkIcon kind="url">`
- * (mirrors the harness clickable-link geometry: 1.1em keeps the glyph
- * proportional to the surrounding text, the negative offset seats its
- * optical center on the cap height). */
-.linkIcon {
-  flex: none;
-  width: 1.1em;
-  height: 1.1em;
-  vertical-align: -0.25em;
-  margin-right: 5px;
-}
+/* Open actions shared by the sources and evidence surfaces: the blocked
+ * variant, the resolving state, and screen-reader-only copy. Text-link
+ * geometry lives in `../link.module.css`, shared with the cards surface.
+ * Tokens only, no theme selectors; light/dark resolves through the aliases. */
 
 /* Blocked: kept focusable (aria-disabled, not native disabled) so the
  * tooltip and the described-by reason can explain the mismatch. */

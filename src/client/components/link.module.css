@@ -1,0 +1,74 @@
+/* The one clickable-link language for text-link actions. Mirrors the harness
+ * clickable-link spec (MarkdownText anchors, WebBlock source links,
+ * ProducedFiles file buttons): link-blue at rest, dotted underline with a 3px
+ * offset on hover/focus, and a proportional glyph seat. The host has no
+ * link-button primitive, so these buttons keep their own geometry here. */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+  color: var(--dsw-alias-link);
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+}
+
+.linkIcon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.25em;
+  margin-right: 5px;
+}
+
+/* Dense 22px row variant for tool-card action links. Complete on its own so
+ * callers can use it without also applying `.link`. */
+.linkDense {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px;
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
+  color: var(--dsw-alias-link);
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.linkDense:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  outline: var(--dsw-focus-ring-width, 1px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link));
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .linkDense:hover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+}

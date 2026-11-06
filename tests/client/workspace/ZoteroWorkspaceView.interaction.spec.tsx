@@ -153,7 +153,7 @@ describe('inspector', () => {
     expect(screen.getByText(/保留 2 条/)).toBeDefined()
     expect(screen.getByText(/报告 4 条/)).toBeDefined()
     fireEvent.click(view.container.querySelector('[data-inspector-panel="exports"]')!)
-    expect(screen.getByText(/BibTeX/)).toBeDefined()
+    expect(screen.getAllByText(/BibTeX/).length).toBeGreaterThan(0)
     view.unmount()
   })
 

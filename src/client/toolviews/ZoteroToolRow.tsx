@@ -7,6 +7,8 @@
 import { useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
+  Button,
+  CodeBlock,
   DisclosureRow,
   IconInspectOutlineRegular,
   TextShimmer,
@@ -21,7 +23,6 @@ import type {
 import { isToolRunning, metaOf, rowStateOf } from '../../sources/presenters.js'
 import { writeMetaOf } from '../sources/write-decoder.ts'
 import css from './toolviews.module.css'
-import quiet from '../components/quiet.module.css'
 
 interface ToolRowRenderContext {
   readonly isRunning: boolean
@@ -49,9 +50,25 @@ export function RunningNotice({ text }: { readonly text: string }) {
   return <div className={css.coverageNotice}>{text}</div>
 }
 
-/** Preformatted raw payload fallback when structured view is absent or malformed. */
-export function RawTextFallback({ text }: { readonly text: string }) {
-  return <pre className={css.codeBox}>{text}</pre>
+/** Raw payload fallback when the structured view is absent or malformed. */
+export function RawTextFallback({
+  text,
+  copyLabel,
+  copiedLabel,
+}: {
+  readonly text: string
+  readonly copyLabel: string
+  readonly copiedLabel: string
+}) {
+  return (
+    <CodeBlock
+      code={text}
+      showHeader={false}
+      copyLabel={copyLabel}
+      copiedLabel={copiedLabel}
+      className={css.rawCode}
+    />
+  )
 }
 
 export function ZoteroToolRow({
@@ -131,17 +148,18 @@ export function ZoteroToolRow({
     <div className={css.bodyWrap}>
       {content}
       {inspect !== undefined && (
-        <button
-          type="button"
-          className={clsx(quiet.quietDense, quiet.muted, css.inspectButton)}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={css.inspectButton}
+          icon={<IconInspectOutlineRegular size={12} />}
           onClick={(e) => {
             e.stopPropagation()
             inspect()
           }}
         >
-          <IconInspectOutlineRegular size={12} />
-          <span>{t('toolInspect')}</span>
-        </button>
+          {t('toolInspect')}
+        </Button>
       )}
     </div>
   ) : null

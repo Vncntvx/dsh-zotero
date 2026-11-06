@@ -40,6 +40,7 @@ import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
 import { isObjectKey } from '../../../json.ts'
 import { CopyButton } from '../CopyButton.tsx'
+import { CommentIcon } from '../CommentIcon.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { LibraryCitationActions } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
@@ -77,9 +78,9 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 /** The short badge label for an attachment's content type. */
-function attachmentKindOf(contentType: string): string {
-  if (contentType === PDF_CONTENT_TYPE) return 'PDF'
-  if (contentType === HTML_CONTENT_TYPE) return 'HTML'
+function attachmentKindOf(contentType: string, t: TranslateNS<'zotero'>): string {
+  if (contentType === PDF_CONTENT_TYPE) return t('badgePdf')
+  if (contentType === HTML_CONTENT_TYPE) return t('badgeHtml')
   const subtype = contentType.split('/')[1]
   return (subtype ?? contentType).toUpperCase()
 }
@@ -179,23 +180,24 @@ function AttachmentItem({
           {resolving ? `${attachment.title} (${t('libraryLoading')})` : attachment.title}
         </span>
       </div>
-      <span className={css.childKind}>{attachmentKindOf(attachment.contentType)}</span>
+      <span className={css.childKind}>{attachmentKindOf(attachment.contentType, t)}</span>
     </>
   )
 
   if (canOpen) {
     return (
       <li>
-        <button
-          type="button"
-          className={clsx(css.childRow, css.childRowClickable)}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={clsx(css.childRow, css.childRowSeat)}
           onClick={handleOpen}
           disabled={resolving}
           aria-label={attachment.title}
           title={error ?? (supported ? t('readPdfInSidebar') : attachment.title)}
         >
           {content}
-        </button>
+        </Button>
       </li>
     )
   }
@@ -228,9 +230,10 @@ function NoteItem({
       )}
       <div className={css.cardFooter}>
         {isLong ? (
-          <button
-            type="button"
-            className={css.cardToggle}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={css.toggleSeat}
             aria-expanded={expanded}
             onClick={() => setExpanded((v) => !v)}
           >
@@ -239,7 +242,7 @@ function NoteItem({
               size={12}
               className={clsx(css.toggleChevron, expanded && css.toggleChevronOpen)}
             />
-          </button>
+          </Button>
         ) : (
           <span />
         )}
@@ -248,21 +251,22 @@ function NoteItem({
             value={note.text}
             label={t('copy')}
             copiedLabel={t('copied')}
-            className={css.cardActionBtn}
+            className={css.actionSeat}
             icon={<IconCopyOutlineRegular size={11} />}
             title={t('libraryCopyNote')}
           />
           {inputActions !== undefined && (
-            <button
-              type="button"
-              className={css.cardActionBtn}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={css.actionSeat}
+              icon={<IconNewChatOutlineRegular size={11} />}
               onClick={handleInsert}
               title={t('libraryInsertNote')}
               aria-label={t('libraryInsertNote')}
             >
-              <IconNewChatOutlineRegular size={11} />
-              <span>{t('libraryInsertNote')}</span>
-            </button>
+              {t('libraryInsertNote')}
+            </Button>
           )}
         </div>
       </div>
@@ -288,7 +292,9 @@ function AnnotationItem({
 
   const handleInsert = () => {
     if (!inputActions) return
-    const pageInfo = annotation.pageLabel ? ` (P. ${annotation.pageLabel})` : ''
+    const pageInfo = annotation.pageLabel
+      ? t('annotationPageSuffix', { page: annotation.pageLabel })
+      : ''
     const quote = `"${annotation.text}"${pageInfo}`
     inputActions.insertQuote(quote)
   }
@@ -317,38 +323,40 @@ function AnnotationItem({
         )}
         <div className={css.cardActions}>
           {annotationUrl !== null && (
-            <button
-              type="button"
-              className={css.cardActionBtn}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={css.actionSeat}
+              icon={<IconLinkOutlineRegular size={11} />}
               onClick={() => {
                 if (openProtocol !== undefined) void openProtocol(annotationUrl)
               }}
               title={t('openInZoteroTooltip')}
               aria-label={t('openInZotero')}
             >
-              <IconLinkOutlineRegular size={11} />
-              <span>{t('openInZotero')}</span>
-            </button>
+              {t('openInZotero')}
+            </Button>
           )}
           <CopyButton
             value={annotation.text}
             label={t('copy')}
             copiedLabel={t('copied')}
-            className={css.cardActionBtn}
+            className={css.actionSeat}
             icon={<IconCopyOutlineRegular size={11} />}
             title={t('libraryCopyQuote')}
           />
           {inputActions !== undefined && (
-            <button
-              type="button"
-              className={css.cardActionBtn}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={css.actionSeat}
+              icon={<IconNewChatOutlineRegular size={11} />}
               onClick={handleInsert}
               title={t('libraryInsertQuote')}
               aria-label={t('libraryInsertQuote')}
             >
-              <IconNewChatOutlineRegular size={11} />
-              <span>{t('libraryInsertQuote')}</span>
-            </button>
+              {t('libraryInsertQuote')}
+            </Button>
           )}
         </div>
       </div>
@@ -360,9 +368,10 @@ function AnnotationItem({
       )}
 
       {isLong && (
-        <button
-          type="button"
-          className={css.cardToggle}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={css.toggleSeat}
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
         >
@@ -371,14 +380,12 @@ function AnnotationItem({
             size={12}
             className={clsx(css.toggleChevron, expanded && css.toggleChevronOpen)}
           />
-        </button>
+        </Button>
       )}
 
       {annotation.comment !== undefined && annotation.comment !== '' && (
         <div className={css.annotationComment}>
-          <span className={css.commentIcon} aria-hidden="true">
-            💬
-          </span>
+          <CommentIcon size={14} className={css.commentIcon} />
           <p className={css.commentText}>{annotation.comment}</p>
         </div>
       )}
@@ -515,9 +522,10 @@ export function LibraryInspector({
             {detail.abstract}
           </p>
           {detail.abstractTruncated && (
-            <button
-              type="button"
-              className={css.abstractToggle}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={css.toggleSeat}
               aria-expanded={abstractOpen}
               onClick={() => setAbstractOpen((open) => !open)}
             >
@@ -526,7 +534,7 @@ export function LibraryInspector({
                 size={12}
                 className={clsx(css.toggleChevron, abstractOpen && css.toggleChevronOpen)}
               />
-            </button>
+            </Button>
           )}
         </section>
       )}
@@ -563,7 +571,7 @@ export function LibraryInspector({
                     value={detail.doi}
                     label={detail.doi}
                     copiedLabel={t('copied')}
-                    className={css.copyInline}
+                    className={css.copySeat}
                   />
                 </dd>
               </div>
@@ -576,7 +584,7 @@ export function LibraryInspector({
                     value={detail.url}
                     label={detail.url}
                     copiedLabel={t('copied')}
-                    className={css.copyInline}
+                    className={css.copySeat}
                   />
                 </dd>
               </div>
@@ -712,9 +720,10 @@ function ChildSection({
   const [open, setOpen] = useState(defaultOpen)
   return (
     <section className={css.section}>
-      <button
-        type="button"
-        className={css.sectionHeaderBtn}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={css.sectionHeaderSeat}
         aria-expanded={open}
         aria-label={
           open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
@@ -726,7 +735,7 @@ function ChildSection({
           size={12}
           className={clsx(css.toggleChevron, open && css.toggleChevronOpen)}
         />
-      </button>
+      </Button>
       {open && (
         <>
           <ul className={css.childList}>{children}</ul>

@@ -9,7 +9,7 @@
  * CI has no sibling checkout, and a missing list would turn the guard into a
  * no-op.
  *
- * The snapshot carries three facts:
+ * The snapshot carries four facts:
  *
  * 1. `harness` — the pinned harness version the names were read from, so a
  *    version bump without a refresh fails the guard instead of silently
@@ -19,11 +19,15 @@
  *    published, not statically defined, so hand-maintained: `--write` carries
  *    it over untouched. An entry is added deliberately, together with the host
  *    code that publishes it.
+ * 4. `ds` — the host's base tokens (`--ds-*`, defined in `ui-theme/src/styles/
+ *    base.css`). The motion and code-font families live here rather than in
+ *    `--dsw-*`; generating them keeps `style-guard.mjs` from silently passing
+ *    a misspelt `--ds-*` reference.
  *
  * Usage:
  *
  *   node scripts/style-tokens.mjs           # check the snapshot against upstream
- *   node scripts/style-tokens.mjs --write   # rewrite the `dsw` half
+ *   node scripts/style-tokens.mjs --write   # rewrite the `dsw` and `ds` halves
  *
  * `DSH_THEME_DIR` overrides the theme sheet directory for a non-sibling
  * checkout. A missing directory fails the check rather than writing an empty
@@ -67,28 +71,31 @@ export function pinnedHarness(pkg) {
 }
 
 /**
- * Every `--dsw-*` custom property a stylesheet defines.
+ * Every custom property a stylesheet defines under one prefix.
  *
  * Commented-out definitions are not definitions: the sheets carry retired
  * tokens behind `/* … *\/` in a few places, and a name that only survives in a
  * comment would widen the allowlist for a token nothing publishes.
  * @param css - stylesheet source.
+ * @param prefix - the namespace to collect, e.g. `--dsw-` or `--ds-`.
  * @returns the token names, `--` prefix included.
  */
-export function collectThemeTokens(css) {
+export function collectThemeTokens(css, prefix = '--dsw-') {
   const live = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
-  return [...live.matchAll(/(--dsw-[a-z0-9-]+)\s*:/g)].map((match) => match[1])
+  return [...live.matchAll(new RegExp(`(${prefix}[a-z0-9-]+)\\s*:`, 'g'))].map((match) => match[1])
 }
 
 /**
  * The sorted, de-duplicated token list across a directory of stylesheets.
  * @param read - one sheet's source by file name.
  * @param files - sheet file names.
- * @returns every token the theme defines.
+ * @param prefix - the namespace to collect.
+ * @returns every token the theme defines under that prefix.
  */
-export function mergeThemeTokens(read, files) {
+export function mergeThemeTokens(read, files, prefix = '--dsw-') {
   const tokens = new Set()
-  for (const file of files) for (const token of collectThemeTokens(read(file))) tokens.add(token)
+  for (const file of files)
+    for (const token of collectThemeTokens(read(file), prefix)) tokens.add(token)
   return [...tokens].sort()
 }
 
@@ -108,14 +115,15 @@ export function diffTokens(snapshotTokens, upstreamTokens) {
 }
 
 /**
- * The snapshot to write: the freshly read palette, the pin it was read under,
- * and the hand-maintained seam list carried over from the current file.
+ * The snapshot to write: the two generated token families, the pin they were
+ * read under, and the hand-maintained seam list carried over from the current
+ * file.
  * @param current - the committed snapshot, absent on first write.
- * @param facts - the pin and the freshly read palette.
+ * @param facts - the pin and the freshly read token families.
  * @returns the snapshot object, keys in a stable order.
  */
-export function snapshotOf(current, { harness, dsw }) {
-  return { harness, dsw, dsh: [...(current?.dsh ?? [])] }
+export function snapshotOf(current, { harness, dsw, ds = [] }) {
+  return { harness, dsw, dsh: [...(current?.dsh ?? [])], ds }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -130,7 +138,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1)
   }
   const harness = pinnedHarness(JSON.parse(readFileSync(manifest, 'utf8')))
-  const dsw = mergeThemeTokens((name) => readFileSync(join(themeDir, name), 'utf8'), files)
+  const read = (name) => readFileSync(join(themeDir, name), 'utf8')
+  const dsw = mergeThemeTokens(read, files)
+  const ds = mergeThemeTokens(read, files, '--ds-')
   const current = (() => {
     try {
       return JSON.parse(readFileSync(fixture, 'utf8'))
@@ -139,8 +149,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     }
   })()
   if (process.argv.includes('--write')) {
-    writeFileSync(fixture, `${JSON.stringify(snapshotOf(current, { harness, dsw }), null, 2)}\n`)
-    console.log(`style-tokens: wrote ${dsw.length} tokens from ${files.length} sheets`)
+    writeFileSync(
+      fixture,
+      `${JSON.stringify(snapshotOf(current, { harness, dsw, ds }), null, 2)}\n`,
+    )
+    console.log(
+      `style-tokens: wrote ${dsw.length} dsw + ${ds.length} ds tokens from ${files.length} sheets`,
+    )
   } else {
     const problems = []
     if (current === undefined)
@@ -149,17 +164,24 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       if (current.harness !== harness) {
         problems.push(`snapshot describes harness ${current.harness}, the pin is ${harness}`)
       }
-      const { missing, removed } = diffTokens(current.dsw ?? [], dsw)
-      if (missing.length > 0)
-        problems.push(`${missing.length} token(s) not in the snapshot: ${missing.join(', ')}`)
-      if (removed.length > 0)
-        problems.push(`${removed.length} token(s) gone upstream: ${removed.join(', ')}`)
+      for (const [label, committed, upstream] of [
+        ['dsw', current.dsw ?? [], dsw],
+        ['ds', current.ds ?? [], ds],
+      ]) {
+        const { missing, removed } = diffTokens(committed, upstream)
+        if (missing.length > 0)
+          problems.push(
+            `${label}: ${missing.length} token(s) not in the snapshot: ${missing.join(', ')}`,
+          )
+        if (removed.length > 0)
+          problems.push(`${label}: ${removed.length} token(s) gone upstream: ${removed.join(', ')}`)
+      }
     }
     if (problems.length > 0) {
       for (const problem of problems) console.error(`style-tokens: ${problem}`)
       console.error('style-tokens: run node scripts/style-tokens.mjs --write')
       process.exit(1)
     }
-    console.log(`style-tokens ok: ${dsw.length} tokens, harness ${harness}`)
+    console.log(`style-tokens ok: ${dsw.length} dsw + ${ds.length} ds tokens, harness ${harness}`)
   }
 }

@@ -11,6 +11,8 @@ export interface StyleTokenSnapshot {
   readonly dsw: readonly string[]
   /** `--dsh-*` seams this plugin consumes. Hand-maintained. */
   readonly dsh: readonly string[]
+  /** `--ds-*` host base tokens the theme sheets define. Generated. */
+  readonly ds: readonly string[]
 }
 
 /** What the snapshot is written from. */
@@ -19,6 +21,8 @@ export interface StyleTokenFacts {
   readonly harness: string
   /** The freshly read palette. */
   readonly dsw: readonly string[]
+  /** The freshly read host base tokens. */
+  readonly ds?: readonly string[]
 }
 
 /** Names the snapshot and upstream disagree on. */
@@ -37,21 +41,24 @@ export interface StyleTokenDiff {
 export declare function pinnedHarness(pkg: unknown): string
 
 /**
- * Every `--dsw-*` custom property a stylesheet defines.
+ * Every custom property a stylesheet defines under one prefix.
  * @param css - stylesheet source.
+ * @param prefix - the namespace to collect, e.g. `--dsw-` or `--ds-`.
  * @returns the token names, `--` prefix included.
  */
-export declare function collectThemeTokens(css: string): string[]
+export declare function collectThemeTokens(css: string, prefix?: string): string[]
 
 /**
  * The sorted, de-duplicated token list across a directory of stylesheets.
  * @param read - one sheet's source by file name.
  * @param files - sheet file names.
- * @returns every token the theme defines.
+ * @param prefix - the namespace to collect.
+ * @returns every token the theme defines under that prefix.
  */
 export declare function mergeThemeTokens(
   read: (file: string) => string,
   files: readonly string[],
+  prefix?: string,
 ): string[]
 
 /**
@@ -66,10 +73,11 @@ export declare function diffTokens(
 ): StyleTokenDiff
 
 /**
- * The snapshot to write: the freshly read palette, the pin it was read under,
- * and the hand-maintained seam list carried over from the current file.
+ * The snapshot to write: the two generated token families, the pin they were
+ * read under, and the hand-maintained seam list carried over from the current
+ * file.
  * @param current - the committed snapshot, absent on first write.
- * @param facts - the pin and the freshly read palette.
+ * @param facts - the pin and the freshly read token families.
  * @returns the snapshot object, keys in a stable order.
  */
 export declare function snapshotOf(

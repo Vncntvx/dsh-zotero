@@ -76,34 +76,9 @@
 
 /* --- Card Actions & Buttons --- */
 
-/* The 22px quiet rows keep only their seat: `../components/quiet.module.css`
- * owns the stroke, radius, typography, and interaction. */
+/* The host Button draws every control; this is the inspect action's seat. */
 .inspectButton {
   align-self: flex-start;
-}
-
-.actionLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 4px;
-  font: var(--dsw-font-xxxs-11);
-  font-weight: 500;
-  color: var(--dsw-alias-link);
-  text-decoration: none;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: opacity 120ms var(--ds-ease-in-out);
-}
-
-@media (hover: hover) {
-  .actionLink:hover {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
-    opacity: 0.85;
-  }
 }
 
 /* --- Card Lists & Item Cards --- */
@@ -221,33 +196,25 @@
 
 /* --- Code & Citations (zotero_export) --- */
 
+/* The host CodeBlock draws its own surface; these only place the header row
+ * and the block. */
 .codeWrap {
   display: flex;
   flex-direction: column;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  overflow: hidden;
+  gap: 6px;
 }
 
 .codeHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--dsw-alias-bg-layer-1);
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
-  min-height: 28px;
+  gap: 8px;
 }
 
-.codeBox {
+.rawCode {
   margin: 0;
-  padding: 10px 12px;
-  font: var(--dsw-font-markdown-code-block);
-  color: var(--dsw-alias-label-secondary);
-  overflow-x: auto;
   max-height: 360px;
-  white-space: pre;
+  overflow: auto;
 }
 
 /* --- Write Operations & Receipts --- */
@@ -300,17 +267,6 @@
   color: var(--dsw-alias-label-caption);
 }
 
-/* Zotero's own annotation colour, passed in as data (see ChildrenToolView).
-   A hairline ring keeps a pale highlight visible against the card surface. */
-.annotationSwatch {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: var(--dsw-radius-xs);
-  background: var(--zotero-annotation, transparent);
-  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2);
-}
-
 .tagPills {
   display: flex;
   flex-wrap: wrap;
@@ -332,7 +288,6 @@
 @media (prefers-reduced-motion: reduce) {
   .summary,
   .summarySuffix,
-  .actionLink,
   .itemCard,
   .evidenceItem {
     transition: none;

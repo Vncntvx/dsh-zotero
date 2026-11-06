@@ -43,7 +43,11 @@ const palette = JSON.parse(
 const sheet = (css: string) => ({ file: 'probe.module.css', css })
 
 /** The palette a synthetic case resolves against. */
-const KNOWN = { dsw: ['--dsw-alias-label-primary'], dsh: ['--dsh-content-font-size'] }
+const KNOWN = {
+  dsw: ['--dsw-alias-label-primary'],
+  dsh: ['--dsh-content-font-size'],
+  ds: ['--ds-ease-in-out'],
+}
 
 describe('stripComments', () => {
   it('blanks a comment body without moving a single offset', () => {
@@ -111,6 +115,12 @@ describe('tokenReferencesOf', () => {
     const css = '.a { color: var(--dsw-alias-label-primary); --local: 1px; top: var(--local); }'
     expect(tokenReferencesOf(css)).toEqual(['--dsw-alias-label-primary'])
   })
+
+  it('ignores @position-try idents and plugin-local custom properties', () => {
+    const css =
+      '.a { position-try-fallbacks: --zotero-tags-above; padding-left: calc(var(--tree-depth, 0) * 14px); }'
+    expect(tokenReferencesOf(css)).toEqual([])
+  })
 })
 
 describe('unknownTokenViolations', () => {
@@ -131,6 +141,15 @@ describe('unknownTokenViolations', () => {
 
   it('fires on a seam the snapshot does not declare', () => {
     expect(unknownTokenViolations(sheet('.a { top: var(--dsh-unknown); }'), KNOWN)).toHaveLength(1)
+  })
+
+  it('checks the --ds-* base namespace too', () => {
+    expect(
+      unknownTokenViolations(sheet('.a { transition: 1s var(--ds-unknown); }'), KNOWN),
+    ).toHaveLength(1)
+    expect(
+      unknownTokenViolations(sheet('.a { transition: 1s var(--ds-ease-in-out); }'), KNOWN),
+    ).toEqual([])
   })
 })
 
@@ -224,6 +243,14 @@ describe('stateBorderViolations', () => {
       '.rowActive { border-left-color: var(--dsw-alias-state-business-primary); }',
     ].join('\n')
     expect(stateBorderViolations(sheet(css), KNOWN)).toEqual([])
+  })
+
+  it('resolves a suffix-composed variant against its base width', () => {
+    const css = [
+      '.row { border-left: 0.5px solid var(--dsw-alias-border-l2); }',
+      '.rowActive { border-left-color: var(--dsw-alias-state-business-primary); }',
+    ].join('\n')
+    expect(stateBorderViolations(sheet(css), KNOWN)).toHaveLength(1)
   })
 
   it('fires on a state border stated at hairline weight outright', () => {

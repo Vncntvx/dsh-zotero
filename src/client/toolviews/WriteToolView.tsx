@@ -33,6 +33,7 @@ import {
 } from '../../sources/presenters.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
+import linkCss from '../components/link.module.css'
 
 /** The write tools this view renders. */
 export type WriteToolName =
@@ -455,7 +456,7 @@ export function WriteToolView(props: WriteToolViewProps) {
         {() =>
           rawText ? (
             <div className={css.receiptCard}>
-              <RawTextFallback text={rawText} />
+              <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
             </div>
           ) : null
         }
@@ -507,7 +508,9 @@ export function WriteToolView(props: WriteToolViewProps) {
                 <Tag tone="danger">{t('toolFailed')}</Tag>
                 <span className={css.receiptTitle}>{errorSummary}</span>
               </div>
-              {rawText && <RawTextFallback text={rawText} />}
+              {rawText && (
+                <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
+              )}
             </div>
           )
         }
@@ -520,10 +523,10 @@ export function WriteToolView(props: WriteToolViewProps) {
 
             {parentRef && (
               <div className={css.itemActions}>
-                <span className={css.itemMeta}>{t('toolParentItem')}:</span>
+                <span className={css.itemMeta}>{t('toolParentItemLine')}</span>
                 <button
                   type="button"
-                  className={css.actionLink}
+                  className={linkCss.linkDense}
                   onClick={() => {
                     const targetUrl = parentSelectUrl ?? selectUrlOf(parentRef)
                     if (targetUrl) void client.openProtocol(targetUrl)
@@ -539,7 +542,8 @@ export function WriteToolView(props: WriteToolViewProps) {
                   label={t('copyZoteroLink')}
                   copiedLabel={t('copied')}
                   title={t('copyZoteroLinkTooltip')}
-                  className={css.actionLink}
+                  variant="link"
+                  className={linkCss.linkDense}
                 />
               </div>
             )}
@@ -561,7 +565,9 @@ export function WriteToolView(props: WriteToolViewProps) {
               </div>
             )}
 
-            {rawText && <RawTextFallback text={rawText} />}
+            {rawText && (
+              <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
+            )}
           </div>
         )
       }}

@@ -176,12 +176,14 @@ export function declarationsOf(body) {
 }
 
 /**
- * Every design-system token a stylesheet references.
+ * Every design-system token a stylesheet references. The three namespaces are
+ * the static palette (`--dsw-*`), the runtime preference seams (`--dsh-*`), and
+ * the host base tokens (`--ds-*`, defined in `ui-theme/src/styles/base.css`).
  * @param text - stylesheet source, or a single value.
  * @returns the referenced names, `--` prefix included.
  */
 export function tokenReferencesOf(text) {
-  return [...text.matchAll(/var\(\s*(--(?:dsw|dsh)-[a-z0-9-]+)/g)].map((match) => match[1])
+  return [...text.matchAll(/var\(\s*(--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)].map((match) => match[1])
 }
 
 /**
@@ -316,9 +318,9 @@ function subjectClassesOf(selector) {
  */
 export function unknownTokenViolations(source, palette) {
   const css = stripComments(source.css)
-  const known = new Set([...palette.dsw, ...palette.dsh])
+  const known = new Set([...palette.dsw, ...(palette.dsh ?? []), ...(palette.ds ?? [])])
   const violations = []
-  for (const match of css.matchAll(/var\(\s*(--(?:dsw|dsh)-[a-z0-9-]+)/g)) {
+  for (const match of css.matchAll(/var\(\s*(--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)) {
     if (known.has(match[1])) continue
     violations.push({
       file: source.file,
@@ -422,13 +424,38 @@ export function fullRoundRadiusViolations(source) {
 }
 
 /**
+ * Resolve a rule's inherited border widths against the base classes it
+ * qualifies. An attribute variant (`.badge[data-tone]`) resolves exactly; a
+ * suffix-composed variant (`.itemRowActive`) resolves against the longest base
+ * class name that prefixes it (`.itemRow`), which is the class whose width it
+ * restates the colour of.
+ * @param baseWidths - widths keyed by base class name.
+ * @param key - the variant's own base class name.
+ * @returns the inherited widths, empty when no base declares one.
+ */
+function resolveBaseWidths(baseWidths, key) {
+  const exact = baseWidths.get(key)
+  if (exact !== undefined) return exact
+  let best = ''
+  let widths = {}
+  for (const [base, candidate] of baseWidths) {
+    if (key.startsWith(base) && base.length > best.length) {
+      best = base
+      widths = candidate
+    }
+  }
+  return widths
+}
+
+/**
  * Violations of the state-border floor: a hairline in a state colour reads as a
  * tint, not a mark, so a state border is at least one pixel.
  *
  * A variant rule usually restates only the colour, taking its width from the
  * class it qualifies; the effective width is therefore resolved across the
- * pair, and a variant that neither states nor inherits a full pixel is the
- * failure this catches.
+ * pair, both for attribute variants and for suffix-composed class names. A
+ * variant that neither states nor inherits a full pixel is the failure this
+ * catches.
  * @param source - one stylesheet.
  * @returns the violations, empty when every state border is full weight.
  */
@@ -449,7 +476,7 @@ export function stateBorderViolations(source) {
     const sides = stateSidesOf(declarations)
     if (sides.length === 0) continue
     const stated = sideWidthsOf(declarations)
-    const inherited = baseWidths.get(baseClassOf(rule.selector) ?? '') ?? {}
+    const inherited = resolveBaseWidths(baseWidths, baseClassOf(rule.selector) ?? '')
     const thin = sides.filter((side) => {
       const width = stated[side] ?? inherited[side]
       return width !== undefined && width < STATE_BORDER_FLOOR

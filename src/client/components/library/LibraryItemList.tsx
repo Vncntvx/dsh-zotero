@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton } from '../IconButton.tsx'
 import { isPdfContentType } from '../../../media-types.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
 import { LibraryPager } from './LibraryPager.tsx'
@@ -80,15 +81,14 @@ export function LibraryItemList({
             </span>
           )}
           {locate !== undefined && (
-            <button
-              type="button"
-              className={clsx(css.toolButton, css.listLocate)}
+            <IconButton
+              shape="square"
+              icon={<IconWorkspaceTreeOutlineMedium className={css.actionIcon} />}
+              className={css.listLocate}
               aria-label={t('libraryLocate')}
               title={t('libraryLocate')}
               onClick={locate}
-            >
-              <IconWorkspaceTreeOutlineMedium className={css.actionIcon} />
-            </button>
+            />
           )}
         </div>
       </header>
@@ -164,7 +164,7 @@ export function LibraryItemList({
                     {/* A detection badge, not an absence claim: the search
                      * index's best-attachment pick names a PDF when one is
                      * indexed; rows without it may still carry files. */}
-                    {hasPdf && <span className={css.pdfBadge}>PDF</span>}
+                    {hasPdf && <span className={css.pdfBadge}>{t('badgePdf')}</span>}
                   </button>
                 </li>
               )

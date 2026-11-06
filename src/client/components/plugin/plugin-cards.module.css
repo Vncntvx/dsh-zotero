@@ -218,18 +218,9 @@
   overflow-wrap: anywhere;
 }
 
-.diagDetail summary {
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-}
-
-.diagDetail pre {
-  margin: 4px 0 0;
-  font: var(--dsw-font-markdown-code-block-small);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--dsw-alias-label-secondary);
+/* The detail row is a host DisclosureRow; only its seat belongs here. */
+.diagDetail {
+  margin-top: 2px;
 }
 
 .diagEmpty {

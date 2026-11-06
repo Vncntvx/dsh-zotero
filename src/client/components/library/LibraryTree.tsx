@@ -10,6 +10,7 @@ import clsx from 'clsx'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
+  DisclosureRow,
   IconChevronRightOutlineMedium,
   IconDeliverDocMedium,
   IconFolderCloseMedium,
@@ -353,16 +354,7 @@ export function LibraryTree({
                 </button>
               </div>
               {row.conditions.length > 0 && (
-                <details className={clsx(css.caption, css.searchConditions)}>
-                  <summary>{t('librarySearchConditions')}</summary>
-                  <ol>
-                    {row.conditions.map((condition, index) => (
-                      <li key={index}>
-                        {condition.condition} · {condition.operator} · {condition.value}
-                      </li>
-                    ))}
-                  </ol>
-                </details>
+                <SavedSearchConditions conditions={row.conditions} t={t} />
               )}
             </li>
           )
@@ -376,5 +368,35 @@ export function LibraryTree({
         retry={retrySavedSearches}
       />
     </nav>
+  )
+}
+
+/** The saved-search condition lines, collapsed behind a host DisclosureRow. */
+function SavedSearchConditions({
+  conditions,
+  t,
+}: {
+  readonly conditions: SavedSearchRowView['conditions']
+  readonly t: TranslateNS<'zotero'>
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <DisclosureRow
+      icon={<IconSearchOutlineMedium />}
+      title={t('librarySearchConditions')}
+      open={open}
+      expandable
+      expandOnRowClick={false}
+      onToggle={() => setOpen((value) => !value)}
+      className={clsx(css.caption, css.searchConditions)}
+    >
+      <ol>
+        {conditions.map((condition, index) => (
+          <li key={index}>
+            {condition.condition} · {condition.operator} · {condition.value}
+          </li>
+        ))}
+      </ol>
+    </DisclosureRow>
   )
 }

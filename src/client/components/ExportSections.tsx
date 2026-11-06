@@ -27,7 +27,7 @@ import {
 import { ExportCard } from './ExportCard.tsx'
 import { ExportDocumentRow } from './ExportDocumentRow.tsx'
 import css from './cards.module.css'
-import quiet from './quiet.module.css'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 
 interface ExportSectionsProps {
   readonly exports: readonly ExportArtifact[]
@@ -72,15 +72,15 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
                   label={t('copyAll')}
                   copiedLabel={t('copied')}
                 />
-                <button
-                  type="button"
-                  className={quiet.quiet}
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     downloadSection(section)
                   }}
                 >
                   {`${t('downloadAll')} ${extensionOf(section.format)}`}
-                </button>
+                </Button>
               </span>
             </header>
           )}
@@ -92,15 +92,15 @@ export function ExportSections({ exports, t }: ExportSectionsProps) {
               <span className={css.unresolvedItemsText}>
                 {t('unresolvedItemsNote', { count: group.count })}
               </span>
-              <button
-                type="button"
-                className={quiet.quiet}
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   downloadArtifact(group.artifact)
                 }}
               >
                 {`${t('downloadFull')} ${formatLabelOf(group.artifact.format, t)}`}
-              </button>
+              </Button>
             </div>
           ))}
           {section.unresolved.map((artifact) => (
