@@ -34,6 +34,7 @@ export default defineConfig({
         'src/client/css-modules.d.ts',
         'src/client/build-info-globals.d.ts',
         'src/client/plugin-slots.d.ts',
+        'src/client/deliverables-turn-data.d.ts',
         'src/client/sources/model.ts',
       ],
       // Thresholds are **ratchets per layer**, not aspirations: each number is

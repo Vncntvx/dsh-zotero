@@ -19,9 +19,10 @@ export interface FocusViolation {
  * Blank comments and string/template bodies while preserving every offset, so
  * matches in the result map to real line numbers.
  * @param source - the file content.
+ * @param blankStrings - whether to blank string bodies as well as comments; defaults to true.
  * @returns same-length text with comments and string bodies blanked.
  */
-export declare function stripCommentsAndStrings(source: string): string
+export declare function stripCommentsAndStrings(source: string, blankStrings?: boolean): string
 
 /**
  * Find focused or disabled test constructs — including the chained
@@ -64,3 +65,12 @@ export declare function helperSizeViolations(
   baseline?: Readonly<Record<string, number>>,
   limit?: number,
 ): HelperSizeViolation[]
+
+/**
+ * Find imports of an upstream package's unpublished source tree.
+ * @param source - the file content.
+ * @returns each offending import with its 1-based line and module specifier.
+ */
+export declare function upstreamSourceImportsOf(
+  source: string,
+): Array<{ readonly line: number; readonly specifier: string }>

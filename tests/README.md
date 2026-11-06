@@ -50,6 +50,13 @@ never in a file named after a number or a function.
   test locations, primary verification levels, and relevant acceptance packs
   in a short module README or the change description. Update that record when
   ownership changes; do not maintain a second inventory of every test case.
+- The `deliverables.file.actions` turn-data reader is verified at contract
+  level by `client/deliverables/turn-data-contract.spec.ts` and at
+  browser-behaviour level by
+  `client/deliverables/DeliverableZoteroAction.spec.tsx`. Both consume the one
+  `client/deliverables/support/turn-projection.ts` fixture, which builds a
+  typed `ChatSnapshot` from public harness types rather than importing the
+  upstream package's unpublished source tree.
 - Current split-module ownership: `src/local/item-schema-directory.ts` is
   verified by `local/item-schema-directory.spec.ts` at module-behaviour level,
   with browse and item-write suites covering its consumers; collection writes
@@ -308,8 +315,8 @@ instead of reporting a mocked pass as live verification.
 
 ## Guards
 
-`npm run lint:test` (also the first step of `npm test`) enforces six mechanical
-rules; each one exists because this repository hit it:
+`npm run lint:test` (also the first step of `npm test`) enforces seven
+mechanical rules; each one exists because this repository hit it:
 
 - no raw control bytes in source or prose. The SourcesTab spec (since split
   into `SourcesTab.*.spec.tsx`) once carried NUL bytes, which made the file
@@ -322,7 +329,15 @@ rules; each one exists because this repository hit it:
   extension nor a declared binary one, so an asset type is skipped only after
   someone decided it should be;
 - helpers stay at or below 300 lines; files over the limit are frozen in a
-  path-specific baseline that only shrinks, and new files may never enter it.
+  path-specific baseline that only shrinks, and new files may never enter it;
+- no `src/**` or `tests/**` import may reach into an upstream
+  `@deepseek-ai/*` package's private source subtree. Those packages advertise
+  a `./src/*` export but ship only `lib/**` and `locale/*.json`, so such an
+  import resolves against a sibling checkout and breaks both typecheck and
+  Vite resolution in the registry-only client lane CI runs. Only import
+  syntax is scanned: the `/src/` string fixtures in the artifact-audit spec
+  and in the guard's own positive/negative cases, plus commented-out
+  examples, are not dependencies.
 
 The helper import graph — specs → module support → shared helpers, with no
 cross-module support references, no support importing specs, and no shared

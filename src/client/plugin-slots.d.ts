@@ -11,11 +11,12 @@
  * contracts merge with `import type`, never with a runtime import
  * (slots.md:200).
  *
- * The `turn-deliverables.ts` import is deliberately a type-only source import:
- * the package's public `/client` entry does not re-export the
- * `ConversationTurnDataMap` augmentation, and its published tarball ships no
- * `src/`. This declaration file is client typecheck input only; client types
- * are not emitted into `lib/`, so the published package never resolves it.
+ * The `deliverables` turn-data key is declared locally in
+ * `deliverables-turn-data.d.ts`: the upstream package's public `/client`
+ * entry does not re-export its `ConversationTurnDataMap` augmentation, and
+ * the source file that declares it is absent from the published tarball. No
+ * import in this program may reach into an upstream package's private source
+ * subtree; `npm run lint:test` enforces that boundary.
  *
  * @module dsh-zotero/client/plugin-slots.d.ts
  */
@@ -28,7 +29,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-deliverables/client'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'
+// Generated remote namespaces are published but not ambient: without this
+// import `ctx.remote.credentials` is typed only when a sibling checkout leaks
+// the settings-controller declaration into the program. A registry-only
+// install must load it through the package's public `/remote` entry.
+import type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
 import type { ZoteroClientFace } from './actions/client-face.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

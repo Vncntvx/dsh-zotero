@@ -24,6 +24,7 @@ yarn-error.log*
 # Local tool artifacts
 .zcode/
 .workbuddy/
+.codebuddy/
 
 # Local dev overlays carry absolute checkout paths; ship the templates instead
 dev.cordis.yml

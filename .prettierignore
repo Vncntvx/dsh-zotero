@@ -9,3 +9,4 @@ package-lock.json
 # not part of the release gate's surface.
 .workbuddy/
 .zcode/
+.codebuddy/

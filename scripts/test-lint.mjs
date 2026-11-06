@@ -316,10 +316,17 @@ function checkLanes() {
  * regex needs a full lexer, a mistake there would blank real code (hiding a
  * violation), and a regex body containing `.only(`/`.skip(` does not occur in
  * this suite.
+ *
+ * `blankStrings = false` keeps string bodies intact. The upstream-source
+ * import guard needs both readings: comments removed so a documented example
+ * does not count as a dependency, and string bodies still present so the
+ * module specifier can be named. Comparing the two readings at each match
+ * position is what distinguishes a real import from a string fixture.
  * @param source - the file content.
- * @returns same-length text with comments and string bodies blanked.
+ * @param blankStrings - whether to blank string and template bodies too.
+ * @returns same-length text with comments (and optionally strings) blanked.
  */
-export function stripCommentsAndStrings(source) {
+export function stripCommentsAndStrings(source, blankStrings = true) {
   const out = source.split('')
   const n = source.length
   let i = 0
@@ -349,7 +356,7 @@ export function stripCommentsAndStrings(source) {
       }
       continue
     }
-    if (ch === '"' || ch === "'" || ch === '`') {
+    if (blankStrings && (ch === '"' || ch === "'" || ch === '`')) {
       const quote = ch
       i += 1
       while (i < n) {
@@ -427,6 +434,62 @@ function checkFocus() {
   }
 }
 
+/**
+ * The published `@deepseek-ai/*` packages advertise `"./src/*": "./src/*"` in
+ * `exports` while `files` ships only `lib/**` and `locale/*.json`. An import
+ * into that subtree resolves in a sibling checkout (where this workspace
+ * links `node_modules` to source) and fails both typecheck and Vite
+ * resolution in the registry-only client lane CI runs. `src/**` and
+ * `tests/**` must depend on public entries only.
+ *
+ * Only import syntax counts: `tests/unit/harness-state.spec.ts` legitimately
+ * carries `/src/` specifiers inside string fixtures for its own artifact
+ * audit. A commented-out example is not a dependency either. Comparing a
+ * comment-only stripping with the full comment-and-string blanking at the
+ * match position is what keeps those two cases out of the result.
+ *
+ * Regex literals are not stripped (see {@link stripCommentsAndStrings}); a
+ * regex containing a fake import specifier would be reported, and no such
+ * literal exists in this suite.
+ * @param source - the file content.
+ * @returns each offending import with its 1-based line and module specifier.
+ */
+const UPSTREAM_SOURCE_IMPORT =
+  /\b(?:from|import|require)\s*\(?\s*['"](@deepseek-ai\/[a-z0-9-]+\/src\/[^'"\n]+)['"]/g
+
+export function upstreamSourceImportsOf(source) {
+  const noComments = stripCommentsAndStrings(source, false)
+  const codeOnly = stripCommentsAndStrings(source)
+  const found = []
+  for (const match of noComments.matchAll(UPSTREAM_SOURCE_IMPORT)) {
+    if (codeOnly[match.index] === ' ') continue
+    found.push({
+      line: noComments.slice(0, match.index).split('\n').length,
+      specifier: match[1],
+    })
+  }
+  return found
+}
+
+/** No source or spec may import an upstream package's unpublished source tree. */
+function checkUpstreamSourceImports() {
+  const sourceFile = /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/
+  for (const dir of ['src', 'tests']) {
+    for (const path of filesUnder(join(root, dir))) {
+      if (!sourceFile.test(path)) continue
+      const source = readFileSync(path, 'utf8')
+      for (const violation of upstreamSourceImportsOf(source)) {
+        failures.push(
+          [
+            `${relative(root, path)}:${violation.line} imports ${violation.specifier}`,
+            `  fix: use the package's public entry, or declare the contract locally; the published tarball ships no src tree`,
+          ].join('\n'),
+        )
+      }
+    }
+  }
+}
+
 const invokedDirectly =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
 
@@ -437,6 +500,7 @@ if (invokedDirectly) {
   checkExtensionCoverage()
   checkLanes()
   checkFocus()
+  checkUpstreamSourceImports()
 
   if (failures.length > 0) {
     process.stderr.write(`test-lint: ${failures.length} problem(s)\n\n`)

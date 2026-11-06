@@ -16,6 +16,7 @@ import {
   helperSizeViolations,
   stripCommentsAndStrings,
   unscannedExtensionsOf,
+  upstreamSourceImportsOf,
 } from '../../scripts/test-lint.mjs'
 
 describe('focus guard', () => {
@@ -116,6 +117,62 @@ describe('extension coverage guard', () => {
   it('scans the locale catalogs as text roots', () => {
     expect(TEXT_ROOTS).toContain('locale')
     expect(BINARY_EXTENSIONS).toEqual(['.png'])
+  })
+})
+
+describe('upstream private-source import guard', () => {
+  it('names the specifier and line for every import spelling', () => {
+    const source = [
+      `import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'`,
+      `import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembler.ts'`,
+      `const lazy = import('@deepseek-ai/dsh-tool-present/src/types.ts')`,
+      `const sync = require('@deepseek-ai/dsh-session/src/types.ts')`,
+      `import {`,
+      `  deliverablesDefinition,`,
+      `} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'`,
+    ].join('\n')
+    expect(upstreamSourceImportsOf(source)).toEqual([
+      {
+        line: 1,
+        specifier: '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts',
+      },
+      {
+        line: 2,
+        specifier: '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembler.ts',
+      },
+      { line: 3, specifier: '@deepseek-ai/dsh-tool-present/src/types.ts' },
+      { line: 4, specifier: '@deepseek-ai/dsh-session/src/types.ts' },
+      {
+        line: 7,
+        specifier: '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts',
+      },
+    ])
+  })
+
+  it('leaves public entries, string fixtures, and documented examples alone', () => {
+    const source = [
+      `import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'`,
+      `import type {} from '@deepseek-ai/dsh-client-ui-deliverables/client'`,
+      `const found = collectArtifactProblems(tree, ['@deepseek-ai/dsh-client-ui-chat/src/panel.ts'])`,
+      `const example = "import { x } from '@deepseek-ai/dsh-session/src/types.ts'"`,
+      `// import { turn } from '@deepseek-ai/dsh-session/src/types.ts'`,
+      `/* import { y } from '@deepseek-ai/dsh-tool-present/src/types.ts' */`,
+    ].join('\n')
+    expect(upstreamSourceImportsOf(source)).toEqual([])
+  })
+
+  it('keeps specifiers readable in comment-only stripping', () => {
+    const source = [
+      `// import { x } from '@deepseek-ai/dsh-session/src/types.ts'`,
+      `import { y } from '@deepseek-ai/dsh-session/src/fork.ts'`,
+    ].join('\n')
+    expect(stripCommentsAndStrings(source, false)).toContain(
+      `'@deepseek-ai/dsh-session/src/fork.ts'`,
+    )
+    expect(stripCommentsAndStrings(source)).not.toContain(`'@deepseek-ai/dsh-session/src/fork.ts'`)
+    expect(upstreamSourceImportsOf(source)).toEqual([
+      { line: 2, specifier: '@deepseek-ai/dsh-session/src/fork.ts' },
+    ])
   })
 })
 
