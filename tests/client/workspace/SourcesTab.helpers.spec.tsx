@@ -25,6 +25,7 @@ import { preparing, running, settled } from '../helpers/blocks.ts'
 import { CONNECTED, UNAVAILABLE, chatOf, toolRow } from '../helpers/sources-tab-harness.tsx'
 
 import { mockT } from '../helpers/mock-translate.ts'
+import { statusView } from '../../helpers/status-view.ts'
 const t = mockT
 
 describe('collectZoteroCalls', () => {
@@ -230,11 +231,7 @@ describe('status projection helpers', () => {
       connectionDiagnosisOf(
         {
           kind: 'unavailable',
-          data: {
-            providerId: 'local',
-            connected: false,
-            diagnosis: 'ZOTERO_NOT_RUNNING: unreachable',
-          },
+          data: statusView({ connected: false, diagnosis: 'ZOTERO_NOT_RUNNING: unreachable' }),
           checkedAt: '10:00:00',
         },
         t,
@@ -244,7 +241,7 @@ describe('status projection helpers', () => {
       connectionDiagnosisOf(
         {
           kind: 'unavailable',
-          data: { providerId: 'local', connected: false, diagnosis: '' },
+          data: statusView({ connected: false, diagnosis: '' }),
           checkedAt: '10:00:00',
         },
         t,

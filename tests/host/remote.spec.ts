@@ -14,6 +14,7 @@ import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src
 import { TYPERT_MANIFEST } from '../../src/typert.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { rejectionOf } from './support/open-protocol.js'
+import { statusView } from '../helpers/status-view.ts'
 
 /** A signal that never aborts: direct calls pass the carrier signal the gateway would inject. */
 const LIVE_SIGNAL = new AbortController().signal
@@ -38,18 +39,18 @@ describe('the zotero status endpoint', () => {
     )
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
     const status = await runtime.status(LIVE_SIGNAL)
-    expect(status).toEqual({
-      providerId: 'local',
-      // The authority actually dialled, the mock server's own host:port, not
-      // the configured default. The card's live refresh replaces the parsed
-      // command text with this view, so an endpoint dropped here would blank
-      // the row the user just refreshed.
-      endpoint: new URL(lane.mock.baseUrl).host,
-      connected: true,
-      apiVersion: '3',
-      schemaVersion: '37',
-      serverId: 'S1',
-    })
+    // The authority actually dialled is the mock server's own host:port, not
+    // the configured default. The card's live refresh replaces the parsed
+    // command text with this view, so an endpoint dropped here would blank
+    // the row the user just refreshed.
+    expect(status).toEqual(
+      statusView({
+        endpoint: new URL(lane.mock.baseUrl).host,
+        apiVersion: '3',
+        schemaVersion: '37',
+        serverId: 'S1',
+      }),
+    )
     // A connected probe has nothing to diagnose: the `ZOTERO_DIAGNOSIS_OK`
     // sentinel the host status carries is stripped at the wire, so the card
     // never renders a diagnosis box for a healthy service.
@@ -161,11 +162,9 @@ describe('the zotero status endpoint', () => {
     const context = new Context()
     await context.plugin(TypertRegistry)
     new ZoteroRuntime(context)
-    await expect(context.get('zoteroRemote')!.status(LIVE_SIGNAL)).resolves.toEqual({
-      providerId: 'local',
-      connected: false,
-      diagnosis: 'The Zotero service is not composed.',
-    })
+    await expect(context.get('zoteroRemote')!.status(LIVE_SIGNAL)).resolves.toEqual(
+      statusView({ connected: false, diagnosis: 'The Zotero service is not composed.' }),
+    )
     await context.fiber.dispose()
   })
 })
@@ -229,14 +228,12 @@ describe('the zotero typert manifest', () => {
     const schema = result!.create()
     // `diagnosis` is optional on the wire: a connected view carries none, and
     // absence must parse rather than fall over the strict object.
-    const valid = schema.parse({ providerId: 'local', connected: true })
-    expect(valid).toEqual({ providerId: 'local', connected: true })
+    const valid = schema.parse(statusView())
+    expect(valid).toEqual(statusView())
     // A failure view keeps its code-bearing string.
-    const failed = schema.parse({
-      providerId: 'local',
-      connected: false,
-      diagnosis: 'ZOTERO_NOT_RUNNING: down',
-    })
+    const failed = schema.parse(
+      statusView({ connected: false, diagnosis: 'ZOTERO_NOT_RUNNING: down' }),
+    )
     expect(failed).toMatchObject({ diagnosis: 'ZOTERO_NOT_RUNNING: down' })
     expect(() => schema.parse({ providerId: 'local', connected: 'yes' })).toThrow()
   })
@@ -283,7 +280,7 @@ describe('the zotero typert manifest', () => {
       { create?: () => { parse: (v: unknown) => unknown } } | undefined
     expect(typeof result?.create).toBe('function')
     const schema = result!.create!()
-    expect(schema.parse({ providerId: 'local', connected: true })).toMatchObject({
+    expect(schema.parse(statusView())).toMatchObject({
       providerId: 'local',
       connected: true,
     })

@@ -24,7 +24,7 @@ import {
 } from '../helpers/source-fixtures.ts'
 import { mountView } from '../helpers/workspace-harness.tsx'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
-import type { ZoteroStatusView } from '../../../src/client/remote.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the view needs the shared DOM face.
@@ -55,13 +55,11 @@ describe('toolbar', () => {
   it('shows the write state when the Remote status carries the write block', () => {
     const connection: ConnectionView = {
       kind: 'connected',
-      data: {
-        providerId: 'local',
-        connected: true,
+      data: statusView({
         apiVersion: '3',
         serverId: 'sPMHtLD6HHBd',
         write: { enabled: true, authorized: false },
-      } as ZoteroStatusView,
+      }),
       checkedAt: '10:00:00',
     }
     const { view } = mountView(singleFixture(), connection)

@@ -14,27 +14,26 @@ import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-c
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { vi, type Mock } from 'vitest'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
+import type { SourceWorkspace } from '../../../src/sources/model.ts'
 import { SourcesTab, type SourcesTabProps } from '../../../src/client/components/SourcesTab.tsx'
 import { zoteroClientStub } from './zotero-client.ts'
 import { settled } from './blocks.ts'
 import { mockT } from './mock-translate.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 /** A connected probe result: the note plus the facts the diagnostic menu shows. */
-export const CONNECTED: ZoteroStatusView = {
-  providerId: 'local',
-  connected: true,
+export const CONNECTED: ZoteroStatusView = statusView({
   apiVersion: '3',
   schemaVersion: '37',
   serverId: 'sPMHtLD6HHBd',
   diagnosis: 'ok',
-}
+})
 
 /** The refused probe: a diagnosis line, no instance facts. */
-export const UNAVAILABLE: ZoteroStatusView = {
-  providerId: 'local',
+export const UNAVAILABLE: ZoteroStatusView = statusView({
   connected: false,
   diagnosis: 'connection refused',
-}
+})
 
 /** The probe face the specs script; loose, so a test spy stays assignable. */
 export type StatusProbe = () => Promise<{ ok: boolean; value?: unknown; error?: unknown }>
@@ -245,6 +244,8 @@ export function sessionsOf(sessionId = 's1', cwd?: string): SessionsStub {
  *   the selector `useSessions` is called with, so a spec can pin the row the
  *   file address resolves against.
  * @param sessions - the catalog snapshot `useSessions` answers from.
+ * @param projection - the composed projection value `useProjection` answers
+ *   with; undefined mounts the tab without one (the not-composed default).
  */
 export function mountTab(
   chat: ChatSnapshot | undefined,
@@ -257,6 +258,7 @@ export function mountTab(
     ) => void
   },
   sessions: SessionsStub = sessionsOf(),
+  projection?: SourceWorkspace,
 ): { view: ReturnType<typeof render> } {
   const props = {
     t: mockT,
@@ -275,7 +277,7 @@ export function mountTab(
       return chat === undefined ? undefined : sel(chat)
     },
     ...(inputActions === undefined ? {} : { inputActions }),
-    useProjection: () => undefined,
+    useProjection: () => projection,
     useRemoteAccess: () => true,
     useAccess: () => true,
     useZoteroClient: () => zoteroClientStub(),

@@ -1,8 +1,11 @@
 /**
- * The wire boundary schemas both codec arms materialize. The host registry
- * (`src/status-codec.ts`) parses payloads with them through `create()`, and
- * the browser arm (`src/client/status-codec.ts`) carries the same objects.
- * Neither half imports the other's module.
+ * The wire boundary's single source: every zod schema the `zotero` namespace
+ * validates with, and the one shared invocation list both halves register.
+ * `ZOTERO_COMMON_INVOCATIONS` materializes each schema once through
+ * `strictCodec()`; the host manifest aliases it in `src/status-codec.ts` and
+ * the browser face aliases it in `src/client/status-codec.ts`. Neither half
+ * imports the other's module or builds its own descriptor list, so the two
+ * sides cannot disagree about a boundary.
  *
  * Client-safe: its imports are `zod`, the contract's own types, type-only
  * domain unions from `types.ts` (erased at build), and the runtime constants
@@ -16,7 +19,7 @@
  */
 
 import { z } from 'zod'
-import type { TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
+import type { InvocationDescriptor, TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ZoteroChildRowsView,
   ZoteroLibraryExportFormatView,
@@ -26,6 +29,45 @@ import type {
   ZoteroLibraryWriteRequestView,
 } from './contract.js'
 import type { ZoteroItemizedExportFormat } from './types.js'
+import {
+  ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL,
+  ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL,
+  ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL,
+  ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL,
+  ZOTERO_REF_PARAM_TYPE_SYMBOL,
+  ZOTERO_REPORT_RESULT_TYPE_SYMBOL,
+  ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL,
+  ZOTERO_SOURCE_PROJECTION_FAILED,
+  ZOTERO_STATUS_TYPE_SYMBOL,
+  ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL,
+  zoteroCollectionPathInvocation,
+  zoteroDiagnosticsInvocation,
+  zoteroLibraryBrowseInvocation,
+  zoteroLibraryChildPageInvocation,
+  zoteroLibraryExportInvocation,
+  zoteroLibraryItemInvocation,
+  zoteroLibrarySearchInvocation,
+  zoteroLibraryWriteInvocation,
+  zoteroOpenProtocolInvocation,
+  zoteroReportClientErrorInvocation,
+  zoteroResolveAttachmentInvocation,
+  zoteroRevokeWriteGrantInvocation,
+  zoteroStatusInvocation,
+} from './contract.js'
 import {
   ZOTERO_CHILD_PAGE_MAX_ROWS,
   ZOTERO_EXPORT_FORMATS,
@@ -62,6 +104,17 @@ export function strictCodec(typeSymbol: string, schema: z.ZodType): TypertCodec 
 export const zoteroStatusSchema = z
   .object({
     providerId: z.string(),
+    sourceProjection: z.discriminatedUnion('state', [
+      z.object({ state: z.literal('not-composed') }).strict(),
+      z.object({ state: z.literal('pending') }).strict(),
+      z.object({ state: z.literal('ready') }).strict(),
+      z
+        .object({
+          state: z.literal('failed'),
+          code: z.literal(ZOTERO_SOURCE_PROJECTION_FAILED),
+        })
+        .strict(),
+    ]),
     // Optional on the wire because a service that is not composed dialled
     // nothing; required of every answer that reached a provider, which is what
     // `ZoteroStatus` (the provider's own record) carries.
@@ -708,3 +761,53 @@ export const zoteroCollectionPathResultSchema = z
   })
   .strict()
   .readonly()
+
+export const ZOTERO_STATUS_RESULT_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
+
+export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC),
+  zoteroResolveAttachmentInvocation(
+    strictCodec(ZOTERO_REF_PARAM_TYPE_SYMBOL, zoteroRefSchema),
+    strictCodec(ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL, zoteroAttachmentLocationSchema),
+  ),
+  zoteroDiagnosticsInvocation(strictCodec(ZOTERO_DIAGNOSTICS_TYPE_SYMBOL, zoteroDiagnosticsSchema)),
+  zoteroReportClientErrorInvocation(
+    strictCodec(ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL, zoteroClientErrorReportSchema),
+    strictCodec(ZOTERO_REPORT_RESULT_TYPE_SYMBOL, zoteroReportResultSchema),
+  ),
+  zoteroOpenProtocolInvocation(
+    strictCodec(ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL, zoteroProtocolUrlSchema),
+    strictCodec(ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL, zoteroOpenProtocolResultSchema),
+  ),
+  zoteroRevokeWriteGrantInvocation(
+    strictCodec(ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL, zoteroWriteGrantRevokeSchema),
+  ),
+  zoteroCollectionPathInvocation(
+    strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
+    strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),
+  ),
+  zoteroLibraryBrowseInvocation(
+    strictCodec(ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL, zoteroLibraryBrowseRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL, zoteroLibraryBrowseResultSchema),
+  ),
+  zoteroLibrarySearchInvocation(
+    strictCodec(ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL, zoteroLibrarySearchRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL, zoteroSearchResultSchema),
+  ),
+  zoteroLibraryItemInvocation(
+    strictCodec(ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL, zoteroLibraryItemRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL, zoteroItemDetailSchema),
+  ),
+  zoteroLibraryChildPageInvocation(
+    strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL, zoteroLibraryChildPageRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL, zoteroChildPageSchema),
+  ),
+  zoteroLibraryExportInvocation(
+    strictCodec(ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL, zoteroLibraryExportRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL, zoteroLibraryExportResultSchema),
+  ),
+  zoteroLibraryWriteInvocation(
+    strictCodec(ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL, zoteroLibraryWriteRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL, zoteroLibraryWriteResultSchema),
+  ),
+])

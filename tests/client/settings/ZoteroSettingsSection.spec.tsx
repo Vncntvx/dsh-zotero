@@ -35,6 +35,7 @@ import {
 import { fakeScope, type FakeScope } from '../helpers/fake-scope.ts'
 import { emptyCredentialPort } from '../helpers/credential-port.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the page
 // only needs the pending capsule, so stub it with the shared DOM face.
@@ -135,11 +136,7 @@ describe('ZoteroSettingsSection', () => {
         face={controller.inject()}
         probe={async () => ({
           ok: true,
-          value: {
-            providerId: 'local',
-            connected: true,
-            write: { enabled: true, authorized: true },
-          },
+          value: statusView({ write: { enabled: true, authorized: true } }),
         })}
         revokeWriteGrant={async () => ({ ok: true, value: { removed: true } })}
       />,

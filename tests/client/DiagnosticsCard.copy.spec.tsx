@@ -13,6 +13,7 @@ import type { ZoteroDiagnosticsView, ZoteroStatusView } from '../../src/client/r
 import { zh } from '../../src/client/locales.ts'
 import { deferred, type Deferred } from '../helpers/sync.js'
 import { entry, fakeProbe, okView, targetSubject } from './helpers/diagnostics-fixtures.ts'
+import { statusView } from '../helpers/status-view.ts'
 import { mockT } from './helpers/mock-translate.ts'
 import { zoteroClientStub } from './helpers/zotero-client.ts'
 
@@ -105,18 +106,14 @@ describe('DiagnosticsCard copy', () => {
         debug: true,
       }),
     )
-    const probe = vi.fn(
-      async (): Promise<RemoteResult<ZoteroStatusView>> =>
-        ({
-          ok: true as const,
-          value: {
-            providerId: 'local',
-            connected: false,
-            zoteroVersion: '7.0',
-            diagnosis: 'ZOTERO_NOT_RUNNING: down',
-          },
-        }) as RemoteResult<ZoteroStatusView>,
-    )
+    const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
+      ok: true as const,
+      value: statusView({
+        connected: false,
+        zoteroVersion: '7.0',
+        diagnosis: 'ZOTERO_NOT_RUNNING: down',
+      }),
+    }))
     const { container } = render(
       <DiagnosticsCard
         useZoteroClient={client}

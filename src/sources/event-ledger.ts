@@ -66,6 +66,23 @@ function isZoteroTool(name: string): boolean {
   return name.startsWith('zotero_')
 }
 
+/**
+ * The JSON/block content boundary. The ledger persists outcomes as pure JSON
+ * (the durable event payload's own type) and replays them as content blocks
+ * the workspace builder reads. The two shapes are compatible by construction:
+ * `record` writes block content into a fact, and facts are only ever built
+ * from block content, so the re-interpretation is declared once here instead
+ * of scattered as per-call-site casts.
+ */
+function contentAsBlocks(content: readonly JsonValue[]): readonly ContentBlock[] {
+  return content as unknown as readonly ContentBlock[]
+}
+
+/** The reverse direction of {@link contentAsBlocks}, persisting a block as pure JSON. */
+function blocksAsContent(content: readonly ContentBlock[]): readonly JsonValue[] {
+  return content as unknown as readonly JsonValue[]
+}
+
 /** Narrow one raw event to the structural fields the fold reads. */
 interface LedgerEvent {
   readonly type: string
@@ -75,17 +92,11 @@ interface LedgerEvent {
 }
 
 function asEvent(event: SessionEvent): LedgerEvent {
-  const raw = event as unknown as {
-    type: string
-    seq: number
-    time: number
-    data: unknown
-  }
   return {
-    type: raw.type,
-    seq: typeof raw.seq === 'number' ? raw.seq : 0,
-    time: typeof raw.time === 'number' ? raw.time : 0,
-    data: asRecord(raw.data) ?? {},
+    type: event.type,
+    seq: typeof event.seq === 'number' ? event.seq : 0,
+    time: typeof event.time === 'number' ? event.time : 0,
+    data: asRecord(event.data) ?? {},
   }
 }
 
@@ -100,7 +111,7 @@ function blockOf(fact: LedgerBlockFact): SettledToolBlock {
     args: PartialArguments.fromText(fact.argsRaw),
     call: { name: fact.name, argsRaw: fact.argsRaw },
     callTime: fact.callTime,
-    content: fact.content as unknown as readonly ContentBlock[],
+    content: contentAsBlocks(fact.content),
     isError: fact.isError,
     ...(fact.error === undefined ? {} : { error: fact.error }),
     ...(fact.meta === undefined ? {} : { meta: fact.meta }),
@@ -125,7 +136,7 @@ function record(state: SourceLedgerState, block: SettledToolBlock): SourceLedger
     name: block.name,
     argsRaw: block.call?.argsRaw ?? '',
     callTime: block.callTime ?? block.time,
-    content: block.content as unknown as readonly JsonValue[],
+    content: blocksAsContent(block.content),
     isError: block.isError,
     ...(block.error === undefined ? {} : { error: block.error }),
     ...(block.meta === undefined ? {} : { meta: block.meta as JsonValue }),
@@ -180,7 +191,7 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
         args: PartialArguments.fromText(pending.argsRaw),
         call: { name: pending.name, argsRaw: pending.argsRaw },
         callTime: pending.time,
-        content: content as unknown as readonly ContentBlock[],
+        content: contentAsBlocks(content),
         isError: message?.['isError'] === true,
         ...(asRecord(raw.data['error']) === undefined
           ? {}
@@ -222,7 +233,7 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
         args: PartialArguments.fromText(argsRaw),
         call: { name, argsRaw },
         callTime: state.pending[callId]?.time ?? raw.time,
-        content: content as unknown as readonly ContentBlock[],
+        content: contentAsBlocks(content),
         isError: raw.data['isError'] === true,
         ...(asRecord(raw.data['error']) === undefined
           ? {}

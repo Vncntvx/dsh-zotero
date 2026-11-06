@@ -13,6 +13,7 @@ import type { ZoteroStatusView } from '../../../src/client/remote.ts'
 import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
+import { statusView } from '../../helpers/status-view.ts'
 const t = mockT
 
 const client = () => zoteroClientStub()
@@ -65,7 +66,7 @@ describe('ZoteroPluginDetailSection', () => {
   it('returns null when subject is for another package or item kind', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true },
+      value: statusView(),
     }))
 
     const { container: c1 } = render(
@@ -94,7 +95,7 @@ describe('ZoteroPluginDetailSection', () => {
   it('renders section when subject is a row belonging to dsh-zotero', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true },
+      value: statusView(),
     }))
 
     const { container } = render(
@@ -113,7 +114,7 @@ describe('ZoteroPluginDetailSection', () => {
       ok: true,
       // The wire never carries a diagnosis on a connected probe: the success
       // sentinel is stripped at the wire producer, so no diagnosis box renders.
-      value: { providerId: 'local', connected: true, zoteroVersion: '7.0.5' },
+      value: statusView({ connected: true, zoteroVersion: '7.0.5' }),
     }))
 
     render(
@@ -137,11 +138,10 @@ describe('ZoteroPluginDetailSection', () => {
   it('renders disconnected status and diagnosis when connected is false', async () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true,
-      value: {
-        providerId: 'local',
+      value: statusView({
         connected: false,
         diagnosis: 'Zotero is not running on 127.0.0.1:23119',
-      },
+      }),
     }))
 
     render(
@@ -163,11 +163,10 @@ describe('ZoteroPluginDetailSection', () => {
   it('localizes a coded diagnosis and keeps the technical code visible', async () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true,
-      value: {
-        providerId: 'local',
+      value: statusView({
         connected: false,
         diagnosis: 'ZOTERO_NOT_RUNNING: Zotero is not running or unreachable.',
-      },
+      }),
     }))
 
     render(
@@ -236,12 +235,12 @@ describe('ZoteroPluginDetailSection', () => {
       if (callCount === 1) {
         return {
           ok: true,
-          value: { providerId: 'local', connected: false, diagnosis: 'not ready' },
+          value: statusView({ connected: false, diagnosis: 'not ready' }),
         }
       }
       return {
         ok: true,
-        value: { providerId: 'local', connected: true, zoteroVersion: '7.1.0' },
+        value: statusView({ connected: true, zoteroVersion: '7.1.0' }),
       }
     })
 

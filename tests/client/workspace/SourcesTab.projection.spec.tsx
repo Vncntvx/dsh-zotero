@@ -1,19 +1,17 @@
 // @vitest-environment jsdom
 /**
  * The Sources panel consumes the host projection when it is present and keeps
- * the chat-window fold when it is absent (capability missing, baseline not yet
- * arrived, or a hot-loaded plugin).
+ * the chat-window fold only when host status says the registry is not
+ * composed; absence while registration is pending is not a fallback.
  * @module tests/client/workspace/SourcesTab.projection
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourcesTabProps } from '../../../src/client/components/SourcesTab.tsx'
-import { SourcesTab } from '../../../src/client/components/SourcesTab.tsx'
 import { sourceOf, workspaceOf } from '../helpers/source-fixtures.ts'
-import { connectedProbe, sessionsOf, sessionOf } from '../helpers/sources-tab-harness.tsx'
+import { connectedProbe, mountTab, sessionOf, sessionsOf } from '../helpers/sources-tab-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
-import { zoteroClientStub } from '../helpers/zotero-client.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -22,34 +20,34 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 
 afterEach(cleanup)
 
-/** Mount the tab with a chosen projection value and no chat window. */
-function mountWithProjection(projection: ReturnType<typeof workspaceOf> | undefined) {
-  const props = {
-    t: mockT,
-    status: connectedProbe(),
-    useSession: (sel: (snap: ReturnType<typeof sessionOf>) => unknown) => sel(sessionOf()),
-    useSessions: (sel: (snapshot: ReturnType<typeof sessionsOf>) => unknown) => sel(sessionsOf()),
-    useChat: () => undefined,
-    useProjection: () => projection,
-    useRemoteAccess: () => true,
-    useAccess: () => true,
-    useZoteroClient: () => zoteroClientStub(),
-  } as unknown as SourcesTabProps
-  return render(<SourcesTab {...props} />)
-}
-
 describe('the Sources panel projection path', () => {
-  it('renders a projected source the chat window never loaded', async () => {
-    const view = mountWithProjection(
+  it('keeps rendering a projected source after the ready probe settles', async () => {
+    // The ready state must be asserted after the probe settles, not on the
+    // first frame: a pre-settle assertion would pass on a transient render
+    // and prove nothing about the composed path this file owns.
+    const status = vi.fn(async () => ({
+      ok: true as const,
+      value: statusView({ sourceProjection: { state: 'ready' } }),
+    }))
+    const { view } = mountTab(
+      undefined,
+      status,
+      undefined,
+      sessionOf(),
+      undefined,
+      sessionsOf(),
       workspaceOf([sourceOf({ title: 'Projected paper', ref: 'zotero://user/0/item/PRJ1' })]),
     )
-    expect((await screen.findAllByText('Projected paper')).length).toBeGreaterThan(0)
+    await act(async () => {})
+    // The title renders in the workspace row and the inspector alike, so the
+    // assertion is on any occurrence existing after the probe has settled.
+    expect(screen.getAllByText('Projected paper').length).toBeGreaterThan(0)
     view.unmount()
   })
 
-  it('falls back to the chat window when the projection is absent', async () => {
-    const view = mountWithProjection(undefined)
-    expect(screen.getByText(mockT('noSources'))).toBeDefined()
+  it('folds the loaded chat window once the registry is not composed', async () => {
+    const { view } = mountTab(undefined, connectedProbe())
+    expect(await screen.findByText(mockT('noSources'))).toBeDefined()
     view.unmount()
   })
 })

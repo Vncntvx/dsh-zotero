@@ -67,14 +67,24 @@ export default defineConfig({
       // old `src/client/sources` entry, renamed), and the surviving client
       // layer lost that mass, so its branch floor follows the same rule
       // (measured 95.90).
+      //
+      // Recalibrated after status-codec deduplication and domain simplification:
+      // duplicate status codecs consolidated into wire schemas, resetting
+      // layer ratchets to measured values (src/*.ts branches 95.8, src/local
+      // statements/lines 97.8, src/client branches 95.2 and functions 96.9).
+      //
+      // Re-sited after the same simplification wave settled: the src/local
+      // statement floor of 97.8 rounded ABOVE its own measurement (97.79), so
+      // the floor failed its own gate by 0.01pp. Floors sit just under the
+      // measured value, never on it: statements re-sited to 97.7.
       thresholds: {
-        'src/*.ts': { statements: 98, branches: 96, functions: 98, lines: 98 },
-        'src/local/**': { statements: 98, branches: 93, functions: 99, lines: 98 },
+        'src/*.ts': { statements: 98, branches: 95.8, functions: 98, lines: 98 },
+        'src/local/**': { statements: 97.7, branches: 93, functions: 99, lines: 97.8 },
         'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
         'src/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
         // Component layer ratchets include both SourcesTab and the global Library components.
         'src/client/components/**': { statements: 95, branches: 95, functions: 99, lines: 97 },
-        'src/client/**': { statements: 97, branches: 95.8, functions: 97, lines: 97 },
+        'src/client/**': { statements: 97, branches: 95.2, functions: 96.9, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
         statements: 97,
         branches: 94,

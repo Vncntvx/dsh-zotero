@@ -5,7 +5,7 @@
  * @module dsh-zotero/sources/receipt
  */
 
-import { parseReceiptLine } from '../result-receipt.js'
+import { announcedReceipt, attachmentIdOf } from '../result-receipt.js'
 import { isRecord } from '../json.js'
 import type { ToolBlockLike } from './block-types.js'
 
@@ -18,16 +18,8 @@ import type { ToolBlockLike } from './block-types.js'
 export function receiptOf(block: ToolBlockLike): Record<string, unknown> | null {
   if (!('content' in block) || block.isError) return null
   const file = block.content.find((entry) => entry.type === 'file')
-  if (file?.type !== 'file') return null
-  for (const entry of block.content) {
-    if (entry.type !== 'text') continue
-    const receipt = parseReceiptLine(entry.text)
-    if (
-      receipt !== undefined &&
-      isRecord(receipt['file']) &&
-      receipt['file']['attachmentId'] === file.attachment.attachmentId
-    )
-      return receipt
-  }
-  return null
+  const attachmentId = attachmentIdOf(file?.attachment)
+  if (attachmentId === undefined) return null
+  const receipt = announcedReceipt(block.content, attachmentId)
+  return isRecord(receipt) ? receipt : null
 }

@@ -54,9 +54,13 @@ import type { ZoteroStatus } from './types.js'
  * @param status - the provider's own status record.
  * @returns the view the wire `status` endpoint serves.
  */
-function toStatusView(status: ZoteroStatus): ZoteroStatusView {
+function toStatusView(
+  status: ZoteroStatus,
+  sourceProjection: ZoteroStatusView['sourceProjection'],
+): ZoteroStatusView {
   return {
     providerId: status.providerId,
+    sourceProjection,
     ...(status.endpoint === undefined ? {} : { endpoint: status.endpoint }),
     connected: status.connected,
     ...(status.apiVersion === undefined ? {} : { apiVersion: status.apiVersion }),
@@ -216,16 +220,22 @@ export class ZoteroRuntime extends TypertRemoteService {
    */
   async status(signal: AbortSignal): Promise<ZoteroStatusView> {
     signal.throwIfAborted()
-    const status = await this.ctx.get('zotero')?.status(signal)
+    const service = this.ctx.get('zotero')
+    const [status, sourceProjection] = await Promise.all([
+      service?.status(signal),
+      service?.sourceProjectionStatus(signal) ??
+        Promise.resolve({ state: 'not-composed' as const }),
+    ])
     signal.throwIfAborted()
     if (status === undefined) {
       return {
         providerId: LOCAL_PROVIDER_ID,
+        sourceProjection,
         connected: false,
         diagnosis: ZOTERO_NOT_COMPOSED_MESSAGE,
       }
     }
-    return toStatusView(status)
+    return toStatusView(status, sourceProjection)
   }
 
   /**

@@ -86,6 +86,13 @@ export const en = {
   libraryWriteInvalid: 'Check required fields and JSON arrays before submitting.',
 
   nav: 'Literature trail',
+  sourceProjectionLoading: 'Checking the literature-trail projection…',
+  sourceProjectionSyncing:
+    'The literature-trail projection is ready; waiting for this session snapshot.',
+  sourceProjectionFailed:
+    'The literature-trail projection could not start. Check plugin diagnostics, then reload the plugin.',
+  sourceProjectionStatusUnavailable:
+    'Could not determine whether the literature-trail projection is available.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -794,6 +801,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryWriteInvalid: '提交前请检查必填字段和 JSON 数组。',
 
   nav: '文献轨迹',
+  sourceProjectionLoading: '正在检查文献轨迹投影…',
+  sourceProjectionSyncing: '文献轨迹投影已就绪，正在等待本会话快照。',
+  sourceProjectionFailed: '文献轨迹投影无法启动。请查看插件诊断并重新加载插件。',
+  sourceProjectionStatusUnavailable: '无法确认文献轨迹投影是否可用。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',

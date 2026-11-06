@@ -177,7 +177,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     ).toBe(true)
   })
 
-  it('resets the error boundary when switching to another session', () => {
+  it('resets the error boundary when switching to another session', async () => {
     captureConsoleError()
     const hostile = chatOf([toolRow(searchResult())])
     Object.defineProperty(hostile, 'order', {
@@ -213,7 +213,7 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     view.rerender(<SourcesTab {...props} />)
 
     expect(view.container.querySelector('[data-zotero-surface-error]')).toBeNull()
-    expect(view.container.querySelectorAll('[role="option"]')).toHaveLength(1)
+    expect(await screen.findAllByRole('option')).toHaveLength(1)
   })
 
   it('resolves a read action against the owning session workspace root', async () => {
@@ -280,10 +280,10 @@ describe('the Sources tab keeps its registration when its body throws', () => {
     view.unmount()
   })
 
-  it('still renders the normal workspace when nothing throws', () => {
+  it('still renders the normal workspace when nothing throws', async () => {
     const { view } = mountTab(chatOf([toolRow(searchResult())]), connectedProbe())
     expect(view.container.querySelector('[data-zotero-surface-error]')).toBeNull()
-    expect(view.container.querySelectorAll('[role="option"]')).toHaveLength(1)
+    expect(await screen.findAllByRole('option')).toHaveLength(1)
   })
 })
 

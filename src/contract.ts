@@ -4,12 +4,12 @@
  * so the browser bundle inlines it without pulling host-only schema
  * materialization (zod) into the client graph.
  *
- * Boundary codecs are defined elsewhere. The strict wire schemas live once in
- * `src/wire-schemas.ts` (client-safe: only `zod` and this module's types); host
- * registration and the client Remote face each materialize them through their
- * own `{ mode, typeSymbol, create }` codec arm (`src/status-codec.ts` and
- * `src/client/status-codec.ts`). `zod` stays a platform module the shell
- * serves.
+ * Boundary codecs are defined elsewhere. The strict wire schemas and the one
+ * shared invocation list live once in `src/wire-schemas.ts` (client-safe: only
+ * `zod` and this module's types); the host manifest (`src/status-codec.ts`) and
+ * the client Remote face (`src/client/status-codec.ts`) both alias that list
+ * instead of materializing their own descriptors. `zod` stays a platform module
+ * the shell serves.
  *
  * The two arms do not validate alike. Client Gateway decodes a unary result
  * only through `descriptor.result.decode`, which the generator emits solely for
@@ -58,9 +58,18 @@ export type ZoteroResolvedScope =
   | { kind: 'savedSearch'; ref: string; name: string }
   | { kind: 'trash'; library: SupportedLocalLibrary }
 
+/** Stable wire code reported when the full-session literature-trail projection fails to register. */
+export const ZOTERO_SOURCE_PROJECTION_FAILED = 'ZOTERO_SOURCE_PROJECTION_FAILED' as const
+
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string
+  /** Composition state of the full-session literature-trail projection. */
+  readonly sourceProjection:
+    | { readonly state: 'not-composed' }
+    | { readonly state: 'pending' }
+    | { readonly state: 'ready' }
+    | { readonly state: 'failed'; readonly code: typeof ZOTERO_SOURCE_PROJECTION_FAILED }
   /**
    * The authority the probe dialled, e.g. `127.0.0.1:23119`. Optional on the
    * wire view only because one answer has no endpoint to report: a service that

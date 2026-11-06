@@ -119,7 +119,7 @@ graph LR
 
 ### 会话文献轨迹（`conversation.view`，id `zotero`，order 30）
 
-- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；投影不可用时回退到 `ChatSnapshot` 的已加载窗口。两条路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
+- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
 - 实例判定：归约状态保存条目 ref 的 `serverIds`；宿主编译时不知道当前连接的 Server ID，由客户端用状态探针结果调用 `withEvidenceMatch` 物化 `evidenceMatch`。
 - 检索折叠：分页续调用按 identity 折叠为一次检索；首屏的 `total` 与 `noteMatches` 取第一次调用，`returned`/`omitted` 在续页累加。
 - 界面结构：顶部透镜栏在“文献”与“导出”两个视图间切换；条目检查器包含概览、相关片段、导出三个面板；会话级导出页按格式分段并跨条目去重。

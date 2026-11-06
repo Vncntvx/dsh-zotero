@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
+import { statusView } from '../../helpers/status-view.ts'
 import {
   clearLibrarySessionMemory,
   readLibrarySessionMemory,
@@ -13,11 +14,7 @@ import {
 } from '../../../src/client/components/library/library-storage.ts'
 
 /** A connected probe snapshot naming its instance. */
-const probeOf = (serverId: string): ZoteroStatusView => ({
-  providerId: 'local',
-  connected: true,
-  serverId,
-})
+const probeOf = (serverId: string): ZoteroStatusView => statusView({ serverId })
 
 describe('library session view', () => {
   it('replaces the whole record instead of merging fields', () => {

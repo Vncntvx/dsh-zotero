@@ -1,9 +1,6 @@
 /**
- * The library-panel specs' shared fixtures and mount: the wire views the panel
- * renders (libraries, collections, saved searches, item pages, one detail),
- * `mountPanel` (the page mounted with stubbed session hooks and a scripted
- * wire face), and the spies the interaction tests read back. `.states` and
- * `.interaction` share this one copy instead of carrying drifting sets.
+ * Shared wire fixtures and `mountPanel` for the library-panel state and
+ * interaction specs, so they do not carry separate scripted panel faces.
  * @module tests/client/helpers/library-panel-harness
  */
 
@@ -22,14 +19,10 @@ import {
   type ZoteroLibraryPanelProps,
 } from '../../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import { mockT } from './mock-translate.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 /** A connected probe answer. */
-export const CONNECTED: ZoteroStatusView = {
-  providerId: 'local',
-  connected: true,
-  apiVersion: '3',
-  serverId: 'S1',
-}
+export const CONNECTED: ZoteroStatusView = statusView({ apiVersion: '3', serverId: 'S1' })
 
 /** One personal-library option and one group option. */
 export const LIBRARY_ROWS: ZoteroLibraryBrowseResultView = {

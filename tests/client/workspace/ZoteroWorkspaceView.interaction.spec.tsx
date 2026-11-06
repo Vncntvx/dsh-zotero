@@ -12,11 +12,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
-import type { ZoteroStatusView } from '../../../src/client/remote.ts'
 import { filterCountsOf, evidencePassageTotalOf } from '../../../src/client/sources/selectors.ts'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
 import { mixedFixture, singleFixture } from '../helpers/source-fixtures.ts'
 import { CONNECTED, mountView } from '../helpers/workspace-harness.tsx'
+import { statusView } from '../../helpers/status-view.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the view needs the shared DOM face. Its toolbar menu is
@@ -114,13 +114,12 @@ describe('toolbar', () => {
   it('renders the failure diagnosis and refreshes on demand', () => {
     const unavailable: ConnectionView = {
       kind: 'unavailable',
-      data: {
-        providerId: 'local',
+      data: statusView({
         connected: false,
         serverId: 'sPMHtLD6HHBd',
         apiVersion: '3',
         diagnosis: 'connection refused',
-      } as ZoteroStatusView,
+      }),
       checkedAt: '10:00:01',
     }
     const { view, onRefresh } = mountView(singleFixture(), unavailable)

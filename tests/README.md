@@ -388,6 +388,14 @@ suite's actual maximum; deleting redundant tests does not lower a coverage
 floor. New module coverage floors require measured evidence, and directory
 moves must preserve the coverage include/exclude and threshold scope.
 
+The one exception is a structural recalibration: when a change removes or moves
+whole modules (a deduplication, a layer leaving the graph, a deleted feature),
+the surviving code's measured value is the only honest floor, so the affected
+ratchets re-site just under it — never on it, which would fail its own gate by
+rounding. The recalibration and its before/after evidence are recorded in the
+`vitest.config.ts` threshold comment; re-siting a floor whose own measurement
+still holds it is not a recalibration.
+
 The module layout, behaviour ownership, helper import graph, and
 resource-ownership rules above remain review-enforced: lint proves spec and
 helper size, not that a spec names one behaviour or releases the resources it

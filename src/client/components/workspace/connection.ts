@@ -47,3 +47,36 @@ export function connectionDiagnosisOf(
   }
   return ''
 }
+
+/**
+ * Whether the Sources tab may render its workspace, and the state line to
+ * show instead when it may not. `undefined` means "render the workspace":
+ * the composed projection value is present, or the status endpoint declares
+ * the registry not composed so folding the loaded chat window is the valid
+ * local answer. A failed registration is a hard stop naming its stable code;
+ * a composed projection that has not delivered a value yet reports syncing;
+ * anything the status endpoint itself could not answer reports why, so a
+ * pending registration never silently degrades to the chat-window fold.
+ * @param input - the probe's projection state, whether a projection value
+ *   exists, and the status-channel access facts.
+ * @returns the problem line to render, or undefined to render the workspace.
+ */
+export function projectionGateOf(input: {
+  readonly projection: ZoteroStatusView['sourceProjection'] | undefined
+  readonly hasProjected: boolean
+  readonly canStatus: boolean
+  readonly hasStatus: boolean
+  readonly hasProbeError: boolean
+  readonly t: TranslateNS<'zotero'>
+}): string | undefined {
+  const { projection, hasProjected, canStatus, hasStatus, hasProbeError, t } = input
+  if (projection?.state === 'failed') {
+    return `${t('sourceProjectionFailed')} (${projection.code})`
+  }
+  if (hasProjected || projection?.state === 'not-composed') return undefined
+  if (!canStatus || !hasStatus || hasProbeError) {
+    return t('sourceProjectionStatusUnavailable')
+  }
+  if (projection?.state === 'ready') return t('sourceProjectionSyncing')
+  return t('sourceProjectionLoading')
+}

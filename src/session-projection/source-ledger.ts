@@ -265,6 +265,16 @@ type SourceLedgerProjectionDefinition = Omit<
   }
 }
 
+const workspaceCache = new WeakMap<SourceLedgerState, SourceWorkspace>()
+
+function memoizedWorkspaceOf(ledger: SourceLedgerState): SourceWorkspace {
+  const cached = workspaceCache.get(ledger)
+  if (cached !== undefined) return cached
+  const workspace = workspaceOf(ledger)
+  workspaceCache.set(ledger, workspace)
+  return workspace
+}
+
 /**
  * The literature trail as a host projection. Fork-inherited events are folded:
  * a forked session's trail is the history its user can see.
@@ -284,6 +294,6 @@ export const sourceLedgerProjection: SourceLedgerProjectionDefinition = {
   wire: {
     summary: false,
     viewSchema: sourceWorkspaceSchema,
-    view: (state) => workspaceOf(state.ledger),
+    view: (state) => memoizedWorkspaceOf(state.ledger),
   },
 }

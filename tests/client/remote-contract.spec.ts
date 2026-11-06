@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_REMOTE } from '../../src/client/remote.ts'
-import { ZOTERO_STATUS_CLIENT_RESULT_CODEC } from '../../src/client/status-codec.ts'
+import { ZOTERO_STATUS_RESULT_CODEC } from '../../src/client/status-codec.ts'
 import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,
@@ -34,7 +34,7 @@ describe('zotero Remote contract layering', () => {
     // Both halves build the descriptor through the factory, so its structural
     // identity is asserted on a real descriptor rather than on a second,
     // hand-maintained copy of the same fields.
-    expect(zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)).toMatchObject({
+    expect(zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC)).toMatchObject({
       id: ZOTERO_STATUS_INVOCATION_ID,
       service: ZOTERO_STATUS_SERVICE_KEY,
       namespace: 'zotero',
@@ -78,21 +78,21 @@ describe('zotero Remote contract layering', () => {
       .create
     expect(typeof hostCreate).toBe('function')
     expect(typeof clientCreate).toBe('function')
-    expect(client!.result).toBe(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
-    const valid = { providerId: 'local', connected: true }
+    expect(client!.result).toBe(ZOTERO_STATUS_RESULT_CODEC)
+    const valid = statusView()
     expect(hostCreate().parse(valid)).toEqual(valid)
     expect(clientCreate().parse(valid)).toEqual(valid)
     expect(() => clientCreate().parse({ providerId: 123 })).toThrow()
   })
 
   it('builds descriptors only through the shared factory without sharing mutable identity', () => {
-    const probe = zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
+    const probe = zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC)
     expect(probe.id).toBe(ZOTERO_STATUS_INVOCATION_ID)
     expect(probe.service).toBe(ZOTERO_STATUS_SERVICE_KEY)
     expect(probe.namespace).toBe('zotero')
     expect(probe.method).toBe(ZOTERO_STATUS_METHOD)
     // Two builds never share the mutable structural members.
-    const other = zoteroStatusInvocation(ZOTERO_STATUS_CLIENT_RESULT_CODEC)
+    const other = zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC)
     expect(probe.invocation).not.toBe(other.invocation)
     expect(probe.parameters).not.toBe(other.parameters)
     expect(probe.invocation).toEqual({ kind: ZOTERO_STATUS_INVOCATION_KIND })
@@ -113,6 +113,7 @@ describe('zotero Remote contract layering', () => {
 })
 
 import { runRemoteParitySpec, type ParityCase } from './helpers/remote-parity.ts'
+import { statusView } from '../helpers/status-view.ts'
 
 const PARITY_CASES: readonly ParityCase[] = [
   {
@@ -120,10 +121,11 @@ const PARITY_CASES: readonly ParityCase[] = [
     boundary: { kind: 'result' },
     wire: 'status result',
     typeSymbol: ZOTERO_STATUS_TYPE_SYMBOL,
-    valid: { providerId: 'local', connected: true },
+    valid: statusView(),
     incomplete: [
       { connected: true },
       { providerId: 'local' },
+      { providerId: 'local', connected: true },
       { providerId: 'local', connected: true, write: { enabled: true } },
     ],
     malformed: [
@@ -131,10 +133,22 @@ const PARITY_CASES: readonly ParityCase[] = [
       { providerId: 'local', connected: 'yes' },
       { providerId: 'local', connected: true, diagnosis: 3 },
       { providerId: 'local', connected: true, write: 'on' },
+      { providerId: 'local', connected: true, sourceProjection: { state: 'registering' } },
+      { providerId: 'local', connected: true, sourceProjection: { state: 'failed' } },
+      {
+        providerId: 'local',
+        connected: true,
+        sourceProjection: { state: 'failed', code: 'OTHER' },
+      },
     ],
     undeclared: [
       { providerId: 'local', connected: true, extraFact: 1 },
       { providerId: 'local', connected: true, write: { enabled: true, authorized: false, x: 1 } },
+      {
+        providerId: 'local',
+        connected: true,
+        sourceProjection: { state: 'ready', extraFact: true },
+      },
     ],
     badEnum: [],
   },

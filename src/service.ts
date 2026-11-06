@@ -22,7 +22,8 @@
  */
 
 import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
-import { Service, type Context, type LoggerLevel } from '@deepseek-ai/cordis'
+import { ZOTERO_SOURCE_PROJECTION_FAILED, type ZoteroStatusView } from './contract.js'
+import { Service, type Context, type Fiber, type LoggerLevel } from '@deepseek-ai/cordis'
 import { FIBER_STATE } from './fiber-state.js'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
 // this program (the structural-flip reaction below).
@@ -33,6 +34,7 @@ import type {} from '@deepseek-ai/dsh-typert-registry'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-session-projection'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import { ZoteroHttpClient } from './http-client.js'
 import { ZoteroRuntime } from './remote.js'
@@ -182,6 +184,9 @@ export function requireZoteroService(ctx: Context, signal?: AbortSignal): Zotero
 }
 
 export class ZoteroService extends Service {
+  private sourceProjectionState: ZoteroStatusView['sourceProjection'] = { state: 'not-composed' }
+  private sourceProjectionFiber: (Fiber & PromiseLike<Fiber>) | undefined
+  private sourceProjectionGeneration = 0
   static inject = ['tools', 'systemPrompt']
 
   static Config = ConfigSchema
@@ -271,11 +276,33 @@ export class ZoteroService extends Service {
     // The literature trail is served as a session projection when the harness
     // composes the registry: the fold sees the whole log, not the bounded
     // history window the browser chat store receives. Optional assembly: a
-    // headless composition without the registry keeps the browser fallback.
-    ctx.inject(['sessionProjections'], (host) => {
-      void host.sessionProjections.register(sourceLedgerProjection).catch((error: unknown) => {
+    // headless composition without the registry reports not-composed.
+    this.sourceProjectionFiber = ctx.inject(['sessionProjections'], async (host) => {
+      const generation = ++this.sourceProjectionGeneration
+      this.sourceProjectionState = { state: 'pending' }
+      host.effect(
+        () => () => {
+          if (this.sourceProjectionGeneration !== generation) return
+          if (this.sourceProjectionState.state !== 'failed') {
+            this.sourceProjectionState = { state: 'not-composed' }
+          }
+        },
+        'zotero: source projection registration state',
+      )
+      try {
+        await host.sessionProjections.register(sourceLedgerProjection)
+        if (this.sourceProjectionGeneration === generation) {
+          this.sourceProjectionState = { state: 'ready' }
+        }
+      } catch (error: unknown) {
+        if (this.sourceProjectionGeneration === generation) {
+          this.sourceProjectionState = {
+            state: 'failed',
+            code: ZOTERO_SOURCE_PROJECTION_FAILED,
+          }
+        }
         this.diagnostics.sink.error('projection.register', errorMessageOf(error))
-      })
+      }
     })
     registerResearchSkills(ctx, CORE_SOPS)
     // The status channel: the Remote service binds the wire namespace, and
@@ -332,6 +359,44 @@ export class ZoteroService extends Service {
    */
   writeEnabled(): boolean {
     return this.config.writeEnabled
+  }
+
+  /**
+   * Wait until the registration attempt behind a composed registry settles,
+   * then report its state. The registration callback never rethrows (it logs
+   * and latches `failed`), so the awaited fiber always settles normally.
+   */
+  async sourceProjectionStatus(signal: AbortSignal): Promise<ZoteroStatusView['sourceProjection']> {
+    signal.throwIfAborted()
+    if (this.ctx.get('sessionProjections') === undefined) return { state: 'not-composed' }
+    const fiber = this.sourceProjectionFiber
+    // Defensive: the fiber is assigned synchronously during composition, so
+    // no status call on a composed registry can observe it unset in practice.
+    if (fiber === undefined) return { state: 'pending' }
+    await this.awaitRegistrationOrAbort(fiber, signal)
+    signal.throwIfAborted()
+    // Between composition and the callback's first tick the state is still
+    // the constructed `not-composed`; that reads as pending, not as absence.
+    if (this.sourceProjectionState.state === 'not-composed') return { state: 'pending' }
+    return this.sourceProjectionState
+  }
+
+  /** Wait for the registration fiber, converting an aborted signal into a rejection. */
+  private async awaitRegistrationOrAbort(
+    fiber: Fiber & PromiseLike<Fiber>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let rejectAbort: (() => void) | undefined
+    const aborted = new Promise<never>((_, reject) => {
+      rejectAbort = () => reject(signal.reason ?? new Error('Aborted'))
+      if (signal.aborted) rejectAbort()
+      else signal.addEventListener('abort', rejectAbort, { once: true })
+    })
+    try {
+      await Promise.race([fiber.await(), aborted])
+    } finally {
+      if (rejectAbort !== undefined) signal.removeEventListener('abort', rejectAbort)
+    }
   }
 
   /**

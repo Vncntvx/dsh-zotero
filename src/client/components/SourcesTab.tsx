@@ -33,9 +33,11 @@ import { buildSourceWorkspace } from '../../sources/ledger.js'
 import { withEvidenceMatch } from '../../sources/evidence-match.js'
 import type {} from '../../session-projection/types.js'
 import { ZoteroSurfaceBoundary } from './ZoteroSurfaceBoundary.tsx'
-import type { ConnectionView } from './workspace/connection.ts'
+import { projectionGateOf, type ConnectionView } from './workspace/connection.ts'
 import { ZoteroWorkspaceView } from './workspace/ZoteroWorkspaceView.tsx'
+import { WorkspaceToolbar } from './workspace/WorkspaceToolbar.tsx'
 import { useZoteroProbe } from './useZoteroProbe.ts'
+import workspaceCss from './workspace/workspace.module.css'
 
 /** Defensive recursion bound for nested dispatch trees (the harness block type is unbounded). */
 const MAX_SUBCALL_DEPTH = 256
@@ -300,21 +302,54 @@ function SourcesTabBody({
   // Streaming-stable zotero rows reuse the previous block array (signature gate).
   const blocks = useZoteroBlocks(chat, sessionId)
   // The host projection folds the whole session log; the chat snapshot only
-  // holds the opening window. Absent means the capability is not composed (or
-  // the baseline has not carried it yet), so the window fold remains the
-  // fallback rather than a compatibility layer.
+  // holds the opening window. Local folding is valid only when the host status
+  // endpoint says the projection registry is not composed.
   const projected = useProjection('zoteroSources')
-  const workspace = useMemo(
-    () =>
-      projected !== undefined
-        ? withEvidenceMatch(projected, serverId)
-        : buildSourceWorkspace(blocks, { currentServerId: serverId }),
-    [projected, blocks, serverId],
-  )
   const setDraft = useMemo(
     () => (inputActions === undefined ? undefined : inputActions.setDraft.bind(inputActions)),
     [inputActions],
   )
+
+  const projection = probeState.data?.sourceProjection
+  const projectionState = projection?.state
+  // A useMemo must precede the early return below: hooks may not follow a
+  // conditional return, and the fold must keep a stable identity across probe
+  // refreshes — withEvidenceMatch materializes a fresh object on every call,
+  // and the workspace views memoize off its sources and exports. A projection
+  // present while the registry is declared not composed is a contradictory
+  // stub state; the fold answers it locally rather than trusting the value.
+  const workspace = useMemo(() => {
+    if (projected !== undefined && projectionState !== 'not-composed') {
+      return withEvidenceMatch(projected, serverId)
+    }
+    return buildSourceWorkspace(blocks, { currentServerId: serverId })
+  }, [projected, projectionState, blocks, serverId])
+  const projectionProblem = projectionGateOf({
+    projection,
+    hasProjected: projected !== undefined,
+    canStatus,
+    hasStatus: status !== undefined,
+    hasProbeError: probeState.error !== undefined,
+    t,
+  })
+
+  if (projectionProblem !== undefined) {
+    return (
+      <ResultSessionContext.Provider value={sessionId}>
+        <>
+          <WorkspaceToolbar connection={statusState} onRefresh={runProbe} t={t} />
+          <div className={workspaceCss.empty}>
+            <p
+              role={projectionState === 'failed' ? 'alert' : 'status'}
+              className={workspaceCss.emptyText}
+            >
+              {projectionProblem}
+            </p>
+          </div>
+        </>
+      </ResultSessionContext.Provider>
+    )
+  }
 
   return (
     <ResultSessionContext.Provider value={sessionId}>

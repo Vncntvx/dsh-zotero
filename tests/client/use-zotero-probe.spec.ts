@@ -10,6 +10,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { useZoteroProbe } from '../../src/client/components/useZoteroProbe.ts'
 import type { ZoteroStatusView } from '../../src/contract.ts'
 import { deferred } from '../helpers/sync.ts'
+import { statusView } from '../helpers/status-view.ts'
 
 describe('useZoteroProbe', () => {
   it('initializes with loading false by default', () => {
@@ -22,11 +23,7 @@ describe('useZoteroProbe', () => {
   it('runs automatically on mount when initialAutoRun is true', async () => {
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: {
-        providerId: 'local',
-        connected: true,
-        zoteroVersion: '7.0.11',
-      },
+      value: statusView({ connected: true, zoteroVersion: '7.0.11' }),
     }))
 
     const { result } = renderHook(() => useZoteroProbe(probe, { initialAutoRun: true }))
@@ -41,11 +38,7 @@ describe('useZoteroProbe', () => {
   it('executes runProbe successfully and sets connected data', async () => {
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: {
-        providerId: 'local',
-        connected: true,
-        zoteroVersion: '7.0.15',
-      },
+      value: statusView({ connected: true, zoteroVersion: '7.0.15' }),
     }))
 
     const { result } = renderHook(() => useZoteroProbe(probe))
@@ -64,11 +57,7 @@ describe('useZoteroProbe', () => {
   it('sets diagnosis in error when probe answers ok: true but connected: false', async () => {
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: {
-        providerId: 'local',
-        connected: false,
-        diagnosis: 'ZOTERO_NOT_RUNNING: offline',
-      },
+      value: statusView({ connected: false, diagnosis: 'ZOTERO_NOT_RUNNING: offline' }),
     }))
 
     const { result } = renderHook(() => useZoteroProbe(probe))
@@ -101,7 +90,7 @@ describe('useZoteroProbe', () => {
   it('settles on this mount own answer and keeps it across refreshes', async () => {
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: { providerId: 'local', connected: true, zoteroVersion: '7.0.15' },
+      value: statusView({ connected: true, zoteroVersion: '7.0.15' }),
     }))
 
     const { result } = renderHook(() => useZoteroProbe(probe, { initialAutoRun: true }))
@@ -122,7 +111,7 @@ describe('useZoteroProbe', () => {
     const { result } = renderHook(() =>
       useZoteroProbe(probe, {
         initialAutoRun: true,
-        initialData: { providerId: 'local', connected: true, serverId: 'S1' },
+        initialData: statusView({ connected: true, serverId: 'S1' }),
       }),
     )
     expect(result.current.state.data?.connected).toBe(true)
@@ -175,7 +164,7 @@ describe('useZoteroProbe', () => {
     await act(async () => {
       gate.resolve({
         ok: true,
-        value: { providerId: 'local', connected: true },
+        value: statusView(),
       } as RemoteResult<ZoteroStatusView>)
       await p1
       await p2
@@ -190,7 +179,7 @@ describe('useZoteroProbe', () => {
     // across repeated uses rather than latching after the first click.
     const probe = vi.fn(async () => ({
       ok: true as const,
-      value: { providerId: 'local', endpoint: '127.0.0.1:23119', connected: true },
+      value: statusView({ endpoint: '127.0.0.1:23119' }),
     }))
     const { result } = renderHook(() => useZoteroProbe(probe))
 
@@ -226,7 +215,7 @@ describe('useZoteroProbe', () => {
     await act(async () => {
       gate.resolve({
         ok: true,
-        value: { providerId: 'local', connected: true },
+        value: statusView(),
       } as RemoteResult<ZoteroStatusView>)
     })
 

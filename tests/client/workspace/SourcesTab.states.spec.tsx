@@ -16,6 +16,8 @@ import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/cl
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SourcesTab, type SourcesTabProps } from '../../../src/client/components/SourcesTab.tsx'
 import { zh } from '../../../src/client/locales.ts'
+import { ZOTERO_SOURCE_PROJECTION_FAILED } from '../../../src/contract.ts'
+import { statusView } from '../../helpers/status-view.ts'
 import { preparing, running, settled } from '../helpers/blocks.ts'
 import {
   CONNECTED,
@@ -74,7 +76,7 @@ describe('connectivity strip states', () => {
     } as unknown as SourcesTabProps
     const view = render(<SourcesTab {...props} />)
     await act(async () => {})
-    expect(screen.getByText(zh.noSources)).toBeDefined()
+    expect(screen.getByText(zh.sourceProjectionStatusUnavailable)).toBeDefined()
     view.unmount()
   })
 
@@ -148,6 +150,60 @@ describe('connectivity strip states', () => {
 })
 
 describe('sources states', () => {
+  it('shows a registration failure instead of falling back to the loaded chat window', async () => {
+    const status = vi.fn(async () => ({
+      ok: true as const,
+      value: statusView({
+        sourceProjection: { state: 'failed', code: ZOTERO_SOURCE_PROJECTION_FAILED },
+      }),
+    }))
+    const { view } = mountTab(chatOf([toolRow(searchResult())]), status)
+    await act(async () => {})
+    // Format pin: the rendered alert is the localized sentence plus the stable
+    // wire code, asserted by identity so a wording or code change edits one place.
+    expect(screen.getByRole('alert').textContent).toBe(
+      `${zh.sourceProjectionFailed} (${ZOTERO_SOURCE_PROJECTION_FAILED})`,
+    )
+    expect(view.container.querySelector('[data-evidence-match]')).toBeNull()
+    view.unmount()
+  })
+
+  it('waits for a ready projection snapshot instead of folding the loaded window', async () => {
+    const status = vi.fn(async () => ({
+      ok: true as const,
+      value: statusView({ sourceProjection: { state: 'ready' } }),
+    }))
+    const { view } = mountTab(chatOf([toolRow(searchResult())]), status)
+    await act(async () => {})
+    expect(screen.getByText(zh.sourceProjectionSyncing)).toBeDefined()
+    expect(view.container.querySelector('[data-evidence-match]')).toBeNull()
+    view.unmount()
+  })
+
+  it('reports a pending registration as still loading instead of folding the window', async () => {
+    const status = vi.fn(async () => ({
+      ok: true as const,
+      value: statusView({ sourceProjection: { state: 'pending' } }),
+    }))
+    const { view } = mountTab(chatOf([toolRow(searchResult())]), status)
+    await act(async () => {})
+    expect(screen.getByText(zh.sourceProjectionLoading)).toBeDefined()
+    expect(view.container.querySelector('[data-evidence-match]')).toBeNull()
+    view.unmount()
+  })
+
+  it('reports a loading projection while the probe itself is still in flight', async () => {
+    // A probe that never settles keeps the gate in its loading answer: the
+    // loaded chat window is not a fallback while the status endpoint has not
+    // spoken about the registry yet.
+    const status = vi.fn(() => new Promise<{ ok: boolean; value?: unknown }>(() => {}))
+    const { view } = mountTab(chatOf([toolRow(searchResult())]), status)
+    await act(async () => {})
+    expect(screen.getByText(zh.sourceProjectionLoading)).toBeDefined()
+    expect(view.container.querySelector('[data-evidence-match]')).toBeNull()
+    view.unmount()
+  })
+
   it('opens on the sources lens and keeps every search hit when one was inspected', async () => {
     const status = connectedProbe()
     const rows = Array.from({ length: 20 }, (_, index) => ({

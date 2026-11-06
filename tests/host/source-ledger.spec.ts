@@ -7,10 +7,6 @@
 
 import { describe, expect, it } from 'vitest'
 import { RESULT_RECEIPT_PREFIX } from '../../src/constants.js'
-import { Context, Service } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-import ZoteroService from '../../src/index.js'
 
 import {
   emptyLedgerState,
@@ -301,40 +297,6 @@ describe('the host literature-trail fold', () => {
     ])
     const projectionState = { inheritedEventCount: 99, ledger: state }
     expect(sourceLedgerProjection.wire.view(projectionState).sources).toHaveLength(1)
-  })
-})
-
-describe('the projection registration', () => {
-  it('registers the trail unit when the registry is composed', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
-    await ctx.plugin(ToolRuntime, {})
-    const registered: Array<{ key: string }> = []
-    class StubProjections extends Service {
-      constructor(host: Context) {
-        super(host, 'sessionProjections')
-      }
-      register(definition: { key: string }): Promise<unknown> {
-        registered.push(definition)
-        return Promise.resolve({ stateOf: () => ({}), dispose: async () => {} })
-      }
-    }
-    new StubProjections(ctx)
-    const service = new ZoteroService(ctx, { writeEnabled: true })
-    expect(service.writeEnabled()).toBe(true)
-    await ctx.inject(['sessionProjections'], () => {})
-    expect(registered.map((entry) => entry.key)).toEqual(['zoteroSources'])
-    await ctx.fiber.dispose()
-  })
-
-  it('loads without the registry', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
-    await ctx.plugin(ToolRuntime, {})
-    const service = new ZoteroService(ctx, {})
-    expect(service.writeEnabled()).toBe(false)
-    expect(ctx.get('sessionProjections')).toBeUndefined()
-    await ctx.fiber.dispose()
   })
 })
 

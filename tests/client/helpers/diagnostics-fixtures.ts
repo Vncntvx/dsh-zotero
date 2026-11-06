@@ -7,6 +7,7 @@
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ZoteroDiagnosticsView, ZoteroStatusView } from '../../../src/client/remote.ts'
+import { statusView } from '../../helpers/status-view.ts'
 
 /** The bundle this plugin's diagnostics card owns. */
 export const targetSubject: PluginsSubject = {
@@ -52,6 +53,6 @@ export function entry(
 export function fakeProbe(): Promise<RemoteResult<ZoteroStatusView>> {
   return Promise.resolve({
     ok: true as const,
-    value: { providerId: 'local', connected: true, endpoint: '127.0.0.1:23119' },
+    value: statusView({ endpoint: '127.0.0.1:23119' }),
   })
 }
