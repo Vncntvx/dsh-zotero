@@ -29,6 +29,13 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
       fetchImpl: async () => {
         throw new Error('Saving must not query an external index')
       },
+      // The save tool must never fetch, so the seam is inert here; it only
+      // satisfies the transport's every-arm wiring requirement.
+      publicAccess: {
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+        createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
     }),
     keys: async () => ({}),
     maxResults: () => 10,

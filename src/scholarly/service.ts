@@ -45,6 +45,7 @@ import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
+import { scholarlyPublicAccess } from './transport/host-connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
 
@@ -85,13 +86,16 @@ export class ScholarlyService extends Service {
     super(ctx, 'scholarly')
     assertNoLegacyCredentialFields(config)
 
-    this.http = createScholarlyHttp()
+    this.http = createScholarlyHttp({ publicAccess: scholarlyPublicAccess })
     this.store = new ScholarlyTextStore()
     this.jobRunner = new ZoteroJobRunner(ctx.get('jobs'), scholarlyJobSink(ctx))
     ctx.effect(
       () => () => {
         this.jobRunner.killAll('scholarly service disposed')
         this.store.dispose()
+        // Close the shared validating connection pool: the transport owns
+        // it, and this effect is its only release path.
+        return this.http.dispose()
       },
       'scholarly: text store and job teardown',
     )

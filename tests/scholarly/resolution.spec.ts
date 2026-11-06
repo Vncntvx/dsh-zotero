@@ -19,8 +19,22 @@ import {
   parsePaperIdentifier,
   resolveScholarlyFullText,
 } from '../../src/scholarly/fulltext/resolve.js'
-import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
+import {
+  createScholarlyHttp,
+  type ScholarlyPublicAccess,
+} from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
+
+/**
+ * The public-PDF arm's host seams, stubbed: every name resolves public and
+ * the dispatcher is inert. The arm's own address judgment is the subject of
+ * the transport spec, not of these resolution cases.
+ */
+const stubPublicAccess: ScholarlyPublicAccess = {
+  resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+  createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+  createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+}
 
 let tempDir: string
 
@@ -92,6 +106,7 @@ describe('PDF text extraction & fulltext resolution', () => {
     const arxivHtml = `<!DOCTYPE html><html><body><article class="ltx_document"><h1>Arxiv Test</h1><p>${dummyParagraph}</p></article></body></html>`
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('arxiv.org/html/2301.07041')) {
@@ -117,6 +132,7 @@ describe('PDF text extraction & fulltext resolution', () => {
     const xml = `<article><front><article-meta><article-title>PMC Title</article-title></article-meta></front><body><sec><title>Intro</title><p>${filler}</p></sec></body></article>`
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('PMC12345/fullTextXML')) {
@@ -142,6 +158,7 @@ describe('PDF text extraction & fulltext resolution', () => {
     const longPdf = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<<>>>>endobj\n4 0 obj<</Length ${streamContent.length}>>stream\n${streamContent}\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000219 00000 n \ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n${300 + streamContent.length}\n%%EOF`
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.endsWith('.pdf')) {
@@ -172,6 +189,7 @@ describe('scholarly full-text resolution failure reporting', () => {
     handler: (url: string) => Response | Promise<Response>,
   ): ReturnType<typeof createScholarlyHttp> {
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => handler(String(url)),
       pacer: new HostPacer({}),
     })
@@ -264,6 +282,7 @@ describe('DOI routes: preprint escalation, Unpaywall, and Semantic Scholar', () 
     seen: string[] = [],
   ): ReturnType<typeof createScholarlyHttp> {
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const value = String(url)
         seen.push(value)
@@ -401,6 +420,7 @@ describe('PDF candidate discovery order', () => {
     seen: string[] = [],
   ): ReturnType<typeof createScholarlyHttp> {
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const value = String(url)
         seen.push(value)
@@ -569,6 +589,7 @@ describe('resolver reason composition', () => {
    */
   function routed(routes: Array<[string, () => Response]>): ReturnType<typeof createScholarlyHttp> {
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const value = String(url)
         for (const [needle, build] of routes) if (value.includes(needle)) return build()
