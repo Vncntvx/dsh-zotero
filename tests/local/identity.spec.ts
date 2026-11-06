@@ -219,7 +219,7 @@ describe('Server-ID cache identity', () => {
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writable = new LocalApiProvider(
       client,
-      PROVIDER_LIMITS,
+      () => PROVIDER_LIMITS,
       writer,
       new WriteAuthorizer({ client: writer, persistKey: () => true }),
     )
@@ -235,7 +235,7 @@ describe('Server-ID cache identity', () => {
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writable = new LocalApiProvider(
       client,
-      PROVIDER_LIMITS,
+      () => PROVIDER_LIMITS,
       writer,
       new WriteAuthorizer({ client: writer, persistKey: () => true }),
     )
@@ -259,7 +259,7 @@ describe('Server-ID cache identity', () => {
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writable = new LocalApiProvider(
       client,
-      PROVIDER_LIMITS,
+      () => PROVIDER_LIMITS,
       writer,
       new WriteAuthorizer({ client: writer, persistKey: () => true }),
     )
@@ -295,7 +295,12 @@ describe('Server-ID cache identity', () => {
         throw new Error('keyring disk failure')
       },
     } as unknown as WriteAuthorizer
-    const customProvider = new LocalApiProvider(client, PROVIDER_LIMITS, writer, failingAuthorizer)
+    const customProvider = new LocalApiProvider(
+      client,
+      () => PROVIDER_LIMITS,
+      writer,
+      failingAuthorizer,
+    )
     mock.route('GET', '/api/', (_req, res, helpers) => helpers.raw(200, {}, JSON.stringify({})))
     const status = await customProvider.status()
     expect(status.connected).toBe(false)

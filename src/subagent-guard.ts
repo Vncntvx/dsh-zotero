@@ -42,6 +42,7 @@ interface ActiveRestriction {
   readonly ctx: Context
   names: string
   dispose?: () => void
+  effectDispose?: () => void
 }
 
 /** The lifecycle operations ZoteroService needs when its write surface changes. */
@@ -105,6 +106,9 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
   }
 
   const release = (restriction: ActiveRestriction): void => {
+    const effectDispose = restriction.effectDispose
+    restriction.effectDispose = undefined
+    effectDispose?.()
     const dispose = restriction.dispose
     restriction.dispose = undefined
     restriction.names = ''
@@ -125,7 +129,10 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
     const restriction: ActiveRestriction = { ctx: agent.ctx, names: '' }
     // A custom registry may omit `agent/disposed`; the agent's own scope
     // unwind still retires the map entry, and the restriction unwinds with it.
-    agent.ctx.effect(() => () => retire(agent), 'zotero: subagent guard retire')
+    restriction.effectDispose = agent.ctx.effect(
+      () => () => retire(agent),
+      'zotero: subagent guard retire',
+    )
     active.set(agent, restriction)
     apply(restriction, denyNamesOf(registeredGlobalNames()))
   }

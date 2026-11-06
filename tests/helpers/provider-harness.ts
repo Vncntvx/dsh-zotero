@@ -55,7 +55,10 @@ export function createProvider(
   mock: MockZotero,
   limits: Partial<LocalApiLimits> = {},
 ): LocalApiProvider {
-  return new LocalApiProvider(testHttpClient(mock.baseUrl), { ...PROVIDER_LIMITS, ...limits })
+  return new LocalApiProvider(testHttpClient(mock.baseUrl), () => ({
+    ...PROVIDER_LIMITS,
+    ...limits,
+  }))
 }
 
 /** The per-test harness state: the mock server, the provider, and a temp dir. */

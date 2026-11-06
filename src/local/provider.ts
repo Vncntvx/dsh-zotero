@@ -150,12 +150,12 @@ export class LocalApiProvider implements ZoteroProvider {
 
   constructor(
     private readonly client: ZoteroHttpClient,
-    limits: LocalApiLimits | (() => LocalApiLimits),
+    limits: () => LocalApiLimits,
     private readonly writer?: ZoteroWriteHttpClient,
     private readonly authorizer?: WriteAuthorizer,
     sink?: DiagnosticSink,
   ) {
-    this.getLimits = typeof limits === 'function' ? limits : () => limits
+    this.getLimits = limits
     this.searchCaches = createSearchIndexCaches()
     // The directory owns the scope-listing and breadcrumb caches. It reads the
     // TTL and the fan-out bound through the live limits, so a settings edit

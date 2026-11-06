@@ -102,7 +102,7 @@ let authorizeCalls: number
 function authorizer(persistKey = true): WriteAuthorizer {
   return new WriteAuthorizer({
     client,
-    credentials,
+    credentials: () => credentials,
     persistKey: () => persistKey,
   })
 }
@@ -169,7 +169,11 @@ describe('persisted grants', () => {
         return { key: ISSUED_KEY, remember: true }
       },
     } as unknown as ZoteroWriteHttpClient
-    const writer = new WriteAuthorizer({ client: fakeClient, credentials, persistKey: () => true })
+    const writer = new WriteAuthorizer({
+      client: fakeClient,
+      credentials: () => credentials,
+      persistKey: () => true,
+    })
     await expect(writer.keyFor(SERVER_ID)).resolves.toMatchObject({ key: ISSUED_KEY })
     expect(credentials.records.get(String(WRITE_KEY_RECORD))).toMatchObject({
       kind: 'grant',
@@ -193,7 +197,11 @@ describe('persisted grants', () => {
         return { key: ISSUED_KEY, remember: true }
       },
     } as unknown as ZoteroWriteHttpClient
-    const writer = new WriteAuthorizer({ client: fakeClient, credentials, persistKey: () => true })
+    const writer = new WriteAuthorizer({
+      client: fakeClient,
+      credentials: () => credentials,
+      persistKey: () => true,
+    })
     await expect(writer.keyFor(SERVER_ID)).resolves.toMatchObject({ key: ISSUED_KEY })
     expect(credentials.records.get(String(WRITE_KEY_RECORD))).toEqual(newer)
   })
@@ -242,7 +250,7 @@ describe('persisted grants', () => {
     let reads = 0
     const writer = new WriteAuthorizer({
       client,
-      credentials,
+      credentials: () => credentials,
       persistKey: () => {
         reads += 1
         return reads < 3
@@ -317,7 +325,11 @@ describe('persisted grants', () => {
         remember: true,
       }),
     } as unknown as ZoteroWriteHttpClient
-    const writer = new WriteAuthorizer({ client: fakeClient, credentials, persistKey: () => true })
+    const writer = new WriteAuthorizer({
+      client: fakeClient,
+      credentials: () => credentials,
+      persistKey: () => true,
+    })
     const first = writer.keyFor(SERVER_ID)
     await entered.promise
     const second = writer.keyFor(OTHER_SERVER_ID)

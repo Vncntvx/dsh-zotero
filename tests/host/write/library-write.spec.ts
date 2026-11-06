@@ -171,7 +171,6 @@ describe('panel write gateway', () => {
             ],
             error: {
               message: 'the user rejected tool "zotero_create_note"',
-              info: { code: 'TOOL_DENIED' },
             },
           },
         },
@@ -182,8 +181,31 @@ describe('panel write gateway', () => {
     const outcome = await executeLibraryWrite(host.ctx, request, signal())
     expect(outcome.kind).toBe('declined')
     expect(outcome.message).toBe('the plan was not approved\nno retry will happen')
-    expect(outcome.code).toBe('TOOL_DENIED')
+    expect(outcome.code).toBeUndefined()
     expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not classify an unrelated error that merely mentions a rejected tool', async () => {
+    const host = await boot()
+    vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue({
+      results: [
+        {
+          callId: 'call-1' as never,
+          result: {
+            isError: true,
+            meta: null,
+            content: [{ type: 'text', text: 'gateway failed' }],
+            error: {
+              message: 'gateway failed after the user rejected tool "zotero_create_note"',
+            },
+          },
+        },
+      ],
+      additionalContexts: [],
+      concluded: false,
+    } as never)
+    const outcome = await executeLibraryWrite(host.ctx, request, signal())
+    expect(outcome.kind).toBe('failed')
   })
 
   it('maps Trash to the existing batch soft-delete operation', async () => {

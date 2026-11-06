@@ -169,7 +169,6 @@ describe('the zotero status endpoint', () => {
   })
 })
 
-
 describe('the zotero typert manifest', () => {
   it('declares the status endpoint under the zotero namespace', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
@@ -409,11 +408,24 @@ describe('the zotero resolveAttachment endpoint', () => {
 })
 
 describe('the zotero openProtocol endpoint', () => {
+  /** Execute one launch and return its rejection so the code and details are assertable. */
+  async function rejectionOf(
+    url: string,
+    options: Parameters<typeof executeOpenProtocol>[1],
+  ): Promise<{ code?: string; details?: unknown; cause?: unknown }> {
+    try {
+      await executeOpenProtocol(url, options)
+    } catch (error) {
+      return error as { code?: string; details?: unknown; cause?: unknown }
+    }
+    throw new Error(`expected ${url} to fail`)
+  }
+
   it.each(['darwin', 'linux'] as const)('awaits the %s launcher', async (platform) => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     expect(
       await executeOpenProtocol('zotero://select/library/items/ABC12345', { platform, launcher }),
-    ).toEqual({ ok: true })
+    ).toEqual({ success: true })
     expect(launcher).toHaveBeenCalledWith(
       platform === 'darwin' ? 'open' : 'xdg-open',
       ['zotero://select/library/items/ABC12345'],
@@ -423,7 +435,9 @@ describe('the zotero openProtocol endpoint', () => {
   it('passes the complete Windows URL only through the environment', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const url = 'zotero://open-pdf/groups/123/items/ABC12345?page=12&annotation=ABCD1234'
-    expect(await executeOpenProtocol(url, { platform: 'win32', launcher })).toEqual({ ok: true })
+    expect(await executeOpenProtocol(url, { platform: 'win32', launcher })).toEqual({
+      success: true,
+    })
     const [command, args, options] = launcher.mock.calls[0]!
     expect(command).toBe('powershell.exe')
     expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
@@ -441,7 +455,7 @@ describe('the zotero openProtocol endpoint', () => {
         launcher,
         env: { WSL_DISTRO_NAME: 'Ubuntu' },
       }),
-    ).toEqual({ ok: true })
+    ).toEqual({ success: true })
     const [command, args, options] = launcher.mock.calls[0]!
     expect(command).toBe('powershell.exe')
     expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
@@ -449,53 +463,22 @@ describe('the zotero openProtocol endpoint', () => {
     const script = Buffer.from(args[3]!, 'base64').toString('utf16le')
     expect(script).toContain('UseShellExecute = $true')
   })
-  it('falls back to wslview when powershell.exe fails in WSL', async () => {
+  it('surfaces launcher failure when powershell.exe fails in WSL', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async (cmd) => {
       if (cmd === 'powershell.exe') throw new Error('powershell failed')
     })
     const url = 'zotero://select/library/items/ABC12345'
-    expect(
-      await executeOpenProtocol(url, {
-        platform: 'linux',
-        launcher,
-        env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      }),
-    ).toEqual({ ok: true })
-    expect(launcher).toHaveBeenCalledWith('wslview', [url], { signal: undefined })
-  })
-  it('falls back to xdg-open when powershell.exe and wslview both fail in WSL', async () => {
-    const launcher = vi.fn<ProtocolLauncher>(async (cmd) => {
-      if (cmd === 'powershell.exe' || cmd === 'wslview') throw new Error(`${cmd} failed`)
-    })
-    const url = 'zotero://select/library/items/ABC12345'
-    expect(
-      await executeOpenProtocol(url, {
-        platform: 'linux',
-        launcher,
-        env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      }),
-    ).toEqual({ ok: true })
-    expect(launcher).toHaveBeenCalledWith('xdg-open', [url], { signal: undefined })
-  })
-  it('aborts immediately in WSL fallback chain when signal is cancelled', async () => {
-    const controller = new AbortController()
-    const launcher = vi.fn<ProtocolLauncher>(async (cmd) => {
-      if (cmd === 'powershell.exe') {
-        controller.abort()
-        throw new Error('powershell aborted')
-      }
-    })
-    const url = 'zotero://select/library/items/ABC12345'
-    const result = await executeOpenProtocol(url, {
+    const failure = await rejectionOf(url, {
       platform: 'linux',
       launcher,
-      signal: controller.signal,
       env: { WSL_DISTRO_NAME: 'Ubuntu' },
     })
-    expect(result.ok).toBe(false)
-    expect(launcher).toHaveBeenCalledTimes(1)
-    expect(launcher).not.toHaveBeenCalledWith('wslview', expect.anything(), expect.anything())
-    expect(launcher).not.toHaveBeenCalledWith('xdg-open', expect.anything(), expect.anything())
+    expect(failure).toMatchObject({
+      code: 'zotero/protocol-failed',
+      details: { url, reason: 'powershell failed' },
+    })
+    expect(launcher).toHaveBeenCalledOnce()
+    expect(launcher).toHaveBeenCalledWith('powershell.exe', expect.anything(), expect.anything())
   })
   it.each([
     'https://evil.com',
@@ -506,7 +489,11 @@ describe('the zotero openProtocol endpoint', () => {
     'zotero://open-pdf/library/items/ABC12345?page=1&evil=x',
   ])('refuses invalid target %s before launching', async (url) => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
-    expect((await executeOpenProtocol(url, { platform: 'win32', launcher })).ok).toBe(false)
+    const failure = await rejectionOf(url, { platform: 'win32', launcher })
+    expect(failure).toMatchObject({
+      code: 'zotero/protocol-failed',
+      details: { url, reason: expect.any(String) },
+    })
     expect(launcher).not.toHaveBeenCalled()
   })
   it.each([false, true])('reports launcher failure (async=%s)', async (asyncFailure) => {
@@ -514,24 +501,28 @@ describe('the zotero openProtocol endpoint', () => {
       if (asyncFailure) return Promise.reject(new Error('ENOENT'))
       throw new Error('ENOENT')
     }
-    expect(await executeOpenProtocol('zotero://select/', { platform: 'linux', launcher })).toEqual({
-      ok: false,
-      error: 'ENOENT',
+    const url = 'zotero://select/'
+    const failure = await rejectionOf(url, { platform: 'linux', launcher })
+    expect(failure).toMatchObject({
+      code: 'zotero/protocol-failed',
+      details: { url, reason: 'ENOENT' },
     })
+    expect(failure.cause).toBeInstanceOf(Error)
   })
   it('rejects cancellation before dispatch', async () => {
     const controller = new AbortController()
     controller.abort()
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
-    expect(
-      (
-        await executeOpenProtocol('zotero://select/', {
-          platform: 'linux',
-          launcher,
-          signal: controller.signal,
-        })
-      ).ok,
-    ).toBe(false)
+    const url = 'zotero://select/'
+    const failure = await rejectionOf(url, {
+      platform: 'linux',
+      launcher,
+      signal: controller.signal,
+    })
+    expect(failure).toMatchObject({
+      code: 'zotero/protocol-failed',
+      details: { url, reason: expect.any(String) },
+    })
     expect(launcher).not.toHaveBeenCalled()
   })
 })

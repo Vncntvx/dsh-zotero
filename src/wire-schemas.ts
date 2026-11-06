@@ -142,8 +142,7 @@ export const zoteroProtocolUrlSchema = z.string().startsWith('zotero://')
 /** Wire schema: openProtocol result. */
 export const zoteroOpenProtocolResultSchema = z
   .object({
-    ok: z.boolean(),
-    error: z.string().optional(),
+    success: z.literal(true),
   })
   .strict()
   .readonly()

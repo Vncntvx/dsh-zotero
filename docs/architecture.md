@@ -152,7 +152,8 @@ graph LR
 
 - 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`remediationInspect`、`remediationExecute`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly` 三个命名空间的共享设置表单；
-- 配置全字段声明为 volatile，支持热重载。
+- 配置全字段声明为 volatile，支持热重载；
+- `openProtocol` 协议唤醒：WSL 与 Windows 环境统一采用 `powershell.exe` 调用宿主系统默认程序唤醒 `zotero://` 链接；host 端点失败时抛 `zotero/protocol-failed`，浏览器半侧通过 `shell.overlay` 的 toast 与诊断上报呈现失败，不再保留 DOM anchor 回退。
 
 ## 诊断与日志
 

@@ -152,7 +152,8 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 
 - The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, `remediationInspect`, and `remediationExecute`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
 - The browser half mounts the namespace through `ctx.remote.$mount`, and configuration reads and writes go through the shared settings forms of the `zotero`, `library`, and `scholarly` namespaces;
-- Every configuration field is declared volatile and supports hot reload.
+- Every configuration field is declared volatile and supports hot reload;
+- `openProtocol` protocol launch: WSL and Windows environments unify on `powershell.exe` to launch `zotero://` links through the host system default handler; a host endpoint failure throws `zotero/protocol-failed`, and the browser half surfaces the failure via a `shell.overlay` toast and diagnostics reporting, dropping the DOM anchor fallback.
 
 ## Diagnostics and Logging
 

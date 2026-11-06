@@ -298,14 +298,15 @@ describe('the zotero diagnostics endpoint', () => {
     expect(view.debug).toBe(true)
   })
 
-  it('leaves a config commit carried by a foreign scope untouched', async () => {
+  it('leaves a config commit carried by a foreign fiber untouched', async () => {
     lane = await setupHostLane(undefined, { typert: true })
-    // A waterfall carried by a foreign scope object fails the fiber identity
-    // check and passes through unvetoed.
+    // The listener now receives the resolving fiber as its first argument
+    // (`waterfall('internal/config', fiber, next)`); a foreign context fails
+    // the identity check and passes through unvetoed.
     const raw = { timeoutMs: 42 }
-    expect(
-      lane.zoteroFiber.ctx.waterfall(lane.ctx as never, 'internal/config', raw, () => raw),
-    ).toBe(raw)
+    expect(lane.zoteroFiber.ctx.waterfall('internal/config', lane.ctx as never, () => raw)).toBe(
+      raw,
+    )
   })
 
   it('rebuilds the transport from live commits and ignores heavy-tool flag flips', async () => {

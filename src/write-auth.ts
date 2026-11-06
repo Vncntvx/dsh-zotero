@@ -74,7 +74,7 @@ interface WriteAuthorizerDeps {
   /** The write transport; the authorize call rides it. */
   readonly client: ZoteroWriteHttpClient
   /** The host credentials seam; absent compositions keep grants in memory only. */
-  readonly credentials?: CredentialProvider | (() => CredentialProvider | undefined)
+  readonly credentials?: () => CredentialProvider | undefined
   /**
    * Live read of the persist-grant setting. A live read, not a captured
    * boolean: a settings commit applies to the next authorization without a
@@ -165,9 +165,7 @@ export class WriteAuthorizer {
   constructor(private readonly deps: WriteAuthorizerDeps) {}
 
   private getCredentials(): CredentialProvider | undefined {
-    return typeof this.deps.credentials === 'function'
-      ? this.deps.credentials()
-      : this.deps.credentials
+    return this.deps.credentials?.()
   }
 
   /**

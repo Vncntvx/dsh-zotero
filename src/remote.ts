@@ -18,7 +18,7 @@
 
 import { execFile } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
-import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { domainCall, ZOTERO_NOT_COMPOSED_MESSAGE } from './errors.js'
 import { LOCAL_PROVIDER_ID } from './constants.js'
 import {
@@ -126,7 +126,23 @@ export interface OpenProtocolOptions {
   readonly env?: NodeJS.ProcessEnv
 }
 
-/** Validate a Zotero target and dispatch without a command interpreter. */
+/** One protocol failure with the URL and reason the client renders. */
+function protocolFailure(url: string, reason: string, cause?: unknown): RemoteError {
+  return new RemoteError(
+    'zotero/protocol-failed',
+    reason,
+    { url, reason },
+    cause === undefined ? undefined : { cause },
+  )
+}
+
+/**
+ * Validate a Zotero target and dispatch without a command interpreter.
+ * @param url - the canonical zotero:// URL.
+ * @param options - platform, launcher, cancellation, and environment.
+ * @returns the success acknowledgement.
+ * @throws {RemoteError} `zotero/protocol-failed` for an invalid target or a launcher failure.
+ */
 export async function executeOpenProtocol(
   url: string,
   options: OpenProtocolOptions = {},
@@ -138,8 +154,12 @@ export async function executeOpenProtocol(
     env = process.env,
   } = options
 
-  if (!url.startsWith('zotero://')) return { ok: false, error: 'Protocol not allowed' }
-  if (!validProtocolUrl(url)) return { ok: false, error: 'Malformed zotero:// URL' }
+  if (!url.startsWith('zotero://')) {
+    throw protocolFailure(url, 'Protocol not allowed')
+  }
+  if (!validProtocolUrl(url)) {
+    throw protocolFailure(url, 'Malformed zotero:// URL')
+  }
   try {
     signal?.throwIfAborted()
     const inWsl = platform === 'linux' && isWsl(env)
@@ -150,40 +170,21 @@ export async function executeOpenProtocol(
         DSH_ZOTERO_PROTOCOL_URL: url,
         ...(wslenv ? { WSLENV: wslenv } : {}),
       }
-      try {
-        await launcher(
-          'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-EncodedCommand', POWERSHELL_LAUNCHER_BASE64],
-          {
-            signal,
-            env: launcherEnv,
-          },
-        )
-        return { ok: true }
-      } catch (error) {
-        if (signal?.aborted) throw error
-        if (inWsl) {
-          try {
-            await launcher('wslview', [url], { signal })
-            return { ok: true }
-          } catch (wslviewError) {
-            if (signal?.aborted) throw wslviewError
-            try {
-              await launcher('xdg-open', [url], { signal })
-              return { ok: true }
-            } catch {
-              throw error
-            }
-          }
-        }
-        throw error
-      }
+      await launcher(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-EncodedCommand', POWERSHELL_LAUNCHER_BASE64],
+        {
+          signal,
+          env: launcherEnv,
+        },
+      )
     } else {
       await launcher(platform === 'darwin' ? 'open' : 'xdg-open', [url], { signal })
     }
-    return { ok: true }
+    return { success: true }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    const message = error instanceof Error ? error.message : String(error)
+    throw protocolFailure(url, message, error)
   }
 }
 
@@ -299,12 +300,12 @@ export class ZoteroRuntime extends TypertRemoteService {
    * Launch a zotero:// deep link natively through the host operating system.
    * @param url - canonical zotero:// deep link.
    * @param signal - cancellation signal.
+   * @returns the success acknowledgement.
+   * @throws {RemoteError} `zotero/protocol-failed` for an invalid target or a launcher failure.
    */
   async openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView> {
-    signal.throwIfAborted()
     return executeOpenProtocol(url, { signal })
   }
-
 
   /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */
   private debugEnabled(): boolean {

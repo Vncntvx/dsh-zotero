@@ -218,7 +218,7 @@ function failureCode(result: ToolExecutionFailure): string {
  */
 export async function commitLive(lane: HostLane, patch: Record<string, unknown>): Promise<void> {
   const refs = new Map(
-    volatileEntries(lane.zoteroFiber.config).map(({ path, ref }) => [path.join('.'), ref]),
+    volatileEntries(lane.zoteroFiber.effectiveConfig).map(({ path, ref }) => [path.join('.'), ref]),
   )
   for (const [field, value] of Object.entries(patch)) {
     const ref = refs.get(field)

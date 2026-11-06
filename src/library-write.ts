@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { randomUUID } from 'node:crypto'
 import type { ZoteroLibraryWriteRequestView, ZoteroLibraryWriteResultView } from './contract.js'
 import { requireZoteroService } from './service.js'
-import { ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
+import { HARNESS_USER_REJECTION_PREFIX, ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 import {
   ZoteroError,
   ZOTERO_CAPABILITY_UNAVAILABLE,
@@ -96,7 +96,10 @@ export async function executeLibraryWrite(
   const kind = asString(asRecord(result.meta)?.kind) as
     ZoteroLibraryWriteResultView['kind'] | undefined
   const code = result.isError ? result.error.info?.code : undefined
-  const declined = result.isError && result.error.message.includes('user rejected tool')
+  const declined =
+    result.isError &&
+    result.error.message.startsWith(HARNESS_USER_REJECTION_PREFIX) &&
+    result.error.message.endsWith('"')
   return {
     kind: declined
       ? 'declined'

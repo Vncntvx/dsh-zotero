@@ -54,7 +54,7 @@ function createWritableProvider(): LocalApiProvider {
   const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   return new LocalApiProvider(
     client,
-    PROVIDER_LIMITS,
+    () => PROVIDER_LIMITS,
     writer,
     new WriteAuthorizer({ client: writer, persistKey: () => true }),
   )

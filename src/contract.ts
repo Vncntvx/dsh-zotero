@@ -30,6 +30,7 @@ import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     'zotero/domain': { readonly code: string }
+    'zotero/protocol-failed': { readonly url: string; readonly reason: string }
   }
 }
 
@@ -137,8 +138,7 @@ export interface ZoteroReportResultView {
 
 /** The result of launching a zotero:// protocol URL via the host. */
 export interface ZoteroOpenProtocolResultView {
-  readonly ok: boolean
-  readonly error?: string
+  readonly success: true
 }
 
 /** Package identity every Typert contribution from this plugin claims. */

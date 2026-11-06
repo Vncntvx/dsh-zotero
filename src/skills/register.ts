@@ -4,6 +4,11 @@ import { skillRegistration, type ResearchSop } from './definition.js'
 /** Optional registry: arriving/replaced services rebind with the inject fiber. */
 export function registerResearchSkills(ctx: Context, sops: readonly ResearchSop[]): void {
   ctx.inject(['skills'], (host) => {
-    for (const sop of sops) host.skills.register(skillRegistration(sop))
+    host.effect(() => {
+      const disposers = sops.map((sop) => host.skills.register(skillRegistration(sop)))
+      return () => {
+        for (const dispose of disposers) dispose()
+      }
+    }, 'zotero: research skills registration')
   })
 }

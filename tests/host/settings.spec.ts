@@ -16,6 +16,7 @@ import { resultStorage } from '../helpers/result-storage.ts'
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { volatileEntries } from '@deepseek-ai/cosmokit'
 import { ZOTERO_PROVIDER_UNAVAILABLE } from '../../src/errors.js'
 import { ZOTERO_WRITE_TOOL_NAMES } from '../../src/constants.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
@@ -50,14 +51,9 @@ describe('live configuration', () => {
     // The waterfall runs on the owning fiber's context (the same object the
     // service registered its veto on), so the candidate reaches the hook.
     expect(() =>
-      zoteroFiber.ctx.waterfall(
-        zoteroFiber,
-        'internal/config',
-        { baseUrl: 'http://example.com/api' },
-        () => ({
-          baseUrl: 'http://example.com/api',
-        }),
-      ),
+      zoteroFiber.ctx.waterfall('internal/config', zoteroFiber, () => ({
+        baseUrl: 'http://example.com/api',
+      })),
     ).toThrow(/loopback/)
     expect(lane.ctx.zotero.config.baseUrl).toBe('http://127.0.0.1:1/api')
   })
@@ -66,7 +62,12 @@ describe('live configuration', () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
     const { zoteroFiber } = lane
     const raw = { baseUrl: 'http://127.0.0.1:1/api', timeoutMs: 7000 }
-    expect(zoteroFiber.ctx.waterfall(zoteroFiber, 'internal/config', raw, () => raw)).toBe(raw)
+    // The waterfall returns the resolved config with volatile references;
+    // the veto must preserve the submitted values in those references.
+    const resolved = zoteroFiber.ctx.waterfall('internal/config', zoteroFiber, () => raw)
+    const refs = new Map(volatileEntries(resolved).map(({ path, ref }) => [path.join('.'), ref]))
+    expect(refs.get('baseUrl')?.get()).toBe(raw.baseUrl)
+    expect(refs.get('timeoutMs')?.get()).toBe(raw.timeoutMs)
   })
 
   it('live-applies a baseUrl edit by rebuilding the transport', async () => {
