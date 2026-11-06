@@ -156,6 +156,7 @@
     "@deepseek-ai/schemastery": "^3.19.0",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^5.11.2",
+    "undici": "8.11.2",
     "unpdf": "^1.9.0",
     "zod": "4.4.3"
   },

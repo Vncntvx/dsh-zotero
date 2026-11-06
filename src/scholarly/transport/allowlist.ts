@@ -33,7 +33,7 @@ const PRIVATE_IP_REGEX = /^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\
 
 /**
  * Validates that a URL is a legitimate public web address, rejecting
- * private/loopback addresses.
+ * private/loopback addresses and non-standard ports.
  *
  * IPv6 literal hosts are refused as a class, not by a prefix blacklist.
  * A blacklist cannot enumerate the spellings: WHATWG URL normalizes
@@ -44,19 +44,27 @@ const PRIVATE_IP_REGEX = /^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\
  * a private network. Every host this plugin can legitimately reach is a
  * DNS name (the `hosts.ts` allowlist carries no literals, and open-access
  * PDFs live on publisher DNS names), so a literal has no valid use here
- * and refusing the whole class closes every spelling at once. The
- * harness's unicast whitelist (`web-fetch-http/src/network.ts`) exists
- * for general web retrieval, which must admit public IPv6 literals;
- * `ipaddr.js` is not in this dependency tree and this class closure needs
- * no dependency.
+ * and refusing the whole class closes every spelling at once.
+ *
+ * This lexical gate is the first of two: a name is not an address, so the
+ * transport additionally resolves the hostname and refuses non-public
+ * answers before connecting (`network.ts`). The upstream harness fetch
+ * provider performs no address judgment of its own — it answers intranet
+ * and loopback addresses by design (`packages/web/web-fetch-http`) — so
+ * there is no upstream guard to inherit and none to defer to.
  * @param urlString - the address to check.
- * @returns true when the address is public HTTP(S).
+ * @returns true when the address is public HTTP(S) on port 80 or 443.
  */
 export function isPublicUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString)
     const protocol = url.protocol.toLowerCase()
     if (protocol !== 'https:' && protocol !== 'http:') return false
+
+    // Publishers serve on the default ports; an explicit 80 or 443 is the
+    // same port spelled out. Anything else is not a scholarly endpoint, and
+    // a non-standard port is how an SSRF probe reaches an internal service.
+    if (url.port !== '' && url.port !== '80' && url.port !== '443') return false
 
     const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
     if (

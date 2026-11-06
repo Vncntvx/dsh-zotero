@@ -18,6 +18,7 @@ import {
   searchSemanticScholar,
 } from '../../../src/scholarly/sources/semanticscholar.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../../src/scholarly/transport/http.js'
+import { stubPublicAccess } from '../fixtures.js'
 import { ScholarlyHttpError } from '../../../src/scholarly/transport/http.js'
 
 describe('scholarly query router', () => {
@@ -82,6 +83,7 @@ describe('source searcher registry', () => {
     const { SOURCE_SEARCHERS } = await import('../../../src/scholarly/sources/index.js')
     const { SCHOLARLY_SOURCE_IDS } = await import('../../../src/scholarly/types.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(
           JSON.stringify({ results: [], resultList: { result: [] }, message: { items: [] } }),
@@ -151,6 +153,7 @@ describe('arXiv query construction and search fallback', () => {
   it('retries with the loosened query when the strict one finds nothing', async () => {
     const queries: string[] = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         queries.push(decodeURIComponent(String(url)))
         // Only the any-word form matches; the strict form returns an empty feed.
@@ -177,6 +180,7 @@ describe('arXiv query construction and search fallback', () => {
   it('does not loosen a date-sorted query', async () => {
     const queries: string[] = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         queries.push(String(url))
         return new Response(
@@ -194,6 +198,7 @@ describe('arXiv query construction and search fallback', () => {
   it('looks up one identifier by id_list', async () => {
     const seen: string[] = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         seen.push(String(url))
         return new Response(
@@ -225,6 +230,7 @@ describe('index adapters degrade on a provider-side refusal', () => {
   async function failingWith(status: number): Promise<ScholarlyHttp> {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response('refused', { status }),
       pacer: new HostPacer({}),
     })
@@ -279,6 +285,7 @@ describe('index adapters degrade on a provider-side refusal', () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const headers: Array<Record<string, string>> = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (_url, init) => {
         headers.push((init?.headers ?? {}) as Record<string, string>)
         return new Response(JSON.stringify({ data: [] }), {
@@ -298,6 +305,7 @@ describe('index adapters degrade on a provider-side refusal', () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const urls: string[] = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         urls.push(String(url))
         return new Response(JSON.stringify({ data: [] }), {
@@ -322,6 +330,7 @@ describe('PubMed query construction', () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const urls: string[] = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         urls.push(decodeURIComponent(String(url)))
         return new Response(
@@ -345,6 +354,7 @@ describe('PubMed query construction', () => {
   it('returns nothing when the search finds no identifiers', async () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(JSON.stringify({ esearchresult: { idlist: [] } }), {
           headers: { 'content-type': 'application/json' },
@@ -357,6 +367,7 @@ describe('PubMed query construction', () => {
   it('returns nothing when the search response carries no result block', async () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } }),
       pacer: new HostPacer({}),
@@ -374,6 +385,7 @@ describe('OpenAlex query construction and mapping', () => {
   async function httpOf(seen: string[] = []): Promise<ScholarlyHttp> {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     return createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         seen.push(decodeURIComponent(String(url)))
         return new Response(JSON.stringify({ results: [], meta: { count: 0 } }), {
@@ -448,6 +460,7 @@ describe('OpenAlex query construction and mapping', () => {
   it('looks up linked works and reports the total', async () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
@@ -467,6 +480,7 @@ describe('OpenAlex query construction and mapping', () => {
   it('returns an absent record for a 404 lookup', async () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response('{}', { status: 404 }),
       pacer: new HostPacer({}),
     })
@@ -476,6 +490,7 @@ describe('OpenAlex query construction and mapping', () => {
   it('propagates an OpenAlex 500 from a lookup', async () => {
     const { HostPacer } = await import('../../../src/scholarly/transport/pacing.js')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response('boom', { status: 500 }),
       pacer: new HostPacer({}),
     })

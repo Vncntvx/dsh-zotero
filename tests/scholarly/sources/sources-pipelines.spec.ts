@@ -21,6 +21,7 @@ import {
   searchSemanticScholar,
 } from '../../../src/scholarly/sources/semanticscholar.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
+import { stubPublicAccess } from '../fixtures.js'
 
 describe('adapter network query & lookup pipelines', () => {
   it('searches and looks up arXiv papers', async () => {
@@ -37,6 +38,7 @@ describe('adapter network query & lookup pipelines', () => {
       </feed>
     `
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(atomXml, { headers: { 'content-type': 'application/xml' } }),
     })
@@ -50,6 +52,7 @@ describe('adapter network query & lookup pipelines', () => {
 
   it('searches and looks up Crossref works', async () => {
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('404')) return new Response('Not found', { status: 404 })
@@ -114,6 +117,7 @@ describe('adapter network query & lookup pipelines', () => {
 
   it('searches DBLP and handles HTML challenge error', async () => {
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('challenge')) return new Response('<html>Bot verification</html>')
@@ -167,6 +171,7 @@ describe('adapter network query & lookup pipelines', () => {
     let lastUrl = ''
     let lastInit: RequestInit | undefined
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url, init) => {
         lastUrl = String(url)
         lastInit = init
@@ -209,6 +214,7 @@ describe('adapter network query & lookup pipelines', () => {
     }
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('fullTextXML')) {
@@ -241,6 +247,7 @@ describe('adapter network query & lookup pipelines', () => {
     const efetchXml = `<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>99999999</PMID><Article><ArticleTitle>PubMed Trial Result.</ArticleTitle><Journal><JournalIssue><PubDate><Year>2021</Year></PubDate></JournalIssue></Journal><AuthorList><Author><ForeName>Alice</ForeName><LastName>Brown</LastName></Author></AuthorList></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>`
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('esearch.fcgi')) {
@@ -274,6 +281,7 @@ describe('adapter network query & lookup pipelines', () => {
     }
 
     const mockHttp = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (url) => {
         const u = String(url)
         if (u.includes('s2_404')) return new Response('Not found', { status: 404 })

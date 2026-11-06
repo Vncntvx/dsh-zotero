@@ -9,6 +9,7 @@ import {
   ScholarlyCircuitOpenError,
 } from '../../../src/scholarly/transport/circuit-breaker.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
+import { stubPublicAccess } from '../fixtures.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
 
 describe('scholarly transport safety: allowlist', () => {
@@ -211,6 +212,7 @@ describe('scholarly transport failure classification', () => {
 
     // A redirect serves a 3xx, which is neither success nor failure for health.
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(null, {
           status: 302,
@@ -227,6 +229,7 @@ describe('scholarly transport failure classification', () => {
 
   it('reports an oversized body instead of serving an empty buffer', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response(new Uint8Array(2000), { status: 200 }),
       pacer: new HostPacer({ 'api.openalex.org': 0 }),
     })
@@ -288,7 +291,7 @@ describe('scholarly transport http client', () => {
       }),
     )
 
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
     const result = await http.json<{ status: string; data: number[] }>(
       'https://api.crossref.org/works',
     )
@@ -299,7 +302,7 @@ describe('scholarly transport http client', () => {
 
   it('rejects forbidden hosts before making outbound request', async () => {
     const mockFetch = vi.fn()
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
 
     await expect(http.text('https://unauthorized.org/data')).rejects.toThrow(
       /not on the scholarly allowlist/,
@@ -318,7 +321,7 @@ describe('scholarly transport http client', () => {
       return new Response('{}', { status: 200 })
     })
 
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
     await expect(http.text('https://doi.org/10.1000/1')).rejects.toThrow(
       /Security rejection.*not a valid public HTTP\(S\) address/,
     )
@@ -341,7 +344,7 @@ describe('scholarly transport http client', () => {
       return new Response('{}', { status: 404 })
     })
 
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
     const res = await http.json<{ status: string }>('https://doi.org/10.1000/target')
     expect(res.status).toBe('ok')
   })
@@ -355,7 +358,7 @@ describe('scholarly transport http client', () => {
       }),
     )
 
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
     await expect(http.bytes('https://api.openalex.org/works', { maxBytes: 1000 })).rejects.toThrow(
       /larger than maximum allowed size/,
     )
@@ -366,7 +369,7 @@ describe('scholarly transport http client', () => {
     // hold an api_key or a DOI, so only the host may travel with it.
     const secret = '{{SECRET_ptp2d13j}}'
     const mockFetch = vi.fn().mockResolvedValue(new Response('nope', { status: 500 }))
-    const http = createScholarlyHttp({ fetchImpl: mockFetch })
+    const http = createScholarlyHttp({ publicAccess: stubPublicAccess, fetchImpl: mockFetch })
 
     await expect(http.text(`https://api.openalex.org/works?api_key=${secret}`)).rejects.toSatisfy(
       (error: unknown) => {
@@ -393,6 +396,7 @@ describe('scholarly transport deadline and gate behavior', () => {
     // by the whole budget for the same outcome.
     let calls = 0
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (_url, init) => {
         calls += 1
         return await hangingFetch(init)
@@ -410,6 +414,7 @@ describe('scholarly transport deadline and gate behavior', () => {
     let calls = 0
     const caller = new AbortController()
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (_url, init) => {
         calls += 1
         queueMicrotask(() => caller.abort(new Error('user cancelled')))
@@ -429,6 +434,7 @@ describe('scholarly transport deadline and gate behavior', () => {
     let inFlight = 0
     let peak = 0
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       maxInFlight: 3,
       fetchImpl: async () => {
         inFlight += 1
@@ -454,6 +460,7 @@ describe('scholarly transport deadline and gate behavior', () => {
     })
     breaker.recordFailure('api.crossref.org')
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       circuitBreaker: breaker,
       fetchImpl: async () => new Response('{}', { status: 200 }),
       pacer: new HostPacer({ 'api.crossref.org': 0 }),
@@ -519,6 +526,7 @@ describe('abortableSleep', () => {
 describe('scholarly transport redirect and header handling', () => {
   it('refuses a redirect that names no location', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response(null, { status: 302 }),
       pacer: new HostPacer({ 'doi.org': 0 }),
     })
@@ -528,6 +536,7 @@ describe('scholarly transport redirect and header handling', () => {
   it('stops after the redirect ceiling', async () => {
     let hops = 0
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => {
         hops += 1
         return new Response(null, {
@@ -543,6 +552,7 @@ describe('scholarly transport redirect and header handling', () => {
   it('sends the documented user agent and any caller headers', async () => {
     const seen: Array<Record<string, string>> = []
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async (_url, init) => {
         seen.push((init?.headers ?? {}) as Record<string, string>)
         return new Response('{}', { status: 200 })
@@ -557,6 +567,7 @@ describe('scholarly transport redirect and header handling', () => {
   it('honours a Retry-After header on a 429 and then succeeds', async () => {
     let calls = 0
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => {
         calls += 1
         if (calls === 1) {
@@ -574,6 +585,7 @@ describe('scholarly transport redirect and header handling', () => {
 
   it('reports the retry-after seconds when it gives up on a 429', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response('slow down', { status: 429, headers: { 'retry-after': '120' } }),
       pacer: new HostPacer({ 'api.openalex.org': 0 }),
@@ -585,6 +597,7 @@ describe('scholarly transport redirect and header handling', () => {
 
   it('reports a non-2xx that is not retryable', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => new Response('nope', { status: 403 }),
       pacer: new HostPacer({ 'api.openalex.org': 0 }),
     })
@@ -595,6 +608,7 @@ describe('scholarly transport redirect and header handling', () => {
 describe('transport failure translation', () => {
   it('surfaces a non-Error rejection rather than masking it', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () => {
         throw 'connection exploded'
       },
@@ -605,6 +619,7 @@ describe('transport failure translation', () => {
 
   it('reads a body whose stream yields a single chunk', async () => {
     const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
       fetchImpl: async () =>
         new Response(
           new ReadableStream<Uint8Array>({

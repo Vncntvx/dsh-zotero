@@ -8,7 +8,11 @@ import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { ZoteroJobRunner } from '../../src/job-runner.js'
 import { type ScholarlyReadHost } from '../../src/scholarly/tools/index.js'
-import { createScholarlyHttp, type ScholarlyHttp } from '../../src/scholarly/transport/http.js'
+import {
+  createScholarlyHttp,
+  type ScholarlyHttp,
+  type ScholarlyPublicAccess,
+} from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 
@@ -36,6 +40,18 @@ export async function bootScholarlyContext(): Promise<Context> {
   return ctx
 }
 
+/**
+ * The inert public-access stub every mocked transport carries: the fetch
+ * replacement never opens a socket, so neither the resolver nor the
+ * dispatcher factories are exercised — they only satisfy the seam the
+ * transport now requires of every external request.
+ */
+export const stubPublicAccess: ScholarlyPublicAccess = {
+  resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+  createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+  createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+}
+
 export function createMockHttp(
   handler: (url: string, init?: RequestInit) => Response | Promise<Response>,
 ): ScholarlyHttp {
@@ -55,6 +71,7 @@ export function createMockHttp(
       return handler(urlStr, init)
     },
     pacer,
+    publicAccess: stubPublicAccess,
   })
 }
 
