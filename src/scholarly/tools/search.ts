@@ -16,12 +16,10 @@ import { SOURCE_SEARCHERS } from '../sources/index.js'
 import { SCHOLARLY_SOURCE_IDS, SCHOLARLY_SOURCE_NAMES, type ScholarlyQuery } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
-import {
-  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
-  toCleanJsonRecords,
-  type ScholarlyToolHost,
-  type ScholarlyToolOutput,
-} from './common.js'
+import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
+import { metaRecordOf } from '../../tools/present.js'
+import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
+import { toCleanJsonRecords, type ScholarlyToolHost } from './common.js'
 
 const CITE_HINT = 'Tip: Cite a paper from these results using its title link or ID.'
 
@@ -73,11 +71,12 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         default: 'snippet',
         description: 'How much abstract to display in the text summary.',
       },
+      ...RUN_IN_BACKGROUND_PARAMETER,
     },
-    output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+    output: SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
-    async execute(args, exec): Promise<ScholarlyToolOutput> {
+    async execute(args, exec) {
       const text = args.query.trim()
       if (!text) throw new ZoteroError('query parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
@@ -112,86 +111,101 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         ...(args.categories && args.categories.length > 0 ? { categories: args.categories } : {}),
       }
 
-      const keys = host.keys()
-      const failedSources: string[] = []
+      return await runScholarlyJob({
+        host,
+        exec,
+        label: `scholarly_search (${text}, ${selectedSources.length} sources)`,
+        runInBackground: args.run_in_background === true,
+        run: async (signal, onProgress) => {
+          const keys = await host.keys()
+          const failedSources: string[] = []
 
-      const sourceResults = await Promise.all(
-        selectedSources.map(async (sourceId) => {
-          try {
-            // Total over `ScholarlySourceId`: the registry and the id union are
-            // declared together, so this lookup cannot be undefined.
-            const searcher = SOURCE_SEARCHERS[sourceId]
-            const queryForSource =
-              isDateSort && sourceId !== 'arxiv'
-                ? { ...queryObj, sort: 'relevance' as const, limit: Math.min(50, limit * 3) }
-                : queryObj
+          const sourceResults = await Promise.all(
+            selectedSources.map(async (sourceId, index) => {
+              try {
+                // Total over `ScholarlySourceId`: the registry and the id union are
+                // declared together, so this lookup cannot be undefined.
+                const searcher = SOURCE_SEARCHERS[sourceId]
+                const queryForSource =
+                  isDateSort && sourceId !== 'arxiv'
+                    ? { ...queryObj, sort: 'relevance' as const, limit: Math.min(50, limit * 3) }
+                    : queryObj
 
-            const papers = await searcher(queryForSource, host.http, keys, exec.signal)
-            const weight = BOOSTED_RRF_SOURCES.has(sourceId) ? 1.2 : 1.0
+                const papers = await searcher(queryForSource, host.http, keys, signal)
+                const weight = BOOSTED_RRF_SOURCES.has(sourceId) ? 1.2 : 1.0
+                onProgress({
+                  phase: 'source',
+                  current: index + 1,
+                  total: selectedSources.length,
+                  message: `${SCHOLARLY_SOURCE_NAMES[sourceId]}: ${papers.length} hits`,
+                })
 
+                return {
+                  sourceId,
+                  weight,
+                  papers,
+                } satisfies RankedSourceList
+              } catch (error) {
+                if (signal.aborted) throw error
+                const msg = error instanceof Error ? error.message : String(error)
+                failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${msg})`)
+                return {
+                  sourceId,
+                  weight: 1.0,
+                  papers: [],
+                } satisfies RankedSourceList
+              }
+            }),
+          )
+
+          // 1. Fuse multiple ranked lists with Match Lattice & Weighted RRF
+          let papers = fuseRankedLists(sourceResults)
+
+          // 2. Post-process rankings (title exact match, date/citation sorting, OA filter, limit slice)
+          papers = postProcessRanked(papers, { ...queryObj, limit, sort: args.sort ?? 'relevance' })
+
+          // 3. Cross-component collision check against the local Zotero library (top N only).
+          //    A lookup that could not run reports "unavailable" instead of leaving
+          //    hits unmarked, where a reader would take them for "not held".
+          const { notice: libraryNotice } = await annotateWithLibraryStatus(
+            papers,
+            host.zoteroService?.(),
+            signal,
+          )
+
+          if (papers.length === 0) {
+            const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
+            const failureNotice =
+              failedSources.length > 0 ? `\nUnanswered sources: ${failedSources.join('; ')}.` : ''
             return {
-              sourceId,
-              weight,
-              papers,
-            } satisfies RankedSourceList
-          } catch (error) {
-            if (exec.signal.aborted) throw error
-            const msg = error instanceof Error ? error.message : String(error)
-            failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${msg})`)
-            return {
-              sourceId,
-              weight: 1.0,
+              text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,
               papers: [],
-            } satisfies RankedSourceList
+              issues: failedSources,
+            }
           }
-        }),
-      )
 
-      // 1. Fuse multiple ranked lists with Match Lattice & Weighted RRF
-      let papers = fuseRankedLists(sourceResults)
+          const answeredSources = selectedSources
+            .filter((_, idx) => sourceResults[idx]!.papers.length > 0)
+            .map((s) => SCHOLARLY_SOURCE_NAMES[s])
 
-      // 2. Post-process rankings (title exact match, date/citation sorting, OA filter, limit slice)
-      papers = postProcessRanked(papers, { ...queryObj, limit, sort: args.sort ?? 'relevance' })
+          const abstractChars = args.abstract === 'none' ? 0 : args.abstract === 'full' ? 4000 : 300
+          const summaryHeader = `${papers.length} papers found for "${text}" (via ${answeredSources.join(
+            ', ',
+          )}).`
+          const failureNote =
+            failedSources.length > 0 ? `\nNotice: ${failedSources.join('; ')}.` : ''
 
-      // 3. Cross-component collision check against the local Zotero library (top N only).
-      //    A lookup that could not run reports "unavailable" instead of leaving
-      //    hits unmarked, where a reader would take them for "not held".
-      const { notice: libraryNotice } = await annotateWithLibraryStatus(
-        papers,
-        host.zoteroService?.(),
-        exec.signal,
-      )
+          const formattedLines = papers
+            .map((p, idx) => formatPaperItem(p, idx + 1, abstractChars))
+            .join('\n\n')
 
-      if (papers.length === 0) {
-        const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
-        const failureNotice =
-          failedSources.length > 0 ? `\nUnanswered sources: ${failedSources.join('; ')}.` : ''
-        return {
-          text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,
-          papers: [],
-          issues: failedSources,
-        }
-      }
-
-      const answeredSources = selectedSources
-        .filter((_, idx) => sourceResults[idx]!.papers.length > 0)
-        .map((s) => SCHOLARLY_SOURCE_NAMES[s])
-
-      const abstractChars = args.abstract === 'none' ? 0 : args.abstract === 'full' ? 4000 : 300
-      const summaryHeader = `${papers.length} papers found for "${text}" (via ${answeredSources.join(
-        ', ',
-      )}).`
-      const failureNote = failedSources.length > 0 ? `\nNotice: ${failedSources.join('; ')}.` : ''
-
-      const formattedLines = papers
-        .map((p, idx) => formatPaperItem(p, idx + 1, abstractChars))
-        .join('\n\n')
-
-      return {
-        text: `${summaryHeader}${failureNote}${libraryNotice}\n${CITE_HINT}\n\n${formattedLines}`,
-        papers: toCleanJsonRecords(papers),
-        issues: failedSources,
-      }
+          return {
+            text: `${summaryHeader}${failureNote}${libraryNotice}\n${CITE_HINT}\n\n${formattedLines}`,
+            papers: toCleanJsonRecords(papers),
+            issues: failedSources,
+          }
+        },
+      })
     },
     presentCall: (args) => ({
       card: 'generic',
@@ -199,5 +213,6 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
       rawInput: String(args.query ?? ''),
       kind: 'search',
     }),
+    presentResult: (_args, result) => presentJobArm('Scholarly search', metaRecordOf(result) ?? {}),
   })
 }

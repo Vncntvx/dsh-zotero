@@ -91,6 +91,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
       }
 
       const targets = args.ids
+      const keys = await host.keys()
 
       const outcomes = await mapWithConcurrency(
         targets,
@@ -109,7 +110,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
               const pmc = await lookupEuropePmc(
                 id.kind === 'pmid' ? { pmid: id.id } : { pmcid: id.id },
                 host.http,
-                host.keys(),
+                keys,
                 exec.signal,
               )
               doi = pmc?.doi

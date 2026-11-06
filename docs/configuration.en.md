@@ -6,9 +6,9 @@ dsh-zotero configuration is split across three settings namespaces. Each namespa
 
 - Core `zotero` namespace: `src/config.ts`, 37 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 1 field;
-- Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 6 fields.
+- Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields.
 
-The three groups total 44 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`.
+The three groups total 47 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
@@ -20,7 +20,7 @@ The configuration area of the plugin detail page is a 6-tab form that edits all 
 | Connection          | `zotero`           | 5      | Connection: `baseUrl`, `provider`, `timeoutMs`, `maxInFlightRequests`, `scopeListingTtlMs`                                                                                                                                                                                                                                              |
 | Search & Extraction | `zotero`           | 13     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars` |
 | Literature panel    | `library`          | 1      | Sidebar Display: `rightSidebarEnabled`                                                                                                                                                                                                                                                                                                  |
-| Scholarly Search    | `scholarly`        | 6      | API Credentials & Identification: `email`, `s2Key`, `ncbiKey`, `openalexKey`; Search & Full-text Quotas: `maxResults`, `maxContentChars`                                                                                                                                                                                                |
+| Scholarly Search    | `scholarly`        | 9      | Identity and credential references: `email`, `s2ApiKeyEnv`, `ncbiApiKeyEnv`, `openalexApiKeyEnv`; Search & Full-text Quotas: `maxResults`, `maxContentChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`                                                                                         |
 | Advanced            | `zotero`           | 11     | Output limits: `maxInlineResultTokens`, `maxInlineResultBytes`, `maxResponseBytes`, `maxExportChars`, `maxExportRefs`, `maxBrowseResults`, `maxChangesResults`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`; Diagnostics: `debug`                                                                 |
 
 `webEnabled` sits under "General → Literature trail", and the toggle is named "Show literature trail"; it decides whether the literature trail tab appears at the top of the conversation. The literature panel also needs the `dsh-zotero/library` component row to be composed and this component's `rightSidebarEnabled` to be on, as described below in "Literature panel component configuration".
@@ -83,7 +83,7 @@ Note: `foregroundWaitMs` controls how long a foreground task waits before it is 
 - `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, `promoteOnTimeout`, and `debug` must be booleans;
 - `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 
-The literature panel and scholarly search schemas are validated by the components themselves when they mount: `rightSidebarEnabled` must be a boolean; `maxResults` must be an integer from 1 to 100; `maxContentChars` must be an integer from 1,000 to 50,000; the key fields must be strings.
+The literature panel and scholarly search schemas are validated by the components themselves when they mount: `rightSidebarEnabled` must be a boolean; `maxResults` must be an integer from 1 to 100; `maxContentChars` must be an integer from 1,000 to 50,000; `enableRunInBackground` and `promoteOnTimeout` must be booleans; `foregroundWaitMs` must be an integer from 1 to 240,000; the credential-reference fields must be strings, where an empty value disables that key and a non-empty value is resolved by `src/scholarly/credentials.ts` as an environment-variable name before every tool call.
 
 ## Configuration priority
 
@@ -132,16 +132,23 @@ The component ships with the package and is off by default. Its only switch is t
 
 Component fields have three entry points: the "Scholarly Search" tab of the unified settings page, the "Configure" button on the `dsh-zotero#scholarly` row in the plugin list, or `config` on that row in the current profile's `cordis.patch.yml`. The first two are two views of one form state, synced live over both channels; the third is the configuration override layer. A field change applies on the next tool call, with no profile restart:
 
-| Field             | Default | Description                                                                                                                              |
-| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `email`           | none    | Contact email, attached to Crossref, OpenAlex, and NCBI/Europe PMC request headers (joins the Polite Pool for a better rate-limit quota) |
-| `s2Key`           | none    | Semantic Scholar API key (optional; avoids rate limits on shared IP pools)                                                               |
-| `ncbiKey`         | none    | NCBI / PubMed API key (optional; raises the per-second request cap from 3 to 10)                                                         |
-| `openalexKey`     | none    | OpenAlex API key (optional; raises the per-second request cap to 100)                                                                    |
-| `maxResults`      | `20`    | Maximum number of papers one search returns (1-100)                                                                                      |
-| `maxContentChars` | `12000` | Character cap for chunked full-text reading (1,000-50,000)                                                                               |
+| Field                   | Default | Description                                                                                                                                       |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `email`                 | none    | Contact email, attached to Crossref, OpenAlex, and NCBI/Europe PMC request headers (joins the Polite Pool for a better rate-limit quota)          |
+| `s2ApiKeyEnv`           | `''`    | Credential reference for the Semantic Scholar API key (suggested `S2_API_KEY`); empty disables the key and its shared-pool rate-limit relief      |
+| `ncbiApiKeyEnv`         | `''`    | Credential reference for the NCBI / PubMed API key (suggested `NCBI_API_KEY`); empty disables the key that raises the per-second cap from 3 to 10 |
+| `openalexApiKeyEnv`     | `''`    | Credential reference for the OpenAlex API key (suggested `OPENALEX_API_KEY`); empty disables the key that raises the per-second cap to 100        |
+| `maxResults`            | `20`    | Maximum number of papers one search returns (1-100)                                                                                               |
+| `maxContentChars`       | `12000` | Character cap for chunked full-text reading (1,000-50,000)                                                                                        |
+| `enableRunInBackground` | `true`  | Whether `scholarly_read` / `scholarly_search` / `scholarly_verify` may run as an explicit background job                                          |
+| `promoteOnTimeout`      | `true`  | Whether a foreground wait that exceeds the timeout is promoted to a background job                                                                |
+| `foregroundWaitMs`      | `30000` | Foreground wait in milliseconds before promotion (1-240,000)                                                                                      |
 
 While the component is off, the "Scholarly Search" tab of the settings page shows only a pointer to "Included components" and renders no field, and the component row configuration entry is not registered; once the component is on, the tab becomes an editable form. Full texts are cached under `$DSH_HOME/cache/zotero-scholarly/` as one JSON body per key (not controlled by this table, and with no separate switch).
+
+Where key values live: configuration stores only reference names. The three password controls under "Scholarly Search → identity and credential references" write the typed key into the host credentials store (the credentials seam); the value never enters the configuration. A configured reference that does not resolve fails the tool call instead of degrading to anonymous access.
+
+Upgrading from an older build: the literal fields `s2Key` / `ncbiKey` / `openalexKey` were removed from the schema. A profile that still carries them is refused when the component mounts, with an error that names the fields and the migration. Remove them from the profile's `cordis.patch.yml`, re-enter each key in the matching password control (suggested references `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`), and rotate the old key: it was stored as plaintext configuration and is not migrated automatically.
 
 ---
 

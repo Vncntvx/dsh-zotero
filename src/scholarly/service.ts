@@ -24,15 +24,21 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 // Type-only: brings the `ctx.systemPrompt` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-system-prompt'
+// Type-only: brings the `ctx.jobs` Context merge into this program.
+import type {} from '@deepseek-ai/dsh-jobs'
 import {
+  assertNoLegacyCredentialFields,
   resolveScholarlyConfig,
   ScholarlyConfigSchema,
   type ResolvedScholarlyConfig,
   type ScholarlyConfig,
 } from './config.js'
 import { installParameterCorrection } from '../parameter-correction.js'
+import { ZoteroJobRunner, jobPolicyOf } from '../job-runner.js'
 import { registerResearchSkills } from '../skills/register.js'
 import { SCHOLARLY_SOPS } from '../skills/scholarly.js'
+import { resolveScholarlyKeys } from './credentials.js'
+import { scholarlyJobSink } from './diagnostics.js'
 import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
@@ -52,6 +58,7 @@ export class ScholarlyService extends Service {
 
   public readonly http: ScholarlyHttp
   public readonly store: ScholarlyTextStore
+  private readonly jobRunner: ZoteroJobRunner
 
   private get currentConfig(): ResolvedScholarlyConfig {
     return resolveScholarlyConfig(this.config)
@@ -62,10 +69,18 @@ export class ScholarlyService extends Service {
     public config: ScholarlyConfig = {},
   ) {
     super(ctx, 'scholarly')
+    assertNoLegacyCredentialFields(config)
 
     this.http = createScholarlyHttp()
     this.store = new ScholarlyTextStore()
-    ctx.effect(() => () => this.store.dispose(), 'scholarly: text store teardown')
+    this.jobRunner = new ZoteroJobRunner(ctx.get('jobs'), scholarlyJobSink(ctx))
+    ctx.effect(
+      () => () => {
+        this.jobRunner.killAll('scholarly service disposed')
+        this.store.dispose()
+      },
+      'scholarly: text store and job teardown',
+    )
 
     // This component ships its own settings page (the `plugins.row.config`
     // surface the client registers), so the schema-generated page would be a
@@ -78,14 +93,11 @@ export class ScholarlyService extends Service {
 
     const host: ScholarlyReadHost = {
       http: this.http,
-      keys: (): ScholarlyKeys => ({
-        email: this.currentConfig.email,
-        s2Key: this.currentConfig.s2Key,
-        ncbiKey: this.currentConfig.ncbiKey,
-        openalexKey: this.currentConfig.openalexKey,
-      }),
+      keys: (): Promise<ScholarlyKeys> => resolveScholarlyKeys(ctx, this.currentConfig),
       maxResults: () => this.currentConfig.maxResults,
       maxContentChars: () => this.currentConfig.maxContentChars,
+      jobPolicy: () => jobPolicyOf(this.currentConfig),
+      jobRunner: () => this.jobRunner,
       cache: this.store,
       // Optional dependency read through the official form: `ctx.get` returns
       // `undefined` when the local Zotero component is not composed, which is

@@ -5,12 +5,21 @@
  * @module tests/scholarly/service
  */
 
-import { describe, expect, it } from 'vitest'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { describe, expect, it, vi } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 import { createVolatile } from '@deepseek-ai/cosmokit'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { ScholarlyService } from '../../src/scholarly/service.js'
-import { resolveScholarlyConfig } from '../../src/scholarly/config.js'
+import {
+  assertNoLegacyCredentialFields,
+  legacyCredentialFieldsOf,
+  resolveScholarlyConfig,
+  ScholarlyConfig,
+} from '../../src/scholarly/config.js'
+import { scholarlyJobSink } from '../../src/scholarly/diagnostics.js'
+import type { ZoteroService } from '../../src/service.js'
+import { recordingSink } from '../helpers/recording-sink.js'
 import {
   EXEC_CONTEXT,
   bootScholarlyContext,
@@ -51,12 +60,106 @@ describe('ScholarlyService lifecycle & volatile config', () => {
     expect('enabled' in resolved).toBe(false)
     expect(Object.keys(resolved).sort()).toEqual([
       'email',
+      'enableRunInBackground',
+      'foregroundWaitMs',
       'maxContentChars',
       'maxResults',
-      'ncbiKey',
-      'openalexKey',
-      's2Key',
+      'ncbiApiKeyEnv',
+      'openalexApiKeyEnv',
+      'promoteOnTimeout',
+      's2ApiKeyEnv',
     ])
+  })
+})
+
+describe('legacy literal-key config gate', () => {
+  it('names the removed fields in schema order and ignores unrelated keys', () => {
+    expect(legacyCredentialFieldsOf({ openalexKey: 'a', s2Key: 'b', email: 'x' })).toEqual([
+      's2Key',
+      'openalexKey',
+    ])
+    expect(legacyCredentialFieldsOf({ email: 'x', maxResults: 5 })).toEqual([])
+  })
+
+  it('refuses the section with a migration message and no stored value', () => {
+    expect(() =>
+      assertNoLegacyCredentialFields({ ncbiKey: 'sk-secret', openalexKey: 'sk-other' }),
+    ).toThrow(/ncbiKey, openalexKey.*credential references.*Rotate the old key/s)
+    expect(() => assertNoLegacyCredentialFields({ email: 'x' })).not.toThrow()
+  })
+
+  it('sees the legacy key through the loader schema, which keeps unknown keys', () => {
+    const schema = ScholarlyConfig as unknown as {
+      '~standard': { validate(value: unknown): { value?: unknown; issues?: unknown } }
+    }
+    const validated = schema['~standard'].validate({ s2Key: 'sk-old', email: 'x' })
+    expect(validated.issues).toBeUndefined()
+    expect(legacyCredentialFieldsOf(validated.value as object)).toEqual(['s2Key'])
+  })
+
+  it('fails the mount when the raw section still carries a legacy key', async () => {
+    const ctx = await bootScholarlyContext()
+    expect(() => new ScholarlyService(ctx, { s2Key: 'sk-old' } as unknown as never)).toThrow(
+      /s2Key.*credential references/s,
+    )
+  })
+})
+
+describe('scholarly tool host wiring', () => {
+  it('serves a registered tool through the live host and its shared transport', async () => {
+    const fetchStub = vi.fn(
+      async () =>
+        new Response('{"results":[]}', { headers: { 'content-type': 'application/json' } }),
+    )
+    vi.stubGlobal('fetch', fetchStub)
+    try {
+      const ctx = await bootScholarlyContext()
+      const service = new ScholarlyService(ctx, { email: createVolatile('edge@example.edu') })
+      expect(service).toBeDefined()
+      const batch = await ctx.tools.execute({
+        calls: [
+          {
+            type: 'tool-call',
+            id: ToolCallId('scholarly-search'),
+            name: 'scholarly_search',
+            arguments: JSON.stringify({ query: 'attention' }),
+          },
+        ],
+        signal: new AbortController().signal,
+        agent: {} as never,
+      })
+      expect(batch.results[0]?.result).toBeDefined()
+      expect(fetchStub).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('scholarly job diagnostics', () => {
+  it('forwards job outcomes to the core recorder when it is mounted', () => {
+    const ctx = new Context()
+    const { sink, lines } = recordingSink()
+    ctx.provide('zotero', { diagnostics: { sink } } as unknown as ZoteroService)
+    const forwarded = scholarlyJobSink(ctx)
+    forwarded.debug('job.progress', 'one source answered')
+    forwarded.info('job.outcome', 'scholarly search completed')
+    forwarded.warn('job.promoted', 'foreground wait expired')
+    forwarded.error('job.outcome', 'scholarly read failed')
+    expect(lines.map((line) => [line.level, line.event])).toEqual([
+      ['debug', 'job.progress'],
+      ['info', 'job.outcome'],
+      ['warn', 'job.promoted'],
+      ['error', 'job.outcome'],
+    ])
+  })
+
+  it('is a no-op without the core component', () => {
+    const ctx = new Context()
+    const { sink, lines } = recordingSink()
+    scholarlyJobSink(ctx).warn('job.outcome', 'nothing records this')
+    expect(lines).toEqual([])
+    expect(sink).toBeDefined()
   })
 })
 

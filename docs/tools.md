@@ -663,31 +663,33 @@ zotero_batch_items(
 
 ## 错误码
 
-| 错误码                              | 说明                                                    |
-| ----------------------------------- | ------------------------------------------------------- |
-| `ZOTERO_NOT_RUNNING`                | Zotero 未运行或本地端口不可达                           |
-| `ZOTERO_API_DISABLED`               | Zotero 运行中，但高级设置中未启用本地 API（403）        |
-| `ZOTERO_API_VERSION`                | 本地 API 版本不受支持                                   |
-| `ZOTERO_NOT_IMPLEMENTED`            | 本地 API 明确返回 501，端点或格式在本版本中未实现       |
-| `ZOTERO_SERVER_MISMATCH`            | 引用的 Server ID 与当前运行的 Zotero 实例不匹配         |
-| `ZOTERO_NOT_FOUND`                  | 引用的条目、合集或保存搜索不存在                        |
-| `ZOTERO_RANGE_UNSUPPORTED`          | 服务端未保留所请求版本至今的历史记录（409）             |
-| `ZOTERO_NO_ATTACHMENT`              | 条目下不存在指定类型的附件                              |
-| `ZOTERO_NO_FULLTEXT`                | 附件未建立全文索引                                      |
-| `ZOTERO_FILE_MISSING`               | 记录的本地附件文件在磁盘上不存在                        |
-| `ZOTERO_INVALID_REF`                | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库 |
-| `ZOTERO_INVALID_ARGUMENT`           | 参数违反领域约束规则                                    |
-| `ZOTERO_SCOPE_AMBIGUOUS`            | 合集或保存搜索名称匹配到多个同名对象                    |
-| `ZOTERO_TIMEOUT`                    | 提供方请求超时                                          |
-| `ZOTERO_RESPONSE_TOO_LARGE`         | API 响应数据流超出读取上限                              |
-| `ZOTERO_OUTPUT_TOO_LARGE`           | 导出内容超出字符数上限                                  |
-| `ZOTERO_CAPABILITY_UNAVAILABLE`     | 当前 Provider 未声明所需能力                            |
-| `ZOTERO_PROVIDER_UNAVAILABLE`       | 配置的 Provider 未注册或方法未实现                      |
-| `ZOTERO_UNEXPECTED`                 | 响应数据格式异常或未预期行为                            |
-| `ZOTERO_WRITE_UNAUTHORIZED`         | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝        |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | 计划审查卡无法发起交互（无交互通道或系统级异常）        |
-| `ZOTERO_WRITE_CONFLICT`             | 写入版本前置条件冲突（412），对象已被外部修改           |
-| `ZOTERO_WRITE_RATE_LIMITED`         | Zotero 授权端点限速（429）                              |
+| 错误码                                     | 说明                                                    |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                           |
+| `ZOTERO_API_DISABLED`                      | Zotero 运行中，但高级设置中未启用本地 API（403）        |
+| `ZOTERO_API_VERSION`                       | 本地 API 版本不受支持                                   |
+| `ZOTERO_NOT_IMPLEMENTED`                   | 本地 API 明确返回 501，端点或格式在本版本中未实现       |
+| `ZOTERO_SERVER_MISMATCH`                   | 引用的 Server ID 与当前运行的 Zotero 实例不匹配         |
+| `ZOTERO_NOT_FOUND`                         | 引用的条目、合集或保存搜索不存在                        |
+| `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）             |
+| `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                              |
+| `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                      |
+| `ZOTERO_FILE_MISSING`                      | 记录的本地附件文件在磁盘上不存在                        |
+| `ZOTERO_INVALID_REF`                       | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库 |
+| `ZOTERO_INVALID_ARGUMENT`                  | 参数违反领域约束规则                                    |
+| `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                    |
+| `ZOTERO_TIMEOUT`                           | 提供方请求超时                                          |
+| `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                              |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                  |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                            |
+| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务            |
+| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）        |
+| `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                      |
+| `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                            |
+| `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝        |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）        |
+| `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改           |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                              |
 
 ---
 
@@ -695,23 +697,26 @@ zotero_batch_items(
 
 bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管理器「包含的组件」中启用该组件即挂载它，并提供以下 7 个模型工具：
 
+其中 `scholarly_search`、`scholarly_read`、`scholarly_verify` 声明 `run_in_background`：结果要么是普通文本，要么是 `{ kind: "background", jobId }` / `{ kind: "promoted", jobId, timeoutMs, message }` 两种作业臂；用 `job_output` 取回结果、`job_kill` 取消。显式后台在 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时被结构化拒绝；前台等待超过 `foregroundWaitMs` 自动提升为后台（`promoteOnTimeout=true`），作业结果文本由 `JobOutcome.result` 提供。
+
 ### scholarly_search
 
 跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持语义自动路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
 
 #### 参数
 
-| 参数          | 类型     | 默认值        | 说明                                                                                                                                  |
-| ------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`       | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                          |
-| `sources`     | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由 |
-| `year_from`   | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                            |
-| `year_to`     | integer  | —             | 发表截止年份                                                                                                                          |
-| `open_access` | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                  |
-| `sort`        | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                   |
-| `categories`  | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                               |
-| `limit`       | integer  | `8`           | 返回论文数量上限                                                                                                                      |
-| `abstract`    | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                               |
+| 参数                | 类型     | 默认值        | 说明                                                                                                                                                                              |
+| ------------------- | -------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                      |
+| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由                                             |
+| `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                                                                        |
+| `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                      |
+| `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                              |
+| `sort`              | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                                                               |
+| `categories`        | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                                                                           |
+| `limit`             | integer  | `8`           | 返回论文数量上限                                                                                                                                                                  |
+| `abstract`          | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                                                                           |
+| `run_in_background` | boolean  | `false`       | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
 
 ---
 
@@ -751,15 +756,16 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 参数
 
-| 参数        | 类型    | 默认值   | 说明                                                             |
-| ----------- | ------- | -------- | ---------------------------------------------------------------- |
-| `id`        | string  | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                           |
-| `outline`   | boolean | —        | 设为 `true` 仅返回多级章节目录与字符跨度                         |
-| `section`   | string  | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）        |
-| `query`     | string  | —        | 自然语言问题，基于 BM25 算法在全文段落中排序检索最相关的证据片段 |
-| `passages`  | integer | `5`      | `query` 模式下返回的最优段落数量（1-12）                         |
-| `start`     | integer | `0`      | 分块阅读起始字符偏移量                                           |
-| `max_chars` | integer | 配置上限 | 单次读取的最大字符数                                             |
+| 参数                | 类型    | 默认值   | 说明                                                                                                                                                                              |
+| ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string  | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                            |
+| `outline`           | boolean | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                          |
+| `section`           | string  | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                         |
+| `query`             | string  | —        | 自然语言问题，基于 BM25 算法在全文段落中排序检索最相关的证据片段                                                                                                                  |
+| `passages`          | integer | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                          |
+| `start`             | integer | `0`      | 分块阅读起始字符偏移量                                                                                                                                                            |
+| `max_chars`         | integer | 配置上限 | 单次读取的最大字符数                                                                                                                                                              |
+| `run_in_background` | boolean | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
 
 #### 网络边界
 
@@ -788,9 +794,10 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 参数
 
-| 参数         | 类型     | 默认值   | 说明                                                                 |
-| ------------ | -------- | -------- | -------------------------------------------------------------------- |
-| `references` | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出即报错，不会静默截断） |
+| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                              |
+| ------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出即报错，不会静默截断）                                                                                                              |
+| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
 
 #### 核验结论
 

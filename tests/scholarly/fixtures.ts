@@ -6,6 +6,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
+import { ZoteroJobRunner } from '../../src/job-runner.js'
 import { type ScholarlyReadHost } from '../../src/scholarly/tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
@@ -60,8 +61,14 @@ export function createMockHttp(
 export function createMockHost(http: ScholarlyHttp, zotero?: ZoteroServiceLike): ScholarlyReadHost {
   return {
     http,
-    keys: () => ({ email: 'test@example.com' }),
+    keys: async () => ({ email: 'test@example.com' }),
     maxResults: () => 10,
+    jobPolicy: () => ({
+      enableRunInBackground: false,
+      promoteOnTimeout: false,
+      foregroundWaitMs: 1_000,
+    }),
+    jobRunner: () => new ZoteroJobRunner(undefined),
     maxContentChars: () => 10_000,
     cache: new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-tools-'))),
     zoteroService: () => zotero,

@@ -10,12 +10,10 @@ import { extractOutline, findSection, rankPassagesWithBM25 } from '../fulltext/e
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { DEFAULT_SPILL_CHAR_THRESHOLD, trySpillToolOutput } from '../../spill.js'
-import {
-  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
-  toCleanJsonRecord,
-  type ScholarlyToolHost,
-  type ScholarlyToolOutput,
-} from './common.js'
+import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
+import { metaRecordOf } from '../../tools/present.js'
+import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
+import { toCleanJsonRecord, type ScholarlyToolHost } from './common.js'
 
 export interface ScholarlyReadHost extends ScholarlyToolHost {
   cache?: ScholarlyTextStore
@@ -62,11 +60,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         type: 'integer',
         description: 'Maximum characters per chunk (defaults to the configured maxContentChars).',
       },
+      ...RUN_IN_BACKGROUND_PARAMETER,
     },
-    output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+    output: SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
-    async execute(args, exec): Promise<ScholarlyToolOutput> {
+    async execute(args, exec) {
       const raw = args.id.trim()
       const parsedId = parsePaperIdentifier(raw)
       if (!parsedId) {
@@ -76,152 +75,177 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         )
       }
 
-      const fullText = await resolveScholarlyFullText(parsedId, {
-        http: host.http,
-        keys: host.keys(),
-        store: host.cache,
-        signal: exec.signal,
-      })
+      return await runScholarlyJob({
+        host,
+        exec,
+        label: `scholarly_read (${raw})`,
+        runInBackground: args.run_in_background === true,
+        run: async (signal, onProgress) => {
+          onProgress({ phase: 'resolve', message: `Resolving full text for ${raw}` })
+          const fullText = await resolveScholarlyFullText(parsedId, {
+            http: host.http,
+            keys: await host.keys(),
+            store: host.cache,
+            signal,
+          })
+          onProgress({
+            phase: 'read',
+            message: `Read ${fullText.text.length} characters from ${fullText.source}`,
+          })
 
-      const sections = fullText.structured ? extractOutline(fullText.text) : []
-      const header = `${raw} — ${fullText.text.length} characters (source: ${fullText.source})${
-        fullText.url ? `\nLink: ${fullText.url}` : ''
-      }`
+          const sections = fullText.structured ? extractOutline(fullText.text) : []
+          const header = `${raw} — ${fullText.text.length} characters (source: ${fullText.source})${
+            fullText.url ? `\nLink: ${fullText.url}` : ''
+          }`
 
-      // 1. Inspect Table of Contents
-      if (args.outline) {
-        if (sections.length === 0) {
+          // 1. Inspect Table of Contents
+          if (args.outline) {
+            if (sections.length === 0) {
+              return {
+                text: `${header}\n\nNotice: This document was read from an unstructured PDF and has no section headings. Please read in chunks or search with query.`,
+                document: toCleanJsonRecord({
+                  id: raw,
+                  source: fullText.source,
+                  url: fullText.url,
+                  sections: [],
+                }),
+              }
+            }
+            const outlineText = sections
+              .map(
+                (sec) =>
+                  `${'  '.repeat(Math.min(3, sec.level - 1))}${sec.id}. ${sec.title} (${
+                    sec.end - sec.start
+                  } chars)`,
+              )
+              .join('\n')
+            return {
+              text: `${header}\n\nSections (use section="..." to read):\n${outlineText}`,
+              document: toCleanJsonRecord({
+                id: raw,
+                source: fullText.source,
+                url: fullText.url,
+                sections: sections.map((sec) => ({
+                  id: sec.id,
+                  title: sec.title,
+                  level: sec.level,
+                })),
+              }),
+            }
+          }
+
+          let activeText = fullText.text
+          let scopeLabel = ''
+
+          // 2. Read specific Section
+          if (args.section?.trim()) {
+            const sec = findSection(sections, args.section)
+            if (!sec) {
+              const available = sections
+                .filter((s) => s.level <= 2)
+                .map((s) => `"${s.id}. ${s.title}"`)
+                .join(', ')
+              throw new ZoteroError(
+                sections.length === 0
+                  ? 'This copy has no structured headings; please read in chunks or use query.'
+                  : `Section "${args.section}" not found. Available main sections: ${available}`,
+                ZOTERO_INVALID_ARGUMENT,
+              )
+            }
+            activeText = fullText.text.slice(sec.start, sec.end)
+            scopeLabel = ` [Section ${sec.id}: ${sec.title}]`
+          }
+
+          // 3. BM25 Natural Language Question Matching
+          if (args.query?.trim()) {
+            const numPassages = Math.min(12, Math.max(1, args.passages ?? 5))
+            const ranked = rankPassagesWithBM25(activeText, args.query.trim(), numPassages)
+            onProgress({
+              phase: 'rank',
+              message: `Ranked ${ranked.length} passages for "${args.query.trim()}"`,
+            })
+            if (ranked.length === 0) {
+              return {
+                text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${args.query}". Try alternative phrasing.`,
+                document: toCleanJsonRecord({
+                  id: raw,
+                  source: fullText.source,
+                  query: args.query,
+                  passages: [],
+                }),
+              }
+            }
+
+            const passagesText = ranked
+              .map(
+                (p, idx) =>
+                  `--- Passage ${idx + 1} (Score: ${p.score.toFixed(2)}, chars ${p.start}-${p.end}) ---\n${p.text.trim()}`,
+              )
+              .join('\n\n')
+
+            return {
+              text: `${header}${scopeLabel}\n\nTop passages matching "${args.query}":\n\n${passagesText}`,
+              document: toCleanJsonRecord({
+                id: raw,
+                source: fullText.source,
+                query: args.query,
+                passages: ranked.map(toCleanJsonRecord),
+              }),
+            }
+          }
+
+          // 4. Default Chunked Reading
+          const maxChars = host.maxContentChars ? host.maxContentChars() : 12_000
+          const start = Math.min(activeText.length, Math.max(0, args.start ?? 0))
+          const chunkSize = Math.min(maxChars, Math.max(500, args.max_chars ?? maxChars))
+          const end = Math.min(activeText.length, start + chunkSize)
+
+          const isTruncated = end < activeText.length
+          let spillRef: import('@deepseek-ai/dsh-spill').SpillRef | undefined
+          if (isTruncated && activeText.length > DEFAULT_SPILL_CHAR_THRESHOLD && host.ctx) {
+            spillRef = await trySpillToolOutput(
+              host.ctx,
+              exec,
+              `${raw.replace(/[^a-zA-Z0-9._-]/g, '_')}-fulltext.txt`,
+              activeText,
+            )
+          }
+          const spillNotice =
+            spillRef !== undefined
+              ? `\nFull paper text saved to spill storage: ${spillRef.locator}. ${spillRef.retrievalHint}`
+              : ''
+
+          const statusTail = isTruncated
+            ? `is_truncated: true, next_start: ${end}${spillNotice}`
+            : 'is_truncated: false (end of section/text)'
+
+          const hint =
+            start === 0 && isTruncated && sections.length > 0 && !scopeLabel
+              ? ' (Tip: This paper has structured sections; use outline=true to inspect them).'
+              : ''
+
+          onProgress({
+            phase: 'chunk',
+            message: `Returning characters ${start}–${end} of ${activeText.length}`,
+          })
           return {
-            text: `${header}\n\nNotice: This document was read from an unstructured PDF and has no section headings. Please read in chunks or search with query.`,
+            text: `${header}${scopeLabel}\nCharacters ${start}–${end}; ${statusTail}.${hint}\n\n${activeText.slice(
+              start,
+              end,
+            )}`,
             document: toCleanJsonRecord({
               id: raw,
               source: fullText.source,
               url: fullText.url,
-              sections: [],
+              start,
+              end,
+              isTruncated,
+              text: activeText.slice(start, end),
             }),
+            ...(spillRef !== undefined ? { spill: spillRef } : {}),
           }
-        }
-        const outlineText = sections
-          .map(
-            (sec) =>
-              `${'  '.repeat(Math.min(3, sec.level - 1))}${sec.id}. ${sec.title} (${
-                sec.end - sec.start
-              } chars)`,
-          )
-          .join('\n')
-        return {
-          text: `${header}\n\nSections (use section="..." to read):\n${outlineText}`,
-          document: toCleanJsonRecord({
-            id: raw,
-            source: fullText.source,
-            url: fullText.url,
-            sections: sections.map((sec) => ({ id: sec.id, title: sec.title, level: sec.level })),
-          }),
-        }
-      }
-
-      let activeText = fullText.text
-      let scopeLabel = ''
-
-      // 2. Read specific Section
-      if (args.section?.trim()) {
-        const sec = findSection(sections, args.section)
-        if (!sec) {
-          const available = sections
-            .filter((s) => s.level <= 2)
-            .map((s) => `"${s.id}. ${s.title}"`)
-            .join(', ')
-          throw new ZoteroError(
-            sections.length === 0
-              ? 'This copy has no structured headings; please read in chunks or use query.'
-              : `Section "${args.section}" not found. Available main sections: ${available}`,
-            ZOTERO_INVALID_ARGUMENT,
-          )
-        }
-        activeText = fullText.text.slice(sec.start, sec.end)
-        scopeLabel = ` [Section ${sec.id}: ${sec.title}]`
-      }
-
-      // 3. BM25 Natural Language Question Matching
-      if (args.query?.trim()) {
-        const numPassages = Math.min(12, Math.max(1, args.passages ?? 5))
-        const ranked = rankPassagesWithBM25(activeText, args.query.trim(), numPassages)
-        if (ranked.length === 0) {
-          return {
-            text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${args.query}". Try alternative phrasing.`,
-            document: toCleanJsonRecord({
-              id: raw,
-              source: fullText.source,
-              query: args.query,
-              passages: [],
-            }),
-          }
-        }
-
-        const passagesText = ranked
-          .map(
-            (p, idx) =>
-              `--- Passage ${idx + 1} (Score: ${p.score.toFixed(2)}, chars ${p.start}-${p.end}) ---\n${p.text.trim()}`,
-          )
-          .join('\n\n')
-
-        return {
-          text: `${header}${scopeLabel}\n\nTop passages matching "${args.query}":\n\n${passagesText}`,
-          document: toCleanJsonRecord({
-            id: raw,
-            source: fullText.source,
-            query: args.query,
-            passages: ranked.map(toCleanJsonRecord),
-          }),
-        }
-      }
-
-      // 4. Default Chunked Reading
-      const maxChars = host.maxContentChars ? host.maxContentChars() : 12_000
-      const start = Math.min(activeText.length, Math.max(0, args.start ?? 0))
-      const chunkSize = Math.min(maxChars, Math.max(500, args.max_chars ?? maxChars))
-      const end = Math.min(activeText.length, start + chunkSize)
-
-      const isTruncated = end < activeText.length
-      let spillRef: import('@deepseek-ai/dsh-spill').SpillRef | undefined
-      if (isTruncated && activeText.length > DEFAULT_SPILL_CHAR_THRESHOLD && host.ctx) {
-        spillRef = await trySpillToolOutput(
-          host.ctx,
-          exec,
-          `${raw.replace(/[^a-zA-Z0-9._-]/g, '_')}-fulltext.txt`,
-          activeText,
-        )
-      }
-      const spillNotice =
-        spillRef !== undefined
-          ? `\nFull paper text saved to spill storage: ${spillRef.locator}. ${spillRef.retrievalHint}`
-          : ''
-
-      const statusTail = isTruncated
-        ? `is_truncated: true, next_start: ${end}${spillNotice}`
-        : 'is_truncated: false (end of section/text)'
-
-      const hint =
-        start === 0 && isTruncated && sections.length > 0 && !scopeLabel
-          ? ' (Tip: This paper has structured sections; use outline=true to inspect them).'
-          : ''
-
-      return {
-        text: `${header}${scopeLabel}\nCharacters ${start}–${end}; ${statusTail}.${hint}\n\n${activeText.slice(
-          start,
-          end,
-        )}`,
-        document: toCleanJsonRecord({
-          id: raw,
-          source: fullText.source,
-          url: fullText.url,
-          start,
-          end,
-          isTruncated,
-          text: activeText.slice(start, end),
-        }),
-        ...(spillRef !== undefined ? { spill: spillRef } : {}),
-      }
+        },
+      })
     },
     presentCall: (args) => {
       const isOutline = Boolean(args.outline)
@@ -233,5 +257,6 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
         kind: 'read',
       }
     },
+    presentResult: (_args, result) => presentJobArm('Scholarly read', metaRecordOf(result) ?? {}),
   })
 }

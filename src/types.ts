@@ -36,6 +36,7 @@ import type { CitationKeyConflict, CitationKeySource } from './citation-key.js'
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
     zotero: 'zotero'
+    scholarly: 'scholarly'
   }
 }
 

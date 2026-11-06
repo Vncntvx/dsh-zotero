@@ -59,7 +59,7 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
         host.maxResults(),
         Math.max(1, args.limit ?? Math.min(10, host.maxResults())),
       )
-      const keys = host.keys()
+      const keys = await host.keys()
 
       const work = await lookupOpenAlex(openAlexLookupId, host.http, keys, exec.signal)
       if (!work?.openalex) {

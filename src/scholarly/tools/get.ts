@@ -48,7 +48,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
       if (!raw) throw new ZoteroError('id parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
 
       const id = parsePaperIdentifier(raw)
-      const keys = host.keys()
+      const keys = await host.keys()
       const foundLists: Array<{ sourceId: string; papers: ScholarlyPaper[] }> = []
       /**
        * Sources that could not answer, in `${display name} (${reason})` form,

@@ -77,5 +77,5 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 ## Safety
 
 - **Loopback only**: `resolveConfig` rejects a non-loopback `baseUrl`; redirects are refused. External hosts exist only in `src/scholarly/transport/hosts.ts`.
-- **Credentials**: the Zotero write grant lives in the harness credentials seam (`dsh-credentials`), never in plugin config. Never log, commit, or expose it.
+- **Credentials**: the Zotero write grant lives in the harness credentials seam (`dsh-credentials`), never in plugin config. Never log, commit, or expose it. Scholarly API keys are credential references only: `src/scholarly/credentials.ts` resolves them through `ctx.credentials` per call, and a configured reference that does not resolve fails the call rather than degrading to anonymous access.
 - **Generated output**: `lib/` is produced by `tsc` and `esbuild`; rebuild instead of editing.

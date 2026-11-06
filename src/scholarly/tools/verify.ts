@@ -15,14 +15,12 @@ import {
   type CrossrefWork,
 } from '../sources/crossref.js'
 import { cleanDoi, parseYear } from '../sources/helpers.js'
-import type { ScholarlyPaper } from '../types.js'
+import type { ScholarlyKeys, ScholarlyPaper } from '../types.js'
+import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
+import { metaRecordOf } from '../../tools/present.js'
 import { failureTextOf } from './failure.js'
-import {
-  SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
-  toCleanJsonRecords,
-  type ScholarlyToolHost,
-  type ScholarlyToolOutput,
-} from './common.js'
+import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
+import { toCleanJsonRecords, type ScholarlyToolHost } from './common.js'
 
 /**
  * What one reference check concluded.
@@ -160,6 +158,7 @@ function checkDiscrepancies(
 async function verifySingleReference(
   rawReference: string,
   host: ScholarlyToolHost,
+  keys: ScholarlyKeys,
   signal?: AbortSignal,
 ): Promise<ReferenceCheckResult> {
   const parsed = parseReferenceSnippet(rawReference)
@@ -169,7 +168,7 @@ async function verifySingleReference(
 
   if (parsed.doi) {
     try {
-      const paper = await lookupCrossref(parsed.doi, host.http, host.keys(), signal)
+      const paper = await lookupCrossref(parsed.doi, host.http, keys, signal)
       if (paper) {
         const ok = checkDiscrepancies(parsed, paper, rawReference, notes, 'doi')
         return {
@@ -191,7 +190,7 @@ async function verifySingleReference(
 
   // If no DOI or DOI not found: search Crossref bibliographic match
   try {
-    const hits = await crossrefMatchReference(rawReference, 3, host.http, host.keys(), signal)
+    const hits = await crossrefMatchReference(rawReference, 3, host.http, keys, signal)
     record = hits[0]
   } catch (error) {
     notes.push(`Crossref search failed: ${failureTextOf(error)}`)
@@ -248,11 +247,11 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
       'Checks for phantom/hallucinated DOIs, title discrepancies, author/year mismatches, and retracted papers.',
       `Accepts raw bibliographic citation strings (APA, MLA, IEEE, etc.) or DOIs. Verifies up to ${SCHOLARLY_VERIFY_MAX_REFERENCES} references.`,
     ].join(' '),
-    parameters: VERIFY_PARAMETERS,
-    output: SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
+    parameters: { ...VERIFY_PARAMETERS, ...RUN_IN_BACKGROUND_PARAMETER },
+    output: SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 240_000,
-    async execute(args, exec): Promise<ScholarlyToolOutput> {
+    async execute(args, exec) {
       // The cap is part of the tool's contract, so exceeding it is a named
       // refusal: silently dropping references would answer a different
       // question than the one asked. It counts the list as submitted,
@@ -268,50 +267,73 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
         throw new ZoteroError('references parameter cannot be empty.', ZOTERO_INVALID_ARGUMENT)
       }
 
-      const counts: Record<VerificationVerdict, number> = {
-        verified: 0,
-        check: 0,
-        not_found: 0,
-        unverified: 0,
-      }
+      return await runScholarlyJob({
+        host,
+        exec,
+        label: `scholarly_verify (${list.length} references)`,
+        runInBackground: args.run_in_background === true,
+        run: async (signal, onProgress) => {
+          const keys = await host.keys()
 
-      const results = await mapWithConcurrency(
-        list,
-        5,
-        async (refStr) => {
-          try {
-            return await verifySingleReference(refStr, host, exec.signal)
-          } catch (error) {
-            if (exec.signal.aborted) throw error
-            // An unexpected failure while checking one reference says nothing
-            // about the work itself, so it is `unverified`, never `not_found`.
-            return {
-              raw: refStr,
-              verdict: 'unverified' as const,
-              notes: [`Verification error: ${failureTextOf(error)}`],
-            }
+          const counts: Record<VerificationVerdict, number> = {
+            verified: 0,
+            check: 0,
+            not_found: 0,
+            unverified: 0,
+          }
+          let completed = 0
+
+          const results = await mapWithConcurrency(
+            list,
+            5,
+            async (refStr) => {
+              const report = (): void => {
+                completed += 1
+                onProgress({
+                  phase: 'reference',
+                  current: completed,
+                  total: list.length,
+                  message: `Checked ${completed} of ${list.length} references`,
+                })
+              }
+              try {
+                const result = await verifySingleReference(refStr, host, keys, signal)
+                report()
+                return result
+              } catch (error) {
+                if (signal.aborted) throw error
+                // An unexpected failure while checking one reference says nothing
+                // about the work itself, so it is `unverified`, never `not_found`.
+                report()
+                return {
+                  raw: refStr,
+                  verdict: 'unverified' as const,
+                  notes: [`Verification error: ${failureTextOf(error)}`],
+                }
+              }
+            },
+            { signal },
+          )
+
+          for (const checked of results) counts[checked.verdict] += 1
+
+          const summary =
+            `Reference verification summary: ${counts.verified} verified, ${counts.check} to check, ` +
+            `${counts.not_found} not found, ${counts.unverified} unverified (of ${list.length} checked).\n` +
+            'VERIFIED: official record exists and matches.\n' +
+            'CHECK: record found but discrepancies detected (mismatched DOI/year or retracted).\n' +
+            'NOT FOUND: no matching record found in official registries; verify before using.\n' +
+            'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n' +
+            'Next: retry scholarly_verify after Crossref recovers; scholarly_get checks alternate indexes before excluding a reference.'
+
+          const lines = results.map((r, i) => formatVerificationResult(r, i + 1)).join('\n\n')
+
+          return {
+            text: `${summary}\n\n${lines}`,
+            checks: toCleanJsonRecords(results),
           }
         },
-        { signal: exec.signal },
-      )
-
-      for (const checked of results) counts[checked.verdict] += 1
-
-      const summary =
-        `Reference verification summary: ${counts.verified} verified, ${counts.check} to check, ` +
-        `${counts.not_found} not found, ${counts.unverified} unverified (of ${list.length} checked).\n` +
-        'VERIFIED: official record exists and matches.\n' +
-        'CHECK: record found but discrepancies detected (mismatched DOI/year or retracted).\n' +
-        'NOT FOUND: no matching record found in official registries; verify before using.\n' +
-        'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n' +
-        'Next: retry scholarly_verify after Crossref recovers; scholarly_get checks alternate indexes before excluding a reference.'
-
-      const lines = results.map((r, i) => formatVerificationResult(r, i + 1)).join('\n\n')
-
-      return {
-        text: `${summary}\n\n${lines}`,
-        checks: toCleanJsonRecords(results),
-      }
+      })
     },
     presentCall: (args) => ({
       card: 'generic',
@@ -319,5 +341,6 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
       rawInput: `${(args.references ?? []).length} items`,
       kind: 'search',
     }),
+    presentResult: (_args, result) => presentJobArm('Scholarly verify', metaRecordOf(result) ?? {}),
   })
 }

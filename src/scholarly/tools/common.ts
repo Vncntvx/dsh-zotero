@@ -8,12 +8,15 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
 import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
+import type { JobPolicy, ZoteroJobRunner } from '../../job-runner.js'
 import type { ZoteroServiceLike } from '../zotero-link.js'
 
 export interface ScholarlyToolHost {
   http: ScholarlyHttp
-  keys(): ScholarlyKeys
+  keys(): Promise<ScholarlyKeys>
   maxResults(): number
+  jobPolicy(): JobPolicy
+  jobRunner(): ZoteroJobRunner
   zoteroService?(): ZoteroServiceLike | undefined
   ctx?: Context
 }
@@ -41,7 +44,13 @@ export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
       },
     },
   },
-  render: (_args: unknown, value: { text: string; spill?: SpillRef }) => {
+  render: (
+    _args: unknown,
+    value: {
+      text: string
+      spill?: { readonly locator: string; readonly bytes: number; readonly retrievalHint: string }
+    },
+  ) => {
     const text = value.text
     const recovery =
       value.spill !== undefined && !text.includes(value.spill.locator)

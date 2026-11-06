@@ -35,7 +35,11 @@ These properties are intentional; regressions are treated as security bugs. The
   blindly.
 - **Credentials stay in the credential seam**: the Zotero write grant is stored
   in the harness credentials store, never in plugin configuration, logs, or
-  fixtures.
+  fixtures. The scholarly API keys follow the same rule: configuration carries
+  only credential-reference names (`s2ApiKeyEnv`, `ncbiApiKeyEnv`,
+  `openalexApiKeyEnv`), the values are resolved through `ctx.credentials`
+  before each external call, and a configured reference that cannot be
+  resolved fails the call instead of silently degrading to anonymous access.
 - **Request-driven core**: the core bundle performs no external network calls.
   External scholarly requests exist only inside the opt-in `dsh-zotero/scholarly`
   component, behind an SSRF-guarded transport.

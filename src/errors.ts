@@ -40,6 +40,10 @@ export const ZOTERO_RESPONSE_TOO_LARGE = 'ZOTERO_RESPONSE_TOO_LARGE'
 export const ZOTERO_OUTPUT_TOO_LARGE = 'ZOTERO_OUTPUT_TOO_LARGE'
 /** The selected provider does not declare the required capability. */
 export const ZOTERO_CAPABILITY_UNAVAILABLE = 'ZOTERO_CAPABILITY_UNAVAILABLE'
+/** A scholarly API key reference is configured but the credentials seam is not composed. */
+export const ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE = 'ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE'
+/** A configured scholarly API key reference does not resolve to a value. */
+export const ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED = 'ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED'
 /** The configured provider is not registered. */
 export const ZOTERO_PROVIDER_UNAVAILABLE = 'ZOTERO_PROVIDER_UNAVAILABLE'
 /** The one message every "zotero is not composed" answer spells. */
@@ -79,6 +83,8 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_RESPONSE_TOO_LARGE,
   ZOTERO_OUTPUT_TOO_LARGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE,
+  ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_UNAUTHORIZED,

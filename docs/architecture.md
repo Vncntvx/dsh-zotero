@@ -99,9 +99,10 @@ graph LR
 - 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；段落只列出该步骤准入的工具，准入为空时不渲染；web_fetch 路由禁令随任一外部 scholarly 工具保留；父组件的策略段不描述外部检索工具，只在 save 进入本步准入时按其名字归类写面。
 - 主机白名单：`src/scholarly/transport/hosts.ts` 是唯一真源，允许的 host 与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。
 - 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束。
-- 凭证：三个 `role('secret')` 声明的 API Key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。
+- 凭证：学术检索配置只保存 `role('credential-ref')` 声明的凭据引用名（`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`），密钥值不进入配置；`src/scholarly/credentials.ts` 在每次外部工具调用前经 `ctx.get('credentials')` 解析，引用名非法、凭据服务缺失或引用无值时分别报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` 或 `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`，不静默降级为匿名请求。解析后的 key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。
 - 全文缓存：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引；读结果分 `hit` / `miss` / `corrupt` 三态，损坏条目被驱逐并记录。
 - 失败语义：全文解析的每条路由各自记录失败原因，终态错误逐条列出；`scholarly_verify` 用四值结论区分“注册表说没有”与“注册表联系不上”。
+- 后台任务：`scholarly_read` / `scholarly_search` / `scholarly_verify` 复用核心的 `ZoteroJobRunner`（`src/job-runner.ts`），作业 kind 为 `scholarly`，输出上限 256 KiB；显式后台由 `run_in_background` 请求，前台超时按 `enableRunInBackground` / `promoteOnTimeout` / `foregroundWaitMs` 提升；组件卸载时 `ZoteroJobRunner.killAll` 终止本组件启动的作业。
 - 公开面：`src/scholarly/index.ts` 只导出服务类、配置 schema 与领域类型；传输、主机表、存储与融合内部实现均不导出。
 
 ## 文献库子组件 (`src/library/`)
@@ -128,6 +129,7 @@ graph LR
 
 - 门控：组件行已组合、核心 `webEnabled` 开启、面板 `rightSidebarEnabled` 不为 false，三者同时成立才挂载；开关变化即时生效。
 - 数据面：`useLibraryFeed` 持有面板的全部 wire 调用；`library-data-plane.ts` 对其做同请求合并与短 TTL 缓存（browse 30s、item 10s、export 10s、search/childPage 2s，`collectionPath` 不缓存；最多 128 条），并按 `serverId` 重新键入缓存；只缓存成功读取，写入不经过该层。
+- 访问门禁：面板整组（标签页类型、主体、标题、标签菜单、输入框按钮、交付与文档操作）只在宿主授予全局 `zotero/browse` 动作时注册；引文导出、附件定位与桌面端唤起各自回答自己的全局授权；写入抽屉回答会话级 `zotero/write` 授权，无授权时直接说明拒绝，而不是提供一个宿主必然拒绝的提交。宿主侧的检查（`src/library-write.ts` 的 `ctx.remoteAccess.allows`）仍是权威。
 - 会话绑定：面板标签页是会话作用域：本地附件在该会话的右侧阅读栏打开，写入审批与计划卡发往该会话。
 - 状态与无障碍：面板偏好与视图钉子按 `serverId` 存入 `localStorage`；详情载荷与探针快照按会话保存在内存中（上限 8 个会话）；合集树使用 ARIA tree、roving tabindex 与方向键。
 - 布局：宽屏三列由匿名容器查询 `@container (min-width: 720px)` 切换；窄屏为分段导航（导航 / 列表 / 详情），并有 640/520/460/360px 的细化。

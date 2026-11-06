@@ -151,9 +151,14 @@
 - **原因**：本会话尚未调用任何读类工具（检索、浏览、详情、子对象、原文片段、附件定位、导出）；或会话创建于插件加载之前，Agent 没有可用的 Zotero 工具；；或只做了写入与库外学术检索。文献轨迹只记录读类工具与导出，不记录写入，也不含库外文献。
 - **排查**：先在对话中让 Agent 检索或读取文献库（如 `zotero_search`、`zotero_get`）；确认会话在插件加载后创建并重试；确认核心 `webEnabled` 开启。学术检索结果需保存进 Zotero 文献库后才会出现在轨迹里。文献面板中的人工浏览不会写入轨迹，轨迹只反映 Agent 的工具调用。
 
-## 23. 历史会话打不开（`not marked ignorable`）
+## 23. 学术检索组件因旧版密钥字段无法挂载
 
-- **现象**：打开某个较早的会话时加载失败，报错形如 `contains event type "zotero/status" (seq 326) unknown to this harness and not marked ignorable`。
-- **原因**：旧版插件把 `/zotero` 的连接状态写成会话事件 `zotero/status`，但没有标记 `ignorable`。`56d800e` 移除该事件链后，当前版本不再认识这个类型，而存储契约对「未知且未标记可忽略」的事件一律拒绝解释整份日志，这是存储契约的 fail-closed 行为。
-- **排查与修复**：打开插件页 → dsh-zotero 详情页 → 「数据维护」→ 点「健康体检」。命中的会话会连同原因一并列出；选中后用「修复所选项」并在确认层确认。修复只给 `zotero/status` 记录补写 `ignorable: true`，不改 `seq`、`data` 与事件顺序，写入前保留一份字节一致的副本，副本路径显示在结果里。修复后重新打开会话即可。
-- **限制**：提示「会话正被占用」说明该会话有活动写入句柄，先关闭对应会话再重试；提示「格式版本高于当前运行版本」或「记录未通过完整性校验」时不提供修复，需要升级运行版本或另行处置；「当前运行环境未提供会话存储维护接口」表示宿主未装载持久化维护能力，本页无法处置。
+- **现象**：插件列表中的 `dsh-zotero/scholarly` 组件加载失败，错误消息含 `s2Key` / `ncbiKey` / `openalexKey`，并提示这些字段已改为凭据引用。
+- **原因**：旧版配置把 API 密钥字面量存进 `scholarly.config`；当前 schema 已删除这三个字段，组件挂载时对仍携带旧字段的 profile 显式拒绝（schemas 非严格校验会保留未知键，因此不做该检查就会静默丢失密钥）。
+- **修复**：打开当前 profile 的 `cordis.patch.yml`，从 `scholarly` 条目的 `config` 删除 `s2Key` / `ncbiKey` / `openalexKey`；在设置页「学术检索 → 数据源身份与密钥」把密钥重新输入到三个密码框（写入宿主凭据存储，引用名建议 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`）；轮换旧密钥（旧值曾以明文存储，不会自动迁移）；重启 profile 后重试。
+
+## 24. 学术检索报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` / `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`
+
+- **现象**：`scholarly_*` 工具调用失败并返回上述错误码之一。
+- **原因**：`UNRESOLVED` 表示配置的引用名不是合法环境变量名，或凭据存储中没有该引用的值；`UNAVAILABLE` 表示配置了引用，但宿主没有装载凭据服务。两种情况都不会静默降级为匿名请求。
+- **修复**：检查「学术检索」设置中的引用名拼写与语法（首字符为字母或下划线，其后仅字母、数字、下划线）；确认该引用在宿主凭据存储中有值（设置页密码框保存，或由凭据管理/环境变量层提供）；只想匿名访问时清空引用并删除对应密钥；`UNAVAILABLE` 时让宿主装载凭据 provider（如 `@deepseek-ai/dsh-credentials-local`）。

@@ -6,9 +6,9 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 
 - 核心 `zotero` 命名空间：`src/config.ts`，37 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，1 个字段；
-- 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，6 个字段。
+- 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段。
 
-三组合计 44 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly`）的 `config` 下。
+三组合计 47 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -20,7 +20,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 | 本地连接 | `zotero`     | 5      | 连接：`baseUrl`、`provider`、`timeoutMs`、`maxInFlightRequests`、`scopeListingTtlMs`                                                                                                                                                                                                                          |
 | 检索提取 | `zotero`     | 13     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars` |
 | 文献面板 | `library`    | 1      | 侧边栏显示设置：`rightSidebarEnabled`                                                                                                                                                                                                                                                                         |
-| 学术检索 | `scholarly`  | 6      | 数据源身份与密钥：`email`、`s2Key`、`ncbiKey`、`openalexKey`；学术检索与全文配额：`maxResults`、`maxContentChars`                                                                                                                                                                                             |
+| 学术检索 | `scholarly`  | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                          |
 | 高级选项 | `zotero`     | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                           |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
@@ -83,7 +83,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 - `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground`、`promoteOnTimeout` 与 `debug` 必须为布尔值；
 - `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
-文献面板与学术检索的 schema 由组件自身在挂载时校验：`rightSidebarEnabled` 必须为布尔值；`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；密钥字段必须为字符串。
+文献面板与学术检索的 schema 由组件自身在挂载时校验：`rightSidebarEnabled` 必须为布尔值；`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；`foregroundWaitMs` 必须是 1–240,000 的整数；凭据引用名为字符串，空串表示禁用该 key，非空值在每次工具调用前由 `src/scholarly/credentials.ts` 解析为合法环境变量名。
 
 ## 配置优先级
 
@@ -132,16 +132,23 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。字段变更在下一次工具调用时生效，无需重启 profile：
 
-| 字段              | 默认值  | 说明                                                                                               |
-| ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `email`           | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额） |
-| `s2Key`           | —       | Semantic Scholar API Key（可选，避免共享 IP 池限速）                                               |
-| `ncbiKey`         | —       | NCBI / PubMed API Key（可选，将每秒请求上限从 3 提升至 10）                                        |
-| `openalexKey`     | —       | OpenAlex API Key（可选，将每秒请求上限提升至 100）                                                 |
-| `maxResults`      | `20`    | 单次检索返回的最大论文数量（1-100）                                                                |
-| `maxContentChars` | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                             |
+| 字段                    | 默认值  | 说明                                                                                                        |
+| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `email`                 | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额）          |
+| `s2ApiKeyEnv`           | `''`    | Semantic Scholar API Key 的凭据引用名（建议 `S2_API_KEY`）；空串禁用该 key，配置后可避免共享 IP 池限速      |
+| `ncbiApiKeyEnv`         | `''`    | NCBI / PubMed API Key 的凭据引用名（建议 `NCBI_API_KEY`）；空串禁用该 key，配置后每秒请求上限从 3 提升至 10 |
+| `openalexApiKeyEnv`     | `''`    | OpenAlex API Key 的凭据引用名（建议 `OPENALEX_API_KEY`）；空串禁用该 key，配置后每秒请求上限提升至 100      |
+| `maxResults`            | `20`    | 单次检索返回的最大论文数量（1-100）                                                                         |
+| `maxContentChars`       | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                                      |
+| `enableRunInBackground` | `true`  | 是否允许 `scholarly_read` / `scholarly_search` / `scholarly_verify` 显式转入后台任务执行                    |
+| `promoteOnTimeout`      | `true`  | 前台等待超时时是否自动提升为后台任务                                                                        |
+| `foregroundWaitMs`      | `30000` | 前台等待毫秒数，超时后提升为后台任务（1-240,000）                                                           |
 
 组件未启用时，设置页的「学术检索」标签页只显示一条指向「包含的组件」的提示，不渲染任何字段，组件行配置入口也不会注册；组件启用后该标签页才成为可编辑表单。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。
+
+密钥值写在哪里：配置只保存凭据引用名；设置页「学术检索 → 数据源身份与密钥」中的三个密码框把输入的密钥值写入宿主凭据存储（credentials seam），不进入配置。引用名解析失败时工具调用直接失败，不会静默降级为匿名请求。
+
+从旧版升级：旧字段 `s2Key` / `ncbiKey` / `openalexKey` 已从 schema 移除。携带这些字段的 profile 会在组件挂载时被显式拒绝（错误消息列出字段与迁移步骤）。请从 profile 的 `cordis.patch.yml` 删除旧字段，在设置页把密钥重新输入到对应的密码框（引用名建议 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`），并轮换旧密钥：旧值曾以明文保存在配置里，不会自动迁移。
 
 ---
 

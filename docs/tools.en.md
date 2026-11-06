@@ -663,31 +663,33 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 ## Error codes
 
-| Error code                          | Description                                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `ZOTERO_NOT_RUNNING`                | Zotero is not running or the local port is unreachable                                           |
-| `ZOTERO_API_DISABLED`               | Zotero is running but the local API is not enabled in advanced settings (403)                    |
-| `ZOTERO_API_VERSION`                | Unsupported local API version                                                                    |
-| `ZOTERO_NOT_IMPLEMENTED`            | The local API explicitly returns 501; endpoint or format unimplemented in this version           |
-| `ZOTERO_SERVER_MISMATCH`            | Referenced Server ID does not match the running Zotero instance                                  |
-| `ZOTERO_NOT_FOUND`                  | Referenced item, collection, or saved search does not exist                                      |
-| `ZOTERO_RANGE_UNSUPPORTED`          | The server does not keep change history back to the requested version (409)                      |
-| `ZOTERO_NO_ATTACHMENT`              | No attachment of the requested type exists under the item                                        |
-| `ZOTERO_NO_FULLTEXT`                | The attachment has no full-text index                                                            |
-| `ZOTERO_FILE_MISSING`               | The recorded local attachment file does not exist on disk                                        |
-| `ZOTERO_INVALID_REF`                | Ref format violates the `zotero://` grammar or targets an unsupported library                    |
-| `ZOTERO_INVALID_ARGUMENT`           | Argument violates domain constraints                                                             |
-| `ZOTERO_SCOPE_AMBIGUOUS`            | A collection or saved-search name matches several same-name objects                              |
-| `ZOTERO_TIMEOUT`                    | Provider request timed out                                                                       |
-| `ZOTERO_RESPONSE_TOO_LARGE`         | API response stream exceeds the read cap                                                         |
-| `ZOTERO_OUTPUT_TOO_LARGE`           | Export content exceeds the character cap                                                         |
-| `ZOTERO_CAPABILITY_UNAVAILABLE`     | The current provider does not declare the required capability                                    |
-| `ZOTERO_PROVIDER_UNAVAILABLE`       | The configured provider is not registered or the method is unimplemented                         |
-| `ZOTERO_UNEXPECTED`                 | Abnormal response payload or unexpected behavior                                                 |
-| `ZOTERO_WRITE_UNAUTHORIZED`         | Write not authorized: key missing, expired, or rejected in the authorization dialog              |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` | The plan review card cannot start interaction (no interactive channel or a system-level failure) |
-| `ZOTERO_WRITE_CONFLICT`             | Write version precondition conflict (412); the object was modified externally                    |
-| `ZOTERO_WRITE_RATE_LIMITED`         | Zotero authorization endpoint rate limited (429)                                                 |
+| Error code                                 | Description                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `ZOTERO_NOT_RUNNING`                       | Zotero is not running or the local port is unreachable                                                        |
+| `ZOTERO_API_DISABLED`                      | Zotero is running but the local API is not enabled in advanced settings (403)                                 |
+| `ZOTERO_API_VERSION`                       | Unsupported local API version                                                                                 |
+| `ZOTERO_NOT_IMPLEMENTED`                   | The local API explicitly returns 501; endpoint or format unimplemented in this version                        |
+| `ZOTERO_SERVER_MISMATCH`                   | Referenced Server ID does not match the running Zotero instance                                               |
+| `ZOTERO_NOT_FOUND`                         | Referenced item, collection, or saved search does not exist                                                   |
+| `ZOTERO_RANGE_UNSUPPORTED`                 | The server does not keep change history back to the requested version (409)                                   |
+| `ZOTERO_NO_ATTACHMENT`                     | No attachment of the requested type exists under the item                                                     |
+| `ZOTERO_NO_FULLTEXT`                       | The attachment has no full-text index                                                                         |
+| `ZOTERO_FILE_MISSING`                      | The recorded local attachment file does not exist on disk                                                     |
+| `ZOTERO_INVALID_REF`                       | Ref format violates the `zotero://` grammar or targets an unsupported library                                 |
+| `ZOTERO_INVALID_ARGUMENT`                  | Argument violates domain constraints                                                                          |
+| `ZOTERO_SCOPE_AMBIGUOUS`                   | A collection or saved-search name matches several same-name objects                                           |
+| `ZOTERO_TIMEOUT`                           | Provider request timed out                                                                                    |
+| `ZOTERO_RESPONSE_TOO_LARGE`                | API response stream exceeds the read cap                                                                      |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds the character cap                                                                      |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`            | The current provider does not declare the required capability                                                 |
+| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                          |
+| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | A configured scholarly credential reference is invalid or has no value (never falls back to anonymous access) |
+| `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                      |
+| `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                              |
+| `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                           |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | The plan review card cannot start interaction (no interactive channel or a system-level failure)              |
+| `ZOTERO_WRITE_CONFLICT`                    | Write version precondition conflict (412); the object was modified externally                                 |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero authorization endpoint rate limited (429)                                                              |
 
 ---
 
@@ -695,23 +697,26 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 The bundle component `dsh-zotero/scholarly` ships with the package and is off by default. Enabling it under "Included components" in the plugin manager mounts it and provides the following 7 model tools:
 
+`scholarly_search`, `scholarly_read`, and `scholarly_verify` also declare `run_in_background`: a result is either plain text or one of the two job arms `{ kind: "background", jobId }` / `{ kind: "promoted", jobId, timeoutMs, message }`; collect it with `job_output` and cancel it with `job_kill`. An explicit background request is refused with a structured error while `enableRunInBackground=false` or when no `jobs` service is mounted; a foreground wait that exceeds `foregroundWaitMs` is promoted when `promoteOnTimeout=true`, and the job result text is served from `JobOutcome.result`.
+
 ### scholarly_search
 
 Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports automatic semantic routing and multi-source RRF fusion with deduplication, and checks the local Zotero library for saved status automatically.
 
 #### Parameters
 
-| Parameter     | Type     | Default       | Description                                                                                                                                                    |
-| ------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`       | string   | required      | Topic words, paper title, or author name                                                                                                                       |
-| `sources`     | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by topic semantics |
-| `year_from`   | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                         |
-| `year_to`     | integer  | none          | End publication year                                                                                                                                           |
-| `open_access` | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                  |
-| `sort`        | string   | `"relevance"` | Sort order: `relevance`, `date` (newest first; only the previous year when `year_from` is omitted), `citations` (most cited first)                             |
-| `categories`  | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                             |
-| `limit`       | integer  | `8`           | Paper cap                                                                                                                                                      |
-| `abstract`    | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                  |
+| Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                                      |
+| ------------------- | -------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                                         |
+| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by topic semantics                                                                                                   |
+| `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                                           |
+| `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                                             |
+| `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                                    |
+| `sort`              | string   | `"relevance"` | Sort order: `relevance`, `date` (newest first; only the previous year when `year_from` is omitted), `citations` (most cited first)                                                                                                                               |
+| `categories`        | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                                                                                                                               |
+| `limit`             | integer  | `8`           | Paper cap                                                                                                                                                                                                                                                        |
+| `abstract`          | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                                                                                                                    |
+| `run_in_background` | boolean  | `false`       | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
 
 ---
 
@@ -751,15 +756,16 @@ Tiered reading of lawful open-access full text with passage-level BM25 evidence 
 
 #### Parameters
 
-| Parameter   | Type    | Default    | Description                                                                                    |
-| ----------- | ------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `id`        | string  | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                               |
-| `outline`   | boolean | none       | Set to `true` to return only the multi-level outline and character spans                       |
-| `section`   | string  | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                     |
-| `query`     | string  | none       | Natural-language question; BM25 ranks the most relevant evidence passages across the full text |
-| `passages`  | integer | `5`        | Number of top passages returned in `query` mode (1-12)                                         |
-| `start`     | integer | `0`        | Starting character offset for chunked reading                                                  |
-| `max_chars` | integer | config cap | Maximum characters read per call                                                               |
+| Parameter           | Type    | Default    | Description                                                                                                                                                                                                                                                      |
+| ------------------- | ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string  | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                                 |
+| `outline`           | boolean | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                                         |
+| `section`           | string  | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                                       |
+| `query`             | string  | none       | Natural-language question; BM25 ranks the most relevant evidence passages across the full text                                                                                                                                                                   |
+| `passages`          | integer | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                                           |
+| `start`             | integer | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                                    |
+| `max_chars`         | integer | config cap | Maximum characters read per call                                                                                                                                                                                                                                 |
+| `run_in_background` | boolean | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
 
 #### Network boundary
 
@@ -788,9 +794,10 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 
 #### Parameters
 
-| Parameter    | Type     | Default  | Description                                                                                                   |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `references` | string[] | required | Reference text list to verify (at most 40 papers per call; going over is an error, with no silent truncation) |
+| Parameter           | Type     | Default  | Description                                                                                                                                                                                                                                                      |
+| ------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `references`        | string[] | required | Reference text list to verify (at most 40 papers per call; going over is an error, with no silent truncation)                                                                                                                                                    |
+| `run_in_background` | boolean  | `false`  | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
 
 #### Verdicts
 

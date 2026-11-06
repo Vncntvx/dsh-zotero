@@ -8,6 +8,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { ZoteroCreateItemOutcome } from '../../src/types.js'
 import { createScholarlySaveToZoteroTool } from '../../src/scholarly/tools/save-to-zotero.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
+import { ZoteroJobRunner } from '../../src/job-runner.js'
 
 export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
   const ctx = new Context()
@@ -29,8 +30,14 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
         throw new Error('Saving must not query an external index')
       },
     }),
-    keys: () => ({}),
+    keys: async () => ({}),
     maxResults: () => 10,
+    jobPolicy: () => ({
+      enableRunInBackground: false,
+      promoteOnTimeout: false,
+      foregroundWaitMs: 1_000,
+    }),
+    jobRunner: () => new ZoteroJobRunner(undefined),
     zoteroService: () => ({
       search: async () => {
         throw new Error('Saving must not perform an implicit search')

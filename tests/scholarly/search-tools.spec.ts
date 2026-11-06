@@ -27,11 +27,20 @@ describe('scholarly tools registry', () => {
     expect(tools.length).toBe(SCHOLARLY_TOOL_NAMES.length)
   })
 
-  it('projects write outcomes only for the scholarly save card', () => {
+  it('projects write outcomes and job arms only for the cards that have them', () => {
     const tools = createAllScholarlyTools(createMockHost(createMockHttp(() => new Response('{}'))))
+    // The save tool projects its write outcome; the three long tools project
+    // their job arm; the remaining read tools project nothing, so the client
+    // renders them with the generic row.
+    const projecting = new Set([
+      'scholarly_save_to_zotero',
+      'scholarly_read',
+      'scholarly_search',
+      'scholarly_verify',
+    ])
     for (const tool of tools) {
-      if (tool.name === 'scholarly_save_to_zotero') {
-        expect(tool.output.presentationMeta).toBeTypeOf('function')
+      if (projecting.has(tool.name)) {
+        expect(tool.output.presentationMeta, `${tool.name} projects its arm`).toBeTypeOf('function')
       } else {
         expect(tool.output.presentationMeta, `${tool.name} has no client card`).toBeUndefined()
       }
