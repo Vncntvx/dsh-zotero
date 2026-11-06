@@ -5,6 +5,7 @@
 
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ZoteroClientFace } from '../../actions/client-face.ts'
 import { LIBRARY_TAB_KIND } from '../../library-tab.ts'
 
 export interface ZoteroLibraryMenuProps {
@@ -13,8 +14,8 @@ export interface ZoteroLibraryMenuProps {
   readonly dismiss?: () => void
   readonly t: TranslateNS<'zotero'>
   readonly onRefresh?: (sessionId: string, tabId: string) => void
-  /** Host-backed protocol launcher from the shared client face. */
-  readonly openProtocol?: (url: string) => Promise<boolean>
+  /** Root-provided shared face; the slot framework supplies it like `t`. */
+  readonly useZoteroClient: () => ZoteroClientFace
 }
 
 export function ZoteroLibraryMenu({
@@ -22,10 +23,11 @@ export function ZoteroLibraryMenu({
   sessionId,
   dismiss,
   onRefresh,
-  openProtocol,
+  useZoteroClient,
   t,
 }: ZoteroLibraryMenuProps) {
   if (tab?.kind !== LIBRARY_TAB_KIND) return null
+  const { openProtocol } = useZoteroClient()
   return (
     <>
       <MenuItemButton
@@ -39,7 +41,7 @@ export function ZoteroLibraryMenu({
       <MenuItemButton
         onSelect={() => {
           dismiss?.()
-          if (openProtocol !== undefined) void openProtocol('zotero://select/')
+          void openProtocol('zotero://select/')
         }}
       >
         {t('openInZotero')}

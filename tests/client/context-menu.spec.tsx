@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { fakeWorld, applyEntry } from './helpers/apply-world.ts'
+import { failOpenProtocol } from './helpers/remote-stubs.ts'
 
 const { writeClipboard } = vi.hoisted(() => ({ writeClipboard: vi.fn(async () => true) }))
 
@@ -28,10 +29,31 @@ describe('unified context menus', () => {
     expect(fileMenu?.id).toBe('dsh-zotero.file')
     expect(fileMenu?.order).toBe(150)
 
-    const itemMenu = world.contextMenuRegistrations.find((reg) => reg.target === 'zoteroItem')
-    expect(itemMenu).toBeDefined()
-    expect(itemMenu?.id).toBe('dsh-zotero.item')
-    expect(itemMenu?.order).toBe(100)
+    // The desktop hand-off and the clipboard copy are separate
+    // contributions: the first calls a global Remote endpoint and is gated on
+    // that grant, the second is a local clipboard write.
+    const openMenu = world.contextMenuRegistrations.find((reg) => reg.id === 'dsh-zotero.item.open')
+    expect(openMenu).toBeDefined()
+    expect(openMenu?.target).toBe('zoteroItem')
+    expect(openMenu?.order).toBe(100)
+
+    const copyMenu = world.contextMenuRegistrations.find((reg) => reg.id === 'dsh-zotero.item.copy')
+    expect(copyMenu).toBeDefined()
+    expect(copyMenu?.target).toBe('zoteroItem')
+    expect(copyMenu?.order).toBe(110)
+  })
+
+  it('withdraws the desktop hand-off when the openProtocol grant is missing', async () => {
+    const world = fakeWorld()
+    world.grantedActions.delete('zotero/openProtocol')
+    await applyEntry(world)
+
+    expect(
+      world.contextMenuRegistrations.find((reg) => reg.id === 'dsh-zotero.item.open'),
+    ).toBeUndefined()
+    expect(
+      world.contextMenuRegistrations.find((reg) => reg.id === 'dsh-zotero.item.copy'),
+    ).toBeDefined()
   })
 
   it('withdraws both contributions when the library component is not composed', async () => {
@@ -45,11 +67,11 @@ describe('unified context menus', () => {
   it('withdraws both contributions when the right sidebar is disabled', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    expect(world.contextMenuRegistrations).toHaveLength(2)
+    expect(world.contextMenuRegistrations).toHaveLength(3)
 
     await world.libraryScope.set('rightSidebarEnabled', false)
     expect(world.contextMenuRegistrations).toEqual([])
-    expect(world.contextMenuDisposes).toBe(2)
+    expect(world.contextMenuDisposes).toBe(3)
   })
 
   it('offers openInLibrary for bibliography files and declines others', async () => {
@@ -79,7 +101,9 @@ describe('unified context menus', () => {
     const world = fakeWorld()
     await applyEntry(world)
 
-    const itemMenu = world.contextMenuRegistrations.find((reg) => reg.target === 'zoteroItem')!
+    const itemMenu = world.contextMenuRegistrations.find(
+      (reg) => reg.id === 'dsh-zotero.item.open',
+    )!
     const signal = new AbortController().signal
     const actions = itemMenu.resolve(
       {
@@ -90,22 +114,28 @@ describe('unified context menus', () => {
       signal,
     )
 
-    expect(actions).toHaveLength(2)
+    expect(actions).toHaveLength(1)
     expect(actions[0].id).toBe('openInDesktop')
     expect(actions[0].icon).toEqual({ key: 'zotero.library' })
 
     await actions[0].run()
     expect(world.openProtocolCalls).toEqual(['zotero://select/library/items/ABC12345'])
 
-    ;(world.ctx as any).remote.zotero.openProtocol = async () => ({ ok: false, error: {} }) as never
+    failOpenProtocol(world)
     await expect(actions[0].run()).resolves.toBeUndefined()
+    expect(world.openProtocolCalls).toEqual([
+      'zotero://select/library/items/ABC12345',
+      'zotero://select/library/items/ABC12345',
+    ])
   })
 
   it('copies the canonical select link and reports clipboard refusal', async () => {
     const world = fakeWorld()
     await applyEntry(world)
 
-    const itemMenu = world.contextMenuRegistrations.find((reg) => reg.target === 'zoteroItem')!
+    const itemMenu = world.contextMenuRegistrations.find(
+      (reg) => reg.id === 'dsh-zotero.item.copy',
+    )!
     const signal = new AbortController().signal
     const actions = itemMenu.resolve(
       {

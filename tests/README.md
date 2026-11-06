@@ -204,6 +204,18 @@ instead of reporting a mocked pass as live verification.
 - `tests/helpers/provider-harness.ts`: the provider lane's single import
   surface: mock + provider boot, request builders, and `PROVIDER_LIMITS`, the
   one `LocalApiLimits` base every spec overrides.
+- `tests/client/helpers/zotero-client.ts`: the browser lane's one
+  `ZoteroClientFace` stub. `zoteroClientStub(overrides)` satisfies the complete
+  five-member face, so a spec overrides only the members it drives instead of
+  restating a partial face behind a double cast; `inputActionsStub()` is the
+  matching session-composer face.
+- `tests/client/helpers/credential-port.ts`: the shared credential-port stub
+  (`emptyCredentialPort`) and the `remoteCredentialsStub`/`remoteEventStub`
+  helpers the apply world composes; specs that assert credential behavior use
+  their own recording port.
+- `tests/client/helpers/remote-stubs.ts`: the browser-lane Remote surface stubs
+  (`createRemoteAccessStub`, `createRemoteZoteroStub`) extracted from
+  `apply-world.ts` to keep that helper inside its frozen size budget.
 - `tests/helpers/test-clients.ts`: `testHttpClient` / `testWriteClient`, the
   suite's standard transport bounds; a spec passes only what it varies.
 - `tests/helpers/approval-stub.ts`: the one `approval` seam the write lanes

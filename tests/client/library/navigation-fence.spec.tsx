@@ -61,13 +61,16 @@ it('restarts one prefix when a later page reports a new library version', async 
     vi.mocked(browse).mock.calls.filter(([request]) => request.kind === 'savedSearches').length
   const savedBefore = savedReads()
   act(() => result.current.loadMoreTree(undefined))
-  await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
+  // Synchronize on the restarted page itself, not on the phase that was
+  // already 'ready' before the version bump reached the reducer.
+  await waitFor(() =>
+    expect(result.current.treeLane(undefined)).toMatchObject({
+      rows: [{ ref: firstRef }, { ref: secondRef }],
+      libraryVersion: 2,
+    }),
+  )
   expect(offsets).toEqual([0, 1, 0])
   expect(savedReads()).toBe(savedBefore)
-  expect(result.current.treeLane(undefined)).toMatchObject({
-    rows: [{ ref: firstRef }, { ref: secondRef }],
-    libraryVersion: 2,
-  })
 })
 
 it('fails the branch when the library keeps changing under one prefix', async () => {

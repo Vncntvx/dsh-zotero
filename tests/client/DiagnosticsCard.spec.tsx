@@ -15,12 +15,12 @@ import type { ZoteroDiagnosticsView } from '../../src/client/remote.ts'
 import { zh } from '../../src/client/locales.ts'
 import { entry, fakeProbe, okView, targetSubject } from './helpers/diagnostics-fixtures.ts'
 import { mockT } from './helpers/mock-translate.ts'
-import type { ZoteroClientFace } from '../../src/client/actions/client-face.ts'
+import { zoteroClientStub } from './helpers/zotero-client.ts'
 
 afterEach(cleanup)
 
 const t = mockT
-const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
+const client = () => zoteroClientStub()
 
 const otherSubject: PluginsSubject = {
   kind: 'bundle',

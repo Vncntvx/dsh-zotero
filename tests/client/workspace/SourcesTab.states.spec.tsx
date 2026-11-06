@@ -28,6 +28,7 @@ import {
   sessionsOf,
   toolRow,
 } from '../helpers/sources-tab-harness.tsx'
+import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the tab only needs the shared DOM face.
@@ -62,14 +63,7 @@ describe('connectivity strip states', () => {
     // PropsRuntime surface: upstream merges stop breaking it.
     const props = {
       t,
-      useZoteroClient: () => ({
-        reportClientError: vi.fn(async () => {}),
-        openProtocol: vi.fn(async () => true),
-        resolveAttachment: vi.fn(async () => ({
-          ok: true,
-          value: { ref: '', kind: 'file', title: '', contentType: '' },
-        })),
-      }),
+      useZoteroClient: () => zoteroClientStub(),
       status: undefined,
       useSession: (sel: (snap: SessionSnapshot) => unknown) => sel(sessionOf()),
       useSessions: (sel: (snapshot: ReturnType<typeof sessionsOf>) => unknown) => sel(sessionsOf()),

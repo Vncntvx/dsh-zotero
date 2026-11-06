@@ -36,6 +36,8 @@ describe('the browser-half entry', () => {
       'locale',
       'slots',
       'remote',
+      'remote.credentials',
+      'remoteAccess',
       'configForms',
       'sidebarRight',
       'sidebarRightTabs',
@@ -92,6 +94,22 @@ describe('the browser-half entry', () => {
       'sidebar.right.tab.document.unpreviewable',
       'contextMenu.icon',
     ])
+  })
+
+  it('provides the client face through root props and keeps it off the tab menu slot', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+    expect(typeof world.rootProps?.useZoteroClient).toBe('function')
+
+    const menu = world.injected.find((entry) => entry.name === 'sidebar.right.tab.menu.item')
+    menu?.register()
+    const registration = world.registered.find(
+      (entry) => entry.name === 'sidebar.right.tab.menu.item',
+    )
+    const inject = registration?.options.inject as () => Record<string, unknown> | undefined
+    const injected = inject()
+    expect(typeof injected?.onRefresh).toBe('function')
+    expect(injected).not.toHaveProperty('openProtocol')
   })
 
   it('injects the activation guide into the plugins.bundle.activation slot', async () => {
@@ -288,6 +306,8 @@ describe('the browser-half entry', () => {
     expect(world.injectDeps).toEqual([
       [
         'remote.zotero',
+        'remote.credentials',
+        'remoteAccess',
         'locale',
         'slots',
         'configForms',
@@ -405,12 +425,13 @@ describe('the browser-half entry', () => {
     // gated surfaces subscriptions, and the mount.
     // Per-namespace counts: the zotero form carries the webEnabled watch, the
     // card model, and the panel gate's sync; the library form carries its own
-    // sync and card model; the scholarly form its card model.
+    // sync and card model; the scholarly form its card model plus the
+    // credential-reference subscription that drives remote reads.
     await dispose()
     expect(world.eventDisposes).toBe(0)
     expect(world.scope.unsubscribes).toBe(3)
     expect(world.libraryScope.unsubscribes).toBe(2)
-    expect(world.scholarlyScope.unsubscribes).toBe(1)
+    expect(world.scholarlyScope.unsubscribes).toBe(2)
     expect(world.uiDisposes).toBe(1)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
     expect(world.mountDisposes).toBe(1)

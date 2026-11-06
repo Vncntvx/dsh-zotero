@@ -10,12 +10,12 @@ import { ZoteroPluginDetailSection } from '../../../src/client/components/plugin
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../../../src/client/remote.ts'
-import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
+import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT
 
-const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
+const client = () => zoteroClientStub()
 
 afterEach(cleanup)
 

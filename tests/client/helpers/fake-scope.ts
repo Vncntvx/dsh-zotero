@@ -41,6 +41,8 @@ export type FakeScope = ConfigForm<Record<string, unknown>> & {
   writes: FakeWrite[]
   /** How many subscriptions have been released. */
   unsubscribes: number
+  /** Publish a Host-side snapshot update (settings arrival or refresh). */
+  publish(next: Partial<ConfigFormSnapshot<Record<string, unknown>>>): void
 }
 
 /**
@@ -100,6 +102,10 @@ export function fakeScope(options: FakeScopeOptions = {}): FakeScope {
       applyWrite('unset', field)
       publish()
       return true
+    },
+    publish: (next) => {
+      snapshot = { ...snapshot, ...next }
+      publish()
     },
     mutate: async (ops: readonly SettingsPathOpView[]) => {
       if (options.rejectWrites === true) return false

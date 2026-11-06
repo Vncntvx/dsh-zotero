@@ -5,6 +5,8 @@
  * reading-stage labels (精读/已引用).
  */
 
+import { SCHOLARLY_CREDENTIAL_REFERENCE_NAMES } from '../credential-names.ts'
+
 /** Every locale key the plugin renders: English is the source of the key set. */
 export type ZoteroLocaleKey = keyof typeof en
 
@@ -28,6 +30,8 @@ export const en = {
     'Submit once to review the exact plan in this conversation. Every change requires session approval and plan approval. Writes are never retried automatically.',
   libraryWriteNeedsSession:
     'This conversation is not running. Start it to receive the write approval and plan card.',
+  libraryWriteNeedsAccess:
+    'This identity may not write to the Zotero library of this conversation.',
   libraryWriteSession: 'Approval conversation',
   libraryWriteConditionsRequired: 'Add at least one complete condition row.',
   libraryWriteConditionIncomplete:
@@ -93,6 +97,10 @@ export const en = {
   scholarlyDisabled:
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
+  invalidCredentialRef:
+    'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
+  scholarlyKeyNeedsReference:
+    'Set a valid credential reference above before storing a key; leaving it blank uses anonymous access.',
   tabFeatures: 'General',
   tabConnection: 'Connection',
   tabSearch: 'Search & Extraction',
@@ -128,7 +136,8 @@ export const en = {
   groupSearchEvidence: 'Passages & Fulltext Extraction',
   groupSearchEvidenceDesc: 'Passage length, passage count, notes, and full-text chunk sizes.',
   groupScholarlyAuth: 'API Credentials & Identification',
-  groupScholarlyAuthDesc: 'Contact email for the Polite Pool and optional academic API keys.',
+  groupScholarlyAuthDesc:
+    'Contact email for the Polite Pool, credential references for optional academic API keys, and the key values stored in the credentials store.',
   groupScholarlyLimits: 'Search & Full-text Quotas',
   groupScholarlyLimitsDesc: 'Maximum results per search and the full-text reading limit.',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
@@ -137,12 +146,21 @@ export const en = {
   scholarlyEmail: 'Contact email',
   scholarlyEmailHint:
     'Contact email sent to Crossref, OpenAlex, and NCBI/Europe PMC for the polite pool and higher rate limits.',
+  scholarlyS2ApiKeyEnv: 'Semantic Scholar credential reference',
+  scholarlyS2ApiKeyEnvHint: `Environment-variable name holding the key (suggested: ${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.semanticScholar}). Leave blank to use anonymous access.`,
+  scholarlyNcbiApiKeyEnv: 'NCBI credential reference',
+  scholarlyNcbiApiKeyEnvHint: `Environment-variable name holding the key (suggested: ${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.ncbi}). Leave blank to use anonymous access.`,
+  scholarlyOpenalexApiKeyEnv: 'OpenAlex credential reference',
+  scholarlyOpenalexApiKeyEnvHint: `Environment-variable name holding the key (suggested: ${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.openalex}). Leave blank to use anonymous access.`,
   scholarlyS2Key: 'Semantic Scholar API key',
-  scholarlyS2KeyHint: 'Optional; avoids shared-pool rate limiting.',
+  scholarlyS2KeyHint:
+    'Stored in the credentials store under the reference above, never in configuration.',
   scholarlyNcbiKey: 'NCBI / PubMed API key',
-  scholarlyNcbiKeyHint: 'Optional; raises rate limit from 3 to 10 req/s.',
+  scholarlyNcbiKeyHint:
+    'Stored in the credentials store under the reference above, never in configuration.',
   scholarlyOpenalexKey: 'OpenAlex API key',
-  scholarlyOpenalexKeyHint: 'Optional; raises rate limit to 100 req/s.',
+  scholarlyOpenalexKeyHint:
+    'Stored in the credentials store under the reference above, never in configuration.',
   scholarlyMaxResults: 'Max papers per search',
   scholarlyMaxResultsHint: 'Maximum number of papers returned in a single search (1-100).',
   scholarlyMaxContentChars: 'Max full-text characters',
@@ -692,6 +710,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryWriteApprovalHint:
     '提交后请在当前会话中核对具体计划。每次变更都需要会话审批和计划批准，写入不会自动重试。',
   libraryWriteNeedsSession: '当前会话未运行；启动该会话后才能接收写入审批与计划卡。',
+  libraryWriteNeedsAccess: '当前身份无权写入该会话的 Zotero 文库。',
   libraryWriteSession: '审批会话',
   libraryWriteConditionsRequired: '至少填写一行完整条件。',
   libraryWriteConditionIncomplete: '每个条件行都需要条件、运算符与值；请删除空行。',
@@ -755,6 +774,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scholarlyDisabled:
     '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
   invalidNumber: '请填数字；留空表示使用默认值。',
+  invalidCredentialRef:
+    '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
+  scholarlyKeyNeedsReference: '请先在上方填写有效的凭据引用名，再保存密钥；留空表示匿名访问。',
   tabFeatures: '基础设置',
   tabConnection: '本地连接',
   tabSearch: '检索提取',
@@ -786,7 +808,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupSearchEvidenceDesc: '原文片段长度、段落数、笔记正文及全文切片上限。',
   groupScholarlyAuth: '数据源身份与密钥',
   groupScholarlyAuthDesc:
-    '配置邮箱以加入 Polite Pool 获得更优限速配额，以及可选的外部学术 API 密钥。',
+    '配置邮箱以加入 Polite Pool 获得更优限速配额，填写可选学术 API 密钥的凭据引用，并在凭据存储中保存密钥值。',
   groupScholarlyLimits: '学术检索与全文配额',
   groupScholarlyLimitsDesc: '全网检索最大返回篇数与全文提取字符上限。',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
@@ -795,12 +817,18 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scholarlyEmail: '联系邮箱',
   scholarlyEmailHint:
     '附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头，加入 Polite Pool 获得更高限速配额。',
+  scholarlyS2ApiKeyEnv: 'Semantic Scholar 凭据引用',
+  scholarlyS2ApiKeyEnvHint: `保存密钥的环境变量名（建议：${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.semanticScholar}）；留空表示匿名访问。`,
+  scholarlyNcbiApiKeyEnv: 'NCBI 凭据引用',
+  scholarlyNcbiApiKeyEnvHint: `保存密钥的环境变量名（建议：${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.ncbi}）；留空表示匿名访问。`,
+  scholarlyOpenalexApiKeyEnv: 'OpenAlex 凭据引用',
+  scholarlyOpenalexApiKeyEnvHint: `保存密钥的环境变量名（建议：${SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.openalex}）；留空表示匿名访问。`,
   scholarlyS2Key: 'Semantic Scholar API 密钥',
-  scholarlyS2KeyHint: '可选；避免共享 IP 池限速。',
+  scholarlyS2KeyHint: '保存在上方引用对应的凭据存储中，不进入配置。',
   scholarlyNcbiKey: 'NCBI / PubMed API 密钥',
-  scholarlyNcbiKeyHint: '可选；将请求上限从每秒 3 次提升至 10 次。',
+  scholarlyNcbiKeyHint: '保存在上方引用对应的凭据存储中，不进入配置。',
   scholarlyOpenalexKey: 'OpenAlex API 密钥',
-  scholarlyOpenalexKeyHint: '可选；将请求上限提升至每秒 100 次。',
+  scholarlyOpenalexKeyHint: '保存在上方引用对应的凭据存储中，不进入配置。',
   scholarlyMaxResults: '单次检索论文数上限',
   scholarlyMaxResultsHint: '单次全网检索返回的最大论文数量（1-100）。',
   scholarlyMaxContentChars: '全文读取字符数上限',

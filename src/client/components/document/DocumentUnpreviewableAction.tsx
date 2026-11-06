@@ -4,8 +4,7 @@
  */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { isBibliographyPath } from '../../bibliography.ts'
-import { BibliographyLibraryButton } from './BibliographyLibraryButton.tsx'
+import { BibliographyAction } from './BibliographyAction.tsx'
 
 export interface DocumentUnpreviewableActionProps
   extends
@@ -18,7 +17,5 @@ export function DocumentUnpreviewableAction({
   onOpenLibrary,
   t,
 }: DocumentUnpreviewableActionProps) {
-  if (!isBibliographyPath(absolutePath)) return null
-
-  return <BibliographyLibraryButton label={t('openInLibraryPanel')} onOpenLibrary={onOpenLibrary} />
+  return <BibliographyAction absolutePath={absolutePath} t={t} onOpenLibrary={onOpenLibrary} />
 }

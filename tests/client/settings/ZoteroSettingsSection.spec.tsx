@@ -33,6 +33,7 @@ import {
   type LibraryCardState,
 } from '../../../src/client/library-form-controller.ts'
 import { fakeScope, type FakeScope } from '../helpers/fake-scope.ts'
+import { emptyCredentialPort } from '../helpers/credential-port.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the page
@@ -384,7 +385,10 @@ describe('ZoteroSettingsSection', () => {
 
   it('explains the disabled component when the scholarly namespace is not served', () => {
     scope = fakeScope({ value: {} })
-    const scholarlyController = new ScholarlyFormController(fakeScope({ status: 'unavailable' }))
+    const scholarlyController = new ScholarlyFormController(
+      fakeScope({ status: 'unavailable' }),
+      emptyCredentialPort,
+    )
     mount(zh, scholarlyController.inject())
     fireEvent.click(screen.getByRole('tab', { name: zh.tabScholarly }))
     expect(screen.getByText(zh.scholarlyDisabled)).toBeDefined()
@@ -398,7 +402,7 @@ describe('ZoteroSettingsSection', () => {
     const scholarlyScope = fakeScope({
       value: { email: 'scholar@example.com', maxResults: 15 },
     })
-    const scholarlyController = new ScholarlyFormController(scholarlyScope)
+    const scholarlyController = new ScholarlyFormController(scholarlyScope, emptyCredentialPort)
     mount(zh, scholarlyController.inject())
 
     const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
@@ -415,7 +419,7 @@ describe('ZoteroSettingsSection', () => {
   it('preserves uncommitted edits across tab transitions without unmount-discard', () => {
     scope = fakeScope({ value: { timeoutMs: 5000 } })
     const scholarlyScope = fakeScope({ value: { email: 'initial@example.com' } })
-    const scholarlyController = new ScholarlyFormController(scholarlyScope)
+    const scholarlyController = new ScholarlyFormController(scholarlyScope, emptyCredentialPort)
     mount(zh, scholarlyController.inject())
 
     // 1. Edit a Zotero field on Tab 2 (Connection)

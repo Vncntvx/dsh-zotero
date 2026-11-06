@@ -207,6 +207,8 @@ export function useLibraryFeed(
   const selectedRefRef = useRef(selectedRef)
   selectedRefRef.current = selectedRef
   const restoredServer = useRef<string>()
+  /** The exact state last written, keyed by instance so a switch re-persists. */
+  const lastPersisted = useRef<{ serverId: string; serialized: string }>()
   const [hydratedServer, setHydratedServer] = useState<string>()
   const active = enabled && serverId !== undefined && hydratedServer === serverId
 
@@ -298,40 +300,38 @@ export function useLibraryFeed(
     if (changedInstance) setRefreshToken((value) => value + 1)
   }, [serverId, resetLibraryState, face])
 
-  useEffect(() => {
-    if (!active || serverId === undefined || hydratedServer !== serverId) return
-    writeLibraryState(serverId, {
-      version: 2,
-      prefixes: navigation.prefixes,
-      library: currentLibrary,
-      selection,
-      q: debouncedQ,
-      mode,
-      sort,
-      direction,
-      offset,
-      expanded: [...expanded],
-      filters,
-      selectedRef,
-      narrowPane,
-    })
-  }, [
-    serverId,
-    active,
-    hydratedServer,
-    currentLibrary,
+  // Persist by content, not by reference. Navigation publishes a fresh
+  // `prefixes` object for every pagination step, including loading states
+  // whose visible prefix is unchanged; keying the effect on that identity
+  // made each intermediate publish a synchronous localStorage write of an
+  // identical value. A serialized value compares by content, and the ref
+  // also makes an instance switch write once even when the content matches.
+  const persistedState: LibraryStoredState = {
+    version: 2,
+    prefixes: navigation.prefixes,
+    library: currentLibrary,
     selection,
-    debouncedQ,
+    q: debouncedQ,
     mode,
     sort,
     direction,
     offset,
-    expanded,
+    expanded: [...expanded],
     filters,
     selectedRef,
     narrowPane,
-    navigation.prefixes,
-  ])
+  }
+  const serialized = JSON.stringify(persistedState)
+  useEffect(() => {
+    if (!active || serverId === undefined || hydratedServer !== serverId) return
+    if (
+      lastPersisted.current?.serverId === serverId &&
+      lastPersisted.current.serialized === serialized
+    )
+      return
+    writeLibraryState(serverId, persistedState)
+    lastPersisted.current = { serverId, serialized }
+  }, [active, serverId, hydratedServer, serialized])
 
   // The debounced query drives requests; the raw input drives the text box.
   useEffect(() => {

@@ -10,6 +10,7 @@ import type {
   ZoteroLibraryPanelProps,
 } from '../../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
+import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 afterEach(cleanup)
 it('menu click refreshes the target feed and displays the new server data', async () => {
@@ -42,6 +43,7 @@ it('menu click refreshes the target feed and displays the new server data', asyn
       dismiss={dismiss}
       onRefresh={onRefresh}
       t={mockT}
+      useZoteroClient={() => zoteroClientStub()}
     />,
   )
   title = 'After refresh'

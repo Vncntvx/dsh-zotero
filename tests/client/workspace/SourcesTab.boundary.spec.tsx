@@ -23,7 +23,7 @@ import {
   type SessionsStub,
 } from '../helpers/sources-tab-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
-import type { ZoteroClientFace } from '../../../src/client/actions/client-face.ts'
+import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -36,15 +36,7 @@ afterEach(() => {
 })
 
 const report = vi.fn(async () => {})
-const zoteroClient = () =>
-  ({
-    reportClientError: vi.fn(async () => {}),
-    openProtocol: vi.fn(async () => true),
-    resolveAttachment: vi.fn(async () => ({
-      ok: true,
-      value: { ref: '', kind: 'file', title: '', contentType: '' },
-    })),
-  }) as unknown as ZoteroClientFace
+const zoteroClient = () => zoteroClientStub()
 
 /**
  * Silence React's own error logging for the deliberate throw, returning the spy

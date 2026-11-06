@@ -16,9 +16,11 @@ import {
   SettingsValueField,
   type SettingsFormActions,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { BooleanField } from './fields.tsx'
 import type { ZoteroLocaleKey } from './locales.ts'
 import {
   SCHOLARLY_NUMERIC_KEYS,
+  type ScholarlyBooleanKey,
   type ScholarlyCardState,
   type ScholarlyNumericKey,
   type ScholarlySecretKey,
@@ -59,6 +61,9 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
         </div>
         <div className={css.fields}>
           {renderValueField(t, state, actions, 'email')}
+          {renderValueField(t, state, actions, 's2ApiKeyEnv')}
+          {renderValueField(t, state, actions, 'ncbiApiKeyEnv')}
+          {renderValueField(t, state, actions, 'openalexApiKeyEnv')}
           {renderSecretField(t, state, actions, 's2Key')}
           {renderSecretField(t, state, actions, 'ncbiKey')}
           {renderSecretField(t, state, actions, 'openalexKey')}
@@ -75,6 +80,18 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
           {renderValueField(t, state, actions, 'maxContentChars')}
         </div>
       </section>
+
+      <section className={css.group} aria-label={t('groupJobs')}>
+        <div className={css.groupHeader}>
+          <h3 className={css.groupHeading}>{t('groupJobs')}</h3>
+          <p className={css.groupNote}>{t('groupJobsDesc')}</p>
+        </div>
+        <div className={css.fields}>
+          {renderBooleanField(t, state, actions, 'enableRunInBackground')}
+          {renderBooleanField(t, state, actions, 'promoteOnTimeout')}
+          {renderJobWaitField(t, state, actions)}
+        </div>
+      </section>
     </>
   )
 }
@@ -88,6 +105,7 @@ function renderValueField(
   const field = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey
   const hintKey = `${labelKey}Hint` as ZoteroLocaleKey
+  const credentialRef = key.endsWith('ApiKeyEnv')
   return (
     <SettingsValueField
       key={key}
@@ -99,9 +117,58 @@ function renderValueField(
       invalid={field.invalid}
       overriddenLabel={t('overridden')}
       resetLabel={t('reset')}
-      invalidLabel={t('invalidNumber')}
+      invalidLabel={t(credentialRef ? 'invalidCredentialRef' : 'invalidNumber')}
       disabled={!state.writable || state.saving}
       numeric={NUMERIC_FIELDS.has(key)}
+      onEdit={(text) => actions.edit(key, text)}
+      onReset={() => actions.resetField(key)}
+    />
+  )
+}
+
+function renderJobWaitField(
+  t: (key: ZoteroLocaleKey) => string,
+  state: ScholarlyCardState,
+  actions: ScholarlyFormActions,
+): ReactNode {
+  const field = state.foregroundWaitMs
+  return (
+    <SettingsValueField
+      key="foregroundWaitMs"
+      id="scholarly-settings-foregroundWaitMs"
+      label={t('foregroundWaitMs')}
+      hint={t('foregroundWaitMsHint')}
+      text={field.text}
+      overridden={field.overridden}
+      invalid={field.invalid}
+      overriddenLabel={t('overridden')}
+      resetLabel={t('reset')}
+      invalidLabel={t('invalidNumber')}
+      disabled={!state.writable || state.saving}
+      numeric
+      onEdit={(text) => actions.edit('foregroundWaitMs', text)}
+      onReset={() => actions.resetField('foregroundWaitMs')}
+    />
+  )
+}
+
+function renderBooleanField(
+  t: (key: ZoteroLocaleKey) => string,
+  state: ScholarlyCardState,
+  actions: ScholarlyFormActions,
+  key: ScholarlyBooleanKey,
+): ReactNode {
+  const field = state[key]
+  return (
+    <BooleanField
+      key={key}
+      label={t(key)}
+      hint={t(`${key}Hint` as ZoteroLocaleKey)}
+      text={field.text}
+      overridden={field.overridden}
+      overriddenLabel={t('overridden')}
+      resetLabel={t('reset')}
+      disabled={!state.writable || state.saving}
       onEdit={(text) => actions.edit(key, text)}
       onReset={() => actions.resetField(key)}
     />
@@ -116,7 +183,12 @@ function renderSecretField(
 ): ReactNode {
   const secret = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey
-  const hintKey = `${labelKey}Hint` as ZoteroLocaleKey
+  const hintKey =
+    secret.referenceState === 'missing'
+      ? 'scholarlyKeyNeedsReference'
+      : secret.referenceState === 'invalid'
+        ? 'invalidCredentialRef'
+        : (`${labelKey}Hint` as ZoteroLocaleKey)
   return (
     <SettingsSecretField
       key={key}
@@ -126,7 +198,7 @@ function renderSecretField(
       text={secret.text}
       configured={secret.configured}
       stateLabel={secret.configured ? t('secretConfigured') : t('secretNotConfigured')}
-      disabled={!state.writable || state.saving}
+      disabled={secret.disabled}
       onEdit={(text) => actions.edit(key, text)}
     />
   )

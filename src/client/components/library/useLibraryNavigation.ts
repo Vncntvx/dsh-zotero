@@ -405,8 +405,15 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
     state.current.clear()
     setLanes(new Map())
     void (async () => {
-      await load(undefined, counts.get('') ?? 0, true)
-      await load(SAVED, counts.get(SAVED) ?? 0, true)
+      // Root and saved searches are distinct lane keys over independent
+      // listings. Neither prefix depends on the other's pages, and `load`
+      // already deduplicates by key with its own concurrency slot, so waiting
+      // for root's full pagination before starting saved only adds latency.
+      // Re-location still waits for both to settle.
+      await Promise.all([
+        load(undefined, counts.get('') ?? 0, true),
+        load(SAVED, counts.get(SAVED) ?? 0, true),
+      ])
       await locateRef.current()
     })()
   }, [load])

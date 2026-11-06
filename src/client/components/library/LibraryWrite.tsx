@@ -84,6 +84,7 @@ export function LibraryWrite({
   write,
   sessionId,
   sessionRunning,
+  writeAllowed,
   selectedRef,
   collectionRef,
   searchRef,
@@ -97,6 +98,12 @@ export function LibraryWrite({
   readonly sessionId: string
   /** Whether that conversation can currently receive approvals. */
   readonly sessionRunning: boolean
+  /**
+   * Whether this Peer may call `zotero/write` on this session. The Host
+   * refuses the call without the grant, so the form states the refusal
+   * instead of offering a submission the Host would reject.
+   */
+  readonly writeAllowed: boolean
   readonly selectedRef?: string
   readonly collectionRef?: string
   readonly searchRef?: string
@@ -174,7 +181,7 @@ export function LibraryWrite({
     setDraft((previous) => ({ ...previous, [field]: text }))
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!sessionRunning || inFlight.current) return
+    if (!sessionRunning || !writeAllowed || inFlight.current) return
     setResult(undefined)
     let request: ZoteroLibraryWriteRequestView
     try {
@@ -249,8 +256,13 @@ export function LibraryWrite({
           {t('libraryWriteNeedsSession')}
         </p>
       )}
+      {sessionRunning && !writeAllowed && (
+        <p className={css.listNote} role="status">
+          {t('libraryWriteNeedsAccess')}
+        </p>
+      )}
       <form className={css.writeForm} onSubmit={(event) => void submit(event)}>
-        <fieldset disabled={busy || !sessionRunning} className={css.writeForm}>
+        <fieldset disabled={busy || !sessionRunning || !writeAllowed} className={css.writeForm}>
           <label className={css.writeField}>
             <span className={css.caption}>{t('libraryWriteSession')}</span>
             <input className={css.writeInput} value={sessionId} readOnly aria-readonly="true" />

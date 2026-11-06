@@ -48,6 +48,7 @@ import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-
 import { reportCrashedSurface } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
+import type { ScholarlyCredentialPort } from './scholarly-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
@@ -104,6 +105,8 @@ export const inject = [
   'locale',
   'slots',
   'remote',
+  'remote.credentials',
+  'remoteAccess',
   'configForms',
   'sidebarRight',
   'sidebarRightTabs',
@@ -150,6 +153,8 @@ interface UiSurfaces {
   readonly libraryForm: ConfigForm<Record<string, unknown>>
   readonly libraryCard: LibraryFormController
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
+  /** The one client face; root props and out-of-tree consumers read it here. */
+  readonly client: ZoteroClientFace
 }
 
 /**
@@ -157,12 +162,12 @@ interface UiSurfaces {
  * dictionaries, the shared client face, the protocol-failure toast, the slot
  * crash intake, and the dedicated tool cards.
  */
-function registerSharedSurfaces(ctx: ClientContext): ZoteroClientFace {
+function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+  const { client } = surfaces
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
   // The library panel's session view cache outlives its pane tab on purpose;
   // the plugin's own teardown is the one point that owns every entry.
   ctx.effect(() => () => clearLibrarySessionMemory(), 'dsh-zotero: library session views')
-  const client = createZoteroClientFace(ctx)
   ctx.effect(
     () => ctx.slots.provideRoot({ props: { useZoteroClient: () => client } }),
     'dsh-zotero: client face',
@@ -208,7 +213,6 @@ function registerSharedSurfaces(ctx: ClientContext): ZoteroClientFace {
   )
   // Dedicated Chat cards for the registered Zotero and cross-component tools
   registerZoteroToolviews(ctx)
-  return client
 }
 
 /**
@@ -417,12 +421,8 @@ function sidebarEnabledOf(
  * @param ctx - the browser plugin context.
  * @param surfaces - the shared facts every registration group reads.
  */
-function registerLibraryPanelSurfaces(
-  ctx: ClientContext,
-  surfaces: UiSurfaces,
-  client: ZoteroClientFace,
-): void {
-  const { form, libraryForm, probe } = surfaces
+function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
+  const { form, libraryForm, probe, client } = surfaces
   const panelT = ctx.locale.bind(NS)
 
   /**
@@ -524,7 +524,6 @@ function registerLibraryPanelSurfaces(
               if (refresh) refresh()
               else plane.invalidate()
             },
-            openProtocol: client.openProtocol,
           }),
         },
         ZoteroLibraryMenu,
@@ -616,22 +615,44 @@ function registerLibraryPanelSurfaces(
       },
     })
 
-    const disposeItemMenu = ctx.contextMenus.register({
-      id: `${REGISTRANT}.item`,
+    // The desktop hand-off calls the global `zotero/openProtocol` endpoint, so
+    // it is registered only while the Host grants that action. Copying the
+    // select link is a local clipboard write and stays available to every
+    // peer that reached the item at all.
+    const disposeOpenInDesktop = ctx.remoteAccess.whenAccess('zotero/openProtocol', () => {
+      const dispose = ctx.contextMenus.register({
+        id: `${REGISTRANT}.item.open`,
+        target: 'zoteroItem',
+        order: 100,
+        resolve: (target) => {
+          const selectUrl = selectUrlOf(target.ref)
+          if (!selectUrl) return []
+          return [
+            {
+              id: 'openInDesktop',
+              label: panelT('openInZotero'),
+              icon: { key: LIBRARY_ICON_KEY },
+              run: async () => {
+                // This resolve callback runs outside the React tree, so the
+                // root-provided `useZoteroClient` prop is not available here;
+                // the one face in `surfaces` is the out-of-tree access point.
+                await client.openProtocol(selectUrl)
+              },
+            },
+          ]
+        },
+      })
+      return () => dispose()
+    })
+
+    const disposeCopyLinkMenu = ctx.contextMenus.register({
+      id: `${REGISTRANT}.item.copy`,
       target: 'zoteroItem',
-      order: 100,
+      order: 110,
       resolve: (target) => {
         const selectUrl = selectUrlOf(target.ref)
         if (!selectUrl) return []
         return [
-          {
-            id: 'openInDesktop',
-            label: panelT('openInZotero'),
-            icon: { key: LIBRARY_ICON_KEY },
-            run: async () => {
-              await client.openProtocol(selectUrl)
-            },
-          },
           {
             id: 'copySelectLink',
             label: panelT('copyZoteroLink'),
@@ -649,7 +670,8 @@ function registerLibraryPanelSurfaces(
     })
 
     return () => {
-      disposeItemMenu()
+      disposeCopyLinkMenu()
+      disposeOpenInDesktop()
       disposeFileMenu()
       disposeContextIcon()
       disposeDocumentUnpreviewable()
@@ -667,22 +689,31 @@ function registerLibraryPanelSurfaces(
   // The `library` settings namespace is served exactly while the
   // `dsh-zotero/library` row is composed; with the row off, no surface
   // registers and no `zotero/browse|search|item|childPage|export|write` call is made.
+  //
+  // The panel is additionally gated on the Host's remote access: a peer
+  // without the global `zotero/browse` grant may not read the library, so the
+  // whole surface group (tab type, body, title, tab menu, composer button,
+  // deliverable and document actions) stays withdrawn for it. The write
+  // entry has its own, narrower gate: `zotero/write` resolves the session
+  // resource, so it is answered per session inside the panel.
   ctx.effect(
     () =>
-      ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () => {
-        const right = gatedMount(mountRight)
-        const sync = (): void => {
-          right.sync(sidebarEnabledOf(form, libraryForm, 'rightSidebarEnabled'))
-        }
-        const unsubscribeForm = form.subscribe(sync)
-        const unsubscribeLibrary = libraryForm.subscribe(sync)
-        sync()
-        return () => {
-          unsubscribeForm()
-          unsubscribeLibrary()
-          right.dispose()
-        }
-      }),
+      ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () =>
+        ctx.remoteAccess.whenAccess('zotero/browse', () => {
+          const right = gatedMount(mountRight)
+          const sync = (): void => {
+            right.sync(sidebarEnabledOf(form, libraryForm, 'rightSidebarEnabled'))
+          }
+          const unsubscribeForm = form.subscribe(sync)
+          const unsubscribeLibrary = libraryForm.subscribe(sync)
+          sync()
+          return () => {
+            unsubscribeForm()
+            unsubscribeLibrary()
+            right.dispose()
+          }
+        }),
+      ),
     'dsh-zotero: library right-sidebar surface',
   )
 }
@@ -698,7 +729,9 @@ function registerLibraryPanelSurfaces(
  * @param ctx - the browser plugin context, scoped to the declared services.
  */
 function registerUi(ctx: ClientContext): void {
-  const client = registerSharedSurfaces(ctx)
+  // The face is created here and handed to every group through `surfaces`;
+  // no registration function owns a second copy or returns it as a value.
+  const client = createZoteroClientFace(ctx)
   // One form controller per settings namespace. The bundle configuration page
   // edits all three at once; the dedicated rows edit their specific subsystem.
   // All live as long as the client fiber.
@@ -708,17 +741,12 @@ function registerUi(ctx: ClientContext): void {
     ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   )
   const card = new ZoteroCardController(form)
-  const scholarlyCard = new ScholarlyFormController(scholarlyForm)
+  const credentialPort: ScholarlyCredentialPort = {
+    describe: (refs) => ctx.remote.credentials.describe([...refs]),
+    set: (ref, value) => ctx.remote.credentials.set(ref, value),
+  }
+  const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
   const libraryCard = new LibraryFormController(libraryForm)
-
-  ctx.effect(
-    () => () => {
-      card.dispose()
-      scholarlyCard.dispose()
-      libraryCard.dispose()
-    },
-    'dsh-zotero: card forms',
-  )
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
   // it directly. Concurrent probes share one in-flight call: multiple consumers
@@ -740,10 +768,30 @@ function registerUi(ctx: ClientContext): void {
     libraryForm,
     libraryCard,
     probe,
+    client,
   }
+  // Shared effects still register first: dictionaries, session cache teardown,
+  // root props, protocol toast, and crash intake precede the controllers' own
+  // disposers and the per-surface registrations.
+  registerSharedSurfaces(ctx, surfaces)
+  ctx.effect(
+    () => () => {
+      card.dispose()
+      scholarlyCard.dispose()
+      libraryCard.dispose()
+    },
+    'dsh-zotero: card forms',
+  )
+  ctx.effect(
+    () =>
+      ctx.remote.$on('credentials/reference-updated', (ref) => {
+        scholarlyCard.refreshCredential(ref)
+      }),
+    'dsh-zotero: scholarly credential invalidations',
+  )
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)
-  registerLibraryPanelSurfaces(ctx, surfaces, client)
+  registerLibraryPanelSurfaces(ctx, surfaces)
 }
 
 /**
@@ -772,6 +820,8 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const ui = ctx.inject(
     [
       'remote.zotero',
+      'remote.credentials',
+      'remoteAccess',
       'locale',
       'slots',
       'configForms',

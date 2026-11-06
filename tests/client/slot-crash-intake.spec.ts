@@ -96,6 +96,11 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
     locale: { register: () => {}, bind: () => (key: string) => key },
     remote: {
       $mount: async () => async () => {},
+      $on: () => () => undefined,
+      credentials: {
+        describe: async () => ({ ok: true, value: {} }),
+        set: async () => ({ ok: true, value: undefined }),
+      },
       zotero: {
         status: async () => ({ ok: true, value: {} }),
         resolveAttachment: async (ref: string) => ({ ok: true, value: { ref, kind: 'file' } }),
@@ -104,6 +109,26 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
           journal.push(report)
           return respond()
         },
+      },
+    },
+    /**
+     * The access seam: this world models the owner, who may call every
+     * action, so each guarded effect installs.
+     */
+    remoteAccess: {
+      whenAccess: (_action: string, callback: () => unknown) => {
+        const dispose = callback()
+        return typeof dispose === 'function' ? (dispose as () => void) : () => undefined
+      },
+      source: () => ({ getSnapshot: () => true, subscribe: () => () => undefined }),
+      whenResourceAccess: (
+        _kind: string,
+        _id: string,
+        _action: string,
+        callback: () => unknown,
+      ) => {
+        const dispose = callback()
+        return typeof dispose === 'function' ? (dispose as () => void) : () => undefined
       },
     },
     inject: (_deps: readonly string[], callback: (ctx: unknown) => void) => {

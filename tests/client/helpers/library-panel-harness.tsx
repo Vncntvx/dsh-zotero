@@ -308,6 +308,10 @@ export function mountPanel(
     inputActions,
     // Session-scope standard props: the pane tab is bound to one session.
     sessionId: (sessions.paneId ?? sessions.ids[0] ?? 's1') as never,
+    // The access hooks default to the owner's grants; a viewer spec overrides
+    // one through the surface argument.
+    useAccess: (() => true) as never,
+    useRemoteAccess: (() => true) as never,
     useSession: (select: (snapshot: unknown) => unknown) => {
       const paneId = sessions.paneId ?? sessions.ids[0] ?? 's1'
       return select({

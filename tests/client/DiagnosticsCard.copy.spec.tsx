@@ -14,12 +14,12 @@ import { zh } from '../../src/client/locales.ts'
 import { deferred, type Deferred } from '../helpers/sync.js'
 import { entry, fakeProbe, okView, targetSubject } from './helpers/diagnostics-fixtures.ts'
 import { mockT } from './helpers/mock-translate.ts'
-import type { ZoteroClientFace } from '../../src/client/actions/client-face.ts'
+import { zoteroClientStub } from './helpers/zotero-client.ts'
 
 afterEach(cleanup)
 
 const t = mockT
-const client = () => ({ reportClientError: vi.fn(async () => {}) }) as unknown as ZoteroClientFace
+const client = () => zoteroClientStub()
 
 describe('DiagnosticsCard copy', () => {
   it('copies the diagnostics bundle to the clipboard', async () => {

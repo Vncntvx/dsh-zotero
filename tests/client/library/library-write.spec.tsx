@@ -32,6 +32,7 @@ describe('LibraryWrite component', () => {
           write={write}
           sessionId="s1"
           sessionRunning
+          writeAllowed
           collectionRef="zotero://user/0/collection/COLL0001"
           searchRef="zotero://user/0/search/SEARCH01"
           refreshAffected={refresh}
@@ -65,10 +66,12 @@ describe('LibraryWrite component', () => {
     const write = vi.fn(() => pending.promise),
       refresh = vi.fn()
     const props = { t: translate, write, refreshAffected: refresh }
-    const view = render(<LibraryWrite {...props} sessionId="s1" sessionRunning={false} />)
+    const view = render(
+      <LibraryWrite {...props} sessionId="s1" sessionRunning={false} writeAllowed />,
+    )
     fireEvent.submit(document.querySelector('form')!)
     expect(write).not.toHaveBeenCalled()
-    view.rerender(<LibraryWrite {...props} sessionId="s1" sessionRunning />)
+    view.rerender(<LibraryWrite {...props} sessionId="s1" sessionRunning writeAllowed />)
     fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
       target: { value: 'createCollection' },
     })
@@ -97,6 +100,7 @@ describe('LibraryWrite component', () => {
         write={write}
         sessionId="s1"
         sessionRunning
+        writeAllowed
         refreshAffected={vi.fn()}
       />,
     )
@@ -134,6 +138,7 @@ describe('LibraryWrite component', () => {
         write={write}
         sessionId="s1"
         sessionRunning
+        writeAllowed
         refreshAffected={vi.fn()}
       />,
     )
@@ -163,6 +168,7 @@ describe('LibraryWrite component', () => {
         write={write}
         sessionId="s1"
         sessionRunning
+        writeAllowed
         refreshAffected={vi.fn()}
       />,
     )
@@ -188,6 +194,7 @@ describe('LibraryWrite component', () => {
         write={write}
         sessionId="s1"
         sessionRunning
+        writeAllowed
         refreshAffected={vi.fn()}
       />,
     )
@@ -211,6 +218,7 @@ describe('LibraryWrite component', () => {
         write={write}
         sessionId="s1"
         sessionRunning
+        writeAllowed
         selectedRef="zotero://user/0/item/ITEM0001"
         refreshAffected={vi.fn()}
       />,
@@ -238,6 +246,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning={false}
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )
@@ -258,6 +267,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-2"
         sessionRunning
+        writeAllowed
         selectedRef="zotero://user/0/item/ITEMKEY1"
         collectionRef="zotero://user/0/collection/COLLKEY1"
         searchRef="zotero://user/0/savedSearch/SRCHKEY1"
@@ -286,6 +296,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )
@@ -328,6 +339,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )
@@ -357,6 +369,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         selectedRef="zotero://user/0/item/PARENT123"
         refreshAffected={appliedSpy}
       />,
@@ -408,6 +421,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )
@@ -463,6 +477,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )
@@ -516,6 +531,7 @@ describe('LibraryWrite component', () => {
         write={writeSpy}
         sessionId="session-1"
         sessionRunning
+        writeAllowed
         refreshAffected={appliedSpy}
       />,
     )

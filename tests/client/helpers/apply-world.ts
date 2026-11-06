@@ -12,10 +12,12 @@ import {
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../../src/settings-namespace.ts'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../../src/contract.ts'
+import { createRemoteAccessStub, createRemoteZoteroStub } from './remote-stubs.ts'
 import { fakeScope } from './fake-scope.ts'
 import { createFakeContextMenus, type FakeContextMenuRegistration } from './fake-context-menus.ts'
 import { fakeProvideRoot } from './fake-slot-root.ts'
 import { fakeEntryErrorSeam, type EntryErrorListener } from './slot-crash-seam.ts'
+import { emptyCredentialPort } from './credential-port.ts'
 
 export interface FakeSlotsEntry {
   name: string
@@ -85,6 +87,11 @@ export interface FakeApplyWorld {
   contextMenuDisposes: number
   /** Namespaces currently served by the host; defaults to both zotero and scholarly. */
   servedNamespaces?: Set<string>
+  /**
+   * The endpoint actions this Peer may call. Defaults to every Zotero
+   * action (the owner); a spec narrows it to model a viewer without a grant.
+   */
+  grantedActions: Set<string>
   whileServedRegistrations: Array<{ namespaces: readonly string[] }>
   whileServedDisposes: number
   /** Slot names in the order their inject disposers ran. */
@@ -120,6 +127,21 @@ export function fakeWorld(
     [SCHOLARLY_SETTINGS_NAMESPACE]: scholarlyScope,
   }
   const whileServedRegistrations: FakeApplyWorld['whileServedRegistrations'] = []
+  // Every Zotero endpoint action is granted by default: the world models the
+  // owner, the only Peer whose access answer is true for everything. A spec
+  // narrows the set to model a viewer without a grant.
+  const grantedActions = new Set([
+    'zotero/status',
+    'zotero/browse',
+    'zotero/search',
+    'zotero/item',
+    'zotero/childPage',
+    'zotero/export',
+    'zotero/resolveAttachment',
+    'zotero/openProtocol',
+    'zotero/write',
+    'session:test-session:zotero/write',
+  ])
   // The world object is shared with the ctx closures (disposer counters
   // included), so the returned handle observes the disposers' side effects.
   const world: FakeApplyWorld = {
@@ -186,6 +208,7 @@ export function fakeWorld(
     contextMenuRegistrations,
     contextMenuDisposes: 0,
     entryErrorListeners,
+    grantedActions,
     whileServedRegistrations,
     whileServedDisposes: 0,
   }
@@ -207,6 +230,7 @@ export function fakeWorld(
       },
       bind: () => (key: string) => key,
     },
+    remoteAccess: createRemoteAccessStub(world.grantedActions),
     remote: {
       $mount: async (contribution: unknown) => {
         mounts.push(contribution)
@@ -215,31 +239,9 @@ export function fakeWorld(
           world.mountDisposes += 1
         }
       },
-      /**
-       * The namespace `$mount` publishes. It is readable through the dotted
-       * form only on a fiber that declared `remote.zotero`, so the UI callback
-       * reads it here exactly as the runtime writes it.
-       */
-      zotero: {
-        status: () => world.status(),
-        resolveAttachment: (ref: string) => world.resolveAttachment(ref),
-        browse: (request: unknown) => world.libraryWire.browse(request),
-        search: (request: unknown) => world.libraryWire.search(request),
-        item: (request: unknown) => world.libraryWire.item(request),
-        childPage: (request: unknown) => world.libraryWire.childPage(request),
-        write: (request: unknown) => world.libraryWire.write(request),
-        diagnostics: async () =>
-          ({
-            ok: true as const,
-            value: { entries: [], total: 0, truncated: false, debug: false },
-          }) as unknown,
-        reportClientError: async (report: { surface: string; message: string }) =>
-          ({ ok: true as const, value: { seq: 1, report } }) as unknown,
-        openProtocol: async (url: string) => {
-          world.openProtocolCalls.push(url)
-          return { ok: true as const, value: { success: true as const } } as unknown
-        },
-      },
+      $on: (_event: string, _listener: (payload: unknown) => void) => () => undefined,
+      credentials: emptyCredentialPort,
+      zotero: createRemoteZoteroStub(world),
     },
     /**
      * Start a fiber for `deps`, run its callback, and hand back the disposer

@@ -200,6 +200,18 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   }, [sessionRemoved, props.sessionId])
   const cwd = props.useSessions((snapshot) => snapshot.byId[props.sessionId]?.cwd)
   const client = props.useZoteroClient()
+  // The write entry answers the session resource: `zotero/write` carries the
+  // owning session, so a peer without the grant on this session must not see
+  // a form whose submission the Host would refuse. The read actions resolve
+  // the global resource instead, so the panel itself is gated on those.
+  const writeAllowed = props.useAccess('zotero/write')
+  // The citation export, the attachment lookup, and the desktop hand-off are
+  // global-resource actions, so each answers the global grant separately: a
+  // peer that may read the library but not export it keeps the list and loses
+  // the export control.
+  const canExport = props.useRemoteAccess('zotero/export')
+  const canResolveAttachment = props.useRemoteAccess('zotero/resolveAttachment')
+  const canOpenProtocol = props.useRemoteAccess('zotero/openProtocol')
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = (path: string): void => {
@@ -492,6 +504,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   write={props.write}
                   sessionId={props.sessionId}
                   sessionRunning={sessionRunning}
+                  writeAllowed={writeAllowed}
                   selectedRef={feed.selectedRef}
                   collectionRef={
                     feed.selection.kind === 'collection' ? feed.selection.ref : undefined
@@ -509,9 +522,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 childStates={feed.childStates}
                 retryChild={feed.retryChild}
                 openFile={openFile}
-                resolveAttachment={props.resolveAttachment}
-                openProtocol={client.openProtocol}
-                exportItem={props.export}
+                resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
+                openProtocol={canOpenProtocol ? client.openProtocol : undefined}
+                exportItem={canExport ? props.export : undefined}
               />
             </div>
           </div>
