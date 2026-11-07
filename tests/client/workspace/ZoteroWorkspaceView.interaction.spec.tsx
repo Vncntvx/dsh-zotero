@@ -12,9 +12,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
-import { filterCountsOf, evidencePassageTotalOf } from '../../../src/client/sources/selectors.ts'
+import { filterCountsOf } from '../../../src/client/sources/selectors.ts'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
-import { mixedFixture, singleFixture } from '../helpers/source-fixtures.ts'
+import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
+import { singleFixture } from '../helpers/source-fixtures-gallery.ts'
 import { CONNECTED, mountView } from '../helpers/workspace-harness.tsx'
 import { statusView } from '../../helpers/status-view.ts'
 
@@ -356,8 +357,8 @@ describe('evidence overview', () => {
     const { view } = mountView(workspace)
     // The aggregate entry carries the true passage sum (not the source
     // count the filter pill shows), so the two numbers never conflate.
-    const total = evidencePassageTotalOf(workspace.sources)
-    expect(total).toBeGreaterThan(filterCountsOf(workspace.sources).evidence)
+    const total = workspace.evidencePassageTotal
+    expect(total).toBeGreaterThan(workspace.filterCounts.evidence)
     fireEvent.click(screen.getByText(zh.evidenceEntryLabel.replace('{count}', String(total))))
     // The board groups passages by source; the cards carry their own facts,
     // so the defensive scope note is gone from the page.

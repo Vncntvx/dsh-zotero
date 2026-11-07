@@ -165,6 +165,9 @@ export function SourceOverview({
       ) : (
         <p className={css.note}>{t('overviewNoSearch')}</p>
       )}
+      {item.searchesTotal > item.searches.length && (
+        <p className={css.note}>{t('searchesOmittedNote', { count: item.searchesTotal })}</p>
+      )}
       <Button
         variant="ghost"
         size="sm"

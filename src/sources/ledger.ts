@@ -47,6 +47,11 @@ import type {
   SupportedLocalLibrary,
 } from './model.js'
 import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.js'
+import { filterCountsOf } from './filters.js'
+import {
+  ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
+  ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
+} from '../constants.js'
 import type { ZoteroResolvedScope } from '../contract.js'
 
 interface BuildSourceWorkspaceOptions {
@@ -699,7 +704,9 @@ export function buildSourceWorkspace(
         facts: draft.facts,
         operations: draft.operations,
         searches: draft.searches,
+        searchesTotal: draft.searches.length,
         evidence,
+        evidenceTotal: evidence.length,
         ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
         ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
         ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
@@ -707,15 +714,52 @@ export function buildSourceWorkspace(
           ? {}
           : { retrievalSummary: draft.retrievalSummary }),
         exports: draft.exports,
+        exportsTotal: draft.exports.length,
         firstSeenAt: draft.firstSeenAt,
         lastTouchedAt: draft.lastTouchedAt,
       }
     })
 
+  // The aggregates are computed over the FULL lists, before any windowing:
+  // they are the honest totals the UI displays while the lists show their
+  // windowed head. The filters' own predicate table judges the sources, so a
+  // pill count and a filtered listing can never disagree.
+  const filterCounts = filterCountsOf(sources)
+  const evidencePassageTotal = sources.reduce((total, item) => total + item.evidence.length, 0)
+  const exportedRefs = new Set<string>()
+  for (const artifact of exports) {
+    for (const ref of artifact.refs) exportedRefs.add(normalizeRefKey(ref))
+  }
+  const exportTotal = exports.length
+  const sourceTotal = sources.length
+
+  // The wire view is windowed: the projection state above stays complete,
+  // while the lists the client renders are bounded so a long session cannot
+  // grow the wire emission or the render without bound. Every list carries
+  // its exact total; the aggregates above carry the session-wide numbers, so
+  // what is not listed is counted, never lost.
+  const rowCap = ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS
+  const windowItem = (item: SourceItem): SourceItem => ({
+    ...item,
+    searches: item.searches.slice(0, rowCap),
+    searchesTotal: item.searches.length,
+    evidence: item.evidence.slice(0, rowCap),
+    evidenceTotal: item.evidence.length,
+    exports: item.exports.slice(0, rowCap),
+    exportsTotal: item.exports.length,
+  })
+  const windowedSources = sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowItem)
+  const windowedExports = exports.slice(0, rowCap)
+
   return {
-    sources,
-    exports,
+    sources: windowedSources,
+    sourceTotal,
+    exports: windowedExports,
+    exportTotal,
     exportOperations,
     omittedRows,
+    filterCounts,
+    evidencePassageTotal,
+    exportedRefCount: exportedRefs.size,
   }
 }

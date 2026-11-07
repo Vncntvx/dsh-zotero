@@ -12,16 +12,13 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
+import { artifactOf, passageOf, searchOf, workspaceOf } from '../helpers/source-fixtures.ts'
+import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
 import {
-  artifactOf,
-  mixedFixture,
-  passageOf,
   repeatedRetrieveFixture,
-  searchOf,
   singleFixture,
-  workspaceOf,
   zeroMatchFixture,
-} from '../helpers/source-fixtures.ts'
+} from '../helpers/source-fixtures-gallery.ts'
 import { mountView } from '../helpers/workspace-harness.tsx'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
 import { statusView } from '../../helpers/status-view.ts'

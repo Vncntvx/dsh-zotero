@@ -130,18 +130,11 @@ export function fakeWorld(
   // Every Zotero endpoint action is granted by default: the world models the
   // owner, the only Peer whose access answer is true for everything. A spec
   // narrows the set to model a viewer without a grant.
-  const grantedActions = new Set([
-    'zotero/status',
-    'zotero/browse',
-    'zotero/search',
-    'zotero/item',
-    'zotero/childPage',
-    'zotero/export',
-    'zotero/resolveAttachment',
-    'zotero/openProtocol',
-    'zotero/write',
-    'session:test-session:zotero/write',
-  ])
+  const grantedActions = new Set(
+    'zotero/status,zotero/browse,zotero/search,zotero/item,zotero/childPage,zotero/export,zotero/resolveAttachment,zotero/openProtocol,zotero/write,session:test-session:zotero/write'.split(
+      ',',
+    ),
+  )
   // The world object is shared with the ctx closures (disposer counters
   // included), so the returned handle observes the disposers' side effects.
   const world: FakeApplyWorld = {
@@ -225,9 +218,7 @@ export function fakeWorld(
       return disposer
     },
     locale: {
-      register: (ns: string, dict: unknown) => {
-        dictionaries.push({ ns, dict })
-      },
+      register: (ns: string, dict: unknown) => void dictionaries.push({ ns, dict }),
       bind: () => (key: string) => key,
     },
     remoteAccess: createRemoteAccessStub(world.grantedActions),
@@ -235,9 +226,7 @@ export function fakeWorld(
       $mount: async (contribution: unknown) => {
         mounts.push(contribution)
         if (mountRejects !== undefined) throw mountRejects
-        return () => {
-          world.mountDisposes += 1
-        }
+        return () => void (world.mountDisposes += 1)
       },
       $on: (_event: string, _listener: (payload: unknown) => void) => () => undefined,
       credentials: emptyCredentialPort,
@@ -250,20 +239,29 @@ export function fakeWorld(
      */
     inject: (deps: readonly string[], callback: (ctx: unknown) => void) => {
       world.injectDeps.push([...deps])
+      const isUiFiber = deps.includes('remote.zotero')
       const owned: Array<() => void> = []
-      collector = owned
-      try {
-        callback(ctx)
-      } finally {
-        collector = undefined
-      }
       const dispose = async () => {
         for (const disposer of owned.reverse()) disposer()
-        world.uiDisposes += 1
+        if (isUiFiber) world.uiDisposes += 1
       }
-      const promise =
-        injectRejects !== undefined ? Promise.reject(injectRejects) : Promise.resolve({ dispose })
-      return Object.assign(promise, { dispose })
+      if (isUiFiber && injectRejects !== undefined) {
+        return Object.assign(Promise.reject(injectRejects), { dispose })
+      }
+      const previousCollector = collector
+      collector = owned
+      try {
+        const allPresent = deps.every((dep) => {
+          const [parent, child] = dep.split('.')
+          return child
+            ? (ctx as any)[parent]?.[child] !== undefined
+            : (ctx as any)[dep] !== undefined
+        })
+        if (allPresent) callback(ctx)
+      } finally {
+        collector = previousCollector
+      }
+      return Object.assign(Promise.resolve({ dispose }), { dispose })
     },
     configForms: {
       get: (id: string) => {

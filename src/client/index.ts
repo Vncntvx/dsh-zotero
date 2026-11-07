@@ -109,7 +109,6 @@ export const inject = [
   'configForms',
   'sidebarRight',
   'sidebarRightTabs',
-  'contextMenus',
 ]
 
 /**
@@ -597,83 +596,91 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       ),
     )
 
-    const disposeFileMenu = ctx.contextMenus.register({
-      id: `${REGISTRANT}.file`,
-      target: 'file',
-      order: 150,
-      resolve: (target) => {
-        if (!isBibliographyPath(target.path)) return []
-        return [
-          {
-            id: 'openInLibrary',
-            label: panelT('openInLibraryPanel'),
-            icon: { key: LIBRARY_ICON_KEY },
-            run: () => {
-              ctx.sidebarRight.openTabIn(target.sessionId, LIBRARY_TAB_KIND)
-            },
-          },
-        ]
-      },
-    })
-
-    // The desktop hand-off calls the global `zotero/openProtocol` endpoint, so
-    // it is registered only while the Host grants that action. Copying the
-    // select link is a local clipboard write and stays available to every
-    // peer that reached the item at all.
-    const disposeOpenInDesktop = ctx.remoteAccess.whenAccess('zotero/openProtocol', () => {
-      const dispose = ctx.contextMenus.register({
-        id: `${REGISTRANT}.item.open`,
-        target: 'zoteroItem',
-        order: 100,
+    let disposeMenus = () => {}
+    const menuFiber = ctx.inject(['contextMenus'], (menuCtx: ClientContext) => {
+      const disposeFileMenu = menuCtx.contextMenus.register({
+        id: `${REGISTRANT}.file`,
+        target: 'file',
+        order: 150,
         resolve: (target) => {
-          const selectUrl = selectUrlOf(target.ref)
-          if (!selectUrl) return []
+          if (!isBibliographyPath(target.path)) return []
           return [
             {
-              id: 'openInDesktop',
-              label: panelT('openInZotero'),
+              id: 'openInLibrary',
+              label: panelT('openInLibraryPanel'),
               icon: { key: LIBRARY_ICON_KEY },
-              run: async () => {
-                // This resolve callback runs outside the React tree, so the
-                // root-provided `useZoteroClient` prop is not available here;
-                // the one face in `surfaces` is the out-of-tree access point.
-                await client.openProtocol(selectUrl)
+              run: () => {
+                ctx.sidebarRight.openTabIn(target.sessionId, LIBRARY_TAB_KIND)
               },
             },
           ]
         },
       })
-      return () => dispose()
-    })
 
-    const disposeCopyLinkMenu = ctx.contextMenus.register({
-      id: `${REGISTRANT}.item.copy`,
-      target: 'zoteroItem',
-      order: 110,
-      resolve: (target) => {
-        const selectUrl = selectUrlOf(target.ref)
-        if (!selectUrl) return []
-        return [
-          {
-            id: 'copySelectLink',
-            label: panelT('copyZoteroLink'),
-            failureLabel: panelT('menuCopyLinkFailed'),
-            run: async () => {
-              const accepted = await writeClipboard(selectUrl)
-              ctx.contextMenus.notify(
-                accepted ? panelT('copied') : panelT('libraryCopyClipboardUnavailable'),
-                accepted,
-              )
-            },
+      // The desktop hand-off calls the global `zotero/openProtocol` endpoint, so
+      // it is registered only while the Host grants that action. Copying the
+      // select link is a local clipboard write and stays available to every
+      // peer that reached the item at all.
+      const disposeOpenInDesktop = menuCtx.remoteAccess.whenAccess('zotero/openProtocol', () => {
+        const dispose = menuCtx.contextMenus.register({
+          id: `${REGISTRANT}.item.open`,
+          target: 'zoteroItem',
+          order: 100,
+          resolve: (target) => {
+            const selectUrl = selectUrlOf(target.ref)
+            if (!selectUrl) return []
+            return [
+              {
+                id: 'openInDesktop',
+                label: panelT('openInZotero'),
+                icon: { key: LIBRARY_ICON_KEY },
+                run: async () => {
+                  // This resolve callback runs outside the React tree, so the
+                  // root-provided `useZoteroClient` prop is not available here;
+                  // the one face in `surfaces` is the out-of-tree access point.
+                  await client.openProtocol(selectUrl)
+                },
+              },
+            ]
           },
-        ]
-      },
+        })
+        return () => dispose()
+      })
+
+      const disposeCopyLinkMenu = menuCtx.contextMenus.register({
+        id: `${REGISTRANT}.item.copy`,
+        target: 'zoteroItem',
+        order: 110,
+        resolve: (target) => {
+          const selectUrl = selectUrlOf(target.ref)
+          if (!selectUrl) return []
+          return [
+            {
+              id: 'copySelectLink',
+              label: panelT('copyZoteroLink'),
+              failureLabel: panelT('menuCopyLinkFailed'),
+              run: async () => {
+                const accepted = await writeClipboard(selectUrl)
+                menuCtx.contextMenus.notify(
+                  accepted ? panelT('copied') : panelT('libraryCopyClipboardUnavailable'),
+                  accepted,
+                )
+              },
+            },
+          ]
+        },
+      })
+
+      disposeMenus = () => {
+        disposeCopyLinkMenu()
+        disposeOpenInDesktop()
+        disposeFileMenu()
+      }
     })
 
     return () => {
-      disposeCopyLinkMenu()
-      disposeOpenInDesktop()
-      disposeFileMenu()
+      disposeMenus()
+      void menuFiber.dispose()
       disposeContextIcon()
       disposeDocumentUnpreviewable()
       disposeDocumentActions()
@@ -828,7 +835,6 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
       'configForms',
       'sidebarRight',
       'sidebarRightTabs',
-      'contextMenus',
     ],
     registerUi,
   )

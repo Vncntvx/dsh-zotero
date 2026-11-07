@@ -516,13 +516,80 @@ Child notes, child attachments, and annotations are supported. The result body l
 
 ---
 
-## Zotero saved-search tools
+## zotero_create_saved_search
 
-`zotero_create_saved_search`, `zotero_update_saved_search`, and `zotero_delete_saved_search` use Zotero's native saved-search conditions. Creation needs at least one condition; when the create response is lost or its saved state cannot be verified, the result is `committed-unverified` (`retryable: false`), so check by search ref/key first and never create a duplicate.
+Create a Zotero saved search with explicit conditions in the personal library. Creation requires at least one condition; when the create response is lost or its saved state cannot be verified, the result is `committed-unverified` (`retryable: false`), which must be reconciled by search ref/key before any retry.
 
-Creation takes `name` and `conditions` (each with `condition`, `operator`, `value`); update takes `search` plus at least one of `name` or `conditions`; delete takes `search`. Update and delete both use object/library version preconditions.
+### Parameters
 
-Unverified create, update, and delete receipts distinguish `commit-unknown`, `saved-state-unverified`, and `receipt-unknown`; the body and presentation metadata keep the known ref, key, version, and server identity. Without a known identity, check Zotero first and do not write again.
+| Parameter    | Type     | Required | Description                                                                             |
+| ------------ | -------- | -------- | --------------------------------------------------------------------------------------- |
+| `name`       | string   | ✓        | Name of the saved search (non-blank text)                                               |
+| `conditions` | object[] | ✓        | List of condition objects, each containing `condition` (field), `operator`, and `value` |
+
+### Output
+
+- Successfully created: `{kind: "applied", ref, key, version, name, conditions, libraryVersion, serverId?}`;
+- Unverified commit: `{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`;
+- Declined on plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "itemType", "operator": "is", "value": "journalArticle"}])
+```
+
+---
+
+## zotero_update_saved_search
+
+Update the name or search conditions of an existing saved search in the personal library. Carries object and library version preconditions.
+
+### Parameters
+
+| Parameter    | Type     | Required | Description                                                                                 |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------- |
+| `search`     | string   | ✓        | Target saved search ref (`zotero://user/0/saved-search/<KEY>`)                              |
+| `name`       | string   | —        | New name (optional; non-blank text when provided)                                           |
+| `conditions` | object[] | —        | New condition objects list (optional; each containing `condition`, `operator`, and `value`) |
+
+At least one of `name` or `conditions` must be provided.
+
+### Output
+
+- Successfully updated: `{kind: "applied", ref, key, version, name?, conditions?, libraryVersion, serverId?}`;
+- Unverified commit: `{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`;
+- Declined on plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_update_saved_search(search="zotero://user/0/saved-search/SRCH1234", name="Updated ML Papers")
+```
+
+---
+
+## zotero_delete_saved_search
+
+Delete a saved search from the personal library. **Irreversible**: removes the saved-search definition only; library items are not affected. Carries object and library version preconditions.
+
+### Parameters
+
+| Parameter | Type   | Required | Description                                                    |
+| --------- | ------ | -------- | -------------------------------------------------------------- |
+| `search`  | string | ✓        | Target saved search ref (`zotero://user/0/saved-search/<KEY>`) |
+
+### Output
+
+- Successfully deleted: `{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`;
+- Unverified commit: `{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`;
+- Declined on plan card: `{kind: "declined"}`.
+
+### Example
+
+```text
+zotero_delete_saved_search(search="zotero://user/0/saved-search/SRCH1234")
+```
 
 ## scholarly_save_to_zotero
 
@@ -551,6 +618,8 @@ Save scholarly search results into the personal library through the local write 
 
 Correct an item's scalar metadata. Field validity follows Zotero's `itemTypeFields`: a field the item type does not accept is refused before any PATCH, and values must be non-blank text. The write carries the item's version precondition (`If-Unmodified-Since-Version`).
 
+Scalar updates validate every requested field against the item type, compare normalized wire values strictly, and PATCH only differences. A satisfied request returns `{kind: "applied", unchanged: true, changed: []}` with the observed item `version`, no new `libraryVersion`, and obtains no write key. Capability and both approval gates still apply.
+
 ### Parameters
 
 | Parameter | Type   | Required | Description                                                                                 |
@@ -561,6 +630,7 @@ Correct an item's scalar metadata. Field validity follows Zotero's `itemTypeFiel
 ### Output
 
 - Something changed: `{kind: "applied", ref, version, changed, libraryVersion, serverId?}` (`changed` lists the submitted field names in lexical order);
+- Unchanged: `{kind: "applied", unchanged: true, changed: []}`;
 - Declined on the plan card: `{kind: "declined"}`;
 - Version precondition lost: `ZOTERO_WRITE_CONFLICT`. The object was changed concurrently; run the tool once more (the re-run reads the version again).
 
@@ -804,5 +874,3 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 #### Verdicts
 
 Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). An unreachable registry is never reported as `NOT FOUND`.
-
-Scalar updates validate every requested field against the item type, compare normalized wire values strictly, and PATCH only differences. A satisfied request returns `kind:"applied", unchanged:true, changed:[]` with the observed item `version`, no new `libraryVersion`, and obtains no write key. Capability and both approval gates still apply.

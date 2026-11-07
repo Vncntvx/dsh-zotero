@@ -175,5 +175,3 @@ The literature panel appears only when all three conditions hold:
 3. This component's `rightSidebarEnabled` is on.
 
 The panel only browses and searches the local Zotero library; writes started from the panel and writes from tools pass through the same approval seam and require the owning session to be running. External retrieval is not part of the panel; see the "four boundaries" section of [Product model](product-model.en.md).
-
-Removed configuration: `maxDetailChars` and `maxNoteBodyChars`; full detail and note bodies are preserved.

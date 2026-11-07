@@ -31,7 +31,9 @@ function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): str
   // run bookkeeping.
   const parts = [
     t('retrievalRunCount', { count: summary.runCount }),
-    t('retrievalKeptCount', { count: item.evidence.length }),
+    // The exact kept total, not the windowed list's length: the workspace
+    // caps the passages the panel lists.
+    t('retrievalKeptCount', { count: item.evidenceTotal }),
     t('retrievalReportedCount', { count: item.facts.reportedEvidenceCount }),
   ]
   if (summary.truncated) parts.push(t('budgetLimitedNote'))
@@ -97,6 +99,9 @@ export function SourceEvidence({ item, t }: SourceEvidenceProps) {
             <PassageRow key={`${passage.sourceRef}-${index}`} passage={passage} t={t} />
           ))}
         </ul>
+      )}
+      {item.evidenceTotal > item.evidence.length && (
+        <p className={css.note}>{t('evidenceOmittedNote', { count: item.evidenceTotal })}</p>
       )}
       {availabilityEntries.length > 0 && (
         <div className={css.section}>

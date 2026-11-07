@@ -120,7 +120,7 @@ graph LR
 
 ### 会话文献轨迹（`conversation.view`，id `zotero`，order 30）
 
-- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
+- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`；状态保持完整，投递给浏览器的视图按窗口截断（会话顺序的列表头），并携带在截断前算好的精确聚合——过滤器计数、段落总数、导出去重数与每个列表的精确 total——因此未列出的部分被如实计数，不会丢失。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
 - 实例判定：归约状态保存条目 ref 的 `serverIds`；宿主编译时不知道当前连接的 Server ID，由客户端用状态探针结果调用 `withEvidenceMatch` 物化 `evidenceMatch`。
 - 检索折叠：分页续调用按 identity 折叠为一次检索；首屏的 `total` 与 `noteMatches` 取第一次调用，`returned`/`omitted` 在续页累加。
 - 界面结构：顶部透镜栏在“文献”与“导出”两个视图间切换；条目检查器包含概览、相关片段、导出三个面板；会话级导出页按格式分段并跨条目去重。
@@ -192,6 +192,6 @@ graph LR
 
 ## 导航状态与路径端点
 
-`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储键与格式为 v2，不迁移旧记录，不保存目录响应或叶节点结论。新增只读 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
+`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储采用 v2 键与格式，仅保留状态与视图标记，不持久化目录响应或叶节点推断。只读端点 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
 
-读取交付由 `result-delivery.ts` 统一管理：`zotero_results` 保存持久回执，AttachmentStore 保存单份完整 JSON。`result-route.ts` 按认证的持久事件坐标读取；六个读取工具共用 inline/file 结构，后台与超时提升的任务先持久化再完成（前台落定由 inline 预算决定），post-execute 为所属 job_output 追加有界标准 FileBlock。`result-reader.ts` 在校验流结束后才允许复制下载。按种类窗口和完整读取共用顺序 `childPages`，位置解析复用当前页并限制并发。
+读取交付由 `result-delivery.ts` 统一管理：`zotero_results` 保存持久回执，AttachmentStore 保存单份完整 JSON。`result-route.ts` 按认证的持久事件坐标读取；八个读取工具共用 inline/file 结构，后台与超时提升的任务先持久化再完成（前台落定由 inline 预算决定），post-execute 为所属 job_output 追加有界标准 FileBlock。`result-reader.ts` 在校验流结束后才允许复制下载。按种类窗口和完整读取共用顺序 `childPages`，位置解析复用当前页并限制并发。

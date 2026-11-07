@@ -56,6 +56,20 @@ describe('ZoteroLocateActions', () => {
     expect(openProtocol).toHaveBeenCalledWith('zotero://select/library/items/ITEMKEY1')
   })
 
+  it('triggers protocol dispatch when clicking the link-variant open action', () => {
+    const openProtocol = vi.fn(async () => true)
+    render(
+      <ZoteroLocateActions
+        itemRef="zotero://user/0/item/ITEMKEY1"
+        variant="link"
+        openProtocol={openProtocol}
+        t={t}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: mockT('openInZotero') }))
+    expect(openProtocol).toHaveBeenCalledWith('zotero://select/library/items/ITEMKEY1')
+  })
+
   it('renders buttons with link variant and custom class', () => {
     render(
       <ZoteroLocateActions

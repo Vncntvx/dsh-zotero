@@ -7,8 +7,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceItem } from '../../../src/sources/model.js'
 import {
-  evidencePassageTotalOf,
-  exportedRefCountOf,
   exportSectionsOf,
   filterCountsOf,
   filterSources,
@@ -111,38 +109,6 @@ describe('filterCountsOf', () => {
       exported: 0,
       issues: 0,
     })
-  })
-})
-
-describe('evidencePassageTotalOf', () => {
-  it('sums the kept passages, not the sources that carry them', () => {
-    const sources = [
-      sourceOf({
-        facts: {
-          reportedEvidenceCount: 3,
-        },
-        evidence: [passageOf(), passageOf(), passageOf()],
-      }),
-      sourceOf({
-        facts: {
-          reportedEvidenceCount: 1,
-        },
-        evidence: [passageOf()],
-      }),
-      sourceOf({}),
-    ]
-    expect(evidencePassageTotalOf(sources)).toBe(4)
-    // The same three sources count as two evidence-bearing sources: the
-    // filter pill count and the overview sum genuinely differ.
-    expect(filterCountsOf(sources).evidence).toBe(2)
-  })
-
-  it('is zero when no source carries passages', () => {
-    expect(evidencePassageTotalOf([sourceOf({}), sourceOf({})])).toBe(0)
-  })
-
-  it('is zero for an empty list', () => {
-    expect(evidencePassageTotalOf([])).toBe(0)
   })
 })
 
@@ -419,29 +385,5 @@ describe('exportSectionsOf', () => {
 
   it('is empty for no exports', () => {
     expect(exportSectionsOf([])).toEqual([])
-  })
-})
-
-describe('exportedRefCountOf', () => {
-  it('counts distinct exported documents, deduplicated across formats', () => {
-    const REF = 'zotero://user/0/item/QRST3456'
-    const exports = [
-      artifactOf({ callId: 'e1', format: 'bibtex', refs: [REF] }),
-      artifactOf({ callId: 'e2', format: 'ris', refs: [REF] }),
-      artifactOf({ callId: 'e3', format: 'bibtex', refs: ['zotero://user/0/item/AAAA1111'] }),
-    ]
-    expect(exportedRefCountOf(exports)).toBe(2)
-  })
-
-  it('deduplicates refs that differ only by server qualifiers', () => {
-    const exports = [
-      artifactOf({ callId: 'e1', refs: ['zotero://user/0/item/QRST3456'] }),
-      artifactOf({ callId: 'e2', refs: ['zotero://user/0/item/QRST3456?server=S1'] }),
-    ]
-    expect(exportedRefCountOf(exports)).toBe(1)
-  })
-
-  it('is zero for no exports', () => {
-    expect(exportedRefCountOf([])).toBe(0)
   })
 })

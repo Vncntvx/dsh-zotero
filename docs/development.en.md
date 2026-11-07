@@ -8,12 +8,12 @@
 src/
   index.ts              # Plugin entry (pure re-export)
   service.ts            # ZoteroService (Cordis service: tool wiring and provider lifecycle)
-  service-config.ts     # Transport-rebuild config keys and the LocalApiLimits mapping (split from service.ts)
-  service-lifecycle.ts  # Config commit validation and volatile-update handling (split from service.ts)
-  shell-write-approval.ts # Approval seam for shell commands that write to the local API directly (split from service.ts)
-  subagent-guard.ts     # Subagent write policy: narrows write-tool visibility by session lineage and denies child write calls at execution time (split from service.ts)
-  tool-diagnostics.ts   # Tool execution diagnostics recording (split from service.ts)
-  tool-registration.ts  # Read/write tool registration lists (split from service.ts)
+  service-config.ts     # Transport-rebuild config keys and the LocalApiLimits mapping
+  service-lifecycle.ts  # Config commit validation and volatile-update handling
+  shell-write-approval.ts # Approval seam for shell commands that write to the local API directly
+  subagent-guard.ts     # Subagent write policy: narrows write-tool visibility by session lineage and denies child write calls at execution time
+  tool-diagnostics.ts   # Tool execution diagnostics recording
+  tool-registration.ts  # Read/write tool registration lists
   skills/               # Host-only research SOP definitions, recipes and component-scoped registration; see skills.en.md for maintenance and verification
   library/              # Literature panel subcomponent (ZoteroLibraryService, config schema)
   library-views.ts      # Bidirectional mapping between the literature panel's wire views and domain requests (including export)
@@ -81,8 +81,9 @@ Chinese documents under `docs/` are maintained in pairs with their `.en.md` Engl
 | [Getting started](getting-started.en.md)       | Installation, prerequisites, and connection verification                                                                  |
 | [Product model](product-model.en.md)           | Two entry points, two UI surfaces, component division, and system boundaries: the single source for naming and boundaries |
 | [Features](features.en.md)                     | Conversation capabilities, literature trail, literature panel, writing, and scholarly search                              |
+| [Research SOP skills](skills.en.md)            | Seven on-demand research workflows, batch budgets, and evidence boundaries                                                |
 | [Tool reference](tools.en.md)                  | 23 local tools (8 read + 15 write) and 7 scholarly retrieval tools                                                        |
-| [Configuration reference](configuration.en.md) | Three settings namespaces, 44 fields, and the hot-reload mechanism                                                        |
+| [Configuration reference](configuration.en.md) | Three settings namespaces, 47 fields, and the hot-reload mechanism                                                        |
 | [Troubleshooting](troubleshooting.en.md)       | Common issues, causes, and diagnostic steps                                                                               |
 | [Architecture](architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                                                                  |
 | [Development guide](development.en.md)         | Build, test, debug, and release flows                                                                                     |

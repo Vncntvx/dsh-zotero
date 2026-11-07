@@ -110,6 +110,20 @@ export const ZOTERO_LIST_PAGE_ROWS = 100
 export const ZOTERO_FILTERED_ROW_RETENTION = 1000
 
 /**
+ * The literature-trail workspace's wire-view windows. The projection state
+ * folds the whole session log (the trail is complete by contract); the VIEW
+ * the client receives is windowed so a long session cannot grow the wire
+ * emission and the React render without bound. The lists keep their head in
+ * transcript order and every capped list carries its exact total, so the
+ * aggregates the UI displays stay honest about what is not listed. The
+ * source cap bounds the sidebar union; the row cap bounds each item's
+ * search-occurrence, evidence-passage, and export-artifact lists (and the
+ * session-wide exports list).
+ */
+export const ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES = 200
+export const ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS = 50
+
+/**
  * The child-listing page the panel's detail requests by default and the
  * largest one the detail endpoint accepts. The wire `childPageSchema` spells
  * the same two numbers; the detail domain clamps every requested page to the

@@ -19,12 +19,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceWorkspace } from '../../../sources/model.js'
 import { mapTuple } from '../../segmented-tabs.ts'
-import {
-  exportedRefCountOf,
-  filterCountsOf,
-  filterSources,
-  type SourceFilter,
-} from '../../sources/selectors.ts'
+import { filterSources, type SourceFilter } from '../../sources/selectors.ts'
 import { WorkspaceToolbar } from './WorkspaceToolbar.tsx'
 import type { ConnectionView } from './connection.ts'
 import { SourceSidebar } from './SourceSidebar.tsx'
@@ -134,7 +129,10 @@ export function ZoteroWorkspaceView({
   const [mobilePane, setMobilePane] = useState<MobilePane>('list')
   const [evidenceOpen, setEvidenceOpen] = useState(false)
 
-  const counts = useMemo(() => filterCountsOf(workspace.sources), [workspace.sources])
+  // The filter bar reads the workspace's own aggregates, computed host-side
+  // over ALL sources before the view was windowed; a windowed source the
+  // list does not show still counts.
+  const counts = workspace.filterCounts
   const visible = useMemo(
     () => filterSources(workspace.sources, filter),
     [workspace.sources, filter],
@@ -144,7 +142,7 @@ export function ZoteroWorkspaceView({
     [selection, workspace.sources, visible],
   )
   // The exports lens counts distinct exported documents, not export calls.
-  const exportedCount = useMemo(() => exportedRefCountOf(workspace.exports), [workspace.exports])
+  const exportedCount = workspace.exportedRefCount
 
   const lensTabItems = useMemo(
     () =>

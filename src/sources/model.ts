@@ -9,6 +9,8 @@
  * @module dsh-zotero/sources/model
  */
 
+import type { SourceFilterCounts } from './filters.js'
+
 /** Provable outcome facts; every field is produced by successful calls only. */
 interface SourceFacts {
   /** Total evidence passages reported across all successful retrieves. */
@@ -212,7 +214,17 @@ export interface SourceItem {
   readonly facts: SourceFacts
   readonly operations: OperationFacts
   readonly searches: readonly SearchOccurrence[]
+  /**
+   * The item's total search occurrences, exact even when the `searches` list
+   * is windowed by the workspace caps.
+   */
+  readonly searchesTotal: number
   readonly evidence: readonly EvidencePassage[]
+  /**
+   * The item's total kept passages, exact even when the `evidence` list is
+   * windowed by the workspace caps.
+   */
+  readonly evidenceTotal: number
   /** Zotero's attachment selection (search/get facts); never a resolved location. */
   readonly bestAttachment?: AttachmentHint
   /** The resolved location from a successful zotero_get location request. */
@@ -222,6 +234,11 @@ export interface SourceItem {
   /** The successful retrieves on this item, summarized for the Evidence head. */
   readonly retrievalSummary?: RetrievalSummary
   readonly exports: readonly ExportArtifact[]
+  /**
+   * The item's total export artifacts, exact even when the `exports` list is
+   * windowed by the workspace caps.
+   */
+  readonly exportsTotal: number
   /** Ordering: transcript position of the first touch. */
   readonly firstSeenAt: number
   /** Ordering: transcript position of the last touch. */
@@ -230,12 +247,25 @@ export interface SourceItem {
 
 /** The aggregated session sources plus session-wide facts. */
 export interface SourceWorkspace {
-  /** The stable union of all successful search hits and directly referenced items. */
+  /**
+   * The stable union of successful search hits and directly referenced items,
+   * windowed to the workspace cap in transcript order.
+   */
   readonly sources: readonly SourceItem[]
-  /** Every successful export artifact, in transcript order. */
+  /** Total sources the session proved, exact even when `sources` is windowed. */
+  readonly sourceTotal: number
+  /** Every successful export artifact, windowed to the row cap in transcript order. */
   readonly exports: readonly ExportArtifact[]
+  /** Total successful export artifacts, exact even when `exports` is windowed. */
+  readonly exportTotal: number
   /** Non-successful export calls only; never rendered as results. */
   readonly exportOperations: OperationFacts
   /** Search rows the bounded presentation projections did not itemize. */
   readonly omittedRows: number
+  /** Per-filter item counts over ALL sources, computed before the window. */
+  readonly filterCounts: SourceFilterCounts
+  /** Total kept passages across ALL sources, computed before the window. */
+  readonly evidencePassageTotal: number
+  /** Distinct exported refs across ALL artifacts, computed before the window. */
+  readonly exportedRefCount: number
 }

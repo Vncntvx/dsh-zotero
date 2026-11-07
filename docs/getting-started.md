@@ -18,9 +18,9 @@ dsh-zotero 将本地 Zotero 文献库接入 DeepSeek Harness：Agent 在对话�
 在 DeepSeek Harness 桌面端的**插件**（或**设置 → 插件**）中点击**安装插件**，输入对应标识：
 
 - npm 最新版（推荐）：`dsh-zotero`
-- npm 指定版本：`dsh-zotero@<version>`（如 `dsh-zotero@0.14.1`）
+- npm 指定版本：`dsh-zotero@<version>`（如 `dsh-zotero@1.0.1`）
 - GitHub 预构建分支：`github:Vncntvx/dsh-zotero#release`
-- GitHub 指定版本或 commit：`github:Vncntvx/dsh-zotero#v0.14.1` 或 `github:Vncntvx/dsh-zotero#<commit-hash>`
+- GitHub 指定版本或 commit：`github:Vncntvx/dsh-zotero#v1.0.1` 或 `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### 命令行安装
 

@@ -8,12 +8,12 @@
 src/
   index.ts              # 插件入口（纯 re-export）
   service.ts            # ZoteroService（Cordis 服务：工具接线与 Provider 生命周期）
-  service-config.ts     # 传输重建配置键与 LocalApiLimits 映射（自 service.ts 拆分）
-  service-lifecycle.ts  # 配置提交校验与 volatile 更新处理（自 service.ts 拆分）
-  shell-write-approval.ts # shell 直写本地 API 的审批接缝（自 service.ts 拆分）
-  subagent-guard.ts     # 子 agent 写策略：按会话血缘收缩写工具可见性并在执行期拒绝其写调用（自 service.ts 拆分）
-  tool-diagnostics.ts   # 工具执行诊断记录（自 service.ts 拆分）
-  tool-registration.ts  # 读/写工具注册清单（自 service.ts 拆分）
+  service-config.ts     # 传输重建配置键与 LocalApiLimits 映射
+  service-lifecycle.ts  # 配置提交校验与 volatile 更新处理
+  shell-write-approval.ts # shell 直写本地 API 的审批接缝
+  subagent-guard.ts     # 子 agent 写策略：按会话血缘收缩写工具可见性并在执行期拒绝其写调用
+  tool-diagnostics.ts   # 工具执行诊断记录
+  tool-registration.ts  # 读/写工具注册清单
   skills/               # Host 端按需研究 SOP：定义、Recipe、组件分层注册；维护与验证见 skills.md
   library/              # 文献面板子组件（ZoteroLibraryService、配置 schema）
   library-views.ts      # 文献面板 wire 视图与域请求的双向映射（含 export）
@@ -81,8 +81,9 @@ tests/                  # 单元测试与端到端测试用例
 | [快速入门](getting-started.md) | 安装、前置条件与连接验证                                     |
 | [产品模型](product-model.md)   | 两个入口、两大视图、组件分工与系统边界：命名与边界的唯一来源 |
 | [功能概览](features.md)        | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
+| [研究 SOP 技能](skills.md)     | 七个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)           | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
-| [配置参考](configuration.md)   | 三个设置命名空间、44 个字段与热更新机制                      |
+| [配置参考](configuration.md)   | 三个设置命名空间、47 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md) | 常见问题、原因与排查步骤                                     |
 | [系统架构](architecture.md)    | 数据流、分层职责与设计边界                                   |
 | [开发指南](development.md)     | 构建、测试、调试与发布流程                                   |

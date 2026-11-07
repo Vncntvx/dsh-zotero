@@ -175,5 +175,3 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 3. 本组件的 `rightSidebarEnabled` 开启。
 
 面板只浏览与检索本地文献库；面板发起的写入与工具写入走同一条审批接缝，且要求所属会话正在运行。外部检索不属于面板，见[产品模型](product-model.md)的「四条边界」。
-
-已删除 `maxDetailChars` 与 `maxNoteBodyChars` 配置；详情和笔记正文完整保留。

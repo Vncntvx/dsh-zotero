@@ -27,6 +27,9 @@ export function SourceExports({ item, t }: SourceExportsProps) {
   return (
     <div className={css.panel}>
       <ExportSections exports={item.exports} t={t} />
+      {item.exportsTotal > item.exports.length && (
+        <p className={css.note}>{t('exportsOmittedNote', { count: item.exportsTotal })}</p>
+      )}
     </div>
   )
 }

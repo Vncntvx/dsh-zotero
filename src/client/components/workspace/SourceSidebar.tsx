@@ -20,7 +20,7 @@
  * @module dsh-zotero/client/components/workspace/SourceSidebar
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button,
@@ -30,11 +30,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceItem, SourceWorkspace } from '../../../sources/model.js'
-import {
-  evidencePassageTotalOf,
-  type SourceFilter,
-  type SourceFilterCounts,
-} from '../../sources/selectors.ts'
+import { type SourceFilter, type SourceFilterCounts } from '../../sources/selectors.ts'
 import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspaceView.tsx'
 import { SourceListItem } from './SourceListItem.tsx'
 import { IconButton } from '../IconButton.tsx'
@@ -83,12 +79,9 @@ export function SourceSidebar({
   const filterBarRef = useRef<HTMLDivElement>(null)
   const [filterEdges, setFilterEdges] = useState({ left: false, right: false })
 
-  // The board's own tally, keyed on the sources it counts rather than redone
-  // on every filter or selection change.
-  const evidencePassageTotal = useMemo(
-    () => evidencePassageTotalOf(workspace.sources),
-    [workspace.sources],
-  )
+  // The board's aggregate entry: the exact total the host computed over ALL
+  // sources before the view was windowed, not the window's sum.
+  const evidencePassageTotal = workspace.evidencePassageTotal
 
   // The pill strip follows the harness's composer-rail pattern: the
   // scrollbar stays hidden and overflow is announced by edge arrows paging
@@ -252,6 +245,9 @@ export function SourceSidebar({
       )}
       {workspace.omittedRows > 0 && (
         <p className={css.emptyNote}>{t('omittedRowsNote', { count: workspace.omittedRows })}</p>
+      )}
+      {workspace.sourceTotal > workspace.sources.length && (
+        <p className={css.emptyNote}>{t('sourcesOmittedNote', { count: workspace.sourceTotal })}</p>
       )}
       {visible.length === 0 ? (
         <div className={css.emptyWrap}>

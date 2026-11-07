@@ -516,13 +516,80 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 ---
 
-## Zotero saved search 工具
+## zotero_create_saved_search
 
-`zotero_create_saved_search`、`zotero_update_saved_search`、`zotero_delete_saved_search` 使用 Zotero 原生 saved-search 条件。创建至少需要一个条件；创建响应丢失或回显无法核验时返回 `committed-unverified`（`retryable: false`），必须先按 search ref/key 核对，不能重复创建。
+使用明确的条件在个人库中创建 Zotero 保存的搜索（Saved Search）。创建至少需要一个条件；创建响应丢失或回显无法核验时返回 `committed-unverified`（`retryable: false`），必须先按 search ref/key 核对，禁止重复创建。
 
-创建参数为 `name` 与 `conditions`（每项含 `condition`、`operator`、`value`）；更新参数为 `search` 以及至少一个 `name` 或 `conditions`；删除参数为 `search`。更新和删除均使用对象/库版本前置条件。
+### 参数
 
-创建、更新和删除的未核验回执区分 `commit-unknown`、`saved-state-unverified` 和 `receipt-unknown`，正文和展示元数据保留已知 ref、key、版本与服务器身份。无已知身份时先检查 Zotero，不重复写入。
+| 参数         | 类型     | 必填 | 说明                                                                                   |
+| ------------ | -------- | ---- | -------------------------------------------------------------------------------------- |
+| `name`       | string   | ✓    | 保存搜索的名称（非空文本）                                                             |
+| `conditions` | object[] | ✓    | 搜索条件列表，每项包含 `condition`（字段名）、`operator`（操作符）与 `value`（匹配值） |
+
+### 输出
+
+- 成功创建：`{kind: "applied", ref, key, version, name, conditions, libraryVersion, serverId?}`；
+- 提交未核验：`{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "itemType", "operator": "is", "value": "journalArticle"}])
+```
+
+---
+
+## zotero_update_saved_search
+
+更新个人库中已有保存搜索的名称或匹配条件。写入携带对象版本与库版本前置条件。
+
+### 参数
+
+| 参数         | 类型     | 必填 | 说明                                                                |
+| ------------ | -------- | ---- | ------------------------------------------------------------------- |
+| `search`     | string   | ✓    | 目标保存搜索 ref（`zotero://user/0/saved-search/<KEY>`）            |
+| `name`       | string   | —    | 新名称（可选；提供时须为非空文本）                                  |
+| `conditions` | object[] | —    | 新搜索条件列表（可选；每项包含 `condition`、`operator` 与 `value`） |
+
+`name` 与 `conditions` 至少需要提供一项。
+
+### 输出
+
+- 成功更新：`{kind: "applied", ref, key, version, name?, conditions?, libraryVersion, serverId?}`；
+- 提交未核验：`{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_update_saved_search(search="zotero://user/0/saved-search/SRCH1234", name="Updated ML Papers")
+```
+
+---
+
+## zotero_delete_saved_search
+
+删除个人库中的指定保存搜索。**不可逆**：删除操作仅移除保存搜索定义本身，文献库中的条目不受影响。写入携带对象版本与库版本前置条件。
+
+### 参数
+
+| 参数     | 类型   | 必填 | 说明                                                         |
+| -------- | ------ | ---- | ------------------------------------------------------------ |
+| `search` | string | ✓    | 待删除的保存搜索 ref（`zotero://user/0/saved-search/<KEY>`） |
+
+### 输出
+
+- 成功删除：`{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`；
+- 提交未核验：`{kind: "committed-unverified", reason, key?, ref?, version?, libraryVersion?, serverId?}`；
+- 计划卡拒绝：`{kind: "declined"}`。
+
+### 示例
+
+```text
+zotero_delete_saved_search(search="zotero://user/0/saved-search/SRCH1234")
+```
 
 ## scholarly_save_to_zotero
 
@@ -551,6 +618,8 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 订正条目的标量元数据。字段合法性以 Zotero 的 `itemTypeFields` 为准：某字段不被该条目类型接受时，在任何 PATCH 之前拒绝；值必须是非空文本。写入携带条目版本前置条件（`If-Unmodified-Since-Version`）。
 
+标量更新先校验全部字段适用于条目类型，再严格比较规范化 wire 值，仅 PATCH 差异。已满足请求返回 `{kind: "applied", unchanged: true, changed: []}` 及实际读取的条目 `version`，不报告新的 `libraryVersion`，不获取写凭据。能力门与两级审批仍适用。
+
 ### 参数
 
 | 参数  | 类型   | 必填 | 说明                                                                                     |
@@ -561,6 +630,7 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 ### 输出
 
 - 实际发生变更：`{kind: "applied", ref, version, changed, libraryVersion, serverId?}`（`changed` 为实际提交的字段名，按字典序）；
+- 无需变更：`{kind: "applied", unchanged: true, changed: []}`；
 - 计划卡拒绝：`{kind: "declined"}`；
 - 版本前置失败：`ZOTERO_WRITE_CONFLICT`。对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
 
@@ -804,5 +874,3 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 #### 核验结论
 
 每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。
-
-标量更新先校验全部字段适用于条目类型，再严格比较规范化 wire 值，仅 PATCH 差异。已满足请求返回 `kind:"applied", unchanged:true, changed:[]` 及实际读取的条目 `version`，不报告新的 `libraryVersion`，不获取写凭据。能力门与两级审批仍适用。

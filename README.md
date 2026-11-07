@@ -50,7 +50,7 @@ dsh-zotero 是面向 DeepSeek Harness 的本地 Zotero 插件。Agent 在对话�
 在 DeepSeek Harness 桌面端打开侧栏的**插件**，点击**添加插件**，输入对应标识：
 
 - 最新版（推荐）：`dsh-zotero`
-- 指定版本：`dsh-zotero@0.14.1`
+- 指定版本：`dsh-zotero@1.0.1`
 - GitHub 预构建分支：`github:Vncntvx/dsh-zotero#release`
 
 ### 命令行安装

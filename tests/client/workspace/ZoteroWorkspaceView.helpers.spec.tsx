@@ -15,7 +15,7 @@ import {
   scopeLabelOf,
 } from '../../../src/client/components/workspace/SourceOverview.tsx'
 import { zh } from '../../../src/client/locales.ts'
-import { mixedFixture } from '../helpers/source-fixtures.ts'
+import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT

@@ -656,9 +656,14 @@ describe('buildSourceWorkspace', () => {
     it('ignores unknown tool names and handles the empty slice', () => {
       expect(buildSourceWorkspace([])).toEqual({
         sources: [],
+        sourceTotal: 0,
         exports: [],
+        exportTotal: 0,
         exportOperations: { running: 0, failed: 0, stopped: 0 },
         omittedRows: 0,
+        filterCounts: { all: 0, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
+        evidencePassageTotal: 0,
+        exportedRefCount: 0,
       })
       const workspace = buildSourceWorkspace([block('x1', 1, 'other_tool', {}, {})])
       expect(workspace.sources).toEqual([])

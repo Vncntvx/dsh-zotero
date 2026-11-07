@@ -41,7 +41,6 @@ describe('the browser-half entry', () => {
       'configForms',
       'sidebarRight',
       'sidebarRightTabs',
-      'contextMenus',
     ])
   })
 
@@ -313,8 +312,8 @@ describe('the browser-half entry', () => {
         'configForms',
         'sidebarRight',
         'sidebarRightTabs',
-        'contextMenus',
       ],
+      ['contextMenus'],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
     tab?.register()
@@ -324,6 +323,14 @@ describe('the browser-half entry', () => {
       ok: true,
       value: { connected: true },
     })
+    await dispose()
+  })
+
+  it('activates cleanly when the contextMenus service is not available', async () => {
+    const world = fakeWorld()
+    delete (world.ctx as { contextMenus?: unknown }).contextMenus
+    const dispose = await applyEntry(world)
+    expect(world.contextMenuRegistrations).toEqual([])
     await dispose()
   })
 

@@ -92,7 +92,7 @@ const MAX_HELPER_LINES = 300
  */
 const HELPER_SIZE_BASELINE = Object.freeze({
   'tests/client/helpers/primitives-stub.ts': 732,
-  'tests/client/helpers/source-fixtures.ts': 435,
+  'tests/client/helpers/source-fixtures.ts': 133,
   'tests/client/helpers/apply-world.ts': 378,
   'tests/client/helpers/library-panel-harness.tsx': 354,
 })

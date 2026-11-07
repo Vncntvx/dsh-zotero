@@ -3,57 +3,20 @@
  * facts (refs the session's tool calls produced). Deep links are canonical
  * URLs copied to the clipboard for external reference or quick search, while
  * PDF reading is performed natively in the sidebar.
+ *
+ * Ref identity parsing lives under `src/sources/` so the host's filter-count
+ * aggregates share the one implementation; this module re-exports it for its
+ * own callers.
  * @module dsh-zotero/client/actions/open-zotero
  */
 
-import { REF_IN_TEXT_PATTERN, type RefKind } from '../../ref-grammar.ts'
+export {
+  clearRefIdentityCacheForTesting,
+  parseRefIdentity,
+  type ParsedRefIdentity,
+} from '../../sources/source-capabilities.js'
 
-/** Structured identity parsed from a canonical Zotero ref. */
-interface ParsedRefIdentity {
-  readonly libraryType: 'user' | 'group'
-  readonly libraryId: string
-  readonly kind: RefKind
-  readonly key: string
-}
-
-const REF_IDENTITY_CACHE_LIMIT = 500
-const refIdentityCache = new Map<string, ParsedRefIdentity | null>()
-
-/**
- * Clear the reference identity cache. Exported for test isolation.
- */
-export function clearRefIdentityCacheForTesting(): void {
-  refIdentityCache.clear()
-}
-
-/**
- * Parse the library identity (type, id, kind, key) from one ref.
- * Supports both personal (`user/0`) and group (`group/<id>`) libraries.
- * Results are cached in a bounded Map to eliminate redundant regex evaluation.
- */
-export function parseRefIdentity(ref: string): ParsedRefIdentity | null {
-  const cached = refIdentityCache.get(ref)
-  if (cached !== undefined) return cached
-
-  const match = REF_IN_TEXT_PATTERN.exec(ref)
-  let result: ParsedRefIdentity | null = null
-  if (match?.groups) {
-    const { libraryType, libraryId, kind, key } = match.groups
-    result = {
-      libraryType: libraryType as 'user' | 'group',
-      libraryId: libraryId!,
-      kind: kind as RefKind,
-      key: key!,
-    }
-  }
-
-  if (refIdentityCache.size >= REF_IDENTITY_CACHE_LIMIT) {
-    const firstKey = refIdentityCache.keys().next().value
-    refIdentityCache.delete(firstKey!)
-  }
-  refIdentityCache.set(ref, result)
-  return result
-}
+import { parseRefIdentity, type ParsedRefIdentity } from '../../sources/source-capabilities.js'
 
 /**
  * Path segment within Zotero protocol URLs: `library/items/<key>` for user

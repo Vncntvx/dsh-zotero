@@ -396,6 +396,11 @@ export const en = {
   filterScrollLeft: 'Scroll filters left',
   filterScrollRight: 'Scroll filters right',
   omittedRowsNote: '{count} more search results are not listed individually.',
+  sourcesOmittedNote:
+    "The earliest {count} sources are counted; this list shows the session's first entries.",
+  searchesOmittedNote: 'The full trail holds {count} searches for this item; the first are listed.',
+  evidenceOmittedNote: 'The full trail holds {count} passages for this item; the first are listed.',
+  exportsOmittedNote: 'The full trail holds {count} exports; the first are listed.',
   detailOmittedNote:
     'The card outgrew its byte budget, so its detail rows were omitted; the complete data stays in the result.',
   noSources: 'No Zotero papers in this session yet.',
@@ -1082,6 +1087,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   filterScrollLeft: '向左滚动筛选',
   filterScrollRight: '向右滚动筛选',
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
+  sourcesOmittedNote: '共计入账 {count} 个来源；此处按会话顺序列出开头部分。',
+  searchesOmittedNote: '该文献的完整轨迹共 {count} 次检索；此处列出开头部分。',
+  evidenceOmittedNote: '该文献的完整轨迹共 {count} 条段落；此处列出开头部分。',
+  exportsOmittedNote: '完整轨迹共 {count} 次导出；此处列出开头部分。',
   detailOmittedNote: '结果超出卡片的字节预算，明细已省略；完整数据保留在原始结果中。',
   noSources: '本会话还没有 Zotero 文献。',
   searchEpisodeQueryLine: '检索「{query}」 · {scope} · {mode}',

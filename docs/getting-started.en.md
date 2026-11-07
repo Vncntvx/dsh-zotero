@@ -18,9 +18,9 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 In the DeepSeek Harness desktop app under **Plugins** (or **Settings → Plugins**), click **Install Plugin** and enter the package identifier:
 
 - Latest version (recommended): `dsh-zotero`
-- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@0.14.1`)
+- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.0.1`)
 - GitHub prebuilt branch: `github:Vncntvx/dsh-zotero#release`
-- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v0.14.1` or `github:Vncntvx/dsh-zotero#<commit-hash>`
+- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.0.1` or `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### Command line
 

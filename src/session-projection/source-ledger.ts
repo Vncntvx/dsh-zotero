@@ -191,12 +191,15 @@ const sourceItemSchema = z
     facts: z.object({ reportedEvidenceCount: z.number().int().nonnegative() }).strict(),
     operations: operationFactsSchema,
     searches: z.array(searchOccurrenceSchema),
+    searchesTotal: z.number().int().nonnegative(),
     evidence: z.array(evidencePassageSchema),
+    evidenceTotal: z.number().int().nonnegative(),
     bestAttachment: attachmentHintSchema.optional(),
     attachment: attachmentSchema.optional(),
     retrievalFacts: retrievalFactsSchema.optional(),
     retrievalSummary: retrievalSummarySchema.optional(),
     exports: z.array(exportArtifactSchema),
+    exportsTotal: z.number().int().nonnegative(),
     firstSeenAt: z.number(),
     lastTouchedAt: z.number(),
   })
@@ -206,9 +209,23 @@ const sourceItemSchema = z
 export const sourceWorkspaceSchema = z
   .object({
     sources: z.array(sourceItemSchema),
+    sourceTotal: z.number().int().nonnegative(),
     exports: z.array(exportArtifactSchema),
+    exportTotal: z.number().int().nonnegative(),
     exportOperations: operationFactsSchema,
     omittedRows: z.number().int().nonnegative(),
+    filterCounts: z
+      .object({
+        all: z.number().int().nonnegative(),
+        pdf: z.number().int().nonnegative(),
+        retrieved: z.number().int().nonnegative(),
+        evidence: z.number().int().nonnegative(),
+        exported: z.number().int().nonnegative(),
+        issues: z.number().int().nonnegative(),
+      })
+      .strict(),
+    evidencePassageTotal: z.number().int().nonnegative(),
+    exportedRefCount: z.number().int().nonnegative(),
   })
   .strict()
 

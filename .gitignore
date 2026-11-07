@@ -35,3 +35,6 @@ coverage/
 
 # packed tarballs
 *.tgz
+
+# Local vitest reporter output (a probe can write it anywhere)
+.vitest/

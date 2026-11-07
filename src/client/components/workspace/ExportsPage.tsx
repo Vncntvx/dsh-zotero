@@ -29,6 +29,9 @@ export function ExportsPage({ workspace, t }: ExportsPageProps) {
         <p className={css.note}>{t('exportsIncompleteNote', { counts: incomplete })}</p>
       )}
       <ExportSections exports={workspace.exports} t={t} />
+      {workspace.exportTotal > workspace.exports.length && (
+        <p className={css.note}>{t('exportsOmittedNote', { count: workspace.exportTotal })}</p>
+      )}
     </div>
   )
 }

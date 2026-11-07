@@ -10,14 +10,16 @@ import { filterCountsOf } from '../../src/client/sources/selectors.ts'
 import { hasPdf } from '../../src/client/sources/source-capabilities.ts'
 import {
   largeArtifactFixture,
-  largeFixture,
   mismatchFixture,
-  mixedFixture,
-  offlineFixture,
   repeatedRetrieveFixture,
   singleFixture,
   zeroMatchFixture,
-} from './helpers/source-fixtures.ts'
+} from './helpers/source-fixtures-gallery.ts'
+import {
+  largeFixture,
+  mixedFixture,
+  offlineFixture,
+} from './helpers/source-fixtures-collections.ts'
 
 describe('source fixtures', () => {
   it('single: one item with a PDF, evidence, and an export', () => {
