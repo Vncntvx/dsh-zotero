@@ -8,12 +8,16 @@
 
 import { describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   createClientAuthorityPlugin,
   clientGraphViolations,
+  GENERATED_REMOTE,
+  INLINE_SAFE,
   isInlineSafeHarness,
+  VENDORED_LIBRARY,
 } from '../../scripts/client-graph-authority.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -239,7 +243,6 @@ describe('harness inline-safe table (dsh-v0.2.2-rc.1)', () => {
   it('covers the full pinned INLINE_SAFE arms', () => {
     for (const specifier of [
       '@deepseek-ai/dsh-file-reference',
-      '@deepseek-ai/dsh-fs-patch',
       '@deepseek-ai/dsh-session/client',
       '@deepseek-ai/dsh-llm',
       '@deepseek-ai/dsh-tools/types',
@@ -280,5 +283,26 @@ describe('harness inline-safe table (dsh-v0.2.2-rc.1)', () => {
     ]) {
       expect(isInlineSafeHarness(specifier), specifier).toBe(false)
     }
+  })
+})
+
+describe('the mirror matches the pin tag snapshot', () => {
+  it('carries the exact regex sources extracted from the pinned harness tag', () => {
+    // The fixture is extracted from
+    // `git show dsh-v<pin>:packages/client/tsdown.client.ts` and committed so
+    // the guard runs where no sibling checkout exists (CI). A harness bump
+    // re-extracts it alongside the mirror itself; the failure messages name
+    // the extraction command.
+    const fixture = JSON.parse(
+      readFileSync(join(repoRoot, 'tests/fixtures/harness-client-graph-pin.json'), 'utf8'),
+    ) as { pin: string; inlineSafe: string; generatedRemote: string; vendoredLibrary: string }
+    const hint = `re-extract with: git -C ../deepseek-harness show ${fixture.pin}:packages/client/tsdown.client.ts`
+    expect(INLINE_SAFE.source, `INLINE_SAFE vs ${fixture.pin}: ${hint}`).toBe(fixture.inlineSafe)
+    expect(GENERATED_REMOTE.source, `GENERATED_REMOTE vs ${fixture.pin}: ${hint}`).toBe(
+      fixture.generatedRemote,
+    )
+    expect(VENDORED_LIBRARY.source, `VENDORED_LIBRARY vs ${fixture.pin}: ${hint}`).toBe(
+      fixture.vendoredLibrary,
+    )
   })
 })
