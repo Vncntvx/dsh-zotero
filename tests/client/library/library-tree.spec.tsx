@@ -304,6 +304,20 @@ it('locates and focuses the selected row without changing selection', () => {
   expect(props.toggleCollection).toHaveBeenCalledWith(rootRef)
 })
 
+it('drops a pending focus whose target left the tree before it mounted', () => {
+  const childRef = childPage.rows[0]!.ref
+  const { props, rerender } = mountTree()
+  // Ask for a row the current tree does not carry: the pending ref waits for
+  // its row to mount.
+  rerender(<LibraryTree {...props} locatedRef={childRef} />)
+  // The tree changes shape without the target (the root collapses).
+  rerender(<LibraryTree {...mountTree(new Set()).props} />)
+  // The target re-enters the tree later for an unrelated reason: the stale
+  // pending ref must not claim focus then.
+  rerender(<LibraryTree {...mountTree(new Set([rootRef, childRef])).props} />)
+  expect(document.activeElement?.getAttribute('role')).not.toBe('treeitem')
+})
+
 it('appends children from the control after the visible branch', () => {
   const { props } = mountTree()
   const group = screen.getByRole('group', { name: rootPage.rows[0]!.name })

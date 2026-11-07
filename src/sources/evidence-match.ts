@@ -4,7 +4,7 @@
  * refs against the currently connected Zotero instance. Same-key refs always
  * fold into one source record, and a ref qualified for another instance marks
  * the record `mismatch` instead of splitting it.
- * @module dsh-zotero/client/sources/evidence-match
+ * @module dsh-zotero/sources/evidence-match
  */
 
 import type { EvidenceMatchStatus, SourceWorkspace } from './model.js'

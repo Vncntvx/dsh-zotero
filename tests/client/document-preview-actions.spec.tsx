@@ -1,22 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The two document slots share one bibliography guard and button; the table
- * below keeps each slot's behaviour explicit without mirroring the same
- * describe twice.
+ * The document preview's open-library action: the bibliography guard, the
+ * one accessible button, and the shared BibliographyAction underneath it.
+ * Both document slots register this single component.
  * @module tests/client/document-preview-actions
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, fireEvent, cleanup } from '@testing-library/react'
-import type { ReactNode } from 'react'
 import {
-  DocumentZoteroAction,
-  type DocumentZoteroActionProps,
-} from '../../src/client/components/document/DocumentZoteroAction.tsx'
-import {
-  DocumentUnpreviewableAction,
-  type DocumentUnpreviewableActionProps,
-} from '../../src/client/components/document/DocumentUnpreviewableAction.tsx'
+  DocumentOpenLibraryAction,
+  type DocumentOpenLibraryActionProps,
+} from '../../src/client/components/document/DocumentOpenLibraryAction.tsx'
 import { BibliographyAction } from '../../src/client/components/document/BibliographyAction.tsx'
 import { mockT } from './helpers/mock-translate.ts'
 
@@ -26,52 +21,31 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   return primitivesStub()
 })
 
-interface ActionProps {
-  readonly absolutePath: string
-  readonly t: typeof mockT
-  readonly onOpenLibrary?: () => void
-}
-
-interface ActionCase {
-  readonly name: string
-  readonly element: (props: ActionProps) => ReactNode
-}
-
-const actions: readonly ActionCase[] = [
-  {
-    name: 'DocumentZoteroAction',
-    element: (props) => (
-      <DocumentZoteroAction {...(props as unknown as DocumentZoteroActionProps)} />
-    ),
-  },
-  {
-    name: 'DocumentUnpreviewableAction',
-    element: (props) => (
-      <DocumentUnpreviewableAction {...(props as unknown as DocumentUnpreviewableActionProps)} />
-    ),
-  },
-]
-
 describe('Document preview actions', () => {
   afterEach(() => {
     cleanup()
   })
   const label = mockT('openInLibraryPanel')
 
-  it.each(actions)('$name returns null for a non-bibliography path', ({ element }) => {
-    const { container } = render(element({ absolutePath: '/workspace/project/main.ts', t: mockT }))
+  const renderAction = (absolutePath: string, onOpenLibrary?: () => void) =>
+    render(
+      <DocumentOpenLibraryAction
+        {...({
+          absolutePath,
+          onOpenLibrary,
+          t: mockT,
+        } as unknown as DocumentOpenLibraryActionProps)}
+      />,
+    )
+
+  it('returns null for a non-bibliography path', () => {
+    const { container } = renderAction('/workspace/project/main.ts')
     expect(container.firstChild).toBeNull()
   })
 
-  it.each(actions)('$name renders one accessible button that opens the library', ({ element }) => {
+  it('renders one accessible button that opens the library', () => {
     const onOpen = vi.fn()
-    const { getByRole } = render(
-      element({
-        absolutePath: '/workspace/project/references.bib',
-        onOpenLibrary: onOpen,
-        t: mockT,
-      }),
-    )
+    const { getByRole } = renderAction('/workspace/project/references.bib', onOpen)
     const button = getByRole('button')
     expect(button.textContent).toBe(label)
     expect(button.title).toBe(label)
@@ -80,14 +54,8 @@ describe('Document preview actions', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
-  it.each(actions)('$name renders for a .ris suffix too', ({ element }) => {
-    const { getByRole } = render(
-      element({
-        absolutePath: '/workspace/project/citations.ris',
-        onOpenLibrary: vi.fn(),
-        t: mockT,
-      }),
-    )
+  it('renders for a .ris suffix too', () => {
+    const { getByRole } = renderAction('/workspace/project/citations.ris')
     expect(getByRole('button').textContent).toBe(label)
   })
 

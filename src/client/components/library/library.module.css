@@ -538,6 +538,9 @@
 }
 
 .virtualViewport {
+  /* The max-height is mirrored by VIRTUAL_VIEWPORT.height in LibraryTree.tsx
+     (the virtualizers' fallback rect before a real measurement); keep the
+     two in step. */
   min-height: 0;
   max-height: 360px;
   overflow-y: auto;

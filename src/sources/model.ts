@@ -6,7 +6,7 @@
  * never rendered as achievements. The model carries no harness execution
  * objects (no tool-call blocks); call-level diagnostics stay with the
  * built-in Trajectory view.
- * @module dsh-zotero/client/sources/model
+ * @module dsh-zotero/sources/model
  */
 
 /** Provable outcome facts; every field is produced by successful calls only. */

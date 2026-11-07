@@ -22,6 +22,7 @@ import {
   textArg,
 } from '../../sources/presenters.js'
 import { RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { CitationKeyConflictNotice } from '../components/CitationKeyConflictNotice.tsx'
 import css from './toolviews.module.css'
 import linkCss from '../components/link.module.css'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -189,14 +190,7 @@ export function ExportToolView(props: ExportToolViewProps) {
                           })}
                         </div>
                       )}
-                      {item.citationKeyConflict && (
-                        <div className={css.coverageNotice}>
-                          {t('toolCitationKeyConflict', {
-                            native: item.citationKeyConflict.native,
-                            extra: item.citationKeyConflict.extra,
-                          })}
-                        </div>
-                      )}
+                      <CitationKeyConflictNotice conflict={item.citationKeyConflict} t={t} />
                     </div>
                   ))}
                 </div>

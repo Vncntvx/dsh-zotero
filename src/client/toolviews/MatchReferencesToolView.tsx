@@ -13,6 +13,7 @@ import {
 } from '../../sources/presenters.js'
 import { isRecord, numberField, stringField } from '../../json.ts'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { CitationKeyConflictNotice } from '../components/CitationKeyConflictNotice.tsx'
 import css from './toolviews.module.css'
 
 type Props = PropsRuntime<'tool.call.toolview', 'zotero_match_references'> & PropsLocale<'zotero'>
@@ -109,14 +110,17 @@ export function MatchReferencesToolView(props: Props) {
                         .filter(Boolean)
                         .join(' · ')}
                     </div>
+                    {/* The stricter both-fields-truthy guard stays: an empty
+                        field renders as nothing, as before. */}
                     {candidate.citationKeyConflict?.native &&
                       candidate.citationKeyConflict.extra && (
-                        <div className={css.coverageNotice}>
-                          {t('toolCitationKeyConflict', {
+                        <CitationKeyConflictNotice
+                          conflict={{
                             native: candidate.citationKeyConflict.native,
                             extra: candidate.citationKeyConflict.extra,
-                          })}
-                        </div>
+                          }}
+                          t={t}
+                        />
                       )}
                   </div>
                 ))}

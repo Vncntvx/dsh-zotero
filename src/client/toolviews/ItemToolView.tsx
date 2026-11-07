@@ -20,6 +20,7 @@ import {
   textArg,
 } from '../../sources/presenters.js'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { CitationKeyConflictNotice } from '../components/CitationKeyConflictNotice.tsx'
 import css from './toolviews.module.css'
 import linkCss from '../components/link.module.css'
 
@@ -219,14 +220,10 @@ export function ItemToolView(props: ItemToolViewProps) {
                   })}
                 </div>
               )}
-              {getItemView?.citationKeyConflict && (
-                <div className={css.coverageNotice}>
-                  {t('toolCitationKeyConflict', {
-                    native: getItemView.citationKeyConflict.native,
-                    extra: getItemView.citationKeyConflict.extra,
-                  })}
-                </div>
-              )}
+              <CitationKeyConflictNotice
+                conflict={getItemView?.citationKeyConflict ?? undefined}
+                t={t}
+              />
 
               {childCounts.length > 0 && (
                 <div className={css.evidenceBadges}>

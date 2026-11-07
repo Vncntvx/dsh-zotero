@@ -91,10 +91,7 @@ export async function readTrashGraph(
       const data = asRecord(asRecord(json)?.data)
       const childKey = asString(asRecord(json)?.key)
       if (childKey === undefined || !isObjectKey(childKey) || data?.parentItem !== node.key) {
-        throw new ZoteroError(
-          `Zotero returned an invalid child of ${node.key}.`,
-          ZOTERO_UNEXPECTED,
-        )
+        throw new ZoteroError(`Zotero returned an invalid child of ${node.key}.`, ZOTERO_UNEXPECTED)
       }
       return snapshotOf(json, childKey)
     })

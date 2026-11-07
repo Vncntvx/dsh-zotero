@@ -1,5 +1,5 @@
 /**
- * @module dsh-zotero/client/sources/export-decoder
+ * @module dsh-zotero/sources/export-decoder
  */
 
 import { isRecord, numberField, stringArrayOf, stringField } from '../json.js'

@@ -3,7 +3,7 @@
  * extraction and the `\cite{}` command. Extraction is best-effort: a body
  * the regex cannot parse leaves the artifact itself untouched, and only the
  * convenience button disappears.
- * @module dsh-zotero/client/sources/bibtex
+ * @module dsh-zotero/sources/bibtex
  */
 
 import { BIBTEX_KEY_SOURCE } from '../export-items.js'

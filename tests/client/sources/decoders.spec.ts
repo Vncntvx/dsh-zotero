@@ -535,10 +535,7 @@ describe('getBatchMetaOf', () => {
 
   it('joins the statuses vector onto the request refs only when they match one-to-one', () => {
     const refs = ['zotero://user/0/item/AAAAAAA1', 'zotero://user/0/item/AAAAAAA2']
-    const joined = getBatchMetaOf(
-      { items: [], statuses: ['ok', 'error'] },
-      refs,
-    )
+    const joined = getBatchMetaOf({ items: [], statuses: ['ok', 'error'] }, refs)
     expect(joined.outcomes.get(refs[0]!)).toBe('ok')
     expect(joined.outcomes.get(refs[1]!)).toBe('error')
     expect(joined.attributedRefs).toEqual(refs)
@@ -597,7 +594,15 @@ describe('matchReferencesMetaOf', () => {
       },
       {
         selected: [],
-        candidates: [{ ref: 'zotero://user/0/item/AAAAAAA2', title: 'Beta', authors: [], venue: null, year: null }],
+        candidates: [
+          {
+            ref: 'zotero://user/0/item/AAAAAAA2',
+            title: 'Beta',
+            authors: [],
+            venue: null,
+            year: null,
+          },
+        ],
       },
     ])
   })

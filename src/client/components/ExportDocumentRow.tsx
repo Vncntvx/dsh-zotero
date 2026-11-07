@@ -95,6 +95,9 @@ export function ExportDocumentRow({ doc, t }: ExportDocumentRowProps) {
           })}
         </p>
       )}
+      {/* A `<p>` in this module's document-title style, not the toolviews'
+          notice chip: the shared CitationKeyConflictNotice would restyle the
+          row. The sentence text stays the shared i18n key. */}
       {doc.citationKeyConflict !== undefined && (
         <p className={css.documentTitle}>
           {t('toolCitationKeyConflict', {

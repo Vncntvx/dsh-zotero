@@ -16,15 +16,10 @@ import {
   ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
   ZoteroError,
 } from '../errors.js'
+import { SCHOLARLY_KEY_FIELD_PAIRS as KEY_FIELDS } from '../credential-names.js'
+
 import type { ResolvedScholarlyConfig } from './config.js'
 import type { ScholarlyKeys } from './types.js'
-
-/** One configured reference and the resolved field it supplies. */
-const KEY_FIELDS = [
-  ['s2Key', 's2ApiKeyEnv'],
-  ['ncbiKey', 'ncbiApiKeyEnv'],
-  ['openalexKey', 'openalexApiKeyEnv'],
-] as const
 
 /**
  * Resolve every configured key reference at one tool-call boundary.

@@ -8,7 +8,7 @@
  * legacy projection versions are carried); reads are defensive, so an absent
  * or malformed field degrades to nothing instead of crashing the panel. Only
  * the fields the panel renders are decoded.
- * @module dsh-zotero/client/sources/decoders
+ * @module dsh-zotero/sources/decoders
  */
 
 import { evidenceItemsOf } from './presenters.js'

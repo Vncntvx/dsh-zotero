@@ -11,3 +11,15 @@ export const SCHOLARLY_CREDENTIAL_REFERENCE_NAMES = {
   ncbi: 'NCBI_API_KEY',
   openalex: 'OPENALEX_API_KEY',
 } as const
+
+/**
+ * The three write-only secret controls and the reference field each feeds,
+ * as `[secretKey, referenceField]` pairs. One tuple so the browser
+ * controller's derived maps and the host resolver's field walk cannot drift
+ * apart; the parity spec pins all three spellings to it.
+ */
+export const SCHOLARLY_KEY_FIELD_PAIRS = [
+  ['s2Key', 's2ApiKeyEnv'],
+  ['ncbiKey', 'ncbiApiKeyEnv'],
+  ['openalexKey', 'openalexApiKeyEnv'],
+] as const

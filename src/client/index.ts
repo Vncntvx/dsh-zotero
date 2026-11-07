@@ -77,8 +77,7 @@ import { ZoteroLibraryMenu } from './components/library/ZoteroLibraryMenu.tsx'
 import { ZoteroComposerSlot } from './components/composer/ZoteroComposerButton.tsx'
 import { isBibliographyPath } from './bibliography.ts'
 import { DeliverableZoteroAction } from './components/deliverables/DeliverableZoteroAction.tsx'
-import { DocumentZoteroAction } from './components/document/DocumentZoteroAction.tsx'
-import { DocumentUnpreviewableAction } from './components/document/DocumentUnpreviewableAction.tsx'
+import { DocumentOpenLibraryAction } from './components/document/DocumentOpenLibraryAction.tsx'
 import { ZoteroToast } from './components/ZoteroToast.tsx'
 import { selectUrlOf } from './actions/open-zotero.ts'
 import { en, zh } from './locales.ts'
@@ -568,7 +567,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           registrant: REGISTRANT,
           inject: openLibraryFace,
         },
-        DocumentZoteroAction,
+        DocumentOpenLibraryAction,
       ),
     )
 
@@ -583,7 +582,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
             registrant: REGISTRANT,
             inject: openLibraryFace,
           },
-          DocumentUnpreviewableAction,
+          DocumentOpenLibraryAction,
         ),
     )
 

@@ -31,26 +31,26 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { asFormScope } from './helpers/form-scope.ts'
+import { SCHOLARLY_KEY_FIELD_PAIRS } from '../credential-names.js'
 
 /** Settings text fields, including the three credential references. */
 const SCHOLARLY_TEXT_KEYS = ['email', 's2ApiKeyEnv', 'ncbiApiKeyEnv', 'openalexApiKeyEnv'] as const
 export type ScholarlyTextKey = (typeof SCHOLARLY_TEXT_KEYS)[number]
 
-/** Credential-reference fields, keyed by the write-only control they feed. */
-const SECRET_REF_FIELDS = {
-  s2Key: 's2ApiKeyEnv',
-  ncbiKey: 'ncbiApiKeyEnv',
-  openalexKey: 'openalexApiKeyEnv',
-} as const
 const SECRET_KEYS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
 export type ScholarlySecretKey = (typeof SECRET_KEYS)[number]
 
-/** The write-only control a reference field feeds, for draft clearing. */
-const SECRET_FOR_REFERENCE: Readonly<Record<string, ScholarlySecretKey>> = {
-  s2ApiKeyEnv: 's2Key',
-  ncbiApiKeyEnv: 'ncbiKey',
-  openalexApiKeyEnv: 'openalexKey',
-}
+/**
+ * The reference field each write-only control feeds, derived from the shared
+ * key-field tuple the host resolver reads too (see the parity spec).
+ */
+export const SECRET_REF_FIELDS = Object.fromEntries(
+  SCHOLARLY_KEY_FIELD_PAIRS.map(([secret, reference]) => [secret, reference]),
+) as Readonly<Record<ScholarlySecretKey, string>>
+
+/** The inverse map, for clearing the right control's draft. */
+export const SECRET_FOR_REFERENCE: Readonly<Record<string, ScholarlySecretKey>> =
+  Object.fromEntries(SCHOLARLY_KEY_FIELD_PAIRS.map(([secret, reference]) => [reference, secret]))
 
 /** Whole-number limits. */
 export const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars', 'foregroundWaitMs'] as const
@@ -112,8 +112,13 @@ export interface ScholarlyCardFace extends SettingsFormActions {
   }
 }
 
-/** A POSIX-style environment-variable name, the credential-reference grammar. */
-const CREDENTIAL_REFERENCE = /^[A-Za-z_][A-Za-z0-9_]*$/
+/**
+ * A POSIX-style environment-variable name, the credential-reference grammar.
+ * The client graph cannot import the host validation, so this must mirror
+ * `REF_PATTERN` in `@deepseek-ai/dsh-credentials` (which the host's
+ * `credentialRef()` enforces); the parity spec pins the two together.
+ */
+export const CREDENTIAL_REFERENCE = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 function credentialRefFieldSpec(field: string): SettingsFieldSpec {
   return {

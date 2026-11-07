@@ -19,6 +19,7 @@ import {
   textArg,
 } from '../../sources/presenters.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
+import { CitationKeyConflictNotice } from '../components/CitationKeyConflictNotice.tsx'
 import css from './toolviews.module.css'
 import linkCss from '../components/link.module.css'
 
@@ -107,14 +108,7 @@ export function SearchToolView(props: SearchToolViewProps) {
                       {row.creatorSummary && (
                         <div className={css.itemMeta}>{row.creatorSummary}</div>
                       )}
-                      {row.citationKeyConflict && (
-                        <div className={css.coverageNotice}>
-                          {t('toolCitationKeyConflict', {
-                            native: row.citationKeyConflict.native,
-                            extra: row.citationKeyConflict.extra,
-                          })}
-                        </div>
-                      )}
+                      <CitationKeyConflictNotice conflict={row.citationKeyConflict} t={t} />
                       <div className={css.itemActions}>
                         {row.bestAttachmentRef && (
                           <PdfReadButton

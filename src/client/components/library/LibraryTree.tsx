@@ -60,6 +60,15 @@ const FIXED_SCOPES: readonly {
   },
 ]
 
+/**
+ * The fallback rect the virtualizers use before a real measurement lands.
+ * The height mirrors the `.virtualViewport` max-height in
+ * `library.module.css` — keep the two in step, since a CSS change that
+ * shrinks the visible scroll box leaves this as the first-paint estimate.
+ * The width is a deliberate 1px: rows size to the container, never to this
+ * fallback, so a degenerate width only keeps the first estimate honest
+ * about not knowing.
+ */
 const VIRTUAL_VIEWPORT = { width: 1, height: 360 }
 
 function observeLibraryViewportRect(
@@ -180,12 +189,15 @@ export function LibraryTree({
   const [focused, setFocused] = useState<string>()
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocus = useRef<string>()
+  const treeItems = treeVirtualizer.getVirtualItems()
   const focus = (ref: string | undefined) => {
     if (ref === undefined) return
     setFocused(ref)
     pendingFocus.current = ref
     const index = flatTree.findIndex((entry) => entry.row.ref === ref)
     if (index >= 0) treeVirtualizer.scrollToIndex(index, { align: 'auto' })
+    // Focus immediately when the row is mounted; the effect below is the
+    // catch-up for a row the scroll or a later expansion has not mounted yet.
     buttons.current.get(ref)?.focus()
   }
   const focusRef = flatTree.some(({ row }) => row.ref === focused) ? focused : flatTree[0]?.row.ref
@@ -196,11 +208,18 @@ export function LibraryTree({
   useEffect(() => {
     const ref = pendingFocus.current
     if (ref === undefined) return
+    if (!flatTree.some(({ row }) => row.ref === ref)) {
+      // The target left the tree (collapsed, removed): nothing left to catch.
+      pendingFocus.current = undefined
+      return
+    }
     const button = buttons.current.get(ref)
     if (button === undefined) return
     pendingFocus.current = undefined
     button.focus()
-  }, [treeVirtualizer.getVirtualItems(), flatTree])
+    // `treeItems` is the render-scope virtual items, so this effect re-runs
+    // exactly when the mounted range changes.
+  }, [treeItems, flatTree])
 
   useEffect(() => {
     if (locatedRef === undefined) return
@@ -320,7 +339,7 @@ export function LibraryTree({
             }
           }}
         >
-          {treeVirtualizer.getVirtualItems().map((virtualRow) => {
+          {treeItems.map((virtualRow) => {
             const index = virtualRow.index
             const { row, depth, setSize, posInSet } = flatTree[index]!
             const lane = treeLane(row.ref)
