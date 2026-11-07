@@ -42,7 +42,6 @@ import {
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
-  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import {
   asRecord,
@@ -68,7 +67,7 @@ import {
   validateItemUpdateFields,
   wireFieldOf,
 } from '../write-item-rules.js'
-import { committedUnverified, settleCreate } from './write-verdicts.js'
+import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
 import type { ItemSnapshot, WriteDomainDeps } from './write-deps.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
@@ -649,14 +648,7 @@ export async function updateItem(
       try {
         ;({ libraryVersion } = await send(patch))
       } catch (error) {
-        if (error instanceof ZoteroWriteCommitUnknownError)
-          return committedUnverified({
-            kind: 'item',
-            key: localRef.key,
-            serverId,
-            reason: 'receipt-unknown',
-          })
-        throw error
+        return receiptOfCommitUnknown(error, { kind: 'item', key: localRef.key, serverId })
       }
       return {
         kind: 'applied',

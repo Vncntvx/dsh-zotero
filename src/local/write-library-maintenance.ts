@@ -33,7 +33,7 @@ import type {
   ZoteroRestoreItemsResult,
   ZoteroWriteCommittedUnverified,
 } from '../types.js'
-import { committedUnverified } from './write-verdicts.js'
+import { receiptOfCommitUnknown } from './write-verdicts.js'
 
 async function readLibraryVersion(
   deps: WriteDomainDeps,
@@ -116,16 +116,7 @@ export async function restoreItems(
             ),
           ))
         } catch (error) {
-          if (error instanceof ZoteroWriteCommitUnknownError) {
-            unverified.push(
-              committedUnverified({
-                kind: 'item',
-                key: node.key,
-                serverId,
-                reason: 'receipt-unknown',
-              }),
-            )
-          }
+          unverified.push(receiptOfCommitUnknown(error, { kind: 'item', key: node.key, serverId }))
           throw error
         }
         lastLibraryVersion = libraryVersion
@@ -206,13 +197,7 @@ export async function deleteLibraryTags(
         }),
     ))
   } catch (error) {
-    if (error instanceof ZoteroWriteCommitUnknownError)
-      return committedUnverified({
-        kind: 'item',
-        serverId: effectiveServerId,
-        reason: 'receipt-unknown',
-      })
-    throw error
+    return receiptOfCommitUnknown(error, { kind: 'tag', serverId: effectiveServerId })
   }
   return {
     kind: 'deleted',

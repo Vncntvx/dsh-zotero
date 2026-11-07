@@ -3,12 +3,7 @@
  * @module dsh-zotero/local/write-item-lists
  */
 
-import {
-  WRITE_LIST_SELECTION_MESSAGE,
-  ZOTERO_INVALID_ARGUMENT,
-  ZoteroError,
-  ZoteroWriteCommitUnknownError,
-} from '../errors.js'
+import { WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import { requireWritableRef } from '../refs.js'
 import type {
   ZoteroUpdateItemCollectionsRequest,
@@ -30,7 +25,7 @@ import {
   tagState,
   withItemStateWrite,
 } from './write-domain.js'
-import { committedUnverified } from './write-verdicts.js'
+import { receiptOfCommitUnknown } from './write-verdicts.js'
 
 export async function updateItemTags(
   deps: WriteDomainDeps,
@@ -66,14 +61,7 @@ export async function updateItemTags(
       try {
         ;({ libraryVersion } = await send({ tags: merged }))
       } catch (error) {
-        if (error instanceof ZoteroWriteCommitUnknownError)
-          return committedUnverified({
-            kind: 'item',
-            key: localRef.key,
-            serverId,
-            reason: 'receipt-unknown',
-          })
-        throw error
+        return receiptOfCommitUnknown(error, { kind: 'item', key: localRef.key, serverId })
       }
       return {
         kind: 'applied',
@@ -140,14 +128,11 @@ export async function updateItemCollections(
       try {
         ;({ libraryVersion } = await send({ collections: merged }))
       } catch (error) {
-        if (error instanceof ZoteroWriteCommitUnknownError)
-          return committedUnverified({
-            kind: 'item',
-            key: localRef.key,
-            serverId: effectiveServerId,
-            reason: 'receipt-unknown',
-          })
-        throw error
+        return receiptOfCommitUnknown(error, {
+          kind: 'item',
+          key: localRef.key,
+          serverId: effectiveServerId,
+        })
       }
       return {
         kind: 'applied',

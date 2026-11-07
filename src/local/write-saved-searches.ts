@@ -8,7 +8,6 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,
-  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import { asString } from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
@@ -22,7 +21,7 @@ import {
   requireWritableRefAtServer,
   withWriteKey,
 } from './write-domain.js'
-import { committedUnverified, settleCreate } from './write-verdicts.js'
+import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
 import type {
   ZoteroCreateSavedSearchRequest,
   ZoteroDeleteSavedSearchRequest,
@@ -111,14 +110,7 @@ export async function updateSavedSearch(
       }),
     ))
   } catch (error) {
-    if (error instanceof ZoteroWriteCommitUnknownError)
-      return committedUnverified({
-        kind: 'search',
-        key: ref.key,
-        serverId,
-        reason: 'receipt-unknown',
-      })
-    throw error
+    return receiptOfCommitUnknown(error, { kind: 'search', key: ref.key, serverId })
   }
   return {
     kind: 'applied',
@@ -153,14 +145,11 @@ export async function deleteSavedSearch(
       }),
     ))
   } catch (error) {
-    if (error instanceof ZoteroWriteCommitUnknownError)
-      return committedUnverified({
-        kind: 'search',
-        key: ref.key,
-        serverId: effectiveServerId,
-        reason: 'receipt-unknown',
-      })
-    throw error
+    return receiptOfCommitUnknown(error, {
+      kind: 'search',
+      key: ref.key,
+      serverId: effectiveServerId,
+    })
   }
   return {
     kind: 'deleted',

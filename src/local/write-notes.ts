@@ -7,7 +7,6 @@ import {
   WRITE_CHILD_COLLECTIONS_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
-  ZoteroWriteCommitUnknownError,
   requireNonBlank,
 } from '../errors.js'
 import { asRecord, asString } from '../json.js'
@@ -27,7 +26,7 @@ import type {
   ZoteroWriteCommittedUnverified,
 } from '../types.js'
 import { markdownToNoteHtml } from './note-format.js'
-import { committedUnverified, settleCreate } from './write-verdicts.js'
+import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { collectionRef, itemRef } from './write-refs.js'
 import {
@@ -166,14 +165,7 @@ export async function updateNote(
       try {
         ;({ libraryVersion } = await send({ note: markdownToNoteHtml(markdown) }))
       } catch (error) {
-        if (error instanceof ZoteroWriteCommitUnknownError)
-          return committedUnverified({
-            kind: 'note',
-            key: localRef.key,
-            serverId,
-            reason: 'receipt-unknown',
-          })
-        throw error
+        return receiptOfCommitUnknown(error, { kind: 'note', key: localRef.key, serverId })
       }
       return { kind: 'applied', ref: resultRef, version: libraryVersion, libraryVersion, serverId }
     },

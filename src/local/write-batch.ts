@@ -13,7 +13,11 @@ import {
 } from '../errors.js'
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
 import { readTrashGraph } from './trash-item.js'
-import { batchCreateUnverified, settleBatchCreates } from './write-verdicts.js'
+import {
+  batchCreateUnverified,
+  batchOperationUnverified,
+  settleBatchCreates,
+} from './write-verdicts.js'
 import { ZoteroWriteCommitUnknownError } from '../errors.js'
 import type {
   ZoteroBatchCreateItemResult,
@@ -249,15 +253,14 @@ async function runBatchUpdates(
             ;({ libraryVersion } = await send(patchBody))
           } catch (error) {
             if (error instanceof ZoteroWriteCommitUnknownError) {
-              unverified.push({
-                op: 'update',
-                index: checkedUpdates.indexOf(update),
-                ref: resultRef,
-                committed: true,
-                retryable: false,
-                reason: 'receipt-unknown',
-                serverId: effectiveServerId,
-              })
+              unverified.push(
+                batchOperationUnverified(
+                  'update',
+                  checkedUpdates.indexOf(update),
+                  resultRef,
+                  effectiveServerId,
+                ),
+              )
               return undefined
             }
             throw error
@@ -322,15 +325,14 @@ async function runBatchDeletes(
           ))
         } catch (error) {
           if (error instanceof ZoteroWriteCommitUnknownError)
-            unverified.push({
-              op: 'delete',
-              index: checkedDeletes.indexOf(ref),
-              ref: itemRef(node.key, serverId),
-              committed: true,
-              retryable: false,
-              reason: 'receipt-unknown',
-              serverId,
-            })
+            unverified.push(
+              batchOperationUnverified(
+                'delete',
+                checkedDeletes.indexOf(ref),
+                itemRef(node.key, serverId),
+                serverId,
+              ),
+            )
           throw error
         }
         lastLibraryVersion = libraryVersion

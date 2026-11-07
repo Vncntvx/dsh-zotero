@@ -10,6 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createItem } from '../../../src/local/write-domain.js'
+import { committedUnverified } from '../../../src/local/write-verdicts.js'
 import { createNote } from '../../../src/local/write-notes.js'
 import { updateItemTags } from '../../../src/local/write-item-lists.js'
 import { createCollection, deleteCollection } from '../../../src/local/write-collections.js'
@@ -456,6 +457,20 @@ describe('createItem verdicts', () => {
     await expect(createItem(deps, { itemType: 'book', title: 'A study' })).rejects.toMatchObject({
       code: ZOTERO_NOT_FOUND,
       message: OBJECT_NOT_FOUND_MESSAGE,
+    })
+  })
+})
+
+describe('committedUnverified verdict shapes', () => {
+  it('names no object ref for a tag verdict, which settles a library-wide write', () => {
+    expect(
+      committedUnverified({ kind: 'tag', serverId: SERVER_ID, reason: 'receipt-unknown' }),
+    ).toEqual({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'receipt-unknown',
+      serverId: SERVER_ID,
     })
   })
 })

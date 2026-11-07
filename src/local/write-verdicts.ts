@@ -24,7 +24,11 @@ import type {
   ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
-export type CommittedUnverifiedKind = 'note' | 'item' | 'collection' | 'search'
+/**
+ * The object vocabulary a committed-unverified receipt can name. A `tag`
+ * settles a library-wide tag write, which names no object and carries no ref.
+ */
+export type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search'
 
 export interface CommittedUnverifiedOptions {
   readonly kind: CommittedUnverifiedKind
@@ -66,7 +70,7 @@ export function committedUnverified(
   const { kind, batch, serverId, key, version, reason = 'saved-state-unverified' } = options
   const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
   const ref =
-    safeKey === undefined
+    safeKey === undefined || kind === 'tag'
       ? undefined
       : kind === 'collection'
         ? collectionRef(safeKey, serverId)
@@ -90,6 +94,29 @@ export function committedUnverified(
   }
 }
 
+/**
+ * Settle a commit-unknown as a receipt-unknown verdict, or rethrow anything
+ * else. Every versioned-PATCH catch block funnels through here, so the
+ * reason and the non-commit-unknown rethrow stay spelled once.
+ */
+export function receiptOfCommitUnknown(
+  error: unknown,
+  options: CommittedUnverifiedOptions,
+): ZoteroWriteCommittedUnverified {
+  if (!(error instanceof ZoteroWriteCommitUnknownError)) throw error
+  return committedUnverified({ ...options, reason: options.reason ?? 'receipt-unknown' })
+}
+
+/** The receipt-unknown shape for one batch operation slot. */
+export function batchOperationUnverified(
+  op: ZoteroBatchOperationUnverified['op'],
+  index: number,
+  ref: string,
+  serverId: string,
+): ZoteroBatchOperationUnverified {
+  return { op, index, ref, committed: true, retryable: false, reason: 'receipt-unknown', serverId }
+}
+
 async function sendSingleCreate(
   deps: WriteDomainDeps,
   path: string,
@@ -102,16 +129,13 @@ async function sendSingleCreate(
   try {
     return await deps.writer.batch(path, [entry], { serverId, apiKey, signal })
   } catch (error) {
-    if (error instanceof ZoteroWriteCommitUnknownError) {
-      // A caller abort leaves the caller's tool result masked by the
-      // pipeline's canonical cancellation, which would hide the commit state
-      // behind a plain "aborted". Rethrow instead: the recorded error result
-      // carries the commit-unknown wording. A deadline keeps the receipt —
-      // its caller is still listening.
-      if (signal?.aborted) throw error
-      return committedUnverified({ kind, serverId, reason: 'commit-unknown' })
-    }
-    throw error
+    // A caller abort leaves the caller's tool result masked by the
+    // pipeline's canonical cancellation, which would hide the commit state
+    // behind a plain "aborted". Rethrow instead: the recorded error result
+    // carries the commit-unknown wording. A deadline keeps the receipt —
+    // its caller is still listening.
+    if (signal?.aborted) throw error
+    return receiptOfCommitUnknown(error, { kind, serverId, reason: 'commit-unknown' })
   }
 }
 
