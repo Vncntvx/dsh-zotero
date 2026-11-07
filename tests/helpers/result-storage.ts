@@ -43,7 +43,11 @@ export function resultStorage(ctx: Context) {
   } as never) // Only external service operations consumed by production are substituted.
   ctx.provide('storageDomain', {
     open: vi.fn(async () => ({
-      table: () => ({ get: (key: string) => receipts.get(key), put }),
+      table: () => ({
+        get: (key: string) => receipts.get(key),
+        put,
+        entries: () => receipts.entries(),
+      }),
       close: async () => {},
     })),
   } as never)

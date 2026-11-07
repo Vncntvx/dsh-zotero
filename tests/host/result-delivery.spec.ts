@@ -113,6 +113,7 @@ it('reopens the receipts domain when the storage facility is replaced', async ()
         put: async (key: string, value: unknown) => {
           receipts.set(key, value)
         },
+        entries: () => receipts.entries(),
       }),
       close: async () => {},
     }))

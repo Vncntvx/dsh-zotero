@@ -152,7 +152,7 @@ it('fails on a missing domain service and allows a failed domain open to be retr
   })
   expect(storage.save).toHaveBeenCalledOnce()
 })
-it('does not announce success when cancelled after storing the complete file', async () => {
+it('completes the receipt write once the file is stored, even when cancelled after storing', async () => {
   lane = await setupHostLane()
   const storage = resultStorage(lane.ctx),
     controller = new AbortController()
@@ -169,8 +169,17 @@ it('does not announce success when cancelled after storing the complete file', a
     arguments: {},
     agent: { session: { header: { id: 's' } } },
   } as unknown as import('@deepseek-ai/dsh-tools').ToolExecution
-  await expect(
-    delivery.prepare(exec, { text: 'x'.repeat(20000) }, () => [], controller.signal),
-  ).rejects.toThrow('cancelled publication')
-  expect(storage.put).not.toHaveBeenCalled()
+  // Once the file is published the attachment store cannot reclaim it, so the
+  // receipt — the file's only reference — must land regardless of the abort.
+  // The caller still observes its own cancellation through the tool pipeline;
+  // the durable record must not depend on that race.
+  const receipt = await delivery.prepare(
+    exec,
+    { text: 'x'.repeat(20000) },
+    () => [],
+    controller.signal,
+  )
+  expect(receipt).toMatchObject({ delivery: 'file' })
+  expect(storage.put).toHaveBeenCalledTimes(1)
+  expect(controller.signal.aborted).toBe(true)
 })

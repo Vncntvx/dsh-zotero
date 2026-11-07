@@ -281,7 +281,13 @@ export class ResultDelivery {
         signal,
         data: jsonBytes({ version: 1, tool: exec.name, request: exec.arguments, data }, signal),
       }))
-    signal.throwIfAborted()
+    // Publication is settle-once-begun from here: saveFileStream itself cleans
+    // up a mid-stream abort (staged temp files), but once the file is
+    // published the attachment store has no way to reclaim it, so the receipt
+    // writes below run to completion regardless of the signal — either no file
+    // and no receipt, or the file and all of its receipts. Cancelling before
+    // the save still aborts cleanly, and the aborted caller still observes its
+    // own abort; the durable record must not depend on that race.
     const receipt = receiptSchema.parse({
       delivery: 'file',
       version: 1,
@@ -315,7 +321,6 @@ export class ResultDelivery {
     if (!fits()) throw new Error('Result reference exceeds the configured inline budget.')
     await table.put(key, receipt)
     if (jobId) await table.put(await resultReceiptKey('job', sessionId, jobId), receipt)
-    signal.throwIfAborted()
     return receipt
   }
   wrap(definition: ToolDefinition): ToolDefinition {
@@ -442,9 +447,20 @@ export class ResultDelivery {
         job.status !== 'completed'
       )
         return next()
-      const receipt = (await this.receipts()).get(
-        await resultReceiptKey('job', exec.agent.session.header.id, jobId),
-      )
+      const session = exec.agent.session.header.id
+      const table = await this.receipts()
+      let receipt = table.get(await resultReceiptKey('job', session, jobId))
+      if (!receipt) {
+        // The two receipt puts are not atomic: a crash or storage failure
+        // between them can leave the per-call receipt without its job-key
+        // twin. Reconcile by the job id the receipt itself carries instead of
+        // dropping the re-attach — the write domain's reconcile-never-retry
+        // discipline applied to the delivery side.
+        receipt = [...table.entries()].find(([, candidate]) => {
+          const record = asRecord(candidate)
+          return record?.jobId === jobId && record?.sessionId === session
+        })?.[1]
+      }
       if (!receipt) return next()
       const decision = await next()
       if (decision.kind !== 'accept' || Object.hasOwn(decision, 'value')) return decision
