@@ -24,7 +24,7 @@ afterEach(async () => {
   await mock.close()
 })
 
-function child(itemType = 'note', data: Record<string, unknown> = {}) {
+function child(itemType = 'note', data: Record<string, unknown> = {}, includeReceipt = true) {
   // Stateful so the restore's read-back sees the graph it wrote: the item
   // flips out of the Trash and advances when its PATCH lands. A Trash graph
   // read also lists children (a childless object answers an empty page).
@@ -49,7 +49,7 @@ function child(itemType = 'note', data: Record<string, unknown> = {}) {
     expect(req.headers['if-unmodified-since-version']).toBe('10')
     deleted = false
     version = 11
-    h.raw(204, batchHeaders(11), '')
+    h.raw(204, includeReceipt ? batchHeaders(11) : { 'Zotero-Server-ID': 'srv-write-domain-1' }, '')
   })
   grantAuthorize(mock)
   return writeDeps(mock).deps
@@ -64,6 +64,17 @@ describe('child item write preconditions', () => {
     expect(JSON.parse(mock.requests.find((r) => r.method === 'PATCH')!.body!)).toEqual({
       note: expect.stringContaining('<strong>updated</strong>'),
     })
+  })
+
+  it('returns an unverified receipt for a note PATCH without a version', async () => {
+    const deps = child('note', { tags: undefined }, false)
+    await expect(updateNote(deps, { item: ITEM_REF, markdown: 'updated' })).resolves.toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: ITEM_KEY,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
   })
 
   it.each(['note', 'attachment', 'annotation'])(

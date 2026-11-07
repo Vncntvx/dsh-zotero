@@ -42,6 +42,7 @@ import {
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
+  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import {
   asRecord,
@@ -67,7 +68,7 @@ import {
   validateItemUpdateFields,
   wireFieldOf,
 } from '../write-item-rules.js'
-import { settleCreate } from './write-verdicts.js'
+import { committedUnverified, settleCreate } from './write-verdicts.js'
 import type { ItemSnapshot, WriteDomainDeps } from './write-deps.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
@@ -76,6 +77,7 @@ import {
   type ZoteroObjectRef,
   type ZoteroUpdateItemRequest,
   type ZoteroUpdateItemResult,
+  type ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
 type ItemTags = readonly { readonly tag: string; readonly type?: number }[]
@@ -604,7 +606,7 @@ export async function updateItem(
   deps: WriteDomainDeps,
   request: ZoteroUpdateItemRequest,
   signal?: AbortSignal,
-): Promise<ZoteroUpdateItemResult> {
+): Promise<ZoteroUpdateItemResult | ZoteroWriteCommittedUnverified> {
   const localRef = requireWritableRef(request.item, ['item'])
   const updates = validateItemUpdateFields(request.set)
   return await withItemStateWrite(
@@ -643,7 +645,19 @@ export async function updateItem(
           serverId,
         }
       changed.sort()
-      const { libraryVersion } = await send(patch)
+      let libraryVersion: number
+      try {
+        ;({ libraryVersion } = await send(patch))
+      } catch (error) {
+        if (error instanceof ZoteroWriteCommitUnknownError)
+          return committedUnverified({
+            kind: 'item',
+            key: localRef.key,
+            serverId,
+            reason: 'receipt-unknown',
+          })
+        throw error
+      }
       return {
         kind: 'applied',
         ref: resultRef,

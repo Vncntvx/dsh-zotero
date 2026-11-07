@@ -370,6 +370,45 @@ describe('saved-search execution through the approval seam', () => {
       { kind: 'deleted', key: SEARCH_KEY },
     )[0] as { text: string }
     expect(renderedDelete.text).toContain('operation completed for SEARCH01.')
+    expect(
+      update.output.render(
+        { search: SEARCH_REF },
+        {
+          kind: 'committed-unverified',
+          committed: true,
+          retryable: false,
+          reason: 'receipt-unknown',
+          key: SEARCH_KEY,
+          serverId: SERVER_ID,
+        },
+      )[0],
+    ).toMatchObject({ type: 'text', text: expect.stringContaining('Do not retry') })
+    expect(
+      update.output.presentationMeta!(
+        { search: SEARCH_REF },
+        {
+          kind: 'committed-unverified',
+          committed: true,
+          retryable: false,
+          reason: 'receipt-unknown',
+          key: SEARCH_KEY,
+          serverId: SERVER_ID,
+        },
+      ),
+    ).toMatchObject({ kind: 'committed-unverified', reason: 'receipt-unknown' })
+    expect(
+      remove.output.presentationMeta!(
+        { search: SEARCH_REF },
+        {
+          kind: 'committed-unverified',
+          committed: true,
+          retryable: false,
+          reason: 'receipt-unknown',
+          key: SEARCH_KEY,
+          serverId: SERVER_ID,
+        },
+      ),
+    ).toMatchObject({ kind: 'committed-unverified', reason: 'receipt-unknown' })
 
     // A receipt carrying neither ref nor key must still name the subject
     // instead of rendering an empty sentence, and an absent library version

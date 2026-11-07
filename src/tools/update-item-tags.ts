@@ -21,6 +21,7 @@ import {
   listUpdatePresentationMeta,
   presentUpdateResultView,
   renderUpdateList,
+  renderCommittedUnverified,
   UPDATE_ITEM_TAGS_OUTPUT_SCHEMA,
 } from './write-present.js'
 import { assertAddRemoveSelection, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
@@ -81,6 +82,8 @@ export function renderUpdateItemTags(
   _args: UpdateItemTagsArgs,
   value: UpdateItemTagsOutput,
 ): ContentBlock[] {
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'tags', 'committed')
   return renderUpdateList(value.kind === 'declined' ? value : { ...value, items: value.tags }, {
     noun: 'tags',
     unchangedTarget: 'the requested tag set',

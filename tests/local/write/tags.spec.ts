@@ -113,6 +113,7 @@ describe('updateItemTags', () => {
       add: ['new', 'existing'],
       remove: ['gone'],
     })
+    if (result.kind !== 'applied') throw new Error(`unexpected write outcome: ${result.kind}`)
     expect(result.unchanged).toBe(false)
     expect(result.added).toEqual(['new'])
     expect(result.removed).toEqual(['gone'])
@@ -148,6 +149,7 @@ describe('updateItemTags', () => {
     serveItem({ tags: [{ tag: 'existing' }] })
     const { deps } = writeDeps(mock)
     const result = await updateItemTags(deps, { item: ITEM_REF, add: ['existing'] })
+    if (result.kind !== 'applied') throw new Error(`unexpected write outcome: ${result.kind}`)
     expect(result.unchanged).toBe(true)
     expectApplied(result)
     expect(result.libraryVersion).toBeUndefined()
@@ -214,6 +216,24 @@ describe('updateItemTags', () => {
     }
     expect((thrown as Error).message).toBe(WRITE_CONFLICT_MESSAGE)
     expect((thrown as { code?: string }).code).toBe(ZOTERO_WRITE_CONFLICT)
+  })
+
+  it('returns an unverified receipt when the tag PATCH omits its version', async () => {
+    grantAuthorize(mock)
+    serveItem({ tags: [] })
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    const result = await updateItemTags(deps, { item: ITEM_REF, add: ['new'] })
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: ITEM_KEY,
+      serverId: SERVER_ID,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
   })
 })
 

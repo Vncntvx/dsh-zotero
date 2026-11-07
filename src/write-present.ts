@@ -52,7 +52,7 @@ export const COMMITTED_UNVERIFIED_VARIANT = {
     retryable: { type: 'boolean', enum: [false], required: true },
     reason: {
       type: 'string',
-      enum: ['saved-state-unverified', 'commit-unknown'],
+      enum: ['saved-state-unverified', 'commit-unknown', 'receipt-unknown'],
       required: true,
     },
     ref: { type: 'string' },
@@ -66,7 +66,7 @@ export const COMMITTED_UNVERIFIED_VARIANT = {
 /** The fields the shared committed-unverified render and meta read. */
 interface CommittedUnverifiedLike {
   readonly kind: 'committed-unverified'
-  readonly reason: 'saved-state-unverified' | 'commit-unknown'
+  readonly reason: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown'
   readonly ref?: string
   readonly key?: string
   readonly version?: number
@@ -97,7 +97,7 @@ export function renderCommittedUnverified(
       ? `reconcile the ${objectName} by its key/ref`
       : `reconcile by checking Zotero for the ${objectName} before taking any further action`
   const text =
-    value.reason === 'commit-unknown'
+    value.reason === 'commit-unknown' || value.reason === 'receipt-unknown'
       ? `Zotero may have ${pastVerb} the ${objectName}${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.`
       : `Zotero ${pastVerb} the ${objectName}${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.`
   return [{ type: 'text', text }]
@@ -170,8 +170,10 @@ export function listUpdatePresentationMeta(
         added: readonly unknown[]
         removed: readonly unknown[]
       }
+    | CommittedUnverifiedLike
     | { kind: 'declined' },
 ): JsonValue {
+  if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return value.kind === 'applied'
     ? {
         kind: 'applied',
@@ -235,6 +237,7 @@ const COMMON_UPDATE_LIST_PROPERTIES = {
 export const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -249,6 +252,7 @@ export const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = {
 export const UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -270,6 +274,7 @@ interface UpdateListRenderOptions {
 export function renderUpdateList(
   value:
     | { kind: 'declined' }
+    | CommittedUnverifiedLike
     | {
         kind: 'applied'
         ref: string
@@ -286,6 +291,8 @@ export function renderUpdateList(
   if (value.kind === 'declined') {
     return renderDeclined()
   }
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, options.noun, 'committed')
   const lines = [
     value.unchanged
       ? `No change: ${value.ref} already carries ${options.unchangedTarget} (version ${value.version}).`
@@ -431,13 +438,13 @@ export const BATCH_ITEMS_OUTPUT_SCHEMA = {
             type: 'object',
             additionalProperties: false,
             properties: {
-              op: { type: 'string', enum: ['create'], required: true },
+              op: { type: 'string', enum: ['create', 'update', 'delete'], required: true },
               index: { type: 'integer', required: true },
               committed: { type: 'boolean', enum: [true], required: true },
               retryable: { type: 'boolean', enum: [false], required: true },
               reason: {
                 type: 'string',
-                enum: ['saved-state-unverified', 'commit-unknown'],
+                enum: ['saved-state-unverified', 'commit-unknown', 'receipt-unknown'],
                 required: true,
               },
               key: { type: 'string' },

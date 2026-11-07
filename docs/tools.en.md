@@ -400,7 +400,7 @@ Create a collection, either top-level or under a parent collection.
 ### Output
 
 - Created: `{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`;
-- Creation committed but the saved state cannot be verified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}`, **not retryable**; check by key/ref in Zotero;
+- Creation committed but the saved state cannot be verified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown" | "receipt-unknown", ...}`, **not retryable**; check by key/ref in Zotero;
 - Declined on the plan card: `{kind: "declined"}`.
 
 ### Example
@@ -456,7 +456,7 @@ Create a paper item from a closed field set. Zotero's `POST /items` only accepts
 ### Output
 
 - Created: `{kind: "applied", ref, key, version, itemType, title?, tags, collections, libraryVersion, serverId?}`;
-- Committed but state unverified: `{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`, **not retryable**;
+- Committed but state unverified: `{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown" | "receipt-unknown", ...}`, **not retryable**;
 - Declined on the plan card: `{kind: "declined"}`.
 
 ### Example
@@ -510,9 +510,9 @@ Restore selected items from the personal library Trash. Each item's version is r
 | --------- | -------- | -------- | -------------------- |
 | `refs`    | string[] | ✓        | Item refs to restore |
 
-Output is `{kind: "restored", restored, failed, serverId?}`; version conflicts are never retried automatically.
+Output is `{kind: "restored", restored, unverified, failed, serverId?}`; version conflicts go to `failed`, unknown receipts go to `unverified`, and neither arm is retried automatically.
 
-Child notes, child attachments, and annotations are supported. The result body lists every restored object's ref, version, and library version, plus every failed object's ref, error code, and reason; the card reports the real restored and failed counts, and shows a warning on partial failure.
+Child notes, child attachments, and annotations are supported. The result body lists every restored object's ref, version, and library version, plus every failed or unverified object's ref and error details; the card reports restored, unverified, and failed counts. An unverified receipt must be reconciled by ref/key before any further action and is never retried.
 
 ---
 
@@ -522,7 +522,7 @@ Child notes, child attachments, and annotations are supported. The result body l
 
 Creation takes `name` and `conditions` (each with `condition`, `operator`, `value`); update takes `search` plus at least one of `name` or `conditions`; delete takes `search`. Update and delete both use object/library version preconditions.
 
-An unverified creation receipt distinguishes `commit-unknown` from `saved-state-unverified`, and the body and presentation metadata keep the known ref, key, version, and server identity. Without a known identity, check Zotero first and do not create again.
+Unverified create, update, and delete receipts distinguish `commit-unknown`, `saved-state-unverified`, and `receipt-unknown`; the body and presentation metadata keep the known ref, key, version, and server identity. Without a known identity, check Zotero first and do not write again.
 
 ## scholarly_save_to_zotero
 

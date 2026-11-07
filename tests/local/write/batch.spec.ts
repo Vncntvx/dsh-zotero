@@ -93,6 +93,26 @@ describe('batchItems domain operations', () => {
     expect(sentEntries).toHaveLength(2)
   })
 
+  it('archives a batch create transport refusal as per-index failures', async () => {
+    const { deps } = writeDeps(mock)
+    grantAuthorize(mock)
+    mock.route('POST', '/api/users/0/items', (_req, _res, helpers) =>
+      helpers.raw(400, { 'Content-Type': 'text/plain', 'Zotero-Server-ID': SERVER_ID }, 'bad item'),
+    )
+    const result = await batchItems(deps, {
+      create: [
+        { itemType: 'book', title: 'First' },
+        { itemType: 'book', title: 'Second' },
+      ],
+    })
+    expect(result.created).toEqual([])
+    expect(result.unverified).toEqual([])
+    expect(result.failed).toMatchObject([
+      { op: 'create', index: 0, code: 'ZOTERO_INVALID_ARGUMENT' },
+      { op: 'create', index: 1, code: 'ZOTERO_INVALID_ARGUMENT' },
+    ])
+  })
+
   it('executes batch item updates for tags and collections sequentially', async () => {
     const { deps } = writeDeps(mock)
     grantAuthorize(mock)
@@ -241,6 +261,36 @@ describe('batchItems domain operations', () => {
     })
     expect(result.updated).toMatchObject([{ unchanged: true, addedCollections: [] }])
     expect(mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
+  })
+
+  it('rejects an empty item update before reading or writing', async () => {
+    const { deps } = writeDeps(mock)
+    await expect(
+      batchItems(deps, {
+        update: [{ ref: ITEM_REF }],
+      }),
+    ).rejects.toMatchObject({ code: 'ZOTERO_INVALID_ARGUMENT' })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(0)
+  })
+
+  it('puts an item update with a missing receipt in unverified without retrying', async () => {
+    const { deps } = writeDeps(mock)
+    grantAuthorize(mock)
+    serveItemRead(mock, {
+      key: ITEM_KEY,
+      data: { itemType: 'journalArticle', tags: [] },
+      version: 4,
+    })
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const result = await batchItems(deps, { update: [{ ref: ITEM_REF, addTags: ['new'] }] })
+    expect(result.updated).toEqual([])
+    expect(result.failed).toEqual([])
+    expect(result.unverified).toMatchObject([
+      { op: 'update', reason: 'receipt-unknown', retryable: false, ref: expect.any(String) },
+    ])
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
   })
 
   it('executes batch item deletions sequentially with version preconditions', async () => {

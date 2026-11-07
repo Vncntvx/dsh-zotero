@@ -124,6 +124,19 @@ describe('request shaping', () => {
     expect(JSON.parse(request.body)).toEqual({ tags: [{ tag: 'methods' }] })
   })
 
+  it('marks a successful PATCH without a library receipt as commit-unknown', async () => {
+    mock.route('PATCH', '/api/users/0/items/ABCD1234', (_req, res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    await expect(
+      client.patch(
+        'users/0/items/ABCD1234',
+        { tags: [{ tag: 'methods' }] },
+        { ...writeOptions(), ifUnmodifiedSinceVersion: 4 },
+      ),
+    ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
+  })
+
   it('keeps exactly one write in flight: the second batch waits for the first to finish', async () => {
     let releaseFirst: (() => void) | undefined
     const release = new Promise<void>((resolve) => {

@@ -8,6 +8,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,
+  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import { asString } from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
@@ -21,7 +22,7 @@ import {
   requireWritableRefAtServer,
   withWriteKey,
 } from './write-domain.js'
-import { settleCreate } from './write-verdicts.js'
+import { committedUnverified, settleCreate } from './write-verdicts.js'
 import type {
   ZoteroCreateSavedSearchRequest,
   ZoteroDeleteSavedSearchRequest,
@@ -79,7 +80,7 @@ export async function updateSavedSearch(
   deps: WriteDomainDeps,
   request: ZoteroUpdateSavedSearchRequest,
   signal?: AbortSignal,
-): Promise<ZoteroSavedSearchResult> {
+): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified> {
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
   if (request.name === undefined && request.conditions === undefined)
@@ -99,14 +100,26 @@ export async function updateSavedSearch(
   const patch: Record<string, unknown> = {}
   if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
   if (request.conditions !== undefined) patch.conditions = request.conditions
-  const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-    deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, patch, {
-      serverId,
-      apiKey,
-      ifUnmodifiedSinceVersion: version,
-      signal,
-    }),
-  )
+  let libraryVersion: number
+  try {
+    ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+      deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, patch, {
+        serverId,
+        apiKey,
+        ifUnmodifiedSinceVersion: version,
+        signal,
+      }),
+    ))
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError)
+      return committedUnverified({
+        kind: 'search',
+        key: ref.key,
+        serverId,
+        reason: 'receipt-unknown',
+      })
+    throw error
+  }
   return {
     kind: 'applied',
     ref: searchRef(ref.key, serverId),
@@ -123,20 +136,32 @@ export async function deleteSavedSearch(
   deps: WriteDomainDeps,
   request: ZoteroDeleteSavedSearchRequest,
   signal?: AbortSignal,
-): Promise<ZoteroDeleteSavedSearchResult> {
+): Promise<ZoteroDeleteSavedSearchResult | ZoteroWriteCommittedUnverified> {
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
   const read = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
   const effectiveServerId = read.serverId
   const precondition = requireLibraryVersion(read.libraryVersion)
-  const { libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, (apiKey) =>
-    deps.writer.delete(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, {
-      serverId: effectiveServerId,
-      apiKey,
-      ifUnmodifiedSinceVersion: precondition,
-      signal,
-    }),
-  )
+  let libraryVersion: number
+  try {
+    ;({ libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, (apiKey) =>
+      deps.writer.delete(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, {
+        serverId: effectiveServerId,
+        apiKey,
+        ifUnmodifiedSinceVersion: precondition,
+        signal,
+      }),
+    ))
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError)
+      return committedUnverified({
+        kind: 'search',
+        key: ref.key,
+        serverId: effectiveServerId,
+        reason: 'receipt-unknown',
+      })
+    throw error
+  }
   return {
     kind: 'deleted',
     ref: searchRef(ref.key, effectiveServerId),

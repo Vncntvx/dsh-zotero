@@ -339,6 +339,27 @@ describe('updateItem', () => {
     expect((thrown as { code?: string }).code).toBe(ZOTERO_WRITE_CONFLICT)
   })
 
+  it('returns an unverified receipt when the metadata PATCH omits its version', async () => {
+    grantAuthorize(mock)
+    serveItem({ itemType: 'journalArticle' })
+    mock.route('GET', '/api/itemTypeFields', (_req, _res, helpers) =>
+      helpers.json([{ field: 'title' }]),
+    )
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    const result = await updateItem(deps, { item: ITEM_REF, set: { title: 'T' } })
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: ITEM_KEY,
+      serverId: SERVER_ID,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+  })
+
   it('rejects an item read served by a different Zotero instance', async () => {
     serveItem({ itemType: 'journalArticle' }, { serverId: 'OTHER1234' })
     const { deps } = writeDeps(mock)

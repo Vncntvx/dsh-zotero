@@ -17,7 +17,7 @@ import { batchCreateUnverified, settleBatchCreates } from './write-verdicts.js'
 import { ZoteroWriteCommitUnknownError } from '../errors.js'
 import type {
   ZoteroBatchCreateItemResult,
-  ZoteroBatchCreateUnverified,
+  ZoteroBatchOperationUnverified,
   ZoteroBatchDeleteItemResult,
   ZoteroBatchItemsRequest,
   ZoteroBatchItemsResult,
@@ -127,7 +127,7 @@ async function runBatchCreates(
   serverId: string,
   signal: AbortSignal | undefined,
   created: ZoteroBatchCreateItemResult[],
-  unverified: ZoteroBatchCreateUnverified[],
+  unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
 ): Promise<number | undefined> {
   if (checkedCreates.length === 0) return undefined
@@ -181,6 +181,7 @@ async function runBatchUpdates(
   serverId: string,
   signal: AbortSignal | undefined,
   updated: ZoteroBatchUpdateItemResult[],
+  unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
@@ -243,7 +244,24 @@ async function runBatchUpdates(
           const patchBody: Record<string, unknown> = {}
           if (tagsChanged) patchBody.tags = nextTags
           if (collectionsChanged) patchBody.collections = nextCollectionKeys
-          const { libraryVersion } = await send(patchBody)
+          let libraryVersion: number
+          try {
+            ;({ libraryVersion } = await send(patchBody))
+          } catch (error) {
+            if (error instanceof ZoteroWriteCommitUnknownError) {
+              unverified.push({
+                op: 'update',
+                index: checkedUpdates.indexOf(update),
+                ref: resultRef,
+                committed: true,
+                retryable: false,
+                reason: 'receipt-unknown',
+                serverId: effectiveServerId,
+              })
+              return undefined
+            }
+            throw error
+          }
           lastLibraryVersion = libraryVersion
           return {
             ref: resultRef,
@@ -258,8 +276,9 @@ async function runBatchUpdates(
           }
         },
       )
-      updated.push(result)
+      if (result !== undefined) updated.push(result)
     } catch (err) {
+      if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'update',
         ref: itemRef(update.ref.key, serverId),
@@ -277,6 +296,7 @@ async function runBatchDeletes(
   serverId: string,
   signal: AbortSignal | undefined,
   deleted: ZoteroBatchDeleteItemResult[],
+  unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
@@ -286,18 +306,33 @@ async function runBatchDeletes(
       const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
       for (const node of graph) {
         if (node.deleted) continue
-        const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-          deps.writer.patch(
-            `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
-            { deleted: 1 },
-            {
+        let libraryVersion: number
+        try {
+          ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+            deps.writer.patch(
+              `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
+              { deleted: 1 },
+              {
+                serverId,
+                apiKey,
+                ifUnmodifiedSinceVersion: node.version,
+                signal,
+              },
+            ),
+          ))
+        } catch (error) {
+          if (error instanceof ZoteroWriteCommitUnknownError)
+            unverified.push({
+              op: 'delete',
+              index: checkedDeletes.indexOf(ref),
+              ref: itemRef(node.key, serverId),
+              committed: true,
+              retryable: false,
+              reason: 'receipt-unknown',
               serverId,
-              apiKey,
-              ifUnmodifiedSinceVersion: node.version,
-              signal,
-            },
-          ),
-        )
+            })
+          throw error
+        }
         lastLibraryVersion = libraryVersion
         completedRefs.push(itemRef(node.key, serverId))
       }
@@ -323,6 +358,7 @@ async function runBatchDeletes(
           .map((node) => itemRef(node.key, serverId)),
       })
     } catch (err) {
+      if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'delete',
         ref: itemRef(ref.key, serverId),
@@ -367,7 +403,7 @@ export async function batchItems(
   const created: ZoteroBatchCreateItemResult[] = []
   const updated: ZoteroBatchUpdateItemResult[] = []
   const deleted: ZoteroBatchDeleteItemResult[] = []
-  const unverified: ZoteroBatchCreateUnverified[] = []
+  const unverified: ZoteroBatchOperationUnverified[] = []
   const failed: ZoteroBatchOperationFailure[] = []
   let latestLibraryVersion: number | undefined
   const versions = [
@@ -381,8 +417,17 @@ export async function batchItems(
       unverified,
       failed,
     ),
-    await runBatchUpdates(deps, checkedUpdates, resolvedColsMap, serverId, signal, updated, failed),
-    await runBatchDeletes(deps, checkedDeletes, serverId, signal, deleted, failed),
+    await runBatchUpdates(
+      deps,
+      checkedUpdates,
+      resolvedColsMap,
+      serverId,
+      signal,
+      updated,
+      unverified,
+      failed,
+    ),
+    await runBatchDeletes(deps, checkedDeletes, serverId, signal, deleted, unverified, failed),
   ]
   for (const version of versions) {
     if (version !== undefined) latestLibraryVersion = version

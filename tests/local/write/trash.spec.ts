@@ -36,6 +36,7 @@ function graph(
   options: {
     fail?: string
     lie?: string
+    missingReceipt?: boolean
     missingTotal?: boolean
     many?: boolean
     badSnapshot?: 'wrong-key' | 'invalid-deleted'
@@ -86,7 +87,11 @@ function graph(
       }
       if (options.lie !== node.key) node.deleted = 1
       node.version++
-      h.raw(204, batchHeaders(node.version), '')
+      h.raw(
+        204,
+        options.missingReceipt ? { 'Zotero-Server-ID': SERVER_ID } : batchHeaders(node.version),
+        '',
+      )
     })
   }
   return saved
@@ -123,6 +128,19 @@ describe('complete Trash operations', () => {
       },
     ])
     expect(saved.get(ITEM_KEY)?.deleted).toBe(0)
+  })
+
+  it('puts a delete with a missing receipt in unverified without retrying', async () => {
+    grantAuthorize(mock)
+    graph({ missingReceipt: true })
+    const { deps } = writeDeps(mock)
+    const result = await batchItems(deps, { delete: [ITEM_REF] })
+    expect(result.deleted).toEqual([])
+    expect(result.failed).toEqual([])
+    expect(result.unverified).toMatchObject([
+      { op: 'delete', reason: 'receipt-unknown', retryable: false },
+    ])
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
   })
 
   it('does not claim success if an acknowledged PATCH did not change saved state', async () => {

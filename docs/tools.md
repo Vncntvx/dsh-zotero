@@ -400,7 +400,7 @@ zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["方法
 ### 输出
 
 - 成功创建：`{kind: "applied", ref, key, version, name, parentRef?, libraryVersion, serverId?}`；
-- 创建已提交但保存状态无法核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown", ...}`，**不可重试**，请按 key/ref 在 Zotero 中核对；
+- 创建已提交但保存状态无法核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown" | "receipt-unknown", ...}`，**不可重试**，请按 key/ref 在 Zotero 中核对；
 - 计划卡拒绝：`{kind: "declined"}`。
 
 ### 示例
@@ -456,7 +456,7 @@ zotero_delete_collection(collection="田野笔记")
 ### 输出
 
 - 成功创建：`{kind: "applied", ref, key, version, itemType, title?, tags, collections, libraryVersion, serverId?}`；
-- 已提交但状态未核验：`{kind: "committed-unverified", committed: true, retryable: false, reason, ...}`，**不可重试**；
+- 已提交但状态未核验：`{kind: "committed-unverified", committed: true, retryable: false, reason: "saved-state-unverified" | "commit-unknown" | "receipt-unknown", ...}`，**不可重试**；
 - 计划卡拒绝：`{kind: "declined"}`。
 
 ### 示例
@@ -510,9 +510,9 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 | ------ | -------- | ---- | --------------------- |
 | `refs` | string[] | ✓    | 要恢复的条目 ref 列表 |
 
-输出为 `{kind: "restored", restored, failed, serverId?}`；不会自动重试版本冲突。
+输出为 `{kind: "restored", restored, unverified, failed, serverId?}`；版本冲突记录在 `failed`，回执未知记录在 `unverified`，两者都不会自动重试。
 
-支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败对象的 ref、错误码和原因；卡片根据实际结果显示恢复数与失败数，部分失败显示警示。
+支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败和未核验对象的 ref、错误码或原因；卡片根据实际结果显示恢复数、未核验数与失败数，未核验回执必须先按 ref/key 核对，禁止重试。
 
 ---
 
@@ -522,7 +522,7 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 创建参数为 `name` 与 `conditions`（每项含 `condition`、`operator`、`value`）；更新参数为 `search` 以及至少一个 `name` 或 `conditions`；删除参数为 `search`。更新和删除均使用对象/库版本前置条件。
 
-创建的未核验回执区分 `commit-unknown` 和 `saved-state-unverified`，正文和展示元数据保留已知 ref、key、版本与服务器身份。无已知身份时先检查 Zotero，不重复创建。
+创建、更新和删除的未核验回执区分 `commit-unknown`、`saved-state-unverified` 和 `receipt-unknown`，正文和展示元数据保留已知 ref、key、版本与服务器身份。无已知身份时先检查 Zotero，不重复写入。
 
 ## scholarly_save_to_zotero
 

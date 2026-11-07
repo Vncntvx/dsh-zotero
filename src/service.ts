@@ -94,9 +94,9 @@ import type {
   ZoteroCreateNoteRequest,
   ZoteroCreateNoteCommittedOutcome,
   ZoteroDeleteCollectionRequest,
-  ZoteroDeleteCollectionResult,
+  ZoteroDeleteCollectionOutcome,
   ZoteroDeleteLibraryTagsRequest,
-  ZoteroDeleteLibraryTagsResult,
+  ZoteroDeleteLibraryTagsOutcome,
   ZoteroGetRequest,
   ZoteroGetBatchRequest,
   ZoteroGetBatchResult,
@@ -117,11 +117,11 @@ import type {
   ZoteroSearchResult,
   ZoteroStatus,
   ZoteroUpdateItemCollectionsRequest,
-  ZoteroUpdateItemCollectionsResult,
+  ZoteroUpdateItemCollectionsOutcome,
   ZoteroUpdateItemRequest,
-  ZoteroUpdateItemResult,
+  ZoteroUpdateItemOutcome,
   ZoteroUpdateItemTagsRequest,
-  ZoteroUpdateItemTagsResult,
+  ZoteroUpdateItemTagsOutcome,
   ZoteroUpdateNoteRequest,
   ZoteroUpdateNoteOutcome,
   ZoteroUpdateCollectionRequest,
@@ -422,7 +422,7 @@ export class ZoteroService extends Service {
       else signal.addEventListener('abort', rejectAbort, { once: true })
     })
     try {
-      await Promise.race([fiber.await(), aborted])
+      await Promise.race([registration, aborted])
     } finally {
       if (rejectAbort !== undefined) signal.removeEventListener('abort', rejectAbort)
     }
@@ -822,7 +822,7 @@ export class ZoteroService extends Service {
   async updateItemTags(
     request: ZoteroUpdateItemTagsRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroUpdateItemTagsResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroUpdateItemTagsOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'updateItemTags', request)
   }
 
@@ -843,7 +843,7 @@ export class ZoteroService extends Service {
   async updateItemCollections(
     request: ZoteroUpdateItemCollectionsRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroUpdateItemCollectionsOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'updateItemCollections', request)
   }
 
@@ -876,7 +876,7 @@ export class ZoteroService extends Service {
   async deleteCollection(
     request: ZoteroDeleteCollectionRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroDeleteCollectionResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroDeleteCollectionOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'deleteCollection', request)
   }
 
@@ -902,7 +902,7 @@ export class ZoteroService extends Service {
   async updateItem(
     request: ZoteroUpdateItemRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroUpdateItemResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroUpdateItemOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'updateItem', request)
   }
 
@@ -915,7 +915,7 @@ export class ZoteroService extends Service {
   async deleteLibraryTags(
     request: ZoteroDeleteLibraryTagsRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined> {
+  ): Promise<ZoteroDeleteLibraryTagsOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'deleteLibraryTags', request)
   }
 

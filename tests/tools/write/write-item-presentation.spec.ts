@@ -12,6 +12,8 @@ import {
 } from '../../../src/tools/delete-collection.js'
 import { createItemPlan, renderCreateItem } from '../../../src/tools/create-item.js'
 import { updateItemPlan, renderUpdateItem } from '../../../src/tools/update-item.js'
+import { renderUpdateItemCollections } from '../../../src/tools/update-item-collections.js'
+import { renderUpdateItemTags } from '../../../src/tools/update-item-tags.js'
 import {
   deleteLibraryTagsPlan,
   renderDeleteLibraryTags,
@@ -118,6 +120,9 @@ describe('collection lifecycle presentation', () => {
     expect(
       textOfBlocks(renderDeleteCollection({ collection: 'x' }, { kind: 'declined' })),
     ).toContain('Declined')
+    expect(textOfBlocks(renderDeleteCollection({ collection: 'x' }, UNVERIFIED))).toContain(
+      'Do not retry',
+    )
   })
 
   it('builds the collection plans with the previewed blast radius', () => {
@@ -312,6 +317,9 @@ describe('item create and update presentation', () => {
     expect(textOfBlocks(renderUpdateItem({ ref: 'r', set: {} }, { kind: 'declined' }))).toContain(
       'Declined',
     )
+    expect(textOfBlocks(renderUpdateItem({ ref: 'r', set: {} }, UNVERIFIED))).toContain(
+      'Do not retry',
+    )
   })
 
   it('builds the item plans from the closed field set', () => {
@@ -491,6 +499,9 @@ describe('library-wide tag deletion presentation', () => {
     expect(textOfBlocks(renderDeleteLibraryTags({ tags: ['a'] }, { kind: 'declined' }))).toContain(
       'Declined',
     )
+    expect(textOfBlocks(renderDeleteLibraryTags({ tags: ['a'] }, UNVERIFIED))).toContain(
+      'Do not retry',
+    )
   })
 
   it('builds the plan with per-tag counts and the irreversible radius', () => {
@@ -544,6 +555,15 @@ describe('library-wide tag deletion presentation', () => {
     })
     expect(remove.presentResult?.({ tags: ['a'] }, { isError: false } as never)).toBeUndefined()
     await lane.teardown()
+  })
+
+  it('renders unverified list updates as non-retryable outcomes', () => {
+    expect(textOfBlocks(renderUpdateItemTags({ ref: 'r', add: ['x'] }, UNVERIFIED))).toContain(
+      'Do not retry',
+    )
+    expect(
+      textOfBlocks(renderUpdateItemCollections({ ref: 'r', add: ['c'] }, UNVERIFIED)),
+    ).toContain('Do not retry')
   })
 
   it('refuses an empty or oversized tag selection before the plan', async () => {

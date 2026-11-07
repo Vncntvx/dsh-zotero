@@ -19,9 +19,11 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { renderDeclined } from './present.js'
 import {
+  COMMITTED_UNVERIFIED_VARIANT,
   DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentUpdateResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
 import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { validateItemUpdateFields } from '../write-item-rules.js'
@@ -62,6 +64,7 @@ type UpdateItemArgs = InferArgs<typeof UPDATE_ITEM_PARAMETERS>
 const UPDATE_ITEM_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -104,6 +107,8 @@ export function renderUpdateItem(_args: UpdateItemArgs, value: UpdateItemOutput)
   if (value.kind === 'declined') {
     return renderDeclined()
   }
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'item', 'committed')
   if (value.unchanged)
     return [
       {
