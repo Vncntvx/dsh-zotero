@@ -15,7 +15,8 @@
     # It ships off. Its row's switch in the plugin manager's "Included
     # components" list is the only authorization: mounting the component
     # registers its seven tools and permits requests to the allowlisted
-    # external indexes.
+    # external indexes; the open-access PDF fulltext arm is the single
+    # allowlist exception and is guarded by the public-address gates.
     - id: scholarly
       name: dsh-zotero/scholarly
       disabled: true

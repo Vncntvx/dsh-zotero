@@ -37,17 +37,17 @@ DSH's built-in "Trail" tab records tool-call execution times and raw parameters;
 
 The plugin is split into three components with distinct roles:
 
-| Component name             | Role                                                                | Default state | Partition rationale                                                                                             |
-| :------------------------- | :------------------------------------------------------------------ | :------------ | :-------------------------------------------------------------------------------------------------------------- |
-| **`dsh-zotero` (core)**    | Local communication, base model tools, literature trail, settings   | Enabled       | Plugin foundation, providing core connections and baseline capabilities.                                        |
-| **`dsh-zotero/library`**   | Literature panel service (`zoteroLibrary`) and sidebar interface    | Enabled       | Decouples the library browsing UI so it can be disabled as a whole, with an independent settings namespace.     |
-| **`dsh-zotero/scholarly`** | External scholarly retrieval, open-access full text, citation check | Disabled      | External network authorization boundary; outbound requests to academic indexes are permitted only when enabled. |
+| Component name             | Role                                                                | Default state | Partition rationale                                                                                                                           |
+| :------------------------- | :------------------------------------------------------------------ | :------------ | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`dsh-zotero` (core)**    | Local communication, base model tools, literature trail, settings   | Enabled       | Plugin foundation, providing core connections and baseline capabilities.                                                                      |
+| **`dsh-zotero/library`**   | Literature panel service (`zoteroLibrary`) and sidebar interface    | Enabled       | Decouples the library browsing UI so it can be disabled as a whole, with an independent settings namespace.                                   |
+| **`dsh-zotero/scholarly`** | External scholarly retrieval, open-access full text, citation check | Disabled      | External network authorization boundary; outbound requests (allowlisted indexes and the open-access PDF arm) are permitted only when enabled. |
 
 ### Component Roles
 
 - **Core component**: The plugin body. Manages communication with the local Zotero API (`127.0.0.1:23119`), registers 8 read tools and 15 write tools, and maintains the literature trail and configuration options.
 - **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend. It registers no tools and injects no prompts; requests forward directly to the core service. It can be unmounted entirely if the sidebar is not needed.
-- **Scholarly retrieval component**: The only component capable of accessing the external network. When unmounted, no outbound networking capability or tools exist in the host; when mounted, it registers 7 scholarly retrieval tools, strictly confined to allowlisted academic indexes.
+- **Scholarly retrieval component**: The only component capable of accessing the external network. When unmounted, no outbound networking capability or tools exist in the host; when mounted, it registers 7 scholarly retrieval tools: index searches stay confined to the allowlisted academic indexes, and the open-access PDF fulltext arm is the single exception, allowed on any public HTTP(S) host under the two-gate public-address check (see [Architecture](architecture.en.md)).
 
 `src/skills/` registers phased instructions through the Harness's optional `ctx.skills`, with the core component owning three and the scholarly retrieval component owning four. The model selects from a catalog of names and short descriptions, then loads the full Markdown body with the `skill` tool; bodies stay out of the standing system prompt. See the [research SOP skill reference](skills.en.md).
 
@@ -72,7 +72,7 @@ Both primary paths reach the local library through `ctx.zotero`. External schola
 ## Four Boundaries
 
 1. **Write safety**: Write tools are disabled by default. Once enabled, they may modify only the personal library (`zotero://user/0/`); every write (from the agent or the panel) requires approval and plan card confirmation, with no automatic retries on failure.
-2. **Network isolation**: Local requests connect strictly to loopback addresses (`127.0.0.1`) without following redirects; external requests are issued only by the scholarly retrieval component, limited to allowlisted academic indexes.
+2. **Network isolation**: Local requests connect strictly to loopback addresses (`127.0.0.1`) without following redirects; external requests are issued only by the scholarly retrieval component: index searches are limited to allowlisted academic indexes, and the open-access PDF arm is the single exception (any public HTTP(S) host, under the two-gate public-address check).
 3. **Trail scope**: The literature trail records only read tool calls and exports from this session; writes are recorded on approval cards and do not enter the trail; external papers found via scholarly search do not enter the trail until saved to the library.
 4. **Scope limits**: The Trash is accessible only via the literature panel and is not exposed to model tool search scopes; panel searches cover only the local library, leaving external discovery to the agent via the scholarly component.
 

@@ -42,7 +42,11 @@ These properties are intentional; regressions are treated as security bugs. The
   resolved fails the call instead of silently degrading to anonymous access.
 - **Request-driven core**: the core bundle performs no external network calls.
   External scholarly requests exist only inside the opt-in `dsh-zotero/scholarly`
-  component, behind an SSRF-guarded transport.
+  component, behind an SSRF-guarded transport. The allowlist in
+  `src/scholarly/transport/hosts.ts` governs the index arms; the open-access PDF
+  fulltext arm is the single exception that may fetch from any public HTTP(S)
+  host, guarded by the two-gate public-address check (the `allowlist.ts` lexical
+  gate plus `network.ts` connect-time resolution and pinning).
 - **Rejection messages leak nothing**: tool errors name hostnames at most; full
   URLs, which can carry credentials or DOIs, are never echoed back.
 - **Session-log maintenance goes through the persistence seam**: the repair
