@@ -31,6 +31,8 @@ interface ResponseHelpers {
   raw(status: number, headers: Record<string, string>, body: string): void
   /** 200 JSON after `ms` milliseconds; used for timeout and cancellation tests. */
   delayJson(body: unknown, ms: number, headers?: Record<string, string>): void
+  /** Arbitrary status/headers/body after `ms` milliseconds. */
+  delayRaw(status: number, headers: Record<string, string>, body: string, ms: number): void
 }
 
 export type RouteHandler = (
@@ -164,6 +166,12 @@ export class MockZotero {
         setTimeout(() => {
           if (res.writableEnded || res.destroyed) return
           helpers.json(body, headers)
+        }, ms).unref()
+      },
+      delayRaw: (status, headers, body, ms) => {
+        setTimeout(() => {
+          if (res.writableEnded || res.destroyed) return
+          helpers.raw(status, headers, body)
         }, ms).unref()
       },
     }
