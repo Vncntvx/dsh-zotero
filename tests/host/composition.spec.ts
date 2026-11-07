@@ -19,7 +19,7 @@ import { load } from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import Include, { type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
@@ -54,12 +54,12 @@ async function bootComposition(extraPatches: readonly PatchOptions[] = []): Prom
   mock = await MockZotero.start()
   root = await mkdtemp(join(tmpdir(), 'dsh-zotero-loader-'))
   const configPath = join(root, 'cordis.yml')
-  // The real bundle patch file is parsed with the include's own entry-list
-  // dialect (the same parse `boot()` performs on `--patch` layers), so the
-  // shipped artifact's rows (id `zotero`, name `dsh-zotero`, empty config,
-  // and the scholarly row shipped off) are what the composition validates.
+  // The shipped artifact contains plain YAML values; the include plugin
+  // applies its child-owned expression dialect when it loads the patch.
+  // Parsing the artifact here with js-yaml's current public API keeps this
+  // test independent of the include package's private js-yaml major.
   const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-  const parsedPatch = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
+  const parsedPatch = load(bundlePatch) as PatchOptions[]
   await writeFile(
     configPath,
     ["- name: '@deepseek-ai/dsh-system-prompt'", "- name: '@deepseek-ai/dsh-tools'", ''].join('\n'),
@@ -189,7 +189,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     // id is what the browser's config form addresses and what the plugin
     // manager's switch handles.
     const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-    const parsed = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
+    const parsed = load(bundlePatch) as PatchOptions[]
     const rows = parsed.flatMap((patch) => patch.insert ?? [])
     const row = rows.find((entry) => entry.name === 'dsh-zotero/scholarly')
     expect(row).toBeDefined()
@@ -233,7 +233,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
 
   it('declares the library subcomponent row in cordis.patch.yml', async () => {
     const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-    const parsed = load(bundlePatch, { schema: entryListSchema }) as PatchOptions[]
+    const parsed = load(bundlePatch) as PatchOptions[]
     const rows = parsed.flatMap((patch) => patch.insert ?? [])
     const row = rows.find((entry) => entry.name === 'dsh-zotero/library')
     expect(row).toBeDefined()

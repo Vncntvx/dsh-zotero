@@ -12,6 +12,7 @@ import { ZOTERO_SOURCE_PROJECTION_FAILED } from '../../src/contract.js'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { deferred } from '../helpers/sync.js'
 import { projectionHandle, stubProjections } from './support/session-projections.ts'
 import ZoteroService from '../../src/index.js'
@@ -77,6 +78,50 @@ describe('the projection registration', () => {
       state: 'failed',
       code: ZOTERO_SOURCE_PROJECTION_FAILED,
     })
+    await ctx.fiber.dispose()
+  })
+
+  it('releases the projection registration with the service fiber', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    const projections = new SessionProjectionRegistry(ctx)
+    const serviceFiber = ctx.plugin(ZoteroService, {})
+    await serviceFiber
+
+    await expect(
+      (ctx.get('zotero') as ZoteroService).sourceProjectionStatus(new AbortController().signal),
+    ).resolves.toEqual({ state: 'ready' })
+    const registrations = (
+      projections as unknown as {
+        registrations: Map<string, { refs: number }>
+      }
+    ).registrations
+    expect(registrations.get('zoteroSources')?.refs).toBe(1)
+
+    await serviceFiber.dispose()
+
+    expect(registrations.get('zoteroSources')?.refs).toBe(0)
+    await ctx.fiber.dispose()
+  })
+
+  it('disposes a registration handle that resolves after service teardown', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    const started = deferred<void>()
+    const ready = deferred<unknown>()
+    const disposed = deferred<void>()
+    stubProjections(ctx, () => {
+      started.resolve()
+      return ready.promise
+    })
+    const serviceFiber = ctx.plugin(ZoteroService, {})
+    await started.promise
+    await serviceFiber.dispose()
+
+    ready.resolve({ stateOf: () => ({}), dispose: async () => disposed.resolve() })
+    await disposed.promise
     await ctx.fiber.dispose()
   })
 })
