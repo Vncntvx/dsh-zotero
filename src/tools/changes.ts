@@ -11,7 +11,6 @@
  * @module dsh-zotero/tools/changes
  */
 
-import type { ResultDelivery } from '../result-delivery.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -49,7 +48,6 @@ import {
   BACKGROUND_OUTPUT_PROPERTIES,
   PROMOTED_OUTPUT_PROPERTIES,
   RUN_IN_BACKGROUND_PARAMETER,
-  ZoteroJobRunner,
   executeWithJobs,
   isJobArm,
   jobPolicyOf,
@@ -555,7 +553,6 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
 export function registerChangesTool(
   ctx: Context,
   service: ZoteroService,
-  delivery?: ResultDelivery,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
   const parameters = CHANGES_WITH_BACKGROUND_PARAMETERS
@@ -596,7 +593,7 @@ export function registerChangesTool(
               ? 'zotero_changes (baseline)'
               : `zotero_changes (since v${changesArgs.since.version})`
           return await executeWithJobs({
-            runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
+            runner: service.jobRunner,
             exec,
             label,
             run: async (signal, onProgress) => {

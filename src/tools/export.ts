@@ -9,7 +9,6 @@
  * @module dsh-zotero/tools/export
  */
 
-import type { ResultDelivery } from '../result-delivery.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import type {} from '@deepseek-ai/dsh-tool-present/types'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -44,7 +43,6 @@ import {
   BACKGROUND_OUTPUT_PROPERTIES,
   PROMOTED_OUTPUT_PROPERTIES,
   RUN_IN_BACKGROUND_PARAMETER,
-  ZoteroJobRunner,
   executeWithJobs,
   isJobArm,
   jobPolicyOf,
@@ -317,7 +315,6 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
 export function registerExportTool(
   ctx: Context,
   service: ZoteroService,
-  delivery?: ResultDelivery,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
   const parameters = EXPORT_WITH_BACKGROUND_PARAMETERS
@@ -383,7 +380,7 @@ export function registerExportTool(
               ? await workingDirectory!.ensure(exec.agent!, exec.signal)
               : undefined
           return executeWithJobs({
-            runner: new ZoteroJobRunner(ctx.get('jobs'), service.diagnostics.sink, delivery),
+            runner: service.jobRunner,
             exec,
             label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
             run: async (signal, onProgress) => {

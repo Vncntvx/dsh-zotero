@@ -30,6 +30,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertReleaseSource } from './release-branch-guard.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -53,22 +54,40 @@ function getOptionValue(argv, flag, defaultValue) {
 
 function parseArgs() {
   const argv = process.argv.slice(2)
+  const sourceSha = getOptionValue(
+    argv,
+    '--source-sha',
+    process.env.GITHUB_SHA ?? runGit(['rev-parse', 'HEAD']),
+  )
   return {
     dryRun: argv.includes('--dry-run'),
     push: argv.includes('--push'),
     branch: getOptionValue(argv, '--branch', 'release'),
     remote: getOptionValue(argv, '--remote', 'origin'),
+    sourceSha,
   }
 }
 
 const options = parseArgs()
 console.log(
-  `[release-branch] Preparing ${options.branch} (dryRun=${options.dryRun}, push=${options.push})`,
+  `[release-branch] Preparing ${options.branch} (dryRun=${options.dryRun}, push=${options.push}, source=${options.sourceSha})`,
 )
+
+assertReleaseSource({
+  actualSha: runGit(['rev-parse', 'HEAD']),
+  expectedSha: options.sourceSha,
+  status: runGit(['status', '--porcelain']),
+})
 
 // 1. Prove and build artifacts
 console.log('[release-branch] Building project (Node and Client bundles)...')
 execFileSync('npm', ['run', 'build'], { cwd: root, stdio: 'inherit' })
+
+assertReleaseSource({
+  actualSha: runGit(['rev-parse', 'HEAD']),
+  expectedSha: options.sourceSha,
+  status: runGit(['status', '--porcelain']),
+})
 
 const requiredFiles = ['lib/index.js', 'lib/client.js']
 for (const file of requiredFiles) {

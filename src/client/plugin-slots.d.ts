@@ -34,6 +34,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // the settings-controller declaration into the program. A registry-only
 // install must load it through the package's public `/remote` entry.
 import type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
+import type {} from '@deepseek-ai/dsh-api-remote-access/client'
 import type { ZoteroClientFace } from './actions/client-face.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

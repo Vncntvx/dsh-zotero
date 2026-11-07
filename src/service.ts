@@ -71,6 +71,9 @@ import { installServiceConfigLifecycle } from './service-lifecycle.js'
 import { registerPromptSection } from './prompt.js'
 import { installShellWriteApproval } from './shell-write-approval.js'
 import { registerReadTools, registerWriteTools } from './tool-registration.js'
+import { ResultDelivery } from './result-delivery.js'
+import { registerResultRoute } from './result-route.js'
+import { ZoteroJobRunner } from './job-runner.js'
 import { installToolDiagnostics } from './tool-diagnostics.js'
 import { createSubagentGuard, type SubagentGuard } from './subagent-guard.js'
 import { CORE_SOPS } from './skills/core.js'
@@ -207,6 +210,10 @@ export class ZoteroService extends Service {
    * side.
    */
   private readonly writeGate = new ConcurrencyGate(ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS)
+  /** Core-owned durable result delivery shared by every heavy read tool. */
+  private readonly resultDelivery: ResultDelivery
+  /** Core-owned runner; its registry source follows late jobs composition. */
+  readonly jobRunner: ZoteroJobRunner
   /** Disposer of the currently registered `local` provider, released after a rebuild's new registration lands. */
   private providerDispose: (() => void) | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
@@ -253,6 +260,12 @@ export class ZoteroService extends Service {
     const resolved = resolveConfig(config)
     this.diagnostics.setThreshold(resolved.debug ? 'debug' : 'info')
     this.entry = toLiveEntry(config)
+    this.resultDelivery = new ResultDelivery(ctx, () => this.config)
+    this.jobRunner = new ZoteroJobRunner(
+      () => ctx.get('jobs'),
+      this.diagnostics.sink,
+      this.resultDelivery,
+    )
     const initialConfig = this.config
     this.buildTransport(initialConfig)
     installServiceConfigLifecycle(ctx, {
@@ -281,7 +294,14 @@ export class ZoteroService extends Service {
     installParameterCorrection(ctx, ZOTERO_TOOL_NAMES)
     // Background-capable tools keep their parameters static; execution refuses
     // requests the current composition cannot serve.
-    registerReadTools(ctx, this)
+    registerReadTools(ctx, this, this.resultDelivery)
+    registerResultRoute(ctx, this.resultDelivery)
+    ctx.effect(
+      () => () => {
+        this.jobRunner.killAll('zotero service disposed')
+      },
+      'zotero: job teardown',
+    )
     // The literature trail is served as a session projection when the harness
     // composes the registry: the fold sees the whole log, not the bounded
     // history window the browser chat store receives. Optional assembly: a

@@ -162,6 +162,13 @@ export interface ZoteroJobTask<T> {
   readonly renderResult?: (value: T) => string
 }
 
+type JobRegistrySource = JobRegistry | (() => JobRegistry | undefined)
+
+interface ActiveJob {
+  readonly registry: JobRegistry
+  readonly owner: SessionId | undefined
+}
+
 interface PromotedJobResult {
   readonly kind: 'promoted'
   readonly jobId: JobId
@@ -258,16 +265,20 @@ export async function executeWithJobs<T>(options: {
 
 export class ZoteroJobRunner {
   /** Live jobs this runner started, with the owner the registry fences on. */
-  private readonly active = new Map<JobId, SessionId | undefined>()
+  private readonly active = new Map<JobId, ActiveJob>()
 
   constructor(
-    private readonly registry?: JobRegistry,
+    private readonly registrySource?: JobRegistrySource,
     private readonly sink?: DiagnosticSink,
     private readonly delivery?: ResultDelivery,
   ) {}
 
+  private registry(): JobRegistry | undefined {
+    return typeof this.registrySource === 'function' ? this.registrySource() : this.registrySource
+  }
+
   get isAvailable(): boolean {
-    return this.registry !== undefined
+    return this.registry() !== undefined
   }
 
   /**
@@ -277,10 +288,9 @@ export class ZoteroJobRunner {
    * @param reason - registry-visible cancellation reason.
    */
   killAll(reason: string): void {
-    if (!this.registry) return
-    for (const [id, owner] of this.active) {
+    for (const [id, { registry, owner }] of this.active) {
       try {
-        this.registry.kill(id, owner, reason)
+        registry.kill(id, owner, reason)
       } catch {
         // A job that settled between the snapshot and kill is already gone.
       }
@@ -297,7 +307,8 @@ export class ZoteroJobRunner {
     task: ZoteroJobTask<T>,
     options?: { readonly persistAtCompletion?: () => boolean },
   ): { id: JobId; done: Promise<ZoteroJobOutcome> } {
-    if (!this.registry) {
+    const registry = this.registry()
+    if (!registry) {
       throw new Error(JOBS_UNAVAILABLE_MESSAGE)
     }
 
@@ -311,7 +322,7 @@ export class ZoteroJobRunner {
       resolveOutcome = resolve
     })
 
-    const id = this.registry.start({
+    const id = registry.start({
       kind: task.kind ?? 'zotero',
       label: task.label,
       ...(task.outputLimitBytes === undefined ? {} : { outputLimitBytes: task.outputLimitBytes }),
@@ -399,7 +410,7 @@ export class ZoteroJobRunner {
     })
 
     this.delivery?.track(donePromise)
-    this.active.set(id, task.exec.agent?.id)
+    this.active.set(id, { registry, owner: task.exec.agent?.id })
     void donePromise.then(
       () => this.active.delete(id),
       () => this.active.delete(id),
@@ -417,7 +428,8 @@ export class ZoteroJobRunner {
     task: ZoteroJobTask<T>,
     waitTimeoutMs: number,
   ): Promise<{ kind: 'foreground'; value: T } | PromotedJobResult> {
-    if (!this.registry) {
+    const registry = this.registry()
+    if (!registry) {
       const value = await task.run(
         task.exec.signal,
         () => {},
@@ -492,14 +504,14 @@ export class ZoteroJobRunner {
 
     let view: JobView
     try {
-      view = await this.registry.wait(id, waitTimeoutMs, owner, task.exec.signal)
+      view = await registry.wait(id, waitTimeoutMs, owner, task.exec.signal)
     } catch (error) {
       // Only a caller abort cancels the job. A registry failure (unknown id,
       // owner fence, internal error) must not destroy a healthy in-flight
       // operation or be reported as cancellation.
       if (task.exec.signal.aborted) {
         try {
-          this.registry.kill(id, owner, TOOL_ABORTED_MESSAGE)
+          registry.kill(id, owner, TOOL_ABORTED_MESSAGE)
         } catch {
           // The owner may have been disposed, or the registry may have
           // observed terminal settlement between wait rejection and here.
@@ -508,7 +520,7 @@ export class ZoteroJobRunner {
         // registry observes terminal settlement. Wait for the producer first,
         // then let the registry publish its terminal view before removing the
         // private foreground record. Cancellation itself must stay immediate.
-        void this.removeAfterCancellation(id, owner, done)
+        void this.removeAfterCancellation(registry, id, owner, done)
         throw toolAborted()
       }
       // The job is still live and the id is the only handle. Hand it back as a
@@ -548,7 +560,7 @@ export class ZoteroJobRunner {
     }
 
     // Settled within foreground wait
-    this.registry.remove(id, owner)
+    registry.remove(id, owner)
 
     if (view.status === 'failed') {
       // Prefer the producer's own error: the registry's `detail` is a string,
@@ -568,18 +580,18 @@ export class ZoteroJobRunner {
 
   /** Remove a cancelled foreground record after the registry has settled it. */
   private async removeAfterCancellation(
+    registry: JobRegistry,
     id: JobId,
     owner: SessionId | undefined,
     done: Promise<ZoteroJobOutcome>,
   ): Promise<void> {
-    if (!this.registry) return
     try {
       await done
       // LocalJobRegistry settles from the producer promise in a following
       // microtask; wait through its public view rather than racing remove.
-      const view = await this.registry.wait(id, JOB_CANCELLATION_SETTLE_MS, owner)
+      const view = await registry.wait(id, JOB_CANCELLATION_SETTLE_MS, owner)
       if (view.status === 'completed' || view.status === 'failed' || view.status === 'killed') {
-        this.registry.remove(id, owner)
+        registry.remove(id, owner)
       }
     } catch {
       // A cancelled foreground call has no model-visible job id. If the

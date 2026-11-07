@@ -136,6 +136,31 @@ describe('getBatch', () => {
     })
   })
 
+  it('propagates an in-flight read that rejects after caller cancellation aborts the pool', async () => {
+    const ref = parseRef('zotero://user/0/item/AAAA1111')
+    const caller = new AbortController()
+    const started = deferred<void>()
+    const result = getBatch(
+      async (_request, signal) => {
+        started.resolve()
+        await new Promise<void>((resolve) => {
+          const onAbort = (): void => {
+            signal?.removeEventListener('abort', onAbort)
+            resolve()
+          }
+          if (signal?.aborted === true) resolve()
+          else signal?.addEventListener('abort', onAbort, { once: true })
+        })
+        throw new Error('late failure')
+      },
+      { refs: [ref] },
+      caller.signal,
+    )
+    await started.promise
+    caller.abort()
+    await expect(result).rejects.toThrow('late failure')
+  })
+
   it('rejects empty, duplicate, and over-sized batches before reading', async () => {
     let reads = 0
     const read = async () => {

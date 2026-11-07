@@ -19,11 +19,14 @@ export class ScholarlyCircuitOpenError extends Error {
   constructor(
     public readonly host: string,
     public readonly cooldownRemainingMs: number,
+    public readonly reason: 'cooldown' | 'probe-in-flight' = 'cooldown',
   ) {
     super(
-      `${host} is temporarily unavailable after repeated failures (${Math.ceil(
-        cooldownRemainingMs / 1_000,
-      )}s remaining).`,
+      reason === 'probe-in-flight'
+        ? `${host} is temporarily unavailable while its recovery probe is in flight.`
+        : `${host} is temporarily unavailable after repeated failures (${Math.ceil(
+            cooldownRemainingMs / 1_000,
+          )}s remaining).`,
     )
     this.name = 'ScholarlyCircuitOpenError'
   }
@@ -34,6 +37,7 @@ interface HostCircuit {
   consecutiveFailures: number
   lastFailureTime: number
   cooldownEndsAt: number
+  probeToken?: symbol
 }
 
 interface CircuitBreakerOptions {
@@ -115,17 +119,37 @@ export class CircuitBreaker {
     circuit.state = to
   }
 
-  beforeRequest(host: string): void {
+  beforeRequest(host: string, probeToken?: symbol): symbol | undefined {
     const state = this.getState(host)
     const circuit = this.getCircuit(host)
     if (state === 'OPEN') {
       const remaining = Math.max(0, circuit.cooldownEndsAt - Date.now())
       throw new ScholarlyCircuitOpenError(host, remaining)
     }
+    if (state === 'HALF_OPEN') {
+      if (circuit.probeToken !== undefined && circuit.probeToken !== probeToken) {
+        throw new ScholarlyCircuitOpenError(host, 0, 'probe-in-flight')
+      }
+      circuit.probeToken ??= Symbol(host)
+      return circuit.probeToken
+    }
+    return undefined
+  }
+
+  /** Release a half-open probe that was cancelled before it reached fetch. */
+  releaseProbe(host: string, probeToken?: symbol): void {
+    const circuit = this.getCircuit(host)
+    if (
+      circuit.state === 'HALF_OPEN' &&
+      (probeToken === undefined || circuit.probeToken === probeToken)
+    ) {
+      circuit.probeToken = undefined
+    }
   }
 
   recordSuccess(host: string): void {
     const circuit = this.getCircuit(host)
+    circuit.probeToken = undefined
     if (circuit.state === 'HALF_OPEN' || circuit.consecutiveFailures > 0) {
       circuit.consecutiveFailures = 0
       // Host recovered with successful response.
@@ -152,6 +176,7 @@ export class CircuitBreaker {
 
     if (circuit.state === 'HALF_OPEN') {
       // Half-open probe failed: immediately reopen circuit.
+      circuit.probeToken = undefined
       circuit.cooldownEndsAt = now + this.cooldownMs
       this.transition(circuit, 'OPEN')
       return
