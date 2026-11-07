@@ -8,6 +8,7 @@
  */
 
 import { intervalForHost } from './hosts.js'
+import { raceWithSignal } from '../../race-signal.js'
 
 /**
  * Sleep that a caller's cancellation can cut short.
@@ -16,21 +17,19 @@ import { intervalForHost } from './hosts.js'
  * @returns resolution after the wait, or rejection on cancellation.
  */
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted === true) {
-      reject(signal.reason ?? new Error('Operation aborted'))
-      return
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      reject(signal?.reason ?? new Error('Operation aborted'))
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return raceWithSignal(
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        timer = undefined
+        resolve()
+      }, ms)
+    }),
+    signal,
+  ).finally(() => {
+    // A cancellation cuts the wait short; the timer it leaves behind must not
+    // keep the event loop alive past the rejection.
+    if (timer !== undefined) clearTimeout(timer)
   })
 }
 
@@ -126,16 +125,5 @@ async function waitForPrevious(previous: Promise<void>, signal?: AbortSignal): P
     await previous
     return
   }
-  if (signal.aborted) throw signal.reason ?? new Error('Operation aborted')
-
-  let onAbort!: () => void
-  const aborted = new Promise<never>((_, reject) => {
-    onAbort = () => reject(signal.reason ?? new Error('Operation aborted'))
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
-  try {
-    await Promise.race([previous, aborted])
-  } finally {
-    signal.removeEventListener('abort', onAbort)
-  }
+  await raceWithSignal(previous, signal)
 }

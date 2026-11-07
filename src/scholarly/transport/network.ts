@@ -30,6 +30,8 @@
  */
 
 import { ScholarlySecurityError } from './allowlist.js'
+import { errorMessageOf } from '../../errors.js'
+import { raceWithSignal } from '../../race-signal.js'
 
 /** One DNS answer: the literal address and its family. */
 export interface ResolvedAddress {
@@ -47,6 +49,19 @@ export type AddressResolver = (
   hostname: string,
   signal?: AbortSignal,
 ) => Promise<readonly ResolvedAddress[]>
+
+/**
+ * One pinned connection: the dispatcher rides in the fetch `init` (undici's
+ * own `RequestInit` extension), and `close()` ends the connection pool once
+ * the attempt's response body has settled. Declared here — the pure/host
+ * split's shared vocabulary — so the factory in `host-connections.ts` and the
+ * transport in `http.ts` cannot drift apart.
+ */
+export interface PinnedDispatcher {
+  /** Passed through to fetch as undici's `dispatcher` init extension. */
+  readonly dispatcher: unknown
+  close(): Promise<void>
+}
 
 /**
  * Whether one dotted-quad is a public unicast IPv4 address.
@@ -203,26 +218,12 @@ export async function resolvePublicAddresses(
 ): Promise<readonly ResolvedAddress[]> {
   let answers: readonly ResolvedAddress[]
   try {
-    if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted')
     const resolution = signal === undefined ? resolver(hostname) : resolver(hostname, signal)
-    if (signal === undefined) answers = await resolution
-    else {
-      let abort: (() => void) | undefined
-      const canceled = new Promise<never>((_, reject) => {
-        abort = () => reject(signal.reason ?? new Error('Operation aborted'))
-        signal.addEventListener('abort', abort, { once: true })
-      })
-      try {
-        answers = await Promise.race([resolution, canceled])
-      } finally {
-        if (abort !== undefined) signal.removeEventListener('abort', abort)
-      }
-    }
+    answers = await raceWithSignal(resolution, signal)
   } catch (error) {
     if (signal?.aborted) throw error
-    const reason = error instanceof Error ? error.message : String(error)
     throw new ScholarlySecurityError(
-      `Security rejection: "${hostname}" did not resolve (${reason}).`,
+      `Security rejection: "${hostname}" did not resolve (${errorMessageOf(error)}).`,
     )
   }
   if (answers.length === 0) {

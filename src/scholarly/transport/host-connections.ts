@@ -17,6 +17,7 @@ import {
   pinnedLookup,
   validatingLookup,
   type AddressResolver,
+  type PinnedDispatcher,
   type ResolvedAddress,
 } from './network.js'
 
@@ -27,16 +28,6 @@ export const dnsAddressResolver = async (hostname: string): Promise<readonly Res
     address: answer.address,
     family: answer.family === 6 ? 6 : 4,
   }))
-}
-
-/**
- * One pinned connection factory's answer: the dispatcher rides inside the
- * fetch `init` (undici's own `RequestInit` extension), and `close()` ends the
- * agent's pool once the attempt's response body has settled.
- */
-export interface PinnedDispatcher {
-  readonly dispatcher: unknown
-  close(): Promise<void>
 }
 
 /**

@@ -268,6 +268,52 @@ describe('provider registration', () => {
     expect((thrown as ZoteroError).code).toBe(ZOTERO_PROVIDER_UNAVAILABLE)
   })
 
+  it('replaces a provider under the same id with the replace option', async () => {
+    lane = await setupHostLane()
+    const service = lane.ctx.get('zotero') as ZoteroService
+    const double = (diagnosis: string): ZoteroProvider => ({
+      id: 'local',
+      capabilities: new Set(),
+      status: async () => ({
+        providerId: 'local',
+        endpoint: '127.0.0.1:23119',
+        connected: false,
+        diagnosis,
+      }),
+      search: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getItem: async () => {
+        throw new Error('test double: must not be called')
+      },
+      getAttachmentLocation: async () => {
+        throw new Error('test double: must not be called')
+      },
+      retrieve: async () => {
+        throw new Error('test double: must not be called')
+      },
+      export: async () => {
+        throw new Error('test double: must not be called')
+      },
+      changes: async () => {
+        throw new Error('test double: must not be called')
+      },
+      browse: async () => {
+        throw new Error('test double: must not be called')
+      },
+    })
+    // Without the option the stable configured id is still a duplicate.
+    expect(() => service.registerProvider(double('first'))).toThrow(ZoteroError)
+    // The transport rebuild's swap: install the new provider, then the old
+    // registration's identity-checked disposer no-ops.
+    const dispose = service.registerProvider(double('second'), { replace: true })
+    expect((await service.status()).diagnosis).toBe('second')
+    // The returned disposer removes exactly the registration it installed;
+    // under the stable id nothing else is left.
+    dispose()
+    await expect(service.status()).rejects.toThrow('No Zotero provider "local" is registered.')
+  })
+
   it('removes a provider when its registration disposer runs', async () => {
     lane = await setupHostLane()
     const service = lane.ctx.get('zotero') as ZoteroService

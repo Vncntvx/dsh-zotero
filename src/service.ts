@@ -65,6 +65,7 @@ import {
 } from './errors.js'
 import { ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS, ZOTERO_TOOL_NAMES } from './constants.js'
 import { ConcurrencyGate } from './concurrency.js'
+import { raceWithSignal } from './race-signal.js'
 import { LocalApiProvider } from './local/provider.js'
 import { installParameterCorrection } from './parameter-correction.js'
 import { localProviderLimits } from './service-config.js'
@@ -444,17 +445,7 @@ export class ZoteroService extends Service {
     registration: PromiseLike<unknown>,
     signal: AbortSignal,
   ): Promise<void> {
-    let rejectAbort: (() => void) | undefined
-    const aborted = new Promise<never>((_, reject) => {
-      rejectAbort = () => reject(signal.reason ?? new Error('Aborted'))
-      if (signal.aborted) rejectAbort()
-      else signal.addEventListener('abort', rejectAbort, { once: true })
-    })
-    try {
-      await Promise.race([registration, aborted])
-    } finally {
-      if (rejectAbort !== undefined) signal.removeEventListener('abort', rejectAbort)
-    }
+    await raceWithSignal(registration, signal)
   }
 
   /**
@@ -507,21 +498,14 @@ export class ZoteroService extends Service {
       authorizer,
       this.diagnostics.sink,
     )
-    // The swap is synchronous: the new provider is in the seam before the
-    // old registration is released, so a caller between the two steps — and
-    // a construction failure before either — never sees zero providers. The
-    // disposer is identity-checked, because the id is stable across swaps.
-    this.providers.set(provider.id, provider)
-    const previousDispose = this.providerDispose
-    this.providerDispose = this.ctx.effect(
-      () => () => {
-        if (this.providers.get(provider.id) === provider) {
-          this.providers.delete(provider.id)
-        }
-      },
-      'zotero.transportRegistration()',
-    )
-    previousDispose?.()
+    // The swap is synchronous: registerProvider installs the new provider
+    // under the stable id before this releases the old registration (whose
+    // identity-checked disposer then no-ops), so a caller between the two
+    // steps — and a construction failure before either — never sees zero
+    // providers.
+    const previousDispose = this.registerProvider(provider, { replace: true })
+    this.providerDispose?.()
+    this.providerDispose = previousDispose
     this.authorizer = authorizerInstance
     this.diagnostics.sink.info('transport.built', 'Zotero transport stack built', { writeEnabled })
   }
@@ -563,12 +547,15 @@ export class ZoteroService extends Service {
 
   /**
    * Register a provider into the seam. Effect-scoped: unloading the
-   * registering fiber removes the provider.
-   * @throws {ZoteroError} `ZOTERO_PROVIDER_UNAVAILABLE` on a duplicate id.
+   * registering fiber removes the provider. With `{replace: true}` a provider
+   * under an already-registered id is a swap, not a duplicate: the transport
+   * rebuild replaces its own provider across config reloads.
+   * @throws {ZoteroError} `ZOTERO_PROVIDER_UNAVAILABLE` on a duplicate id
+   *   without the replace option.
    * @returns the registration disposer.
    */
-  registerProvider(provider: ZoteroProvider): () => void {
-    if (this.providers.has(provider.id)) {
+  registerProvider(provider: ZoteroProvider, options?: { replace?: boolean }): () => void {
+    if (this.providers.has(provider.id) && options?.replace !== true) {
       throw new ZoteroError(
         `A Zotero provider with id "${provider.id}" is already registered.`,
         ZOTERO_PROVIDER_UNAVAILABLE,

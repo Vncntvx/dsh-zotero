@@ -34,7 +34,12 @@ import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../
 import { assertAllowedScholarlyUrl, ScholarlySecurityError } from './allowlist.js'
 import { CircuitBreaker, ScholarlyCircuitOpenError } from './circuit-breaker.js'
 import { HostPacer, abortableSleep } from './pacing.js'
-import { resolvePublicAddresses, type AddressResolver, type ResolvedAddress } from './network.js'
+import {
+  resolvePublicAddresses,
+  type AddressResolver,
+  type PinnedDispatcher,
+  type ResolvedAddress,
+} from './network.js'
 
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -51,14 +56,6 @@ export interface ScholarlyPublicAccess {
   readonly resolver: AddressResolver
   readonly createDispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
   readonly createValidatingDispatcher: () => PinnedDispatcher
-}
-
-/** One pinned connection: the dispatcher rides in the fetch `init`. */
-export interface PinnedDispatcher {
-  /** Passed through to fetch as undici's `dispatcher` init extension. */
-  readonly dispatcher: unknown
-  /** Ends the connection pool once the attempt's response has settled. */
-  close(): Promise<void>
 }
 
 /** Deadline code stamped on a provider timeout, so a call can classify it. */

@@ -24,6 +24,13 @@ import type {
 } from '@deepseek-ai/dsh-tools'
 import { asRecord } from './json.js'
 
+/**
+ * The harness error code `ToolArgsError` stamps on a schema-violating call
+ * (`@deepseek-ai/dsh-tools`, packages/core/tools/src/schema.ts). Anchored once
+ * so a harness rename surfaces here instead of silently disabling the hint.
+ */
+const INVALID_ARGS_CODE = 'INVALID_ARGS'
+
 /** One undeclared argument and the declared parameter it was meant for. */
 export interface ParameterCorrection {
   readonly input: string
@@ -129,7 +136,7 @@ export function parameterCorrectionOf(
   argumentsValue: unknown,
   result: Readonly<ToolExecutionResult>,
 ): ParameterCorrection | undefined {
-  if (!result.isError || result.error.info?.code !== 'INVALID_ARGS') return undefined
+  if (!result.isError || result.error.info?.code !== INVALID_ARGS_CODE) return undefined
   const args = asRecord(argumentsValue)
   const schema = asRecord(parameters)
   const properties = asRecord(schema?.properties)
@@ -176,7 +183,11 @@ export function parameterCorrectionListener(
   lookup: ParameterCorrectionLookup,
 ): ParameterCorrectionListener {
   return async (exec, result, next) => {
-    if (!admitted.has(exec.name) || !result.isError || result.error.info?.code !== 'INVALID_ARGS')
+    if (
+      !admitted.has(exec.name) ||
+      !result.isError ||
+      result.error.info?.code !== INVALID_ARGS_CODE
+    )
       return next()
     const decision = await next()
     if (decision.kind !== 'accept' || Object.hasOwn(decision, 'value')) return decision

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ConcurrencyGate, GateAbortedError, mapWithConcurrency } from '../../src/concurrency.js'
+import { raceWithSignal } from '../../src/race-signal.js'
 import { deferred, progress } from '../helpers/sync.js'
 
 describe('mapWithConcurrency', () => {
@@ -159,5 +160,37 @@ describe('ConcurrencyGate', () => {
   it('rejects a non-integer or non-positive limit', () => {
     expect(() => new ConcurrencyGate(0)).toThrow(/positive integer/)
     expect(() => new ConcurrencyGate(1.5)).toThrow(/positive integer/)
+  })
+})
+
+describe('raceWithSignal', () => {
+  it('rejects an already-aborted signal before touching the promise', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('stop first'))
+    const untouched = deferred<void>()
+    await expect(raceWithSignal(untouched.promise, controller.signal)).rejects.toThrow('stop first')
+  })
+
+  it('rejects mid-wait with the signal reason and stops listening once settled', async () => {
+    const controller = new AbortController()
+    const settled = deferred<void>()
+    const slow = raceWithSignal(settled.promise, controller.signal)
+    controller.abort(new Error('cut short'))
+    await expect(slow).rejects.toThrow('cut short')
+    // The loser keeps running; settling it afterwards must not blow up
+    // through a stale listener.
+    settled.resolve()
+    await settled.promise
+  })
+
+  it('passes a promise through when no signal is given', async () => {
+    await expect(raceWithSignal(Promise.resolve('done'), undefined)).resolves.toBe('done')
+  })
+
+  it('removes the abort listener once the promise wins the race', async () => {
+    const controller = new AbortController()
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener')
+    await expect(raceWithSignal(Promise.resolve('won'), controller.signal)).resolves.toBe('won')
+    expect(removeSpy.mock.calls.map((call) => call[0])).toEqual(['abort'])
   })
 })

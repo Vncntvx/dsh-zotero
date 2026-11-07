@@ -30,6 +30,7 @@ import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { LIBRARY_WRITE_TOOL_NAMES, SCHOLARLY_SAVE_TOOL_NAME } from './constants.js'
 import type { DiagnosticsRecorder } from './diagnostics.js'
+import { errorMessageOf } from './errors.js'
 import { FIBER_STATE } from './fiber-state.js'
 
 /** The model-facing denial. One constant, so a wording change edits one place. */
@@ -165,7 +166,9 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
       try {
         apply(restriction, deny)
       } catch (error) {
-        diagnostics.sink.warn('subagent.restriction.failed', messageOf(error), { agent: agent.id })
+        diagnostics.sink.warn('subagent.restriction.failed', errorMessageOf(error), {
+          agent: agent.id,
+        })
         errors.push(error)
       }
     }
@@ -184,7 +187,7 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
     try {
       refresh()
     } catch (error) {
-      diagnostics.sink.warn('subagent.refresh.failed', messageOf(error))
+      diagnostics.sink.warn('subagent.refresh.failed', errorMessageOf(error))
     }
   }
   // Also covers Scholarly mounting after existing children, and unloading it.
@@ -220,8 +223,4 @@ export function createSubagentGuard(ctx: Context, diagnostics: DiagnosticsRecord
       }
     },
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
