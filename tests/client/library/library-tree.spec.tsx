@@ -368,3 +368,51 @@ it('renders a row whose ref is not a URL', () => {
     'false',
   )
 })
+
+it('keeps a large navigation dataset virtualized without truncating its total size', () => {
+  const largeRoots: CollectionRowView[] = Array.from({ length: 10_000 }, (_, index) => ({
+    kind: 'collection',
+    ref: `zotero://user/0/collection/LARGE${index}`,
+    name: `Collection ${index}`,
+    path: [`Collection ${index}`],
+    depth: 0,
+  }))
+  const largeSavedSearches = Array.from({ length: 10_000 }, (_, index) => ({
+    kind: 'savedSearch' as const,
+    ref: `zotero://user/0/search/LARGE${index}`,
+    name: `Saved ${index}`,
+    conditions: [],
+  }))
+  const largeRootPage = {
+    rows: largeRoots,
+    total: largeRoots.length,
+    offset: 0,
+    limit: largeRoots.length,
+    nextOffset: undefined,
+  }
+  const { props, rerender } = mountTree(new Set(), { phase: 'loading' }, largeRoots)
+  rerender(
+    <LibraryTree
+      {...props}
+      flatTree={flattenTree(largeRoots, () => undefined, new Set(), largeRootPage)}
+      rootLane={{ phase: 'ready', ...largeRootPage }}
+      savedSearches={{
+        phase: 'ready',
+        rows: largeSavedSearches,
+        total: largeSavedSearches.length,
+        offset: 0,
+        limit: largeSavedSearches.length,
+        nextOffset: undefined,
+      }}
+    />,
+  )
+
+  expect(screen.getAllByRole('treeitem').length).toBeLessThan(100)
+  expect(screen.getByRole('treeitem', { name: 'Collection 0' })).toBeTruthy()
+  expect(screen.queryByRole('treeitem', { name: 'Collection 9999' })).toBeNull()
+  expect(screen.getAllByRole('button', { name: /^Saved / }).length).toBeLessThan(100)
+  expect(screen.queryByRole('button', { name: 'Saved 9999' })).toBeNull()
+  expect(screen.getByRole('tree', { name: zh.libraryCollections }).getAttribute('style')).toContain(
+    `height: ${largeRoots.length * 32}px`,
+  )
+})

@@ -121,6 +121,7 @@ const EXTERNALS = [
   'zod',
   '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-primitives',
+  '@tanstack/react-virtual',
 ]
 
 /**

@@ -7,7 +7,13 @@
  */
 
 import clsx from 'clsx'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  observeElementRect,
+  useVirtualizer,
+  type Rect,
+  type Virtualizer,
+} from '@tanstack/react-virtual'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   DisclosureRow,
@@ -53,6 +59,20 @@ const FIXED_SCOPES: readonly {
     icon: () => <IconTrashOutlineMedium className={css.treeRowIcon} />,
   },
 ]
+
+const VIRTUAL_VIEWPORT = { width: 1, height: 360 }
+
+function observeLibraryViewportRect(
+  instance: Virtualizer<HTMLDivElement, any>,
+  callback: (rect: Rect) => void,
+) {
+  return observeElementRect(instance, (rect) =>
+    callback({
+      width: rect.width || VIRTUAL_VIEWPORT.width,
+      height: rect.height || VIRTUAL_VIEWPORT.height,
+    }),
+  )
+}
 
 interface LibraryTreeProps {
   readonly locatedRef?: string
@@ -120,18 +140,67 @@ export function LibraryTree({
   retrySavedSearches,
 }: LibraryTreeProps) {
   const savedPage = lanePageOf(savedSearches)
+  const collectionViewport = useRef<HTMLDivElement>(null)
+  const savedViewport = useRef<HTMLDivElement>(null)
+  const treeVirtualizer = useVirtualizer({
+    count: flatTree.length,
+    getScrollElement: () => collectionViewport.current,
+    estimateSize: () => 32,
+    overscan: 8,
+    initialRect: VIRTUAL_VIEWPORT,
+    observeElementRect: observeLibraryViewportRect,
+    getItemKey: (index) => flatTree[index]?.row.ref ?? index,
+  })
+  const savedVirtualizer = useVirtualizer({
+    count: savedPage?.rows.length ?? 0,
+    getScrollElement: () => savedViewport.current,
+    estimateSize: () => 32,
+    overscan: 8,
+    initialRect: VIRTUAL_VIEWPORT,
+    observeElementRect: observeLibraryViewportRect,
+    getItemKey: (index) => savedPage?.rows[index]?.ref ?? index,
+  })
+  const measureTreeRow = useCallback(
+    (element: HTMLLIElement | null) => {
+      if (element !== null && element.getBoundingClientRect().height > 0) {
+        treeVirtualizer.measureElement(element)
+      }
+    },
+    [treeVirtualizer],
+  )
+  const measureSavedRow = useCallback(
+    (element: HTMLLIElement | null) => {
+      if (element !== null && element.getBoundingClientRect().height > 0) {
+        savedVirtualizer.measureElement(element)
+      }
+    },
+    [savedVirtualizer],
+  )
   const selectionKey = 'ref' in selection ? identityOf(selection.ref) : undefined
   const [focused, setFocused] = useState<string>()
   const buttons = useRef(new Map<string, HTMLButtonElement>())
+  const pendingFocus = useRef<string>()
   const focus = (ref: string | undefined) => {
     if (ref === undefined) return
     setFocused(ref)
+    pendingFocus.current = ref
+    const index = flatTree.findIndex((entry) => entry.row.ref === ref)
+    if (index >= 0) treeVirtualizer.scrollToIndex(index, { align: 'auto' })
     buttons.current.get(ref)?.focus()
   }
   const focusRef = flatTree.some(({ row }) => row.ref === focused) ? focused : flatTree[0]?.row.ref
   useEffect(() => {
     if (focused !== undefined && focusRef !== focused) setFocused(focusRef)
   }, [focusRef, focused])
+
+  useEffect(() => {
+    const ref = pendingFocus.current
+    if (ref === undefined) return
+    const button = buttons.current.get(ref)
+    if (button === undefined) return
+    pendingFocus.current = undefined
+    button.focus()
+  }, [treeVirtualizer.getVirtualItems(), flatTree])
 
   useEffect(() => {
     if (locatedRef === undefined) return
@@ -229,97 +298,112 @@ export function LibraryTree({
         <p className={clsx(css.caption, css.treeNote)}>{t('libraryNoCollections')}</p>
       )}
 
-      <ul
-        className={css.treeList}
-        role="tree"
-        aria-label={t('libraryCollections')}
-        onKeyDownCapture={(event) => {
-          if (
-            event.target instanceof HTMLElement &&
-            event.target.closest('[role=treeitem]') === null &&
-            flatTree.length > 0
-          ) {
-            if (event.key === 'ArrowDown' || event.key === 'Home') {
-              focus(flatTree[0]?.row.ref)
-              event.preventDefault()
-            } else if (event.key === 'End') {
-              focus(flatTree.at(-1)?.row.ref)
-              event.preventDefault()
+      <div ref={collectionViewport} className={css.virtualViewport}>
+        <ul
+          className={clsx(css.treeList, css.virtualList)}
+          role="tree"
+          style={{ height: treeVirtualizer.getTotalSize() }}
+          aria-label={t('libraryCollections')}
+          onKeyDownCapture={(event) => {
+            if (
+              event.target instanceof HTMLElement &&
+              event.target.closest('[role=treeitem]') === null &&
+              flatTree.length > 0
+            ) {
+              if (event.key === 'ArrowDown' || event.key === 'Home') {
+                focus(flatTree[0]?.row.ref)
+                event.preventDefault()
+              } else if (event.key === 'End') {
+                focus(flatTree.at(-1)?.row.ref)
+                event.preventDefault()
+              }
             }
-          }
-        }}
-      >
-        {flatTree.map(({ row, depth, setSize, posInSet }, index) => {
-          const lane = treeLane(row.ref)
-          const childless = hasNoChildren(row, lane)
-          const isExpanded = !childless && expanded.has(row.ref)
-          const isSelected = selection.kind === 'collection' && identityOf(row.ref) === selectionKey
+          }}
+        >
+          {treeVirtualizer.getVirtualItems().map((virtualRow) => {
+            const index = virtualRow.index
+            const { row, depth, setSize, posInSet } = flatTree[index]!
+            const lane = treeLane(row.ref)
+            const childless = hasNoChildren(row, lane)
+            const isExpanded = !childless && expanded.has(row.ref)
+            const isSelected =
+              selection.kind === 'collection' && identityOf(row.ref) === selectionKey
 
-          return (
-            <li key={row.ref} role="none">
-              <div
-                className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}
-                style={{ '--tree-depth': depth } as React.CSSProperties}
+            return (
+              <li
+                key={row.ref}
+                role="none"
+                data-index={virtualRow.index}
+                ref={measureTreeRow}
+                className={css.virtualRow}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                {childless ? (
-                  <span className={css.treeExpanderPlaceholder} />
-                ) : (
-                  <IconButton
-                    size="sm"
-                    shape="square"
-                    tabIndex={-1}
-                    aria-expanded={isExpanded}
-                    aria-label={row.name}
-                    className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
-                    icon={<IconChevronRightOutlineMedium className={css.chevronSvg} />}
-                    onClick={() => {
-                      buttons.current.get(row.ref)?.focus()
-                      toggleCollection(row.ref)
-                    }}
-                  />
-                )}
-                <button
-                  type="button"
-                  role="treeitem"
-                  ref={(element) => {
-                    if (element) buttons.current.set(row.ref, element)
-                    else buttons.current.delete(row.ref)
-                  }}
-                  tabIndex={focusRef === row.ref ? 0 : -1}
-                  aria-level={depth + 1}
-                  aria-expanded={childless ? undefined : isExpanded}
-                  aria-busy={lane?.phase === 'loading' || undefined}
-                  aria-selected={isSelected}
-                  aria-setsize={setSize}
-                  aria-posinset={posInSet}
-                  onFocus={() => setFocused(row.ref)}
-                  onKeyDown={(event) => keyDown(event, index)}
-                  className={clsx(css.treeRow, isSelected && css.treeRowActive)}
-                  title={row.path.length > 0 ? row.path.join(' / ') : row.name}
-                  onClick={() => selectScope({ kind: 'collection', ref: row.ref, name: row.name })}
+                <div
+                  className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}
+                  style={{ '--tree-depth': depth } as React.CSSProperties}
                 >
-                  {isExpanded ? (
-                    <IconFolderOpenMedium className={css.treeRowIcon} />
+                  {childless ? (
+                    <span className={css.treeExpanderPlaceholder} />
                   ) : (
-                    <IconFolderCloseMedium className={css.treeRowIcon} />
+                    <IconButton
+                      size="sm"
+                      shape="square"
+                      tabIndex={-1}
+                      aria-expanded={isExpanded}
+                      aria-label={row.name}
+                      className={clsx(css.treeExpander, isExpanded && css.treeExpanderOpen)}
+                      icon={<IconChevronRightOutlineMedium className={css.chevronSvg} />}
+                      onClick={() => {
+                        buttons.current.get(row.ref)?.focus()
+                        toggleCollection(row.ref)
+                      }}
+                    />
                   )}
-                  <span className={css.treeRowLabel}>{row.name}</span>
-                </button>
-              </div>
-              {closingBranches.get(row.ref)?.map((entry) => (
-                <LibraryLaneControls
-                  key={entry.row.ref}
-                  t={t}
-                  label={entry.row.name}
-                  lane={treeLane(entry.row.ref)}
-                  page={() => loadMoreTree(entry.row.ref)}
-                  retry={() => retryTree(entry.row.ref)}
-                />
-              ))}
-            </li>
-          )
-        })}
-      </ul>
+                  <button
+                    type="button"
+                    role="treeitem"
+                    ref={(element) => {
+                      if (element) buttons.current.set(row.ref, element)
+                      else buttons.current.delete(row.ref)
+                    }}
+                    tabIndex={focusRef === row.ref ? 0 : -1}
+                    aria-level={depth + 1}
+                    aria-expanded={childless ? undefined : isExpanded}
+                    aria-busy={lane?.phase === 'loading' || undefined}
+                    aria-selected={isSelected}
+                    aria-setsize={setSize}
+                    aria-posinset={posInSet}
+                    onFocus={() => setFocused(row.ref)}
+                    onKeyDown={(event) => keyDown(event, index)}
+                    className={clsx(css.treeRow, isSelected && css.treeRowActive)}
+                    title={row.path.length > 0 ? row.path.join(' / ') : row.name}
+                    onClick={() =>
+                      selectScope({ kind: 'collection', ref: row.ref, name: row.name })
+                    }
+                  >
+                    {isExpanded ? (
+                      <IconFolderOpenMedium className={css.treeRowIcon} />
+                    ) : (
+                      <IconFolderCloseMedium className={css.treeRowIcon} />
+                    )}
+                    <span className={css.treeRowLabel}>{row.name}</span>
+                  </button>
+                </div>
+                {closingBranches.get(row.ref)?.map((entry) => (
+                  <LibraryLaneControls
+                    key={entry.row.ref}
+                    t={t}
+                    label={entry.row.name}
+                    lane={treeLane(entry.row.ref)}
+                    page={() => loadMoreTree(entry.row.ref)}
+                    retry={() => retryTree(entry.row.ref)}
+                  />
+                ))}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
 
       <LibraryLaneControls
         t={t}
@@ -336,31 +420,45 @@ export function LibraryTree({
       {savedPage?.rows.length === 0 && (
         <p className={clsx(css.caption, css.treeNote)}>{t('libraryNoSavedSearches')}</p>
       )}
-      <ul className={css.treeList}>
-        {savedPage?.rows.map((row) => {
-          const isSelected =
-            selection.kind === 'savedSearch' && identityOf(row.ref) === selectionKey
-          return (
-            <li key={row.ref}>
-              <div className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}>
-                <span className={css.treeExpanderPlaceholder} />
-                <button
-                  type="button"
-                  className={clsx(css.treeRow, isSelected && css.treeRowActive)}
-                  aria-current={isSelected ? 'page' : undefined}
-                  onClick={() => selectScope({ kind: 'savedSearch', ref: row.ref, name: row.name })}
-                >
-                  <IconSearchOutlineMedium className={css.treeRowIcon} />
-                  <span className={css.treeRowLabel}>{row.name}</span>
-                </button>
-              </div>
-              {row.conditions.length > 0 && (
-                <SavedSearchConditions conditions={row.conditions} t={t} />
-              )}
-            </li>
-          )
-        })}
-      </ul>
+      <div ref={savedViewport} className={css.virtualViewport}>
+        <ul
+          className={clsx(css.treeList, css.virtualList)}
+          style={{ height: savedVirtualizer.getTotalSize() }}
+        >
+          {savedVirtualizer.getVirtualItems().map((virtualRow) => {
+            const row = savedPage!.rows[virtualRow.index]!
+            const isSelected =
+              selection.kind === 'savedSearch' && identityOf(row.ref) === selectionKey
+            return (
+              <li
+                key={row.ref}
+                data-index={virtualRow.index}
+                ref={measureSavedRow}
+                className={css.virtualRow}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
+              >
+                <div className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}>
+                  <span className={css.treeExpanderPlaceholder} />
+                  <button
+                    type="button"
+                    className={clsx(css.treeRow, isSelected && css.treeRowActive)}
+                    aria-current={isSelected ? 'page' : undefined}
+                    onClick={() =>
+                      selectScope({ kind: 'savedSearch', ref: row.ref, name: row.name })
+                    }
+                  >
+                    <IconSearchOutlineMedium className={css.treeRowIcon} />
+                    <span className={css.treeRowLabel}>{row.name}</span>
+                  </button>
+                </div>
+                {row.conditions.length > 0 && (
+                  <SavedSearchConditions conditions={row.conditions} t={t} />
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
       <LibraryLaneControls
         t={t}
         label={t('librarySavedSearches')}

@@ -537,6 +537,25 @@
   gap: 1px;
 }
 
+.virtualViewport {
+  min-height: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.virtualList {
+  position: relative;
+  display: block;
+}
+
+.virtualRow {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  width: 100%;
+}
+
 .treeSectionHeader {
   display: flex;
   align-items: center;
