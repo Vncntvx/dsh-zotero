@@ -26,6 +26,7 @@
  */
 
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 
@@ -43,9 +44,6 @@ export type FullTextRead =
   | { readonly kind: 'miss' }
   | { readonly kind: 'corrupt'; readonly reason: string }
 
-/** Longest key fragment kept in a file name. */
-const MAX_KEY_CHARS = 120
-
 /** Hard ceiling on one stored body: `maxContentChars` allows 50 000 characters. */
 const MAX_RECORD_BYTES = 4 * 1_048_576
 
@@ -53,15 +51,12 @@ const MAX_RECORD_BYTES = 4 * 1_048_576
 const DEFAULT_MEMORY_ITEMS = 8
 
 /**
- * A file-safe spelling of one cache key.
- *
- * Path traversal is impossible by construction: every non-word character
- * becomes `_`, so the result is a single segment with no separator.
+ * A collision-resistant, path-safe spelling of one cache key.
  * @param key - the logical cache key.
  * @returns the file-name fragment.
  */
 function fileNameOf(key: string): string {
-  return `${key.replace(/[^\w.-]+/g, '_').slice(0, MAX_KEY_CHARS)}.json`
+  return `${createHash('sha256').update(key, 'utf8').digest('hex')}.json`
 }
 
 /**
@@ -109,7 +104,7 @@ export class ScholarlyTextStore {
 
   private ensureRoot(): Promise<void> {
     if (!this.rootEnsured) {
-      this.rootEnsured = mkdir(this.root, { recursive: true }).then(
+      this.rootEnsured = mkdir(join(this.root, 'v2'), { recursive: true }).then(
         () => {},
         (err) => {
           this.rootEnsured = undefined
@@ -130,7 +125,7 @@ export class ScholarlyTextStore {
     if (cached !== undefined) return { kind: 'hit', record: cached }
     if (this.disposed) return { kind: 'miss' }
 
-    const path = join(this.root, fileNameOf(key))
+    const path = join(this.root, 'v2', fileNameOf(key))
     let raw: string
     try {
       raw = await readFile(path, 'utf8')
@@ -152,7 +147,22 @@ export class ScholarlyTextStore {
       return { kind: 'corrupt', reason: 'malformed JSON' }
     }
 
-    const record = recordOf(parsed)
+    const envelope = parsed as { key?: unknown; record?: unknown } | null
+    if (
+      typeof envelope !== 'object' ||
+      envelope === null ||
+      !Object.hasOwn(envelope, 'key') ||
+      !Object.hasOwn(envelope, 'record')
+    ) {
+      await this.evict(path)
+      return { kind: 'corrupt', reason: 'record shape' }
+    }
+    if (envelope.key !== key) {
+      await this.evict(path)
+      return { kind: 'corrupt', reason: 'cache key mismatch' }
+    }
+
+    const record = recordOf(envelope.record)
     if (record === undefined) {
       await this.evict(path)
       return { kind: 'corrupt', reason: 'record shape' }
@@ -173,7 +183,7 @@ export class ScholarlyTextStore {
    *   that should fail the read it is serving.
    */
   async set(key: string, record: FullTextRecord): Promise<void> {
-    const encoded = JSON.stringify(record)
+    const encoded = JSON.stringify({ key, record })
     if (Buffer.byteLength(encoded, 'utf8') > MAX_RECORD_BYTES) {
       throw new Error(
         `scholarly store: record "${key}" exceeds the ${MAX_RECORD_BYTES}-byte cache ceiling`,
@@ -183,7 +193,7 @@ export class ScholarlyTextStore {
     if (this.disposed) return
 
     await this.ensureRoot()
-    const path = join(this.root, fileNameOf(key))
+    const path = join(this.root, 'v2', fileNameOf(key))
     const temporary = `${path}.${process.pid}.tmp`
     await writeFile(temporary, encoded, 'utf8')
     await rename(temporary, path)

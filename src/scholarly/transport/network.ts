@@ -43,7 +43,10 @@ export interface ResolvedAddress {
  * There is no test-only bypass flag: the transport always resolves through
  * whatever resolver it was built with.
  */
-export type AddressResolver = (hostname: string) => Promise<readonly ResolvedAddress[]>
+export type AddressResolver = (
+  hostname: string,
+  signal?: AbortSignal,
+) => Promise<readonly ResolvedAddress[]>
 
 /**
  * Whether one dotted-quad is a public unicast IPv4 address.
@@ -196,11 +199,27 @@ export function isPublicIpAddress(ip: string): boolean {
 export async function resolvePublicAddresses(
   hostname: string,
   resolver: AddressResolver,
+  signal?: AbortSignal,
 ): Promise<readonly ResolvedAddress[]> {
   let answers: readonly ResolvedAddress[]
   try {
-    answers = await resolver(hostname)
+    if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted')
+    const resolution = signal === undefined ? resolver(hostname) : resolver(hostname, signal)
+    if (signal === undefined) answers = await resolution
+    else {
+      let abort: (() => void) | undefined
+      const canceled = new Promise<never>((_, reject) => {
+        abort = () => reject(signal.reason ?? new Error('Operation aborted'))
+        signal.addEventListener('abort', abort, { once: true })
+      })
+      try {
+        answers = await Promise.race([resolution, canceled])
+      } finally {
+        if (abort !== undefined) signal.removeEventListener('abort', abort)
+      }
+    }
   } catch (error) {
+    if (signal?.aborted) throw error
     const reason = error instanceof Error ? error.message : String(error)
     throw new ScholarlySecurityError(
       `Security rejection: "${hostname}" did not resolve (${reason}).`,
