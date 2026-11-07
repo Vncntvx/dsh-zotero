@@ -338,6 +338,7 @@ export class LocalApiProvider implements ZoteroProvider {
   ): Promise<ZoteroMatchReferencesResult> {
     return matchReferencesDomain(
       {
+        ...this.deps(),
         search: (searchRequest, searchSignal) =>
           this.search(searchRequest, searchSignal, { includeSupplemental: false }),
       },

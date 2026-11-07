@@ -82,6 +82,15 @@ function setup(total = 250) {
         headers.set('Last-Modified-Version', String(batchVersion.current))
         return { json: answer, headers }
       }
+      // The per-key read the trash path uses when it must re-read rows one
+      // key at a time (an itemKey= listing cannot see trashed rows).
+      const perKey = /\/items\/([A-Z0-9]{8})$/.exec(path)
+      if (perKey !== null && (params?.get('itemKey') ?? null) === null) {
+        const row = rows.find((candidate) => candidate.key === perKey[1])
+        headers.set('Total-Results', '1')
+        headers.set('Last-Modified-Version', String(batchVersion.current))
+        return { json: row ?? null, headers }
+      }
       // The candidate listing itself.
       const start = Number(params?.get('start') ?? 0)
       const limit = Number(params?.get('limit') ?? LISTING_PAGE)
@@ -421,5 +430,32 @@ describe('exact panel filters', () => {
     await expect(
       search({ yearFrom: 2023, hasAttachment: false, offset: 0, limit: 1 }),
     ).rejects.toThrow('The library changed while a filtered search page was served')
+  })
+})
+
+describe('trash-scope filtered pages', () => {
+  it('serves a fresh trash-filtered page from the scan rows without re-reading keys', async () => {
+    const env = setup(250)
+    const result = await env.search({ includeTrashed: true, yearFrom: 2023, yearTo: 2023 })
+    expect(result.items).toHaveLength(3)
+    const perKey = env.getJson.mock.calls.filter(([path]) => /\/items\/[A-Z0-9]{8}$/.test(path))
+    expect(perKey).toHaveLength(0)
+  })
+
+  it('serves a cached trash-filtered page through the per-key read-back', async () => {
+    const env = setup(250)
+    await env.search({ includeTrashed: true, yearFrom: 2023, yearTo: 2023 })
+    await env.search({ includeTrashed: true, yearFrom: 2023, yearTo: 2023, offset: 1 })
+    const perKey = env.getJson.mock.calls.filter(([path]) => /\/items\/[A-Z0-9]{8}$/.test(path))
+    // The stored index carries candidates only: page 2 re-reads its keys.
+    expect(perKey).toHaveLength(2)
+  })
+
+  it('falls back to the per-key read-back when the scan exceeds the row retention cap', async () => {
+    const env = setup(1001)
+    const result = await env.search({ includeTrashed: true, yearFrom: 2020, yearTo: 2020 })
+    expect(result.returned).toBe(10)
+    const perKey = env.getJson.mock.calls.filter(([path]) => /\/items\/[A-Z0-9]{8}$/.test(path))
+    expect(perKey).toHaveLength(10)
   })
 })

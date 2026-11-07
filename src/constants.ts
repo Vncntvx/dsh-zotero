@@ -101,6 +101,15 @@ export const ZOTERO_ITEMKEY_BATCH = 50
 export const ZOTERO_LIST_PAGE_ROWS = 100
 
 /**
+ * How many normalized rows one filtered trash scan retains in-request so the
+ * first page serve can skip the per-key read-back (an `itemKey=` listing
+ * cannot see trashed rows, so the read-back is one `GET /items/{key}` per
+ * page key). Past the cap the serve falls back to the read-back; the cap
+ * bounds the request's transient memory.
+ */
+export const ZOTERO_FILTERED_ROW_RETENTION = 1000
+
+/**
  * The child-listing page the panel's detail requests by default and the
  * largest one the detail endpoint accepts. The wire `childPageSchema` spells
  * the same two numbers; the detail domain clamps every requested page to the

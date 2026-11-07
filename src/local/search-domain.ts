@@ -7,7 +7,12 @@
  */
 
 import type { ZoteroHttpClient } from '../http-client.js'
-import { ZOTERO_LIST_PAGE_ROWS, ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../constants.js'
+import {
+  ZOTERO_FILTERED_ROW_RETENTION,
+  ZOTERO_LIST_PAGE_ROWS,
+  ZOTERO_YEAR_MAX,
+  ZOTERO_YEAR_MIN,
+} from '../constants.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import {
@@ -258,18 +263,62 @@ async function exactFilteredSearch(
 
   let index = deps.searchCaches.filtered.get(indexKey)
   let rescanned = false
+  let scanRows: ReadonlyMap<string, ZoteroSearchItem> | undefined
   if (index === undefined) {
-    index = await scanFilteredIndex(deps, scope, request, library, includeTrashed, signal, options)
+    const scan = await scanFilteredIndex(
+      deps,
+      scope,
+      request,
+      library,
+      includeTrashed,
+      signal,
+      options,
+    )
+    index = scan.index
+    scanRows = scan.rows
     deps.searchCaches.filtered.put(indexKey, index)
     rescanned = true
   }
 
   /** Serve one page from an index; `undefined` means the index drifted. */
-  const servePage = async (pageIndex: FilteredIndex): Promise<ZoteroSearchResult | undefined> => {
+  const servePage = async (
+    pageIndex: FilteredIndex,
+    rows?: ReadonlyMap<string, ZoteroSearchItem>,
+  ): Promise<ZoteroSearchResult | undefined> => {
     const filtered = filteredCandidatesOf(pageIndex, request)
     const pageKeys = filtered
       .slice(request.offset, request.offset + request.limit)
       .map((candidate) => candidate.key)
+    const shaped = (items: ZoteroSearchItem[]): ZoteroSearchResult => {
+      const nextOffset = nextOffsetOf(request.offset, items.length, filtered.length)
+      return {
+        scope: scope.resolved,
+        items,
+        total: filtered.length,
+        offset: request.offset,
+        returned: items.length,
+        normalizedQuery: request.query?.trim() ?? '',
+        queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
+        ...(items.length === 0
+          ? {
+              nextActions: [
+                'Try a DOI',
+                'Shorten the title',
+                'Add an author surname',
+                'Search a collection scope',
+              ],
+            }
+          : {}),
+        ...(nextOffset === undefined ? {} : { nextOffset }),
+      }
+    }
+    if (rows !== undefined && pageKeys.every((key) => rows.has(key))) {
+      // Fresh-scan fast path: the page's rows are the scan's own download, so
+      // the result is self-consistent with the index by construction and the
+      // per-key read-back (the trash path's row source and drift fence) has
+      // nothing left to prove.
+      return shaped(pageKeys.map((key) => rows.get(key)!))
+    }
     const { byKey, libraryVersion } = await searchRowsByKeys(
       deps,
       library,
@@ -284,31 +333,10 @@ async function exactFilteredSearch(
         libraryVersion !== pageIndex.libraryVersion) ||
       pageKeys.some((key) => !byKey.has(key))
     if (drifted) return undefined
-    const items = pageKeys.map((key) => byKey.get(key)!)
-    const nextOffset = nextOffsetOf(request.offset, items.length, filtered.length)
-    return {
-      scope: scope.resolved,
-      items,
-      total: filtered.length,
-      offset: request.offset,
-      returned: items.length,
-      normalizedQuery: request.query?.trim() ?? '',
-      queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
-      ...(items.length === 0
-        ? {
-            nextActions: [
-              'Try a DOI',
-              'Shorten the title',
-              'Add an author surname',
-              'Search a collection scope',
-            ],
-          }
-        : {}),
-      ...(nextOffset === undefined ? {} : { nextOffset }),
-    }
+    return shaped(pageKeys.map((key) => byKey.get(key)!))
   }
 
-  let page = await servePage(index)
+  let page = await servePage(index, rescanned ? scanRows : undefined)
   if (page === undefined) {
     if (rescanned) {
       throw new ZoteroError(
@@ -317,9 +345,18 @@ async function exactFilteredSearch(
       )
     }
     deps.searchCaches.filtered.delete(indexKey)
-    index = await scanFilteredIndex(deps, scope, request, library, includeTrashed, signal, options)
+    const rescan = await scanFilteredIndex(
+      deps,
+      scope,
+      request,
+      library,
+      includeTrashed,
+      signal,
+      options,
+    )
+    index = rescan.index
     deps.searchCaches.filtered.put(indexKey, index)
-    page = await servePage(index)
+    page = await servePage(index, rescan.rows)
     if (page === undefined) {
       throw new ZoteroError(
         'The library changed while a filtered search page was served; retry the request.',
@@ -355,6 +392,11 @@ function filteredCandidatesOf(
  * scan and the attachment-presence walk run concurrently when the request
  * filters on attachment existence; each scan halves the configured
  * concurrency so the total stays inside the caller's budget.
+ *
+ * Rows normalize once after the walk. When the request reads trashed rows,
+ * the normalized rows are retained in-request (bounded by
+ * `ZOTERO_FILTERED_ROW_RETENTION`) so a fresh scan's first serve can skip
+ * the per-key read-back; they never enter the stored index.
  */
 async function scanFilteredIndex(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },
@@ -364,7 +406,7 @@ async function scanFilteredIndex(
   includeTrashed: boolean,
   signal: AbortSignal | undefined,
   options: ZoteroSearchOptions,
-): Promise<FilteredIndex> {
+): Promise<{ index: FilteredIndex; rows?: ReadonlyMap<string, ZoteroSearchItem> }> {
   const wantParents = request.hasAttachment !== undefined
   const scanConcurrency = wantParents
     ? Math.max(1, Math.floor(deps.limits.searchConcurrency / 2))
@@ -379,11 +421,7 @@ async function scanFilteredIndex(
     signal,
     { body: 'filtered search candidates', page: 'filtered search candidates' },
     scanConcurrency,
-    (rows) =>
-      rows.map((row) => {
-        const item = normalizeSearchItem(row, { library })
-        return { key: parseRef(item.ref).key, year: item.year }
-      }),
+    (rows) => rows,
   )
   const parentsPromise = wantParents
     ? attachmentParentKeys(deps, deps.searchCaches, library, scope.serverId, includeTrashed, {
@@ -437,20 +475,41 @@ async function scanFilteredIndex(
       parentSet = fetched.parents
     }
   }
-  const candidates = scanned.pages.flatMap((page) => page.value)
-  return {
-    candidates:
-      parentSet === undefined
-        ? candidates
-        : candidates.map((candidate) => ({
-            key: candidate.key,
-            year: candidate.year,
-            hasAttachment: parentSet.has(candidate.key),
-          })),
-    attachmentIndexed: wantParents,
+  // Rows normalize once, after the walk, with the listing's own server id —
+  // the same qualification the read-back path gives its rows.
+  const ctx = {
+    library,
     ...(scanned.serverId !== undefined ? { serverId: scanned.serverId } : {}),
-    ...(scanned.libraryVersion !== undefined ? { libraryVersion: scanned.libraryVersion } : {}),
-    fetchedAt: Date.now(),
+  }
+  const candidates: FilteredCandidate[] = []
+  let retained: Map<string, ZoteroSearchItem> | undefined
+  const retainRows =
+    includeTrashed &&
+    scanned.pages.reduce((sum, page) => sum + page.value.length, 0) <= ZOTERO_FILTERED_ROW_RETENTION
+  if (retainRows) retained = new Map()
+  for (const page of scanned.pages) {
+    for (const row of page.value) {
+      const item = normalizeSearchItem(row, ctx)
+      candidates.push({ key: parseRef(item.ref).key, year: item.year })
+      retained?.set(parseRef(item.ref).key, item)
+    }
+  }
+  return {
+    index: {
+      candidates:
+        parentSet === undefined
+          ? candidates
+          : candidates.map((candidate) => ({
+              key: candidate.key,
+              year: candidate.year,
+              hasAttachment: parentSet.has(candidate.key),
+            })),
+      attachmentIndexed: wantParents,
+      ...(scanned.serverId !== undefined ? { serverId: scanned.serverId } : {}),
+      ...(scanned.libraryVersion !== undefined ? { libraryVersion: scanned.libraryVersion } : {}),
+      fetchedAt: Date.now(),
+    },
+    rows: retained,
   }
 }
 

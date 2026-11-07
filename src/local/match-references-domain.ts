@@ -9,7 +9,14 @@ import {
   normalizeTitleForAlignment,
   normalizeYearForAlignment,
 } from '../export-mapping.js'
-import { ZoteroError, ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED } from '../errors.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
+import type { ZoteroHttpClient } from '../http-client.js'
+import { normalizeSearchItem } from '../normalize-search.js'
+import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
+import type { LocalApiLimits } from './limits.js'
+import { readPagesConcurrentlyFolded } from './pagination.js'
+import { buildSearchParams } from './search-query.js'
+import { itemsSegmentFor } from './scope-paths.js'
 import type {
   ZoteroMatchReferenceInput,
   ZoteroMatchReferenceCandidate,
@@ -80,106 +87,66 @@ function fieldDiffOf(
 }
 
 /**
- * Zotero's quick-search modes do not index DOI fields. Read every top-level
- * metadata page once for this reconciliation call, then retain only exact DOI
- * hits. The total and cursor checks make an incomplete or shifting scan fail
- * closed instead of turning an unseen DOI into `notFound` or a false unique
- * match.
+ * Zotero's quick-search modes do not index DOI fields. List every top-level
+ * metadata page once for this reconciliation call through the shared
+ * concurrent page walker, then retain only exact DOI hits. The walker's
+ * per-page fences (window honesty, Total-Results, per-page library version)
+ * make an incomplete or shifting scan fail closed instead of turning an
+ * unseen DOI into `notFound` or a false unique match.
  */
 async function candidatesByDoi(
-  deps: {
-    search: (request: ZoteroSearchRequest, signal?: AbortSignal) => Promise<ZoteroSearchResult>
-  },
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   dois: ReadonlySet<string>,
   signal?: AbortSignal,
 ): Promise<Map<string, ZoteroSearchItem[]>> {
   const matches = new Map([...dois].map((doi) => [doi, [] as ZoteroSearchItem[]]))
   if (matches.size === 0) return matches
-
-  const fetchPage = (offset: number) =>
-    deps.search(
-      {
-        query: '',
-        mode: 'metadata',
-        scope: { kind: 'library' },
-        sort: 'dateModified',
-        direction: 'desc',
-        offset,
-        limit: ZOTERO_LIST_PAGE_ROWS,
-        itemLevel: 'top',
-      },
-      signal,
-    )
-
-  const firstPage = await fetchPage(0)
-  if (firstPage.offset !== 0 || firstPage.returned !== firstPage.items.length) {
-    throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
+  // The sweep's scope is fixed: the whole top-level personal library, the
+  // same listing the search layer spells for a `{kind:'library'}` scope and
+  // the search request's own parameter serialization.
+  const path = `${libraryPrefix(PERSONAL_LIBRARY)}/${itemsSegmentFor('top')}`
+  const walked = await readPagesConcurrentlyFolded(
+    deps.client,
+    path,
+    buildSearchParams({
+      query: '',
+      mode: 'metadata',
+      scope: { kind: 'library' },
+      sort: 'dateModified',
+      direction: 'desc',
+      offset: 0,
+      limit: ZOTERO_LIST_PAGE_ROWS,
+      itemLevel: 'top',
+    }),
+    undefined,
+    signal,
+    { body: 'DOI lookup listing', page: 'DOI lookup' },
+    deps.limits.searchConcurrency,
+    (rows) => rows,
+  )
+  // Rows normalize after the walk, once the listing's own server id is known,
+  // exactly as the search domain qualifies a listing's refs.
+  const ctx = {
+    library: PERSONAL_LIBRARY,
+    ...(walked.serverId === undefined ? {} : { serverId: walked.serverId }),
   }
-  const total = firstPage.total
-  if (firstPage.returned > total) {
-    throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
-  }
-
-  const addItems = (items: ZoteroSearchItem[]) => {
-    for (const item of items) {
+  for (const page of walked.pages) {
+    for (const row of page.value) {
+      const item = normalizeSearchItem(row, ctx)
       const doi = normalizeDoiForAlignment(item.doi)
       if (doi === undefined) continue
       const bucket = matches.get(doi)
       if (bucket !== undefined) bucket.push(item)
     }
   }
-
-  addItems(firstPage.items)
-
-  const next = firstPage.returned
-  if (next >= total) {
-    if (firstPage.nextOffset !== undefined) {
-      throw new ZoteroError('DOI lookup returned a cursor beyond its total.', ZOTERO_UNEXPECTED)
-    }
-    return matches
-  }
-
-  if (firstPage.returned === 0 || firstPage.nextOffset !== next) {
-    throw new ZoteroError('DOI lookup did not return every library page.', ZOTERO_UNEXPECTED)
-  }
-
-  const remainingOffsets: number[] = []
-  for (let offset = next; offset < total; offset += ZOTERO_LIST_PAGE_ROWS) {
-    remainingOffsets.push(offset)
-  }
-
-  const remainingPages = await mapWithConcurrency(remainingOffsets, 4, async (offset) => {
-    const page = await fetchPage(offset)
-    if (page.offset !== offset || page.returned !== page.items.length) {
-      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
-    }
-    if (page.total !== total) {
-      throw new ZoteroError('The Zotero library changed during DOI lookup.', ZOTERO_UNEXPECTED)
-    }
-    if (offset > page.total || page.returned > page.total - offset) {
-      throw new ZoteroError('DOI lookup received an inconsistent page.', ZOTERO_UNEXPECTED)
-    }
-    const pageNext = offset + page.returned
-    if (pageNext >= total) {
-      if (page.nextOffset !== undefined) {
-        throw new ZoteroError('DOI lookup returned a cursor beyond its total.', ZOTERO_UNEXPECTED)
-      }
-    } else if (page.returned === 0 || page.nextOffset !== pageNext) {
-      throw new ZoteroError('DOI lookup did not return every library page.', ZOTERO_UNEXPECTED)
-    }
-    return page
-  })
-
-  for (const page of remainingPages) {
-    addItems(page.items)
-  }
-
   return matches
 }
 
 export async function matchReferences(
   deps: {
     search: (request: ZoteroSearchRequest, signal?: AbortSignal) => Promise<ZoteroSearchResult>
+    client: ZoteroHttpClient
+    limits: LocalApiLimits
   },
   request: ZoteroMatchReferencesRequest,
   signal?: AbortSignal,

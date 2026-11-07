@@ -18,7 +18,7 @@ import { ZOTERO_NOT_FOUND, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import { asRecord, asString, parseNonNegativeSafeInteger } from '../json.js'
 import { libraryPrefix } from '../refs.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
-import { chunkItemKeyBatches } from './pagination.js'
+import { chunkItemKeyBatches, requireArrayBody } from './pagination.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type { SupportedLocalLibrary } from '../types.js'
@@ -93,7 +93,7 @@ async function fetchItemKeyScopes<T>(
       )
       assertServerIdMatches(serverIdFromHeaders(headers, options.serverId), options.serverId)
       const version = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
-      return { byKey: rowsByKey(requireArrayRows(json, options), options), version }
+      return { byKey: rowsByKey(requireArrayBody(json, options.what), options), version }
     },
     { signal: options.signal },
   )
@@ -163,17 +163,6 @@ function rowsByKey<T>(rows: readonly unknown[], options: ItemKeyBatchOptions<T>)
     byKey.set(key, options.mapRow(row, key))
   }
   return byKey
-}
-
-/** The scope listing must answer an array; anything else is a broken read. */
-function requireArrayRows(
-  json: unknown,
-  options: ItemKeyBatchOptions<unknown>,
-): readonly unknown[] {
-  if (!Array.isArray(json)) {
-    throw new ZoteroError(`The ${options.what} answered a non-array body.`, ZOTERO_UNEXPECTED)
-  }
-  return json
 }
 
 /** Merge per-request results and enforce one library version across them. */
