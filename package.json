@@ -1,6 +1,6 @@
 {
   "name": "dsh-zotero",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.1",
   "description": "Zotero plugin for DeepSeek Harness: search and read papers in conversation, audit the literature trail, and browse the literature panel for citations and approved writes.",
   "keywords": [
     "zotero",
