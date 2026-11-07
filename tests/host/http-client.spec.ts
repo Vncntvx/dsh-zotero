@@ -229,6 +229,55 @@ describe('identity protection', () => {
     controller.abort()
     await expectZoteroError(pending, TOOL_ABORTED, TOOL_ABORTED_MESSAGE)
   })
+
+  it("bounds the identity refresh by the triggering request's remaining deadline", async () => {
+    // The 412 arrives 60 ms into a 100 ms request, so the refresh may only
+    // spend the remaining ~40 ms. Before the budget composition the refresh
+    // drew a fresh full deadline and the call took ~160 ms; the total here
+    // must stay near one deadline. (Timing is the subject — tests/README
+    // rule 4.)
+    const slow412 = testHttpClient(mock.baseUrl, { timeoutMs: 100, maxResponseBytes: 1024 })
+    mock.route('GET', '/api/users/0/items', (_req, res, helpers) =>
+      helpers.delayRaw(
+        412,
+        { 'Content-Type': 'text/plain' },
+        'Zotero-Server-ID does not match',
+        60,
+      ),
+    )
+    mock.route('GET', '/api/', (req, res, helpers) => helpers.delayJson({}, 5000))
+    const startedAt = Date.now()
+    const error = await expectZoteroError(
+      slow412.getJson('users/0/items'),
+      ZOTERO_SERVER_MISMATCH,
+      SERVER_MISMATCH_MESSAGE,
+    )
+    const elapsed = Date.now() - startedAt
+    expect((error.cause as HarnessError).code).toBe(ZOTERO_TIMEOUT)
+    expect(elapsed).toBeLessThan(140)
+  })
+
+  it('skips the identity refresh when no budget remains', async () => {
+    // `timeoutMs: 0` is the deadline helper's no-timer sentinel, so the 412
+    // answers without racing the deadline — and the remaining budget is
+    // spent. The branch must skip the refresh (one request on the wire)
+    // rather than attempt one with a non-positive deadline.
+    const spent = testHttpClient(mock.baseUrl, { timeoutMs: 0, maxResponseBytes: 1024 })
+    mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
+      helpers.raw(
+        412,
+        { 'Content-Type': 'text/plain' },
+        'Zotero-Server-ID does not match this server',
+      ),
+    )
+    const error = await expectZoteroError(
+      spent.getJson('users/0/items'),
+      ZOTERO_SERVER_MISMATCH,
+      SERVER_MISMATCH_MESSAGE,
+    )
+    expect((error.cause as HarnessError).code).toBe(ZOTERO_TIMEOUT)
+    expect(mock.requests).toHaveLength(1)
+  })
 })
 
 describe('http status translation', () => {

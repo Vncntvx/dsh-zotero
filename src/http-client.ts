@@ -58,6 +58,13 @@ interface ZoteroHttpGetOptions {
   readonly serverId?: string
   /** Send the remembered instance id (default true); false suppresses it for identity refreshes. */
   readonly sendServerId?: boolean
+  /**
+   * Internal: the deadline this request may still spend, in milliseconds. The
+   * identity refresh rides its triggering request's remaining budget instead
+   * of drawing a fresh one, so a 412 refresh cannot double the worst-case
+   * wall clock. Absent means a full per-request deadline.
+   */
+  readonly deadlineBudgetMs?: number
 }
 
 interface ZoteroHttpResponse {
@@ -438,8 +445,14 @@ export class ZoteroHttpClient {
       // The deadline fuses caller cancellation with the provider timeout; its
       // TimeoutReason later distinguishes our timeout from caller aborts. It
       // starts here, after the slot was taken, so time spent queued behind the
-      // gate is never reported as Zotero failing to respond in time.
-      using d = deadline(opts.signal, this.options.timeoutMs, ZOTERO_TIMEOUT)
+      // gate is never reported as Zotero failing to respond in time. The
+      // identity refresh re-enters `send` with its triggering request's
+      // remaining budget; a fresh call draws the full per-request deadline.
+      using d = deadline(
+        opts.signal,
+        opts.deadlineBudgetMs ?? this.options.timeoutMs,
+        ZOTERO_TIMEOUT,
+      )
       const headers: Record<string, string> = {
         [ZOTERO_API_VERSION_HEADER]: ZOTERO_LOCAL_API_VERSION,
       }
@@ -475,9 +488,19 @@ export class ZoteroHttpClient {
         if (isIdentityRefresh) {
           throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
         }
+        // The refresh shares the triggering request's deadline: what remains
+        // of this request's budget is all the caller ever agreed to wait. A
+        // 412 that arrives inside the deadline/abort propagation race (no
+        // budget left) skips the refresh — there is no time to attempt one.
+        const remainingMs = this.options.timeoutMs - (Date.now() - startedAt)
+        if (remainingMs <= 0) {
+          throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH, {
+            cause: new ZoteroError(requestTimeoutMessage(this.options.timeoutMs), ZOTERO_TIMEOUT),
+          })
+        }
         let refreshError: unknown
         try {
-          await this.refreshIdentity(opts.signal)
+          await this.refreshIdentity(opts.signal, remainingMs)
         } catch (error) {
           if (opts.signal?.aborted) throw error
           refreshError = error
@@ -551,8 +574,21 @@ export class ZoteroHttpClient {
     if (id !== null && id !== '') this.currentServerId = id
   }
 
-  /** Re-read `/api/` without the remembered id so a stale id cannot 412 the refresh. */
-  private async refreshIdentity(signal?: AbortSignal): Promise<void> {
-    await this.doGet('', undefined, { signal, sendServerId: false }, true)
+  /**
+   * Re-read `/api/` without the remembered id so a stale id cannot 412 the
+   * refresh. The refresh rides the triggering request's remaining deadline
+   * instead of drawing a fresh one, so a 412 on a slow request cannot extend
+   * the caller's worst-case wait.
+   */
+  private async refreshIdentity(
+    signal: AbortSignal | undefined,
+    remainingMs: number,
+  ): Promise<void> {
+    await this.doGet(
+      '',
+      undefined,
+      { signal, sendServerId: false, deadlineBudgetMs: remainingMs },
+      true,
+    )
   }
 }
