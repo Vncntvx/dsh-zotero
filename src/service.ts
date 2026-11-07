@@ -35,6 +35,7 @@ import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import { ZoteroHttpClient } from './http-client.js'
 import { ZoteroRuntime } from './remote.js'
@@ -190,6 +191,8 @@ export function requireZoteroService(ctx: Context, signal?: AbortSignal): Zotero
 export class ZoteroService extends Service {
   private sourceProjectionState: ZoteroStatusView['sourceProjection'] = { state: 'not-composed' }
   private sourceProjectionFiber: (Fiber & PromiseLike<Fiber>) | undefined
+  private sourceProjectionReady: Promise<void> | undefined
+  private sourceProjectionHandle: ProjectionHandle<unknown> | undefined
   private sourceProjectionGeneration = 0
   static inject = ['tools', 'systemPrompt']
 
@@ -306,7 +309,7 @@ export class ZoteroService extends Service {
     // composes the registry: the fold sees the whole log, not the bounded
     // history window the browser chat store receives. Optional assembly: a
     // headless composition without the registry reports not-composed.
-    this.sourceProjectionFiber = ctx.inject(['sessionProjections'], async (host) => {
+    this.sourceProjectionFiber = ctx.inject(['sessionProjections'], (host) => {
       const generation = ++this.sourceProjectionGeneration
       this.sourceProjectionState = { state: 'pending' }
       host.effect(
@@ -318,21 +321,45 @@ export class ZoteroService extends Service {
         },
         'zotero: source projection registration state',
       )
-      try {
-        await host.sessionProjections.register(sourceLedgerProjection)
-        if (this.sourceProjectionGeneration === generation) {
-          this.sourceProjectionState = { state: 'ready' }
-        }
-      } catch (error: unknown) {
-        if (this.sourceProjectionGeneration === generation) {
-          this.sourceProjectionState = {
-            state: 'failed',
-            code: ZOTERO_SOURCE_PROJECTION_FAILED,
+      this.sourceProjectionReady = (async () => {
+        try {
+          const handle = await host.sessionProjections.register(sourceLedgerProjection)
+          if (this.sourceProjectionGeneration !== generation) {
+            await handle.dispose()
+            return
           }
+          this.sourceProjectionHandle = handle
+          this.sourceProjectionState = { state: 'ready' }
+        } catch (error: unknown) {
+          if (this.sourceProjectionGeneration === generation) {
+            this.sourceProjectionState = {
+              state: 'failed',
+              code: ZOTERO_SOURCE_PROJECTION_FAILED,
+            }
+          }
+          this.diagnostics.sink.error('projection.register', errorMessageOf(error))
         }
-        this.diagnostics.sink.error('projection.register', errorMessageOf(error))
-      }
+      })()
+      void this.sourceProjectionReady
     })
+    ctx.effect(
+      () => () => {
+        this.sourceProjectionGeneration++
+        const fiber = this.sourceProjectionFiber
+        const handle = this.sourceProjectionHandle
+        this.sourceProjectionFiber = undefined
+        this.sourceProjectionReady = undefined
+        this.sourceProjectionHandle = undefined
+        const fiberDisposal = fiber?.dispose()
+        if (fiberDisposal !== undefined) {
+          void Promise.resolve(fiberDisposal).catch((error: unknown) => {
+            this.diagnostics.sink.error('projection.dispose', errorMessageOf(error))
+          })
+        }
+        return handle?.dispose()
+      },
+      'zotero: source projection teardown',
+    )
     registerResearchSkills(ctx, CORE_SOPS)
     // The status channel: the Remote service binds the wire namespace, and
     // the strict manifest claims its endpoints. See typert.ts for why the
@@ -402,7 +429,9 @@ export class ZoteroService extends Service {
     // Defensive: the fiber is assigned synchronously during composition, so
     // no status call on a composed registry can observe it unset in practice.
     if (fiber === undefined) return { state: 'pending' }
-    await this.awaitRegistrationOrAbort(fiber, signal)
+    await this.awaitRegistrationOrAbort(fiber.await(), signal)
+    const ready = this.sourceProjectionReady
+    if (ready !== undefined) await this.awaitRegistrationOrAbort(ready, signal)
     signal.throwIfAborted()
     // Between composition and the callback's first tick the state is still
     // the constructed `not-composed`; that reads as pending, not as absence.
@@ -412,7 +441,7 @@ export class ZoteroService extends Service {
 
   /** Wait for the registration fiber, converting an aborted signal into a rejection. */
   private async awaitRegistrationOrAbort(
-    fiber: Fiber & PromiseLike<Fiber>,
+    registration: PromiseLike<unknown>,
     signal: AbortSignal,
   ): Promise<void> {
     let rejectAbort: (() => void) | undefined
