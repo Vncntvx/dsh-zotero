@@ -1,0 +1,1 @@
+{"version":3,"file":"register.d.ts","sourceRoot":"","sources":["../../src/skills/register.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,qBAAqB,CAAA;AAClD,OAAO,EAAqB,KAAK,WAAW,EAAE,MAAM,iBAAiB,CAAA;AAErE,kFAAkF;AAClF,wBAAgB,sBAAsB,CAAC,GAAG,EAAE,OAAO,EAAE,IAAI,EAAE,SAAS,WAAW,EAAE,GAAG,IAAI,CASvF"}

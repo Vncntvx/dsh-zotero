@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/scholarly",
+    "description": "Scholarly literature plugin for DeepSeek Harness: search papers across Semantic Scholar, Crossref, and arXiv, track citations, resolve open-access PDFs, and manage reading lists."
+  }
+}

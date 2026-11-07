@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "dsh-zotero",
+    "description": "Zotero plugin for DeepSeek Harness: search and read papers in conversation, audit the literature trail, and browse the literature panel for citations and approved writes.",
+    "detail": "docs/plugin-detail.en.md"
+  },
+  "maxInlineResultTokens": "Inline result token limit",
+  "maxInlineResultTokensHint": "Results above this positive integer budget require durable file storage.",
+  "maxInlineResultBytes": "Inline result byte limit",
+  "maxInlineResultBytesHint": "Independent UTF-8 byte limit; oversized results require attachments and storageDomain."
+}

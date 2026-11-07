@@ -1,0 +1,21 @@
+# This patch is used when the plugin is installed as a dsh bundle.
+# The `name` refers to the package name, so Node module resolution can find it.
+- insert:
+    - id: zotero
+      name: dsh-zotero
+      config: {}
+    # The library component provides the library panel (collections tree,
+    # multi-dimensional filters, item inspector, and approved personal-library writes).
+    - id: library
+      name: dsh-zotero/library
+      config:
+        rightSidebarEnabled: true
+    # The scholarly component provides external academic literature retrieval
+    # (arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, DBLP).
+    # It ships off. Its row's switch in the plugin manager's "Included
+    # components" list is the only authorization: mounting the component
+    # registers its seven tools and permits requests to the allowlisted
+    # external indexes.
+    - id: scholarly
+      name: dsh-zotero/scholarly
+      disabled: true
