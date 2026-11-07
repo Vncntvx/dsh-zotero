@@ -7,7 +7,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ZoteroHttpClient } from '../../../src/http-client.js'
 import { ZOTERO_UNEXPECTED } from '../../../src/errors.js'
-import { searchRowsByKeys } from '../../../src/local/search-index.js'
+import {
+  attachmentParentKeys,
+  createSearchIndexCaches,
+  searchRowsByKeys,
+} from '../../../src/local/search-index.js'
 import { PROVIDER_LIMITS } from '../../helpers/provider-harness.js'
 import { searchHit } from '../../helpers/server/objects.js'
 
@@ -82,5 +86,28 @@ describe('filtered-search row batches', () => {
     for (const [path] of getJson.mock.calls) {
       expect(path).toMatch(/^users\/0\/items\/ITEM\d{4}$/)
     }
+  })
+
+  it('includes trashed attachments when building the parent index', async () => {
+    const getJson = vi.fn(async (_path: string, params: URLSearchParams) => ({
+      json: [{ data: { parentItem: 'ITEM0001' } }],
+      headers: new Headers({
+        'Zotero-Server-ID': 'S1',
+        'Last-Modified-Version': '7',
+        'Total-Results': '1',
+      }),
+    }))
+    const client = { getJson } as unknown as ZoteroHttpClient
+    const result = await attachmentParentKeys(
+      { client, limits: PROVIDER_LIMITS },
+      createSearchIndexCaches(),
+      { type: 'user', id: 0 },
+      'S1',
+      true,
+      {},
+    )
+    expect(getJson).toHaveBeenCalledOnce()
+    expect(getJson.mock.calls[0]?.[1].get('includeTrashed')).toBe('1')
+    expect(result.parents).toEqual(new Set(['ITEM0001']))
   })
 })

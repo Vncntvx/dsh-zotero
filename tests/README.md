@@ -30,9 +30,9 @@ never in a file named after a number or a function.
   level: a client reducer can be pure, while a tool execution spec can mount
   the host. Apply the verification levels below within each lane.
 - Within a lane, group related specs by module, then name files for behaviours.
-  Use `local/search/parameters.spec.ts`, `local/write/batch-verdicts.spec.ts`,
-  `client/library/request-races.spec.tsx`, or
-  `scholarly/sources/openalex/parsing.spec.ts`. A small module may keep one
+  Use `local/search/search.spec.ts`, `local/write/batch-verdicts.spec.ts`,
+  `client/library/list-request-ownership.spec.tsx`, or
+  `scholarly/sources/sources-parsing.spec.ts`. A small module may keep one
   spec directly in its lane; create a directory when it needs several
   behaviour specs or dedicated support. Do not create empty scaffolding.
 - A production file may have several specs. Split along independent behaviour

@@ -4,7 +4,6 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ZoteroService } from './service.js'
-import { registerResultRoute } from './result-route.js'
 import { ResultDelivery, type ToolWrapper } from './result-delivery.js'
 import { registerBrowseTool } from './tools/browse.js'
 import { registerChangesTool } from './tools/changes.js'
@@ -28,10 +27,12 @@ import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
 import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerUpdateNoteTool } from './tools/update-note.js'
 
-export function registerReadTools(ctx: Context, service: ZoteroService): void {
-  const delivery = new ResultDelivery(ctx, () => service.config)
+export function registerReadTools(
+  ctx: Context,
+  service: ZoteroService,
+  delivery: ResultDelivery,
+): void {
   delivery.installJobs()
-  registerResultRoute(ctx, delivery)
   // Every read tool registers through the same delivery envelope, explicitly:
   // the tool module still owns its schema and execute, and this is the one
   // place that wraps them.
@@ -42,8 +43,8 @@ export function registerReadTools(ctx: Context, service: ZoteroService): void {
   registerMatchReferencesTool(ctx, service, wrap)
   registerRetrieveTool(ctx, service, wrap)
   registerBrowseTool(ctx, service, wrap)
-  registerExportTool(ctx, service, delivery, wrap)
-  registerChangesTool(ctx, service, delivery, wrap)
+  registerExportTool(ctx, service, wrap)
+  registerChangesTool(ctx, service, wrap)
 }
 
 export function registerWriteTools(ctx: Context, service: ZoteroService): Array<() => void> {

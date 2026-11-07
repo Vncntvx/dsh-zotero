@@ -100,20 +100,42 @@ export class HostPacer {
     // Every link resolves, so one abandoned wait cannot reject the host's chain.
     const tailPromise = previous.then(() => held).catch(() => {})
     this.tails.set(host, tailPromise)
+    void tailPromise.then(() => {
+      if (this.tails.get(host) === tailPromise) this.tails.delete(host)
+    })
 
-    await previous
+    let acquired = false
 
     try {
+      await waitForPrevious(previous, signal)
       const last = this.lastRequestTime.get(host) ?? 0
       const waitTime = interval - (Date.now() - last)
       if (waitTime > 0) await abortableSleep(waitTime, signal)
+      acquired = true
     } finally {
-      this.lastRequestTime.set(host, Date.now())
+      if (acquired) this.lastRequestTime.set(host, Date.now())
       release()
-      if (this.tails.get(host) === tailPromise) {
-        this.tails.delete(host)
-      }
       this.pruneLastRequestTimes()
     }
+  }
+}
+
+/** Wait for a predecessor while keeping queued cancellation responsive. */
+async function waitForPrevious(previous: Promise<void>, signal?: AbortSignal): Promise<void> {
+  if (signal === undefined) {
+    await previous
+    return
+  }
+  if (signal.aborted) throw signal.reason ?? new Error('Operation aborted')
+
+  let onAbort!: () => void
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason ?? new Error('Operation aborted'))
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    await Promise.race([previous, aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
   }
 }

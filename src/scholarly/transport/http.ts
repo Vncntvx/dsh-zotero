@@ -208,6 +208,20 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
     const maxRetries = reqOptions.retries ?? 2
     const timeoutMs = reqOptions.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const maxBytes = reqOptions.maxBytes ?? DEFAULT_MAX_BYTES
+    const probeTokens = new Map<string, symbol>()
+    const releaseProbe = (host: string): void => {
+      const probeToken = probeTokens.get(host)
+      circuitBreaker.releaseProbe(host, probeToken)
+      probeTokens.delete(host)
+    }
+    const recordSuccess = (host: string): void => {
+      circuitBreaker.recordSuccess(host)
+      probeTokens.delete(host)
+    }
+    const recordFailure = (host: string): void => {
+      circuitBreaker.recordFailure(host)
+      probeTokens.delete(host)
+    }
 
     // The caller's cancellation is the only abort that stops a retry: their
     // signal is checked directly, never inferred from a fused one. A retry
@@ -215,6 +229,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
     // so one host's rate-limit wait cannot starve the other sources.
     for (let attempt = 0; ; attempt++) {
       if (callerAborted(reqOptions.signal)) {
+        releaseProbe(new URL(currentUrl).hostname)
         throw reqOptions.signal?.reason ?? new Error('Operation aborted')
       }
       assertAllowedScholarlyUrl(currentUrl, publicOnly)
@@ -223,9 +238,17 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
       // entry would bypass pacing and split breaker circuits.
       const hostname = new URL(currentUrl).hostname
 
-      circuitBreaker.beforeRequest(hostname)
+      const probeToken = circuitBreaker.beforeRequest(hostname, probeTokens.get(hostname))
+      if (probeToken === undefined) probeTokens.delete(hostname)
+      else probeTokens.set(hostname, probeToken)
+      const halfOpenProbe = probeToken !== undefined
 
-      await pacer.pace(hostname, reqOptions.signal)
+      try {
+        await pacer.pace(hostname, reqOptions.signal)
+      } catch (error) {
+        releaseProbe(hostname)
+        throw error
+      }
 
       // Every arm must prove its DNS answer public before it may connect.
       // The open-access PDF arm leaves the allowlist, so it resolves and
@@ -235,18 +258,30 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
       // A composition that never wired the seams fails loud here instead of
       // connecting to an unjudged address.
       let pinned: PinnedDispatcher | undefined
-      if (publicAccess === undefined) {
-        throw new ScholarlySecurityError(
-          'Security rejection: the scholarly transport is not wired to an address resolver, so no external request can be fetched safely.',
-        )
-      }
-      if (publicOnly) {
-        const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver)
-        pinned = publicAccess.createDispatcher(addresses)
+      try {
+        if (publicAccess === undefined) {
+          throw new ScholarlySecurityError(
+            'Security rejection: the scholarly transport is not wired to an address resolver, so no external request can be fetched safely.',
+          )
+        }
+        if (publicOnly) {
+          const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver)
+          pinned = publicAccess.createDispatcher(addresses)
+        }
+      } catch (error) {
+        releaseProbe(hostname)
+        throw error
       }
       const dispatcher = pinned ?? sharedValidatingDispatcher()
 
-      const release = await gate.acquire(reqOptions.signal)
+      let release: (() => void) | undefined
+      try {
+        release = await gate.acquire(reqOptions.signal)
+      } catch (error) {
+        releaseProbe(hostname)
+        await pinned?.close()
+        throw error
+      }
       using d = deadline(reqOptions.signal, timeoutMs, SCHOLARLY_TIMEOUT)
       let retryDelayMs: number | undefined
       try {
@@ -274,16 +309,17 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
           await response.body?.cancel()
           const nextUrl = new URL(location, currentUrl).href
           assertAllowedScholarlyUrl(nextUrl, publicOnly)
+          if (new URL(nextUrl).hostname !== hostname) releaseProbe(hostname)
           currentUrl = nextUrl
           // The next hop re-runs the lexical gate and its own resolution at
           // the top of the loop; no spacing is owed between hops.
           retryDelayMs = 0
         } else if (response.ok) {
-          circuitBreaker.recordSuccess(hostname)
+          recordSuccess(hostname)
           return await reader(response, maxBytes)
         } else {
           const status = response.status
-          circuitBreaker.recordFailure(hostname)
+          recordFailure(hostname)
           await response.body?.cancel()
 
           const retryAfterHeader = Number(response.headers.get('retry-after'))
@@ -302,18 +338,42 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
         }
       } catch (error) {
         // Caller cancellation is final: no retry, no translation.
-        if (callerAborted(reqOptions.signal)) throw error
-        if (error instanceof ScholarlySecurityError) throw error
-        if (error instanceof ScholarlyHttpError) throw error
-        if (error instanceof ScholarlyCircuitOpenError) throw error
+        if (callerAborted(reqOptions.signal)) {
+          releaseProbe(hostname)
+          throw error
+        }
+        if (error instanceof ScholarlySecurityError) {
+          releaseProbe(hostname)
+          throw error
+        }
+        if (error instanceof ScholarlyHttpError) {
+          releaseProbe(hostname)
+          throw error
+        }
+        if (error instanceof ScholarlyCircuitOpenError) {
+          releaseProbe(hostname)
+          throw error
+        }
         // An oversized body is a property of the resource, not of the host's
         // health: retrying it re-downloads the same too-large body.
-        if (error instanceof ResponseTooLargeError) throw error
+        if (error instanceof ResponseTooLargeError) {
+          releaseProbe(hostname)
+          throw error
+        }
+
+        // A half-open admission is one probe, even when the request's normal
+        // retry budget is larger. A failed probe must reopen the circuit now;
+        // retrying it would collide with the probe fence and leave the host
+        // permanently stuck in HALF_OPEN.
+        if (halfOpenProbe) {
+          recordFailure(hostname)
+          throw error
+        }
 
         // A provider deadline is one failure of this host; a connection drop is
         // another. Both are retried, and neither is reported as a caller abort.
         if (isProviderTimeout(d.signal) || attempt >= maxRetries) {
-          circuitBreaker.recordFailure(hostname)
+          recordFailure(hostname)
           if (isProviderTimeout(d.signal)) {
             throw new ScholarlyHttpError(504, hostname)
           }
@@ -326,12 +386,19 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
         // response body (success, cancelled, or failed) is already settled by
         // the time this finally runs, so the pool can close here.
         await pinned?.close()
+        if (callerAborted(reqOptions.signal)) releaseProbe(hostname)
       }
       if (callerAborted(reqOptions.signal)) {
+        releaseProbe(hostname)
         throw reqOptions.signal?.reason ?? new Error('Operation aborted')
       }
       if (retryDelayMs !== undefined && retryDelayMs > 0) {
-        await sleep(retryDelayMs, reqOptions.signal)
+        try {
+          await sleep(retryDelayMs, reqOptions.signal)
+        } catch (error) {
+          releaseProbe(hostname)
+          throw error
+        }
       }
     }
   }

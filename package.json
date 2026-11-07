@@ -76,6 +76,7 @@
     "test:integration": "ZOTERO_INTEGRATION=1 vitest run tests/integration/zotero.integration.spec.ts",
     "smoke": "node scripts/smoke.mjs",
     "smoke:discovery": "node scripts/discovery-smoke.mjs",
+    "smoke:web-composition": "node scripts/discovery-smoke.mjs --browser",
     "link:local-harness": "node scripts/link-local-harness.mjs"
   },
   "dsh": {
@@ -164,6 +165,7 @@
     "@deepseek-ai/cordis": "^4.1.0",
     "@deepseek-ai/cordis-plugin-include": "^1.1.0",
     "@deepseek-ai/cordis-plugin-loader": "^1.1.0",
+    "@deepseek-ai/dsh-api-remote-access": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-remotes": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-settings-controller": "0.2.2-rc.1",
@@ -261,6 +263,7 @@
     "micromark-util-sanitize-uri": "^2.0.1",
     "micromark-util-symbol": "^2.0.1",
     "micromark-util-types": "^2.0.2",
+    "playwright": "1.65.0",
     "prettier": "^3.9.6",
     "react": "^18.2.0",
     "react-dom": "^18.3.1",
@@ -277,6 +280,7 @@
     "@deepseek-ai/dsh-agent-default-model": "0.2.2-rc.1",
     "@deepseek-ai/dsh-agent-preset-registry": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-api-remote-access": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-remotes": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.1",
     "@deepseek-ai/dsh-api-settings-controller": "0.2.2-rc.1",

@@ -23,6 +23,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { resolveHarnessRoot } from './shared/harness-packages.mjs'
+import { chromium } from 'playwright'
 
 /** The plugin id the boot graph must carry, derived from the package manifest. */
 const PLUGIN_ID = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).name
@@ -227,6 +228,7 @@ async function serveOnce(port) {
     if (!bundle.includes('__ModuleLoader__.load')) {
       throw new Error('the served bundle does not carry the __ModuleLoader__.load handoff')
     }
+    if (process.argv.includes('--browser')) await verifyBrowser(port, cookie)
     console.log(`discovery ok: ${entry.url}`)
   } finally {
     try {
@@ -259,6 +261,62 @@ async function serveOnce(port) {
       throw stolen
     }
     throw new Error(`dsh web exited with code ${child.exitCode} before serving`)
+  }
+}
+
+async function verifyBrowser(port, cookie) {
+  const browser = await chromium.launch({ headless: true })
+  const browserContext = await browser.newContext()
+  const [cookieName, ...cookieParts] = cookie.split('=')
+  await browserContext.addCookies([
+    {
+      name: cookieName,
+      value: cookieParts.join('='),
+      domain: '127.0.0.1',
+      path: '/',
+    },
+  ])
+  const page = await browserContext.newPage()
+  const pageErrors = []
+  const requests = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  page.on('request', (request) => requests.push(request.url()))
+  try {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' })
+    try {
+      await page.waitForFunction(
+        () => document.querySelector('button[aria-label="Literature panel"]') !== null,
+        undefined,
+        { timeout: 15_000 },
+      )
+    } catch (error) {
+      const body = await page
+        .locator('body')
+        .innerText()
+        .catch(() => '')
+      throw new Error(
+        `${error.message}; body=${body.slice(0, 500)}; pageErrors=${pageErrors.join('|')}`,
+      )
+    }
+    const panel = page.getByRole('button', { name: 'Literature panel', exact: true })
+    if ((await panel.count()) !== 1) {
+      throw new Error(
+        'the browser registered an unexpected number of Zotero literature panel controls',
+      )
+    }
+    await panel.click({ force: true })
+    if (!requests.some((url) => url.includes('dsh-zotero/client.js'))) {
+      throw new Error(
+        `the browser never requested the packed dsh-zotero client bundle: ${requests.filter((url) => url.includes('plugin') || url.includes('client')).join(' | ')}`,
+      )
+    }
+    if (pageErrors.length > 0) {
+      throw new Error(`browser page errors: ${pageErrors.join('; ')}`)
+    }
+    console.log('browser composition ok: packed bundle and literature panel surface')
+  } finally {
+    await browserContext.close()
+    await browser.close()
   }
 }
 

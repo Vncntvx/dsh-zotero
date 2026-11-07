@@ -88,7 +88,10 @@ export class ScholarlyService extends Service {
 
     this.http = createScholarlyHttp({ publicAccess: scholarlyPublicAccess })
     this.store = new ScholarlyTextStore()
-    this.jobRunner = new ZoteroJobRunner(ctx.get('jobs'), scholarlyJobSink(ctx))
+    // Lazy like the core service (`src/service.ts`): a plugin-loaded jobs
+    // registry may mount after this row, and an eagerly captured `undefined`
+    // would permanently disable scholarly background runs and promotion.
+    this.jobRunner = new ZoteroJobRunner(() => ctx.get('jobs'), scholarlyJobSink(ctx))
     ctx.effect(
       () => () => {
         this.jobRunner.killAll('scholarly service disposed')

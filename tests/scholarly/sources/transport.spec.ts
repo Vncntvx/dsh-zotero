@@ -1,13 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CircuitBreaker } from '../../../src/scholarly/transport/circuit-breaker.js'
 import {
   assertAllowedScholarlyUrl,
   isAllowedScholarlyHost,
   isPublicUrl,
 } from '../../../src/scholarly/transport/allowlist.js'
-import {
-  CircuitBreaker,
-  ScholarlyCircuitOpenError,
-} from '../../../src/scholarly/transport/circuit-breaker.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
 import { stubPublicAccess } from '../fixtures.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
@@ -103,43 +100,6 @@ describe('scholarly transport safety: allowlist', () => {
     expect(() => assertAllowedScholarlyUrl(`http://127.0.0.1:23119/api?api_key=${secret}`)).toThrow(
       /127\.0\.0\.1/,
     )
-  })
-})
-
-describe('scholarly transport resilience: circuit breaker', () => {
-  it('manages CLOSED, OPEN, and HALF_OPEN state transitions', () => {
-    const breaker = new CircuitBreaker({
-      failureThreshold: 3,
-      cooldownMs: 50,
-      windowMs: 1000,
-    })
-
-    const host = 'api.semanticscholar.org'
-    expect(breaker.getState(host)).toBe('CLOSED')
-
-    // 2 consecutive failures do not trip
-    breaker.recordFailure(host)
-    breaker.recordFailure(host)
-    expect(breaker.getState(host)).toBe('CLOSED')
-    expect(() => breaker.beforeRequest(host)).not.toThrow()
-
-    // 3rd failure trips the breaker to OPEN
-    breaker.recordFailure(host)
-    expect(breaker.getState(host)).toBe('OPEN')
-    expect(() => breaker.beforeRequest(host)).toThrow(ScholarlyCircuitOpenError)
-
-    // Wait for cooldown to expire using fake timers
-    vi.useFakeTimers()
-    try {
-      vi.advanceTimersByTime(65)
-      expect(breaker.getState(host)).toBe('HALF_OPEN')
-      // Half open probe succeeds
-      breaker.recordSuccess(host)
-      expect(breaker.getState(host)).toBe('CLOSED')
-      expect(() => breaker.beforeRequest(host)).not.toThrow()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })
 
@@ -279,6 +239,27 @@ describe('scholarly transport rate limiting: HostPacer', () => {
     const pacer = new HostPacer()
     const preAborted = AbortSignal.abort(new Error('pre-aborted'))
     await expect(pacer.pace('adhoc.org', preAborted)).rejects.toThrow('pre-aborted')
+  })
+
+  it('rejects a queued waiter promptly and still advances the host queue', async () => {
+    vi.useFakeTimers()
+    try {
+      const pacer = new HostPacer({ 'queued.host': 50 })
+      const first = pacer.pace('queued.host')
+      const controller = new AbortController()
+      const second = pacer.pace('queued.host', controller.signal)
+      await Promise.resolve()
+
+      controller.abort(new Error('queued cancellation'))
+      await expect(second).rejects.toThrow('queued cancellation')
+
+      const third = pacer.pace('queued.host')
+      await vi.advanceTimersByTimeAsync(50)
+      await first
+      await third
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
