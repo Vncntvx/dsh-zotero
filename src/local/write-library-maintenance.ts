@@ -7,7 +7,6 @@ import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_WRITE_OBJECT_BATCH } from '../con
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_UNEXPECTED,
   ZoteroError,
   ZoteroWriteCommitUnknownError,
   writeListTooLongMessage,
@@ -17,6 +16,7 @@ import { parseNonNegativeSafeInteger } from '../json.js'
 import { libraryPrefix, PERSONAL_LIBRARY, formatRef } from '../refs.js'
 import { itemRef } from './write-refs.js'
 import { readTrashGraph } from './trash-item.js'
+import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import {
@@ -33,7 +33,7 @@ import type {
   ZoteroRestoreItemsResult,
   ZoteroWriteCommittedUnverified,
 } from '../types.js'
-import { receiptOfCommitUnknown } from './write-verdicts.js'
+import { committedUnverified, receiptOfCommitUnknown } from './write-verdicts.js'
 
 async function readLibraryVersion(
   deps: WriteDomainDeps,
@@ -79,7 +79,7 @@ export async function restoreItems(
   const failed: ZoteroRestoreItemsResult['failed'] = []
   const serverId = await ensureServerId(deps, signal)
   for (const item of request.items) {
-    const completedRefs: string[] = []
+    const progress = trashWalkProgress()
     try {
       const ref = requireWritableRefAtServer(item, ['item'], serverId)
       const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
@@ -96,49 +96,34 @@ export async function restoreItems(
         })
         continue
       }
-      let lastLibraryVersion: number | undefined
       // Children precede their parent, so a failed child never leaves an
       // orphaned parent behind a claimed full restore.
-      for (const node of graph) {
-        if (!node.deleted) continue
-        let libraryVersion: number
-        try {
-          ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-            deps.writer.patch(
-              `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
-              { deleted: 0 },
-              {
-                serverId,
-                apiKey,
-                ifUnmodifiedSinceVersion: node.version,
-                signal,
-              },
-            ),
-          ))
-        } catch (error) {
-          unverified.push(receiptOfCommitUnknown(error, { kind: 'item', key: node.key, serverId }))
-          throw error
-        }
-        lastLibraryVersion = libraryVersion
-        completedRefs.push(itemRef(node.key, serverId))
-      }
-      const saved = await readTrashGraph(deps.client, ref.key, serverId, signal)
-      const keys = new Set(graph.map((node) => node.key))
-      if (
-        saved.length !== graph.length ||
-        saved.some((node) => node.deleted || !keys.has(node.key))
-      ) {
-        throw new ZoteroError(
-          `Zotero did not verify the restored graph for ${ref.key}. Check the completed refs before further action.`,
-          ZOTERO_UNEXPECTED,
-        )
-      }
+      await patchTrashNodes(deps, serverId, signal, graph, {
+        wantDeleted: false,
+        progress,
+        onCommitUnknown: (node) => {
+          unverified.push(
+            committedUnverified({ kind: 'item', key: node.key, serverId, reason: 'receipt-unknown' }),
+          )
+        },
+      })
+      const saved = await verifyTrashGraph(
+        deps.client,
+        ref.key,
+        serverId,
+        graph,
+        {
+          wantDeleted: false,
+          message: `Zotero did not verify the restored graph for ${ref.key}. Check the completed refs before further action.`,
+        },
+        signal,
+      )
       const parent = saved[saved.length - 1]!
       restored.push({
         ref: itemRef(ref.key, serverId),
         restored: true,
         version: parent.version,
-        libraryVersion: lastLibraryVersion,
+        libraryVersion: progress.libraryVersion,
         serverId,
         ...(graph.length > 1
           ? { children: graph.slice(0, -1).map((node) => ({ ref: itemRef(node.key, serverId) })) }
@@ -152,7 +137,7 @@ export async function restoreItems(
         ref: formatRef(item),
         code: error.code,
         message: error.message,
-        ...(completedRefs.length > 0 ? { completedRefs } : {}),
+        ...(progress.completedRefs.length > 0 ? { completedRefs: progress.completedRefs } : {}),
       })
     }
   }

@@ -1,16 +1,20 @@
 /** Read and verify the complete object graph for a recoverable item deletion. */
 import type { ZoteroHttpClient } from '../http-client.js'
+import { mapWithConcurrency } from '../concurrency.js'
 import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
 import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { fetchChildrenForTrash } from './children-wire.js'
 
-interface TrashSnapshot {
+export interface TrashSnapshot {
   key: string
   version: number
   itemType: string
   deleted: boolean
 }
+
+/** Sibling child listings are independent reads; this bounds their parallelism. */
+const TRASH_GRAPH_CONCURRENCY = 4
 
 function snapshotOf(json: unknown, key: string): TrashSnapshot {
   const row = asRecord(json)
@@ -55,44 +59,49 @@ async function readTrashSnapshot(
   return snapshotOf(json, key)
 }
 
-/** Children precede their parent so a failed child never hides an untrashed object. */
+/**
+ * Children precede their parent so a failed child never hides an untrashed
+ * object, and sibling order follows the listing order. One round trip per
+ * graph level: the child listings of one node's children are independent
+ * reads and run concurrently.
+ */
 export async function readTrashGraph(
   client: ZoteroHttpClient,
   key: string,
   serverId: string,
   signal?: AbortSignal,
 ): Promise<TrashSnapshot[]> {
-  const ordered: TrashSnapshot[] = []
   const seen = new Set<string>()
-  const visit = async (node: TrashSnapshot): Promise<void> => {
+  const visit = async (node: TrashSnapshot): Promise<TrashSnapshot[]> => {
     if (seen.has(node.key))
       throw new ZoteroError(
         `Zotero repeated child ${node.key} in the Trash graph.`,
         ZOTERO_UNEXPECTED,
       )
     seen.add(node.key)
-    if (node.itemType !== 'annotation') {
-      const children = await fetchChildrenForTrash(
-        { client },
-        node.key,
-        serverId,
-        node.itemType === 'attachment',
-        signal,
-      )
-      for (const json of children) {
-        const data = asRecord(asRecord(json)?.data)
-        const childKey = asString(asRecord(json)?.key)
-        if (childKey === undefined || !isObjectKey(childKey) || data?.parentItem !== node.key) {
-          throw new ZoteroError(
-            `Zotero returned an invalid child of ${node.key}.`,
-            ZOTERO_UNEXPECTED,
-          )
-        }
-        await visit(snapshotOf(json, childKey))
+    if (node.itemType === 'annotation') return [node]
+    const children = await fetchChildrenForTrash(
+      { client },
+      node.key,
+      serverId,
+      node.itemType === 'attachment',
+      signal,
+    )
+    const childSnapshots = children.map((json) => {
+      const data = asRecord(asRecord(json)?.data)
+      const childKey = asString(asRecord(json)?.key)
+      if (childKey === undefined || !isObjectKey(childKey) || data?.parentItem !== node.key) {
+        throw new ZoteroError(
+          `Zotero returned an invalid child of ${node.key}.`,
+          ZOTERO_UNEXPECTED,
+        )
       }
-    }
-    ordered.push(node)
+      return snapshotOf(json, childKey)
+    })
+    const childGraphs = await mapWithConcurrency(childSnapshots, TRASH_GRAPH_CONCURRENCY, visit, {
+      signal,
+    })
+    return [...childGraphs.flat(), node]
   }
-  await visit(await readTrashSnapshot(client, key, serverId, signal))
-  return ordered
+  return visit(await readTrashSnapshot(client, key, serverId, signal))
 }

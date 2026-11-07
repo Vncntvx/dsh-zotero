@@ -13,6 +13,7 @@ import {
 } from '../errors.js'
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
 import { readTrashGraph } from './trash-item.js'
+import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import {
   batchCreateUnverified,
   batchOperationUnverified,
@@ -304,27 +305,14 @@ async function runBatchDeletes(
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
   for (const ref of checkedDeletes) {
-    const completedRefs: string[] = []
+    const progress = trashWalkProgress()
     try {
       const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
-      for (const node of graph) {
-        if (node.deleted) continue
-        let libraryVersion: number
-        try {
-          ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-            deps.writer.patch(
-              `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
-              { deleted: 1 },
-              {
-                serverId,
-                apiKey,
-                ifUnmodifiedSinceVersion: node.version,
-                signal,
-              },
-            ),
-          ))
-        } catch (error) {
-          if (error instanceof ZoteroWriteCommitUnknownError)
+      try {
+        await patchTrashNodes(deps, serverId, signal, graph, {
+          wantDeleted: true,
+          progress,
+          onCommitUnknown: (node) => {
             unverified.push(
               batchOperationUnverified(
                 'delete',
@@ -333,22 +321,24 @@ async function runBatchDeletes(
                 serverId,
               ),
             )
-          throw error
-        }
-        lastLibraryVersion = libraryVersion
-        completedRefs.push(itemRef(node.key, serverId))
+          },
+        })
+      } finally {
+        // A mid-graph failure must still hand the versions of the PATCHes
+        // that did land to the request-level result.
+        if (progress.libraryVersion !== undefined) lastLibraryVersion = progress.libraryVersion
       }
-      const saved = await readTrashGraph(deps.client, ref.key, serverId, signal)
-      const keys = new Set(graph.map((node) => node.key))
-      if (
-        saved.length !== graph.length ||
-        saved.some((node) => !node.deleted || !keys.has(node.key))
-      ) {
-        throw new ZoteroError(
-          `Zotero did not verify the complete graph for ${ref.key} in Trash. Check the completed refs before further action.`,
-          ZOTERO_UNEXPECTED,
-        )
-      }
+      const saved = await verifyTrashGraph(
+        deps.client,
+        ref.key,
+        serverId,
+        graph,
+        {
+          wantDeleted: true,
+          message: `Zotero did not verify the complete graph for ${ref.key} in Trash. Check the completed refs before further action.`,
+        },
+        signal,
+      )
       const version = saved[saved.length - 1].version
       deleted.push({
         ref: itemRef(ref.key, serverId),
@@ -366,7 +356,7 @@ async function runBatchDeletes(
         ref: itemRef(ref.key, serverId),
         code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
         message: err instanceof Error ? err.message : String(err),
-        ...(completedRefs.length > 0 ? { completedRefs } : {}),
+        ...(progress.completedRefs.length > 0 ? { completedRefs: progress.completedRefs } : {}),
       })
     }
   }
