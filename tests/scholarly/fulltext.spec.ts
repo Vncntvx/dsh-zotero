@@ -159,21 +159,61 @@ describe('ScholarlyTextStore (disk bodies & memory index)', () => {
 
   it('reports a corrupt entry as corrupt and evicts it, never as a miss', async () => {
     const store = new ScholarlyTextStore(tempDir)
-    await writeFile(join(tempDir, 'doi-10.bad.json'), '{ truncated', 'utf8')
+    await store.set('doi-10.bad', { text: 'x', source: 'test', structured: true })
+    const cacheDir = join(tempDir, 'v2')
+    const [fileName] = readdirSync(cacheDir)
+    await writeFile(join(cacheDir, fileName!), '{ truncated', 'utf8')
 
-    const read = await store.get('doi-10.bad')
+    const cold = new ScholarlyTextStore(tempDir)
+    const read = await cold.get('doi-10.bad')
     expect(read.kind).toBe('corrupt')
     if (read.kind === 'corrupt') expect(read.reason).toBe('malformed JSON')
 
     // Evicted: the next read is a genuine miss.
-    expect((await store.get('doi-10.bad')).kind).toBe('miss')
+    expect((await cold.get('doi-10.bad')).kind).toBe('miss')
+  })
+
+  it('keeps distinct DOI keys isolated after a cold restart', async () => {
+    const warm = new ScholarlyTextStore(tempDir)
+    await warm.set('doi-10.1234/a/b', { text: 'first', source: 'test', structured: true })
+    await warm.set('doi-10.1234/a_b', { text: 'second', source: 'test', structured: true })
+    warm.dispose()
+
+    const cold = new ScholarlyTextStore(tempDir)
+    expect(recordOf(await cold.get('doi-10.1234/a/b')).text).toBe('first')
+    expect(recordOf(await cold.get('doi-10.1234/a_b')).text).toBe('second')
+  })
+
+  it('rejects a valid record stored under a different logical key', async () => {
+    const warm = new ScholarlyTextStore(tempDir)
+    await warm.set('doi-10.1234/a/b', { text: 'first', source: 'test', structured: true })
+    const cacheDir = join(tempDir, 'v2')
+    const [fileName] = readdirSync(cacheDir)
+    await writeFile(
+      join(cacheDir, fileName!),
+      JSON.stringify({
+        key: 'doi-10.1234/a_b',
+        record: { text: 'other', source: 'test', structured: true },
+      }),
+      'utf8',
+    )
+
+    const cold = new ScholarlyTextStore(tempDir)
+    expect(await cold.get('doi-10.1234/a/b')).toEqual({
+      kind: 'corrupt',
+      reason: 'cache key mismatch',
+    })
+    expect((await cold.get('doi-10.1234/a/b')).kind).toBe('miss')
   })
 
   it('reports a record whose shape does not hold as corrupt', async () => {
     const store = new ScholarlyTextStore(tempDir)
-    await writeFile(join(tempDir, 'shape.json'), JSON.stringify({ text: 'x' }), 'utf8')
+    await store.set('shape', { text: 'x', source: 'test', structured: true })
+    const cacheDir = join(tempDir, 'v2')
+    const [fileName] = readdirSync(cacheDir)
+    await writeFile(join(cacheDir, fileName!), JSON.stringify({ key: 'shape' }), 'utf8')
 
-    const read = await store.get('shape')
+    const read = await new ScholarlyTextStore(tempDir).get('shape')
     expect(read.kind).toBe('corrupt')
   })
 
@@ -194,10 +234,10 @@ describe('ScholarlyTextStore (disk bodies & memory index)', () => {
     await store.set('../../escape', { text: 'v', source: 's', structured: false })
     const read = await store.get('../../escape')
     expect(recordOf(read).text).toBe('v')
-    // The document landed inside the root, under a single sanitized segment.
-    const listing = readdirSync(tempDir)
+    // The document landed in the versioned namespace under a fixed-length digest.
+    const listing = readdirSync(join(tempDir, 'v2'))
     expect(listing).toHaveLength(1)
-    expect(listing[0]).not.toContain('/')
+    expect(listing[0]).toMatch(/^[a-f0-9]{64}\.json$/)
   })
 })
 
@@ -318,33 +358,45 @@ describe('store and evidence-bridge contract corners', () => {
 
   it('rejects a record whose structured flag is not a boolean', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'scholarly-shape2-'))
+    const store = new ScholarlyTextStore(dir)
+    await store.set('bad-structured', { text: 'x', source: 's', structured: true })
+    const [fileName] = readdirSync(join(dir, 'v2'))
     await writeFile(
-      join(dir, 'bad-structured.json'),
-      JSON.stringify({ text: 't', source: 's', structured: 'yes' }),
+      join(dir, 'v2', fileName!),
+      JSON.stringify({
+        key: 'bad-structured',
+        record: { text: 't', source: 's', structured: 'yes' },
+      }),
       'utf8',
     )
-    const store = new ScholarlyTextStore(dir)
-    expect((await store.get('bad-structured')).kind).toBe('corrupt')
+    expect((await new ScholarlyTextStore(dir).get('bad-structured')).kind).toBe('corrupt')
   })
 
   it('rejects a record with a non-string url', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'scholarly-shape3-'))
+    const store = new ScholarlyTextStore(dir)
+    await store.set('bad-url', { text: 'x', source: 's', structured: true })
+    const [fileName] = readdirSync(join(dir, 'v2'))
     await writeFile(
-      join(dir, 'bad-url.json'),
-      JSON.stringify({ text: 't', source: 's', structured: true, url: 42 }),
+      join(dir, 'v2', fileName!),
+      JSON.stringify({
+        key: 'bad-url',
+        record: { text: 't', source: 's', structured: true, url: 42 },
+      }),
       'utf8',
     )
-    const store = new ScholarlyTextStore(dir)
-    expect((await store.get('bad-url')).kind).toBe('corrupt')
+    expect((await new ScholarlyTextStore(dir).get('bad-url')).kind).toBe('corrupt')
   })
 
   it('reports a JSON null body as corrupt instead of a hit', async () => {
     // `typeof null === 'object'`: a null on disk must fail the shape check,
     // not reach `recordOf`'s property reads as an empty record.
     const dir = mkdtempSync(join(tmpdir(), 'scholarly-null-'))
-    await writeFile(join(dir, 'null.json'), 'null', 'utf8')
     const store = new ScholarlyTextStore(dir)
-    const read = await store.get('null')
+    await store.set('null', { text: 'x', source: 's', structured: true })
+    const [fileName] = readdirSync(join(dir, 'v2'))
+    await writeFile(join(dir, 'v2', fileName!), 'null', 'utf8')
+    const read = await new ScholarlyTextStore(dir).get('null')
     expect(read.kind).toBe('corrupt')
     if (read.kind === 'corrupt') expect(read.reason).toBe('record shape')
   })

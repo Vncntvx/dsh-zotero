@@ -237,6 +237,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
       // hostname: the interval table has no port column, and a keyed-by-port
       // entry would bypass pacing and split breaker circuits.
       const hostname = new URL(currentUrl).hostname
+      using d = deadline(reqOptions.signal, timeoutMs, SCHOLARLY_TIMEOUT)
 
       const probeToken = circuitBreaker.beforeRequest(hostname, probeTokens.get(hostname))
       if (probeToken === undefined) probeTokens.delete(hostname)
@@ -244,9 +245,10 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
       const halfOpenProbe = probeToken !== undefined
 
       try {
-        await pacer.pace(hostname, reqOptions.signal)
+        await pacer.pace(hostname, d.signal)
       } catch (error) {
         releaseProbe(hostname)
+        if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         throw error
       }
 
@@ -265,24 +267,26 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
           )
         }
         if (publicOnly) {
-          const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver)
+          const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver, d.signal)
           pinned = publicAccess.createDispatcher(addresses)
         }
       } catch (error) {
         releaseProbe(hostname)
+        if (callerAborted(reqOptions.signal)) throw error
+        if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         throw error
       }
       const dispatcher = pinned ?? sharedValidatingDispatcher()
 
       let release: (() => void) | undefined
       try {
-        release = await gate.acquire(reqOptions.signal)
+        release = await gate.acquire(d.signal)
       } catch (error) {
         releaseProbe(hostname)
         await pinned?.close()
+        if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         throw error
       }
-      using d = deadline(reqOptions.signal, timeoutMs, SCHOLARLY_TIMEOUT)
       let retryDelayMs: number | undefined
       try {
         const response = await fetchImpl(currentUrl, {

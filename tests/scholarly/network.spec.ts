@@ -21,6 +21,7 @@ import { ScholarlySecurityError } from '../../src/scholarly/transport/allowlist.
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { stubPublicAccess } from './fixtures.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
+import { deferred } from '../helpers/sync.js'
 
 /** A resolver whose every name answers these addresses. */
 function resolverOf(addresses: readonly ResolvedAddress[]): AddressResolver {
@@ -184,6 +185,34 @@ describe('pinnedLookup', () => {
 })
 
 describe('the public-PDF arm inside the transport', () => {
+  it('stops waiting on DNS cancellation and never dispatches a fetch', async () => {
+    const resolverGate = deferred<readonly ResolvedAddress[]>()
+    const resolverStarted = deferred<void>()
+    const fetchImpl = vi.fn(async () => new Response('%PDF-1.4 body', { status: 200 }))
+    const controller = new AbortController()
+    const http = createScholarlyHttp({
+      fetchImpl,
+      publicAccess: {
+        resolver: async () => {
+          resolverStarted.resolve()
+          return resolverGate.promise
+        },
+        createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+        createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+      pacer: new HostPacer({}),
+    })
+    const request = http.bytes('https://example.com/paper.pdf', {
+      allowPublicPdf: true,
+      signal: controller.signal,
+    })
+    await resolverStarted.promise
+    controller.abort(new Error('caller canceled'))
+    await expect(request).rejects.toThrow('caller canceled')
+    resolverGate.resolve([PUBLIC_V4])
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it('rejects a DNS bypass name before any fetch', async () => {
     const fetchImpl = vi.fn(async () => new Response('%PDF-1.4 body', { status: 200 }))
     const http = createScholarlyHttp({
