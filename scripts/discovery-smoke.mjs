@@ -17,6 +17,7 @@
 
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -148,6 +149,26 @@ async function reservePort() {
   return port
 }
 
+/**
+ * Pin the composition's Documents directory into the fresh profile, so the
+ * harness's first-boot default workspace resolves inside the temp home on
+ * every host. Without it the Linux path of the workspace controller resolves
+ * the system Documents directory through `xdg-user-dir DOCUMENTS`, which a
+ * bare CI runner cannot answer (empty, or $HOME, which the controller
+ * refuses) — the composition then boots workspace-less and the session
+ * composer never renders the plugin's slot surfaces, so the browser phase
+ * would wait forever on a button the composition never had a chance to show.
+ */
+async function pinDocumentsDirectory() {
+  const documents = join(HOME, 'Documents')
+  await mkdir(documents, { recursive: true })
+  const patchPath = join(HOME, 'profiles', PROFILE, 'cordis.patch.yml')
+  await writeFile(
+    patchPath,
+    `# Written by scripts/discovery-smoke.mjs: the smoke's own Documents root.\n- id: workspace-controller\n  config:\n    documentsDirectory: ${documents}\n`,
+  )
+}
+
 async function main() {
   const tarball = packPath()
   console.log(`packed: ${tarball}`)
@@ -155,6 +176,7 @@ async function main() {
 
   const add = dshCommand(['plugin', '--profile', PROFILE, 'add', tarball])
   await execFileAsync(add.command, add.args, { env: ENV })
+  await pinDocumentsDirectory()
 
   // The reserved port can be stolen between reserve and bind; retry the whole
   // serve on EADDRINUSE instead of failing the run on a TOCTOU loss.

@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24.15.0
           cache: 'npm'
 
       - name: Install dependencies
@@ -52,7 +52,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24.15.0
           cache: 'npm'
 
       - name: Install dependencies
@@ -62,9 +62,11 @@ jobs:
         run: |
           # The smoke installs the packed plugin into a real dsh profile, and CI
           # has no sibling harness checkout to take the CLI from; use the
-          # published CLI at the exact version the dev tree pins.
+          # published CLI at the exact version the dev tree pins. The CLI's
+          # plugin manager spawns pnpm from PATH, so install the version the
+          # harness pins in its packageManager field alongside it.
           pinned="$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-api-remotes']")"
-          npm install --global "@deepseek-ai/dsh@${pinned}"
+          npm install --global "@deepseek-ai/dsh@${pinned}" pnpm@11.28.5
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -90,7 +92,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24.15.0
           cache: 'npm'
 
       - name: Install dependencies
