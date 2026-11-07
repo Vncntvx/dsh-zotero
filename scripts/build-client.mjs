@@ -126,11 +126,12 @@ const EXTERNALS = [
 /**
  * Harness inline-safety lives in `client-graph-authority.mjs`
  * (`INLINE_SAFE` / `GENERATED_REMOTE` / `VENDORED_LIBRARY`), the counterpart of
- * `packages/client/tsdown.client.ts` at dsh-v0.2.2-rc.1. The three patterns are
- * a verbatim copy of that file's constants: after a harness bump, diff the
- * upstream file and mirror the change here rather than editing from memory.
- * Packages the host half owns also live there: resolve-time and metafile
- * enforcement share one rule source with the unit tests.
+ * `packages/client/tsdown.client.ts` at the harness pin tag. The three patterns
+ * are a verbatim copy of that file's constants: after a harness bump, extract
+ * them from the new tag (`git show dsh-v<pin>:…`) and mirror the change here
+ * rather than editing from memory or from the sibling's working tree. Packages
+ * the host half owns also live there: resolve-time and metafile enforcement
+ * share one rule source with the unit tests.
  */
 
 /** Metafile artifact markers that mean host schema materialization leaked in. */

@@ -45,11 +45,13 @@
  * @module scripts/harness-state
  */
 
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, satisfies, validRange } from 'semver'
 import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
+import { GENERATED_REMOTE, INLINE_SAFE, VENDORED_LIBRARY } from './client-graph-authority.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolveHarnessRoot(root)
@@ -728,6 +730,56 @@ function checkArtifacts(strict, packages) {
 }
 
 /**
+ * The client-graph mirror in `client-graph-authority.mjs` claims to copy
+ * `packages/client/tsdown.client.ts` at the pin tag. This check makes the
+ * claim load-bearing: with a sibling checkout present, the three constants
+ * are diffed against `git show dsh-v<pin>:…`. Without a sibling the unit
+ * suite's snapshot fixture carries the proof (CI checks nothing here — the
+ * registry install ships no tsdown file to compare against).
+ */
+function collectMirrorProblems(pin) {
+  if (!existsSync(harnessRoot)) return []
+  const file = 'packages/client/tsdown.client.ts'
+  let upstream
+  try {
+    upstream = execFileSync('git', ['-C', harnessRoot, 'show', `dsh-v${pin}:${file}`], {
+      encoding: 'utf8',
+    })
+  } catch {
+    notes.push(
+      `tag dsh-v${pin} not found in the sibling checkout: the client-graph mirror was not verified against the pin`,
+    )
+    return []
+  }
+  const sourceOf = (name) => {
+    const line = upstream.split('\n').find((candidate) => candidate.includes(`const ${name} = `))
+    if (line === undefined) return undefined
+    const match = line.match(/\/(.+)\/[$a-z]*\s*$/)
+    return match === null ? undefined : match[1]
+  }
+  const problems = []
+  for (const [name, mirror] of [
+    ['INLINE_SAFE', INLINE_SAFE],
+    ['GENERATED_REMOTE', GENERATED_REMOTE],
+    ['VENDORED_LIBRARY', VENDORED_LIBRARY],
+  ]) {
+    const upstreamSource = sourceOf(name)
+    if (upstreamSource === undefined) {
+      problems.push(`upstream ${name} not found in ${file} at dsh-v${pin}`)
+      continue
+    }
+    if (upstreamSource !== mirror.source) {
+      problems.push(
+        `client-graph mirror ${name} does not match the pin tag dsh-v${pin}` +
+          ' — re-extract the mirror and tests/fixtures/harness-client-graph-pin.json from the tag' +
+          ` (git show dsh-v<pin>:${file}), never from the sibling's working tree`,
+      )
+    }
+  }
+  return problems
+}
+
+/**
  * Rewrite every harness face of a manifest to the pin. Mutates
  * `manifest` in place. Dev and overrides take the exact pin; peers
  * and engines become >=pin. The manifest carries no other derived
@@ -783,6 +835,9 @@ function runCheck(strict) {
   // profile, which is a hard failure in both modes: unlike a stale sibling
   // build, there is nothing here that only the release path has to prove.
   problems.push(...collectVendorProblems(harnessRoot, manifest, packages))
+  // The mirror drift is a release-path lie about what the running host
+  // inlines, so it fails in both modes like the vendor check does.
+  problems.push(...collectMirrorProblems(pin))
   checkArtifacts(strict, packages)
   report()
   if (problems.length === 0) console.log(`harness state ok: pin ${pin}`)

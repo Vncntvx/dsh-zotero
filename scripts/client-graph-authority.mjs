@@ -73,17 +73,22 @@ export function packageNameOf(key) {
 
 /**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
- * constants in `packages/client/tsdown.client.ts` at **dsh-v0.2.2-rc.1**:
- * `INLINE_SAFE`, `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in
- * step with that file: never invent a fourth arm here.
+ * constants in `packages/client/tsdown.client.ts` **at the harness pin tag**
+ * (`dsh-v<pin>`, currently `dsh-v0.2.2-rc.1`): `INLINE_SAFE`,
+ * `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in step with that
+ * file: never invent a fourth arm here.
  *
- * The three patterns below are a verbatim copy of the upstream constants, so a
- * harness bump that touches them has to be taken from a diff of that file
- * rather than from memory: the upstream file is the only definition, this is
- * its mirror.
+ * The source of truth is the tag's version of the file — not the sibling
+ * working copy and not its HEAD, both of which can be far ahead of the pin
+ * the installed packages resolve to. Two guards hold the line: the snapshot
+ * fixture `tests/fixtures/harness-client-graph-pin.json` (extracted from the
+ * tag, CI-proof) and the `checkMirror` step in `scripts/harness-state.mjs`
+ * (diffs the mirror against `git show dsh-v<pin>:…` whenever a sibling
+ * checkout is present). A harness bump re-extracts the fixture and this
+ * mirror from the new tag; never copy them from the working tree.
  */
 export const INLINE_SAFE =
-  /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
+  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
 export const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 export const VENDORED_LIBRARY =
   /^@deepseek-ai\/(?:(?:cosmokit|schemastery)(?:\/|$)|cordis-plugin-timer$)/
