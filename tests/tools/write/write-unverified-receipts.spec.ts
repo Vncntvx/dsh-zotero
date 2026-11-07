@@ -50,3 +50,35 @@ describe('unverified creation receipts', () => {
     },
   )
 })
+
+describe('unverified graph-write receipts', () => {
+  it('retains the parent ref and the acknowledged refs of a whole-graph write', () => {
+    const value = {
+      kind: 'committed-unverified' as const,
+      reason: 'receipt-unknown' as const,
+      key: 'ATTACH01',
+      ref: 'zotero://user/0/item/ATTACH01?server=srv',
+      parentRef: 'zotero://user/0/item/PARENT01?server=srv',
+      completedRefs: ['zotero://user/0/item/NOTECHLD?server=srv'],
+      serverId: 'srv',
+    }
+    const text = renderCommittedUnverified(value, 'item', 'created')
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(text).toContain('parent ref zotero://user/0/item/PARENT01?server=srv')
+    expect(text).toContain(
+      'Refs acknowledged before the outcome turned unknown: zotero://user/0/item/NOTECHLD?server=srv',
+    )
+    expect(createWritePresentationMeta(value)).toEqual({
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'receipt-unknown',
+      key: 'ATTACH01',
+      ref: 'zotero://user/0/item/ATTACH01?server=srv',
+      parentRef: 'zotero://user/0/item/PARENT01?server=srv',
+      completedRefs: ['zotero://user/0/item/NOTECHLD?server=srv'],
+      serverId: 'srv',
+    })
+  })
+})

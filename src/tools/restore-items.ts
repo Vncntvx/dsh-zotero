@@ -107,10 +107,16 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
           (item) =>
             `- Failed ${item.ref ?? `index ${item.index}`}: ${item.code}: ${item.message}${item.completedRefs === undefined ? '' : `\n  Completed refs: ${item.completedRefs.join(', ')}`}`,
         ),
-        ...value.unverified.map(
-          (item) =>
-            `- Unverified restore outcome for ${item.ref ?? `key ${item.key ?? 'unknown'}`} on server ${item.serverId}: Zotero may have committed it. Do not retry; reconcile the item before further action.`,
-        ),
+        ...value.unverified.map((item) => {
+          const identity = item.ref ?? `key ${item.key ?? 'unknown'}`
+          const parent =
+            item.parentRef === undefined ? '' : ` The write was issued for ${item.parentRef}.`
+          const acknowledged =
+            item.completedRefs === undefined || item.completedRefs.length === 0
+              ? ''
+              : ` Refs acknowledged before the outcome turned unknown: ${item.completedRefs.join(', ')}.`
+          return `- Unverified restore outcome for ${identity} on server ${item.serverId}: Zotero may have committed it. Do not retry; reconcile the item before further action.${parent}${acknowledged}`
+        }),
       ].join('\n'),
     },
   ]

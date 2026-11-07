@@ -59,6 +59,8 @@ export const COMMITTED_UNVERIFIED_VARIANT = {
     key: { type: 'string' },
     version: { type: 'integer' },
     libraryVersion: { type: 'integer' },
+    parentRef: { type: 'string' },
+    completedRefs: { type: 'array', items: { type: 'string' } },
     serverId: { type: 'string', required: true },
   },
 } as const
@@ -71,6 +73,8 @@ interface CommittedUnverifiedLike {
   readonly key?: string
   readonly version?: number
   readonly libraryVersion?: number
+  readonly parentRef?: string
+  readonly completedRefs?: readonly string[]
   readonly serverId?: string
 }
 
@@ -89,6 +93,7 @@ export function renderCommittedUnverified(
     ...(value.ref === undefined ? [] : [`ref ${value.ref}`]),
     ...(value.version === undefined ? [] : [`version ${value.version}`]),
     ...(value.libraryVersion === undefined ? [] : [`library version ${value.libraryVersion}`]),
+    ...(value.parentRef === undefined ? [] : [`parent ref ${value.parentRef}`]),
     ...(value.serverId === undefined ? [] : [`server ${value.serverId}`]),
   ]
   const identity = known.length === 0 ? '' : ` (${known.join('; ')})`
@@ -96,10 +101,14 @@ export function renderCommittedUnverified(
     value.key !== undefined || value.ref !== undefined
       ? `reconcile the ${objectName} by its key/ref`
       : `reconcile by checking Zotero for the ${objectName} before taking any further action`
+  const acknowledged =
+    value.completedRefs === undefined || value.completedRefs.length === 0
+      ? ''
+      : ` Refs acknowledged before the outcome turned unknown: ${value.completedRefs.join(', ')}.`
   const text =
     value.reason === 'commit-unknown' || value.reason === 'receipt-unknown'
-      ? `Zotero may have ${pastVerb} the ${objectName}${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.`
-      : `Zotero ${pastVerb} the ${objectName}${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.`
+      ? `Zotero may have ${pastVerb} the ${objectName}${identity}, but the response did not prove the outcome. Do not retry; ${reconciliation}.${acknowledged}`
+      : `Zotero ${pastVerb} the ${objectName}${identity}, but its saved state could not be verified. Do not retry; ${reconciliation}.${acknowledged}`
   return [{ type: 'text', text }]
 }
 
@@ -150,6 +159,10 @@ export function createWritePresentationMeta(
       ...(value.ref === undefined ? {} : { ref: value.ref }),
       ...(value.version === undefined ? {} : { version: value.version }),
       ...(value.libraryVersion === undefined ? {} : { libraryVersion: value.libraryVersion }),
+      ...(value.parentRef === undefined ? {} : { parentRef: value.parentRef }),
+      ...(value.completedRefs === undefined || value.completedRefs.length === 0
+        ? {}
+        : { completedRefs: [...value.completedRefs] }),
       ...(value.serverId === undefined ? {} : { serverId: value.serverId }),
     }
   }

@@ -102,8 +102,20 @@ export async function restoreItems(
         wantDeleted: false,
         progress,
         onCommitUnknown: (node) => {
+          // The receipt must reconcile the whole graph write: the parent it
+          // was issued for, the child whose outcome is unknown, and the
+          // siblings acknowledged before it.
           unverified.push(
-            committedUnverified({ kind: 'item', key: node.key, serverId, reason: 'receipt-unknown' }),
+            committedUnverified({
+              kind: 'item',
+              key: node.key,
+              serverId,
+              reason: 'receipt-unknown',
+              parentRef: itemRef(ref.key, serverId),
+              ...(progress.completedRefs.length > 0
+                ? { completedRefs: progress.completedRefs }
+                : {}),
+            }),
           )
         },
       })

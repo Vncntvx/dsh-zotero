@@ -273,6 +273,91 @@ describe('zotero_restore_items', () => {
     expect(text).toContain('Do not retry')
   })
 
+  it('carries the parent ref and the acknowledged refs on a child commit-unknown', async () => {
+    serveIdentityAndGrant()
+    const NOTE_KEY = 'NOTECHLD'
+    const ATTACH_KEY = 'ATTACH01'
+    // Parent plus a note and an attachment, all still in the Trash; the
+    // children are served first by the walk, so the note PATCH acknowledges
+    // before the attachment PATCH loses its receipt.
+    lane.mock.route('GET', `/api/users/0/items/${KEY_1}`, (_req, _res, h) =>
+      h.json(itemJson(KEY_1, 10, { itemType: 'book', title: 'Old draft', deleted: 1 }), {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '10',
+      }),
+    )
+    lane.mock.route('GET', `/api/users/0/items/${KEY_1}/children`, (_req, _res, h) =>
+      h.json(
+        [
+          itemJson(NOTE_KEY, 4, { itemType: 'note', deleted: 1, parentItem: KEY_1 }),
+          itemJson(ATTACH_KEY, 5, { itemType: 'attachment', deleted: 1, parentItem: KEY_1 }),
+        ],
+        {
+          'Zotero-Server-ID': SERVER_ID,
+          'Last-Modified-Version': '10',
+          'Total-Results': '2',
+        },
+      ),
+    )
+    lane.mock.route('GET', `/api/users/0/items/${NOTE_KEY}/children`, (_req, _res, h) =>
+      h.json([], {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '4',
+        'Total-Results': '0',
+      }),
+    )
+    lane.mock.route('GET', `/api/users/0/items/${ATTACH_KEY}/children`, (_req, _res, h) =>
+      h.json([], {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '5',
+        'Total-Results': '0',
+      }),
+    )
+    lane.mock.route('PATCH', `/api/users/0/items/${NOTE_KEY}`, (_req, _res, h) =>
+      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, ''),
+    )
+    lane.mock.route('PATCH', `/api/users/0/items/${ATTACH_KEY}`, (_req, _res, h) =>
+      h.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+
+    const result = expectValue(
+      await lane.runTool('zotero_restore_items', { refs: [REF_1] }),
+      'zotero_restore_items',
+    )
+    expect(result.value).toMatchObject({
+      kind: 'restored',
+      restored: [],
+      unverified: [
+        {
+          kind: 'committed-unverified',
+          committed: true,
+          retryable: false,
+          reason: 'receipt-unknown',
+          key: ATTACH_KEY,
+          ref: `zotero://user/0/item/${ATTACH_KEY}?server=${SERVER_ID}`,
+          parentRef: SERVED_REF_1,
+          completedRefs: [`zotero://user/0/item/${NOTE_KEY}?server=${SERVER_ID}`],
+          serverId: SERVER_ID,
+        },
+      ],
+      failed: [],
+    })
+    // The note settled; the attachment's outcome is unknown; the parent was
+    // never attempted and the request moved on without a retry.
+    const patches = lane.mock.requests.filter((request) => request.method === 'PATCH')
+    expect(patches.map((request) => request.pathname)).toEqual([
+      `/api/users/0/items/${NOTE_KEY}`,
+      `/api/users/0/items/${ATTACH_KEY}`,
+    ])
+    const text = result.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(text).toContain(`The write was issued for ${SERVED_REF_1}`)
+    expect(text).toContain(
+      `Refs acknowledged before the outcome turned unknown: zotero://user/0/item/${NOTE_KEY}?server=${SERVER_ID}`,
+    )
+  })
+
   it('writes nothing when the plan is rejected', async () => {
     serveIdentityAndGrant()
     setApprovalOutcome('rejected')

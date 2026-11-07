@@ -37,6 +37,10 @@ export interface CommittedUnverifiedOptions {
   readonly key?: string
   readonly version?: number
   readonly reason?: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown'
+  /** The graph write's root object, when the uncertain node is a child. */
+  readonly parentRef?: string
+  /** Refs the same graph write acknowledged before this outcome. */
+  readonly completedRefs?: readonly string[]
 }
 
 function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
@@ -67,7 +71,16 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
 export function committedUnverified(
   options: CommittedUnverifiedOptions,
 ): ZoteroWriteCommittedUnverified {
-  const { kind, batch, serverId, key, version, reason = 'saved-state-unverified' } = options
+  const {
+    kind,
+    batch,
+    serverId,
+    key,
+    version,
+    reason = 'saved-state-unverified',
+    parentRef,
+    completedRefs,
+  } = options
   const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
   const ref =
     safeKey === undefined || kind === 'tag'
@@ -88,6 +101,12 @@ export function committedUnverified(
           ...(ref !== undefined ? { ref } : {}),
           ...(version !== undefined ? { version } : {}),
         }
+      : {}),
+    ...(parentRef !== undefined ? { parentRef } : {}),
+    // A snapshot, not an alias of the caller's live accumulator: the receipt
+    // must keep describing the moment the outcome turned unknown.
+    ...(completedRefs !== undefined && completedRefs.length > 0
+      ? { completedRefs: [...completedRefs] }
       : {}),
     ...(batch !== undefined ? { libraryVersion: batch.libraryVersion } : {}),
     serverId,

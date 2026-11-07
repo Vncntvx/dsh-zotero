@@ -1043,6 +1043,13 @@ export interface ZoteroWriteCommittedUnverified {
   version?: number
   /** Present when the response supplied a trustworthy library version. */
   libraryVersion?: number
+  /**
+   * The object the graph write was issued for, when the uncertain node is a
+   * child inside a whole-graph write such as a Trash restore.
+   */
+  parentRef?: string
+  /** Refs the same graph write already acknowledged before this outcome. */
+  completedRefs?: string[]
   serverId: string
 }
 
