@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diff, gt, valid } from 'semver'
+import { diff, gt, maxSatisfying, valid } from 'semver'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -93,15 +93,16 @@ function registryBase() {
   }
 }
 
-async function latestVersion(registry, name) {
+async function latestVersion(registry, name, range) {
   const response = await fetch(`${registry}/${name.replace('/', '%2F')}`, {
     headers: { accept: 'application/vnd.npm.install-v1+json' },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   const packument = await response.json()
-  const latest = packument['dist-tags']?.latest
-  if (!valid(latest)) throw new Error('packument carries no valid dist-tags.latest')
+  const versions = Object.keys(packument.versions ?? {}).filter((version) => valid(version))
+  const latest = maxSatisfying(versions, range)
+  if (latest === null) throw new Error(`no published version satisfies ${range}`)
   return latest
 }
 
@@ -133,7 +134,7 @@ const registry = registryBase()
 const lookups = await mapLimit(targets, CONCURRENCY, async (name) => {
   const current = installedVersion(name)
   try {
-    return { name, current, latest: await latestVersion(registry, name) }
+    return { name, current, latest: await latestVersion(registry, name, declaredRange(name)) }
   } catch (error) {
     return { name, current, error: error instanceof Error ? error.message : String(error) }
   }
