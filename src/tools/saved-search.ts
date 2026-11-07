@@ -94,8 +94,12 @@ const DELETED = {
   },
 } as const
 const CREATED = { oneOf: [DECLINED_OUTPUT_SCHEMA, COMMITTED_UNVERIFIED_VARIANT, APPLIED] } as const
-const UPDATE_OUTPUT = { oneOf: [DECLINED_OUTPUT_SCHEMA, APPLIED] } as const
-const DELETE_OUTPUT = { oneOf: [DECLINED_OUTPUT_SCHEMA, DELETED] } as const
+const UPDATE_OUTPUT = {
+  oneOf: [DECLINED_OUTPUT_SCHEMA, COMMITTED_UNVERIFIED_VARIANT, APPLIED],
+} as const
+const DELETE_OUTPUT = {
+  oneOf: [DECLINED_OUTPUT_SCHEMA, COMMITTED_UNVERIFIED_VARIANT, DELETED],
+} as const
 type CreateArgs = InferArgs<typeof CREATE>
 type UpdateArgs = InferArgs<typeof UPDATE>
 type DeleteArgs = InferArgs<typeof DELETE>
@@ -122,6 +126,7 @@ const render = (_args: unknown, value: AnyOutput): ContentBlock[] => {
 /** Replayable projection for the update arm: the applied identity. */
 function presentUpdateMeta(_args: UpdateArgs, value: UpdateOutput): JsonValue {
   if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',
     ref: value.ref,
@@ -134,6 +139,7 @@ function presentUpdateMeta(_args: UpdateArgs, value: UpdateOutput): JsonValue {
 /** Replayable projection for the delete arm: the deleted identity. */
 function presentDeleteMeta(_args: DeleteArgs, value: DeleteOutput): JsonValue {
   if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'deleted',
     ref: value.ref,

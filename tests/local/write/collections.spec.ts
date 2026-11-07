@@ -258,4 +258,28 @@ describe('updateItemCollections', () => {
     expect((thrown as Error).message).toBe(WRITE_CONFLICT_MESSAGE)
     expect((thrown as { code?: string }).code).toBe(ZOTERO_WRITE_CONFLICT)
   })
+
+  it('returns an unverified receipt when the membership PATCH omits its version', async () => {
+    grantAuthorize(mock)
+    mock.route('GET', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(
+        200,
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '10' },
+        JSON.stringify(itemJson(ITEM_KEY, 10, { tags: [], collections: [] })),
+      ),
+    )
+    mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    const result = await updateItemCollections(deps, { item: ITEM_REF, add: ['方法论'] })
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: ITEM_KEY,
+      serverId: SERVER_ID,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+  })
 })

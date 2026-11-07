@@ -22,6 +22,7 @@ import {
   listUpdatePresentationMeta,
   presentUpdateResultView,
   renderUpdateList,
+  renderCommittedUnverified,
   UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA,
 } from './write-present.js'
 import {
@@ -92,6 +93,8 @@ export function renderUpdateItemCollections(
   _args: UpdateItemCollectionsArgs,
   value: UpdateItemCollectionsOutput,
 ): ContentBlock[] {
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'membership', 'committed')
   return renderUpdateList(
     value.kind === 'declined' ? value : { ...value, items: value.collections },
     {

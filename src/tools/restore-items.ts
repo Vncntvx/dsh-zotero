@@ -9,7 +9,12 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { metaRecordOf, renderDeclined } from './present.js'
-import { DECLINED_OUTPUT_SCHEMA, WRITE_FAILURE_ITEM, libraryVersionLine } from './write-present.js'
+import {
+  COMMITTED_UNVERIFIED_VARIANT,
+  DECLINED_OUTPUT_SCHEMA,
+  WRITE_FAILURE_ITEM,
+  libraryVersionLine,
+} from './write-present.js'
 import { parseWritableRef, assertWriteList, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
@@ -57,6 +62,7 @@ const OUTPUT = {
       properties: {
         kind: { type: 'string', enum: ['restored'], required: true },
         restored: { type: 'array', required: true, items: RESTORED_ITEM },
+        unverified: { type: 'array', required: true, items: COMMITTED_UNVERIFIED_VARIANT },
         failed: { type: 'array', required: true, items: WRITE_FAILURE_ITEM },
         serverId: { type: 'string' },
       },
@@ -70,7 +76,7 @@ function restoreItemsPlan(args: Args): string {
     '**Restore Zotero Trash items**',
     WRITE_PLAN_LIBRARY_LINE,
     `- Items: ${args.refs.join(', ')}`,
-    "Each item's whole child graph (attachments, notes, annotations) is restored children-first, every node under its own version precondition, and the graph is read back to prove the restore; failures are reported per ref with the refs already acknowledged.",
+    "Each item's whole child graph (attachments, notes, annotations) is restored children-first, every node under its own version precondition, and the graph is read back to prove the restore; failures and unverified receipts are reported per ref with the refs already acknowledged. Never retry an unverified receipt.",
   ].join('\n')
 }
 
@@ -82,7 +88,7 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
     {
       type: 'text',
       text: [
-        `Restored ${written.length} item(s) from Trash; ${alreadyLive.length} already live; ${value.failed.length} failed.`,
+        `Restored ${written.length} item(s) from Trash; ${alreadyLive.length} already live; ${value.unverified.length} unverified; ${value.failed.length} failed.`,
         ...value.restored.map((item) => {
           if (item.alreadyPresent === true) {
             return `- Already live in the library (nothing written): ${item.ref} (version ${item.version}).`
@@ -101,6 +107,10 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
           (item) =>
             `- Failed ${item.ref ?? `index ${item.index}`}: ${item.code}: ${item.message}${item.completedRefs === undefined ? '' : `\n  Completed refs: ${item.completedRefs.join(', ')}`}`,
         ),
+        ...value.unverified.map(
+          (item) =>
+            `- Unverified restore outcome for ${item.ref ?? `key ${item.key ?? 'unknown'}`} on server ${item.serverId}: Zotero may have committed it. Do not retry; reconcile the item before further action.`,
+        ),
       ].join('\n'),
     },
   ]
@@ -114,6 +124,7 @@ function presentRestoreItemsMeta(_args: Args, value: Output): JsonValue {
     kind: 'restored',
     restoredCount: value.restored.filter((item) => item.restored).length,
     failedCount: value.failed.length,
+    ...(value.unverified.length > 0 ? { unverifiedCount: value.unverified.length } : {}),
     ...(alreadyPresentCount > 0 ? { alreadyPresentCount } : {}),
     ...(value.serverId === undefined ? {} : { serverId: value.serverId }),
   }
@@ -125,12 +136,17 @@ function presentRestoreItemsResult(_args: Args, result: ToolResult): ToolResultV
   if (record.kind === 'declined') {
     return { card: 'generic', title: 'Zotero restore: declined, nothing written' }
   }
-  if (typeof record.restoredCount !== 'number' || typeof record.failedCount !== 'number')
+  if (
+    typeof record.restoredCount !== 'number' ||
+    typeof record.failedCount !== 'number' ||
+    (record.unverifiedCount !== undefined && typeof record.unverifiedCount !== 'number')
+  )
     return undefined
   const already = typeof record.alreadyPresentCount === 'number' ? record.alreadyPresentCount : 0
+  const unverified = typeof record.unverifiedCount === 'number' ? record.unverifiedCount : 0
   return {
     card: 'generic',
-    title: `Zotero restore: ${record.restoredCount} restored, ${already} already live, ${record.failedCount} failed`,
+    title: `Zotero restore: ${record.restoredCount} restored, ${already} already live, ${unverified} unverified, ${record.failedCount} failed`,
   }
 }
 

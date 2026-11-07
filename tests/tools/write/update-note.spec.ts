@@ -206,6 +206,25 @@ describe('zotero_update_note', () => {
     })[0] as { text: string }
     expect(served.text).toContain(`Updated note ${SERVED_NOTE_REF} (version 11).`)
     expect(served.text).toContain(`served by ${SERVER_ID}`)
+    const unverified = tool.output.render(args, {
+      kind: 'committed-unverified',
+      committed: true,
+      retryable: false,
+      reason: 'receipt-unknown',
+      key: NOTE_KEY,
+      serverId: SERVER_ID,
+    })[0] as { text: string }
+    expect(unverified.text).toContain('Do not retry')
+    expect(
+      tool.output.presentationMeta!(args, {
+        kind: 'committed-unverified',
+        committed: true,
+        retryable: false,
+        reason: 'receipt-unknown',
+        key: NOTE_KEY,
+        serverId: SERVER_ID,
+      }),
+    ).toMatchObject({ kind: 'committed-unverified', reason: 'receipt-unknown', key: NOTE_KEY })
     expect(tool.presentCall!(args)).toEqual({
       card: 'generic',
       kind: 'edit',
@@ -349,6 +368,26 @@ describe('zotero_update_collection', () => {
         text: 'Declined: the user answered the plan without approving. Nothing was written.',
       },
     ])
+    expect(
+      tool.output.render!(args, {
+        kind: 'committed-unverified',
+        committed: true,
+        retryable: false,
+        reason: 'receipt-unknown',
+        key: COLLECTION_KEY,
+        serverId: SERVER_ID,
+      })[0],
+    ).toMatchObject({ type: 'text', text: expect.stringContaining('Do not retry') })
+    expect(
+      tool.output.presentationMeta!(args, {
+        kind: 'committed-unverified',
+        committed: true,
+        retryable: false,
+        reason: 'receipt-unknown',
+        key: COLLECTION_KEY,
+        serverId: SERVER_ID,
+      }),
+    ).toMatchObject({ kind: 'committed-unverified', reason: 'receipt-unknown' })
   })
 
   it('formats updateNotePlan and truncates markdown over 300 characters', () => {

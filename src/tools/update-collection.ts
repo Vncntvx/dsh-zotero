@@ -11,8 +11,11 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
+  COMMITTED_UNVERIFIED_VARIANT,
+  createWritePresentationMeta,
   libraryVersionLine,
   presentUpdateResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
 import { parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
@@ -35,6 +38,7 @@ type Args = InferArgs<typeof PARAMETERS>
 const OUTPUT = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -63,6 +67,8 @@ function updateCollectionPlan(args: Args): string {
 }
 function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
   if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'collection', 'committed')
   return [
     {
       type: 'text',
@@ -76,6 +82,7 @@ function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
 /** Replayable projection: the applied collection identity, or the declined fact. */
 function presentUpdateCollectionMeta(_args: Args, value: Output): JsonValue {
   if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',
     ref: value.ref,

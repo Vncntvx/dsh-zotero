@@ -3,13 +3,19 @@
  * @module dsh-zotero/local/write-item-lists
  */
 
-import { WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
+import {
+  WRITE_LIST_SELECTION_MESSAGE,
+  ZOTERO_INVALID_ARGUMENT,
+  ZoteroError,
+  ZoteroWriteCommitUnknownError,
+} from '../errors.js'
 import { requireWritableRef } from '../refs.js'
 import type {
   ZoteroUpdateItemCollectionsRequest,
   ZoteroUpdateItemCollectionsResult,
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsResult,
+  ZoteroWriteCommittedUnverified,
 } from '../types.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { collectionRef } from './write-refs.js'
@@ -24,12 +30,13 @@ import {
   tagState,
   withItemStateWrite,
 } from './write-domain.js'
+import { committedUnverified } from './write-verdicts.js'
 
 export async function updateItemTags(
   deps: WriteDomainDeps,
   request: ZoteroUpdateItemTagsRequest,
   signal?: AbortSignal,
-): Promise<ZoteroUpdateItemTagsResult> {
+): Promise<ZoteroUpdateItemTagsResult | ZoteroWriteCommittedUnverified> {
   const localRef = requireWritableRef(request.item, ['item'])
   const add = normalizeWriteList('add', request.add ?? [])
   const remove = normalizeWriteList('remove', request.remove ?? [])
@@ -55,7 +62,19 @@ export async function updateItemTags(
           serverId,
         }
       }
-      const { libraryVersion } = await send({ tags: merged })
+      let libraryVersion: number
+      try {
+        ;({ libraryVersion } = await send({ tags: merged }))
+      } catch (error) {
+        if (error instanceof ZoteroWriteCommitUnknownError)
+          return committedUnverified({
+            kind: 'item',
+            key: localRef.key,
+            serverId,
+            reason: 'receipt-unknown',
+          })
+        throw error
+      }
       return {
         kind: 'applied',
         ref: resultRef,
@@ -75,7 +94,7 @@ export async function updateItemCollections(
   deps: WriteDomainDeps,
   request: ZoteroUpdateItemCollectionsRequest,
   signal?: AbortSignal,
-): Promise<ZoteroUpdateItemCollectionsResult> {
+): Promise<ZoteroUpdateItemCollectionsResult | ZoteroWriteCommittedUnverified> {
   const localRef = requireWritableRef(request.item, ['item'])
   const addInputs = (request.add ?? []).map((value) => normalizeCollectionInput('add', value))
   const removeInputs = (request.remove ?? []).map((value) =>
@@ -117,7 +136,19 @@ export async function updateItemCollections(
           serverId: effectiveServerId,
         }
       }
-      const { libraryVersion } = await send({ collections: merged })
+      let libraryVersion: number
+      try {
+        ;({ libraryVersion } = await send({ collections: merged }))
+      } catch (error) {
+        if (error instanceof ZoteroWriteCommitUnknownError)
+          return committedUnverified({
+            kind: 'item',
+            key: localRef.key,
+            serverId: effectiveServerId,
+            reason: 'receipt-unknown',
+          })
+        throw error
+      }
       return {
         kind: 'applied',
         ref: resultRef,

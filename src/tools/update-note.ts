@@ -11,8 +11,11 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
+  COMMITTED_UNVERIFIED_VARIANT,
+  createWritePresentationMeta,
   libraryVersionLine,
   presentUpdateResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
 import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
@@ -36,6 +39,7 @@ type Args = InferArgs<typeof PARAMETERS>
 const OUTPUT = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -64,6 +68,8 @@ export function updateNotePlan(args: Args): string {
 
 function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
   if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'note', 'committed')
   return [
     {
       type: 'text',
@@ -78,6 +84,7 @@ function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
 /** Replayable projection: the applied note identity, or the declined fact. */
 function presentUpdateNoteMeta(_args: Args, value: Output): JsonValue {
   if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',
     ref: value.ref,

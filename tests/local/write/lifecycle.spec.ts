@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deleteLibraryTags } from '../../../src/local/write-library-maintenance.js'
-import { createCollection, deleteCollection } from '../../../src/local/write-collections.js'
+import {
+  createCollection,
+  deleteCollection,
+  updateCollection,
+} from '../../../src/local/write-collections.js'
 import {
   SERVER_MISMATCH_MESSAGE,
   WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
@@ -443,6 +447,81 @@ describe('deleteCollection', () => {
       message: writeObjectRefusedMessage('The collection no longer exists.', 404),
     })
   })
+
+  it('returns an unverified receipt for collection update without a version', async () => {
+    grantAuthorize(mock)
+    mock.route('GET', `/api/users/0/collections/${COLLECTION_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(
+        200,
+        {
+          'Content-Type': 'application/json',
+          'Zotero-Server-ID': SERVER_ID,
+          'Last-Modified-Version': '30',
+        },
+        JSON.stringify({
+          key: COLLECTION_KEY,
+          version: 3,
+          library: { type: 'user', id: 0 },
+          data: { key: COLLECTION_KEY, version: 3, name: 'Methods' },
+        }),
+      ),
+    )
+    mock.route('PATCH', `/api/users/0/collections/${COLLECTION_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    const ref = {
+      library: { type: 'user' as const, id: 0 as const },
+      kind: 'collection' as const,
+      key: COLLECTION_KEY,
+      serverId: SERVER_ID,
+    }
+    await expect(
+      updateCollection(deps, { collection: ref, name: 'Renamed' }),
+    ).resolves.toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: COLLECTION_KEY,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+  })
+
+  it('returns an unverified receipt for collection delete without a version', async () => {
+    grantAuthorize(mock)
+    const deleteKey = 'DELCO001'
+    mock.route('GET', `/api/users/0/collections/${deleteKey}`, (_req, _res, helpers) =>
+      helpers.raw(
+        200,
+        {
+          'Content-Type': 'application/json',
+          'Zotero-Server-ID': SERVER_ID,
+          'Last-Modified-Version': '30',
+        },
+        JSON.stringify({
+          key: deleteKey,
+          version: 3,
+          library: { type: 'user', id: 0 },
+          data: { key: deleteKey, version: 3, name: 'Methods' },
+        }),
+      ),
+    )
+    mock.route('DELETE', `/api/users/0/collections/${deleteKey}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    await expect(
+      deleteCollection(deps, {
+        collection: `zotero://user/0/collection/${deleteKey}`,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: deleteKey,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(1)
+  })
 })
 
 describe('deleteLibraryTags', () => {
@@ -500,6 +579,7 @@ describe('deleteLibraryTags', () => {
     )
     const { deps } = writeDeps(mock)
     const result = await deleteLibraryTags(deps, { tags: ['to read', 'a|b'] })
+    if (result.kind !== 'deleted') throw new Error(`unexpected write outcome: ${result.kind}`)
     expect(result.deletedTags).toEqual(['a|b', 'to read'])
     const deleted = mock.requests.find((request) => request.method === 'DELETE')
     expect(deleted?.search.getAll('tag')).toEqual(['to read||a|b'])
@@ -517,6 +597,8 @@ describe('deleteLibraryTags', () => {
     // rather than refused, so a rerun answers with the identical receipt.
     const first = await deleteLibraryTags(deps, { tags: ['gone', 'legacy'] })
     const second = await deleteLibraryTags(deps, { tags: ['gone', 'legacy'] })
+    if (first.kind !== 'deleted' || second.kind !== 'deleted')
+      throw new Error(`unexpected write outcome: ${first.kind}/${second.kind}`)
     expect(second).toEqual(first)
     expect(first.deletedTags).toEqual(['gone', 'legacy'])
     expect(mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(2)
@@ -557,5 +639,21 @@ describe('deleteLibraryTags', () => {
     await expect(deleteLibraryTags(deps, { tags: ['legacy'] })).rejects.toMatchObject({
       code: ZOTERO_WRITE_CONFLICT,
     })
+  })
+
+  it('returns an unverified receipt when library tag deletion omits its version', async () => {
+    grantAuthorize(mock)
+    serveLibraryVersion(88)
+    mock.route('DELETE', '/api/users/0/tags', (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    await expect(deleteLibraryTags(deps, { tags: ['legacy'] })).resolves.toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      serverId: SERVER_ID,
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(1)
   })
 })

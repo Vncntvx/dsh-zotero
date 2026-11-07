@@ -22,8 +22,10 @@ import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
+  COMMITTED_UNVERIFIED_VARIANT,
   libraryVersionLine,
   presentDeleteResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
@@ -43,6 +45,7 @@ type DeleteCollectionArgs = InferArgs<typeof DELETE_COLLECTION_PARAMETERS>
 const DELETE_COLLECTION_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -172,6 +175,8 @@ export function renderDeleteCollection(
   if (value.kind === 'declined') {
     return renderDeclined()
   }
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'collection', 'committed')
   return [
     {
       type: 'text',

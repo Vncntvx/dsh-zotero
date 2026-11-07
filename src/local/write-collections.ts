@@ -11,6 +11,7 @@ import {
   ZOTERO_NOT_FOUND,
   ZOTERO_UNEXPECTED,
   ZoteroError,
+  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { formatRef, isRefString, libraryPrefix, parseRef, PERSONAL_LIBRARY } from '../refs.js'
@@ -25,7 +26,7 @@ import {
   requireWritableRefAtServer,
   withWriteKey,
 } from './write-domain.js'
-import { settleCreate } from './write-verdicts.js'
+import { committedUnverified, settleCreate } from './write-verdicts.js'
 import type {
   ZoteroCreateCollectionCommittedOutcome,
   ZoteroCreateCollectionRequest,
@@ -33,6 +34,7 @@ import type {
   ZoteroDeleteCollectionResult,
   ZoteroUpdateCollectionRequest,
   ZoteroUpdateCollectionResult,
+  ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
 async function assertNoSiblingWithName(
@@ -135,7 +137,7 @@ export async function deleteCollection(
   deps: WriteDomainDeps,
   request: ZoteroDeleteCollectionRequest,
   signal?: AbortSignal,
-): Promise<ZoteroDeleteCollectionResult> {
+): Promise<ZoteroDeleteCollectionResult | ZoteroWriteCommittedUnverified> {
   const input = normalizeCollectionInput('collection', request.collection)
   const serverId = await ensureServerId(deps, signal)
   const checked = isRefString(input)
@@ -149,22 +151,34 @@ export async function deleteCollection(
   const effectiveServerId = read.serverId
   const precondition = requireLibraryVersion(read.libraryVersion)
   const resultRef = collectionRef(checked.key, effectiveServerId)
-  const { libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
-    try {
-      return await deps.writer.delete(
-        `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${checked.key}`,
-        { serverId: effectiveServerId, apiKey, ifUnmodifiedSinceVersion: precondition, signal },
-      )
-    } catch (error) {
-      if (error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND) {
-        throw new ZoteroError(
-          writeObjectRefusedMessage('The collection no longer exists.', 404),
-          ZOTERO_NOT_FOUND,
+  let libraryVersion: number
+  try {
+    ;({ libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
+      try {
+        return await deps.writer.delete(
+          `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${checked.key}`,
+          { serverId: effectiveServerId, apiKey, ifUnmodifiedSinceVersion: precondition, signal },
         )
+      } catch (error) {
+        if (error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND) {
+          throw new ZoteroError(
+            writeObjectRefusedMessage('The collection no longer exists.', 404),
+            ZOTERO_NOT_FOUND,
+          )
+        }
+        throw error
       }
-      throw error
-    }
-  })
+    }))
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError)
+      return committedUnverified({
+        kind: 'collection',
+        key: checked.key,
+        serverId: effectiveServerId,
+        reason: 'receipt-unknown',
+      })
+    throw error
+  }
   deps.onCollectionsChanged?.()
   return {
     kind: 'deleted',
@@ -180,7 +194,7 @@ export async function updateCollection(
   deps: WriteDomainDeps,
   request: ZoteroUpdateCollectionRequest,
   signal?: AbortSignal,
-): Promise<ZoteroUpdateCollectionResult> {
+): Promise<ZoteroUpdateCollectionResult | ZoteroWriteCommittedUnverified> {
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.collection, ['collection'], serverId)
   if (request.name === undefined && request.parent === undefined) {
@@ -200,14 +214,26 @@ export async function updateCollection(
       patch.parentCollection = parent.key
     }
   }
-  const { libraryVersion } = await withWriteKey(deps, serverId, signal, async (apiKey) =>
-    deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections/${ref.key}`, patch, {
-      serverId,
-      apiKey,
-      ifUnmodifiedSinceVersion: version,
-      signal,
-    }),
-  )
+  let libraryVersion: number
+  try {
+    ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, async (apiKey) =>
+      deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections/${ref.key}`, patch, {
+        serverId,
+        apiKey,
+        ifUnmodifiedSinceVersion: version,
+        signal,
+      }),
+    ))
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError)
+      return committedUnverified({
+        kind: 'collection',
+        key: ref.key,
+        serverId,
+        reason: 'receipt-unknown',
+      })
+    throw error
+  }
   deps.onCollectionsChanged?.()
   return {
     kind: 'applied',

@@ -96,9 +96,9 @@ import type {
   ZoteroCreateNoteRequest,
   ZoteroCreateNoteCommittedOutcome,
   ZoteroDeleteCollectionRequest,
-  ZoteroDeleteCollectionResult,
+  ZoteroDeleteCollectionOutcome,
   ZoteroDeleteLibraryTagsRequest,
-  ZoteroDeleteLibraryTagsResult,
+  ZoteroDeleteLibraryTagsOutcome,
   ZoteroBatchItemsRequest,
   ZoteroBatchItemsResult,
   ZoteroExportRequest,
@@ -120,23 +120,24 @@ import type {
   ZoteroSearchResult,
   ZoteroStatus,
   ZoteroUpdateItemCollectionsRequest,
-  ZoteroUpdateItemCollectionsResult,
+  ZoteroUpdateItemCollectionsOutcome,
   ZoteroUpdateItemRequest,
-  ZoteroUpdateItemResult,
+  ZoteroUpdateItemOutcome,
   ZoteroUpdateItemTagsRequest,
-  ZoteroUpdateItemTagsResult,
+  ZoteroUpdateItemTagsOutcome,
   ZoteroUpdateNoteRequest,
-  ZoteroUpdateNoteResult,
+  ZoteroUpdateNoteOutcome,
   ZoteroUpdateCollectionRequest,
-  ZoteroUpdateCollectionResult,
+  ZoteroUpdateCollectionOutcome,
   ZoteroRestoreItemsRequest,
   ZoteroRestoreItemsResult,
   ZoteroCreateSavedSearchRequest,
+  ZoteroUpdateSavedSearchOutcome,
   ZoteroSavedSearchResult,
+  ZoteroWriteCommittedUnverified,
   ZoteroUpdateSavedSearchRequest,
   ZoteroDeleteSavedSearchRequest,
-  ZoteroDeleteSavedSearchResult,
-  ZoteroWriteCommittedUnverified,
+  ZoteroDeleteSavedSearchOutcome,
 } from '../types.js'
 
 export class LocalApiProvider implements ZoteroProvider {
@@ -441,14 +442,14 @@ export class LocalApiProvider implements ZoteroProvider {
   async updateItemTags(
     request: ZoteroUpdateItemTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemTagsResult> {
+  ): Promise<ZoteroUpdateItemTagsOutcome> {
     return updateItemTagsDomain(this.writeDeps(), request, signal)
   }
 
   async updateNote(
     request: ZoteroUpdateNoteRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateNoteResult> {
+  ): Promise<ZoteroUpdateNoteOutcome> {
     return updateNoteDomain(this.writeDeps(), request, signal)
   }
 
@@ -459,14 +460,14 @@ export class LocalApiProvider implements ZoteroProvider {
   async updateItemCollections(
     request: ZoteroUpdateItemCollectionsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemCollectionsResult> {
+  ): Promise<ZoteroUpdateItemCollectionsOutcome> {
     return updateItemCollectionsDomain(this.writeDeps(), request, signal)
   }
 
   async updateCollection(
     request: ZoteroUpdateCollectionRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateCollectionResult> {
+  ): Promise<ZoteroUpdateCollectionOutcome> {
     return updateCollectionDomain(this.writeDeps(), request, signal)
   }
 
@@ -488,7 +489,7 @@ export class LocalApiProvider implements ZoteroProvider {
   async deleteCollection(
     request: ZoteroDeleteCollectionRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteCollectionResult> {
+  ): Promise<ZoteroDeleteCollectionOutcome> {
     return deleteCollectionDomain(this.writeDeps(), request, signal)
   }
 
@@ -510,7 +511,7 @@ export class LocalApiProvider implements ZoteroProvider {
   async updateItem(
     request: ZoteroUpdateItemRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemResult> {
+  ): Promise<ZoteroUpdateItemOutcome> {
     return updateItemDomain(this.writeDeps(), request, signal)
   }
 
@@ -521,7 +522,7 @@ export class LocalApiProvider implements ZoteroProvider {
   async deleteLibraryTags(
     request: ZoteroDeleteLibraryTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteLibraryTagsResult> {
+  ): Promise<ZoteroDeleteLibraryTagsOutcome> {
     return deleteLibraryTagsDomain(this.writeDeps(), request, signal)
   }
 
@@ -552,14 +553,14 @@ export class LocalApiProvider implements ZoteroProvider {
   async updateSavedSearch(
     request: ZoteroUpdateSavedSearchRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroSavedSearchResult> {
+  ): Promise<ZoteroUpdateSavedSearchOutcome> {
     return updateSavedSearchDomain(this.writeDeps(), request, signal)
   }
 
   async deleteSavedSearch(
     request: ZoteroDeleteSavedSearchRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteSavedSearchResult> {
+  ): Promise<ZoteroDeleteSavedSearchOutcome> {
     return deleteSavedSearchDomain(this.writeDeps(), request, signal)
   }
 }

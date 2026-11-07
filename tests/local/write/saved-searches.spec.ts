@@ -100,4 +100,43 @@ describe('saved-search writes', () => {
     const deletion = mock.requests.find((request) => request.method === 'DELETE')
     expect(deletion?.headers['if-unmodified-since-version']).toBe('12')
   })
+
+  it('returns unverified receipts for update and delete without version headers', async () => {
+    grantAuthorize(mock)
+    const ref = parseRef('zotero://user/0/search/SEARCH01')
+    const conditions = [{ condition: 'title', operator: 'contains', value: 'review' }]
+    mock.route('GET', '/api/users/0/searches/SEARCH01', (_req, _res, helpers) =>
+      helpers.json(
+        {
+          key: 'SEARCH01',
+          version: 12,
+          data: { key: 'SEARCH01', name: 'Old name', conditions },
+        },
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' },
+      ),
+    )
+    mock.route('PATCH', '/api/users/0/searches/SEARCH01', (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    mock.route('DELETE', '/api/users/0/searches/SEARCH01', (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    )
+    const { deps } = writeDeps(mock)
+    await expect(updateSavedSearch(deps, { search: ref, name: 'New name' })).resolves.toMatchObject(
+      {
+        kind: 'committed-unverified',
+        reason: 'receipt-unknown',
+        key: 'SEARCH01',
+        retryable: false,
+      },
+    )
+    await expect(deleteSavedSearch(deps, { search: ref })).resolves.toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'receipt-unknown',
+      key: 'SEARCH01',
+      retryable: false,
+    })
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+    expect(mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(1)
+  })
 })

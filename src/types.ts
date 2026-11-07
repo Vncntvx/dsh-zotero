@@ -1023,22 +1023,21 @@ export interface ZoteroUpdateNoteResult {
 }
 
 /**
- * A create (note, item, or collection) that must be treated as committed for
+ * A write (create, update, or delete) that must be treated as committed for
  * retry safety, although Zotero's response could not prove the complete saved
  * state. This is deliberately not an ordinary retryable error: retrying can
  * create a duplicate object. Reconcile by the returned key/ref when one is
  * available.
  *
- * One shape serves all three creates on purpose: the kind of object created
- * shows in the ref (item refs for notes and items, collection refs for
- * collections), and the retry-safety contract must not drift between them.
+ * The same shape is used across write operations so a missing receipt never
+ * turns into an ordinary retryable error.
  */
 export interface ZoteroWriteCommittedUnverified {
   kind: 'committed-unverified'
   /** The caller must not retry; for `commit-unknown` this is conservative. */
   committed: true
   retryable: false
-  reason: 'saved-state-unverified' | 'commit-unknown'
+  reason: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown'
   ref?: string
   key?: string
   version?: number
@@ -1313,13 +1312,13 @@ export interface ZoteroBatchOperationFailure {
   completedRefs?: string[]
 }
 
-/** A non-retryable create whose commit or saved state cannot be proven. */
-export interface ZoteroBatchCreateUnverified {
-  op: 'create'
+/** A non-retryable batch operation whose commit or saved state cannot be proven. */
+export interface ZoteroBatchOperationUnverified {
+  op: 'create' | 'update' | 'delete'
   index: number
   committed: true
   retryable: false
-  reason: 'saved-state-unverified' | 'commit-unknown'
+  reason: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown'
   key?: string
   ref?: string
   version?: number
@@ -1327,13 +1326,15 @@ export interface ZoteroBatchCreateUnverified {
   serverId: string
 }
 
+export type ZoteroBatchCreateUnverified = ZoteroBatchOperationUnverified & { op: 'create' }
+
 export interface ZoteroBatchItemsResult {
   kind: 'applied'
   total: number
   created: ZoteroBatchCreateItemResult[]
   updated: ZoteroBatchUpdateItemResult[]
   deleted: ZoteroBatchDeleteItemResult[]
-  unverified: ZoteroBatchCreateUnverified[]
+  unverified: ZoteroBatchOperationUnverified[]
   failed: ZoteroBatchOperationFailure[]
   libraryVersion?: number
   serverId?: string
@@ -1364,6 +1365,7 @@ export interface ZoteroRestoreItemResult {
 export interface ZoteroRestoreItemsResult {
   kind: 'restored'
   restored: ZoteroRestoreItemResult[]
+  unverified: ZoteroWriteCommittedUnverified[]
   failed: ZoteroBatchOperationFailure[]
   serverId?: string
 }
@@ -1421,26 +1423,34 @@ export type ZoteroCreateNoteCommittedOutcome =
   ZoteroCreateNoteResult | ZoteroWriteCommittedUnverified
 
 export type ZoteroCreateNoteOutcome = ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined
-export type ZoteroUpdateItemTagsOutcome = ZoteroUpdateItemTagsResult | ZoteroWriteDeclined
+export type ZoteroUpdateItemTagsOutcome =
+  ZoteroUpdateItemTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroUpdateItemCollectionsOutcome =
-  ZoteroUpdateItemCollectionsResult | ZoteroWriteDeclined
+  ZoteroUpdateItemCollectionsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroCreateCollectionCommittedOutcome =
   ZoteroCreateCollectionResult | ZoteroWriteCommittedUnverified
 export type ZoteroCreateCollectionOutcome =
   ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined
-export type ZoteroDeleteCollectionOutcome = ZoteroDeleteCollectionResult | ZoteroWriteDeclined
+export type ZoteroDeleteCollectionOutcome =
+  ZoteroDeleteCollectionResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroCreateItemCommittedOutcome =
   ZoteroCreateItemResult | ZoteroWriteCommittedUnverified
 export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined
-export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteDeclined
-export type ZoteroUpdateNoteOutcome = ZoteroUpdateNoteResult | ZoteroWriteDeclined
-export type ZoteroUpdateCollectionOutcome = ZoteroUpdateCollectionResult | ZoteroWriteDeclined
+export type ZoteroUpdateItemOutcome =
+  ZoteroUpdateItemResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
+export type ZoteroUpdateNoteOutcome =
+  ZoteroUpdateNoteResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
+export type ZoteroUpdateCollectionOutcome =
+  ZoteroUpdateCollectionResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroRestoreItemsOutcome = ZoteroRestoreItemsResult | ZoteroWriteDeclined
 export type ZoteroCreateSavedSearchOutcome =
   ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
-export type ZoteroUpdateSavedSearchOutcome = ZoteroSavedSearchResult | ZoteroWriteDeclined
-export type ZoteroDeleteSavedSearchOutcome = ZoteroDeleteSavedSearchResult | ZoteroWriteDeclined
-export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteDeclined
+export type ZoteroUpdateSavedSearchOutcome =
+  ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
+export type ZoteroDeleteSavedSearchOutcome =
+  ZoteroDeleteSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
+export type ZoteroDeleteLibraryTagsOutcome =
+  ZoteroDeleteLibraryTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined
 
 /**
@@ -1570,7 +1580,7 @@ export interface ZoteroProvider {
   updateNote?(
     request: ZoteroUpdateNoteRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateNoteResult>
+  ): Promise<ZoteroUpdateNoteOutcome>
   /**
    * Update one item's tags (read-merge-write; add and remove settle in one write).
    * @param request - the item ref and the tags to add/remove.
@@ -1580,7 +1590,7 @@ export interface ZoteroProvider {
   updateItemTags?(
     request: ZoteroUpdateItemTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemTagsResult>
+  ): Promise<ZoteroUpdateItemTagsOutcome>
   /**
    * Update one item's collection membership (read-merge-write).
    * @param request - the item ref and the collections to add/remove (refs or names).
@@ -1590,7 +1600,7 @@ export interface ZoteroProvider {
   updateItemCollections?(
     request: ZoteroUpdateItemCollectionsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemCollectionsResult>
+  ): Promise<ZoteroUpdateItemCollectionsOutcome>
   /**
    * Create a collection, optionally under a parent.
    * @param request - the name and the optional parent ref or name.
@@ -1604,7 +1614,7 @@ export interface ZoteroProvider {
   updateCollection?(
     request: ZoteroUpdateCollectionRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateCollectionResult>
+  ): Promise<ZoteroUpdateCollectionOutcome>
   /**
    * Delete a collection by ref or name.
    * @param request - the collection ref or name.
@@ -1614,7 +1624,7 @@ export interface ZoteroProvider {
   deleteCollection?(
     request: ZoteroDeleteCollectionRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteCollectionResult>
+  ): Promise<ZoteroDeleteCollectionOutcome>
   /**
    * Create a bibliographic item from the closed field set.
    * @param request - the itemType plus title/url/date/doi/abstract/publicationTitle/creators.
@@ -1634,7 +1644,7 @@ export interface ZoteroProvider {
   updateItem?(
     request: ZoteroUpdateItemRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroUpdateItemResult>
+  ): Promise<ZoteroUpdateItemOutcome>
   /**
    * Delete tags library-wide.
    * @param request - the tag names to delete.
@@ -1644,7 +1654,7 @@ export interface ZoteroProvider {
   deleteLibraryTags?(
     request: ZoteroDeleteLibraryTagsRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteLibraryTagsResult>
+  ): Promise<ZoteroDeleteLibraryTagsOutcome>
   /**
    * Perform batch item mutations (create/import, update tags/collections, delete).
    * @param request - the create, update, and delete item operations.
@@ -1662,15 +1672,15 @@ export interface ZoteroProvider {
   createSavedSearch?(
     request: ZoteroCreateSavedSearchRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified>
+  ): Promise<ZoteroCreateSavedSearchOutcome>
   updateSavedSearch?(
     request: ZoteroUpdateSavedSearchRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroSavedSearchResult>
+  ): Promise<ZoteroUpdateSavedSearchOutcome>
   deleteSavedSearch?(
     request: ZoteroDeleteSavedSearchRequest,
     signal?: AbortSignal,
-  ): Promise<ZoteroDeleteSavedSearchResult>
+  ): Promise<ZoteroDeleteSavedSearchOutcome>
 }
 
 /**

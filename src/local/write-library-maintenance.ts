@@ -9,6 +9,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,
+  ZoteroWriteCommitUnknownError,
   writeListTooLongMessage,
   writeListEmptyMessage,
 } from '../errors.js'
@@ -30,7 +31,9 @@ import type {
   ZoteroDeleteLibraryTagsResult,
   ZoteroRestoreItemsRequest,
   ZoteroRestoreItemsResult,
+  ZoteroWriteCommittedUnverified,
 } from '../types.js'
+import { committedUnverified } from './write-verdicts.js'
 
 async function readLibraryVersion(
   deps: WriteDomainDeps,
@@ -72,6 +75,7 @@ export async function restoreItems(
       ZOTERO_INVALID_ARGUMENT,
     )
   const restored: ZoteroRestoreItemsResult['restored'] = []
+  const unverified: ZoteroRestoreItemsResult['unverified'] = []
   const failed: ZoteroRestoreItemsResult['failed'] = []
   const serverId = await ensureServerId(deps, signal)
   for (const item of request.items) {
@@ -97,18 +101,33 @@ export async function restoreItems(
       // orphaned parent behind a claimed full restore.
       for (const node of graph) {
         if (!node.deleted) continue
-        const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-          deps.writer.patch(
-            `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
-            { deleted: 0 },
-            {
-              serverId,
-              apiKey,
-              ifUnmodifiedSinceVersion: node.version,
-              signal,
-            },
-          ),
-        )
+        let libraryVersion: number
+        try {
+          ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
+            deps.writer.patch(
+              `${libraryPrefix(PERSONAL_LIBRARY)}/items/${node.key}`,
+              { deleted: 0 },
+              {
+                serverId,
+                apiKey,
+                ifUnmodifiedSinceVersion: node.version,
+                signal,
+              },
+            ),
+          ))
+        } catch (error) {
+          if (error instanceof ZoteroWriteCommitUnknownError) {
+            unverified.push(
+              committedUnverified({
+                kind: 'item',
+                key: node.key,
+                serverId,
+                reason: 'receipt-unknown',
+              }),
+            )
+          }
+          throw error
+        }
         lastLibraryVersion = libraryVersion
         completedRefs.push(itemRef(node.key, serverId))
       }
@@ -135,6 +154,7 @@ export async function restoreItems(
           : {}),
       })
     } catch (error) {
+      if (error instanceof ZoteroWriteCommitUnknownError) continue
       if (!(error instanceof ZoteroError)) throw error
       failed.push({
         op: 'update',
@@ -145,7 +165,7 @@ export async function restoreItems(
       })
     }
   }
-  return { kind: 'restored', restored, failed, serverId }
+  return { kind: 'restored', restored, unverified, failed, serverId }
 }
 
 function tagsDeletePath(tags: readonly string[]): string {
@@ -159,7 +179,7 @@ export async function deleteLibraryTags(
   deps: WriteDomainDeps,
   request: ZoteroDeleteLibraryTagsRequest,
   signal?: AbortSignal,
-): Promise<ZoteroDeleteLibraryTagsResult> {
+): Promise<ZoteroDeleteLibraryTagsResult | ZoteroWriteCommittedUnverified> {
   const tags = normalizeWriteList('tags', request.tags ?? [])
   if (tags.length === 0) {
     throw new ZoteroError(writeListEmptyMessage('tags'), ZOTERO_INVALID_ARGUMENT)
@@ -170,19 +190,30 @@ export async function deleteLibraryTags(
     serverId,
     signal,
   )
-  const { libraryVersion } = await withWriteKey(
-    deps,
-    effectiveServerId,
-    signal,
-    async (apiKey) =>
-      await deps.writer.delete(tagsDeletePath(tags), {
+  let libraryVersion: number
+  try {
+    ;({ libraryVersion } = await withWriteKey(
+      deps,
+      effectiveServerId,
+      signal,
+      async (apiKey) =>
+        await deps.writer.delete(tagsDeletePath(tags), {
+          serverId: effectiveServerId,
+          apiKey,
+          ifUnmodifiedSinceVersion: precondition,
+          tagDeleteLimit: true,
+          signal,
+        }),
+    ))
+  } catch (error) {
+    if (error instanceof ZoteroWriteCommitUnknownError)
+      return committedUnverified({
+        kind: 'item',
         serverId: effectiveServerId,
-        apiKey,
-        ifUnmodifiedSinceVersion: precondition,
-        tagDeleteLimit: true,
-        signal,
-      }),
-  )
+        reason: 'receipt-unknown',
+      })
+    throw error
+  }
   return {
     kind: 'deleted',
     deletedTags: [...tags].sort(),

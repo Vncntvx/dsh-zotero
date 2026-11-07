@@ -19,19 +19,20 @@ import { type ZoteroBatchWrite, type ZoteroWriteObjectFailure } from '../write-h
 import type {
   ZoteroBatchCreateItemResult,
   ZoteroBatchCreateUnverified,
+  ZoteroBatchOperationUnverified,
   ZoteroBatchOperationFailure,
   ZoteroWriteCommittedUnverified,
 } from '../types.js'
 
 export type CommittedUnverifiedKind = 'note' | 'item' | 'collection' | 'search'
 
-interface CommittedUnverifiedOptions {
+export interface CommittedUnverifiedOptions {
   readonly kind: CommittedUnverifiedKind
   readonly serverId: string
   readonly batch?: ZoteroBatchWrite
   readonly key?: string
   readonly version?: number
-  readonly reason?: 'saved-state-unverified' | 'commit-unknown'
+  readonly reason?: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown'
 }
 
 function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
@@ -59,7 +60,9 @@ function objectRefusedError(refused: ZoteroWriteObjectFailure): ZoteroError {
   }
 }
 
-function committedUnverified(options: CommittedUnverifiedOptions): ZoteroWriteCommittedUnverified {
+export function committedUnverified(
+  options: CommittedUnverifiedOptions,
+): ZoteroWriteCommittedUnverified {
   const { kind, batch, serverId, key, version, reason = 'saved-state-unverified' } = options
   const safeKey = key !== undefined && isObjectKey(key) ? key : undefined
   const ref =
@@ -256,7 +259,7 @@ export function settleBatchCreates(
   creates: readonly { readonly itemType: string }[],
   serverId: string,
   created: ZoteroBatchCreateItemResult[],
-  unverified: ZoteroBatchCreateUnverified[],
+  unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
 ): void {
   const indices = new Set(creates.map((_, index) => String(index)))

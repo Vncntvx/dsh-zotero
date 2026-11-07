@@ -23,8 +23,10 @@ import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
   DECLINED_OUTPUT_SCHEMA,
+  COMMITTED_UNVERIFIED_VARIANT,
   libraryVersionLine,
   presentDeleteResultView,
+  renderCommittedUnverified,
 } from './write-present.js'
 import { assertWriteList } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
@@ -46,6 +48,7 @@ type DeleteLibraryTagsArgs = InferArgs<typeof DELETE_LIBRARY_TAGS_PARAMETERS>
 const DELETE_LIBRARY_TAGS_OUTPUT_SCHEMA = {
   oneOf: [
     DECLINED_OUTPUT_SCHEMA,
+    COMMITTED_UNVERIFIED_VARIANT,
     {
       type: 'object',
       additionalProperties: false,
@@ -172,6 +175,8 @@ export function renderDeleteLibraryTags(
   if (value.kind === 'declined') {
     return renderDeclined()
   }
+  if (value.kind === 'committed-unverified')
+    return renderCommittedUnverified(value, 'library tags', 'committed')
   return [
     {
       type: 'text',
