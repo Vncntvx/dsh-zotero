@@ -48,6 +48,13 @@ export interface LedgerPendingCall {
 export interface SourceLedgerState {
   readonly blocks: readonly LedgerBlockFact[]
   readonly pending: Readonly<Record<string, LedgerPendingCall>>
+  /**
+   * Every recorded callId. The projection refolds a cell's whole log whenever
+   * it is cold-built, so the dedupe must be O(1) per settled event; a Set
+   * cannot survive the strict zod state schema, so the recorded ids ride the
+   * state as a plain record.
+   */
+  readonly recorded: Readonly<Record<string, true>>
 }
 
 /** The projection state: the fold plus the fork-inherited prefix length. */
@@ -58,7 +65,7 @@ export interface SourceLedgerProjectionState {
 
 /** The empty fold state. */
 export function emptyLedgerState(): SourceLedgerState {
-  return { blocks: [], pending: {} }
+  return { blocks: [], pending: {}, recorded: {} }
 }
 
 /** Whether a tool name is one the literature trail records. */
@@ -128,7 +135,11 @@ function belongsInTrail(block: SettledToolBlock): boolean {
 /** Append one settled fact unless the call is already recorded. */
 function record(state: SourceLedgerState, block: SettledToolBlock): SourceLedgerState {
   if (!belongsInTrail(block)) return state
-  if (state.blocks.some((entry) => entry.callId === block.callId)) return state
+  // The tool/result arm can only reach record with its pending entry intact,
+  // so a callId arrives here once per fold; the ptc-dispatch arm records
+  // without a pending requirement (a dispatch may outlive its turn), so the
+  // recorded set is what keeps a repeated dispatch event a no-op.
+  if (state.recorded[block.callId] === true) return state
   const fact: LedgerBlockFact = {
     callId: block.callId,
     seq: block.seq,
@@ -141,7 +152,11 @@ function record(state: SourceLedgerState, block: SettledToolBlock): SourceLedger
     ...(block.error === undefined ? {} : { error: block.error }),
     ...(block.meta === undefined ? {} : { meta: block.meta as JsonValue }),
   }
-  return { ...state, blocks: [...state.blocks, fact] }
+  return {
+    ...state,
+    blocks: [...state.blocks, fact],
+    recorded: { ...state.recorded, [block.callId]: true },
+  }
 }
 
 /**

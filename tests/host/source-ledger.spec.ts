@@ -188,6 +188,52 @@ describe('the host literature-trail fold', () => {
     expect(workspaceOf(state).sources[0]?.title).toBe('Attention Is All You Need')
   })
 
+  it('keeps a repeated PTC dispatch for the same subCallId a no-op', () => {
+    const settle = {
+      rootCallId: 'root-1',
+      parentCallId: 'root-1',
+      subCallId: 'root-1:ptc:1',
+      name: 'zotero_get',
+      arguments: { ref: REF },
+      isError: false,
+      content: [{ type: 'text', text: 'title' }],
+      meta: { title: 'Attention Is All You Need' },
+    }
+    const state = fold([
+      event('tool/ptc-dispatch-start', settle),
+      event('tool/ptc-dispatch', settle),
+      event('tool/ptc-dispatch', settle),
+    ])
+    expect(state.blocks).toHaveLength(1)
+  })
+
+  it('records a PTC dispatch that outlives its turn, whose pending was cleared', () => {
+    const state = fold([
+      event('tool/ptc-dispatch-start', {
+        rootCallId: 'root-1',
+        parentCallId: 'root-1',
+        subCallId: 'root-1:ptc:1',
+        name: 'zotero_get',
+        arguments: { ref: REF },
+      }),
+      event('turn/start', { turn: 2 }),
+      event('tool/ptc-dispatch', {
+        rootCallId: 'root-1',
+        parentCallId: 'root-1',
+        subCallId: 'root-1:ptc:1',
+        name: 'zotero_get',
+        arguments: { ref: REF },
+        isError: false,
+        content: [{ type: 'text', text: 'title' }],
+        meta: { title: 'Attention Is All You Need' },
+      }),
+    ])
+    // The late dispatch must still land: the trail records subagent outcomes
+    // that outlive the turn which started them.
+    expect(state.blocks).toHaveLength(1)
+    expect(workspaceOf(state).sources[0]?.title).toBe('Attention Is All You Need')
+  })
+
   it('keeps a job_output result only when it carries a durable receipt', () => {
     const receipt = {
       delivery: 'file',
@@ -303,7 +349,10 @@ describe('the host literature-trail fold', () => {
 describe('the projection lifecycle', () => {
   it('initializes, folds, and serves through the registered definition', () => {
     const initial = sourceLedgerProjection.init({} as never, 0 as never)
-    expect(initial).toEqual({ inheritedEventCount: 0, ledger: { blocks: [], pending: {} } })
+    expect(initial).toEqual({
+      inheritedEventCount: 0,
+      ledger: { blocks: [], pending: {}, recorded: {} },
+    })
 
     const called = sourceLedgerProjection.apply(
       initial,

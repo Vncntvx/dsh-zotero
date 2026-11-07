@@ -27,7 +27,13 @@ import {
   type ZoteroRowState,
 } from './presenters.js'
 import { isRecord, stringField } from '../json.js'
-import { getMetaOf, retrieveMetaOf, searchMetaOf } from './decoders.js'
+import {
+  getBatchMetaOf,
+  getMetaOf,
+  matchReferencesMetaOf,
+  retrieveMetaOf,
+  searchMetaOf,
+} from './decoders.js'
 import { exportMetaOf, type ExportMetaView } from './export-decoder.js'
 import type {
   EvidencePassage,
@@ -551,77 +557,40 @@ export function buildSourceWorkspace(
         break
       }
       case 'zotero_get_batch': {
-        const rows = meta !== null && Array.isArray(meta['items']) ? meta['items'] : []
-        const detailsByRef = new Map<string, Record<string, unknown>>()
-        for (const raw of rows) {
-          if (isRecord(raw)) {
-            const ref = stringField(raw, 'ref')
-            if (ref !== undefined) detailsByRef.set(ref, raw)
-          }
-        }
-        const outcomesByRef = new Map<string, 'ok' | 'error'>()
-        const statuses = meta !== null && Array.isArray(meta['statuses']) ? meta['statuses'] : []
-        const refs = listArg(args, 'refs')
-        if (refs.length === statuses.length) {
-          refs.forEach((ref, index) => {
-            const status = statuses[index]
-            if (status === 'ok' || status === 'error') outcomesByRef.set(ref, status)
-          })
-        }
-        const attributedRefs =
-          refs.length > 0 ? refs : [...new Set([...outcomesByRef.keys(), ...detailsByRef.keys()])]
-        for (const ref of attributedRefs) {
-          const raw = detailsByRef.get(ref)
-          const hasOutcome = outcomesByRef.has(ref) || raw !== undefined
+        const view = getBatchMetaOf(meta ?? {}, listArg(args, 'refs'))
+        for (const ref of view.attributedRefs) {
+          const raw = view.rows?.get(ref)
+          const hasOutcome = view.outcomes.has(ref) || raw !== undefined
           if (state === 'ok' && !hasOutcome) continue
-          const outcome = outcomesByRef.get(ref) ?? (raw?.['status'] === 'error' ? 'error' : 'ok')
+          const outcome = view.outcomes.get(ref) ?? (raw?.status === 'error' ? 'error' : 'ok')
           const draft = draftOf(ref, seq)
           const itemState = state === 'ok' && outcome === 'error' ? 'error' : state
           countOperation(draft, itemState)
           if (state !== 'ok' || itemState !== 'ok' || raw === undefined) continue
-          const title = stringField(raw, 'title')
-          if (title !== undefined) draft.title = title
-          const creators = stringField(raw, 'creators')
-          if (creators !== undefined) draft.creators = creators
-          const venue = stringField(raw, 'venue')
-          if (venue !== undefined) draft.venue = venue
-          const year = raw['year']
-          if (typeof year === 'number' && Number.isSafeInteger(year)) draft.year = year
-          const attachmentRef = stringField(raw, 'bestAttachmentRef')
-          if (attachmentRef !== undefined) {
-            const contentType = stringField(raw, 'bestAttachmentType')
+          if (raw.title !== null) draft.title = raw.title
+          if (raw.creators !== null) draft.creators = raw.creators
+          if (raw.venue !== null) draft.venue = raw.venue
+          if (raw.year !== null) draft.year = raw.year
+          if (raw.bestAttachmentRef !== null) {
             draft.bestAttachment = {
-              ref: attachmentRef,
-              ...(contentType === undefined ? {} : { contentType }),
+              ref: raw.bestAttachmentRef,
+              ...(raw.bestAttachmentType === null ? {} : { contentType: raw.bestAttachmentType }),
             }
           }
         }
         break
       }
       case 'zotero_match_references': {
-        if (state !== 'ok' || meta === null || !Array.isArray(meta['items'])) break
-        for (const raw of meta['items']) {
-          if (!isRecord(raw)) continue
-          const selected = isRecord(raw['selected']) ? [raw['selected']] : []
-          const candidates = Array.isArray(raw['candidates'])
-            ? raw['candidates'].filter(isRecord)
-            : []
-          for (const candidate of selected.length > 0 ? selected : candidates) {
-            const ref = stringField(candidate, 'ref')
-            const title = stringField(candidate, 'title')
-            if (ref === undefined || title === undefined) continue
-            const draft = draftOf(ref, seq)
-            draft.title = title
-            const authors = Array.isArray(candidate['authors'])
-              ? candidate['authors'].filter(
-                  (author): author is string => typeof author === 'string',
-                )
-              : []
-            if (authors.length > 0) draft.creators = authors.join(', ')
-            const venue = stringField(candidate, 'venue')
-            if (venue !== undefined) draft.venue = venue
-            const year = candidate['year']
-            if (typeof year === 'number' && Number.isSafeInteger(year)) draft.year = year
+        if (state !== 'ok') break
+        const view = matchReferencesMetaOf(meta ?? {})
+        if (view.items === null) break
+        for (const item of view.items) {
+          for (const candidate of item.selected.length > 0 ? item.selected : item.candidates) {
+            const draft = draftOf(candidate.ref, seq)
+            draft.title = candidate.title
+            if (candidate.authors.length > 0) draft.creators = candidate.authors.join(', ')
+            if (candidate.venue !== null) draft.venue = candidate.venue
+            if (candidate.year !== null) draft.year = candidate.year
           }
         }
         break

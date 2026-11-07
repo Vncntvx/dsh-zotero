@@ -244,6 +244,8 @@ const ledgerStateSchema = z
   .object({
     blocks: z.array(blockFactSchema),
     pending: z.record(z.string(), pendingCallSchema),
+    // The recorded callIds the fold dedupes against; see SourceLedgerState.
+    recorded: z.record(z.string(), z.literal(true)),
   })
   .strict()
 

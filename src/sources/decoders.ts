@@ -1,12 +1,12 @@
 /**
  * The meta decoding layer of the session source model for the search, get,
- * children, retrieve, attachment, and browse projections: each tool's
- * presentation projection read off a settled block. Export, write, and sync
- * (changes/job) projections own their decoders in `export-decoder.ts`,
- * `write-decoder.ts`, and `sync-decoder.ts`. The shapes are the
- * current wire shapes (session logs are per-session snapshots, so no legacy
- * projection versions are carried); reads are defensive, so an absent or
- * malformed field degrades to nothing instead of crashing the panel. Only
+ * get-batch, match-references, children, retrieve, attachment, and browse
+ * projections: each tool's presentation projection read off a settled block.
+ * Export, write, and sync (changes/job) projections own their decoders in
+ * `export-decoder.ts`, `write-decoder.ts`, and `sync-decoder.ts`. The shapes
+ * are the current wire shapes (session logs are per-session snapshots, so no
+ * legacy projection versions are carried); reads are defensive, so an absent
+ * or malformed field degrades to nothing instead of crashing the panel. Only
  * the fields the panel renders are decoded.
  * @module dsh-zotero/client/sources/decoders
  */
@@ -414,4 +414,131 @@ export function attachmentMetaOf(meta: Record<string, unknown>): AttachmentMetaV
     ref: stringField(meta, 'ref') ?? null,
     detailOmitted: detailOmittedOf(meta),
   }
+}
+
+/** One decoded get-batch row: the bibliographic facts the fold can attribute. */
+export interface GetBatchRowMetaView {
+  readonly status: 'ok' | 'error' | null
+  readonly title: string | null
+  readonly creators: string | null
+  readonly venue: string | null
+  readonly year: number | null
+  readonly bestAttachmentRef: string | null
+  readonly bestAttachmentType: string | null
+}
+
+/** The get-batch projection view; `rows === null` means the items were malformed. */
+export interface GetBatchMetaView {
+  readonly rows: ReadonlyMap<string, GetBatchRowMetaView> | null
+  /** The per-ref outcome the statuses vector joined onto the request's refs. */
+  readonly outcomes: ReadonlyMap<string, 'ok' | 'error'>
+  /** The refs the fold attributes: the request's refs when known, else every ref the meta names. */
+  readonly attributedRefs: readonly string[]
+}
+
+/**
+ * The `zotero_get_batch` projection: rows keyed by ref, and the statuses
+ * vector joined onto the request's own refs. The join only reads when the
+ * vector matches the requested refs one-to-one; otherwise the rows' own
+ * `status` field is all the projection states.
+ */
+export function getBatchMetaOf(
+  meta: Record<string, unknown>,
+  refs: readonly string[],
+): GetBatchMetaView {
+  const rawRows = Array.isArray(meta['items']) ? meta['items'] : null
+  const rows = new Map<string, GetBatchRowMetaView>()
+  if (rawRows !== null) {
+    for (const raw of rawRows) {
+      if (!isRecord(raw)) continue
+      const ref = stringField(raw, 'ref')
+      if (ref === undefined) continue
+      const year = raw['year']
+      rows.set(ref, {
+        status: raw['status'] === 'ok' || raw['status'] === 'error' ? raw['status'] : null,
+        title: stringField(raw, 'title') ?? null,
+        creators: stringField(raw, 'creators') ?? null,
+        venue: stringField(raw, 'venue') ?? null,
+        year: typeof year === 'number' && Number.isSafeInteger(year) ? year : null,
+        bestAttachmentRef: stringField(raw, 'bestAttachmentRef') ?? null,
+        bestAttachmentType: stringField(raw, 'bestAttachmentType') ?? null,
+      })
+    }
+  }
+  const outcomes = new Map<string, 'ok' | 'error'>()
+  const statuses = Array.isArray(meta['statuses']) ? meta['statuses'] : []
+  if (refs.length > 0 && refs.length === statuses.length) {
+    refs.forEach((ref, index) => {
+      const status = statuses[index]
+      if (status === 'ok' || status === 'error') outcomes.set(ref, status)
+    })
+  }
+  return {
+    rows: rawRows === null ? null : rows,
+    outcomes,
+    attributedRefs: refs.length > 0 ? refs : [...new Set([...outcomes.keys(), ...rows.keys()])],
+  }
+}
+
+/** One decoded match-references candidate. */
+export interface MatchReferenceCandidateView {
+  readonly ref: string
+  readonly title: string
+  readonly authors: readonly string[]
+  readonly venue: string | null
+  readonly year: number | null
+}
+
+/** The match-references projection view; `items === null` means malformed. */
+/** One decoded match-references input row: its selected and listed candidates. */
+export interface MatchReferenceItemView {
+  readonly selected: readonly MatchReferenceCandidateView[]
+  readonly candidates: readonly MatchReferenceCandidateView[]
+}
+
+export interface MatchReferencesMetaView {
+  readonly items: readonly MatchReferenceItemView[] | null
+}
+
+/**
+ * The `zotero_match_references` projection: per input, the selected candidate
+ * when the match settled on one, else the listed candidates. A candidate
+ * without its ref or title is dropped rather than rendered half.
+ */
+export function matchReferencesMetaOf(meta: Record<string, unknown>): MatchReferencesMetaView {
+  const rawItems = meta['items']
+  if (!Array.isArray(rawItems)) return { items: null }
+  const items: MatchReferenceItemView[] = []
+  for (const raw of rawItems) {
+    if (!isRecord(raw)) continue
+    const decodeCandidate = (value: unknown): MatchReferenceCandidateView | undefined => {
+      if (!isRecord(value)) return undefined
+      const ref = stringField(value, 'ref')
+      const title = stringField(value, 'title')
+      if (ref === undefined || title === undefined) return undefined
+      const authors = Array.isArray(value['authors'])
+        ? value['authors'].filter((author): author is string => typeof author === 'string')
+        : []
+      const year = value['year']
+      return {
+        ref,
+        title,
+        authors,
+        venue: stringField(value, 'venue') ?? null,
+        year: typeof year === 'number' && Number.isSafeInteger(year) ? year : null,
+      }
+    }
+    const selected = isRecord(raw['selected'])
+      ? [decodeCandidate(raw['selected'])].flatMap((candidate) =>
+          candidate === undefined ? [] : [candidate],
+        )
+      : []
+    const candidates = Array.isArray(raw['candidates'])
+      ? raw['candidates']
+          .map(decodeCandidate)
+          .filter((candidate): candidate is MatchReferenceCandidateView => candidate !== undefined)
+      : []
+    items.push({ selected, candidates })
+  }
+  return { items }
 }
