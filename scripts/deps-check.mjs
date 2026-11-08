@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { diff, gt, maxSatisfying, valid } from 'semver'
+import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -34,44 +35,6 @@ const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
 const CONCURRENCY = 8
 const TIMEOUT_MS = 15_000
 const LEVELS = ['major', 'minor', 'patch']
-
-/** Runtime dependencies owned by the sibling harness; never bumped here. */
-const HARNESS_MIRRORED = new Set([
-  '@lexical/headless',
-  '@lexical/history',
-  '@lexical/plain-text',
-  '@lexical/text',
-  '@lexical/utils',
-  '@shikijs/langs',
-  '@tanstack/react-virtual',
-  '@types/react',
-  'anser',
-  'clsx',
-  'diff',
-  'fast-xml-parser',
-  'immer',
-  'katex',
-  'lexical',
-  'mdast-util-from-markdown',
-  'mdast-util-gfm',
-  'mdast-util-math',
-  'micromark-core-commonmark',
-  'micromark-extension-gfm',
-  'micromark-extension-math',
-  'micromark-factory-space',
-  'micromark-util-character',
-  'micromark-util-classify-character',
-  'micromark-util-sanitize-uri',
-  'micromark-util-symbol',
-  'micromark-util-types',
-  'react',
-  'react-dom',
-  'shiki',
-  'simple-icons',
-  'use-sync-external-store',
-  'zod',
-  'zustand',
-])
 
 /** The declared range for a direct dependency, or undefined when it is not one. */
 function declaredRange(name) {

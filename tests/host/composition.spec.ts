@@ -11,125 +11,43 @@
  * @module tests/composition
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { readFile } from 'node:fs/promises'
 import { load } from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
-import Loader from '@deepseek-ai/cordis-plugin-loader'
-import Include, { type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
-import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import ZoteroService from '../../src/index.js'
 import ScholarlyService from '../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../src/library/index.js'
 import { SCHOLARLY_SETTINGS_NAMESPACE } from '../../src/settings-namespace.js'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
-import { MockZotero } from '../helpers/mock-zotero.js'
+import { setupCompositionLane, type CompositionLane } from '../helpers/lanes/composition-lane.js'
 import { SCHOLARLY_TOOL_NAMES, ZOTERO_READ_TOOL_NAMES } from '../helpers/tool-names.js'
 
-let root: string | undefined
-let context: Context | undefined
-let mock: MockZotero | undefined
+let lane: CompositionLane | undefined
 
 afterEach(async () => {
-  await context?.fiber.dispose()
-  context = undefined
-  await mock?.close()
-  mock = undefined
-  if (root !== undefined) await rm(root, { recursive: true, force: true })
-  root = undefined
+  await lane?.dispose()
+  lane = undefined
 })
-
-/**
- * Boot a composition from the shipped bundle patch.
- * @param extraPatches - patch layers applied on top of the shipped ones.
- */
-async function bootComposition(extraPatches: readonly PatchOptions[] = []): Promise<void> {
-  mock = await MockZotero.start()
-  root = await mkdtemp(join(tmpdir(), 'dsh-zotero-loader-'))
-  const configPath = join(root, 'cordis.yml')
-  // The shipped artifact contains plain YAML values; the include plugin
-  // applies its child-owned expression dialect when it loads the patch.
-  // Parsing the artifact here with js-yaml's current public API keeps this
-  // test independent of the include package's private js-yaml major.
-  const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-  const parsedPatch = load(bundlePatch) as PatchOptions[]
-  await writeFile(
-    configPath,
-    ["- name: '@deepseek-ai/dsh-system-prompt'", "- name: '@deepseek-ai/dsh-tools'", ''].join('\n'),
-  )
-
-  context = new Context()
-  context.baseUrl = pathToFileURL(root).href + '/'
-  await context.plugin(Loader)
-  context.loader.builtins.include = Include
-  const modules = new Map<string, unknown>([
-    ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
-    ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['dsh-zotero', ZoteroService],
-    ['dsh-zotero/scholarly', ScholarlyService],
-    ['dsh-zotero/library', ZoteroLibraryService],
-  ])
-  context.loader.internal = {
-    version: 'v2',
-    async import(specifier: string) {
-      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
-      return modules.get(specifier)
-    },
-  } as unknown as NonNullable<typeof context.loader.internal>
-
-  // A later patch layer overrides the bundle row's config: the mock base
-  // URL replaces the default so no test touches a live Zotero. This also
-  // exercises the row-level config replacement semantics.
-  await context.loader.create({
-    name: 'cordis:include',
-    config: {
-      path: pathToFileURL(configPath).href,
-      patches: [
-        ...parsedPatch,
-        { id: 'zotero', config: { baseUrl: mock.baseUrl } },
-        ...extraPatches,
-      ],
-    },
-  })
-  await context.loader.await()
-  context.tools.setExecutor({
-    describe(tools) {
-      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
-    },
-    execute(input) {
-      return executeToolBatch(input, new ToolExecutionPipeline(context!), () => 10)
-    },
-  })
-}
-
-/** The names of every registered model tool in the current composition. */
-function registeredToolNames(): string[] {
-  return context!.tools.schemas().map((schema) => schema.name)
-}
 
 describe('the shipped bundle patch through a real Loader composition', () => {
   it('loads the plugin row, registers everything, and unwinds on disposal', async () => {
-    await bootComposition([{ id: 'scholarly', disabled: false }])
+    lane = await setupCompositionLane([{ id: 'scholarly', disabled: false }])
 
-    expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
-    expect(context!.get('scholarly')).toBeInstanceOf(ScholarlyService)
-    expect(context!.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
-    const names = registeredToolNames()
+    expect(lane.context.get('zotero')).toBeInstanceOf(ZoteroService)
+    expect(lane.context.get('scholarly')).toBeInstanceOf(ScholarlyService)
+    expect(lane.context.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
+    const names = lane.registeredToolNames()
     // Registration order is a dependency-resolution artifact, not a contract,
     // so the composition asserts the set the shared list declares.
     expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES, ...SCHOLARLY_TOOL_NAMES].sort())
-    const assembly = await context!.systemPrompt.assemble()
+    const assembly = await lane.context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
 
     // One end-to-end tool call through the assembled registry.
-    mock!.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
+    lane.mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers) =>
       helpers.json(
         [
           {
@@ -143,7 +61,7 @@ describe('the shipped bundle patch through a real Loader composition', () => {
         { 'Total-Results': '1' },
       ),
     )
-    const batch = await context!.tools.execute({
+    const batch = await lane.context.tools.execute({
       calls: [
         {
           type: 'tool-call',
@@ -160,26 +78,26 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     expect(result.value).toMatchObject({ total: 1, returned: 1 })
 
     // Disposal unwinds every registration owned by the composed tree.
-    await context!.fiber.dispose()
-    expect(context!.get('zotero')).toBeUndefined()
-    expect(context!.get('scholarly')).toBeUndefined()
-    expect(context!.get('zoteroLibrary')).toBeUndefined()
-    expect(context!.get('tools')).toBeUndefined()
+    await lane.context.fiber.dispose()
+    expect(lane.context.get('zotero')).toBeUndefined()
+    expect(lane.context.get('scholarly')).toBeUndefined()
+    expect(lane.context.get('zoteroLibrary')).toBeUndefined()
+    expect(lane.context.get('tools')).toBeUndefined()
   })
 
   it('leaves the scholarly component off until its row is enabled', async () => {
     // The shipped patch carries the scholarly row disabled, so the component
     // is not mounted: its service, its seven tools, and its prompt section are
     // all absent.
-    await bootComposition()
+    lane = await setupCompositionLane()
 
-    expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
-    expect(context!.get('scholarly')).toBeUndefined()
-    expect(context!.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
-    const names = registeredToolNames()
+    expect(lane.context.get('zotero')).toBeInstanceOf(ZoteroService)
+    expect(lane.context.get('scholarly')).toBeUndefined()
+    expect(lane.context.get('zoteroLibrary')).toBeInstanceOf(ZoteroLibraryService)
+    const names = lane.registeredToolNames()
     expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
     expect(names.filter((name) => name.startsWith('scholarly_'))).toHaveLength(0)
-    const assembly = await context!.systemPrompt.assemble()
+    const assembly = await lane.context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'zotero:policy')).toBe(true)
     expect(assembly.sections.some((entry) => entry.name === 'scholarly:policy')).toBe(false)
   })
@@ -197,38 +115,38 @@ describe('the shipped bundle patch through a real Loader composition', () => {
   })
 
   it('registers the scholarly tools and their prompt section once the row is enabled', async () => {
-    await bootComposition([{ id: 'scholarly', disabled: false }])
+    lane = await setupCompositionLane([{ id: 'scholarly', disabled: false }])
 
-    expect(context!.get('scholarly')).toBeInstanceOf(ScholarlyService)
-    const names = registeredToolNames()
+    expect(lane.context.get('scholarly')).toBeInstanceOf(ScholarlyService)
+    const names = lane.registeredToolNames()
     expect(names.filter((name) => name.startsWith('scholarly_')).sort()).toEqual(
       [...SCHOLARLY_TOOL_NAMES].sort(),
     )
-    const assembly = await context!.systemPrompt.assemble()
+    const assembly = await lane.context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'scholarly:policy')).toBe(true)
   })
 
   it('withdraws the scholarly tools when the component is unloaded', async () => {
     // Unloading the component removes its seven tools and its prompt section,
     // while the local library keeps its own.
-    await bootComposition([{ id: 'scholarly', disabled: false }])
+    lane = await setupCompositionLane([{ id: 'scholarly', disabled: false }])
 
-    const entry = [...context!.loader.entries()].find((row) => row.options.id === 'scholarly')
+    const entry = [...lane.context.loader.entries()].find((row) => row.options.id === 'scholarly')
     expect(entry).toBeDefined()
     await entry?.fiber?.dispose()
 
-    const names = registeredToolNames()
+    const names = lane.registeredToolNames()
     expect(names.filter((name) => name.startsWith('scholarly_'))).toHaveLength(0)
     expect(names.filter((name) => name.startsWith('zotero_')).length).toBeGreaterThan(0)
-    const assembly = await context!.systemPrompt.assemble()
+    const assembly = await lane.context.systemPrompt.assemble()
     expect(assembly.sections.some((section) => section.name === 'scholarly:policy')).toBe(false)
     expect(assembly.sections.some((section) => section.name === 'zotero:policy')).toBe(true)
   })
 
   it('disables the library subcomponent when its row is disabled', async () => {
-    await bootComposition([{ id: 'library', disabled: true }])
-    expect(context!.get('zotero')).toBeInstanceOf(ZoteroService)
-    expect(context!.get('zoteroLibrary')).toBeUndefined()
+    lane = await setupCompositionLane([{ id: 'library', disabled: true }])
+    expect(lane.context.get('zotero')).toBeInstanceOf(ZoteroService)
+    expect(lane.context.get('zoteroLibrary')).toBeUndefined()
   })
 
   it('declares the library subcomponent row in cordis.patch.yml', async () => {

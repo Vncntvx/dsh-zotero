@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveHarnessRoot } from '../../scripts/shared/harness-packages.mjs'
 import {
   applyPinToManifest,
+  clientDepsMirrorProblems,
   collectArtifactProblems,
   collectLockProblems,
   collectPinFaceProblems,
@@ -647,5 +648,77 @@ describe('resolveHarnessRoot', () => {
       if (orig !== undefined) process.env.DSH_HARNESS_ROOT = orig
       else delete process.env.DSH_HARNESS_ROOT
     }
+  })
+})
+
+describe('clientDepsMirrorProblems', () => {
+  const run = (
+    local: Record<string, string>,
+    sibling: Record<string, string[]>,
+  ): { problems: string[]; notes: string[] } => {
+    // The mirror set is the union of the names the case exercises; a name the
+    // set lists but one side omits is exactly what the missing-name arms test.
+    const names = new Set([...Object.keys(local), ...Object.keys(sibling)])
+    return clientDepsMirrorProblems(
+      names,
+      new Map(Object.entries(local)),
+      new Map(Object.entries(sibling)),
+    )
+  }
+
+  it('passes when every mirrored floor equals a floor the pin tag declares', () => {
+    const { problems, notes } = run(
+      { 'react-dom': '^18.2.0', 'fast-xml-parser': '^5.11.1', zod: '4.4.3' },
+      { 'react-dom': ['^18.2.0'], 'fast-xml-parser': ['5.11.1'], zod: ['4.4.3'] },
+    )
+    expect(problems).toEqual([])
+    expect(notes).toEqual([])
+  })
+
+  it('passes a sibling-internal floor disagreement when the local floor matches one arm', () => {
+    const { problems, notes } = run({ clsx: '^2.1.1' }, { clsx: ['^2.0.0', '^2.1.1'] })
+    expect(problems).toEqual([])
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/floors 2\.0\.0 \/ 2\.1\.1/)
+  })
+
+  it('reports a local floor the pin tag does not declare', () => {
+    const { problems } = run({ 'react-dom': '^18.3.1' }, { 'react-dom': ['^18.2.0'] })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/floor 18\.3\.1.*declares 18\.2\.0.*move with the harness/)
+  })
+
+  it('reports a mirrored name the sibling no longer carries', () => {
+    const { problems } = run({ 'gone-package': '^1.0.0' }, {})
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/not declared by any packages\/client manifest/)
+  })
+
+  it('reports a mirrored name the manifest no longer declares', () => {
+    const { problems } = run({}, { 'gone-package': ['^1.0.0'] })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/in the mirror set but declared in neither/)
+  })
+
+  it('reports a protocol or non-semver range the floor comparison cannot read', () => {
+    const { problems } = run(
+      { 'fast-xml-parser': 'workspace:*' },
+      { 'fast-xml-parser': ['5.11.1'] },
+    )
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/not a semver range the floor comparison can read/)
+  })
+
+  it('ignores names the mirror set does not list', () => {
+    const { problems, notes } = clientDepsMirrorProblems(
+      new Set(['react-dom']),
+      new Map([
+        ['react-dom', '^18.2.0'],
+        ['undici', '8.0.0'],
+      ]),
+      new Map([['react-dom', ['^18.2.0']]]),
+    )
+    expect(problems).toEqual([])
+    expect(notes).toEqual([])
   })
 })

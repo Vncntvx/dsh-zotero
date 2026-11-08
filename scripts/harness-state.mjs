@@ -51,6 +51,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, satisfies, validRange } from 'semver'
 import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
+import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
 import { GENERATED_REMOTE, INLINE_SAFE, VENDORED_LIBRARY } from './client-graph-authority.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -780,6 +781,148 @@ function collectMirrorProblems(pin) {
 }
 
 /**
+ * The pure decision core of the mirrored client-dependency gate.
+ *
+ * The browser bundle's third-party runtime dependencies mirror the sibling's
+ * `packages/client/*` declarations and move with the harness pin, never on
+ * their own. Floors are compared, not range spellings: `^18.2.0`, `~18.2.0`
+ * and `18.2.0` all resolve to the same installed copy. The sibling may
+ * declare one name with different floors across its own packages; the local
+ * floor must equal one of them and the disagreement is reported as a note.
+ * The mirror set decides which names are mirrored — a name it lists but the
+ * local manifest does not declare is a lie about the bundle's runtime, and a
+ * name the sibling no longer carries has nothing to mirror anymore. Names
+ * the sibling declares without a local mirror are not a local obligation
+ * (the mirror is a subset, and the client-graph guard catches an actual
+ * inlined copy).
+ * @param mirrorNames - the mirrored names, shared with deps-check.
+ * @param localRanges - name to the manifest's declared range (dependencies
+ *   and devDependencies merged by the caller; only mirrored names included).
+ * @param siblingDecls - name to the ranges the sibling's client manifests
+ *   declare at the pin tag; `@types/*` fall back to the sibling root.
+ * @returns `{ problems, notes }` in the collector's problem-string style.
+ */
+export function clientDepsMirrorProblems(mirrorNames, localRanges, siblingDecls) {
+  const problems = []
+  const notes = []
+  for (const name of mirrorNames) {
+    const range = localRanges.get(name)
+    if (range === undefined) {
+      problems.push(
+        `mirrored client dependency "${name}" is in the mirror set but declared in neither dependencies nor devDependencies`,
+      )
+      continue
+    }
+    const localFloor = validRange(range) === null ? null : minVersion(range)
+    if (localFloor === null) {
+      problems.push(
+        `mirrored client dependency "${name}" is "${range}", which is not a semver range the floor comparison can read`,
+      )
+      continue
+    }
+    const declared = siblingDecls.get(name)
+    if (declared === undefined || declared.length === 0) {
+      problems.push(
+        `mirrored client dependency "${name}" is not declared by any packages/client manifest at the pin tag — the sibling no longer carries it; drop the mirror or the dependency`,
+      )
+      continue
+    }
+    const floors = new Set()
+    let unreadable = false
+    for (const siblingRange of declared) {
+      const floor = validRange(siblingRange) === null ? null : minVersion(siblingRange)
+      if (floor === null) {
+        unreadable = true
+        continue
+      }
+      floors.add(floor.version)
+    }
+    if (unreadable) {
+      problems.push(
+        `mirrored client dependency "${name}": the sibling declares a non-semver range at the pin tag (${declared.join(', ')})`,
+      )
+      continue
+    }
+    if (!floors.has(localFloor.version)) {
+      problems.push(
+        `mirrored client dependency "${name}" is "${range}" (floor ${localFloor.version}), but the pin tag declares ${[...floors].sort().join(' / ')} — align with the pin tag; these move with the harness, never on their own`,
+      )
+      continue
+    }
+    if (floors.size > 1) {
+      notes.push(
+        `the sibling declares "${name}" with floors ${[...floors].sort().join(' / ')} across its client packages; the local floor ${localFloor.version} matches one of them`,
+      )
+    }
+  }
+  return { problems, notes }
+}
+
+/**
+ * The executable half of the mirrored client-dependency gate. With a sibling
+ * checkout present, the local mirrored ranges are diffed against the
+ * `packages/client/*` manifests at the pin tag — the same authority the
+ * client-graph mirror uses, never the sibling's working tree. `@types/*`
+ * names fall back to the sibling root manifest, which is where the monorepo
+ * declares them. Without a sibling the gate has no authority to consult and
+ * stays silent, like the graph mirror.
+ */
+function collectClientDepsMirrorProblems(pin, manifest) {
+  if (!existsSync(harnessRoot)) return []
+  let clientPackages
+  try {
+    clientPackages = execFileSync(
+      'git',
+      ['-C', harnessRoot, 'ls-tree', '--name-only', '-d', `dsh-v${pin}:packages/client`],
+      { encoding: 'utf8' },
+    )
+      .split('\n')
+      .filter((line) => line.length > 0)
+  } catch {
+    notes.push(
+      `tag dsh-v${pin} not found in the sibling checkout: the mirrored client dependencies were not verified against the pin`,
+    )
+    return []
+  }
+  const readTagJson = (path) =>
+    JSON.parse(
+      execFileSync('git', ['-C', harnessRoot, 'show', `dsh-v${pin}:${path}`], { encoding: 'utf8' }),
+    )
+  const siblingDecls = new Map()
+  const declare = (name, range) => {
+    if (typeof range !== 'string') return
+    const list = siblingDecls.get(name)
+    if (list === undefined) siblingDecls.set(name, [range])
+    else list.push(range)
+  }
+  for (const pkg of clientPackages) {
+    const manifest_ = readTagJson(`packages/client/${pkg}/package.json`)
+    for (const section of ['dependencies', 'devDependencies']) {
+      for (const [name, range] of Object.entries(manifest_[section] ?? {})) declare(name, range)
+    }
+  }
+  for (const [name, range] of [
+    ...Object.entries(readTagJson('package.json').dependencies ?? {}),
+    ...Object.entries(readTagJson('package.json').devDependencies ?? {}),
+  ]) {
+    if (name.startsWith('@types/') && !siblingDecls.has(name)) declare(name, range)
+  }
+  const localRanges = new Map()
+  for (const section of ['dependencies', 'devDependencies']) {
+    for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+      if (HARNESS_MIRRORED.has(name) && typeof range === 'string') localRanges.set(name, range)
+    }
+  }
+  const { problems, notes: gateNotes } = clientDepsMirrorProblems(
+    HARNESS_MIRRORED,
+    localRanges,
+    siblingDecls,
+  )
+  notes.push(...gateNotes)
+  return problems
+}
+
+/**
  * Rewrite every harness face of a manifest to the pin. Mutates
  * `manifest` in place. Dev and overrides take the exact pin; peers
  * and engines become >=pin. The manifest carries no other derived
@@ -838,6 +981,10 @@ function runCheck(strict) {
   // The mirror drift is a release-path lie about what the running host
   // inlines, so it fails in both modes like the vendor check does.
   problems.push(...collectMirrorProblems(pin))
+  // The mirrored third-party client dependencies must agree with the pin tag
+  // too; their drift only surfaces as a typecheck/test-vs-runtime mismatch
+  // after a harness upgrade, so it fails in both modes like the mirror does.
+  problems.push(...collectClientDepsMirrorProblems(pin, manifest))
   checkArtifacts(strict, packages)
   report()
   if (problems.length === 0) console.log(`harness state ok: pin ${pin}`)

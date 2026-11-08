@@ -106,6 +106,22 @@ export declare function collectVendorProblems(
 ): string[]
 
 /**
+ * The pure decision core of the mirrored client-dependency gate: every
+ * mirrored name must be declared by the local manifest and its range floor
+ * must equal one of the floors the sibling's client manifests declare at the
+ * pin tag. Floors are compared, not range spellings.
+ * @param mirrorNames - the mirrored names, shared with deps-check.
+ * @param localRanges - mirrored name to the manifest's declared range.
+ * @param siblingDecls - name to the ranges the sibling declares at the pin tag.
+ * @returns problems (fatal) and notes (sibling-internal disagreements).
+ */
+export declare function clientDepsMirrorProblems(
+  mirrorNames: ReadonlySet<string>,
+  localRanges: ReadonlyMap<string, string>,
+  siblingDecls: ReadonlyMap<string, readonly string[]>,
+): { problems: string[]; notes: string[] }
+
+/**
  * Classify every imported upstream specifier against the sibling checkout's
  * installed artifacts, on both freshness axes: declarations versus `src`, and
  * the browser runtime versus its own client declarations.
