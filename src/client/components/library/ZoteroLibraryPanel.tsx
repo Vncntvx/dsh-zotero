@@ -439,13 +439,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 toggleCollection={feed.toggleCollection}
                 selection={feed.selection}
                 selectScope={handleSelectScope}
-                savedSearches={feed.savedSearches}
                 rootLane={feed.treeLane(undefined)}
                 treeLane={feed.treeLane}
                 loadMoreTree={feed.loadMoreTree}
                 retryTree={feed.retryTree}
-                loadMoreSavedSearches={feed.loadMoreSavedSearches}
-                retrySavedSearches={feed.retrySavedSearches}
               />
             </div>
             <div

@@ -571,7 +571,9 @@ export function LibraryInspector({
                     value={detail.doi}
                     label={detail.doi}
                     copiedLabel={t('copied')}
-                    className={css.copySeat}
+                    variant="link"
+                    className={css.metaLink}
+                    title={`${detail.doi} (${t('copy')})`}
                   />
                 </dd>
               </div>
@@ -584,7 +586,9 @@ export function LibraryInspector({
                     value={detail.url}
                     label={detail.url}
                     copiedLabel={t('copied')}
-                    className={css.copySeat}
+                    variant="link"
+                    className={css.metaLink}
+                    title={`${detail.url} (${t('copy')})`}
                   />
                 </dd>
               </div>

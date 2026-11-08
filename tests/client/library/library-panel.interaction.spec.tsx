@@ -58,19 +58,9 @@ describe('scope selection drives the list request', () => {
     expect(screen.getByRole('heading', { name: 'LLM Papers' })).toBeTruthy()
   })
 
-  it('lists a saved search and the trash by their selections', async () => {
+  it('lists the trash by its selection', async () => {
     const { face } = mountPanel()
-    await screen.findByText('Unread')
-    act(() => {
-      screen.getByText('Unread').click()
-    })
-    await waitFor(() => {
-      expect(face.search).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          scope: { kind: 'savedSearch', refOrName: 'zotero://user/0/search/SEARCH01' },
-        }),
-      )
-    })
+    await screen.findByText('FlashAttention-2')
     act(() => {
       screen.getByText(zh.libraryTrash).click()
     })
@@ -559,26 +549,6 @@ describe('a rejecting wire face surfaces its lane error, then recovers', () => {
       screen.getByRole('button', { name: zh.refresh }).click()
     })
     expect(await screen.findByText('LLM Papers')).toBeTruthy()
-  })
-
-  it('shows the saved-searches error when its listing rejects and recovers on refresh', async () => {
-    let savedCalls = 0
-    mountPanel({
-      browse: vi.fn(async (request: { kind: string }) => {
-        if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }
-        if (request.kind === 'savedSearches') {
-          savedCalls += 1
-          if (savedCalls === 1) throw new Error('saved blew up')
-          return { ok: true, value: SAVED_SEARCHES }
-        }
-        return { ok: true, value: ROOT_COLLECTIONS }
-      }),
-    })
-    expect(await screen.findByText('saved blew up')).toBeTruthy()
-    act(() => {
-      screen.getByRole('button', { name: zh.refresh }).click()
-    })
-    expect(await screen.findByText('Unread')).toBeTruthy()
   })
 
   it('shows the list error when search rejects and recovers on the next page', async () => {

@@ -29,3 +29,8 @@ it('hands each item row the canonical zoteroItem target', async () => {
     },
   })
 })
+
+it('renders item list gracefully when useContextMenu is unavailable', async () => {
+  mountPanel({}, undefined, { useContextMenu: undefined })
+  await expect(screen.findByText('FlashAttention-2')).resolves.toBeDefined()
+})

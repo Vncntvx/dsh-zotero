@@ -197,6 +197,23 @@ describe('library inspector', () => {
     expect(writeText).toHaveBeenCalledWith('https://example.com/paper')
   })
 
+  it('renders doi copy button and copies on click', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    mountInspector({
+      ...ITEM_DETAIL,
+      doi: '10.1038/s41467-023-38203-3',
+    })
+
+    const doiButton = screen.getByRole('button', { name: '10.1038/s41467-023-38203-3' })
+    expect(doiButton).toBeTruthy()
+    fireEvent.click(doiButton)
+    expect(writeText).toHaveBeenCalledWith('10.1038/s41467-023-38203-3')
+  })
+
   it('renders clickable attachment button and resolves file for reader', async () => {
     const openFile = vi.fn()
     const resolveAttachment = vi.fn().mockResolvedValue({

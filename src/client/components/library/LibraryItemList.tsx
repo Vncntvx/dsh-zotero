@@ -29,7 +29,7 @@ interface LibraryItemListProps {
   readonly selectedRef: string | undefined
   readonly selectItem: (ref: string | undefined) => void
   readonly retry: () => void
-  readonly useContextMenu: UseContextMenu
+  readonly useContextMenu?: UseContextMenu
 }
 
 /** The header a selection shows; collection/search rows carry their own name. */
@@ -64,7 +64,7 @@ export function LibraryItemList({
   useContextMenu,
 }: LibraryItemListProps) {
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
-  const contextMenu = useContextMenu()
+  const contextMenu = typeof useContextMenu === 'function' ? useContextMenu() : undefined
 
   return (
     <section

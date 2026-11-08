@@ -61,17 +61,7 @@ describe('the settled panel', () => {
     fireEvent.change(screen.getByLabelText(zh.libraryWriteName), {
       target: { value: 'Unsaved collection draft' },
     })
-    fireEvent.click(screen.getByText('Unread'))
-    // The drawer is re-keyed on scope changes, so its controlled disclosure
-    // starts closed again after the selection moves.
-    fireEvent.click(await screen.findByRole('button', { name: zh.libraryWriteActions }))
-    fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
-      target: { value: 'updateSavedSearch' },
-    })
-    expect((screen.getByLabelText(zh.libraryWriteSearch) as HTMLTextAreaElement).value).toBe(
-      'zotero://user/0/search/SEARCH01',
-    )
-    expect((screen.getByLabelText(zh.libraryWriteName) as HTMLTextAreaElement).value).toBe('')
+    fireEvent.click(screen.getByText(zh.libraryTrash))
     sessions.byId.s1.running = false
     fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
     // The refresh re-keys the drawer, so its controlled disclosure may start
@@ -96,7 +86,7 @@ describe('the settled panel', () => {
     }
     expect(face.search).toHaveBeenCalledTimes(searchCount)
   })
-  it('renders the fixed scopes, the collection tree, and the saved searches', async () => {
+  it('renders the fixed scopes and the collection tree', async () => {
     mountPanel()
     // The fixed row's label also names the list header while the library
     // scope is selected, so the pair is the assertion, not a single match.
@@ -104,7 +94,6 @@ describe('the settled panel', () => {
     expect(screen.getByText(zh.libraryPublications)).toBeTruthy()
     expect(screen.getByText(zh.libraryTrash)).toBeTruthy()
     expect(await screen.findByText('LLM Papers')).toBeTruthy()
-    expect(await screen.findByText('Unread')).toBeTruthy()
     expect(await screen.findByText('FlashAttention-2')).toBeTruthy()
   })
 
@@ -256,7 +245,6 @@ describe('lane states', () => {
       })),
     })
     expect(await screen.findByText(zh.libraryNoCollections)).toBeTruthy()
-    expect(await screen.findByText(zh.libraryNoSavedSearches)).toBeTruthy()
   })
 
   it('falls back the breadcrumb tooltip to the bare name for root-less paths', async () => {
@@ -286,12 +274,10 @@ describe('lane states', () => {
     expect(row.closest('button')?.getAttribute('title')).toBe('Flat')
   })
 
-  it('shows the selector and saved-search errors when only those lanes fail', async () => {
+  it('shows the selector error when that lane fails', async () => {
     mountPanel({
       browse: vi.fn(async (request: { kind: string }) => {
         if (request.kind === 'libraries') return { ok: false, error: { message: 'no groups' } }
-        if (request.kind === 'savedSearches')
-          return { ok: false, error: { message: 'searches down' } }
         return {
           ok: true,
           value: {
@@ -306,7 +292,6 @@ describe('lane states', () => {
       }),
     })
     expect(await screen.findByText('no groups')).toBeTruthy()
-    expect(await screen.findByText('searches down')).toBeTruthy()
   })
 
   it('renders the sparse inspector: a detail with no optional fields', async () => {

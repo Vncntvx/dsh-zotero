@@ -16,21 +16,14 @@ import {
 } from '@tanstack/react-virtual'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  DisclosureRow,
   IconChevronRightOutlineMedium,
   IconDeliverDocMedium,
   IconFolderCloseMedium,
   IconFolderOpenMedium,
-  IconSearchOutlineMedium,
   IconTrashOutlineMedium,
   IconUserOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type {
-  FlatCollectionRow,
-  LibraryLaneState,
-  LibrarySelection,
-  SavedSearchRowView,
-} from './library-model.ts'
+import type { FlatCollectionRow, LibraryLaneState, LibrarySelection } from './library-model.ts'
 import { lanePageOf } from './library-model.ts'
 import { IconButton } from '../IconButton.tsx'
 import css from './library.module.css'
@@ -83,7 +76,7 @@ function observeLibraryViewportRect(
   )
 }
 
-interface LibraryTreeProps {
+export interface LibraryTreeProps {
   readonly locatedRef?: string
   readonly t: TranslateNS<'zotero'>
   readonly flatTree: readonly FlatCollectionRow[]
@@ -93,15 +86,15 @@ interface LibraryTreeProps {
   readonly toggleCollection: (ref: string) => void
   readonly selection: LibrarySelection
   readonly selectScope: (selection: LibrarySelection) => void
-  readonly savedSearches: LibraryLaneState<SavedSearchRowView>
   readonly rootLane: LibraryLaneState<FlatCollectionRow['row']> | undefined
   readonly treeLane: (
     ref: string | undefined,
   ) => LibraryLaneState<FlatCollectionRow['row']> | undefined
   readonly loadMoreTree: (ref: string | undefined) => void
   readonly retryTree: (ref: string | undefined) => void
-  readonly loadMoreSavedSearches: () => void
-  readonly retrySavedSearches: () => void
+  readonly savedSearches?: unknown
+  readonly loadMoreSavedSearches?: () => void
+  readonly retrySavedSearches?: () => void
 }
 
 /** Whether a selection names one of the fixed scopes; those rows carry no ref. */
@@ -140,17 +133,12 @@ export function LibraryTree({
   toggleCollection,
   selection,
   selectScope,
-  savedSearches,
   rootLane,
   treeLane,
   loadMoreTree,
   retryTree,
-  loadMoreSavedSearches,
-  retrySavedSearches,
 }: LibraryTreeProps) {
-  const savedPage = lanePageOf(savedSearches)
   const collectionViewport = useRef<HTMLDivElement>(null)
-  const savedViewport = useRef<HTMLDivElement>(null)
   const treeVirtualizer = useVirtualizer({
     count: flatTree.length,
     getScrollElement: () => collectionViewport.current,
@@ -160,15 +148,6 @@ export function LibraryTree({
     observeElementRect: observeLibraryViewportRect,
     getItemKey: (index) => flatTree[index]?.row.ref ?? index,
   })
-  const savedVirtualizer = useVirtualizer({
-    count: savedPage?.rows.length ?? 0,
-    getScrollElement: () => savedViewport.current,
-    estimateSize: () => 32,
-    overscan: 8,
-    initialRect: VIRTUAL_VIEWPORT,
-    observeElementRect: observeLibraryViewportRect,
-    getItemKey: (index) => savedPage?.rows[index]?.ref ?? index,
-  })
   const measureTreeRow = useCallback(
     (element: HTMLLIElement | null) => {
       if (element !== null && element.getBoundingClientRect().height > 0) {
@@ -176,14 +155,6 @@ export function LibraryTree({
       }
     },
     [treeVirtualizer],
-  )
-  const measureSavedRow = useCallback(
-    (element: HTMLLIElement | null) => {
-      if (element !== null && element.getBoundingClientRect().height > 0) {
-        savedVirtualizer.measureElement(element)
-      }
-    },
-    [savedVirtualizer],
   )
   const selectionKey = 'ref' in selection ? identityOf(selection.ref) : undefined
   const [focused, setFocused] = useState<string>()
@@ -431,90 +402,6 @@ export function LibraryTree({
         page={() => loadMoreTree(undefined)}
         retry={() => retryTree(undefined)}
       />
-
-      {/* Saved Searches Section */}
-      <div className={css.treeSectionHeader}>
-        <p className={clsx(css.caption, css.treeSection)}>{t('librarySavedSearches')}</p>
-      </div>
-      {savedPage?.rows.length === 0 && (
-        <p className={clsx(css.caption, css.treeNote)}>{t('libraryNoSavedSearches')}</p>
-      )}
-      <div ref={savedViewport} className={css.virtualViewport}>
-        <ul
-          className={clsx(css.treeList, css.virtualList)}
-          style={{ height: savedVirtualizer.getTotalSize() }}
-        >
-          {savedVirtualizer.getVirtualItems().map((virtualRow) => {
-            const row = savedPage!.rows[virtualRow.index]!
-            const isSelected =
-              selection.kind === 'savedSearch' && identityOf(row.ref) === selectionKey
-            return (
-              <li
-                key={row.ref}
-                data-index={virtualRow.index}
-                ref={measureSavedRow}
-                className={css.virtualRow}
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
-              >
-                <div className={clsx(css.treeRowWrap, isSelected && css.treeRowWrapActive)}>
-                  <span className={css.treeExpanderPlaceholder} />
-                  <button
-                    type="button"
-                    className={clsx(css.treeRow, isSelected && css.treeRowActive)}
-                    aria-current={isSelected ? 'page' : undefined}
-                    onClick={() =>
-                      selectScope({ kind: 'savedSearch', ref: row.ref, name: row.name })
-                    }
-                  >
-                    <IconSearchOutlineMedium className={css.treeRowIcon} />
-                    <span className={css.treeRowLabel}>{row.name}</span>
-                  </button>
-                </div>
-                {row.conditions.length > 0 && (
-                  <SavedSearchConditions conditions={row.conditions} t={t} />
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </div>
-      <LibraryLaneControls
-        t={t}
-        label={t('librarySavedSearches')}
-        lane={savedSearches}
-        page={loadMoreSavedSearches}
-        retry={retrySavedSearches}
-      />
     </nav>
-  )
-}
-
-/** The saved-search condition lines, collapsed behind a host DisclosureRow. */
-function SavedSearchConditions({
-  conditions,
-  t,
-}: {
-  readonly conditions: SavedSearchRowView['conditions']
-  readonly t: TranslateNS<'zotero'>
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <DisclosureRow
-      icon={<IconSearchOutlineMedium />}
-      title={t('librarySearchConditions')}
-      open={open}
-      expandable
-      expandOnRowClick={false}
-      onToggle={() => setOpen((value) => !value)}
-      className={clsx(css.caption, css.searchConditions)}
-    >
-      <ol>
-        {conditions.map((condition, index) => (
-          <li key={index}>
-            {condition.condition} · {condition.operator} · {condition.value}
-          </li>
-        ))}
-      </ol>
-    </DisclosureRow>
   )
 }
