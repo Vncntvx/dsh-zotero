@@ -1,38 +1,25 @@
 /**
- * The inspector's passages panel: one source's retrieved passages. Three
- * states come apart honestly: an item never retrieved shows the onboarding
- * note (how passages come to exist), a retrieved item with no kept passage
- * says so without inventing a cause, and a retrieved item with passages
- * renders them. The head carries the RetrievalSummary (run count, kept and
- * reported passage counts, and the truncation note), then the deduplicated
- * passages with their source tags and page labels, the indexing coverage
- * line, and the per-source availability list titled for the latest
- * retrieve. Facts only; nothing here implies the final answer used the
- * passages.
+ * The inspector's passages panel: one source's retrieved passages rendered
+ * as rich passage cards with reader-scale typography, page labels,
+ * jump-to-sidebar PDF actions, and grounding relation notes.
+ * Facts only; nothing here implies the final answer used the passages.
  * @module dsh-zotero/client/components/workspace/SourceEvidence
  */
 
+import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { EvidencePassage, SourceItem } from '../../../sources/model.js'
-import {
-  availabilityLineOf,
-  coverageLineOf,
-  emptyEvidenceNoteOf,
-  sourceLabelKeyOf,
-} from '../../evidence-labels.ts'
+import { emptyEvidenceNoteOf, sourceLabelKeyOf } from '../../evidence-labels.ts'
 import css from './workspace.module.css'
 
 /** The summary line of one item's retrieves: runs, kept, reported, truncated. */
-function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
+export function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
   const summary = item.retrievalSummary
   if (summary === undefined) return ''
-  // The kept/reported counters live on `facts`; the summary carries only the
-  // run bookkeeping.
   const parts = [
     t('retrievalRunCount', { count: summary.runCount }),
-    // The exact kept total, not the windowed list's length: the workspace
-    // caps the passages the panel lists.
     t('retrievalKeptCount', { count: item.evidenceTotal }),
     t('retrievalReportedCount', { count: item.facts.reportedEvidenceCount }),
   ]
@@ -43,39 +30,80 @@ function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): str
 interface SourceEvidenceProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
+  readonly openFile?: (path: string) => void
+  readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
 }
 
-/** One passage row with its source tag, page label, and truncated note.
- * Kept separate from EvidenceCard's twin: different CSS module and no
- * annotation-deep-link action here, since sharing would need class injection. */
-function PassageRow({
-  passage,
-  t,
-}: {
+interface PassageCardProps {
   readonly passage: EvidencePassage
+  readonly item: SourceItem
+  readonly openFile?: (path: string) => void
+  readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly t: TranslateNS<'zotero'>
-}) {
+}
+
+/** One rich passage card with its source tag, page label, jump action, and grounding context. */
+function PassageCard({ passage, item, openFile, resolveAttachment, t }: PassageCardProps) {
+  const targetPdfRef =
+    passage.attachmentRef ?? item.retrievalFacts?.attachmentRef ?? item.attachment?.ref
+  const filePath = item.attachment?.location
+
+  const handleJump = async () => {
+    if (filePath && openFile) {
+      openFile(filePath)
+      return
+    }
+    if (targetPdfRef && resolveAttachment && openFile) {
+      const res = await resolveAttachment(targetPdfRef)
+      if (res.ok && res.value.kind === 'file' && res.value.path) {
+        openFile(res.value.path)
+      }
+    }
+  }
+
   return (
-    <li className={css.passage} data-source={passage.source}>
-      <p className={css.passageHead}>
-        <Tag tone="neutral">{t(sourceLabelKeyOf(passage.source))}</Tag>
-        {passage.pageLabel !== undefined && (
-          <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
+    <article className={css.passageCard} data-source={passage.source}>
+      <div className={css.passageHeader}>
+        <div className={css.passageBadgeRow}>
+          <Tag tone="neutral">{t(sourceLabelKeyOf(passage.source))}</Tag>
+          {passage.pageLabel !== undefined && (
+            <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
+          )}
+        </div>
+        {targetPdfRef !== undefined && openFile !== undefined && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={css.jumpButton}
+            onClick={() => {
+              void handleJump()
+            }}
+          >
+            {t('jumpToPageInSidebar')}
+          </Button>
         )}
-      </p>
-      <p className={css.line}>
-        {passage.text}
-        {passage.previewTruncated ? ` ${t('truncatedPreview')}` : ''}
-      </p>
+      </div>
+
+      <blockquote className={css.quoteBody}>
+        “{passage.text}”{passage.previewTruncated ? ` ${t('truncatedPreview')}` : ''}
+      </blockquote>
+
       {passage.callIds.length > 1 && (
         <p className={css.note}>{t('retrievedMultiple', { count: passage.callIds.length })}</p>
       )}
-    </li>
+
+      {passage.callIds.length > 0 && (
+        <div className={css.groundingContext}>
+          <span className={css.groundingDot} />
+          <span>{t('groundingRelationHint', { calls: passage.callIds.length })}</span>
+        </div>
+      )}
+    </article>
   )
 }
 
-/** The passages panel: summary head, passages, coverage, and availability. */
-export function SourceEvidence({ item, t }: SourceEvidenceProps) {
+/** The passages feed: summary head and the list of rich passage cards. */
+export function SourceEvidence({ item, t, openFile, resolveAttachment }: SourceEvidenceProps) {
   if (item.retrievalFacts === undefined) {
     return (
       <div className={css.panel}>
@@ -83,40 +111,30 @@ export function SourceEvidence({ item, t }: SourceEvidenceProps) {
       </div>
     )
   }
+
   const summaryLine = retrievalSummaryLineOf(item, t)
-  const facts = item.retrievalFacts
-  const coverageLine = facts.coverage === undefined ? '' : coverageLineOf(facts.coverage, t)
-  const availabilityEntries = Object.entries(facts.sourceAvailability)
+
   return (
     <div className={css.panel}>
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}
-      {coverageLine !== '' && <p className={css.note}>{coverageLine}</p>}
       {item.evidence.length === 0 ? (
         <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
       ) : (
-        <ul className={css.passages}>
+        <div className={css.passages}>
           {item.evidence.map((passage, index) => (
-            <PassageRow key={`${passage.sourceRef}-${index}`} passage={passage} t={t} />
+            <PassageCard
+              key={`${passage.sourceRef}-${index}`}
+              passage={passage}
+              item={item}
+              openFile={openFile}
+              resolveAttachment={resolveAttachment}
+              t={t}
+            />
           ))}
-        </ul>
+        </div>
       )}
       {item.evidenceTotal > item.evidence.length && (
         <p className={css.note}>{t('evidenceOmittedNote', { count: item.evidenceTotal })}</p>
-      )}
-      {availabilityEntries.length > 0 && (
-        <div className={css.section}>
-          <p className={css.sectionLabel}>{t('availabilityTitle')}</p>
-          <ul className={css.availability}>
-            {availabilityEntries.map(([source, entry]) => (
-              <li key={source} className={css.note}>
-                {t('availabilityEntry', {
-                  source: t(sourceLabelKeyOf(source)),
-                  detail: availabilityLineOf(entry, t),
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </div>
   )

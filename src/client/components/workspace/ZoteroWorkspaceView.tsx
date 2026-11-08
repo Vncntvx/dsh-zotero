@@ -13,7 +13,6 @@
  */
 
 import { useMemo, useState } from 'react'
-import { SegmentedTabs } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -27,6 +26,7 @@ import { SourceInspector } from './SourceInspector.tsx'
 import { WorkspaceEmptyState } from './WorkspaceEmptyState.tsx'
 import { ExportsPage } from './ExportsPage.tsx'
 import { EvidenceOverview } from './EvidenceOverview.tsx'
+import { SourceAuditPanel } from './SourceAuditPanel.tsx'
 import css from './workspace.module.css'
 
 /** The workspace view's top-level lenses: the sources workspace or the exports page. */
@@ -141,6 +141,10 @@ export function ZoteroWorkspaceView({
     () => effectiveSelectionOf(selection, workspace.sources, visible),
     [selection, workspace.sources, visible],
   )
+  const selectedItem = useMemo(
+    () => workspace.sources.find((item) => item.key === selectedKey),
+    [workspace.sources, selectedKey],
+  )
   // The exports lens counts distinct exported documents, not export calls.
   const exportedCount = workspace.exportedRefCount
 
@@ -165,7 +169,15 @@ export function ZoteroWorkspaceView({
   if (evidenceOpen) {
     return (
       <div className={css.view} data-conversation-composer-overlay>
-        <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
+        <WorkspaceToolbar
+          connection={connection}
+          onRefresh={onRefresh}
+          t={t}
+          workspace={workspace}
+          lens={lens}
+          setLens={setLens}
+          lensTabItems={lensTabItems}
+        />
         <EvidenceOverview
           workspace={workspace}
           openFile={openFile}
@@ -192,16 +204,15 @@ export function ZoteroWorkspaceView({
         }
       }}
     >
-      <WorkspaceToolbar connection={connection} onRefresh={onRefresh} t={t} />
-      <div className={css.lensBar}>
-        <SegmentedTabs
-          items={lensTabItems}
-          value={lens}
-          onChange={(next) => setLens(next)}
-          label={t('lensBarLabel')}
-          size="sm"
-        />
-      </div>
+      <WorkspaceToolbar
+        connection={connection}
+        onRefresh={onRefresh}
+        t={t}
+        workspace={workspace}
+        lens={lens}
+        setLens={setLens}
+        lensTabItems={lensTabItems}
+      />
       {lens === 'exports' ? (
         <ExportsPage workspace={workspace} t={t} />
       ) : workspace.sources.length === 0 ? (
@@ -241,6 +252,9 @@ export function ZoteroWorkspaceView({
             openProtocol={openProtocol}
             t={t}
           />
+          <aside className={css.auditSidebar}>
+            {selectedItem && <SourceAuditPanel item={selectedItem} t={t} />}
+          </aside>
         </div>
       )}
     </div>

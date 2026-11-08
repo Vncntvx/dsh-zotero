@@ -17,6 +17,7 @@ import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/clien
 import {
   Button,
   FileTypeIcon,
+  IconCheckOutlineRegular,
   IconChevronDownOutlineRegular,
   IconCopyOutlineRegular,
   IconFolderCloseMedium,
@@ -40,6 +41,8 @@ import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
 import { isObjectKey } from '../../../json.ts'
 import { CopyButton } from '../CopyButton.tsx'
+import { IconButton } from '../IconButton.tsx'
+import { useCopyFeedback } from '../useCopyFeedback.ts'
 import { CommentIcon } from '../CommentIcon.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { LibraryCitationActions } from './LibraryCitationActions.tsx'
@@ -73,6 +76,67 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     <div className={css.metaRow}>
       <dt className={clsx(css.caption, css.metaLabel)}>{label}</dt>
       <dd className={css.metaValue}>{value}</dd>
+    </div>
+  )
+}
+
+/** One copyable label/value row of the metadata table (DOI, URL). */
+function CopyableMetaRow({
+  label,
+  value,
+  openUrl,
+  t,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly openUrl?: string
+  readonly t: TranslateNS<'zotero'>
+}) {
+  const { phase, copyText } = useCopyFeedback(value)
+  const copied = phase === 'done'
+
+  return (
+    <div className={css.metaRow}>
+      <dt className={clsx(css.caption, css.metaLabel)}>{label}</dt>
+      <dd className={css.metaValue}>
+        <div className={css.metaCopyRow}>
+          <span className={css.metaText}>{value}</span>
+          <div className={css.metaCopyActions}>
+            <IconButton
+              size="sm"
+              shape="square"
+              icon={
+                copied ? (
+                  <IconCheckOutlineRegular size={12} />
+                ) : (
+                  <IconCopyOutlineRegular size={12} />
+                )
+              }
+              aria-label={value}
+              title={copied ? t('copied') : `${value} (${t('copy')})`}
+              onClick={(e) => {
+                e.stopPropagation()
+                copyText(value)
+              }}
+              className={css.metaCopyBtn}
+            />
+            {openUrl !== undefined && (
+              <IconButton
+                size="sm"
+                shape="square"
+                icon={<IconLinkOutlineRegular size={12} />}
+                aria-label={`${openUrl} (${t('openInZotero')})`}
+                title={openUrl}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(openUrl, '_blank', 'noopener,noreferrer')
+                }}
+                className={css.metaCopyBtn}
+              />
+            )}
+          </div>
+        </div>
+      </dd>
     </div>
   )
 }
@@ -564,34 +628,24 @@ export function LibraryInspector({
               <MetaRow label={t('libraryMetaDate')} value={detail.date} />
             )}
             {detail.doi !== undefined && (
-              <div className={css.metaRow}>
-                <dt className={clsx(css.caption, css.metaLabel)}>{t('libraryMetaDoi')}</dt>
-                <dd className={css.metaValue}>
-                  <CopyButton
-                    value={detail.doi}
-                    label={detail.doi}
-                    copiedLabel={t('copied')}
-                    variant="link"
-                    className={css.metaLink}
-                    title={`${detail.doi} (${t('copy')})`}
-                  />
-                </dd>
-              </div>
+              <CopyableMetaRow
+                label={t('libraryMetaDoi')}
+                value={detail.doi}
+                openUrl={
+                  detail.doi.startsWith('http://') || detail.doi.startsWith('https://')
+                    ? detail.doi
+                    : `https://doi.org/${encodeURI(detail.doi.trim())}`
+                }
+                t={t}
+              />
             )}
             {detail.url !== undefined && (
-              <div className={css.metaRow}>
-                <dt className={clsx(css.caption, css.metaLabel)}>{t('libraryMetaUrl')}</dt>
-                <dd className={css.metaValue}>
-                  <CopyButton
-                    value={detail.url}
-                    label={detail.url}
-                    copiedLabel={t('copied')}
-                    variant="link"
-                    className={css.metaLink}
-                    title={`${detail.url} (${t('copy')})`}
-                  />
-                </dd>
-              </div>
+              <CopyableMetaRow
+                label={t('libraryMetaUrl')}
+                value={detail.url}
+                openUrl={detail.url}
+                t={t}
+              />
             )}
             {detail.extra !== undefined && (
               <MetaRow label={t('libraryMetaExtra')} value={detail.extra} />

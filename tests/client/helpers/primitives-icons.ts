@@ -36,4 +36,5 @@ export const primitivesIcons = {
   IconChevronsUpDownOutlineMedium: icon('chevrons-up-down'),
   IconEllipsisOutlineMedium: icon('ellipsis-outline-medium'),
   IconCheckOutlineRegular: icon('check-regular'),
+  IconFolderCloseMedium: icon('folder-close-medium'),
 }

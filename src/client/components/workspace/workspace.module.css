@@ -34,12 +34,62 @@
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  min-height: 36px;
-  padding: 5px 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 12px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.toolbarDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--dsw-alias-border-l2);
+  flex: none;
+}
+
+.toolbarLensSeat {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.metricsRibbon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.metricsPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.toolbarRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
 }
 
 .statusText {
@@ -80,7 +130,7 @@
 .lensBar {
   flex: none;
   display: flex;
-  padding: 4px 12px 0;
+  padding: 0 4px;
 }
 
 .lensTabCount {
@@ -90,14 +140,34 @@
 }
 
 /* The master-detail pair: a proportionally clamped sidebar rail plus the
- * flowing inspector. `max-width` (not `width`) lets the flex child fill the
- * pane up to the shared cap; the rail width breathes with the surface
- * instead of jumping between fixed stops. */
+ * flowing inspector and the audit sidebar. */
 .workspace {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: clamp(280px, 30cqi, 400px) minmax(0, 1fr);
+  grid-template-columns: clamp(320px, 24cqi, 380px) minmax(0, 1fr) clamp(340px, 28cqi, 420px);
+}
+
+.sidebar {
+  grid-column: 1;
+}
+
+.inspector {
+  grid-column: 2;
+}
+
+.auditSidebar {
+  grid-column: 3;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 12px calc(var(--dsh-composer-height, 152px) + 16px);
+  overflow-y: auto;
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 /* The sidebar: the filter bar above a scrollable listbox. Only the listbox
@@ -211,6 +281,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 4px 0;
+  scroll-padding: 6px;
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
@@ -271,8 +343,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 16px calc(var(--dsh-composer-height, 152px) + 16px);
+  gap: 12px;
+  padding: 12px 20px calc(var(--dsh-composer-height, 152px) + 16px);
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
@@ -287,7 +359,7 @@
 .inspectorHead {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .inspectorTitleWrap {
@@ -366,6 +438,95 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+/* The overview card in the inspector: compact paper metadata and collection/tag context */
+.overviewCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.overviewMetaGrid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+.overviewMetaItem {
+  display: contents;
+}
+
+.overviewMetaLabel {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-caption);
+  user-select: none;
+}
+
+.overviewMetaValue {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.chipRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chipIcon {
+  flex: none;
+}
+
+.searchEpisodeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.hitsNote {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.detailCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.detailLine {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
 .summaryLine {
   margin: 0;
   font: var(--dsw-font-xxs-12);
@@ -413,6 +574,226 @@
   gap: 2px;
 }
 
+/* The rich passage card in the unified grounding feed. */
+.passageCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.passageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.passageBadgeRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quoteBody {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-style: italic;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  overflow-wrap: anywhere;
+}
+
+.groundingContext {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-caption);
+}
+
+.groundingDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  corner-shape: round;
+  background: var(--dsw-alias-state-business-primary);
+  flex: none;
+}
+
+.jumpButton.jumpButton {
+  padding: 0 4px;
+  font: var(--dsw-font-xxs-12);
+}
+
+/* The audit card with coverage and in-place citation preview. */
+.auditCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.auditSectionTitle {
+  margin: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coverageBarWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coverageBarTrack {
+  width: 100%;
+  height: 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-border-l2);
+  overflow: hidden;
+}
+
+.coverageBarFill {
+  height: 100%;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-brand-primary);
+}
+
+.coverageStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.citationBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.citationTabsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.citationTabsRow > :first-child {
+  flex: none;
+  white-space: nowrap;
+}
+
+.citationCopyBtn.citationCopyBtn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.citationPre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--dsw-font-markdown-code-font-family);
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Rich item list metadata tags */
+.listItemBadgeRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.topicTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* All-passages cross-literature stream view */
+.allPassagesOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  border-left: 2px solid transparent;
+  background: var(--dsw-alias-bg-layer-2);
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+
+@media (hover: hover) {
+  .allPassagesOption:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.allPassagesOption:focus-visible {
+  outline: var(--dsw-focus-ring-width, 1px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.allPassagesOptionSelected {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-left-color: var(--dsw-alias-state-business-primary);
+}
+
+.allPassagesTitle {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.allPassagesGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.allPassagesGroupTitle {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+  padding-bottom: 4px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
 /* The quiet text toggle that reveals the search-detail facts. */
 .detailToggle {
   align-self: flex-start;
@@ -438,6 +819,43 @@
   outline: var(--dsw-focus-ring-width, 1px) solid
     var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
+}
+
+/* The technical ref identifier card in the audit sidebar */
+.refCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.refHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.refLabel {
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-caption);
+  user-select: none;
+}
+
+.refCopyBtn.refCopyBtn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.refValue {
+  font: var(--dsw-font-xxxs-11);
+  font-family: var(--dsw-font-markdown-code-font-family);
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-all;
+  user-select: text;
 }
 
 /* The exports page: the session-wide artifact list. */
@@ -495,17 +913,62 @@
  * a half-screen window is enough to drop the pane under 760px while the window
  * itself is still wide, which reads as the layout giving up with room to
  * spare. */
-@container (max-width: 640px) {
+/* Medium containers (680px ~ 1099px): standard two-column layout with stacked audit */
+@container (max-width: 1099px) and (min-width: 680px) {
   .workspace {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: clamp(300px, 32cqi, 380px) minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
   }
 
-  .workspace[data-pane='list'] .inspector {
+  .sidebar {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .inspector {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .auditSidebar {
+    grid-column: 2;
+    grid-row: 2;
+    border-left: none;
+    border-top: 0.5px solid var(--dsw-alias-border-l2);
+  }
+}
+
+/* Narrow containers (< 680px): single-column drill-down */
+@container (max-width: 679px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  .workspace[data-pane='list'] .inspector,
+  .workspace[data-pane='list'] .auditSidebar {
     display: none;
   }
 
   .workspace[data-pane='detail'] .sidebar {
     display: none;
+  }
+
+  .sidebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .inspector {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .auditSidebar {
+    grid-column: 1;
+    grid-row: 2;
+    border-left: none;
+    border-top: 0.5px solid var(--dsw-alias-border-l2);
   }
 
   .backSeat.backSeat {

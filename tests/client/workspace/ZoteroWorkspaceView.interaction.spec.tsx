@@ -136,7 +136,7 @@ describe('toolbar', () => {
 })
 
 describe('inspector', () => {
-  it('shows the overview by default and switches panels', () => {
+  it('shows the unified grounding feed with search audit, passages, and exports', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
     expect(
@@ -147,36 +147,17 @@ describe('inspector', () => {
           .replace('{mode}', zh.modeEverything),
       ),
     ).toBeDefined()
-    fireEvent.click(view.container.querySelector('[data-inspector-panel="evidence"]')!)
-    // The summary line names the retrieves and the kept counts.
+    // In the unified grounding feed, passages, retrieval summary, and exports are directly visible without clicking tabs
     expect(screen.getByText(/检索 1 次/)).toBeDefined()
     expect(screen.getByText(/保留 2 条/)).toBeDefined()
     expect(screen.getByText(/报告 4 条/)).toBeDefined()
-    fireEvent.click(view.container.querySelector('[data-inspector-panel="exports"]')!)
     expect(screen.getAllByText(/BibTeX/).length).toBeGreaterThan(0)
     view.unmount()
   })
 
-  it('exposes the lens bar and inspector tabs as tablists with roving selection', () => {
+  it('exposes the lens bar as a tablist with roving selection', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
-    const tabs = view.container
-      .querySelector('[data-inspector-panel="overview"]')!
-      .closest('[role="tablist"]')!
-    expect(tabs.getAttribute('role')).toBe('tablist')
-    expect(tabs.getAttribute('aria-label')).toBe(zh.inspectorTabsLabel)
-    expectKeySelects(tabOf(view, 'data-inspector-panel', 'overview'), 'ArrowRight', () =>
-      tabOf(view, 'data-inspector-panel', 'evidence'),
-    )
-    expectKeySelects(tabOf(view, 'data-inspector-panel', 'evidence'), 'ArrowLeft', () =>
-      tabOf(view, 'data-inspector-panel', 'overview'),
-    )
-    expectKeySelects(tabOf(view, 'data-inspector-panel', 'overview'), 'End', () =>
-      tabOf(view, 'data-inspector-panel', 'exports'),
-    )
-    expectKeySelects(tabOf(view, 'data-inspector-panel', 'exports'), 'Home', () =>
-      tabOf(view, 'data-inspector-panel', 'overview'),
-    )
     const lensBar = view.container
       .querySelector('[data-workspace-lens="sources"]')!
       .closest('[role="tablist"]')!
@@ -197,22 +178,17 @@ describe('inspector', () => {
     expectKeySelects(tabOf(view, 'data-workspace-lens', 'exports'), 'Home', () =>
       tabOf(view, 'data-workspace-lens', 'sources'),
     )
+    view.unmount()
   })
 
-  it('resets to the overview panel when the selection changes', () => {
+  it('updates the inspector feed when selection changes', () => {
     const workspace = mixedFixture()
     const { view } = mountView(workspace)
-    fireEvent.click(view.container.querySelector('[data-inspector-panel="exports"]')!)
-    expect(tabOf(view, 'data-inspector-panel', 'exports').getAttribute('aria-selected')).toBe(
-      'true',
-    )
-    // Select the second visible row: the inspector returns to overview.
     const options = view.container.querySelectorAll('[role="option"]')
     expect(options.length).toBeGreaterThan(1)
     fireEvent.click(options[1]!)
-    expect(tabOf(view, 'data-inspector-panel', 'overview').getAttribute('aria-selected')).toBe(
-      'true',
-    )
+    expect(options[1]!.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getAllByText(/Source item 2: mixed states/).length).toBeGreaterThanOrEqual(1)
     view.unmount()
   })
 
@@ -221,7 +197,8 @@ describe('inspector', () => {
     const { view } = mountView(workspace)
     const options = view.container.querySelectorAll('[role="option"]')
     expect(options.length).toBeGreaterThan(1)
-    expectKeySelects(optionAt(view, 1), ' ', () => tabOf(view, 'data-inspector-panel', 'overview'))
+    fireEvent.keyDown(options[1]!, { key: ' ' })
+    expect(options[1]!.getAttribute('aria-selected')).toBe('true')
     view.unmount()
   })
 
@@ -243,7 +220,7 @@ describe('inspector', () => {
 })
 
 describe('overview panel', () => {
-  it('keeps the search audit lines visible and the disclosure to the ref', () => {
+  it('keeps the search audit lines and technical ref directly visible', () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
     // The audit record is first-screen: query line and hit counts.
@@ -255,21 +232,10 @@ describe('overview panel', () => {
           .replace('{mode}', zh.modeEverything),
       ),
     ).toBeDefined()
-    expect(
-      screen.getByText(zh.searchEpisodeHitsLine.replace('{returned}', '1').replace('{total}', '1')),
-    ).toBeDefined()
-    // The developer ref stays behind the disclosure until it is opened.
-    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`))).toBeNull()
-    fireEvent.click(screen.getByText(zh.searchDetailOpen))
-    // Opening swaps the toggle and reveals the ref; the audit lines stay in
-    // the first screen above, so the disclosure carries no second copy of them.
-    expect(screen.getByText(zh.searchDetailClose)).toBeDefined()
-    expect(
-      screen.getByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`)),
-    ).toBeDefined()
-    fireEvent.click(screen.getByText(zh.searchDetailClose))
-    expect(screen.queryByText(new RegExp(`${zh.refLine} zotero://user/0/item/PPPP0001`))).toBeNull()
-    expect(screen.getByText(zh.searchDetailOpen)).toBeDefined()
+    expect(screen.getByText(zh.searchEpisodeHitsNoTotal.replace('{returned}', '1'))).toBeDefined()
+    // The item ref identifier is directly visible without needing to open a disclosure.
+    expect(screen.getByText(zh.refLine)).toBeDefined()
+    expect(screen.getByText('zotero://user/0/item/PPPP0001')).toBeDefined()
     view.unmount()
   })
 
@@ -311,7 +277,7 @@ describe('filter interplay', () => {
       screen.getByText(`${zh.filterEvidence} ${filterCountsOf(workspace.sources).evidence}`),
     )
     expect(screen.getByText(zh.selectionHiddenNote)).toBeDefined()
-    expect(screen.getByText(/Source item 2: mixed states/)).toBeDefined()
+    expect(screen.getAllByText(/Source item 2: mixed states/).length).toBeGreaterThanOrEqual(1)
     view.unmount()
   })
 })
@@ -365,7 +331,7 @@ describe('evidence overview', () => {
     expect(screen.getByText(/Source item 1: mixed states/)).toBeDefined()
     expect(screen.queryByText(/不能确定这些内容被用于最终回答/)).toBeNull()
     fireEvent.click(screen.getByText(zh.backToSources))
-    expect(screen.getByText(zh.searchDetailOpen)).toBeDefined()
+    expect(screen.getByText(zh.refLine)).toBeDefined()
     view.unmount()
   })
 })

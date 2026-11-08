@@ -567,4 +567,94 @@ describe('library inspector', () => {
     fireEvent.click(openBtns[0]!)
     expect(openProtocol).toHaveBeenCalledTimes(1)
   })
+
+  it('opens external browser window when clicking DOI and URL link buttons', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    // 1. Bare DOI and URL
+    mountInspector({
+      ...ITEM_DETAIL,
+      doi: '10.1038/s41467-023-38203-3',
+      url: 'https://example.com/paper',
+    })
+
+    const doiLinkBtn = screen.getByRole('button', {
+      name: `https://doi.org/10.1038/s41467-023-38203-3 (${zh.openInZotero})`,
+    })
+    fireEvent.click(doiLinkBtn)
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://doi.org/10.1038/s41467-023-38203-3',
+      '_blank',
+      'noopener,noreferrer',
+    )
+
+    const urlLinkBtn = screen.getByRole('button', {
+      name: `https://example.com/paper (${zh.openInZotero})`,
+    })
+    fireEvent.click(urlLinkBtn)
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.com/paper',
+      '_blank',
+      'noopener,noreferrer',
+    )
+
+    // 2. HTTP DOI
+    cleanup()
+    mountInspector({
+      ...ITEM_DETAIL,
+      doi: 'http://dx.doi.org/10.1000/182',
+    })
+    const httpDoiBtn = screen.getByRole('button', {
+      name: `http://dx.doi.org/10.1000/182 (${zh.openInZotero})`,
+    })
+    fireEvent.click(httpDoiBtn)
+    expect(openSpy).toHaveBeenCalledWith(
+      'http://dx.doi.org/10.1000/182',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    openSpy.mockRestore()
+  })
+
+  it('handles askInChat fallback to insertText and setDraft when insertQuote is declined', () => {
+    // 1. Fallback to insertText with captured insertion
+    const insertQuote1 = vi.fn(() => false)
+    const captureInsertion1 = vi.fn(() => ({ start: 5, end: 5 }))
+    const insertText1 = vi.fn()
+    const setDraft1 = vi.fn()
+    const inputActions1 = {
+      insertQuote: insertQuote1,
+      captureInsertion: captureInsertion1,
+      insertText: insertText1,
+      setDraft: setDraft1,
+    } as unknown as InputActions
+
+    const { unmount: unmount1 } = mountInspector(ITEM_DETAIL, {}, inputActions1)
+    const askBtn1 = screen.getByRole('button', { name: zh.libraryAskInChat })
+    fireEvent.click(askBtn1)
+    expect(insertQuote1).toHaveBeenCalled()
+    expect(captureInsertion1).toHaveBeenCalled()
+    expect(insertText1).toHaveBeenCalledWith(
+      mockT('libraryAskPrompt', { title: ITEM_DETAIL.title, ref: ITEM_DETAIL.ref }),
+      { start: 5, end: 5 },
+    )
+    unmount1()
+
+    // 2. Fallback to setDraft when captureInsertion returns undefined
+    const insertQuote2 = vi.fn(() => false)
+    const captureInsertion2 = vi.fn(() => undefined)
+    const setDraft2 = vi.fn()
+    const inputActions2 = {
+      insertQuote: insertQuote2,
+      captureInsertion: captureInsertion2,
+      setDraft: setDraft2,
+    } as unknown as InputActions
+
+    mountInspector(ITEM_DETAIL, {}, inputActions2)
+    const askBtn2 = screen.getByRole('button', { name: zh.libraryAskInChat })
+    fireEvent.click(askBtn2)
+    expect(setDraft2).toHaveBeenCalledWith(
+      mockT('libraryAskPrompt', { title: ITEM_DETAIL.title, ref: ITEM_DETAIL.ref }),
+    )
+  })
 })

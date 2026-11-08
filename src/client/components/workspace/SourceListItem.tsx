@@ -1,6 +1,6 @@
 /**
  * One source list item: a listbox option with no actions, only identification
- * (title, metadata summary, the strict badge whitelist) and selection.
+ * (title, metadata summary, strict badge whitelist, topic chips) and selection.
  * The row is the option, so the whole surface is the activation target;
  * the keyboard contract lives on the listbox (roving tabindex, arrows).
  * The selected visual is a light background plus a 2px primary line on the
@@ -8,7 +8,7 @@
  * @module dsh-zotero/client/components/workspace/SourceListItem
  */
 
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -44,7 +44,7 @@ interface SourceListItemProps {
   readonly t: TranslateNS<'zotero'>
 }
 
-/** One source row as a listbox option. */
+/** One source row as a listbox option with rich metadata and badges. */
 function SourceListItemComponent({
   item,
   index,
@@ -55,6 +55,16 @@ function SourceListItemComponent({
   t,
 }: SourceListItemProps) {
   const badges = badgesOf(item, t)
+
+  const topicTags = useMemo(() => {
+    const tags = new Set<string>()
+    for (const s of item.searches) {
+      for (const tag of s.tags) {
+        if (tag.trim() !== '') tags.add(tag)
+      }
+    }
+    return Array.from(tags).slice(0, 3)
+  }, [item.searches])
 
   const handleSelect = useCallback(() => {
     onSelect(item.key, index)
@@ -77,9 +87,6 @@ function SourceListItemComponent({
       className={clsx(css.listItem, selected && css.listItemSelected)}
       onClick={handleSelect}
       onKeyDown={(event) => {
-        // Enter and Space confirm the selection on narrow surfaces (the
-        // parent moves to the detail pane); the arrows are handled by the
-        // listbox. Space needs preventDefault or the list scrolls instead.
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           handleSelect()
@@ -88,12 +95,17 @@ function SourceListItemComponent({
     >
       <span className={css.listItemTitle}>{item.title ?? item.ref}</span>
       <span className={css.listItemMeta}>{joinNonEmpty(item.creators, item.year, item.venue)}</span>
-      {badges.length > 0 && (
+      {(badges.length > 0 || topicTags.length > 0) && (
         <span className={css.badges}>
           {badges.map((badge) => (
             <Tag key={badge} tone="neutral">
               {badge}
             </Tag>
+          ))}
+          {topicTags.map((tag) => (
+            <span key={tag} className={css.topicTag}>
+              #{tag}
+            </span>
           ))}
         </span>
       )}

@@ -96,10 +96,10 @@ export function SourceOverview({
           search.noteMatches === undefined
             ? hits
             : `${hits} · ${t('searchEpisodeNoteHits', { noteMatches: search.noteMatches })}`
-        const queryLine =
-          search.query !== undefined
-            ? t('searchEpisodeQueryLine', { query: search.query, scope, mode })
-            : t('searchEpisodeNoQueryLine', { scope, mode })
+        const hasQuery = search.query !== undefined && search.query.trim().length > 0
+        const queryLine = hasQuery
+          ? t('searchEpisodeQueryLine', { query: search.query!.trim(), scope, mode })
+          : t('searchEpisodeNoQueryLine', { scope, mode })
         return { key: `${search.callId}-${index}`, queryLine, filters, hitsWithNotes }
       }),
     [item.searches, t],

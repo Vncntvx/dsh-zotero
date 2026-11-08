@@ -37,7 +37,7 @@ The literature trail sits at the top of the conversation and groups the literatu
 
 It records the results of read tools and exports. Writes do not enter the trail; modifications have their own cards and approval records. Results from scholarly retrieval appear only after they are saved into the library.
 
-The criteria of each search sit on the first screen: query, scope (library, My Publications, collection, saved search), mode (metadata or full text), filters (item type, tags, Trash), and the returned count against the total. When the note scan ran, the note hit count gets its own line. Technical refs are folded under "Technical details".
+The criteria of each search sit on the first screen: query, scope (library, My Publications, collection, saved search), mode (metadata or full text), filters (item type, tags, Trash), and the returned count against the total. When the note scan ran, the note hit count gets its own line. The technical ref identifier is displayed directly at the bottom of the audit panel with one-click copy support.
 
 The item inspector has three parts. Overview gives the source and action; passages are grouped by source with page labels and coverage; exports list the citation text this paper produced. The session also has an exports summary page, segmented by format and deduplicated across items. Failed export calls are listed separately under operations and do not count as results.
 
