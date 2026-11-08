@@ -397,6 +397,22 @@ describe('http status translation', () => {
       REDIRECT_REFUSED_MESSAGE,
     )
   })
+
+  it('refuses to send a path that resolves outside the configured origin', async () => {
+    // No caller can produce these paths today (fixed segments and validated
+    // keys only); the guard is the fence a future caller cannot silently
+    // forget. Both an absolute URL and a protocol-relative one must refuse.
+    await expectZoteroError(
+      client.getJson('http://evil.example/api/users/0/items'),
+      ZOTERO_UNEXPECTED,
+      'leaves the configured origin',
+    )
+    await expectZoteroError(
+      client.getJson('//evil.example/api/users/0/items'),
+      ZOTERO_UNEXPECTED,
+      'leaves the configured origin',
+    )
+  })
 })
 
 describe('body handling', () => {

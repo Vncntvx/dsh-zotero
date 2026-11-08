@@ -157,7 +157,7 @@ export async function startWriteDomainMock(): Promise<MockZotero> {
           data: { key: SECOND_COLLECTION_KEY, name: 'Second' },
         },
       ],
-      { 'Zotero-Server-ID': SERVER_ID },
+      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '20' },
     ),
   )
   // The sibling-name check reads the parent's children (or the top level)

@@ -43,7 +43,7 @@ import type { ScopeNameEntry } from '../normalize-scope.js'
 import { matchScopeName, nearScopeCandidates, normalizeScopeEntry } from '../normalize-scope.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders, type LocalReadContext } from './identity.js'
-import { requireArrayBody } from './pagination.js'
+import { requireArrayBody, requireLibraryVersionHeader } from './pagination.js'
 import type {
   SupportedLocalLibrary,
   ZoteroItemLevel,
@@ -263,6 +263,10 @@ export class ScopeDirectory {
       serverId: ctx.serverId,
     })
     const rows = requireArrayBody(json, `${ctx.library.type} ${plural}`)
+    // The navigation listings fence on the library version; the scope
+    // directory reads the same endpoints, so it demands the same honest
+    // version instead of trusting a headerless answer.
+    requireLibraryVersionHeader(headers, `${ctx.library.type} ${plural}`)
     const entries = rows.map((row) => normalizeScopeEntry(row))
     const servedBy = serverIdFromHeaders(headers, ctx.serverId)
     assertServerIdMatches(servedBy, ctx.serverId)

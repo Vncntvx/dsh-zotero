@@ -238,9 +238,12 @@ describe('getItem', () => {
 
   it('leaves collection names off when the listing lacks them', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT)
-    serveJson(mock, `${apiPath()}/collections`, [
-      collectionRow({ key: 'COLL9999', data: { name: 'Other' } }),
-    ])
+    serveJson(
+      mock,
+      `${apiPath()}/collections`,
+      [collectionRow({ key: 'COLL9999', data: { name: 'Other' } })],
+      { 'Last-Modified-Version': '7' },
+    )
     const detail = await provider.getItem(getRequest())
     expect(detail.collections).toEqual([{ ref: 'zotero://user/0/collection/COLL1234' }])
   })
@@ -376,7 +379,9 @@ describe('getItem', () => {
         },
       }),
     )
-    serveJson(mock, `${apiPath()}/collections`, [collectionRow()])
+    serveJson(mock, `${apiPath()}/collections`, [collectionRow()], {
+      'Last-Modified-Version': '7',
+    })
     const first = await provider.getItem(getRequest())
     const second = await provider.getItem({
       ref: parseRef(itemRef(SECOND_ITEM_KEY)),

@@ -191,7 +191,10 @@ describe('zotero_create_item execution', () => {
       h.json({ key: 'K'.repeat(32), remember: true }, { 'Zotero-Server-ID': SERVER_ID }),
     )
     lane.mock.route('GET', '/api/users/0/collections', (_req, _res, h) =>
-      h.json([{ key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: 'Reading' } }]),
+      h.json(
+        [{ key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: 'Reading' } }],
+        { 'Last-Modified-Version': '7' },
+      ),
     )
   }
 

@@ -240,7 +240,7 @@ describe('zotero_search tool', () => {
   it('chains a resolved scope ref into the next page without re-resolving names', async () => {
     const collection = collectionRow()
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
-      helpers.json([collection], { 'Zotero-Server-ID': 'S1' }),
+      helpers.json([collection], { 'Zotero-Server-ID': 'S1', 'Last-Modified-Version': '7' }),
     )
     mock.route('GET', '/api/users/0/collections/COLL1234', (req, res, helpers) =>
       helpers.json(collection, { 'Zotero-Server-ID': 'S1' }),

@@ -382,6 +382,16 @@ export class ZoteroWriteHttpClient {
       throw new ZoteroError(WRITE_IDENTITY_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
     }
     const url = new URL(path, this.baseUrlWithSlash)
+    // Defense-in-depth: `new URL` would let an absolute or protocol-relative
+    // `path` override the loopback base. Every caller builds fixed segments or
+    // validated keys, so this can only fire on a future caller that forgets —
+    // fail loud before a write leaves the configured origin.
+    if (url.origin !== new URL(this.baseUrlWithSlash).origin) {
+      throw new ZoteroError(
+        `Refusing to send a write whose resolved origin ${url.origin} leaves the configured origin of ${this.baseUrlWithSlash}.`,
+        ZOTERO_UNEXPECTED,
+      )
+    }
     const release = await acquireSlot(this.gate, opts.signal)
     const startedAt = Date.now()
     const target = `${method} ${path}`

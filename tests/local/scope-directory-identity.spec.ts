@@ -73,7 +73,10 @@ describe.each(surfaces)('$name', ({ read, plural, listing, key }) => {
       plural === 'searches'
         ? savedSearchRow({ key, data: { name } })
         : collectionRow({ key, data: { name } })
-    return { json: listing ? [row] : row, headers: new Headers({ 'Zotero-Server-ID': serverId }) }
+    return {
+      json: listing ? [row] : row,
+      headers: new Headers({ 'Zotero-Server-ID': serverId, 'Last-Modified-Version': '7' }),
+    }
   }
 
   it('keeps concurrent instance claims and their warm caches separate', async () => {

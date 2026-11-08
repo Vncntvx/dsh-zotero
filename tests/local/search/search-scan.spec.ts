@@ -254,7 +254,7 @@ describe('search: note-content scan', () => {
 
   it('skips the scan for later pages, saved searches, empty queries, and non-note type filters', async () => {
     serveSearchPage(mock, { items: [searchHit()], total: 1 })
-    serveJson(mock, '/api/users/0/searches', SEARCHES)
+    serveJson(mock, '/api/users/0/searches', SEARCHES, { 'Last-Modified-Version': '7' })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,
@@ -276,7 +276,10 @@ describe('search: note-content scan', () => {
   })
 
   it('filters scanned notes by the resolved collection and literal tags', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [],
       total: 0,
@@ -324,7 +327,10 @@ describe('search: note-content scan', () => {
   })
 
   it('resolves child-note collection membership through the parent item', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [],
       total: 0,
@@ -375,7 +381,10 @@ describe('search: note-content scan', () => {
   })
 
   it('splits parent-membership lookups into itemKey batches of at most 50', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [],
       total: 0,
@@ -537,7 +546,10 @@ describe('search: note-content scan', () => {
 
   it('re-fetches a scope listing once the TTL expires', async () => {
     const ttlProvider = createProvider(mock, { scopeListingTtlMs: 30 })
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [],
       total: 0,
@@ -573,7 +585,10 @@ describe('search: note-content scan', () => {
       ...PROVIDER_LIMITS,
       scopeListingTtlMs,
     }))
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [],
       total: 0,
@@ -606,7 +621,10 @@ describe('search: note-content scan', () => {
   })
 
   it('re-checks the scope listing once before failing an unknown collection name', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     await zoteroError(
       provider.search(
         request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'Missing' } }),
@@ -630,6 +648,7 @@ describe('search: note-content scan', () => {
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
       helpers.json(created ? [collectionRow({ data: { name: 'Brand New' } })] : COLLECTIONS, {
         'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '7',
       }),
     )
     serveSearchPage(mock, {

@@ -94,9 +94,10 @@ function serveWrites(mock: MockZotero): void {
     ),
   )
   mock.route('GET', '/api/users/0/collections', (_req, res, helpers) =>
-    helpers.json([
-      { key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: '方法论' } },
-    ]),
+    helpers.json(
+      [{ key: COLLECTION_KEY, version: 3, data: { key: COLLECTION_KEY, name: '方法论' } }],
+      { 'Last-Modified-Version': '7' },
+    ),
   )
   mock.route('POST', '/api/users/0/items', (_req, res, helpers) => {
     const entry = JSON.parse(mock.requests[mock.requests.length - 1]?.body ?? '[]')[0] as Record<

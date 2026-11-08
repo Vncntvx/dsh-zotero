@@ -30,6 +30,7 @@ import {
   annotationRow,
   attachment,
   collectionRow,
+  listingVersionHeaders,
   noteRow,
   paperItem,
   versionHeaders,
@@ -150,6 +151,10 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
     spec.parentAnnotations === undefined ? annotations : spec.parentAnnotations
   const collections = spec.collections === undefined ? [collectionRow()] : spec.collections
   const headers = spec.serverId === null ? {} : versionHeaders(spec.serverId ?? SERVER_ID)
+  // The collections listing is a scope-directory surface: it is honest about
+  // the library version unless the test deliberately serves headerless.
+  const collectionHeaders =
+    spec.serverId === null ? {} : listingVersionHeaders(spec.serverId ?? SERVER_ID)
 
   serveJson(mock, `${prefix}/items/${parent.key}`, parent, headers)
   if (attachmentItem !== null) {
@@ -198,7 +203,7 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
     })
   }
   if (collections !== null) {
-    serveJson(mock, `${prefix}/collections`, collections, headers)
+    serveJson(mock, `${prefix}/collections`, collections, collectionHeaders)
   }
 }
 

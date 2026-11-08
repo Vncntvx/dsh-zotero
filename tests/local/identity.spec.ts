@@ -30,7 +30,12 @@ import {
   itemRef,
   refOf,
 } from '../helpers/server/keys.js'
-import { collectionRow, item, versionHeaders } from '../helpers/server/objects.js'
+import {
+  collectionRow,
+  item,
+  listingVersionHeaders,
+  versionHeaders,
+} from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
 import { deferred } from '../helpers/sync.js'
 
@@ -65,7 +70,7 @@ describe('Server-ID cache identity', () => {
       helpers.json(PARENT, versionHeaders(instance)),
     )
     mock.route('GET', `${apiPath()}/collections`, (req, res, helpers) =>
-      helpers.json(collectionListing(instance), versionHeaders(instance)),
+      helpers.json(collectionListing(instance), listingVersionHeaders(instance)),
     )
 
     // First read pins instance A's listing in the TTL cache.
@@ -101,7 +106,7 @@ describe('Server-ID cache identity', () => {
       mock,
       `${apiPath()}/collections`,
       collectionListing(instance),
-      versionHeaders(instance),
+      listingVersionHeaders(instance),
     )
 
     await provider.getItem({
@@ -131,7 +136,9 @@ describe('Server-ID cache identity', () => {
     mock.route('GET', `${apiPath()}/collections`, (req, res, helpers) =>
       helpers.json(
         [collectionRow({ data: { name: servedName } })],
-        sendId ? versionHeaders('B') : {},
+        // Pre-Zotero-10 answers carry no Server-ID; the library version has
+        // been on every listing far longer, so only the identity header flips.
+        sendId ? listingVersionHeaders('B') : { 'Last-Modified-Version': '20' },
       ),
     )
 
@@ -161,14 +168,14 @@ describe('Server-ID cache identity', () => {
       mock,
       `${apiPath()}/collections`,
       collectionListing(instance),
-      versionHeaders(instance),
+      listingVersionHeaders(instance),
     )
     serveJson(mock, `${apiPath(GROUP_LIBRARY)}/items/${ITEM_KEY}`, PARENT, versionHeaders(instance))
     serveJson(
       mock,
       `${apiPath(GROUP_LIBRARY)}/collections`,
       collectionListing(instance),
-      versionHeaders(instance),
+      listingVersionHeaders(instance),
     )
 
     const personal = await provider.getItem({
@@ -192,7 +199,7 @@ describe('Server-ID cache identity', () => {
     // scope cache were shared, this read would be answered from the first
     // provider's warm entries and the count below would stay at one.
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, PARENT, versionHeaders('A'))
-    serveJson(mock, `${apiPath()}/collections`, collectionListing('A'), versionHeaders('A'))
+    serveJson(mock, `${apiPath()}/collections`, collectionListing('A'), listingVersionHeaders('A'))
     const read = async (): Promise<void> => {
       await provider.getItem({ ref: parseRef(itemRef()), include: new Set() })
     }

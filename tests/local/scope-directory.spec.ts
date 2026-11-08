@@ -9,13 +9,17 @@
 
 import { describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import { ZOTERO_SERVER_ID_HEADER } from '../../src/constants.js'
+import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_SERVER_ID_HEADER } from '../../src/constants.js'
 import type { ZoteroHttpClient } from '../../src/http-client.js'
 import { PERSONAL_LIBRARY } from '../../src/refs.js'
 import { ScopeDirectory } from '../../src/local/scope-directory.js'
+import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
 import { PROVIDER_LIMITS } from '../helpers/provider-harness.js'
 import { COLLECTION_KEY } from '../helpers/server/keys.js'
 import { deferred } from '../helpers/sync.js'
+
+/** The headers an honest listing response carries: the fence requires the version. */
+const LISTING_HEADERS = (): Headers => new Headers([[ZOTERO_LIBRARY_VERSION_HEADER, '7']])
 
 describe('ScopeDirectory scope-listing sharing and cancellation', () => {
   it('lets one cancelled waiter leave a shared scope read running for another', async () => {
@@ -47,7 +51,7 @@ describe('ScopeDirectory scope-listing sharing and cancellation', () => {
     const live = directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined)
     controller.abort()
     await expect(cancelled).rejects.toMatchObject({ code: TOOL_ABORTED })
-    response.resolve({ json: [], headers: new Headers() })
+    response.resolve({ json: [], headers: LISTING_HEADERS() })
     await expect(live).resolves.toMatchObject({ entries: [] })
     expect(reads).toBe(1)
   })
@@ -92,7 +96,7 @@ describe('ScopeDirectory scope-listing sharing and cancellation', () => {
     const client = {
       getJson: async () => {
         reads += 1
-        return { json: [], headers: new Headers() }
+        return { json: [], headers: LISTING_HEADERS() }
       },
     } as unknown as ZoteroHttpClient
     const directory = new ScopeDirectory(
@@ -136,8 +140,8 @@ describe('ScopeDirectory scope-listing sharing and cancellation', () => {
     )
     await started[1]?.promise
     expect(reads).toBe(2)
-    first.resolve({ json: [], headers: new Headers() })
-    second.resolve({ json: [], headers: new Headers() })
+    first.resolve({ json: [], headers: LISTING_HEADERS() })
+    second.resolve({ json: [], headers: LISTING_HEADERS() })
     await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
   })
 
@@ -170,7 +174,7 @@ describe('ScopeDirectory scope-listing sharing and cancellation', () => {
       undefined,
       { force: true },
     )
-    first.resolve({ json: [], headers: new Headers() })
+    first.resolve({ json: [], headers: LISTING_HEADERS() })
     await expect(Promise.all([firstForce, secondForce])).resolves.toHaveLength(2)
     // Both callers forced for the same reason (the cache missed), so they want
     // the same fresh answer: one request serves both. A per-call key would
@@ -208,11 +212,11 @@ describe('ScopeDirectory scope-listing sharing and cancellation', () => {
     // read that started earlier settles late and must not overwrite it.
     second.resolve({
       json: [{ key: 'NEW12345', data: { name: 'new' } }],
-      headers: new Headers(),
+      headers: LISTING_HEADERS(),
     })
     first.resolve({
       json: [{ key: 'OLD12345', data: { name: 'old' } }],
-      headers: new Headers(),
+      headers: LISTING_HEADERS(),
     })
     await expect(Promise.all([normal, forced])).resolves.toHaveLength(2)
     const cached = await directory.scopeListingOf(
@@ -371,5 +375,44 @@ describe('scope resolution ref caching', () => {
     expect(a.name).toBe('Papers')
     expect(b.name).toBe('Papers')
     expect(reads).toBe(1)
+  })
+})
+
+describe('scope listing version fence', () => {
+  function directoryAnswering(response: { json: unknown; headers: Headers }): ScopeDirectory {
+    const client = {
+      getJson: async () => response,
+    } as unknown as ZoteroHttpClient
+    return new ScopeDirectory(
+      client,
+      () => PROVIDER_LIMITS.scopeListingTtlMs,
+      () => PROVIDER_LIMITS.graphConcurrency,
+    )
+  }
+
+  it('refuses a scope listing without a Last-Modified-Version header', async () => {
+    const directory = directoryAnswering({ json: [], headers: new Headers() })
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined),
+    ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED })
+  })
+
+  it('refuses a scope listing whose Last-Modified-Version is not a non-negative integer', async () => {
+    for (const version of ['abc', '-1', '1.5', '']) {
+      const directory = directoryAnswering({
+        json: [],
+        headers: new Headers([[ZOTERO_LIBRARY_VERSION_HEADER, version]]),
+      })
+      await expect(
+        directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined),
+      ).rejects.toMatchObject({ code: ZOTERO_UNEXPECTED })
+    }
+  })
+
+  it('accepts a scope listing that reports an honest version', async () => {
+    const directory = directoryAnswering({ json: [], headers: LISTING_HEADERS() })
+    await expect(
+      directory.scopeListingOf('collections', { library: PERSONAL_LIBRARY }, undefined),
+    ).resolves.toMatchObject({ entries: [] })
   })
 })

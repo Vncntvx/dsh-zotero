@@ -73,7 +73,7 @@ function serveCatalog(mock: MockZotero): void {
       { key: 'COLL1234', version: 3, data: { key: 'COLL1234', name: '方法论' } },
       { key: COLLECTION_KEY, version: 4, data: { key: COLLECTION_KEY, name: 'Second' } },
     ],
-    { 'Zotero-Server-ID': SERVER_ID },
+    { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '7' },
   )
   // The sibling-name check pages the top level with an honest total.
   serveJson(

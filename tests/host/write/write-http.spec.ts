@@ -137,6 +137,20 @@ describe('request shaping', () => {
     ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
   })
 
+  it('refuses to send a path that resolves outside the configured origin', async () => {
+    // No caller can produce this path today (fixed segments and validated keys
+    // only); the guard is the fence a future caller cannot silently forget.
+    await expectZoteroError(
+      client.patch(
+        'http://evil.example/api/users/0/items/ABCD1234',
+        { tags: [{ tag: 'methods' }] },
+        { ...writeOptions(), ifUnmodifiedSinceVersion: 4 },
+      ),
+      ZOTERO_UNEXPECTED,
+      'leaves the configured origin',
+    )
+  })
+
   it('keeps exactly one write in flight: the second batch waits for the first to finish', async () => {
     let releaseFirst: (() => void) | undefined
     const release = new Promise<void>((resolve) => {

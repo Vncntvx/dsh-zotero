@@ -44,6 +44,7 @@ function serveListing(rows: readonly { key: string; name: string }[]): void {
         library: { type: 'user', id: 0 },
         data: { key: entry.key, name: entry.name },
       })),
+      { 'Last-Modified-Version': '7' },
     ),
   )
 }

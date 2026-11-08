@@ -334,7 +334,10 @@ describe('search: trash scope', () => {
 
 describe('search: collection scope', () => {
   it('resolves a collection name and searches its top-level items', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,
@@ -385,7 +388,10 @@ describe('search: collection scope', () => {
   })
 
   it('fails with SCOPE_AMBIGUOUS listing candidate refs for multiple matches', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     const error = await zoteroError(
       provider.search(
         request({ scope: { kind: 'collection', refOrName: 'llm papers' } }),
@@ -399,7 +405,10 @@ describe('search: collection scope', () => {
   })
 
   it('fails with NOT_FOUND and near candidates when nothing matches', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     const error = await zoteroError(
       provider.search(
         request({ scope: { kind: 'collection', refOrName: 'reason' } }),
@@ -413,7 +422,10 @@ describe('search: collection scope', () => {
   })
 
   it('fails with NOT_FOUND without candidates when nothing is even close', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     const error = await zoteroError(
       provider.search(
         request({ scope: { kind: 'collection', refOrName: 'quantization' } }),
@@ -426,10 +438,15 @@ describe('search: collection scope', () => {
   })
 
   it('reports ambiguous saved searches with the saved-search wording', async () => {
-    serveJson(mock, '/api/users/0/searches', [
-      savedSearchRow({ key: 'SRCH1111', data: { name: 'unread' } }),
-      savedSearchRow({ key: 'SRCH2222', data: { name: 'UNREAD' } }),
-    ])
+    serveJson(
+      mock,
+      '/api/users/0/searches',
+      [
+        savedSearchRow({ key: 'SRCH1111', data: { name: 'unread' } }),
+        savedSearchRow({ key: 'SRCH2222', data: { name: 'UNREAD' } }),
+      ],
+      { 'Last-Modified-Version': '7' },
+    )
     const error = await zoteroError(
       provider.search(
         request({ scope: { kind: 'savedSearch', refOrName: 'Unread' } }),
@@ -444,7 +461,10 @@ describe('search: collection scope', () => {
   })
 
   it('resolves a collection name without server provenance on pre-10 listings', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,
@@ -465,7 +485,10 @@ describe('search: collection scope', () => {
   })
 
   it('reuses the cached scope listing across searches by name', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,
@@ -488,7 +511,10 @@ describe('search: collection scope', () => {
   })
 
   it('does not share the scope listing cache across provider instances', async () => {
-    serveJson(mock, '/api/users/0/collections', COLLECTIONS, { 'Total-Results': '3' })
+    serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
+      'Total-Results': '3',
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,
@@ -558,7 +584,10 @@ describe('search: collection scope', () => {
 
 describe('search: saved search scope', () => {
   it('resolves a saved search by name and executes it with the additional filters', async () => {
-    serveJson(mock, '/api/users/0/searches', SEARCHES, { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(mock, '/api/users/0/searches', SEARCHES, {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
+    })
     serveSearchPage(mock, {
       items: [searchHit()],
       total: 1,

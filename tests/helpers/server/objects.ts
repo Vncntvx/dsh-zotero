@@ -23,6 +23,9 @@
 
 import { ATTACHMENT_KEY, COLLECTION_KEY, ITEM_KEY, SERVER_ID } from './keys.js'
 
+/** The library version an unspecified `versionHeaders()` reports. */
+export const DEFAULT_LIBRARY_VERSION = 20
+
 /** One Zotero object as the Local API serializes it. */
 export interface WireObject {
   readonly key: string
@@ -227,7 +230,8 @@ export function citationRow(key: string, citation: string): { key: string; citat
  * The headers a versioned response carries: the instance that answered and the
  * library version it answered at.
  * @param serverId - the answering instance.
- * @param version - the library version to report.
+ * @param version - the library version to report; omitted headers are the
+ *   deliberate headerless fixture (a read that needs the version fails loud).
  * @returns the headers to hand to a route handler.
  */
 export function versionHeaders(
@@ -238,4 +242,19 @@ export function versionHeaders(
     'Zotero-Server-ID': serverId,
     ...(version === undefined ? {} : { 'Last-Modified-Version': String(version) }),
   }
+}
+
+/**
+ * The headers an array-listing response carries: the scope directory and the
+ * navigation listings fence on the library version, so a listing fixture is
+ * honest by default and names the version it answered at.
+ * @param serverId - the answering instance.
+ * @param version - the library version to report.
+ * @returns the headers to hand to a route handler.
+ */
+export function listingVersionHeaders(
+  serverId: string = SERVER_ID,
+  version: number = DEFAULT_LIBRARY_VERSION,
+): Record<string, string> {
+  return versionHeaders(serverId, version)
 }

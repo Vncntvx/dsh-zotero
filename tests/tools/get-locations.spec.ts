@@ -154,7 +154,9 @@ describe('zotero_get requested locations', () => {
       helpers.text(fileUrl, { 'Zotero-Server-ID': 'S1' }),
     )
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
-      helpers.json([collectionRow({ key: 'COLL1234' }), collectionRow({ key: 'COLL9999' })]),
+      helpers.json([collectionRow({ key: 'COLL1234' }), collectionRow({ key: 'COLL9999' })], {
+        'Last-Modified-Version': '7',
+      }),
     )
     mock.route(
       'GET',
@@ -233,7 +235,9 @@ describe('zotero_get requested locations', () => {
         { 'Zotero-Server-ID': 'S1' },
       ),
     )
-    mock.route('GET', '/api/users/0/collections', (req, res, helpers) => helpers.json([]))
+    mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
+      helpers.json([], { 'Last-Modified-Version': '7' }),
+    )
     mock.route('GET', '/api/users/0/items/ABCD1234/children', (req, res, helpers) =>
       helpers.json(
         [

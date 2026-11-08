@@ -19,7 +19,12 @@ import {
 } from '../helpers/provider-harness.js'
 import { zoteroError } from '../helpers/server/assert.js'
 import { COLLECTION_KEY, apiPath, collectionRef } from '../helpers/server/keys.js'
-import { collectionRow, savedSearchRow, versionHeaders } from '../helpers/server/objects.js'
+import {
+  collectionRow,
+  listingVersionHeaders,
+  savedSearchRow,
+  versionHeaders,
+} from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
 
 let mock: ProviderHarness['mock']
@@ -360,7 +365,7 @@ describe('browse: tags', () => {
   })
 
   it('resolves a collection by name through the cached listing before the scoped tags call', async () => {
-    serveJson(mock, `${apiPath()}/collections`, [collectionRow()], versionHeaders('S1'))
+    serveJson(mock, `${apiPath()}/collections`, [collectionRow()], listingVersionHeaders('S1'))
     serveJson(mock, `${apiPath()}/collections/${COLLECTION_KEY}/items/top/tags`, [{ tag: 'rag' }], {
       'Last-Modified-Version': '1',
       'Total-Results': '1',

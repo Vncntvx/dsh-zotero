@@ -51,7 +51,7 @@ describe('resolveCollectionRefs', () => {
         { key: 'COLL0002', version: 3, data: { key: 'COLL0002', name: 'Second' } },
         { key: 'COLL0001', version: 2, data: { key: 'COLL0001', name: 'First' } },
       ],
-      { 'Zotero-Server-ID': SERVER_ID },
+      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '7' },
     )
     const resolved = await directory.resolveCollectionRefs(
       [ref('COLL0001'), ref('COLL0002')],
@@ -70,6 +70,7 @@ describe('resolveCollectionRefs', () => {
   it('falls back to a per-key read for a key the listing lacks', async () => {
     serveListing([{ key: 'COLL0001', version: 2, data: { key: 'COLL0001', name: 'First' } }], {
       'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
     })
     mock.route('GET', '/api/users/0/collections/COLL0009', (_req, res, helpers) =>
       helpers.json(
@@ -90,7 +91,7 @@ describe('resolveCollectionRefs', () => {
   })
 
   it('answers an unknown key with the typed not-found instead of inventing a ref', async () => {
-    serveListing([], { 'Zotero-Server-ID': SERVER_ID })
+    serveListing([], { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '7' })
     await expect(
       directory.resolveCollectionRefs([ref('COLL0040')], LIBRARY, undefined, undefined),
     ).rejects.toMatchObject({ code: ZOTERO_NOT_FOUND })
@@ -99,6 +100,7 @@ describe('resolveCollectionRefs', () => {
   it('never lets the listing answer a ref whose claim mismatches; a live read decides', async () => {
     serveListing([{ key: 'COLL0001', version: 2, data: { key: 'COLL0001', name: 'First' } }], {
       'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '7',
     })
     mock.route('GET', '/api/users/0/collections/COLL0001', (_req, res, helpers) =>
       helpers.json(

@@ -176,7 +176,7 @@ describe('zotero_get tool', () => {
       annotations: [annotationRow()],
     })
     mock.route('GET', '/api/users/0/collections', (req, res, helpers) =>
-      helpers.json([collectionRow()]),
+      helpers.json([collectionRow()], { 'Last-Modified-Version': '7' }),
     )
     const result = expectValue(
       await runTool('zotero_get', {
