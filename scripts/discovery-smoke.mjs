@@ -305,6 +305,12 @@ async function verifyBrowser(port, cookie) {
   page.on('request', (request) => requests.push(request.url()))
   try {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Get started', exact: true }).waitFor()
+    await page
+      .getByRole('dialog', { name: 'Get started', exact: true })
+      .getByRole('button', { name: 'Close', exact: true })
+      .click()
     try {
       await page.waitForFunction(
         () => document.querySelector('button[aria-label="Literature panel"]') !== null,
@@ -326,7 +332,7 @@ async function verifyBrowser(port, cookie) {
         'the browser registered an unexpected number of Zotero literature panel controls',
       )
     }
-    await panel.click({ force: true })
+    await panel.click()
     if (!requests.some((url) => url.includes('dsh-zotero/client.js'))) {
       throw new Error(
         `the browser never requested the packed dsh-zotero client bundle: ${requests.filter((url) => url.includes('plugin') || url.includes('client')).join(' | ')}`,
@@ -335,6 +341,108 @@ async function verifyBrowser(port, cookie) {
     if (pageErrors.length > 0) {
       throw new Error(`browser page errors: ${pageErrors.join('; ')}`)
     }
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+    await page
+      .locator('[data-plugin-package="dsh-zotero"]')
+      .getByRole('button', { name: /^View / })
+      .click()
+    await page.locator('[data-plugin-detail="dsh-zotero"]').waitFor()
+    if (
+      await page
+        .getByRole('tabpanel', { name: 'General', exact: true })
+        .getByLabel('Default citation style', { exact: true })
+        .count()
+    )
+      throw new Error('Citation defaults still appear in General settings')
+    await page.getByRole('tab', { name: 'Literature panel', exact: true }).click()
+    await page.getByRole('button', { name: 'List density', exact: true }).waitFor()
+    const settings = page.locator('[data-zotero-config-page]')
+    for (const name of [
+      'Display and details',
+      'Browsing',
+      'PDF reading',
+      'Citations and conversation',
+      'Citation defaults',
+    ])
+      await settings.getByRole('region', { name, exact: true }).waitFor()
+    if (
+      await settings
+        .getByText(/Appearance preview|Edit citation defaults in General|恢复继承设置/)
+        .count()
+    )
+      throw new Error('Removed preview, navigation or global reset controls are still present')
+    await settings.getByRole('button', { name: 'List density', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Compact', exact: true }).click()
+    if (
+      !(
+        await settings.getByRole('button', { name: 'List density', exact: true }).innerText()
+      ).includes('Compact')
+    )
+      throw new Error('List density draft did not update')
+    const preferences = settings.locator('[data-library-preferences]')
+    const save = preferences.getByRole('button', { name: 'Save', exact: true })
+    if (!(await save.isEnabled())) throw new Error('The staged appearance edit cannot be saved')
+    await save.click()
+    await preferences.getByRole('button', { name: 'Save', exact: true }).waitFor()
+    if (await preferences.getByRole('button', { name: 'Save', exact: true }).isEnabled())
+      throw new Error('The settings save did not settle as accepted')
+    const citation = settings.getByRole('region', { name: 'Citation defaults', exact: true })
+    await citation.getByLabel('Default citation style', { exact: true }).fill('vancouver')
+    await citation.getByLabel('Default citation locale', { exact: true }).fill('zh-CN')
+    await citation.getByRole('button', { name: 'Save', exact: true }).click()
+    await citation.getByRole('button', { name: 'Save', exact: true }).waitFor()
+    if (await citation.getByRole('button', { name: 'Save', exact: true }).isEnabled())
+      throw new Error('Direct citation-default edits were not accepted')
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page
+      .getByRole('dialog', { name: 'Get started', exact: true })
+      .getByRole('button', { name: 'Close', exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+    await page
+      .locator('[data-plugin-package="dsh-zotero"]')
+      .getByRole('button', { name: /^View / })
+      .click()
+    await page.getByRole('tab', { name: 'Literature panel', exact: true }).click()
+    const acceptedDensity = page
+      .locator('[data-zotero-config-page]')
+      .getByRole('button', { name: 'List density', exact: true })
+    await acceptedDensity.waitFor()
+    if (!(await acceptedDensity.innerText()).includes('Compact'))
+      throw new Error('Saved density was not restored from the host after browser reload')
+    if (
+      (await citation.getByLabel('Default citation style', { exact: true }).inputValue()) !==
+        'vancouver' ||
+      (await citation.getByLabel('Default citation locale', { exact: true }).inputValue()) !==
+        'zh-CN'
+    )
+      throw new Error('Saved citation defaults were not restored after browser reload')
+    await page
+      .getByRole('region', { name: 'Display and details', exact: true })
+      .scrollIntoViewIfNeeded()
+    const waitForPaint = () =>
+      page.evaluate(async () => {
+        await document.fonts.ready
+        await new Promise((resolvePaint) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolvePaint)),
+        )
+      })
+    await waitForPaint()
+    await page.screenshot({
+      path: '/tmp/zotero-library-settings.png',
+      fullPage: true,
+      animations: 'disabled',
+    })
+    await citation.scrollIntoViewIfNeeded()
+    await waitForPaint()
+    await page.screenshot({
+      path: '/tmp/zotero-library-citation-defaults.png',
+      fullPage: true,
+      animations: 'disabled',
+    })
+    console.log(
+      'browser settings ok: five groups, direct citation editors, accepted saves and reload persistence',
+    )
     console.log('browser composition ok: packed bundle and literature panel surface')
   } finally {
     await browserContext.close()

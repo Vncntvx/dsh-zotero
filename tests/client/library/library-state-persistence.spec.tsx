@@ -24,7 +24,7 @@ import { deferred } from '../../helpers/sync.ts'
 
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
-    version: 2,
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe('library state persistence', () => {
   it('skips the loading publish whose visible prefix is unchanged', async () => {
-    writeLibraryState('S1', stored({ prefixes: { '': 1 } }))
+    writeLibraryState('S1', 'session-1', stored({ prefixes: { '': 1 } }))
     const writes = vi.spyOn(Storage.prototype, 'setItem')
     const secondPage = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
     const browse = vi.fn(async (request: ZoteroLibraryBrowseRequestView) => {
@@ -94,7 +94,7 @@ describe('library state persistence', () => {
         },
       }),
     )
-    await waitFor(() => expect(readLibraryState('S1')?.prefixes['']).toBe(2))
+    await waitFor(() => expect(readLibraryState('S1', 'session-1')?.prefixes['']).toBe(2))
     expect(writes).toHaveBeenCalledTimes(1)
   })
 
@@ -105,14 +105,14 @@ describe('library state persistence', () => {
     writes.mockClear()
 
     act(() => result.current.setNarrowPane('inspector'))
-    await waitFor(() => expect(readLibraryState('S1')?.narrowPane).toBe('inspector'))
+    await waitFor(() => expect(readLibraryState('S1', 'session-1')?.narrowPane).toBe('inspector'))
     expect(writes).toHaveBeenCalledTimes(1)
 
     act(() => result.current.setSort('title', 'asc'))
-    await waitFor(() => expect(readLibraryState('S1')?.sort).toBe('title'))
+    await waitFor(() => expect(readLibraryState('S1', 'session-1')?.sort).toBe('title'))
     expect(writes).toHaveBeenCalledTimes(2)
-    expect(readLibraryState('S1')).toMatchObject({
-      version: 2,
+    expect(readLibraryState('S1', 'session-1')).toMatchObject({
+      version: 3,
       sort: 'title',
       direction: 'asc',
       narrowPane: 'inspector',
@@ -126,7 +126,9 @@ describe('library state persistence', () => {
     writes.mockClear()
 
     act(() => rerender({ id: 'S2' }))
-    await waitFor(() => expect(readLibraryState('S2')).toBeDefined())
-    expect(writes.mock.calls.some(([key]) => key === libraryStorageKey('S2'))).toBe(true)
+    await waitFor(() => expect(readLibraryState('S2', 'session-1')).toBeDefined())
+    expect(writes.mock.calls.some(([key]) => key === libraryStorageKey('S2', 'session-1'))).toBe(
+      true,
+    )
   })
 })

@@ -1,8 +1,8 @@
 /**
  * The panel's two storage tiers.
  *
- * - `localStorage`, keyed by the confirmed Zotero instance, holds the durable
- *   preferences and the view pins (`selectedRef` / `narrowPane`), so a reload
+ * - `localStorage`, keyed by the confirmed Zotero instance and session, holds the durable
+ *   browsing position and the view pins (`selectedRef` / `narrowPane`), so a reload
  *   reopens the same place.
  * - The in-memory session view, keyed by session id, holds only what the
  *   durable record cannot: the last ready detail payload and the probe
@@ -42,7 +42,7 @@ const selection = z.discriminatedUnion('kind', [
 
 export const libraryStoredStateSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     library: zoteroLibrarySchema,
     selection,
     q: z.string(),
@@ -53,6 +53,15 @@ export const libraryStoredStateSchema = z
     prefixes: z.record(z.string(), z.number().int().nonnegative()).default({}),
     expanded: z.array(z.string().min(1)),
     filters: zoteroLibraryFiltersSchema,
+    childPages: z
+      .object({
+        attachments: z.number().int().nonnegative().optional(),
+        notes: z.number().int().nonnegative().optional(),
+        annotations: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    scroll: z.record(z.string(), z.number().nonnegative()).optional(),
     selectedRef: z.string().optional(),
     narrowPane: z.enum(PANES).optional(),
   })
@@ -96,8 +105,8 @@ export function clearLibrarySessionMemory(sessionId?: string): void {
     sessionViews.clear()
   }
 }
-export const libraryStorageKey = (serverId: string) =>
-  `dsh-zotero:library:2:${encodeURIComponent(serverId)}`
+export const libraryStorageKey = (serverId: string, sessionId: string) =>
+  `dsh-zotero:library:3:${encodeURIComponent(serverId)}:${encodeURIComponent(sessionId)}`
 
 /** The selection arms that carry a ref needing a library/instance check. */
 function isRefScope(
@@ -128,9 +137,12 @@ function sameInstanceRef(
   )
 }
 
-export function readLibraryState(serverId: string): LibraryStoredState | undefined {
+export function readLibraryState(
+  serverId: string,
+  sessionId: string,
+): LibraryStoredState | undefined {
   try {
-    const raw = localStorage.getItem(libraryStorageKey(serverId))
+    const raw = localStorage.getItem(libraryStorageKey(serverId, sessionId))
     if (raw === null) return undefined
     const saved = libraryStoredStateSchema.parse(JSON.parse(raw))
     const validSelection = isRefScope(saved.selection)
@@ -145,23 +157,44 @@ export function readLibraryState(serverId: string): LibraryStoredState | undefin
       saved.selectedRef !== undefined && sameInstanceRef(saved.selectedRef, 'item', saved, serverId)
         ? saved.selectedRef
         : undefined
-    return {
-      ...saved,
-      selection: validSelection ? saved.selection : { kind: 'library' },
-      offset: validSelection ? saved.offset : 0,
-      expanded: saved.expanded.filter((ref) => sameInstanceRef(ref, 'collection', saved, serverId)),
-      selectedRef: validSelectedRef,
+    if (
+      !validSelection ||
+      (saved.selectedRef !== undefined && !validSelectedRef) ||
+      saved.expanded.some((ref) => !sameInstanceRef(ref, 'collection', saved, serverId))
+    ) {
+      throw new Error(
+        'Stored browsing position contains a reference outside its Zotero instance or library. Reset this conversation’s browsing position to continue.',
+      )
     }
+    return saved
   } catch (error) {
-    console.warn('dsh-zotero: library.storage.read', messageOf(error))
-    return undefined
+    throw new Error(messageOf(error))
   }
 }
 
-export function writeLibraryState(serverId: string, value: LibraryStoredState): void {
+export function writeLibraryState(
+  serverId: string,
+  sessionId: string,
+  value: LibraryStoredState,
+): void {
   try {
-    localStorage.setItem(libraryStorageKey(serverId), JSON.stringify(value))
+    localStorage.setItem(libraryStorageKey(serverId, sessionId), JSON.stringify(value))
   } catch (error) {
-    console.warn('dsh-zotero: library.storage.write', messageOf(error))
+    throw new Error(messageOf(error))
   }
+}
+
+/** Explicitly forget only one instance/conversation. */
+export function clearLibraryState(serverId: string, sessionId: string): void {
+  localStorage.removeItem(libraryStorageKey(serverId, sessionId))
+}
+
+/** A deleted conversation cannot leave positions for any Zotero instance in this browser. */
+export function clearLibraryConversationState(sessionId: string): void {
+  const suffix = `:${encodeURIComponent(sessionId)}`
+  const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+  for (const key of keys)
+    if (key?.startsWith('dsh-zotero:library:3:') && key.endsWith(suffix))
+      localStorage.removeItem(key)
+  clearLibrarySessionMemory(sessionId)
 }

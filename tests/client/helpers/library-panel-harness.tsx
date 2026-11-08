@@ -283,12 +283,21 @@ export function mountPanel(
       overrides.write ??
       vi.fn(async () => ({ ok: true, value: { kind: 'applied', message: 'done' } })),
   }
+  const occurrence = new AbortController()
   let lastSelection: unknown
   let lastStatus: unknown
   const contextMenuTargets: Array<{ kind: string; value: unknown }> = []
   const props = {
     t: mockT,
     useZoteroClient: zoteroClientStub,
+    useTabInfo: () => ({
+      tab: {
+        id: 'library',
+        signal: occurrence.signal,
+        visible: true,
+        actions: { openResource: face.openResource },
+      },
+    }),
     ...face,
     useContextMenu: () => ({
       getTriggerProps: (target: { kind: string; value: unknown }) => {
@@ -296,8 +305,6 @@ export function mountPanel(
         return {}
       },
     }),
-    // The session-scope composer face; the panel picks it up through its
-    // `in` guard exactly as the real renderer's prop merge delivers it.
     inputActions,
     // Session-scope standard props: the pane tab is bound to one session.
     sessionId: (sessions.paneId ?? sessions.ids[0] ?? 's1') as never,

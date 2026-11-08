@@ -87,6 +87,7 @@ describe('the browser-half entry', () => {
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
       'sidebar.right.tab.menu.item',
+      'sidebar.right.tab.menu.item',
       'conversation.input.left',
       'deliverables.file.actions',
       'sidebar.right.tab.document.actions',
@@ -436,8 +437,8 @@ describe('the browser-half entry', () => {
     // credential-reference subscription that drives remote reads.
     await dispose()
     expect(world.eventDisposes).toBe(0)
-    expect(world.scope.unsubscribes).toBe(3)
-    expect(world.libraryScope.unsubscribes).toBe(2)
+    expect(world.scope.unsubscribes).toBe(5)
+    expect(world.libraryScope.unsubscribes).toBe(3)
     expect(world.scholarlyScope.unsubscribes).toBe(2)
     expect(world.uiDisposes).toBe(1)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)

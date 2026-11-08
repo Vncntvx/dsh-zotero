@@ -1,3 +1,4 @@
+import { libraryEn, libraryZh } from './library-settings-locales.ts'
 /**
  * Locale bundles for the Zotero plugin: the Settings page (fixed chrome,
  * groups, and the field table) and the Sources panel. English declares the key
@@ -19,6 +20,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
+  ...libraryEn,
   childPageResult: 'Requested page: offset {offset}, {returned} of {total} records',
   childCompleteResult: 'Complete: {total} records',
   childDisplayPreview: 'Card preview: {shown} records',
@@ -262,6 +264,7 @@ export const en = {
   scopeListingTtlMs: 'Scope listing cache (ms)',
   scopeListingTtlMsHint: 'How long a collections/searches listing is trusted before a re-read.',
   defaultStyle: 'Default citation style',
+  invalidCitationDefault: 'Enter a valid CSL style or language code.',
   defaultStyleHint: 'CSL style id used for citations and bibliographies (e.g. apa).',
   defaultLocale: 'Default citation locale',
   defaultLocaleHint: 'CSL locale used for citations and bibliographies (e.g. en-US).',
@@ -759,6 +762,7 @@ export const en = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
+  ...libraryZh,
   childPageResult: '指定页：偏移 {offset}，返回 {returned} / {total} 条',
   childCompleteResult: '完整读取：{total} 条',
   childDisplayPreview: '卡片预览：{shown} 条',
@@ -980,6 +984,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scopeListingTtlMs: '范围列表缓存（毫秒）',
   scopeListingTtlMsHint: '集合与检索列表在重新拉取前的缓存时长。',
   defaultStyle: '默认引文样式',
+  invalidCitationDefault: '请输入有效的 CSL 样式或语言代码。',
   defaultStyleHint: '引文与参考文献使用的 CSL 样式 id（如 apa）。',
   defaultLocale: '默认引文语言',
   defaultLocaleHint: '引文与参考文献使用的区域设置（如 en-US）。',
@@ -1410,8 +1415,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryCollapse: '收起',
   libraryInfoTitle: '信息',
   libraryAskTemplate: '请围绕文献《{title}》（{ref}）回答我的问题：',
-  libraryAskPrompt:
-    'Please refer to the paper "{title}" ({ref}) and answer questions based on its contents.',
+  libraryAskPrompt: '请围绕文献《{title}》（{ref}）回答我的问题：',
   libraryCiteLine: '《{title}》（{ref}）',
   libraryMetaType: '类型',
   libraryMetaCreators: '作者',

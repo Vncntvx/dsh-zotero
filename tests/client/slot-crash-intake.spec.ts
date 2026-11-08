@@ -93,6 +93,7 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
       })
       return disposer
     },
+    sidebarRight: { openTabs: { getSnapshot: () => [], subscribe: () => () => {} } },
     locale: { register: () => {}, bind: () => (key: string) => key },
     remote: {
       $mount: async () => async () => {},

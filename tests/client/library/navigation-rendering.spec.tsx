@@ -10,8 +10,8 @@ import { zh } from '../../../src/client/locales.ts'
 beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 it('renders active-filter empty results distinctly and keeps clear filters visible', async () => {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 's1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
@@ -59,8 +59,8 @@ it('lets the user explicitly leave a missing collection for all items', async ()
 })
 
 it('keeps the restored name visible while its fresh collection path is pending', async () => {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 's1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: {

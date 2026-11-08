@@ -9,16 +9,23 @@ import { SettingsForm } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
 import type { LibraryCardFace } from './library-form-controller.ts'
+import type { CitationCardFace, CitationCardState } from './citation-form-controller.ts'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import { CitationDefaultsForm } from './CitationDefaultsForm.tsx'
 import { formLabels } from './ZoteroSettingsSection.tsx'
 import css from './ZoteroSettingsSection.module.css'
 
 export type LibrarySettingsSectionProps = PropsRuntime<'plugins.row.config'> &
   PropsLocale<'zotero'> &
-  InjectFace<LibraryCardFace>
+  InjectFace<LibraryCardFace> & {
+    useCitationCard: SnapshotSelectorHook<CitationCardState>
+    citation: CitationCardFace
+  }
 
 export function LibrarySettingsSection(props: LibrarySettingsSectionProps): ReactNode {
   const { t, view } = props
   const state = props.useLibraryCard((snapshot) => snapshot)
+  const citationState = props.useCitationCard((snapshot) => snapshot)
   const labels = useMemo(() => formLabels(t), [t])
 
   if (view === 'summary') {
@@ -27,9 +34,12 @@ export function LibrarySettingsSection(props: LibrarySettingsSectionProps): Reac
 
   return (
     <div className={css.page} data-library-config-page>
-      <SettingsForm labels={labels} state={state} onSave={props.save} onDiscard={props.discard}>
-        <LibrarySettingsForm t={t} state={state} actions={props} />
-      </SettingsForm>
+      <div data-library-preferences>
+        <SettingsForm labels={labels} state={state} onSave={props.save} onDiscard={props.discard}>
+          <LibrarySettingsForm t={t} state={state} actions={props} />
+        </SettingsForm>
+      </div>
+      <CitationDefaultsForm t={t} state={citationState} actions={props.citation} labels={labels} />
     </div>
   )
 }

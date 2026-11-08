@@ -1,3 +1,5 @@
+import { LibraryPreferencesContext } from '../../../src/client/library-preferences.tsx'
+import { LIBRARY_DEFAULTS, LIBRARY_SECTIONS } from '../../../src/library-preferences.ts'
 // @vitest-environment jsdom
 /** Inspector disclosure, child paging and recovery keep metadata visible. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -46,7 +48,18 @@ function mountInspector(
       })),
     openProtocol,
   }
-  return { ...render(<LibraryInspector {...props} />), pageChild, retryChild, openProtocol }
+  return {
+    ...render(
+      <LibraryPreferencesContext.Provider
+        value={{ preferences: { ...LIBRARY_DEFAULTS, detailExpandedSections: LIBRARY_SECTIONS } }}
+      >
+        <LibraryInspector {...props} />
+      </LibraryPreferencesContext.Provider>,
+    ),
+    pageChild,
+    retryChild,
+    openProtocol,
+  }
 }
 
 describe('library inspector', () => {
@@ -91,14 +104,10 @@ describe('library inspector', () => {
         items: [{ ...ITEM_DETAIL.annotations!.items[0]!, text: '', comment: 'Margin comment' }],
       },
     })
-    const toggle = screen.getByRole('button', { name: zh.libraryExpand })
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    const toggle = screen.getByRole('button', { name: '收起摘要' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(toggle)
-    expect(
-      screen.getByRole('button', { name: zh.libraryCollapse }).getAttribute('aria-expanded'),
-    ).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: zh.libraryCollapse }))
-    expect(screen.getByRole('button', { name: zh.libraryExpand })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '展开摘要' }))
     for (const text of [
       'Standalone note preview',
       'A Laboratory',
@@ -616,45 +625,20 @@ describe('library inspector', () => {
     openSpy.mockRestore()
   })
 
-  it('handles askInChat fallback to insertText and setDraft when insertQuote is declined', () => {
-    // 1. Fallback to insertText with captured insertion
-    const insertQuote1 = vi.fn(() => false)
-    const captureInsertion1 = vi.fn(() => ({ start: 5, end: 5 }))
-    const insertText1 = vi.fn()
-    const setDraft1 = vi.fn()
-    const inputActions1 = {
-      insertQuote: insertQuote1,
-      captureInsertion: captureInsertion1,
-      insertText: insertText1,
-      setDraft: setDraft1,
-    } as unknown as InputActions
-
-    const { unmount: unmount1 } = mountInspector(ITEM_DETAIL, {}, inputActions1)
-    const askBtn1 = screen.getByRole('button', { name: zh.libraryAskInChat })
-    fireEvent.click(askBtn1)
-    expect(insertQuote1).toHaveBeenCalled()
-    expect(captureInsertion1).toHaveBeenCalled()
-    expect(insertText1).toHaveBeenCalledWith(
-      mockT('libraryAskPrompt', { title: ITEM_DETAIL.title, ref: ITEM_DETAIL.ref }),
-      { start: 5, end: 5 },
-    )
-    unmount1()
-
-    // 2. Fallback to setDraft when captureInsertion returns undefined
-    const insertQuote2 = vi.fn(() => false)
-    const captureInsertion2 = vi.fn(() => undefined)
-    const setDraft2 = vi.fn()
-    const inputActions2 = {
-      insertQuote: insertQuote2,
-      captureInsertion: captureInsertion2,
-      setDraft: setDraft2,
-    } as unknown as InputActions
-
-    mountInspector(ITEM_DETAIL, {}, inputActions2)
-    const askBtn2 = screen.getByRole('button', { name: zh.libraryAskInChat })
-    fireEvent.click(askBtn2)
-    expect(setDraft2).toHaveBeenCalledWith(
-      mockT('libraryAskPrompt', { title: ITEM_DETAIL.title, ref: ITEM_DETAIL.ref }),
-    )
+  it('shows an insertion failure without replacing the existing draft', () => {
+    const inputActions = {
+      insertQuote: vi.fn(() => false),
+      captureInsertion: vi.fn(),
+      insertText: vi.fn(),
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+    }
+    mountInspector(ITEM_DETAIL, {}, inputActions as unknown as InputActions)
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryAskInChat }))
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(expect.stringContaining(ITEM_DETAIL.ref))
+    expect(screen.getByRole('alert').textContent).toBe(zh.libraryInsertFailed)
+    expect(inputActions.setDraft).not.toHaveBeenCalled()
+    expect(inputActions.insertText).not.toHaveBeenCalled()
+    expect(inputActions.persistDraft).not.toHaveBeenCalled()
   })
 })

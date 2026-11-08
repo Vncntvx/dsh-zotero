@@ -6,7 +6,8 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { CitationFormController } from '../../../src/client/citation-form-controller.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   LibrarySettingsSection,
@@ -39,12 +40,22 @@ function LibraryHarness({
   view?: 'summary' | 'page'
   dictionary?: typeof zh
 }) {
+  const [citationController] = useState(() => new CitationFormController(fakeScope()))
+  useEffect(() => () => citationController.dispose(), [citationController])
+  const citation = citationController.inject()
+  const citationState = useSyncExternalStore(
+    citation.hooks.citationCard.subscribe,
+    citation.hooks.citationCard.getSnapshot,
+  )
   const state = useSyncExternalStore(
     face.hooks.libraryCard.subscribe,
     face.hooks.libraryCard.getSnapshot,
   )
   const props = {
     view,
+    citation,
+    useCitationCard: (selector: (snapshot: typeof citationState) => unknown) =>
+      selector(citationState),
     t: makeTranslate(dictionary),
     useLibraryCard: (selector: (snapshot: LibraryCardState) => unknown) => selector(state),
     edit: face.edit,
@@ -85,11 +96,11 @@ describe('LibrarySettingsSection', () => {
     const controller = new LibraryFormController(scope)
     render(<LibraryHarness face={controller.inject()} view="page" dictionary={zh} />)
 
-    expect(screen.getByLabelText(zh.groupLibrarySidebar)).toBeDefined()
+    expect(screen.getByLabelText(zh.libraryDisplaySettings)).toBeDefined()
     expect(screen.getByText(zh.rightSidebarEnabled)).toBeDefined()
 
     const checkboxes = document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
-    expect(checkboxes.length).toBe(1)
+    expect(checkboxes.length).toBe(6)
     expect(checkboxes[0]?.checked).toBe(true)
 
     controller.dispose()
@@ -112,8 +123,10 @@ describe('LibrarySettingsSection', () => {
     expect(checkboxes[0]?.checked).toBe(false)
 
     // Click save button
-    const saveBtn = screen.getByRole('button', { name: zh.save })
-    fireEvent.click(saveBtn)
+    const panelSave = screen
+      .getAllByRole('button', { name: zh.save })
+      .find((button) => !button.hasAttribute('disabled'))!
+    fireEvent.click(panelSave)
 
     await Promise.resolve()
     expect(scope.writes).toEqual([{ op: 'set', field: 'rightSidebarEnabled', value: false }])

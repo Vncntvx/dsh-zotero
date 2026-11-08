@@ -4,10 +4,10 @@
  * of the `zotero`, `library`, and `scholarly` namespaces across a unified
  * 6-tab interface.
  *
- * Tab 1: General (conversation tab, personal library write gate, default style/locale)
+ * Tab 1: General (conversation tab and personal library write gate)
  * Tab 2: Connection (API URL, timeout, max requests, cache TTL)
  * Tab 3: Search & Extraction (query/concurrency quotas, passage and fulltext limits)
- * Tab 4: Library (right-sidebar display for the library panel)
+ * Tab 4: Library (panel preferences and shared CSL defaults)
  * Tab 5: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
  * Tab 6: Advanced (output limits, background job policy, diagnostics)
  *
@@ -39,6 +39,8 @@ import { SETTINGS_TABS, type SettingsTabId, type ZoteroCardFace } from './zotero
 import type { ScholarlyCardFace, ScholarlyCardState } from './scholarly-form-controller.ts'
 import type { LibraryCardFace, LibraryCardState } from './library-form-controller.ts'
 import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
+import { CitationDefaultsForm } from './CitationDefaultsForm.tsx'
+import type { CitationCardFace, CitationCardState } from './citation-form-controller.ts'
 import css from './ZoteroSettingsSection.module.css'
 
 /** Props the renderer binds for the Zotero settings page in plugins.bundle.config. */
@@ -48,6 +50,8 @@ export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
     readonly useScholarlyCard?: SnapshotSelectorHook<ScholarlyCardState>
     readonly scholarly?: ScholarlyCardFace
     readonly useLibraryCard?: SnapshotSelectorHook<LibraryCardState>
+    readonly useCitationCard: SnapshotSelectorHook<CitationCardState>
+    readonly citation: CitationCardFace
     readonly library?: LibraryCardFace
     readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
     readonly revokeWriteGrant?: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
@@ -71,6 +75,7 @@ export function formLabels(t: TranslateNS<'zotero'>): SettingsFormLabels {
  */
 export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactNode {
   const { t } = props
+  const citationState = props.useCitationCard((snapshot) => snapshot)
   const [activeTab, setActiveTab] = useState<SettingsTabId>('features')
   const zoteroState = props.useZoteroCard((snapshot) => snapshot)
   const scholarlyState = props.useScholarlyCard
@@ -123,35 +128,35 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
         </SettingsForm>
       </div>
 
-      <div className={css.tabPanel} hidden={activeTab !== 'library'}>
+      <div
+        className={css.tabPanel}
+        hidden={activeTab !== 'library'}
+        role="tabpanel"
+        id="zotero-panel-library"
+        aria-labelledby="zotero-tab-library"
+      >
         {props.library && libraryState?.available ? (
-          <SettingsForm
-            labels={labels}
-            state={libraryState}
-            onSave={props.library.save}
-            onDiscard={props.library.discard}
-          >
-            <div
-              role="tabpanel"
-              id="zotero-panel-library"
-              aria-labelledby="zotero-tab-library"
-              className={css.tabPanel}
+          <div data-library-preferences>
+            <SettingsForm
+              labels={labels}
+              state={libraryState}
+              onSave={props.library.save}
+              onDiscard={props.library.discard}
             >
               <LibrarySettingsForm t={t} state={libraryState} actions={props.library} />
-            </div>
-          </SettingsForm>
-        ) : (
-          <div
-            role="tabpanel"
-            id="zotero-panel-library"
-            aria-labelledby="zotero-tab-library"
-            className={css.tabPanel}
-          >
-            <p className={css.note} role="status">
-              {t('libraryDisabled')}
-            </p>
+            </SettingsForm>
           </div>
+        ) : (
+          <p className={css.note} role="status">
+            {t('libraryDisabled')}
+          </p>
         )}
+        <CitationDefaultsForm
+          t={t}
+          state={citationState}
+          actions={props.citation}
+          labels={labels}
+        />
       </div>
 
       <div className={css.tabPanel} hidden={activeTab !== 'scholarly'}>

@@ -1,3 +1,5 @@
+import { LIBRARY_DEFAULTS, type LibraryPreferences } from '../../../library-preferences.ts'
+import type { LibraryViewMemory } from '../../library-preferences.tsx'
 /**
  * The library panel's data feed: one hook owning the item list, the library
  * selector, the inspector, and persistence, plus the seam through which the
@@ -46,6 +48,7 @@ import { useLibraryNavigation } from './useLibraryNavigation.ts'
 import {
   readLibrarySessionMemory,
   readLibraryState,
+  clearLibraryState,
   writeLibraryState,
   type LibraryStoredState,
 } from './library-storage.ts'
@@ -58,6 +61,8 @@ const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachme
 type CollectionRow = CollectionRowView
 
 export interface LibraryFeed {
+  readonly storageError?: string
+  readonly clearPosition: () => boolean
   readonly locate: () => void
   readonly locatedRef?: string
   readonly locateError?: string
@@ -121,10 +126,14 @@ export function useLibraryFeed(
   serverId: string | undefined,
   enabled: boolean,
   sessionId: string,
+  preferences: LibraryPreferences = LIBRARY_DEFAULTS,
+  memory?: LibraryViewMemory,
+  visible = true,
 ): LibraryFeed {
   // The session cache carries only the detail payload; every preference and
   // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
   const initialView = readLibrarySessionMemory(sessionId)
+  const [storageError, setStorageError] = useState<string>()
   const [libraries, setLibraries] = useState<LibraryFeed['libraries']>({ phase: 'loading' })
   const [currentLibrary, setCurrentLibrary] = useState<SupportedLocalLibrary>(PERSONAL_LIBRARY)
   const [prefixes, setPrefixes] = useState<Readonly<Record<string, number>>>({})
@@ -204,13 +213,18 @@ export function useLibraryFeed(
   // Live reads for the stable post-write refresh: a form that resolves after
   // its own unmount still refreshes the scope the user sees now, not the one
   // captured when the write was submitted.
+  useEffect(() => {
+    if (memory?.disclosure && memory.disclosure.ref !== selectedRef) memory.disclosure = undefined
+  }, [selectedRef, memory])
   const selectedRefRef = useRef(selectedRef)
   selectedRefRef.current = selectedRef
   const restoredServer = useRef<string>()
+  const restoredSession = useRef<string>()
+  const viewIdentity = JSON.stringify([serverId, sessionId])
   /** The exact state last written, keyed by instance so a switch re-persists. */
   const lastPersisted = useRef<{ serverId: string; serialized: string }>()
-  const [hydratedServer, setHydratedServer] = useState<string>()
-  const active = enabled && serverId !== undefined && hydratedServer === serverId
+  const [hydratedView, setHydratedView] = useState<string>()
+  const active = enabled && serverId !== undefined && hydratedView === viewIdentity
 
   /** The one identity spelling every consumer compares against this instance, memoized per ref. */
   const identityCache = useRef<{ serverId: string | undefined; map: Map<string, string> }>({
@@ -287,18 +301,47 @@ export function useLibraryFeed(
   )
 
   useEffect(() => {
-    if (serverId === undefined || restoredServer.current === serverId) return
-    const saved = readLibraryState(serverId)
-    const changedInstance = restoredServer.current !== undefined
+    if (
+      serverId === undefined ||
+      (restoredServer.current === serverId && restoredSession.current === sessionId)
+    )
+      return
+    setStorageError(undefined)
+    lastPersisted.current = undefined
+    let saved = memory?.resetPending ? undefined : memory?.snapshot
+    if (!saved && !memory?.resetPending && preferences.reopenBehavior === 'restore') {
+      try {
+        saved = readLibraryState(serverId, sessionId)
+      } catch (error) {
+        setStorageError(messageOf(error))
+      }
+    }
+    if (memory) {
+      memory.scroll = saved?.scroll ?? memory.scroll
+      if (saved?.selectedRef && saved.childPages)
+        memory.childPages = { ref: saved.selectedRef, offsets: saved.childPages }
+      memory.resetPending = false
+    }
+    const changedInstance =
+      restoredServer.current !== undefined && restoredServer.current !== serverId
     restoredServer.current = serverId
+    restoredSession.current = sessionId
     // Re-key the shared plane before any lane re-reads: a changed instance
     // must never answer from the previous Zotero's cache.
     if (face.setInstance !== undefined) face.setInstance(serverId)
     else if (changedInstance) face.invalidate?.()
     resetLibraryState(saved?.library ?? { type: 'user', id: 0 }, saved)
-    setHydratedServer(serverId)
+    setHydratedView(viewIdentity)
     if (changedInstance) setRefreshToken((value) => value + 1)
-  }, [serverId, resetLibraryState, face])
+  }, [
+    serverId,
+    resetLibraryState,
+    face,
+    sessionId,
+    viewIdentity,
+    memory,
+    preferences.reopenBehavior,
+  ])
 
   // Persist by content, not by reference. Navigation publishes a fresh
   // `prefixes` object for every pagination step, including loading states
@@ -307,13 +350,13 @@ export function useLibraryFeed(
   // identical value. Serializing inside the effect prevents JSON.stringify
   // from running on every keystroke/render tick.
   useEffect(() => {
-    if (!active || serverId === undefined || hydratedServer !== serverId) return
+    if (!active || storageError || serverId === undefined || hydratedView !== viewIdentity) return
     const persistedState: LibraryStoredState = {
-      version: 2,
+      version: 3,
       prefixes: navigation.prefixes,
       library: currentLibrary,
       selection,
-      q: debouncedQ,
+      q,
       mode,
       sort,
       direction,
@@ -321,6 +364,11 @@ export function useLibraryFeed(
       expanded: [...expanded],
       filters,
       selectedRef,
+      scroll: memory?.scroll,
+      childPages:
+        memory?.childPages && memory.childPages.ref === selectedRef
+          ? memory.childPages.offsets
+          : undefined,
       narrowPane,
     }
     const serialized = JSON.stringify(persistedState)
@@ -329,12 +377,37 @@ export function useLibraryFeed(
       lastPersisted.current.serialized === serialized
     )
       return
-    writeLibraryState(serverId, persistedState)
+    if (memory) {
+      memory.snapshot = persistedState
+      memory.saveScroll = () => {
+        if (!visible || !memory.snapshot) return
+        const state = { ...memory.snapshot, scroll: { ...memory.scroll } }
+        try {
+          writeLibraryState(serverId, sessionId, state)
+        } catch (error) {
+          setStorageError(messageOf(error))
+        }
+      }
+    }
+    if (!visible) return
+    try {
+      writeLibraryState(serverId, sessionId, persistedState)
+    } catch (error) {
+      setStorageError(messageOf(error))
+      return
+    }
     lastPersisted.current = { serverId, serialized }
   }, [
     active,
     serverId,
-    hydratedServer,
+    hydratedView,
+    viewIdentity,
+    sessionId,
+    memory,
+    visible,
+    storageError,
+    q,
+    childStates,
     navigation.prefixes,
     currentLibrary,
     selection,
@@ -410,7 +483,7 @@ export function useLibraryFeed(
     const query: LibraryListQuery = {
       selection,
       library: currentLibrary,
-      q: debouncedQ,
+      q,
       mode,
       sort,
       direction,
@@ -469,7 +542,16 @@ export function useLibraryFeed(
         ref: selectedRef,
         include: INSPECTOR_INCLUDE,
         childPages: Object.fromEntries(
-          INSPECTOR_INCLUDE.map((kind) => [kind, { offset: 0, limit: 20 }]),
+          INSPECTOR_INCLUDE.map((kind) => [
+            kind,
+            {
+              offset:
+                memory?.childPages && memory.childPages.ref === selectedRef
+                  ? (memory.childPages.offsets[kind] ?? 0)
+                  : 0,
+              limit: 20,
+            },
+          ]),
         ),
       })
       .then((result) => {
@@ -556,14 +638,20 @@ export function useLibraryFeed(
       }
       navigation.cancelLocate()
       setSelection(next.kind === 'collection' && row ? { ...next, path: row.path } : next)
-      setQRaw('')
-      setDebouncedQ('')
-      setFiltersRaw({})
+      if (
+        preferences.scopeChangeBehavior === 'clear' ||
+        !['library', 'collection'].includes(next.kind) ||
+        !['library', 'collection'].includes(selection.kind)
+      ) {
+        setQRaw('')
+        setDebouncedQ('')
+        setFiltersRaw({})
+      }
       rewindList()
       if (containerRef !== undefined) setBranchOpen(containerRef, true)
       setNarrowPaneState(pane)
     },
-    [rewindList, selection, serverId, flatTree, setBranchOpen],
+    [rewindList, selection, serverId, flatTree, setBranchOpen, preferences.scopeChangeBehavior],
   )
 
   const setMode = useCallback(
@@ -641,6 +729,29 @@ export function useLibraryFeed(
   }, [libraries, currentLibrary, selectLibrary])
 
   return {
+    storageError,
+    clearPosition: () => {
+      seq.current.list += 1
+      seq.current.inspector += 1
+      resetChildren()
+      navigation.cancelLocate()
+      resetLibraryState(PERSONAL_LIBRARY)
+      if (memory) {
+        memory.childPages = undefined
+        memory.snapshot = undefined
+        memory.scroll = {}
+        memory.disclosure = undefined
+      }
+      lastPersisted.current = undefined
+      try {
+        if (serverId) clearLibraryState(serverId, sessionId)
+        setStorageError(undefined)
+        return true
+      } catch (error) {
+        setStorageError(messageOf(error))
+        return false
+      }
+    },
     libraries,
     currentLibrary,
     selectLibrary,
@@ -703,8 +814,21 @@ export function useLibraryFeed(
     retryLibraries: () => setLibraryRetry((value) => value + 1),
     retryList: () => setListRetry((value) => value + 1),
     retryInspector: () => setInspectorRetry((value) => value + 1),
-    pageChild,
+    pageChild: (kind, offset) => {
+      if (memory && selectedRef) {
+        if (memory.childPages?.ref !== selectedRef)
+          memory.childPages = { ref: selectedRef, offsets: {} }
+        memory.childPages.offsets[kind] = offset
+      }
+      pageChild(kind, offset)
+    },
     childStates,
-    retryChild: (kind) => pageChild(kind, childFeed.childOffsetOf(kind)),
+    retryChild: (kind) =>
+      pageChild(
+        kind,
+        memory?.childPages && memory.childPages.ref === selectedRef
+          ? (memory.childPages.offsets[kind] ?? 0)
+          : childFeed.childOffsetOf(kind),
+      ),
   }
 }

@@ -297,6 +297,7 @@ export function fakeWorld(
       },
     },
     sidebarRight: {
+      openTabs: { getSnapshot: () => [], subscribe: () => () => {} },
       openResource: (url: string) => {
         world.openResourceCalls.push(url)
       },

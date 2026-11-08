@@ -1,3 +1,5 @@
+import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
+import type { LibrarySection } from '../../../library-preferences.ts'
 /**
  * The library panel's inspector: the selected row's detail, restyled after
  * the reference reader's hierarchy — an eyebrow + title + creators + origin
@@ -45,7 +47,7 @@ import { IconButton } from '../IconButton.tsx'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import { CommentIcon } from '../CommentIcon.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
-import { LibraryCitationActions } from './LibraryCitationActions.tsx'
+import { LibraryCitationActions, itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
 import { pdfAttachmentOf, type LibraryItemState } from './library-model.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
@@ -67,6 +69,7 @@ interface LibraryInspectorProps {
   /** Host-backed protocol launcher from the shared client face. */
   readonly openProtocol?: (url: string) => Promise<boolean>
   /** The panel's export face; the citation-copy controls stay wire-disabled without it. */
+  readonly readPdf?: (ref: string) => Promise<void>
   readonly exportItem?: LibraryExportItem
 }
 
@@ -195,6 +198,7 @@ function AttachmentItem({
   openFile,
   resolveAttachment,
   openProtocol,
+  readPdf,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly attachment: ZoteroAttachmentRowView
@@ -202,6 +206,7 @@ function AttachmentItem({
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
   readonly openProtocol?: (url: string) => Promise<boolean>
+  readonly readPdf?: (ref: string) => Promise<void>
 }) {
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -213,6 +218,10 @@ function AttachmentItem({
     setError(null)
     setResolving(true)
     try {
+      if (isPdfContentType(attachment.contentType) && readPdf) {
+        await readPdf(attachment.ref)
+        return
+      }
       const resolver = resolveAttachment
       if (!resolver) return
       const res = await resolver(attachment.ref)
@@ -469,13 +478,19 @@ export function LibraryInspector({
   childStates,
   retryChild,
   exportItem,
+  readPdf,
 }: LibraryInspectorProps) {
   // The abstract's expand state resets with the selection: the section
   // remounts through the inspector's key when another row is picked.
-  const [abstractOpen, setAbstractOpen] = useState(false)
+  const scroll = useLibraryScroll(
+    `inspector:${inspector?.phase === 'ready' ? inspector.detail.ref : ''}`,
+    inspector?.phase === 'ready',
+  )
+  const preferences = useLibraryPreferences()
+  const [insertError, setInsertError] = useState<string>()
   if (inspector === undefined) {
     return (
-      <aside className={css.inspector} aria-label={t('libraryInspector')}>
+      <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
         <div className={css.inspectorEmpty}>
           <div className={css.emptyStateWrapper}>
             <IconInspectOutlineMedium className={css.emptyStateIcon} />
@@ -487,7 +502,7 @@ export function LibraryInspector({
   }
   if (inspector.phase === 'loading') {
     return (
-      <aside className={css.inspector} aria-label={t('libraryInspector')}>
+      <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
         <p className={css.listNote} role="status">
           {t('libraryLoading')}
         </p>
@@ -496,7 +511,7 @@ export function LibraryInspector({
   }
   if (inspector.phase === 'error') {
     return (
-      <aside className={css.inspector} aria-label={t('libraryInspector')}>
+      <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
         <p className={css.listError} role="alert">
           {inspector.message}
         </p>
@@ -518,17 +533,22 @@ export function LibraryInspector({
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {
     if (!inputActions) return
-    if (!inputActions.insertQuote(askPrompt)) {
-      const span = inputActions.captureInsertion()
-      if (span !== undefined) {
-        inputActions.insertText(askPrompt, span)
-      } else {
-        inputActions.setDraft(askPrompt)
-      }
+    const information = [askPrompt, itemInfoTextOf(detail), detail.ref]
+    if (preferences.preferences?.chatInsertContent === 'referenceAndAbstract') {
+      information.push(
+        detail.abstract === undefined
+          ? t('libraryAbstractMissing')
+          : `${detail.abstractTruncated ? t('libraryInsertedAbstractTruncated') : t('libraryMetaAbstract')}\n${detail.abstract}`,
+      )
     }
+    if (inputActions.insertQuote(information.join('\n\n'))) {
+      inputActions.persistDraft()
+      setInsertError(undefined)
+    } else setInsertError(t('libraryInsertFailed'))
   }
   return (
-    <aside className={css.inspector} aria-label={t('libraryInspector')}>
+    <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
+      {insertError && <p role="alert">{insertError}</p>}
       <header className={css.inspectorHead}>
         <p className={clsx(css.caption, css.inspectorEyebrow)}>{detail.itemType}</p>
         <h3 className={css.inspectorTitle}>{detail.title}</h3>
@@ -537,6 +557,7 @@ export function LibraryInspector({
         <div className={css.inspectorActions}>
           {pdfAttachment !== undefined && (
             <PdfReadButton
+              onReadAttachment={readPdf}
               attachmentRef={pdfAttachment.ref}
               onOpenFile={openFile}
               resolveAttachment={resolveAttachment}
@@ -575,42 +596,25 @@ export function LibraryInspector({
       </header>
 
       {detail.abstract !== undefined && (
-        <section className={css.section}>
-          <h4 className={css.sectionTitle}>{t('libraryMetaAbstract')}</h4>
-          <p
-            className={clsx(
-              css.abstract,
-              detail.abstractTruncated && !abstractOpen && css.abstractClamped,
-            )}
-          >
-            {detail.abstract}
-          </p>
+        <DetailDisclosure
+          section="abstract"
+          itemRef={detail.ref}
+          title={t('libraryMetaAbstract')}
+          t={t}
+        >
+          <p className={css.abstract}>{detail.abstract}</p>
           {detail.abstractTruncated && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={css.toggleSeat}
-              aria-expanded={abstractOpen}
-              onClick={() => setAbstractOpen((open) => !open)}
-            >
-              <span>{abstractOpen ? t('libraryCollapse') : t('libraryExpand')}</span>
-              <IconChevronDownOutlineRegular
-                size={12}
-                className={clsx(css.toggleChevron, abstractOpen && css.toggleChevronOpen)}
-              />
-            </Button>
+            <p className={css.listNote}>{t('libraryAbstractTruncated')}</p>
           )}
-        </section>
+        </DetailDisclosure>
       )}
-
       {detail.noteBody !== undefined && (
-        <section className={css.section}>
-          <h4 className={css.sectionTitle}>{t('libraryMetaNote')}</h4>
+        <DetailDisclosure section="notes" itemRef={detail.ref} title={t('libraryMetaNote')} t={t}>
           <p className={css.abstract}>{detail.noteBody.text}</p>
           {detail.noteBody.truncated && (
             <p className={css.listNote}>{t('libraryAbstractTruncated')}</p>
           )}
-        </section>
+        </DetailDisclosure>
       )}
 
       {(detail.venue !== undefined ||
@@ -685,6 +689,8 @@ export function LibraryInspector({
         <ChildSection
           t={t}
           title={t('libraryAttachmentsTitle', { count: detail.attachments.total })}
+          section="attachments"
+          itemRef={detail.ref}
           page={detail.attachments}
           state={childStates.attachments}
           retry={() => retryChild('attachments')}
@@ -695,6 +701,7 @@ export function LibraryInspector({
               key={attachment.ref}
               t={t}
               attachment={attachment}
+              readPdf={readPdf}
               openFile={openFile}
               resolveAttachment={resolveAttachment}
               openProtocol={openProtocol}
@@ -707,6 +714,8 @@ export function LibraryInspector({
         <ChildSection
           t={t}
           title={t('libraryNotesTitle', { count: detail.notes.total })}
+          section="notes"
+          itemRef={detail.ref}
           page={detail.notes}
           state={childStates.notes}
           retry={() => retryChild('notes')}
@@ -722,6 +731,8 @@ export function LibraryInspector({
         <ChildSection
           t={t}
           title={t('libraryAnnotationsTitle', { count: detail.annotations.total })}
+          section="annotations"
+          itemRef={detail.ref}
           page={detail.annotations}
           state={childStates.annotations}
           retry={() => retryChild('annotations')}
@@ -758,7 +769,9 @@ function ChildSection({
   retry,
   pageTo,
   children,
-  defaultOpen = true,
+  defaultOpen,
+  section,
+  itemRef,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly title: string
@@ -774,8 +787,10 @@ function ChildSection({
   readonly pageTo: (offset: number) => void
   readonly children: ReactNode
   readonly defaultOpen?: boolean
+  readonly section: LibrarySection
+  readonly itemRef: string
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useDisclosure(section, itemRef, defaultOpen)
   return (
     <section className={css.section}>
       <Button
@@ -848,5 +863,64 @@ function ChildPager({
         pager={{ page: { label, offset, limit, total, returned, nextOffset }, onPage: setOffset }}
       />
     </div>
+  )
+}
+
+/** Per-item manual choices survive view remounts; accepted defaults affect untouched sections. */
+function useDisclosure(
+  section: LibrarySection,
+  itemRef: string,
+  initial?: boolean,
+): [boolean, (update: (value: boolean) => boolean) => void] {
+  const { preferences, memory } = useLibraryPreferences()
+  const [manual, setManual] = useState<{ ref: string; value: boolean }>()
+  const override =
+    manual?.ref === itemRef
+      ? manual.value
+      : memory?.disclosure?.ref === itemRef
+        ? memory.disclosure.overrides[section]
+        : undefined
+  const open = override ?? initial ?? preferences?.detailExpandedSections.includes(section) ?? false
+  return [
+    open,
+    (update) => {
+      const value = update(open)
+      setManual({ ref: itemRef, value })
+      if (memory) {
+        if (memory.disclosure?.ref !== itemRef) memory.disclosure = { ref: itemRef, overrides: {} }
+        memory.disclosure.overrides[section] = value
+      }
+    },
+  ]
+}
+function DetailDisclosure({
+  section,
+  itemRef,
+  title,
+  t,
+  children,
+}: {
+  section: LibrarySection
+  itemRef: string
+  title: string
+  t: TranslateNS<'zotero'>
+  children: ReactNode
+}) {
+  const [open, setOpen] = useDisclosure(section, itemRef)
+  return (
+    <section className={css.section}>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-label={
+          open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
+        }
+        onClick={() => setOpen((v) => !v)}
+      >
+        {title}
+      </Button>
+      {open && children}
+    </section>
   )
 }

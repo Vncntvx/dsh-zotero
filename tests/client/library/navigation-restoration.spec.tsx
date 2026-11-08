@@ -24,7 +24,7 @@ const child: ZoteroCollectionRowView = {
   depth: 1,
 }
 const saved = {
-  version: 2 as const,
+  version: 3 as const,
   prefixes: {},
   library: { type: 'user' as const, id: 0 as const },
   selection: { kind: 'library' as const },
@@ -48,7 +48,7 @@ function hierarchy(): LibraryFeedFace['browse'] {
   })
 }
 it('restores visible expanded descendants and confirms their leaf state', async () => {
-  writeLibraryState('S1', saved)
+  writeLibraryState('S1', 'session-1', saved)
   const { result, face } = setupLibraryFeed({ browse: hierarchy() })
   await waitFor(() =>
     expect(result.current.treeLane(child.ref)).toMatchObject({ phase: 'ready', total: 0 }),
@@ -58,7 +58,7 @@ it('restores visible expanded descendants and confirms their leaf state', async 
   expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: root.ref }))
 })
 it('does not load expanded descendants hidden behind a collapsed ancestor', async () => {
-  writeLibraryState('S1', { ...saved, expanded: [child.ref] })
+  writeLibraryState('S1', 'session-1', { ...saved, expanded: [child.ref] })
   const { result, face } = setupLibraryFeed({ browse: hierarchy() })
   await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
   expect(
@@ -113,7 +113,7 @@ it('limits navigation restoration to four concurrent branches and drops queued w
     ...root,
     ref: root.ref.replace('COLL0001', `ROOT000${index}`),
   }))
-  writeLibraryState('S1', { ...saved, expanded: roots.map((row) => row.ref) })
+  writeLibraryState('S1', 'session-1', { ...saved, expanded: roots.map((row) => row.ref) })
   const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
   const original = hierarchy()
   let calls = 0
@@ -169,7 +169,7 @@ it('keeps an expanded branch and its children while that lane reloads', async ()
   }
   const gate = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
   let hold = false
-  writeLibraryState('S1', { ...saved, expanded: [root.ref, child.ref] })
+  writeLibraryState('S1', 'session-1', { ...saved, expanded: [root.ref, child.ref] })
   const { result } = setupLibraryFeed({
     browse: async (request) => {
       if (request.kind === 'libraries') return { ok: true, value: LIBRARY_ROWS }

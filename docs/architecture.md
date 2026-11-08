@@ -164,8 +164,9 @@ graph LR
 
 ## 远程通信与设置
 
-- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`；`ZoteroLibraryService` 负责 `browse`、`search`、`item`、`childPage`、`export`、`write`；
+- 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly` 三个命名空间的共享设置表单；
+- 文献面板设置同时提供 11 项 `library` 偏好和 2 项核心 CSL 默认值的直接编辑；`CitationFormController` 为后两项持有独立暂存模型，两个入口共用该模型，不会提交连接等其他字段的草稿。`tests/client/settings/citation-defaults.spec.tsx` 验证真实表单组合、保存拒绝与入口一致性；`tests/client/cards/zotero-card-parity.spec.ts` 验证两个核心字段表合并后与宿主 schema 完整对应；打包后浏览器验收由 `smoke:web-composition` 验证保存和刷新持久化。
 - 配置全字段声明为 volatile，支持热重载；
 - `openProtocol` 协议唤醒：WSL 与 Windows 环境统一采用 `powershell.exe` 调用宿主系统默认程序唤醒 `zotero://` 链接；host 端点失败时抛 `zotero/protocol-failed`，浏览器半侧通过 `shell.overlay` 的 toast 与诊断上报呈现失败，不再保留 DOM anchor 回退。
 

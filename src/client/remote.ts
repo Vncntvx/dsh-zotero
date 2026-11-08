@@ -1,3 +1,4 @@
+import type { ZoteroUrlPdfView } from '../contract.ts'
 /**
  * The client-side Typert Remote contribution for the dsh-zotero host
  * service: mounts the shared structural descriptors into `ctx.remote.zotero`.
@@ -65,6 +66,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   // read `ctx.remote.zotero` resolves it on that fiber.
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
+    releaseUrlPdf: (request: { lease: string }) => Promise<RemoteResult<{ released: true }>>
+    readUrlPdf: (
+      request: { ref: string },
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroUrlPdfView>>
     write: (
       request: ZoteroLibraryWriteRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
@@ -94,6 +100,13 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
   }
   interface TypertRemoteMap {
+    'zotero/releaseUrlPdf': (request: {
+      lease: string
+    }) => Promise<RemoteResult<{ released: true }>>
+    'zotero/readUrlPdf': (
+      request: { ref: string },
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroUrlPdfView>>
     'zotero/write': (
       request: ZoteroLibraryWriteRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>

@@ -63,7 +63,23 @@ describe('the browser-half entry behind the webEnabled gate', () => {
       user: { webEnabled: false },
     })
     await applyEntry(world)
-    expect(world.injected.map((entry) => entry.name)).toEqual([
+    expect(
+      world.injected
+        .filter(
+          (entry) =>
+            ![
+              'sidebar.right.pane.tab',
+              'sidebar.right.pane.tab.title',
+              'sidebar.right.tab.menu.item',
+              'conversation.input.left',
+              'deliverables.file.actions',
+              'sidebar.right.tab.document.actions',
+              'sidebar.right.tab.document.unpreviewable',
+              'contextMenu.icon',
+            ].includes(entry.name),
+        )
+        .map((entry) => entry.name),
+    ).toEqual([
       'shell.overlay',
       'tool.call.toolview',
       'plugins.bundle.activation',
@@ -86,12 +102,12 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     await world.scope.set('webEnabled', false)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)
     expect(world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab')?.active).toBe(
-      false,
+      true,
     )
     expect(
       world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab.title')?.active,
-    ).toBe(false)
-    expect(world.injectDisposes).toBe(9)
+    ).toBe(true)
+    expect(world.injectDisposes).toBe(1)
 
     // Toggle back on: the tab returns (a fresh live registration).
     await world.scope.set('webEnabled', true)

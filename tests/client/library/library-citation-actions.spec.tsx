@@ -22,6 +22,8 @@ import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
+import { LibraryPreferencesContext } from '../../../src/client/library-preferences.tsx'
+import { LIBRARY_DEFAULTS } from '../../../src/library-preferences.ts'
 import { zh } from '../../../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -123,7 +125,7 @@ describe('the more-formats menu', () => {
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(entry.text)
       // Each menu format reports the format it copied, not the citation's label.
-      expect(screen.getByRole('button').textContent).toBe(entry.done)
+      expect(screen.getByRole('button', { name: entry.done })).toBeTruthy()
     })
     expect(exportItem).toHaveBeenCalledWith(expectedRequest(entry.format))
   })
@@ -142,13 +144,16 @@ describe('the more-formats menu', () => {
     mount(() => pending.promise)
     fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
     fireEvent.click(await screen.findByText(zh.libraryCopyRis))
-    expect(screen.getByRole('button').textContent).toBe(zh.libraryExportPending)
+    expect(screen.getByRole('button', { name: zh.libraryExportPending })).toBeTruthy()
     await act(async () => {
       pending.resolve({ ok: true, value: translatorResult('ris', 'TY  - CONF') })
       await pending.promise
     })
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('TY  - CONF'))
-    expect(screen.getByRole('button').textContent).toBe(zh.libraryCopyRisDone)
+    expect(
+      screen.getByRole('button', { name: new RegExp(zh.libraryCitationMenu) }).parentElement
+        ?.previousElementSibling?.textContent,
+    ).toBe(zh.libraryCopyRisDone)
   })
 })
 
@@ -162,7 +167,7 @@ describe('the client-only item info block', () => {
     fireEvent.click(await screen.findByText(zh.libraryCopyItemInfo))
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(1)
-      expect(screen.getByRole('button').textContent).toBe(zh.libraryCopyItemInfoDone)
+      expect(screen.getByRole('button', { name: zh.libraryCopyItemInfoDone })).toBeTruthy()
     })
     const [text] = writeText.mock.calls[0] as [string]
     expect(text.split('\n')).toEqual([
@@ -357,4 +362,36 @@ describe('the feedback and stale-selection guards', () => {
     })
     expect(screen.queryByRole('alert')).toBeNull()
   })
+})
+
+it('reports an empty citation and keeps the clipboard unchanged', async () => {
+  const exportItem = vi.fn<LibraryExportItem>(async () => ({
+    ok: true,
+    value: { format: 'citation', citations: [] },
+  }))
+  mount(exportItem)
+  fireEvent.click(screen.getByRole('button', { name: zh.libraryCopyCitation }))
+  expect(await screen.findByText(zh.libraryCopyCitationEmpty)).toBeTruthy()
+  expect(writeText).not.toHaveBeenCalled()
+})
+it('waits for accepted CSL defaults while leaving translator exports available', async () => {
+  const exportItem = vi.fn<LibraryExportItem>()
+  render(
+    <LibraryPreferencesContext.Provider
+      value={{ preferences: LIBRARY_DEFAULTS, citationPending: true }}
+    >
+      <LibraryCitationActions detail={ITEM_DETAIL} exportItem={exportItem} t={mockT} />
+    </LibraryPreferencesContext.Provider>,
+  )
+  expect(
+    screen.getByRole('button', { name: zh.libraryCopyCitation }).hasAttribute('disabled'),
+  ).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: zh.libraryCitationMenu }))
+  expect(
+    screen.getByRole('menuitem', { name: zh.libraryCopyBibliography }).hasAttribute('disabled'),
+  ).toBe(true)
+  expect(
+    screen.getByRole('menuitem', { name: zh.libraryCopyBibtex }).hasAttribute('disabled'),
+  ).toBe(false)
+  expect(exportItem).not.toHaveBeenCalled()
 })

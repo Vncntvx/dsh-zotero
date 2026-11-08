@@ -22,6 +22,7 @@ import linkCss from '../link.module.css'
 interface PdfReadButtonProps {
   /** Optional structured PDF capability; extracts ref, filePath, or webUrl automatically. */
   readonly capability?: PdfCapability | null
+  readonly onReadAttachment?: (ref: string) => Promise<void>
   readonly attachmentRef?: string
   readonly filePath?: string
   readonly webUrl?: string
@@ -42,6 +43,7 @@ interface PdfReadButtonProps {
 
 export function PdfReadButton({
   capability,
+  onReadAttachment,
   attachmentRef,
   filePath,
   webUrl,
@@ -91,6 +93,17 @@ export function PdfReadButton({
     if (resolving) return
     setError(null)
 
+    if (onReadAttachment && targetRef) {
+      setResolving(true)
+      try {
+        await onReadAttachment(targetRef)
+      } catch (error) {
+        setError(error instanceof Error ? error.message : String(error))
+      } finally {
+        setResolving(false)
+      }
+      return
+    }
     // A web PDF opens in a new tab.
     if (targetWebUrl) {
       openWith(() => openExternalUrl(targetWebUrl))

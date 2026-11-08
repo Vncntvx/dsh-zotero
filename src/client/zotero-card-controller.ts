@@ -1,8 +1,8 @@
 /**
- * The Zotero settings page's staged form over the `zotero` namespace: every
- * Config field, with the field table spelled here. The browser bundle cannot
+ * The Zotero settings page's staged form over the `zotero` namespace: connection, capability and runtime
+ * fields (CSL defaults use CitationFormController), with the field table spelled here. The browser bundle cannot
  * value-import host modules, so the key set is pinned to the host
- * `ResolvedConfig` at compile time below; `tests/client/zotero-card-parity.spec.ts`
+ * `ResolvedConfig` at compile time below; `tests/client/cards/zotero-card-parity.spec.ts`
  * checks the per-field control kind against the same schema at runtime, so the
  * two surfaces cannot drift in either direction.
  *
@@ -35,9 +35,10 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ResolvedConfig } from '../config.ts'
 import { asFormScope } from './helpers/form-scope.ts'
 import { booleanFieldSpec } from './helpers/settings-fields.ts'
+import type { CitationFieldKey } from './citation-form-controller.ts'
 
 /**
- * The section fields this card edits: the host `Config` surface, all of it,
+ * The section fields this card edits: the host `Config` surface except the two CSL defaults,
  * in display order. `group` names the page's display group (a locale key).
  * The Web toggle leads the page because it gates the whole conversation tab,
  * so a visitor sees it first. The write family sits under it: the sensitive
@@ -75,8 +76,6 @@ const FIELD_SPECS = [
   { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
   { key: 'maxBrowseResults', kind: 'number', group: 'groupOutput' },
   { key: 'maxChangesResults', kind: 'number', group: 'groupOutput' },
-  { key: 'defaultStyle', kind: 'text', group: 'groupDefaults' },
-  { key: 'defaultLocale', kind: 'text', group: 'groupDefaults' },
   { key: 'enableRunInBackground', kind: 'boolean', group: 'groupJobs' },
   { key: 'promoteOnTimeout', kind: 'boolean', group: 'groupJobs' },
   { key: 'foregroundWaitMs', kind: 'number', group: 'groupJobs' },
@@ -93,7 +92,7 @@ export type FieldKey = (typeof FIELD_SPECS)[number]['key']
 export type GroupKey = (typeof FIELD_SPECS)[number]['group']
 
 /** Host Config fields the card does not list; a non-empty union fails the client build. */
-type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
+type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey | CitationFieldKey>
 type AssertNever<T extends never> = T
 /** Compile-time exhaustiveness pin (unexported declare). */
 declare const _configSurfaceComplete: AssertNever<MissingConfigField>
@@ -143,7 +142,7 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
     id: 'features',
     labelKey: 'tabFeatures',
-    groupKeys: ['groupWeb', 'groupWrite', 'groupDefaults'],
+    groupKeys: ['groupWeb', 'groupWrite'],
   },
   {
     id: 'connection',

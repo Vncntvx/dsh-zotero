@@ -195,6 +195,8 @@ describe('the settled panel', () => {
     expect(screen.getByText(zh.libraryNotesTitle.replace('{count}', '1'))).toBeTruthy()
     expect(screen.getByText(zh.libraryAttachmentsTitle.replace('{count}', '1'))).toBeTruthy()
     expect(screen.getByText(zh.libraryAnnotationsTitle.replace('{count}', '1'))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /展开笔记/ }))
+    fireEvent.click(screen.getByRole('button', { name: /展开标注/ }))
     expect(screen.getByText('idea')).toBeTruthy()
     expect(screen.getByText('paper.pdf')).toBeTruthy()
     expect(screen.getByText('faster')).toBeTruthy()
@@ -339,11 +341,12 @@ describe('lane states', () => {
     act(() => {
       row.click()
     })
+    fireEvent.click(await screen.findByRole('button', { name: '展开笔记' }))
     expect(await screen.findByText('a scanned note body')).toBeTruthy()
     // The clamped abstract carries an expand toggle instead of a truncation
     // note; the whole note body carries neither.
-    expect(screen.getByRole('button', { name: zh.libraryExpand })).toBeTruthy()
-    expect(screen.queryByText(zh.libraryAbstractTruncated)).toBeNull()
+    expect(screen.getByRole('button', { name: '收起摘要' })).toBeTruthy()
+    expect(screen.getByText(zh.libraryAbstractTruncated)).toBeTruthy()
   })
 
   it('shows the inspector error when the detail request fails', async () => {
@@ -384,6 +387,7 @@ describe('lane states', () => {
     act(() => {
       row.click()
     })
+    fireEvent.click(await screen.findByRole('button', { name: /展开笔记/ }))
     await waitFor(() => {
       expect(screen.getByText('plain note')).toBeTruthy()
     })

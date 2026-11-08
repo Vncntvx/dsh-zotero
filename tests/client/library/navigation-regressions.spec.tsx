@@ -25,8 +25,8 @@ it('hides the previous scope while the next scope request is pending', async () 
   await act(async () => pending.resolve({ ok: true, value: searchPage() }))
 })
 it('restores the child lane of a persisted expanded root', async () => {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },

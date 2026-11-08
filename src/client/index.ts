@@ -1,3 +1,8 @@
+import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMenu.tsx'
+import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { createPdfReaderRegistry } from './url-pdf-readers.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import { createLibraryPreferenceSource, clearLibraryViewMemory } from './library-preferences.tsx'
 /**
  * Zotero settings, browser half: one surface over the `zotero` namespace,
  * rendered in the plugin manager detail page (`plugins.bundle.config`), carrying
@@ -50,6 +55,7 @@ import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import type { ScholarlyCredentialPort } from './scholarly-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
+import { CitationFormController } from './citation-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
@@ -68,10 +74,13 @@ import {
   type ZoteroLibraryPanelFace,
 } from './components/library/ZoteroLibraryPanel.tsx'
 import { createLibraryDataPlane } from './components/library/library-data-plane.ts'
-import { clearLibrarySessionMemory } from './components/library/library-storage.ts'
+import {
+  clearLibrarySessionMemory,
+  clearLibraryState,
+} from './components/library/library-storage.ts'
 import { LIBRARY_ICON_KEY, LIBRARY_TAB_KIND } from './library-tab.ts'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
-import { gatedMount, registerGatedSurfaces, watchWebEnabled, webEnabledOf } from './web-enabled.ts'
+import { gatedMount, registerGatedSurfaces, watchWebEnabled } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
 import { ZoteroLibraryMenu } from './components/library/ZoteroLibraryMenu.tsx'
 import { ZoteroComposerSlot } from './components/composer/ZoteroComposerButton.tsx'
@@ -150,6 +159,7 @@ interface UiSurfaces {
   readonly scholarlyCard: ScholarlyFormController
   readonly libraryForm: ConfigForm<Record<string, unknown>>
   readonly libraryCard: LibraryFormController
+  readonly citationCard: CitationFormController
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   /** The one client face; root props and out-of-tree consumers read it here. */
   readonly client: ZoteroClientFace
@@ -224,7 +234,7 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  * (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { card, scholarlyCard, libraryCard, probe } = surfaces
+  const { card, scholarlyCard, libraryCard, citationCard, probe } = surfaces
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -253,6 +263,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
           const zoteroFace = card.inject()
           const scholarlyFace = scholarlyCard.inject()
           const libraryFace = libraryCard.inject()
+          const citationFace = citationCard.inject()
           return {
             ...zoteroFace,
             probe,
@@ -261,9 +272,11 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
               zoteroCard: zoteroFace.hooks.zoteroCard,
               scholarlyCard: scholarlyFace.hooks.scholarlyCard,
               libraryCard: libraryFace.hooks.libraryCard,
+              citationCard: citationFace.hooks.citationCard,
             },
             scholarly: scholarlyFace,
             library: libraryFace,
+            citation: citationFace,
           }
         },
       },
@@ -306,7 +319,15 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
               key: `${ZOTERO_REMOTE_PACKAGE}#library`,
               locale: NS,
               registrant: REGISTRANT,
-              inject: () => libraryCard.inject(),
+              inject: () => {
+                const library = libraryCard.inject()
+                const citation = citationCard.inject()
+                return {
+                  ...library,
+                  citation,
+                  hooks: { ...library.hooks, ...citation.hooks },
+                }
+              },
             },
             LibrarySettingsSection,
           ),
@@ -399,18 +420,16 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
  * (false only when the snapshot says so) and the surface's own switch.
  */
 function sidebarEnabledOf(
-  form: ConfigForm<Record<string, unknown>>,
   libraryForm: ConfigForm<Record<string, unknown>>,
   key: 'rightSidebarEnabled',
 ): boolean {
   const snapshot = libraryForm.getSnapshot()
-  const ownSwitchOn = snapshot.status !== 'ready' || snapshot.value?.[key] !== false
-  return webEnabledOf(form) && ownSwitchOn
+  return snapshot.status === 'ready' && snapshot.value?.[key] !== false
 }
 
 /**
  * The library panel surface: the right `sidebarRightTabs` + `sidebar.right.pane.tab`
- * pair, gated by `rightSidebarEnabled` and the global `webEnabled` flag. The
+ * pair, gated by the mounted component, `rightSidebarEnabled` and browse access. The
  * panel lives beside the session on purpose: the right reader (local PDFs)
  * and the session composer (ask / add-to-chat) are session-adjacent seams the
  * main-column placement cannot reach.
@@ -423,6 +442,8 @@ function sidebarEnabledOf(
  */
 function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { form, libraryForm, probe, client } = surfaces
+  const preferenceSource = createLibraryPreferenceSource(libraryForm, form)
+  ctx.effect(() => () => preferenceSource.dispose())
   const panelT = ctx.locale.bind(NS)
 
   /**
@@ -439,16 +460,45 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     childPage: (request) => ctx.remote.zotero.childPage(request),
     export: (request) => ctx.remote.zotero.export(request),
   })
-  const refreshBindings = new Map<string, () => void>()
+  const pdfReaders = createPdfReaderRegistry({
+    inventory: ctx.sidebarRight.openTabs,
+    storage: {
+      getItem: (key) => globalThis.localStorage.getItem(key),
+      setItem: (key, value) => globalThis.localStorage.setItem(key, value),
+      removeItem: (key) => globalThis.localStorage.removeItem(key),
+    },
+    release: async (lease) => {
+      const result = await ctx.remote.zotero.releaseUrlPdf({ lease })
+      if (!result.ok) throw result.error
+    },
+    report: (error) =>
+      reportCrashedSurface('action:release-pdf', error, undefined, client.reportClientError),
+  })
+  ctx.effect(() => () => pdfReaders.dispose())
+  const refreshBindings = new Map<string, { refresh: () => void; clear: () => void }>()
   const refreshKey = (sessionId: string, tabId: string) => JSON.stringify([sessionId, tabId])
-  const bindRefresh = (sessionId: string, tabId: string, refresh: () => void) => {
+  const bindRefresh = (
+    sessionId: string,
+    tabId: string,
+    refresh: () => void,
+    clear: () => void,
+  ) => {
     const key = refreshKey(sessionId, tabId)
-    refreshBindings.set(key, refresh)
+    const binding = { refresh, clear }
+    refreshBindings.set(key, binding)
     return () => {
-      if (refreshBindings.get(key) === refresh) refreshBindings.delete(key)
+      if (refreshBindings.get(key) === binding) refreshBindings.delete(key)
     }
   }
   const panelFace = (): ZoteroLibraryPanelFace => ({
+    preferenceSource,
+    readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
+    releaseUrlPdf: (lease) =>
+      ctx.remote.zotero.releaseUrlPdf({ lease }).then((result) => {
+        if (!result.ok) throw result.error
+      }),
+    trackPdf: pdfReaders.track,
+    forgetPdf: pdfReaders.forget,
     bindRefresh,
     status: () => probe(),
     collectionPath: (request) => plane.collectionPath(request),
@@ -519,14 +569,93 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           locale: NS,
           registrant: REGISTRANT,
           inject: () => ({
+            onClear: async (sessionId: string, tabId: string) => {
+              const binding = refreshBindings.get(refreshKey(sessionId, tabId))
+              if (binding) {
+                binding.clear()
+                return
+              }
+              const status = await probe()
+              if (!status.ok) throw status.error
+              if (!status.value.serverId) throw new Error(panelT('libraryOffline'))
+              clearLibraryState(status.value.serverId, sessionId)
+              clearLibraryViewMemory(status.value.serverId, sessionId)
+            },
             onRefresh: (sessionId: string, tabId: string) => {
               const refresh = refreshBindings.get(refreshKey(sessionId, tabId))
-              if (refresh) refresh()
+              if (refresh) refresh.refresh()
               else plane.invalidate()
             },
           }),
         },
         ZoteroLibraryMenu,
+      ),
+    )
+
+    const disposePdfRecovery = ctx.slots.inject('sidebar.right.tab.menu.item', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.tab.menu.item',
+          id: `${REGISTRANT}.pdf.recovery`,
+          order: 210,
+          locale: NS,
+          registrant: REGISTRANT,
+          inject: () => ({
+            source: pdfReaders.source,
+            recoveryError: pdfReaders.recoveryError,
+            reload: async (sessionId: string, tabId: string, address: string) => {
+              const ref = pdfReaders.source(address)
+              if (!ref) throw new Error(panelT('libraryPdfSourceMissing'))
+              if (!preferenceSource.getSnapshot().preferences?.allowUrlPdfRead)
+                throw new Error(panelT('libraryUrlPdfDisabled'))
+              const controller = new AbortController()
+              const present = () =>
+                ctx.sidebarRight.openTabs
+                  .getSnapshot()
+                  .some(
+                    (tab) =>
+                      tab.sessionId === sessionId &&
+                      tab.tabId === tabId &&
+                      tab.contentId === address,
+                  )
+              const unsubscribe = ctx.sidebarRight.openTabs.subscribe(() => {
+                if (!present()) controller.abort(new Error('PDF tab closed.'))
+              })
+              try {
+                if (!present()) throw new Error('PDF tab closed.')
+                const result = await ctx.remote.zotero.readUrlPdf({ ref }, controller.signal)
+                if (!result.ok) throw new Error(result.error.message)
+                try {
+                  controller.signal.throwIfAborted()
+                  const occurrence = ctx.sidebarRight.openTabs
+                    .getSnapshot()
+                    .find(
+                      (tab) =>
+                        tab.sessionId === sessionId &&
+                        tab.tabId === tabId &&
+                        tab.contentId === address,
+                    )
+                  if (!occurrence) throw new Error('PDF tab closed.')
+                  const next = fileAddressFor(sessionId, undefined, result.value.path)
+                  pdfReaders.track(next, result.value.lease, ref)
+                  ctx.sidebarRight.openResourceIn(occurrence.sessionId, next, {
+                    replaceTab: occurrence.tabId,
+                  })
+                } catch (error) {
+                  pdfReaders.forget(fileAddressFor(sessionId, undefined, result.value.path))
+                  const released = await ctx.remote.zotero.releaseUrlPdf({
+                    lease: result.value.lease,
+                  })
+                  if (!released.ok) throw new Error(released.error.message)
+                  throw error
+                }
+              } finally {
+                unsubscribe()
+              }
+            },
+          }),
+        },
+        ZoteroPdfRecoveryMenu,
       ),
     )
 
@@ -687,6 +816,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeDeliverableAction()
       disposeInputButton()
       disposeTabMenu()
+      disposePdfRecovery()
       disposeTabTitle()
       disposeTabBody()
       refreshBindings.clear()
@@ -710,7 +840,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         ctx.remoteAccess.whenAccess('zotero/browse', () => {
           const right = gatedMount(mountRight)
           const sync = (): void => {
-            right.sync(sidebarEnabledOf(form, libraryForm, 'rightSidebarEnabled'))
+            right.sync(sidebarEnabledOf(libraryForm, 'rightSidebarEnabled'))
           }
           const unsubscribeForm = form.subscribe(sync)
           const unsubscribeLibrary = libraryForm.subscribe(sync)
@@ -755,6 +885,7 @@ function registerUi(ctx: ClientContext): void {
   }
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
   const libraryCard = new LibraryFormController(libraryForm)
+  const citationCard = new CitationFormController(form)
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
   // it directly. Concurrent probes share one in-flight call: multiple consumers
@@ -775,6 +906,7 @@ function registerUi(ctx: ClientContext): void {
     scholarlyCard,
     libraryForm,
     libraryCard,
+    citationCard,
     probe,
     client,
   }
@@ -787,6 +919,7 @@ function registerUi(ctx: ClientContext): void {
       card.dispose()
       scholarlyCard.dispose()
       libraryCard.dispose()
+      citationCard.dispose()
     },
     'dsh-zotero: card forms',
   )

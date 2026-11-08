@@ -164,8 +164,9 @@ A single client artifact (`lib/client.js`) contains all interfaces. Every surfac
 
 ## Remote Communication and Settings
 
-- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, and `openProtocol`; `ZoteroLibraryService` handles `browse`, `search`, `item`, `childPage`, `export`, and `write`;
+- The host half registers Typert endpoints in the `zotero` wire namespace through `ZoteroRuntime` (`zoteroRemote`) and `ZoteroLibraryService` (`zoteroLibrary`). `ZoteroRuntime` handles `status`, `resolveAttachment`, `diagnostics`, `reportClientError`, and `openProtocol`; `ZoteroLibraryService` handles `browse`, `collectionPath`, `search`, `item`, `childPage`, `export`, `write`, `readUrlPdf`, and `releaseUrlPdf`;
 - The browser half mounts the namespace through `ctx.remote.$mount`, and configuration reads and writes go through the shared settings forms of the `zotero`, `library`, and `scholarly` namespaces;
+- Literature panel settings directly edit 11 `library` preferences and 2 core CSL defaults. `CitationFormController` owns an independent staged model for the latter, shared by both entrances, so saving them never submits drafts for connection or other fields. `tests/client/settings/citation-defaults.spec.tsx` verifies the real form assembly, save refusals and entrance parity; `tests/client/cards/zotero-card-parity.spec.ts` checks that the two core field tables together match the complete host schema. Packaged browser acceptance in `smoke:web-composition` verifies saves and persistence after reload.
 - Every configuration field is declared volatile and supports hot reload;
 - `openProtocol` protocol dispatch: WSL and Windows environments uniformly use `powershell.exe` to trigger the host protocol handler; the host endpoint throws `zotero/protocol-failed` on failure, and the browser half surfaces it through the `shell.overlay` toast and diagnostics instead of a DOM-anchor fallback.
 

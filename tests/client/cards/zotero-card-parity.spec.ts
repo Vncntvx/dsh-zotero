@@ -13,6 +13,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import {
+  CITATION_FIELD_KEYS,
+  type CitationFieldKey,
+} from '../../../src/client/citation-form-controller.ts'
 import { Config, type ResolvedConfig } from '../../../src/config.ts'
 import {
   BOOLEAN_FIELD_KEYS,
@@ -21,7 +25,7 @@ import {
   type FieldKey,
 } from '../../../src/client/zotero-card-controller.ts'
 
-type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey>
+type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey | CitationFieldKey>
 type AssertNever<T extends never> = T
 export type _ConfigSurfaceComplete = AssertNever<MissingConfigField>
 
@@ -33,12 +37,18 @@ const CONTROL_OF_SCHEMA_TYPE = {
 } as const satisfies Record<string, 'text' | 'number' | 'boolean'>
 
 /** The visible field keys, in display order. */
-const FIELD_KEYS: readonly FieldKey[] = FIELD_GROUPS.flatMap((group) => group.fields)
+const FIELD_KEYS: readonly (FieldKey | CitationFieldKey)[] = [
+  ...FIELD_GROUPS.flatMap((group) => group.fields),
+  ...CITATION_FIELD_KEYS,
+]
+
+const numericKeys: ReadonlySet<string> = NUMERIC_FIELD_KEYS
+const booleanKeys: ReadonlySet<string> = BOOLEAN_FIELD_KEYS
 
 /** The control kind the card renders for one field. */
-function controlKindOf(key: FieldKey): 'text' | 'number' | 'boolean' {
-  if (NUMERIC_FIELD_KEYS.has(key)) return 'number'
-  if (BOOLEAN_FIELD_KEYS.has(key)) return 'boolean'
+function controlKindOf(key: FieldKey | CitationFieldKey): 'text' | 'number' | 'boolean' {
+  if (numericKeys.has(key)) return 'number'
+  if (booleanKeys.has(key)) return 'boolean'
   return 'text'
 }
 
@@ -77,7 +87,7 @@ describe('Zotero settings card parity with the host Config schema', () => {
 
   it('never classifies a field as both a number and a boolean', () => {
     for (const key of FIELD_KEYS) {
-      const matches = [NUMERIC_FIELD_KEYS.has(key), BOOLEAN_FIELD_KEYS.has(key)].filter(Boolean)
+      const matches = [numericKeys.has(key), booleanKeys.has(key)].filter(Boolean)
       expect(
         matches.length,
         `${key} is classified as both a number and a boolean field`,

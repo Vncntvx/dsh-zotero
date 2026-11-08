@@ -1,8 +1,8 @@
 /**
- * The Zotero settings form body: 4 partitioned tabs holding all 37 Zotero
+ * The Zotero settings form body: 4 partitioned tabs holding the 35 connection, capability and runtime
  * configuration fields, as elevated cards.
  *
- * Tab 1: General & Features (conversation tab, personal library write gate, default style/locale)
+ * Tab 1: General & Features (conversation tab, personal library write gate)
  * Tab 2: Local Connection (API URL, timeout, max requests, cache TTL)
  * Tab 3: Local Search & Passages (query/concurrency quotas, passage and fulltext limits)
  * Tab 4: Advanced & Tasks (output limits, background job policy, diagnostics)

@@ -5,7 +5,7 @@
  * @module tests/client/library/library-panel.reader
  */
 
-import { act, cleanup, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ITEM_DETAIL, mountPanel, type SessionStub } from '../helpers/library-panel-harness.tsx'
 import { deferred } from '../../helpers/sync.js'
@@ -49,6 +49,7 @@ describe('reading an attachment', () => {
     const { face } = mountPanel()
     const row = await screen.findByText('FlashAttention-2')
     act(() => row.click())
+    fireEvent.click(await screen.findByRole('button', { name: /展开标注/ }))
     const badge = await screen.findByText('P. 3')
     expect(badge.tagName).toBe('SPAN')
     expect(screen.queryByRole('button', { name: 'P. 3' })).toBeNull()

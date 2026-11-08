@@ -1,3 +1,4 @@
+import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
 /**
  * The library panel's navigation column: the fixed scopes (all items, My
  * Publications, trash), the lazily expanding collection tree, and the saved
@@ -138,10 +139,13 @@ export function LibraryTree({
   loadMoreTree,
   retryTree,
 }: LibraryTreeProps) {
-  const collectionViewport = useRef<HTMLDivElement>(null)
+  const { memory } = useLibraryPreferences()
+  const scroll = useLibraryScroll('tree', flatTree.length > 0, flatTree.length)
+  const collectionViewport = scroll.ref
   const treeVirtualizer = useVirtualizer({
     count: flatTree.length,
     getScrollElement: () => collectionViewport.current,
+    initialOffset: memory?.scroll.tree ?? 0,
     estimateSize: () => 32,
     overscan: 8,
     initialRect: VIRTUAL_VIEWPORT,
@@ -288,7 +292,7 @@ export function LibraryTree({
         <p className={clsx(css.caption, css.treeNote)}>{t('libraryNoCollections')}</p>
       )}
 
-      <div ref={collectionViewport} className={css.virtualViewport}>
+      <div {...scroll} className={css.virtualViewport}>
         <ul
           className={clsx(css.treeList, css.virtualList)}
           role="tree"

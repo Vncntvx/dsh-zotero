@@ -35,8 +35,8 @@ function store(
     name: 'Old name',
   },
 ) {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection,
@@ -79,7 +79,7 @@ it('locates a restored deep scope through real parent rows and sequential root p
   expect(result.current.selection).toMatchObject({ name: 'Current', path: target.path })
   expect(result.current.q).toBe('retained')
   expect(result.current.filters).toEqual({ tags: ['read'] })
-  expect(Object.values(readLibraryState('S1')!.prefixes!)).toContain(2)
+  expect(Object.values(readLibraryState('S1', 'session-1')!.prefixes!)).toContain(2)
 })
 it('does not reread the list when locate resolves to the scope already shown', async () => {
   store({ kind: 'collection', ref: target.ref, name: target.name, path: target.path })
@@ -153,8 +153,8 @@ it('rejects an old filter editor callback after switching scope', async () => {
 
 it('finds a saved search on a later page and refreshes its current name', async () => {
   const searchRef = 'zotero://user/0/search/SEARCH02'
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: searchRef, name: 'Old' },
@@ -196,8 +196,8 @@ it('finds a saved search on a later page and refreshes its current name', async 
 })
 it('does not reread the list when a saved search already carries its served name', async () => {
   const searchRef = 'zotero://user/0/search/SEARCH01'
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: searchRef, name: 'Unread' },
@@ -215,8 +215,8 @@ it('does not reread the list when a saved search already carries its served name
   expect(face.search).toHaveBeenCalledTimes(1)
 })
 it('reports a removed saved search after exhausting its listing', async () => {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/MISSING1', name: 'Missing' },
@@ -274,8 +274,8 @@ it('shows a navigation failure before attempting a restored path', async () => {
   await waitFor(() => expect(result.current.locateError).toContain('Load navigation'))
 })
 it('shows a saved-search listing failure during restored location', async () => {
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/SEARCH01', name: 'Unread' },
@@ -299,8 +299,8 @@ it('shows a saved-search listing failure during restored location', async () => 
 
 it('walks more than two saved-search pages to reveal the restored search', async () => {
   const ref = 'zotero://user/0/search/SEARCH03'
-  writeLibraryState('S1', {
-    version: 2,
+  writeLibraryState('S1', 'session-1', {
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref, name: 'Third' },

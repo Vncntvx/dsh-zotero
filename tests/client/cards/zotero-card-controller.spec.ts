@@ -16,7 +16,6 @@ describe('ZoteroCardController', () => {
         provider: 'local',
         timeoutMs: 5000,
         maxSearchResults: 20,
-        defaultStyle: 'apa',
       },
       base: { baseUrl: 'http://127.0.0.1:23119/api' },
     })
@@ -27,7 +26,6 @@ describe('ZoteroCardController', () => {
     expect(state.provider.text).toBe('local')
     expect(state.timeoutMs.text).toBe('5000')
     expect(state.maxSearchResults.text).toBe('20')
-    expect(state.defaultStyle.text).toBe('apa')
     // Fields the section does not carry render empty rather than a fake value.
     expect(state.maxExportRefs.text).toBe('')
     expect(state.available).toBe(true)

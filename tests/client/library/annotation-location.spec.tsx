@@ -58,6 +58,7 @@ it.each([
       resolveAttachment={undefined}
     />,
   )
+  fireEvent.click(screen.getByRole('button', { name: /展开标注/ }))
   const card = screen.getByText('Source quote').closest('li')!
   fireEvent.click(within(card).getByRole('button', { name: mockT('openInZotero') }))
   expect(opened).toEqual([`zotero://open-pdf/${target}?annotation=ANNO0001`])
@@ -98,6 +99,7 @@ it.each(['unparseable', 'zotero://user/0/annotation/SHORT'])(
         resolveAttachment={undefined}
       />,
     )
+    fireEvent.click(screen.getByRole('button', { name: /展开标注/ }))
     const card = screen.getByText('Source quote').closest('li')!
     expect(within(card).queryByRole('button', { name: mockT('openInZotero') })).toBeNull()
   },

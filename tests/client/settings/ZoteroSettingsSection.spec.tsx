@@ -10,7 +10,11 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  CitationFormController,
+  CITATION_FIELD_KEYS,
+} from '../../../src/client/citation-form-controller.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroSettingsSection } from '../../../src/client/ZoteroSettingsSection.tsx'
 import type { ZoteroSettingsSectionProps } from '../../../src/client/ZoteroSettingsSection.tsx'
@@ -60,6 +64,13 @@ function Harness({
   revokeWriteGrant?: ZoteroSettingsSectionProps['revokeWriteGrant']
   dictionary?: typeof zh
 }) {
+  const [citationController] = useState(() => new CitationFormController(scope))
+  useEffect(() => () => citationController.dispose(), [citationController])
+  const citation = citationController.inject()
+  const citationState = useSyncExternalStore(
+    citation.hooks.citationCard.subscribe,
+    citation.hooks.citationCard.getSnapshot,
+  )
   const state = useSyncExternalStore(
     face.hooks.zoteroCard.subscribe,
     face.hooks.zoteroCard.getSnapshot,
@@ -75,6 +86,9 @@ function Harness({
   const props = {
     // `plugins.bundle.config` renders its entries with `view: 'page'` only.
     view: 'page',
+    citation,
+    useCitationCard: (selector: (snapshot: typeof citationState) => unknown) =>
+      selector(citationState),
     // The page resolves its copy through the locale runtime, so the fixture
     // binds the shipped dictionary with the shared translate stub.
     t: makeTranslate(dictionary),
@@ -159,7 +173,7 @@ describe('ZoteroSettingsSection', () => {
     // checkboxes alike). The count derives from that table, so a field added
     // or dropped fails here instead of silently changing the page.
     expect([...document.querySelectorAll('input')]).toHaveLength(
-      FIELD_GROUPS.flatMap((group) => group.fields).length,
+      FIELD_GROUPS.flatMap((group) => group.fields).length + CITATION_FIELD_KEYS.length,
     )
     expect(saveButton().disabled).toBe(true)
   })
@@ -247,7 +261,9 @@ describe('ZoteroSettingsSection', () => {
     })
     fireEvent.click(saveButton())
     await vi.waitFor(() => {
-      for (const input of document.querySelectorAll('input')) {
+      for (const input of document.querySelectorAll(
+        'input:not(#zotero-settings-defaultStyle):not(#zotero-settings-defaultLocale)',
+      )) {
         expect((input as HTMLInputElement).disabled).toBe(true)
       }
       expect(saveButton().disabled).toBe(true)
@@ -312,7 +328,7 @@ describe('ZoteroSettingsSection', () => {
   it('disables every control while the document is read-only', () => {
     scope = fakeScope({ value: { timeoutMs: 5000 }, writable: false })
     mount()
-    expect(screen.getByText(zh.readOnly)).toBeDefined()
+    expect(screen.getAllByText(zh.readOnly).length).toBeGreaterThan(0)
     for (const input of Array.from(document.querySelectorAll('input'))) {
       expect(input.disabled).toBe(true)
     }
@@ -394,7 +410,7 @@ describe('ZoteroSettingsSection', () => {
     const libraryTab = screen.getByRole('tab', { name: zh.tabLibrary })
     fireEvent.click(libraryTab)
 
-    expect(screen.getByText(zh.groupLibrarySidebar)).toBeDefined()
+    expect(screen.getByText(zh.libraryDisplaySettings)).toBeDefined()
     expect(screen.getByText(zh.rightSidebarEnabled)).toBeDefined()
   })
 

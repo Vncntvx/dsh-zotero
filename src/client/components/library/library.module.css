@@ -781,24 +781,13 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  align-items: stretch;
   width: 100%;
   text-align: left;
-  border: 0;
-  border-left: 2px solid transparent;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  font-family: inherit;
-  padding: 6px 8px 6px 10px;
-  cursor: pointer;
-  box-sizing: border-box;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    border-color 120ms var(--ds-ease-in-out);
 }
 
 /* The PDF detection badge owns the row's right edge; the text keeps clear. */
-.itemRowHasPdf .itemTitle,
+.itemRowHasPdf [data-library-title],
 .itemRowHasPdf .itemMeta {
   padding-right: 44px;
 }
@@ -820,17 +809,6 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   user-select: none;
-}
-
-.itemRow:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-.itemRowActive {
-  background: var(--dsw-alias-interactive-bg-hover);
-  border-left-color: var(--dsw-alias-state-business-primary);
 }
 
 .itemTitle {
@@ -1502,10 +1480,6 @@
 
   .treeRow:hover {
     color: var(--dsw-alias-label-primary);
-  }
-
-  .itemRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 

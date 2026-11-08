@@ -21,7 +21,7 @@ const SELECTED = 'zotero://user/0/item/ITEM0001?server=S1'
 /** The durable record with everything at its default but the view pins. */
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
-    version: 2,
+    version: 3,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe('restored view pins', () => {
   it('restores the selected row and the narrow pane from the instance record', async () => {
-    writeLibraryState('S1', stored({ selectedRef: SELECTED, narrowPane: 'inspector' }))
+    writeLibraryState('S1', 'session-1', stored({ selectedRef: SELECTED, narrowPane: 'inspector' }))
     const { result, face } = setup()
     await waitFor(() => expect(result.current.selectedRef).toBe(SELECTED))
     expect(result.current.narrowPane).toBe('inspector')
@@ -54,7 +54,7 @@ describe('restored view pins', () => {
   })
 
   it('falls back to the inspector pane when only the row was stored', async () => {
-    writeLibraryState('S1', stored({ selectedRef: SELECTED }))
+    writeLibraryState('S1', 'session-1', stored({ selectedRef: SELECTED }))
     const { result } = setup()
     await waitFor(() => expect(result.current.narrowPane).toBe('inspector'))
   })
@@ -62,7 +62,7 @@ describe('restored view pins', () => {
   it('bridges a persisted unqualified expanded ref to the served qualified row', async () => {
     const bare = 'zotero://user/0/collection/COLL0001'
     const qualified = `${bare}?server=S1`
-    writeLibraryState('S1', stored({ expanded: [bare] }))
+    writeLibraryState('S1', 'session-1', stored({ expanded: [bare] }))
     const { result, face } = setup({
       browse: vi.fn<LibraryFeedFace['browse']>(async (request) => ({
         ok: true,
@@ -100,7 +100,7 @@ describe('restored view pins', () => {
         detail: { ...ITEM_DETAIL, ref: 'zotero://user/0/item/ITEM0002?server=S1' },
       },
     })
-    writeLibraryState('S1', stored({ selectedRef: SELECTED }))
+    writeLibraryState('S1', 'session-1', stored({ selectedRef: SELECTED }))
     const { result, face } = setup()
 
     await waitFor(() =>
@@ -115,7 +115,11 @@ describe('restored view pins', () => {
 
 describe('library switch', () => {
   it('keeps the reading preferences the reader chose', async () => {
-    writeLibraryState('S1', stored({ mode: 'everything', sort: 'title', direction: 'asc' }))
+    writeLibraryState(
+      'S1',
+      'session-1',
+      stored({ mode: 'everything', sort: 'title', direction: 'asc' }),
+    )
     const { result } = setup()
     await waitFor(() => expect(result.current.mode).toBe('everything'))
     act(() => result.current.selectLibrary({ type: 'group', id: 123 }))

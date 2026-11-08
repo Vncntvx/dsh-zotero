@@ -1,3 +1,5 @@
+import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
+import preferenceCss from '../../library-settings.module.css'
 /**
  * The library panel's item list: one page of the current scope's hits, the
  * scope's live name in the header, and the offset paginator under the rows.
@@ -16,6 +18,7 @@ import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
 
 interface LibraryItemListProps {
+  readonly scrollKey?: string
   readonly returnToLibrary?: () => void
   readonly filtered?: boolean
   /** Reveals the current scope's row in the collection tree; absent for fixed scopes. */
@@ -50,6 +53,7 @@ function selectionLabelOf(selection: LibrarySelection, t: TranslateNS<'zotero'>)
 
 export function LibraryItemList({
   t,
+  scrollKey = 'list',
   filtered,
   returnToLibrary,
   locate,
@@ -63,6 +67,8 @@ export function LibraryItemList({
   retry,
   useContextMenu,
 }: LibraryItemListProps) {
+  const scroll = useLibraryScroll(scrollKey, list.phase === 'ready')
+  const { preferences } = useLibraryPreferences()
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
   const contextMenu = typeof useContextMenu === 'function' ? useContextMenu() : undefined
 
@@ -99,7 +105,7 @@ export function LibraryItemList({
         </p>
       )}
 
-      <div className={css.listScrollArea}>
+      <div className={css.listScrollArea} {...scroll}>
         {list.phase === 'loading' && (
           <p className={css.listNote} role="status">
             {t('libraryLoading')}
@@ -139,23 +145,27 @@ export function LibraryItemList({
               })
               return (
                 <li key={item.ref}>
-                  <button
-                    type="button"
+                  <Button
+                    size={preferences?.listDensity === 'compact' ? 'sm' : 'md'}
+                    variant={isSelected ? 'outline' : 'ghost'}
                     {...triggerProps}
-                    className={clsx(
-                      css.itemRow,
-                      isSelected && css.itemRowActive,
-                      hasPdf && css.itemRowHasPdf,
-                    )}
+                    className={clsx(css.itemRow, hasPdf && css.itemRowHasPdf)}
                     onClick={() => selectItem(isSelected ? undefined : item.ref)}
                   >
-                    <span className={css.itemTitle}>
-                      {item.title}
-                      {item.year !== undefined && (
-                        <span className={css.itemYear}> ({item.year})</span>
+                    <span
+                      data-library-title
+                      className={clsx(
+                        preferenceCss.rowTitle,
+                        preferences?.titleLines === 1
+                          ? preferenceCss.oneLine
+                          : preferenceCss.twoLines,
                       )}
+                      title={item.title}
+                    >
+                      {item.title}
                     </span>
                     <span className={css.itemMeta}>
+                      {item.year !== undefined && <span>{item.year}</span>}
                       <span className={css.itemType}>{item.itemType}</span>
                       {item.creatorSummary !== '' && (
                         <span className={css.itemCreator}>{item.creatorSummary}</span>
@@ -165,7 +175,7 @@ export function LibraryItemList({
                      * index's best-attachment pick names a PDF when one is
                      * indexed; rows without it may still carry files. */}
                     {hasPdf && <span className={css.pdfBadge}>{t('badgePdf')}</span>}
-                  </button>
+                  </Button>
                 </li>
               )
             })}

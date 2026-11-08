@@ -1,12 +1,12 @@
+import { useLibraryPreferences } from '../../library-preferences.tsx'
 /**
  * The inspector action row's citation controls: a single consolidated menu
  * offering all export formats (CSL citation, bibliography, BibTeX, BibLaTeX,
  * RIS, CSL-JSON) plus a client-only item-info block generated from the
  * inspected record.
  *
- * Every wire copy asks for `refs: [detail.ref]` with no style/locale, so the
- * host's configured rendering defaults decide the text, exactly like the
- * zotero_export tool. The shared {@link useCopyFeedback} lane owns the
+ * Every wire copy asks for `refs: [detail.ref]`; CSL exports include the accepted
+ * core style and locale so a changed default cannot reuse stale cached output. The shared {@link useCopyFeedback} lane owns the
  * clipboard write and the stale-answer guards; the anchor button reflects the
  * active copy state and done label, failures stay inline beside the control,
  * and no copy is ever retried.
@@ -56,6 +56,8 @@ const ALL_FORMATS: readonly {
   readonly label: ZoteroLocaleKey
   readonly separatorBefore?: boolean
 }[] = [
+  { format: 'citation', label: 'libraryCopyCitation' },
+  { format: 'bibliography', label: 'libraryCopyBibliography' },
   { format: 'bibtex', label: 'libraryCopyBibtex' },
   { format: 'biblatex', label: 'libraryCopyBiblatex' },
   { format: 'ris', label: 'libraryCopyRis' },
@@ -118,11 +120,16 @@ export function LibraryCitationActions({
   readonly exportItem: LibraryExportItem | undefined
   readonly t: TranslateNS<'zotero'>
 }) {
+  const { preferences, citation, citationPending } = useLibraryPreferences()
+  const defaultFormat = preferences?.defaultCopyFormat ?? 'citation'
   const [menuOpen, setMenuOpen] = useState(false)
   const [action, setAction] = useState<CopyAction | undefined>(undefined)
   const { phase, error, copy } = useCopyFeedback(detail.ref)
   const busy = phase === 'pending'
   const wireUnavailable = exportItem === undefined
+  const unavailable = (format: CopyAction) =>
+    (format !== 'itemInfo' && wireUnavailable) ||
+    ((format === 'citation' || format === 'bibliography') && citationPending === true)
 
   useEffect(() => {
     setMenuOpen(false)
@@ -135,17 +142,23 @@ export function LibraryCitationActions({
       copy(async () => itemInfoTextOf(detail))
       return
     }
-    if (exportItem === undefined) return
+    if (exportItem === undefined || unavailable(next)) return
     const face = exportItem
     setAction(next)
     copy(async () => {
-      const result = await face({ refs: [detail.ref], format: next })
+      const result = await face({
+        refs: [detail.ref],
+        format: next,
+        ...((next === 'citation' || next === 'bibliography') && citation
+          ? { style: citation.style, locale: citation.locale }
+          : {}),
+      })
       if (!result.ok) throw result.error
       return copyTextOf(result.value)
     })
   }
 
-  let buttonLabel = t('libraryCitationMenu')
+  let buttonLabel = t(ALL_FORMATS.find((entry) => entry.format === defaultFormat)!.label)
   if (action !== undefined) {
     if (phase === 'pending') {
       buttonLabel = t('libraryExportPending')
@@ -166,6 +179,14 @@ export function LibraryCitationActions({
 
   return (
     <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => run(defaultFormat)}
+        disabled={busy || unavailable(defaultFormat)}
+      >
+        {buttonLabel}
+      </Button>
       <Menu
         open={menuOpen}
         portal
@@ -178,11 +199,11 @@ export function LibraryCitationActions({
             icon={<IconCopyOutlineRegular size={14} />}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            aria-label={buttonLabel}
+            aria-label={t('libraryCitationMenu')}
             disabled={busy}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            <span>{buttonLabel}</span>
+            <span>{t('libraryCitationMenu')}</span>
             <IconChevronDownOutlineRegular size={12} />
           </Button>
         }
@@ -191,7 +212,7 @@ export function LibraryCitationActions({
           <MenuItemButton
             key={format}
             separatorBefore={separatorBefore}
-            disabled={busy || (format !== 'itemInfo' && wireUnavailable)}
+            disabled={busy || unavailable(format)}
             onSelect={() => {
               setMenuOpen(false)
               void run(format)
@@ -201,6 +222,7 @@ export function LibraryCitationActions({
           </MenuItemButton>
         ))}
       </Menu>
+      {citationPending && <span role="status">{t('libraryCitationNotReady')}</span>}
       {errorText !== undefined && (
         <span className={css.listError} role="alert">
           {errorText}

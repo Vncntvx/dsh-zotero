@@ -84,9 +84,9 @@ describe('list and inspector lifetime', () => {
 })
 
 describe('instance preferences', () => {
-  it('discards cross-instance or wrong-kind expanded refs and a group publications scope', () => {
-    writeLibraryState('S1', {
-      version: 2,
+  it('reports invalid cross-instance and wrong-kind references in stored browsing state', () => {
+    writeLibraryState('S1', 'session-1', {
+      version: 3,
       prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'publications' },
@@ -103,18 +103,16 @@ describe('instance preferences', () => {
         'zotero://group/123/search/SEARCH01',
       ],
     })
-    expect(readLibraryState('S1')).toMatchObject({
-      selection: { kind: 'library' },
-      offset: 0,
-      expanded: ['zotero://group/123/collection/COLL0001?server=S1'],
-    })
+    expect(() => readLibraryState('S1', 'session-1')).toThrow(
+      'outside its Zotero instance or library',
+    )
   })
 
   it.each(['zotero://user/0/search/SEARCH01', 'zotero://user/0/search/SEARCH01?server=S1'])(
     'restores the saved-search selection and page for %s',
     (ref) => {
-      writeLibraryState('S1', {
-        version: 2,
+      writeLibraryState('S1', 'session-1', {
+        version: 3,
         prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'savedSearch', ref, name: 'Unread' },
@@ -126,24 +124,24 @@ describe('instance preferences', () => {
         expanded: [],
         filters: {},
       })
-      expect(readLibraryState('S1')).toMatchObject({
+      expect(readLibraryState('S1', 'session-1')).toMatchObject({
         selection: { kind: 'savedSearch', ref, name: 'Unread' },
         offset: 50,
       })
     },
   )
 
-  it('ignores malformed or cross-instance storage without blocking startup', () => {
-    localStorage.setItem(libraryStorageKey('S1'), '{broken')
-    expect(readLibraryState('S1')).toBeUndefined()
-    localStorage.setItem(libraryStorageKey('S1'), JSON.stringify({ version: 2 }))
-    expect(readLibraryState('S1')).toBeUndefined()
+  it('reports corrupt storage and write failures to its caller', () => {
+    localStorage.setItem(libraryStorageKey('S1', 'session-1'), '{broken')
+    expect(() => readLibraryState('S1', 'session-1')).toThrow()
+    localStorage.setItem(libraryStorageKey('S1', 'session-1'), JSON.stringify({ version: 3 }))
+    expect(() => readLibraryState('S1', 'session-1')).toThrow()
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota')
     })
     expect(() =>
-      writeLibraryState('S1', {
-        version: 2,
+      writeLibraryState('S1', 'session-1', {
+        version: 3,
         prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'library' },
@@ -155,13 +153,13 @@ describe('instance preferences', () => {
         expanded: [],
         filters: {},
       }),
-    ).not.toThrow()
+    ).toThrow('quota')
     expect(setItem).toHaveBeenCalled()
   })
 
   it('restores a confirmed instance and isolates another instance', async () => {
-    writeLibraryState('S1', {
-      version: 2,
+    writeLibraryState('S1', 'session-1', {
+      version: 3,
       prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'library' },
@@ -186,12 +184,12 @@ describe('instance preferences', () => {
     rerender({ id: 'S2' })
     await waitFor(() => expect(result.current.q).toBe(''))
     expect(result.current.currentLibrary).toEqual({ type: 'user', id: 0 })
-    expect(JSON.parse(localStorage.getItem(libraryStorageKey('S1'))!).q).toBe('saved')
+    expect(JSON.parse(localStorage.getItem(libraryStorageKey('S1', 'session-1'))!).q).toBe('saved')
   })
 
   it('preserves a missing restored scope and exposes its error', async () => {
-    writeLibraryState('S1', {
-      version: 2,
+    writeLibraryState('S1', 'session-1', {
+      version: 3,
       prefixes: {},
       library: { type: 'user', id: 0 },
       selection: {

@@ -1,3 +1,10 @@
+import {
+  LibraryPreferencesContext,
+  useLibraryPreferenceSource,
+  useLibraryPreferences,
+  libraryViewMemory,
+  type LibraryPreferenceSource,
+} from '../../library-preferences.tsx'
 /**
  * The Zotero library panel: a session-scoped right-sidebar tab. It covers the
  * library selector, the collection tree, saved searches, the trash, paged
@@ -40,6 +47,7 @@ import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocationView,
   ZoteroStatusView,
+  ZoteroUrlPdfView,
 } from '../../../contract.ts'
 import type { ZoteroLocaleKey } from '../../locales.ts'
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
@@ -49,6 +57,7 @@ import { useLibraryFeed } from './useLibraryFeed.ts'
 import type { LibraryFeedFace, LibraryPanelWireFace } from './library-feed-types.ts'
 import {
   clearLibrarySessionMemory,
+  clearLibraryConversationState,
   readLibrarySessionMemory,
   writeLibrarySessionView,
 } from './library-storage.ts'
@@ -71,7 +80,20 @@ import css from './library.module.css'
  * composer for the chat actions — are always reachable.
  */
 export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
-  readonly bindRefresh?: (sessionId: string, tabId: string, refresh: () => void) => () => void
+  readonly readUrlPdf?: (
+    request: { ref: string },
+    signal: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroUrlPdfView>>
+  readonly releaseUrlPdf?: (lease: string) => Promise<void>
+  readonly forgetPdf?: (address: string) => void
+  readonly trackPdf?: (address: string, lease: string, ref: string) => void
+  readonly preferenceSource?: LibraryPreferenceSource
+  readonly bindRefresh?: (
+    sessionId: string,
+    tabId: string,
+    refresh: () => void,
+    clear: () => void,
+  ) => () => void
   readonly status: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly openResource: (url: string) => void
@@ -87,9 +109,18 @@ export type ZoteroLibraryPanelProps = PropsRuntime<'sidebar.right.pane.tab'> &
 export function ZoteroLibraryPanel(props: ZoteroLibraryPanelProps) {
   const { t } = props
   const client = props.useZoteroClient()
+  const accepted = useLibraryPreferenceSource(props.preferenceSource)
   return (
     <ZoteroSurfaceBoundary t={t} surface="library" report={client.reportClientError}>
-      <ZoteroLibraryPanelBody {...props} />
+      {accepted.error ? (
+        <p role="alert">{t('libraryConfigError', { message: accepted.error })}</p>
+      ) : !accepted.preferences ? (
+        <p role="status">{t('libraryConfigLoading')}</p>
+      ) : (
+        <LibraryPreferencesContext.Provider value={accepted}>
+          <ZoteroLibraryPanelBody {...props} />
+        </LibraryPreferencesContext.Provider>
+      )}
     </ZoteroSurfaceBoundary>
   )
 }
@@ -124,6 +155,14 @@ const SORT_BY_VALUE = new Map(
 function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const { t } = props
   const [diagMenuOpen, setDiagMenuOpen] = useState(false)
+  const accepted = useLibraryPreferences()
+  const tabInfo = props.useTabInfo?.()
+  const occurrenceSignal = useMemo(
+    () => tabInfo?.tab.signal ?? new AbortController().signal,
+    [tabInfo?.tab.signal],
+  )
+  const sessionRemoved = props.useSession((snapshot) => snapshot.removed)
+  const [cleanupError, setCleanupError] = useState<string>()
   const sessionKey = props.sessionId
   const initialView = readLibrarySessionMemory(sessionKey)
 
@@ -177,11 +216,19 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const inputActions: InputActions | undefined = props.inputActions
   // Lanes read the wire only through a confirmed connection: an offline or
   // failed probe gates every request, and the body renders the offline note.
+  const memory = libraryViewMemory(
+    occurrenceSignal,
+    probeState.data?.serverId ?? '',
+    props.sessionId,
+  )
   const feed = useLibraryFeed(
     face,
     confirmed ? probeState.data?.serverId : undefined,
-    confirmed,
+    confirmed && !sessionRemoved,
     props.sessionId,
+    accepted.preferences,
+    memory,
+    tabInfo?.tab.visible ?? true,
   )
   // The session view's only writer: the detail payload and the probe snapshot
   // are one record, so neither can clear the other through a partial merge.
@@ -203,9 +250,14 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const sessionRunning = props.useSession((snapshot) => snapshot.running && !snapshot.removed)
   // A removed session owns no view; the panel unmounts in the same batch, so
   // this is best effort — the plugin teardown clears whatever it misses.
-  const sessionRemoved = props.useSession((snapshot) => snapshot.removed)
   useEffect(() => {
-    if (sessionRemoved) clearLibrarySessionMemory(props.sessionId)
+    if (sessionRemoved) {
+      try {
+        clearLibraryConversationState(props.sessionId)
+      } catch (error) {
+        setCleanupError(String(error))
+      }
+    }
   }, [sessionRemoved, props.sessionId])
   const cwd = props.useSessions((snapshot) => snapshot.byId[props.sessionId]?.cwd)
   const client = props.useZoteroClient()
@@ -220,12 +272,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // the export control.
   const canExport = props.useRemoteAccess('zotero/export')
   const canResolveAttachment = props.useRemoteAccess('zotero/resolveAttachment')
+  const canReadUrlPdf = props.useRemoteAccess('zotero/readUrlPdf')
   const canOpenProtocol = props.useRemoteAccess('zotero/openProtocol')
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = (path: string): void => {
     try {
-      props.openResource(fileAddressFor(props.sessionId, cwd, path))
+      if (!tabInfo?.tab.actions) throw new Error(t('libraryNoSessionForOpen'))
+      tabInfo.tab.actions.openResource(fileAddressFor(props.sessionId, cwd, path), {
+        destination: accepted.preferences?.localPdfOpenTarget === 'float' ? 'float' : 'sidebar',
+      })
     } catch (error) {
       // The harness refuses with this message when no session surface
       // is mounted; map it to the panel's hint. Other errors rethrow.
@@ -236,11 +292,44 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     }
   }
 
+  const readPdf = async (ref: string): Promise<void> => {
+    if (!tabInfo?.tab || sessionRemoved) throw new Error(t('libraryNoSessionForOpen'))
+    const location = await props.resolveAttachment(ref)
+    if (!location.ok) throw new Error(location.error.message)
+    if (location.value.kind === 'file') {
+      if (accepted.preferences?.localPdfOpenTarget === 'zotero') {
+        const { pdfUrlOf } = await import('../../actions/open-zotero.ts')
+        const url = pdfUrlOf(ref)
+        if (!url || !canOpenProtocol || !(await client.openProtocol(url)))
+          throw new Error(t('libraryPdfReaderUnavailable'))
+      } else if (location.value.path) openFile(location.value.path)
+      else throw new Error(t('pdfFileNotFound'))
+      return
+    }
+    if (!accepted.preferences?.allowUrlPdfRead) throw new Error(t('libraryUrlPdfDisabled'))
+    if (!canReadUrlPdf || !props.readUrlPdf) throw new Error(t('libraryPdfReaderUnavailable'))
+    const pdf = await props.readUrlPdf({ ref }, tabInfo.tab.signal)
+    if (!pdf.ok) throw pdf.error
+    const address = fileAddressFor(props.sessionId, cwd, pdf.value.path)
+    try {
+      tabInfo.tab.signal.throwIfAborted()
+      props.trackPdf?.(address, pdf.value.lease, pdf.value.ref)
+      tabInfo.tab.actions.openResource(address, {
+        destination: accepted.preferences.urlPdfOpenTarget,
+      })
+    } catch (error) {
+      props.forgetPdf?.(address)
+      await props.releaseUrlPdf?.(pdf.value.lease)
+      throw error
+    }
+  }
+
   // Bind the right-sidebar native refresh command to invalidate the panel feed.
-  const tabInfo = props.useTabInfo?.()
   useEffect(() => {
     if (!tabInfo?.tab || sessionRemoved) return
-    return props.bindRefresh?.(props.sessionId, tabInfo.tab.id, feed.refresh)
+    return props.bindRefresh?.(props.sessionId, tabInfo.tab.id, feed.refresh, () => {
+      if (!feed.clearPosition()) throw new Error(t('libraryPositionResetFailed'))
+    })
   }, [props.bindRefresh, props.sessionId, tabInfo?.tab?.id, feed.refresh, sessionRemoved])
   useEffect(() => {
     if (!tabInfo?.tab?.actions?.bindCommands) return
@@ -290,253 +379,279 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   }, [probeState.data, t])
 
   return (
-    <div className={css.panel}>
-      {/* Streamlined Responsive Header */}
-      <header className={css.toolbar}>
-        <div className={css.librarySelectWrap}>
-          <LibrarySelect
-            t={t}
-            state={feed.libraries}
-            current={feed.currentLibrary}
-            onSelect={feed.selectLibrary}
-          />
-        </div>
-
-        <Input
-          className={css.searchInputWrap}
-          icon={<IconSearchOutlineMedium size={14} className={css.searchIcon} />}
-          type="search"
-          placeholder={t('librarySearchPlaceholder')}
-          value={feed.q}
-          onChange={(event) => feed.setQ(event.target.value)}
-          aria-label={t('librarySearchPlaceholder')}
-        />
-
-        <div className={css.searchModeWrap}>
-          <SegmentedControl
-            id="zotero-search-mode"
-            label={t('librarySearchModeLabel')}
-            value={feed.mode}
-            onChange={feed.setMode}
-            options={[
-              { value: 'metadata', label: t('librarySearchModeMetadata') },
-              { value: 'everything', label: t('librarySearchModeEverything') },
-            ]}
-          />
-        </div>
-
-        <div className={css.sortSelectWrap}>
-          <SortSelect
-            t={t}
-            sort={feed.sort}
-            direction={feed.direction}
-            onSelect={(sort, direction) => feed.setSort(sort, direction)}
-          />
-        </div>
-
-        <span className={css.spacer} />
-
-        <div className={css.statusGroup}>
-          <StateDot state={probeState.loading ? 'ongoing' : connected ? 'done' : 'error'} />
-          <span
-            className={css.statusText}
-            role="status"
-            title={connected ? undefined : (probeState.error ?? probeState.data?.diagnosis)}
-          >
-            {probeState.loading || (probeState.data === undefined && probeState.error === undefined)
-              ? t('libraryLoading')
-              : connected
-                ? t('libraryConnected')
-                : t('libraryOffline')}
-          </span>
-        </div>
-
-        {diagnosticMenuItems.length > 0 && (
-          <div className={css.diagnosticsWrap}>
-            <Menu
-              open={diagMenuOpen}
-              anchor={
-                <Tooltip label={t('detailsLabel')} side="bottom" delayMs={500}>
-                  <IconButton
-                    shape="square"
-                    icon={<IconEllipsisOutlineMedium className={css.actionIcon} />}
-                    aria-label={t('detailsLabel')}
-                    onClick={() => setDiagMenuOpen(!diagMenuOpen)}
-                  />
-                </Tooltip>
-              }
-              items={diagnosticMenuItems}
-              onClose={() => setDiagMenuOpen(false)}
-              align="end"
-              portal
+    <LibraryPreferencesContext.Provider value={{ ...accepted, memory }}>
+      <div className={css.panel}>
+        {cleanupError && <p role="alert">{t('libraryPositionError', { message: cleanupError })}</p>}
+        {/* Streamlined Responsive Header */}
+        <header className={css.toolbar}>
+          <div className={css.librarySelectWrap}>
+            <LibrarySelect
+              t={t}
+              state={feed.libraries}
+              current={feed.currentLibrary}
+              onSelect={feed.selectLibrary}
             />
           </div>
-        )}
 
-        <div className={css.refreshWrap}>
-          <Tooltip label={t('refresh')} side="bottom" delayMs={500}>
-            <IconButton
-              shape="square"
-              icon={<IconRefreshOutlineMedium className={css.actionIcon} />}
-              onClick={() => feed.refresh()}
-              aria-label={t('refresh')}
-            />
-          </Tooltip>
-        </div>
+          <Input
+            className={css.searchInputWrap}
+            icon={<IconSearchOutlineMedium size={14} className={css.searchIcon} />}
+            type="search"
+            placeholder={t('librarySearchPlaceholder')}
+            value={feed.q}
+            onChange={(event) => feed.setQ(event.target.value)}
+            aria-label={t('librarySearchPlaceholder')}
+          />
 
-        <div className={css.toolbarBreak} aria-hidden="true" />
-      </header>
-
-      {/* An answered-but-offline probe (or a failed one) replaces the whole
-       * workspace: the lanes stay gated and the note carries the diagnosis.
-       * Until this mount's probe answers, the cached snapshot may still paint
-       * the workspace, with every request still gated. */}
-      {!canBrowse ? (
-        <div className={css.offline} role="note">
-          <p className={css.offlineText}>{t('remoteAccessDenied')}</p>
-        </div>
-      ) : settled &&
-        !connected &&
-        (probeState.data !== undefined || probeState.error !== undefined) ? (
-        <div className={css.offline} role="note">
-          <p className={css.offlineText}>{t('libraryOfflineNote')}</p>
-          {(probeState.error ?? probeState.data?.diagnosis) !== undefined && (
-            <p className={css.offlineDetail}>{probeState.error ?? probeState.data?.diagnosis}</p>
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Responsive Segmented Tabs in Narrow Mode */}
-          <div className={css.narrowNavWrap}>
+          <div className={css.searchModeWrap}>
             <SegmentedControl
-              id="zotero-library-narrow-nav"
-              label={t('tabLibrary')}
-              value={feed.narrowPane}
-              onChange={feed.setNarrowPane}
+              id="zotero-search-mode"
+              label={t('librarySearchModeLabel')}
+              value={feed.mode}
+              onChange={feed.setMode}
               options={[
-                { value: 'tree', label: t('libraryNavTree') },
-                { value: 'list', label: t('libraryNavList') },
-                { value: 'inspector', label: t('libraryNavInspector') },
+                { value: 'metadata', label: t('librarySearchModeMetadata') },
+                { value: 'everything', label: t('librarySearchModeEverything') },
               ]}
             />
           </div>
 
-          {/* 3-Column Workspace with Hairline Dividers */}
-          <div className={css.columns}>
-            <div
-              className={clsx(
-                css.columnPane,
-                css.treePane,
-                feed.narrowPane !== 'tree' && css.columnPaneHidden,
-              )}
-            >
-              <LibraryTree
-                t={t}
-                locatedRef={feed.locatedRef}
-                flatTree={feed.flatTree}
-                expanded={feed.expanded}
-                identityOf={feed.identityOf}
-                toggleCollection={feed.toggleCollection}
-                selection={feed.selection}
-                selectScope={handleSelectScope}
-                rootLane={feed.treeLane(undefined)}
-                treeLane={feed.treeLane}
-                loadMoreTree={feed.loadMoreTree}
-                retryTree={feed.retryTree}
-              />
-            </div>
-            <div
-              className={clsx(
-                css.columnPane,
-                css.listPane,
-                feed.narrowPane !== 'list' && css.columnPaneHidden,
-              )}
-            >
-              {/* Pill-based Filter Rail */}
-              <LibraryFilters
-                key={feed.scopeKey}
-                t={t}
-                face={face}
-                library={feed.currentLibrary}
-                value={feed.filters}
-                change={feed.setFilters}
-                enabled={connected}
-              />
-
-              {feed.mode === 'everything' && (
-                <div className={clsx(css.caption, css.everywhereHint)}>
-                  <IconSearchOutlineMedium className={css.hintIcon} />
-                  <span>{t('libraryEverythingHint')}</span>
-                </div>
-              )}
-
-              <LibraryItemList
-                returnToLibrary={() => feed.selectScope({ kind: 'library' })}
-                filtered={
-                  feed.q !== '' ||
-                  Object.values(feed.filters).some((value) =>
-                    Array.isArray(value) ? value.length > 0 : value !== undefined,
-                  )
-                }
-                locate={'ref' in feed.selection ? feed.locate : undefined}
-                locateError={feed.locateError}
-                t={t}
-                list={feed.list}
-                selection={feed.selection}
-                offset={feed.offset}
-                gotoOffset={feed.gotoOffset}
-                selectedRef={feed.selectedRef}
-                selectItem={handleSelectItem}
-                retry={feed.retryList}
-                useContextMenu={props.useContextMenu}
-              />
-            </div>
-            <div
-              className={clsx(
-                css.columnPane,
-                css.inspectorPane,
-                feed.narrowPane !== 'inspector' && css.columnPaneHidden,
-              )}
-            >
-              {/* Write Support Drawer: acts on the inspected scope, so it
-               * lives in the inspector column above the detail. */}
-              {probeState.data?.write?.enabled === true && feed.currentLibrary.type === 'user' && (
-                <LibraryWrite
-                  // The write targets ride the inspected scope, so a selection
-                  // or inspected row change remounts the form: a draft ref can
-                  // never outlive the item it was typed against.
-                  key={JSON.stringify([feed.scopeKey, feed.selectedRef ?? null])}
-                  t={t}
-                  write={props.write}
-                  sessionId={props.sessionId}
-                  sessionRunning={sessionRunning}
-                  writeAllowed={writeAllowed}
-                  selectedRef={feed.selectedRef}
-                  collectionRef={
-                    feed.selection.kind === 'collection' ? feed.selection.ref : undefined
-                  }
-                  searchRef={feed.selection.kind === 'savedSearch' ? feed.selection.ref : undefined}
-                  refreshAffected={feed.refreshAffected}
-                />
-              )}
-              <LibraryInspector
-                t={t}
-                inspector={feed.inspector}
-                inputActions={inputActions}
-                retry={feed.retryInspector}
-                pageChild={feed.pageChild}
-                childStates={feed.childStates}
-                retryChild={feed.retryChild}
-                openFile={openFile}
-                resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
-                openProtocol={canOpenProtocol ? client.openProtocol : undefined}
-                exportItem={canExport ? props.export : undefined}
-              />
-            </div>
+          <div className={css.sortSelectWrap}>
+            <SortSelect
+              t={t}
+              sort={feed.sort}
+              direction={feed.direction}
+              onSelect={(sort, direction) => feed.setSort(sort, direction)}
+            />
           </div>
-        </>
-      )}
-    </div>
+
+          <span className={css.spacer} />
+
+          <div className={css.statusGroup}>
+            <StateDot state={probeState.loading ? 'ongoing' : connected ? 'done' : 'error'} />
+            <span
+              className={css.statusText}
+              role="status"
+              title={connected ? undefined : (probeState.error ?? probeState.data?.diagnosis)}
+            >
+              {probeState.loading ||
+              (probeState.data === undefined && probeState.error === undefined)
+                ? t('libraryLoading')
+                : connected
+                  ? t('libraryConnected')
+                  : t('libraryOffline')}
+            </span>
+          </div>
+
+          {diagnosticMenuItems.length > 0 && (
+            <div className={css.diagnosticsWrap}>
+              <Menu
+                open={diagMenuOpen}
+                anchor={
+                  <Tooltip label={t('detailsLabel')} side="bottom" delayMs={500}>
+                    <IconButton
+                      shape="square"
+                      icon={<IconEllipsisOutlineMedium className={css.actionIcon} />}
+                      aria-label={t('detailsLabel')}
+                      onClick={() => setDiagMenuOpen(!diagMenuOpen)}
+                    />
+                  </Tooltip>
+                }
+                items={diagnosticMenuItems}
+                onClose={() => setDiagMenuOpen(false)}
+                align="end"
+                portal
+              />
+            </div>
+          )}
+
+          <div className={css.refreshWrap}>
+            <Tooltip label={t('refresh')} side="bottom" delayMs={500}>
+              <IconButton
+                shape="square"
+                icon={<IconRefreshOutlineMedium className={css.actionIcon} />}
+                onClick={() => feed.refresh()}
+                aria-label={t('refresh')}
+              />
+            </Tooltip>
+          </div>
+
+          <div className={css.toolbarBreak} aria-hidden="true" />
+        </header>
+
+        {/* An answered-but-offline probe (or a failed one) replaces the whole
+         * workspace: the lanes stay gated and the note carries the diagnosis.
+         * Until this mount's probe answers, the cached snapshot may still paint
+         * the workspace, with every request still gated. */}
+        {!canBrowse ? (
+          <div className={css.offline} role="note">
+            <p className={css.offlineText}>{t('remoteAccessDenied')}</p>
+          </div>
+        ) : settled &&
+          !connected &&
+          (probeState.data !== undefined || probeState.error !== undefined) ? (
+          <div className={css.offline} role="note">
+            <p className={css.offlineText}>{t('libraryOfflineNote')}</p>
+            {(probeState.error ?? probeState.data?.diagnosis) !== undefined && (
+              <p className={css.offlineDetail}>{probeState.error ?? probeState.data?.diagnosis}</p>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Responsive Segmented Tabs in Narrow Mode */}
+            <div className={css.narrowNavWrap}>
+              <SegmentedControl
+                id="zotero-library-narrow-nav"
+                label={t('tabLibrary')}
+                value={feed.narrowPane}
+                onChange={feed.setNarrowPane}
+                options={[
+                  { value: 'tree', label: t('libraryNavTree') },
+                  { value: 'list', label: t('libraryNavList') },
+                  { value: 'inspector', label: t('libraryNavInspector') },
+                ]}
+              />
+            </div>
+
+            {/* 3-Column Workspace with Hairline Dividers */}
+            {feed.storageError && (
+              <p role="alert">
+                {t('libraryPositionError', { message: feed.storageError })}
+                <Button size="sm" onClick={feed.clearPosition}>
+                  {t('libraryPositionReset')}
+                </Button>
+              </p>
+            )}
+            <div className={css.columns}>
+              <div
+                className={clsx(
+                  css.columnPane,
+                  css.treePane,
+                  feed.narrowPane !== 'tree' && css.columnPaneHidden,
+                )}
+              >
+                <LibraryTree
+                  t={t}
+                  locatedRef={feed.locatedRef}
+                  flatTree={feed.flatTree}
+                  expanded={feed.expanded}
+                  identityOf={feed.identityOf}
+                  toggleCollection={feed.toggleCollection}
+                  selection={feed.selection}
+                  selectScope={handleSelectScope}
+                  rootLane={feed.treeLane(undefined)}
+                  treeLane={feed.treeLane}
+                  loadMoreTree={feed.loadMoreTree}
+                  retryTree={feed.retryTree}
+                />
+              </div>
+              <div
+                className={clsx(
+                  css.columnPane,
+                  css.listPane,
+                  feed.narrowPane !== 'list' && css.columnPaneHidden,
+                )}
+              >
+                {/* Pill-based Filter Rail */}
+                <LibraryFilters
+                  key={feed.scopeKey}
+                  t={t}
+                  face={face}
+                  library={feed.currentLibrary}
+                  value={feed.filters}
+                  change={feed.setFilters}
+                  enabled={connected}
+                />
+
+                {feed.mode === 'everything' && (
+                  <div className={clsx(css.caption, css.everywhereHint)}>
+                    <IconSearchOutlineMedium className={css.hintIcon} />
+                    <span>{t('libraryEverythingHint')}</span>
+                  </div>
+                )}
+
+                <LibraryItemList
+                  scrollKey={JSON.stringify([
+                    'list',
+                    feed.scopeKey,
+                    feed.q,
+                    feed.mode,
+                    feed.sort,
+                    feed.direction,
+                    feed.filters,
+                    feed.offset,
+                  ])}
+                  returnToLibrary={() => feed.selectScope({ kind: 'library' })}
+                  filtered={
+                    feed.q !== '' ||
+                    Object.values(feed.filters).some((value) =>
+                      Array.isArray(value) ? value.length > 0 : value !== undefined,
+                    )
+                  }
+                  locate={'ref' in feed.selection ? feed.locate : undefined}
+                  locateError={feed.locateError}
+                  t={t}
+                  list={feed.list}
+                  selection={feed.selection}
+                  offset={feed.offset}
+                  gotoOffset={feed.gotoOffset}
+                  selectedRef={feed.selectedRef}
+                  selectItem={handleSelectItem}
+                  retry={feed.retryList}
+                  useContextMenu={props.useContextMenu}
+                />
+              </div>
+              <div
+                className={clsx(
+                  css.columnPane,
+                  css.inspectorPane,
+                  feed.narrowPane !== 'inspector' && css.columnPaneHidden,
+                )}
+              >
+                {/* Write Support Drawer: acts on the inspected scope, so it
+                 * lives in the inspector column above the detail. */}
+                {probeState.data?.write?.enabled === true &&
+                  feed.currentLibrary.type === 'user' && (
+                    <LibraryWrite
+                      // The write targets ride the inspected scope, so a selection
+                      // or inspected row change remounts the form: a draft ref can
+                      // never outlive the item it was typed against.
+                      key={JSON.stringify([feed.scopeKey, feed.selectedRef ?? null])}
+                      t={t}
+                      write={props.write}
+                      sessionId={props.sessionId}
+                      sessionRunning={sessionRunning}
+                      writeAllowed={writeAllowed}
+                      selectedRef={feed.selectedRef}
+                      collectionRef={
+                        feed.selection.kind === 'collection' ? feed.selection.ref : undefined
+                      }
+                      searchRef={
+                        feed.selection.kind === 'savedSearch' ? feed.selection.ref : undefined
+                      }
+                      refreshAffected={feed.refreshAffected}
+                    />
+                  )}
+                <LibraryInspector
+                  t={t}
+                  inspector={feed.inspector}
+                  inputActions={inputActions}
+                  retry={feed.retryInspector}
+                  pageChild={feed.pageChild}
+                  childStates={feed.childStates}
+                  retryChild={feed.retryChild}
+                  readPdf={canResolveAttachment ? readPdf : undefined}
+                  openFile={openFile}
+                  resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
+                  openProtocol={canOpenProtocol ? client.openProtocol : undefined}
+                  exportItem={canExport ? props.export : undefined}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </LibraryPreferencesContext.Provider>
   )
 }
 

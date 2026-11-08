@@ -57,6 +57,7 @@ export function zoteroClientStub(
 export function inputActionsStub() {
   return {
     setDraft: vi.fn(),
+    persistDraft: vi.fn(),
     captureInsertion: vi.fn(() => ({ anchor: 0 })),
     insertText: vi.fn(() => true),
     insertQuote: vi.fn(() => true),

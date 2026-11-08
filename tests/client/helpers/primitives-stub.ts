@@ -1,28 +1,4 @@
-/**
- * Shared stub for `@deepseek-ai/dsh-client-ui-primitives`: the client specs
- * replace the real bundle (katex, shiki, the portal machinery) with the DOM
- * face they assert on. `vi.mock` factories are hoisted above the spec's
- * imports, so a spec must reach this module through a dynamic import inside
- * its own factory, a module-scope binding would be initialized too late:
- *
- *     vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
- *       const { primitivesStub } = await import('./helpers/primitives-stub.ts')
- *       return primitivesStub()
- *     })
- *
- * A spec that drives more of a primitive than the shared face offers passes
- * its own variant through `primitivesStub({ … })`, so the difference stays
- * visible at the spec's mock site instead of widening the shared stub for
- * every other file. Specs that stage through the real settings form model
- * (the settings page and the entry wiring) keep the stubbed visuals but take
- * the real form logic through `primitivesWithRealForm`:
- *
- *     vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
- *       const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
- *       return primitivesWithRealForm(importOriginal)
- *     })
- * @module tests/client/helpers/primitives-stub
- */
+/** Shared visual stubs; real staged form logic is loaded by primitivesWithRealForm. */
 
 import {
   Fragment,
@@ -37,6 +13,7 @@ import { vi, type MockedFunction } from 'vitest'
 import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TagStub } from './tag-stub.tsx'
 import { staticMenu, type MenuStubProps } from './menu-stub.tsx'
+import { MenuItemButtonStub } from './menu-item-stub.ts'
 import { primitivesIcons } from './primitives-icons.ts'
 
 /** The real clipboard writer, reached through the mocked module. */
@@ -74,6 +51,7 @@ export interface PrimitivesStub extends Omit<RealForm, 'SettingsValueField'> {
   /** A pill as the button the filter strip renders. */
   readonly Pill: (props: Record<string, unknown>) => ReactElement
   /** The menu variant this stub installs. */
+  readonly MenuItemButton: typeof MenuItemButtonStub
   readonly Menu: (props: MenuStubProps) => ReactElement
   /** The chevron that marks a disclosure. */
   readonly IconChevronDownOutlineMedium: (props: Record<string, unknown>) => ReactElement
@@ -331,6 +309,7 @@ export function primitivesStub(overrides: Partial<PrimitivesStub> = {}): Primiti
         children as never,
       ),
     Menu: staticMenu,
+    MenuItemButton: MenuItemButtonStub,
     MenuSurface: forwardRef<HTMLDivElement, Record<string, unknown>>((props, ref) => {
       const { children, className, style, compact, ...rest } = props
       return createElement(

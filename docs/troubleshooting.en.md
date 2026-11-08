@@ -25,7 +25,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 ## 4. Scholarly tools do not appear
 
 - Symptom: the model cannot see the seven scholarly tools such as `scholarly_search`, or the "Scholarly Search" tab of the settings page shows only a pointer and no field.
-- Cause: the `dsh-zotero/scholarly` component is not mounted. The component ships with the package and is off by default, and that row is its only switch: while the component is not mounted, the service, transport, and tools do not exist, and the host issues no external request.
+- Cause: the `dsh-zotero/scholarly` component is not mounted. The component ships with the package and is off by default, and that row is its only switch: while the component is not mounted, its service, transport, and tools do not exist, and no scholarly retrieval requests are issued.
 - Fix: turn on the `dsh-zotero/scholarly` row under "Included components" in the plugin manager; the tools and the settings page take effect without a restart. The authorization boundary for external retrieval is in [Product model](product-model.en.md).
 
 ## 5. Zotero tools missing from the current session after installation
@@ -62,7 +62,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 - Fix:
   1. In the plugin manager, confirm the `dsh-zotero` row is enabled and the detail page shows no load failure;
   2. On the **dsh-zotero** detail page, open "General → Literature trail" in the configuration area and confirm "Show literature trail" is on and saved; the toggle takes effect at once after saving, with no page refresh;
-  3. The literature trail and the literature panel do not share one gate chain: the trail follows only the core component and `webEnabled`, while the panel needs three gates at once (`dsh-zotero/library` component row + `webEnabled` + `rightSidebarEnabled`), see item 19.
+  3. The literature trail and the literature panel do not share one gate chain: the trail follows only the core component and `webEnabled`, while the panel needs two gates at once (`dsh-zotero/library` component row + `rightSidebarEnabled`), see item 19.
 
 ## 10. A single export exceeds the 50-item limit
 
@@ -126,12 +126,11 @@ Note: diagnostic records stay in the current process memory and are cleared when
 ## 19. Literature panel does not appear
 
 - Symptom: the right sidebar has no "Literature panel" tab or quick entry; the "Literature panel" tab of the settings page shows only a pointer to "Included components".
-- Cause: the literature panel needs three gates at once: the `dsh-zotero/library` component row is composed; the core `webEnabled` ("General → Literature trail → Show literature trail") is on; the component's own `rightSidebarEnabled` ("Literature panel → Sidebar Display → Show in right sidebar") is on. If any one is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued.
+- Cause: the literature panel needs two gates at once: the `dsh-zotero/library` component row is composed; the component's own `rightSidebarEnabled` ("Literature panel → Sidebar Display → Show in right sidebar") is on. If any one is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued.
 - Fix:
   1. Under "Included components" in the plugin manager, confirm the `dsh-zotero/library` row is enabled and reload the plugin;
-  2. Confirm the core `webEnabled` is on (see item 9);
-  3. Open the "Literature panel" tab of the settings page or the "Configure" button on the `dsh-zotero#library` row, confirm "Show in right sidebar" is on and saved; the toggle takes effect at once after saving;
-  4. If all three gates hold and the panel still does not appear, copy diagnostics as in item 18 and check whether the plugin failed to load.
+  2. Open the "Literature panel" tab of the settings page or the "Configure" button on the `dsh-zotero#library` row, confirm "Show in right sidebar" is on and saved; the toggle takes effect at once after saving;
+  3. If both gates hold and the panel still does not appear, copy diagnostics as in item 18 and check whether the plugin failed to load.
 
 ## 20. Literature panel is offline
 

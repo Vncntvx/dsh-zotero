@@ -1,6 +1,6 @@
 /**
  * The staged form controller for the `library` settings namespace (the
- * `dsh-zotero/library` row): right sidebar enablement.
+ * `dsh-zotero/library` row): display, browsing, PDF reading and citation preferences.
  *
  * Follows the harness SettingsFormModel pattern: staged edits,
  * revision-fenced atomic mutations, discard on unmount.
@@ -17,11 +17,17 @@ import {
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { asFormScope } from './helpers/form-scope.ts'
+import {
+  LIBRARY_CHOICES,
+  LIBRARY_DEFAULTS,
+  LIBRARY_PREFERENCE_KEYS,
+  LIBRARY_SECTIONS,
+  type LibraryPreferenceKey,
+} from '../library-preferences.ts'
 import { booleanFieldSpec } from './helpers/settings-fields.ts'
 
-export interface LibraryCardState extends SettingsFormShell {
-  readonly rightSidebarEnabled: SettingsFieldState
-}
+export type LibraryCardState = SettingsFormShell &
+  Readonly<Record<LibraryPreferenceKey, SettingsFieldState>>
 
 export interface LibraryCardFace extends SettingsFormActions {
   readonly hooks: {
@@ -30,7 +36,32 @@ export interface LibraryCardFace extends SettingsFormActions {
 }
 
 function fieldSpecs(): SettingsFieldSpec[] {
-  return [booleanFieldSpec('rightSidebarEnabled')]
+  return LIBRARY_PREFERENCE_KEYS.map((field): SettingsFieldSpec => {
+    if (field === 'rightSidebarEnabled' || field === 'allowUrlPdfRead')
+      return booleanFieldSpec(field)
+    return {
+      field,
+      format: (value) => JSON.stringify(value ?? LIBRARY_DEFAULTS[field]),
+      parse: (text) => {
+        if (text.trim() === '') return { kind: 'clear' }
+        try {
+          const value: unknown = JSON.parse(text)
+          if (field === 'detailExpandedSections') {
+            if (
+              !Array.isArray(value) ||
+              value.some((v) => !LIBRARY_SECTIONS.includes(v)) ||
+              new Set(value).size !== value.length
+            )
+              return undefined
+          } else if (!(LIBRARY_CHOICES[field] as readonly unknown[]).includes(value))
+            return undefined
+          return { kind: 'set', value }
+        } catch {
+          return undefined
+        }
+      },
+    }
+  })
 }
 
 export class LibraryFormController {
@@ -47,7 +78,9 @@ export class LibraryFormController {
     const shell = this.model.shell()
     return {
       ...shell,
-      rightSidebarEnabled: this.model.field('rightSidebarEnabled'),
+      ...(Object.fromEntries(
+        LIBRARY_PREFERENCE_KEYS.map((key) => [key, this.model.field(key)]),
+      ) as Record<LibraryPreferenceKey, SettingsFieldState>),
     }
   }
 
