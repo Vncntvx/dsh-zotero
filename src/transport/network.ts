@@ -1,37 +1,15 @@
 /**
- * Resolved-address guards for the scholarly transport.
- *
- * The lexical allowlist (`allowlist.ts`) decides which *names* may be
- * contacted, but a name is not an address: `localtest.me`, `*.nip.io`, and
- * `*.sslip.io` are ordinary DNS names that resolve to loopback or RFC1918
- * space, and no lexical check can see that. This module is the second gate:
- * the hostname is resolved, every answer must be a public unicast address,
- * and the resolved set is pinned into the connection so the socket cannot be
- * re-bound to a different address between check and connect (DNS rebinding).
- *
- * The module is deliberately free of node and undici imports: it is reachable
- * from the browser *type* program through the scholarly test fixtures, and
- * both node's and undici's declaration files merge global timer and fetch
- * declarations that collide with the DOM ones the client compiles against.
- * The production DNS resolver and the pinned undici dispatcher live in
- * `host-connections.ts`, which only the host-side composition imports.
- *
- * Only the open-access PDF arm leaves the allowlist (`allowPublicPdf`); it
- * resolves and pins a closed address set per attempt. The allowlist arm's
- * names are constants reviewed in `hosts.ts`, but a name is not an address:
- * its connections go through `validatingLookup`, which judges every DNS
- * answer public at connect time. The upstream harness fetch provider
- * explicitly answers intranet and loopback addresses and performs no address
- * judgment of its own (`packages/web/web-fetch-http`), so there is nothing
- * to inherit here.
- *
- * Rejections name the hostname and the offending address, never the URL.
- * @module dsh-zotero/scholarly/transport/network
+ * Shared public-address validation and DNS pinning for scholarly requests and
+ * user-initiated URL PDF reading. Every resolved address must be public, and
+ * the validated answer set is pinned into the socket to prevent DNS rebinding.
+ * Pure contracts stay browser-type-safe; production DNS/undici adapters live
+ * in connections.ts. Errors identify hosts and addresses, never signed URLs.
+ * @module dsh-zotero/transport/network
  */
 
-import { ScholarlySecurityError } from './allowlist.js'
-import { errorMessageOf } from '../../errors.js'
-import { raceWithSignal } from '../../race-signal.js'
+import { PublicAddressError } from './public-url.js'
+import { errorMessageOf } from '../errors.js'
+import { raceWithSignal } from '../race-signal.js'
 
 /** One DNS answer: the literal address and its family. */
 export interface ResolvedAddress {
@@ -208,7 +186,7 @@ export function isPublicIpAddress(ip: string): boolean {
  * @param resolver - the DNS seam; production resolves through the
  *   `node:dns` adapter in `host-connections.ts`.
  * @returns the resolved addresses, all public, in answer order.
- * @throws {ScholarlySecurityError} when the name does not resolve, or any
+ * @throws {PublicAddressError} when the name does not resolve, or any
  *   answer is a non-public address.
  */
 export async function resolvePublicAddresses(
@@ -222,18 +200,18 @@ export async function resolvePublicAddresses(
     answers = await raceWithSignal(resolution, signal)
   } catch (error) {
     if (signal?.aborted) throw error
-    throw new ScholarlySecurityError(
+    throw new PublicAddressError(
       `Security rejection: "${hostname}" did not resolve (${errorMessageOf(error)}).`,
     )
   }
   if (answers.length === 0) {
-    throw new ScholarlySecurityError(
+    throw new PublicAddressError(
       `Security rejection: "${hostname}" did not resolve to any address.`,
     )
   }
   const offender = answers.find((answer) => !isPublicIpAddress(answer.address))
   if (offender !== undefined) {
-    throw new ScholarlySecurityError(
+    throw new PublicAddressError(
       `Security rejection: "${hostname}" resolves to a non-public address (${offender.address}).`,
     )
   }

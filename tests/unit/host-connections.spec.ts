@@ -9,7 +9,7 @@ import {
   createPinnedDispatcher,
   dnsAddressResolver,
   scholarlyPublicAccess,
-} from '../../src/scholarly/transport/host-connections.js'
+} from '../../src/transport/connections.js'
 
 beforeEach(() => {
   lookupMock.mockReset()

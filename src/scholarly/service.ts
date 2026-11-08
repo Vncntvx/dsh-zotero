@@ -45,7 +45,7 @@ import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
-import { scholarlyPublicAccess } from './transport/host-connections.js'
+import { scholarlyPublicAccess } from '../transport/connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
 

@@ -39,7 +39,7 @@ import {
   type AddressResolver,
   type PinnedDispatcher,
   type ResolvedAddress,
-} from './network.js'
+} from '../../transport/network.js'
 
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 

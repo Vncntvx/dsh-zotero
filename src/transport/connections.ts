@@ -1,14 +1,7 @@
 /**
- * The host-side seams of the scholarly transport's address safety: the
- * production DNS resolver and the pinned undici dispatcher.
- *
- * This module imports `node:dns` and `undici`, so it must stay out of the
- * browser type program — both declaration sets merge global timer and fetch
- * declarations that collide with the DOM ones the client compiles against.
- * Only the host-side composition (`scholarly/service.ts`) imports it; the
- * browser-reachable transport (`http.ts`) receives the two seams through its
- * `publicAccess` option, typed against `network.ts`'s pure interfaces.
- * @module dsh-zotero/scholarly/transport/host-connections
+ * Host-only DNS and undici adapters for the shared public-address gate.
+ * Both the scholarly transport and library URL PDF reader inject these adapters.
+ * @module dsh-zotero/transport/connections
  */
 
 import { lookup } from 'node:dns/promises'

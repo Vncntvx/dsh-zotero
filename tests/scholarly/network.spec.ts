@@ -16,7 +16,7 @@ import {
   validatingLookup,
   type AddressResolver,
   type ResolvedAddress,
-} from '../../src/scholarly/transport/network.js'
+} from '../../src/transport/network.js'
 import { ScholarlySecurityError } from '../../src/scholarly/transport/allowlist.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { stubPublicAccess } from './fixtures.js'
