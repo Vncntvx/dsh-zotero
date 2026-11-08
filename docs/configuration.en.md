@@ -5,10 +5,10 @@
 dsh-zotero configuration is split across three settings namespaces. Each namespace gets its field defaults from its own Schemastery schema and is validated on load or save; an invalid value blocks plugin loading or that namespace's configuration write.
 
 - Core `zotero` namespace: `src/config.ts`, 37 fields, runtime validation by `resolveConfig`;
-- Literature panel `library` namespace: `src/library/config.ts`, 1 field;
+- Literature panel `library` namespace: `src/library/config.ts`, 11 fields;
 - Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields.
 
-The three groups total 47 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`.
+The three groups total 57 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
@@ -19,7 +19,7 @@ The configuration area of the plugin detail page is a 6-tab form that edits all 
 | General             | `zotero`           | 8      | Literature trail: `webEnabled`; Writing: `writeEnabled`, `writePersistKey`, `writeNoteMaxChars`, `writeListMaxItems`, `writeAuthorizeDeadlineMs`; Citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                    |
 | Connection          | `zotero`           | 5      | Connection: `baseUrl`, `provider`, `timeoutMs`, `maxInFlightRequests`, `scopeListingTtlMs`                                                                                                                                                                                                                                              |
 | Search & Extraction | `zotero`           | 13     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars` |
-| Literature panel    | `library`          | 1      | Sidebar Display: `rightSidebarEnabled`                                                                                                                                                                                                                                                                                                  |
+| Literature panel    | `library`          | 11     | 11 preferences for display, details, browsing, PDF reading, citations and conversation                                                                                                                                                                                                                                                  |
 | Scholarly Search    | `scholarly`        | 9      | Identity and credential references: `email`, `s2ApiKeyEnv`, `ncbiApiKeyEnv`, `openalexApiKeyEnv`; Search & Full-text Quotas: `maxResults`, `maxContentChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`                                                                                         |
 | Advanced            | `zotero`           | 11     | Output limits: `maxInlineResultTokens`, `maxInlineResultBytes`, `maxResponseBytes`, `maxExportChars`, `maxExportRefs`, `maxBrowseResults`, `maxChangesResults`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`; Diagnostics: `debug`                                                                 |
 
@@ -61,7 +61,7 @@ The configuration area of the plugin detail page is a 6-tab form that edits all 
 | `writeNoteMaxChars`        | `65536`                      | Character cap for one research note body                                                                                                                                                                                                   |
 | `writeListMaxItems`        | `50`                         | Item cap for list-shaped write arguments: `add`/`remove` on `update_item_tags`/`update_item_collections`, `tags` on `delete_library_tags`, and `collections`/`tags`/`sourceRefs` on `create_note`                                          |
 | `writeAuthorizeDeadlineMs` | `120000`                     | Time limit for waiting on the Zotero authorization dialog during a write (ms)                                                                                                                                                              |
-| `webEnabled`               | `true`                       | Whether to show the literature trail tab at the top of the conversation; also one of the gates for the right-sidebar literature panel                                                                                                      |
+| `webEnabled`               | `true`                       | Whether to show the literature trail tab at the top of the conversation                                                                                                                                                                    |
 | `enableRunInBackground`    | `true`                       | Whether requests with `run_in_background: true` may run in the background (the parameter is always declared; passing `true` while this is off returns a structured refusal)                                                                |
 | `promoteOnTimeout`         | `true`                       | Whether a foreground export or changes sync that times out is promoted to a background job                                                                                                                                                 |
 | `foregroundWaitMs`         | `4000`                       | Foreground wait limit (ms), after which the operation is promoted to a background Job                                                                                                                                                      |
@@ -83,7 +83,7 @@ Note: `foregroundWaitMs` controls how long a foreground task waits before it is 
 - `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, `promoteOnTimeout`, and `debug` must be booleans;
 - `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 
-The literature panel and scholarly search schemas are validated by the components themselves when they mount: `rightSidebarEnabled` must be a boolean; `maxResults` must be an integer from 1 to 100; `maxContentChars` must be an integer from 1,000 to 50,000; `enableRunInBackground` and `promoteOnTimeout` must be booleans; `foregroundWaitMs` must be an integer from 1 to 240,000; the credential-reference fields must be strings, where an empty value disables that key and a non-empty value is resolved by `src/scholarly/credentials.ts` as an environment-variable name before every tool call.
+The 11 literature panel preferences are validated at mount and on every commit against the booleans, enums and unique section list below. The scholarly schema is validated by its component: `maxResults` must be an integer from 1 to 100; `maxContentChars` must be an integer from 1,000 to 50,000; `enableRunInBackground` and `promoteOnTimeout` must be booleans; `foregroundWaitMs` must be an integer from 1 to 240,000; the credential-reference fields must be strings, where an empty value disables that key and a non-empty value is resolved by `src/scholarly/credentials.ts` as an environment-variable name before every tool call.
 
 ## Configuration priority
 
@@ -115,7 +115,7 @@ The first two are two views of one `ConfigForm` state, synced live over both cha
 
 - When transport configuration or a write gate changes, the HTTP client, local provider, and write tool set are rebuilt on the same `ZoteroService` instance;
 - Limit configuration changes are read by the provider on the next call, with no transport rebuild;
-- The `webEnabled` toggle shows or hides the literature trail tab and the literature panel immediately after saving;
+- The `webEnabled` toggle shows or hides the literature trail tab immediately after saving;
 - The `rightSidebarEnabled` toggle shows or hides the right-sidebar literature panel immediately after saving;
 - The `debug` toggle takes effect immediately after saving and controls the diagnostics panel at the bottom of the detail page and diagnostic log retention, with no component reinitialization;
 - Every other configuration update applies on the next tool call, with no host restart.
@@ -128,7 +128,7 @@ In a headless environment with no settings service, the plugin runs on the entry
 
 ## Scholarly component configuration (`dsh-zotero/scholarly`)
 
-The component ships with the package and is off by default. Its only switch is the `dsh-zotero/scholarly` row under "Included components" in the plugin manager: enabling that row mounts the component, registers its 7 model tools, and permits external requests — index searches go only to the explicitly allowlisted external academic indexes, and the open-access PDF fulltext arm is the single exception (any public HTTP(S) host under the two-gate public-address check). While the component is not mounted, the service, transport, and tools do not exist, so the host cannot issue any external request; the equivalent hand edit is `- id: scholarly` plus `disabled: false` in the current profile's `cordis.patch.yml`. The authorization boundary for external retrieval is in the "four boundaries" section of [Product model](product-model.en.md).
+The component ships with the package and is off by default. Its only switch is the `dsh-zotero/scholarly` row under "Included components" in the plugin manager: enabling that row mounts the component, registers its 7 model tools, and permits external requests — index searches go only to the explicitly allowlisted external academic indexes, and the open-access PDF fulltext arm is the single exception (any public HTTP(S) host under the two-gate public-address check). While the component is not mounted, its service, transport, and tools do not exist, so no scholarly retrieval request can be issued; the equivalent hand edit is `- id: scholarly` plus `disabled: false` in the current profile's `cordis.patch.yml`. The authorization boundary for external retrieval is in the "four boundaries" section of [Product model](product-model.en.md).
 
 Component fields have three entry points: the "Scholarly Search" tab of the unified settings page, the "Configure" button on the `dsh-zotero#scholarly` row in the plugin list, or `config` on that row in the current profile's `cordis.patch.yml`. The first two are two views of one form state, synced live over both channels; the third is the configuration override layer. A field change applies on the next tool call, with no profile restart:
 
@@ -164,14 +164,24 @@ Component fields have three entry points:
 
 The first two are two views of one form state, synced live over both channels; the third is the configuration override layer.
 
-| Field                 | Default | Description                                                                                                                                                                      |
-| --------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rightSidebarEnabled` | `true`  | Whether to show the literature panel tab and quick entry in the right sidebar (`sidebarRightTabs` + `sidebar.right.pane.tab`), so literature can be read beside the conversation |
+| Field                    | Default                   | Values and behavior                                                                                           |
+| ------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `rightSidebarEnabled`    | `true`                    | Show the panel and shortcuts independently of the literature trail                                            |
+| `listDensity`            | `comfortable`             | `comfortable` / `compact`, using standard / compact host button density                                       |
+| `titleLines`             | `2`                       | `1` / `2`; hover reveals the complete title                                                                   |
+| `detailExpandedSections` | `[abstract, attachments]` | Unique subset of `abstract`, `attachments`, `notes`, `annotations`; an empty array collapses all              |
+| `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                                                |
+| `urlPdfOpenTarget`       | `sidebar`                 | `sidebar` / `float`, after host validation and download                                                       |
+| `allowUrlPdfRead`        | `false`                   | Independent external reading permission, acknowledged before enabling; does not require scholarly             |
+| `reopenBehavior`         | `restore`                 | `restore` resumes the position; `allItems` starts at personal-library All items on a new tab or page reload   |
+| `scopeChangeBehavior`    | `preserve`                | `preserve` / `clear`; applies to query and extra filters between collections and All items in one library     |
+| `defaultCopyFormat`      | `citation`                | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo`                  |
+| `chatInsertContent`      | `reference`               | `reference` inserts item information; `referenceAndAbstract` adds the abstract with missing/truncated markers |
 
-The literature panel appears only when all three conditions hold:
+Both settings entrances share staged edits, save, discard and reset-to-inherited behavior. The appearance preview reads drafts without accessing the library; the live panel consumes accepted settings only. Display, disclosure defaults and actions update immediately without remounting the component; manual disclosure changes for the current item take precedence. Choosing a copy-menu format affects that operation only. CSL style and language reuse core `defaultStyle` / `defaultLocale`; this page shows accepted values and links to General settings.
 
-1. The `dsh-zotero/library` component row is composed: while the row is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued;
-2. The core `webEnabled` is on ("General → Literature trail → Show literature trail");
-3. This component's `rightSidebarEnabled` is on.
+Browsing positions use v3 storage, isolated by browser, Zotero `serverId` and conversation. Records retain library, scope, query, mode, sorting, filters, page, expanded prefixes, selected item, narrow pane and scroll positions, without directory payloads. Temporary hiding, switching conversations and opening a reader preserve the current tab even under `allItems`. Clear a conversation's browsing position from the panel tab menu; resetting inherited configuration is separate. Storage failures show an inline error and reset action. Changing libraries, saved searches or Trash always clears query and extra filters while preserving mode and sorting.
 
-The panel only browses and searches the local Zotero library; writes started from the panel and writes from tools pass through the same approval seam and require the owning session to be running. External retrieval is not part of the panel; see the "four boundaries" section of [Product model](product-model.en.md).
+URL PDF reading accepts only a qualified attachment ref belonging to the current local Zotero instance. The service resolves the URL itself and accepts no arbitrary URL input. Every host passes public-address and DNS checks, connections use the pinned answers, and every redirect is revalidated with HTTPS downgrade refused. Requests carry no browser cookies, credentials or Referer. Downloads are limited to 32 MiB, 60 seconds, 5 redirects and 2 concurrent reads; media type and PDF signature are checked. Failures never return partial files or retry automatically; revoking permission cancels active downloads. Complete PDFs are staged in private random temporary directories and opened through the public host file reader in the owning session's sidebar or floating panel. Closing the last reader or unloading the plugin releases its file; at most 16 reading files are retained. Saving settings and restoring tabs never initiates an external download. The browser retains the attachment source ref; a restored reader offers an explicit Reload PDF tab-menu action that revalidates permission and source before replacing the original session tab. Download URLs are never persisted. This permission enables no external index searches, Agent tools or scholarly prompt section.
+
+The panel requires a composed component row and `rightSidebarEnabled`; `webEnabled` controls only the literature trail. Without the component, no panel surface or endpoint call exists. Panel writes retain the core approval seam and require the owning session to be running.

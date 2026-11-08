@@ -101,9 +101,21 @@ export const TYPERT_MANIFEST: TypertContribution = {
       {
         key: ZOTERO_LIBRARY_SERVICE_KEY,
         exportName: 'ZoteroLibraryService',
-        description: 'Serves library panel listings and approved mutations.',
+        description: 'Serves library panel listings, user PDF reads, and approved mutations.',
         tags: [],
         members: [
+          {
+            kind: 'method',
+            name: 'releaseUrlPdf',
+            signature:
+              'releaseUrlPdf(request: { lease: string }, signal: AbortSignal): Promise<{ released: true }>',
+          },
+          {
+            kind: 'method',
+            name: 'readUrlPdf',
+            signature:
+              'readUrlPdf(request: { ref: string }, signal: AbortSignal): Promise<ZoteroUrlPdfView>',
+          },
           {
             kind: 'method',
             name: 'collectionPath',

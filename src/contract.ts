@@ -983,3 +983,25 @@ export function zoteroCollectionPathInvocation(
 ): InvocationDescriptor {
   return libraryInvocation('dsh-zotero#zotero/collectionPath', 'collectionPath', param, result)
 }
+
+/** A private reading file, released when its last reader closes or the plugin unloads. */
+export interface ZoteroUrlPdfView {
+  readonly ref: string
+  readonly title: string
+  readonly contentType: 'application/pdf'
+  readonly path: string
+  readonly lease: string
+}
+export function zoteroReadUrlPdfInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation('dsh-zotero#zotero/readUrlPdf', 'readUrlPdf', param, result)
+}
+
+export function zoteroReleaseUrlPdfInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation('dsh-zotero#zotero/releaseUrlPdf', 'releaseUrlPdf', param, result)
+}

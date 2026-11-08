@@ -5,10 +5,10 @@
 dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由各自的 Schemastery schema 提供，加载或保存时经校验；不合法的值会阻止插件加载或该命名空间的配置写入。
 
 - 核心 `zotero` 命名空间：`src/config.ts`，37 个字段，由 `resolveConfig` 执行运行时校验；
-- 文献面板 `library` 命名空间：`src/library/config.ts`，1 个字段；
+- 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段。
 
-三组合计 47 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly`）的 `config` 下。
+三组合计 57 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -19,7 +19,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 | 基础设置 | `zotero`     | 8      | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`、`writeNoteMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                            |
 | 本地连接 | `zotero`     | 5      | 连接：`baseUrl`、`provider`、`timeoutMs`、`maxInFlightRequests`、`scopeListingTtlMs`                                                                                                                                                                                                                          |
 | 检索提取 | `zotero`     | 13     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars` |
-| 文献面板 | `library`    | 1      | 侧边栏显示设置：`rightSidebarEnabled`                                                                                                                                                                                                                                                                         |
+| 文献面板 | `library`    | 11     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项设置                                                                                                                                                                                                                                                            |
 | 学术检索 | `scholarly`  | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                          |
 | 高级选项 | `zotero`     | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                           |
 
@@ -61,7 +61,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 | `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                                                                                      |
 | `writeListMaxItems`        | `50`                         | 列表类写入参数的条目上限：`update_item_tags`/`update_item_collections` 的 `add`/`remove`、`delete_library_tags` 的 `tags`、`create_note` 的 `collections`/`tags`/`sourceRefs` |
 | `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                                                                                      |
-| `webEnabled`               | `true`                       | 是否显示会话顶部的文献轨迹标签页；同时是右侧边栏文献面板的门控之一                                                                                                            |
+| `webEnabled`               | `true`                       | 是否显示会话顶部的文献轨迹标签页                                                                                                                                              |
 | `enableRunInBackground`    | `true`                       | 是否允许 `run_in_background: true` 的请求进入后台执行（参数恒声明，关闭时传 `true` 返回结构化拒绝）                                                                           |
 | `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                |
 | `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                            |
@@ -83,7 +83,7 @@ dsh-zotero 的配置按三个设置命名空间分开定义，字段默认值由
 - `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground`、`promoteOnTimeout` 与 `debug` 必须为布尔值；
 - `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
-文献面板与学术检索的 schema 由组件自身在挂载时校验：`rightSidebarEnabled` 必须为布尔值；`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；`foregroundWaitMs` 必须是 1–240,000 的整数；凭据引用名为字符串，空串表示禁用该 key，非空值在每次工具调用前由 `src/scholarly/credentials.ts` 解析为合法环境变量名。
+文献面板的 11 项配置按下表中的布尔值、枚举与无重复分区列表在挂载及每次提交时校验；学术检索的 schema 由组件自身校验：`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；`foregroundWaitMs` 必须是 1–240,000 的整数；凭据引用名为字符串，空串表示禁用该 key，非空值在每次工具调用前由 `src/scholarly/credentials.ts` 解析为合法环境变量名。
 
 ## 配置优先级
 
@@ -115,7 +115,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 - 传输层配置或写入开关变更时，在同一 `ZoteroService` 实例上重建 HTTP 客户端、local provider 与写入工具集；
 - 限额配置变更由 provider 在下次调用时直接读取，无需重建传输层；
-- `webEnabled` 开关保存后即时显示或隐藏文献轨迹标签页与文献面板；
+- `webEnabled` 开关保存后即时显示或隐藏文献轨迹标签页；
 - `rightSidebarEnabled` 开关保存后即时显示或隐藏右侧边栏的文献面板；
 - `debug` 开关保存后即时生效，控制详情页底部诊断面板的显示与诊断日志保留，无需重新初始化组件；
 - 其余配置更新均在下一次工具调用时生效，无需重启宿主。
@@ -128,7 +128,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术检索组件配置 (`dsh-zotero/scholarly`)
 
-组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验）。组件未挂载时，服务、传输层与工具都不存在，宿主无法发出任何外部请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
+组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
 
 组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。字段变更在下一次工具调用时生效，无需重启 profile：
 
@@ -164,14 +164,24 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。
 
-| 字段                  | 默认值 | 说明                                                                                                            |
-| --------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
-| `rightSidebarEnabled` | `true` | 是否在右侧边栏显示文献面板标签页与快捷入口（`sidebarRightTabs` + `sidebar.right.pane.tab`），可边对话边查阅文献 |
+| 字段                     | 默认值                    | 取值与行为                                                                                   |
+| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------- |
+| `rightSidebarEnabled`    | `true`                    | 显示文献面板与快捷入口，独立于文献轨迹开关                                                   |
+| `listDensity`            | `comfortable`             | `comfortable` / `compact`，使用宿主标准 / 紧凑按钮密度                                       |
+| `titleLines`             | `2`                       | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                              |
+| `detailExpandedSections` | `[abstract, attachments]` | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠               |
+| `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                               |
+| `urlPdfOpenTarget`       | `sidebar`                 | `sidebar` / `float`，通过宿主校验并下载后阅读                                                |
+| `allowUrlPdfRead`        | `false`                   | 独立外网阅读授权，表单开启前需确认；不依赖 scholarly 组件                                    |
+| `reopenBehavior`         | `restore`                 | `restore` 恢复上次位置；`allItems` 在新建标签页或刷新后从个人库全部条目开始                  |
+| `scopeChangeBehavior`    | `preserve`                | `preserve` / `clear`；只影响同库合集与全部条目之间的关键词及附加筛选                         |
+| `defaultCopyFormat`      | `citation`                | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo` |
+| `chatInsertContent`      | `reference`               | `reference` 条目信息；`referenceAndAbstract` 另附摘要，缺失及截断均明确标注                  |
 
-文献面板要出现，需要以下三处同时成立：
+两个设置入口均使用暂存、保存、放弃、重置继承值的同一模型。外观预览只读取当前草稿，不查询文献库；实际面板只消费已保存的配置。修改显示、展开范围和默认动作会即时生效，不重挂载组件；当前条目手动调整过的展开状态优先。复制菜单选择只用于本次操作，不改变默认格式。CSL 样式和语言复用核心 `defaultStyle` / `defaultLocale`，本页显示已生效值并提供基础设置入口。
 
-1. `dsh-zotero/library` 组件行已组合：行未启用时不注册任何面板表面，也不发起 `zotero/browse|collectionPath|search|item|childPage|export|write` 请求；
-2. 核心 `webEnabled` 开启（「基础设置 → 文献轨迹 → 显示文献轨迹」）；
-3. 本组件的 `rightSidebarEnabled` 开启。
+浏览位置使用 v3 格式，按浏览器、Zotero 实例 `serverId` 和会话隔离。保存库、范围、关键词、模式、排序、筛选、分页、展开前缀、选中条目、窄屏分区和滚动位置；不保存目录载荷。临时隐藏、切换会话或打开阅读器后返回，保留当前标签页的位置，`allItems` 也不会中途重置。清除会话浏览位置由面板标签菜单触发，与恢复配置继承值分开。存储读取或写入失败会就地显示错误与重置入口。切换库、保存搜索或回收站总是清空关键词与附加筛选，保留检索模式和排序。
 
-面板只浏览与检索本地文献库；面板发起的写入与工具写入走同一条审批接缝，且要求所属会话正在运行。外部检索不属于面板，见[产品模型](product-model.md)的「四条边界」。
+URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行解析 URL，拒绝任意网址输入。每个主机都执行公网地址与 DNS 校验，使用固定解析地址连接，重定向逐跳校验并拒绝 HTTPS 降级；不发送浏览器 Cookie、认证或 Referer。下载上限为 32 MiB、60 秒、最多 5 次重定向和 2 个并发，检查媒体类型与 PDF 文件头，失败不返回截断文件、不自动重试；关闭授权会取消在途下载。完整 PDF 写入随机私有临时目录，通过宿主公开文件阅读器在原会话侧栏或浮窗打开；阅读标签关闭或插件卸载时释放文件，最多保留 16 个阅读文件。保存设置和恢复标签页都不会自动发起外网下载。浏览器保存附件来源 ref，恢复的 PDF 标签可从标签菜单显式「重新载入 PDF」，重新校验授权与来源并替换原会话标签；不持久化下载 URL。此授权不启用外部索引搜索、Agent 工具或 scholarly 提示词。
+
+文献面板显示需要组件行已组合且 `rightSidebarEnabled` 开启；`webEnabled` 只控制文献轨迹。组件未组合时不注册面板，也不调用文献面板端点。面板写入仍走核心审批接缝，要求所属会话正在运行。

@@ -174,6 +174,8 @@ describe('the zotero typert manifest', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
     expect(TYPERT_MANIFEST.face).toBe('host')
     expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
+      'releaseUrlPdf',
+      'readUrlPdf',
       'status',
       'resolveAttachment',
       'diagnostics',
@@ -191,9 +193,17 @@ describe('the zotero typert manifest', () => {
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
       if (
-        ['collectionPath', 'browse', 'search', 'item', 'childPage', 'export', 'write'].includes(
-          invocation.method,
-        )
+        [
+          'releaseUrlPdf',
+          'readUrlPdf',
+          'collectionPath',
+          'browse',
+          'search',
+          'item',
+          'childPage',
+          'export',
+          'write',
+        ].includes(invocation.method)
       ) {
         expect(invocation.service).toBe('zoteroLibrary')
       } else {

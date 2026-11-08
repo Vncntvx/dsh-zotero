@@ -29,7 +29,7 @@ graph LR
 | `dsh-zotero/library`   | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面 |
 | `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取       |
 
-三者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段、没有自己的传输层，端点全部转交核心，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在。
+三者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心；显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在。
 
 ## 核心分层
 
@@ -98,7 +98,7 @@ graph LR
 
 - 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；段落只列出该步骤准入的工具，准入为空时不渲染；web_fetch 路由禁令随任一外部 scholarly 工具保留；父组件的策略段不描述外部检索工具，只在 save 进入本步准入时按其名字归类写面。
 - 主机白名单：`src/scholarly/transport/hosts.ts` 是唯一真源，允许的 host 与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。
-- 地址安全：白名单只判「名字」。端口仅允许 80/443（显式拼写等同默认端口）；开放获取 PDF 臂（`allowPublicPdf`）离开白名单时还须过第二道门——`src/scholarly/transport/network.ts` 解析主机名并拒绝任何非公网单播地址（含 NAT64/IPv4-mapped 内嵌地址的判定），随后把已验证地址钉进 undici 连接（`host-connections.ts`），防止检查与建连之间的 DNS rebinding；重定向的每一跳都重新过词法门与解析门。未接入这两道门（`publicAccess` 缺失）时该臂直接报错，不降级为不钉扎连接。
+- 地址安全：白名单只判「名字」。端口仅允许 80/443（显式拼写等同默认端口）；开放获取 PDF 臂（`allowPublicPdf`）离开白名单时还须过第二道门——`src/transport/network.ts` 解析主机名并拒绝任何非公网单播地址（含 NAT64/IPv4-mapped 内嵌地址的判定），随后把已验证地址钉进 undici 连接（`connections.ts`），防止检查与建连之间的 DNS rebinding；重定向的每一跳都重新过词法门与解析门。未接入这两道门（`publicAccess` 缺失）时该臂直接报错，不降级为不钉扎连接。
 - 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束，重试退避发生在闸门之外，不占用在飞槽位；熔断与限流按裸 hostname（不含端口）计。
 - 凭证：学术检索配置只保存 `role('credential-ref')` 声明的凭据引用名（`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`），密钥值不进入配置；`src/scholarly/credentials.ts` 在每次外部工具调用前经 `ctx.get('credentials')` 解析，引用名非法、凭据服务缺失或引用无值时分别报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` 或 `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`，不静默降级为匿名请求。解析后的 key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。
 - 全文缓存：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引；读结果分 `hit` / `miss` / `corrupt` 三态，损坏条目被驱逐并记录。
@@ -108,8 +108,8 @@ graph LR
 
 ## 文献库子组件 (`src/library/`)
 
-- 服务：`ZoteroLibraryService`（派生自 `TypertRemoteService`）注册 `ctx.zoteroLibrary`，独占 `library` 设置命名空间；端点 `browse`、`search`、`item`、`childPage`、`export`、`write`。只读端点全部经 `requireZoteroService` 转交核心；写入经 `executeLibraryWrite` 进入标准写入审批链；
-- 配置：`src/library/config.ts` 的 `LibraryConfigSchema` 只有 `rightSidebarEnabled` 一个 volatile 开关，宿主不读取它，开关完全由浏览器侧门控消费；
+- 服务：`ZoteroLibraryService`（派生自 `TypertRemoteService`）注册 `ctx.zoteroLibrary`，独占 `library` 设置命名空间；端点 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`。本地库只读端点经 `requireZoteroService` 转交核心；写入经 `executeLibraryWrite` 进入标准写入审批链；
+- 配置：`src/library/config.ts` 的 `LibraryConfigSchema` 定义 11 个 volatile 字段。`library-preferences.ts` 是纯共享取值与默认值权威；宿主逐次校验并执行 URL PDF 授权，浏览器消费已提交快照驱动外观与动作；
 - 页面大小：面板请求的 `limit` 由宿主钳制到核心的 `maxBrowseResults` / `maxSearchResults`，响应回显实际生效值；
 - 导出端点：`export` 复用核心的导出文本域（同一格式、同一 `defaultStyle`/`defaultLocale` 默认值、同一 `maxExportRefs` 上限；只返回渲染文本/引文，不做工具侧的逐条文档定位），供面板动作行复制引用；它是只读端点，不经过写入审批；
 - 导出面：`package.json` 公开 `./library`、`./library/locale/*.json` 与 `./library/icon`，与根导出相互独立。
@@ -129,11 +129,11 @@ graph LR
 
 ### 文献面板（`sidebarRightTabs` + `sidebar.right.pane.tab`）
 
-- 门控：组件行已组合、核心 `webEnabled` 开启、面板 `rightSidebarEnabled` 不为 false，三者同时成立才挂载；开关变化即时生效。
+- 门控：组件行已组合且面板 `rightSidebarEnabled` 开启才挂载；核心 `webEnabled` 只控制文献轨迹；开关变化即时生效。
 - 数据面：`useLibraryFeed` 持有面板的全部 wire 调用；`library-data-plane.ts` 对其做同请求合并与短 TTL 缓存（browse 30s、item 10s、export 10s、search/childPage 2s，`collectionPath` 不缓存；最多 128 条），并按 `serverId` 重新键入缓存；只缓存成功读取，写入不经过该层。
 - 访问门禁：面板整组（标签页类型、主体、标题、标签菜单、输入框按钮、交付与文档操作）只在宿主授予全局 `zotero/browse` 动作时注册；引文导出、附件定位与桌面端唤起各自回答自己的全局授权；写入抽屉回答会话级 `zotero/write` 授权，无授权时直接说明拒绝，而不是提供一个宿主必然拒绝的提交。宿主侧的检查（`src/library-write.ts` 的 `ctx.remoteAccess.allows`）仍是权威。
 - 会话绑定：面板标签页是会话作用域：本地附件在该会话的右侧阅读栏打开，写入审批与计划卡发往该会话。
-- 状态与无障碍：面板偏好与视图钉子按 `serverId` 存入 `localStorage`；详情载荷与探针快照按会话保存在内存中（上限 8 个会话）；合集树使用 ARIA tree、roving tabindex 与方向键。
+- 状态与无障碍：共享偏好来自 `ConfigForm` 的已接受快照，草稿只驱动设置页预览；浏览位置按 `serverId` 与会话存入 `localStorage`；详情载荷与探针快照按会话保存在内存中（上限 8 个会话）；合集树使用 ARIA tree、roving tabindex 与方向键。
 - 布局：宽屏三列由匿名容器查询 `@container (min-width: 720px)` 切换；窄屏为分段导航（导航 / 列表 / 详情），并有 640/520/460/360px 的细化。
 - 竞态：合集树由 `useLibraryNavigation` 的实例世代、每前缀库版本与在途去重负责，其它 lane 的旧结果不会混入；列表、检查器与子列表各自使用独立序号，晚到的旧响应按序号丢弃；子集合翻页走独立 `childPage` 端点。
 - 请求纪律：探针返回前不发出任何面板请求；离线段不发请求；关闭面板后不再发起新请求。
@@ -192,6 +192,14 @@ graph LR
 
 ## 导航状态与路径端点
 
-`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储采用 v2 键与格式，仅保留状态与视图标记，不持久化目录响应或叶节点推断。只读端点 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
+`useLibraryNavigation` 独立管理连续前缀、库版本、在途去重、最多四个导航任务以及恢复和定位；`useLibraryFeed` 管理条目与统一持久化。存储采用 v3 键与格式（按实例和会话隔离），仅保留状态与视图标记，不持久化目录响应或叶节点推断。只读端点 `collectionPath({ library, ref, libraryVersion })` 经 `ctx.zoteroLibrary` → `ctx.zotero` → Local Provider，使用 browse 能力门控。返回根至目标的真实合集行及库版本；结束时通过轻量列表读取校验版本，不使用单对象版本或名称缓存。祖先缺失、循环与非法父关系明确失败。合集和保存搜索分页必须携带有效 `Last-Modified-Version`，双端 codec 拒绝缺失版本。同一前缀的各页必须共享同一库版本；版本前进时只重启该前缀，其余分支与服务请求不受影响。路径数据面只合并同代在途请求，不复用已完成结果。
 
 读取交付由 `result-delivery.ts` 统一管理：`zotero_results` 保存持久回执，AttachmentStore 保存单份完整 JSON。`result-route.ts` 按认证的持久事件坐标读取；八个读取工具共用 inline/file 结构，后台与超时提升的任务先持久化再完成（前台落定由 inline 预算决定），post-execute 为所属 job_output 追加有界标准 FileBlock。`result-reader.ts` 在校验流结束后才允许复制下载。按种类窗口和完整读取共用顺序 `childPages`，位置解析复用当前页并限制并发。
+
+### 用户主动阅读 URL PDF
+
+`src/library/url-pdf.ts` 从核心解析库内附件，在独立 `allowUrlPdfRead` 授权下下载。`src/transport/` 由 scholarly 与用户阅读共用公网地址和 DNS 固定连接，不触发 scholarly 组合。下载检查逐跳重定向、HTTPS 降级、类型、文件头、32 MiB、60 秒和两并发；撤销授权取消在途请求。`pdf-files.ts` 持有私有临时文件的租约（最多 16 个）；客户端通过现有公开 `fileAddressFor` / `tab.actions.openResource` 打开原会话的阅读器，订阅 `sidebarRight.openTabs` 在最后一个阅读标签关闭时释放文件，插件卸载释放余下文件。保存设置及恢复标签不触发下载。实现无需修改宿主仓库。
+
+设置与阅读验收分工：`tests/host/library/config-commit.spec.ts` 通过真实 Loader 验证原子配置提交与拒绝；`url-pdf.spec.ts` 验证网络安全、撤权及下载边界，`pdf-files.spec.ts` 验证文件权限和释放；客户端 `settings-acceptance.spec.tsx` 验证草稿隔离、确认和复制动作，`preference-runtime.spec.tsx` 验证标签生命周期、范围条件和插入内容，`pdf-reader-lifetime.spec.ts` 验证隐藏与浮动标签的清理归属。实时 Zotero 检查由 `npm run test:integration` 执行，打包浏览器组合由 `npm run smoke:web-composition` 执行；二者不能被模拟测试替代。
+
+浏览器仅保留来源附件 ref，恢复的阅读标签通过显式重载重新下载并替换原标签，不保存临时下载 URL。

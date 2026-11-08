@@ -1,3 +1,9 @@
+import {
+  zoteroReadUrlPdfInvocation,
+  zoteroReleaseUrlPdfInvocation,
+  type ZoteroUrlPdfView,
+} from './contract.js'
+import { refFieldsOf } from './ref-grammar.js'
 /**
  * The wire boundary's single source: every zod schema the `zotero` namespace
  * validates with, and the one shared invocation list both halves register.
@@ -96,7 +102,10 @@ export const zoteroLibrarySortSchema = z.enum(
  * @param schema - the shared wire schema both halves validate through.
  * @returns the strict codec arm.
  */
-export function strictCodec(typeSymbol: string, schema: z.ZodType): TypertCodec {
+export function strictCodec(
+  typeSymbol: string,
+  schema: z.ZodType,
+): Extract<TypertCodec, { mode: 'strict' }> {
   return { mode: 'strict', typeSymbol, create: () => schema }
 }
 
@@ -764,7 +773,39 @@ export const zoteroCollectionPathResultSchema = z
 
 export const ZOTERO_STATUS_RESULT_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
 
+export const zoteroReadUrlPdfRequestSchema = z
+  .object({
+    ref: z.string().refine((ref) => {
+      const fields = refFieldsOf(ref)
+      return (
+        fields?.kind === 'attachment' &&
+        fields.serverId !== undefined &&
+        (fields.libraryType === 'group' || fields.libraryId === '0')
+      )
+    }, 'Expected a qualified local attachment ref'),
+  })
+  .strict()
+export const zoteroUrlPdfSchema = z
+  .object({
+    ref: z.string(),
+    title: z.string(),
+    contentType: z.literal('application/pdf'),
+    path: z.string().min(1),
+    lease: z.uuid(),
+  })
+  .strict() satisfies z.ZodType<ZoteroUrlPdfView>
+export const ZOTERO_URL_PDF_CODEC = strictCodec('dsh-zotero#ZoteroUrlPdfView', zoteroUrlPdfSchema)
+export const zoteroReleaseUrlPdfSchema = z.object({ lease: z.uuid() }).strict()
+
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroReleaseUrlPdfInvocation(
+    strictCodec('dsh-zotero#ReleaseUrlPdfRequest', zoteroReleaseUrlPdfSchema),
+    strictCodec('dsh-zotero#PdfReleaseResult', z.object({ released: z.literal(true) }).strict()),
+  ),
+  zoteroReadUrlPdfInvocation(
+    strictCodec('dsh-zotero#ReadUrlPdfRequest', zoteroReadUrlPdfRequestSchema),
+    ZOTERO_URL_PDF_CODEC,
+  ),
   zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC),
   zoteroResolveAttachmentInvocation(
     strictCodec(ZOTERO_REF_PARAM_TYPE_SYMBOL, zoteroRefSchema),
