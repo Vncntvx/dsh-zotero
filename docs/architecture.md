@@ -199,7 +199,7 @@ graph LR
 
 ### 用户主动阅读 URL PDF
 
-`src/library/url-pdf.ts` 从核心解析库内附件，在独立 `allowUrlPdfRead` 授权下下载。`src/transport/` 由 scholarly 与用户阅读共用公网地址和 DNS 固定连接，不触发 scholarly 组合。下载检查逐跳重定向、HTTPS 降级、类型、文件头、32 MiB、60 秒和两并发；撤销授权取消在途请求。`pdf-files.ts` 持有私有临时文件的租约（最多 16 个）；客户端通过现有公开 `fileAddressFor` / `tab.actions.openResource` 打开原会话的阅读器，订阅 `sidebarRight.openTabs` 在最后一个阅读标签关闭时释放文件，插件卸载释放余下文件。保存设置及恢复标签不触发下载。实现无需修改宿主仓库。
+`src/library/service.ts` 在独立 `allowUrlPdfRead` 授权下从核心解析库内附件，`src/library/url-pdf.ts` 只按已解析的附件下载。`src/transport/` 由 scholarly 与用户阅读共用公网地址和 DNS 固定连接，不触发 scholarly 组合。下载检查逐跳重定向、HTTPS 降级、类型、文件头、32 MiB、60 秒和两并发；撤销授权取消在途请求。`pdf-files.ts` 持有私有临时文件的租约（最多 16 个）；客户端通过现有公开 `fileAddressFor` / `tab.actions.openResource` 打开原会话的阅读器，订阅 `sidebarRight.openTabs` 在最后一个阅读标签关闭时释放文件，插件卸载释放余下文件。保存设置及恢复标签不触发下载。实现无需修改宿主仓库。
 
 设置与阅读验收分工：`tests/host/library/config-commit.spec.ts` 通过真实 Loader 验证原子配置提交与拒绝；`url-pdf.spec.ts` 验证网络安全、撤权及下载边界，`pdf-files.spec.ts` 验证文件权限和释放；客户端 `settings-acceptance.spec.tsx` 验证草稿隔离、确认和复制动作，`preference-runtime.spec.tsx` 验证标签生命周期、范围条件和插入内容，`pdf-reader-lifetime.spec.ts` 验证隐藏与浮动标签的清理归属。实时 Zotero 检查由 `npm run test:integration` 执行，打包浏览器组合由 `npm run smoke:web-composition` 执行；二者不能被模拟测试替代。
 

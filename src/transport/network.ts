@@ -134,10 +134,11 @@ function expandIpv6(ip: string): readonly number[] | undefined {
 /**
  * Whether one IPv6 literal is a public unicast address.
  *
- * The refused set: unspecified, IPv4-compatible (`::/96` — the embedded space
- * has no legitimate modern global use), IPv4-mapped (judged by the embedded
- * IPv4), Teredo, documentation, NAT64 (judged by the embedded IPv4), ULA,
- * link-local, and multicast. Everything else — global unicast — passes.
+ * Only global-unicast `2000::/3` passes, except special-purpose ranges within
+ * it. IPv4-mapped and the well-known NAT64 prefix are judged by their embedded
+ * IPv4 address; IPv4-compatible addresses and other special-purpose ranges
+ * are refused. All other space, including site-local, ULA, link-local, and
+ * multicast, is outside global unicast and is refused.
  */
 function isPublicIpv6(ip: string): boolean {
   const groups = expandIpv6(ip)
@@ -152,18 +153,29 @@ function isPublicIpv6(ip: string): boolean {
     }
     return false // IPv4-compatible ::/96
   }
-  if (groups[0] === 0x2001 && groups[1] === 0x0000) return false // Teredo
-  if (groups[0] === 0x2001 && groups[1] === 0x0db8) return false // documentation
-  if (groups[0] === 0x0064 && groups[1] === 0xff9b) {
+  if (
+    groups[0] === 0x0064 &&
+    groups[1] === 0xff9b &&
+    groups.slice(2, 6).every((group) => group === 0)
+  ) {
     const g6 = groups[6]!
     const g7 = groups[7]!
     const embedded = `${Math.floor(g6 / 256)}.${g6 % 256}.${Math.floor(g7 / 256)}.${g7 % 256}`
-    return isPublicIpv4(embedded) // NAT64 tail
+    return isPublicIpv4(embedded) // well-known NAT64 prefix, 64:ff9b::/96
   }
   const first = groups[0]!
-  if (first >= 0xfc00 && first <= 0xfdff) return false // unique local
-  if (first >= 0xfe80 && first <= 0xfebf) return false // link-local
-  if (first >= 0xff00) return false // multicast
+  if (first < 0x2000 || first > 0x3fff) return false // outside global unicast 2000::/3
+  if (first === 0x2001) {
+    const second = groups[1]!
+    if (second <= 0x01ff) return false // IETF special-purpose assignments, 2001::/23
+    if (second === 0x0db8) return false // documentation
+  }
+  if (first === 0x2002) return false // 6to4
+  if (first === 0x3ffe) return false // returned 6bone, formerly 3ffe::/16
+  if (first === 0x2620 && groups[1] === 0x004f && groups[2] === 0x8000) {
+    return false // AS112 direct delegation
+  }
+  if (first === 0x3fff && groups[1]! <= 0x0fff) return false // documentation
   return true
 }
 

@@ -14,7 +14,6 @@ export const URL_PDF_MAX_BYTES = 32 * 1024 * 1024
 export const URL_PDF_TIMEOUT_MS = 60_000
 export interface UrlPdfDependencies {
   readonly allowed: () => boolean
-  readonly resolve: (ref: string, signal: AbortSignal) => Promise<ZoteroAttachmentLocationView>
   readonly resolver: AddressResolver
   readonly dispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
   readonly fetch: typeof globalThis.fetch
@@ -43,7 +42,7 @@ export class UrlPdfReader {
       controller.abort(failure('DISABLED', 'URL PDF reading permission was revoked.'))
   }
   async read(
-    ref: string,
+    attachment: ZoteroAttachmentLocationView,
     signal: AbortSignal,
   ): Promise<{ ref: string; title: string; contentType: 'application/pdf'; data: Uint8Array }> {
     if (!this.deps.allowed())
@@ -55,7 +54,6 @@ export class UrlPdfReader {
     const timeout = AbortSignal.timeout(URL_PDF_TIMEOUT_MS)
     const combined = AbortSignal.any([signal, timeout, controller.signal])
     try {
-      const attachment = await this.deps.resolve(ref, combined)
       if (attachment.kind !== 'url' || !attachment.url)
         throw failure('NOT_URL', 'This attachment is not a URL PDF.')
       let url = new URL(attachment.url)

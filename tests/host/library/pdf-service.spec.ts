@@ -17,14 +17,15 @@ let context: Context | undefined
 async function boot(fs = true, allowed = true) {
   context = new Context()
   // External core-service boundary: this spec owns URL reading, not Local API resolution.
+  const resolveAttachment = vi.fn(async () => ({
+    ref,
+    title: 'paper.pdf',
+    kind: 'url' as const,
+    url: 'https://papers.example/paper.pdf',
+    contentType: 'application/pdf',
+  }))
   context.provide('zotero', {
-    resolveAttachment: async () => ({
-      ref,
-      title: 'paper.pdf',
-      kind: 'url',
-      url: 'https://papers.example/paper.pdf',
-      contentType: 'application/pdf',
-    }),
+    resolveAttachment,
   } as unknown as ZoteroService)
   if (fs) await context.plugin(LocalFileSystem, { cwd: tmpdir() })
   vi.stubGlobal(
@@ -35,7 +36,7 @@ async function boot(fs = true, allowed = true) {
     ),
   )
   await context.plugin(ZoteroLibraryService, { allowUrlPdfRead: allowed })
-  return { ctx: context, service: context.zoteroLibrary }
+  return { ctx: context, service: context.zoteroLibrary, resolveAttachment }
 }
 afterEach(async () => {
   await context?.fiber.dispose()
@@ -53,12 +54,19 @@ it('returns a verified readable file and removes its bytes on release', async ()
   ).resolves.toEqual({ released: true })
   await expect(stat(result.path)).rejects.toMatchObject({ code: 'ENOENT' })
 })
+it('resolves the attachment once before fetching the URL PDF', async () => {
+  const { service, resolveAttachment } = await boot()
+  await service.readUrlPdf({ ref }, new AbortController().signal)
+  expect(resolveAttachment).toHaveBeenCalledExactlyOnceWith(ref, expect.any(AbortSignal))
+  expect(fetch).toHaveBeenCalledOnce()
+})
 it('refuses disabled permission before any download', async () => {
-  const { service } = await boot(true, false)
+  const { service, resolveAttachment } = await boot(true, false)
   await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
     code: 'zotero/domain',
     details: { code: 'ZOTERO_URL_PDF_DISABLED' },
   })
+  expect(resolveAttachment).not.toHaveBeenCalled()
   expect(fetch).not.toHaveBeenCalled()
 })
 it('refuses a missing filesystem before any download', async () => {

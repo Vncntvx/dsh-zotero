@@ -5,6 +5,7 @@ import { UrlPdfReader } from './url-pdf.js'
 import { dnsAddressResolver, createPinnedDispatcher } from '../transport/connections.js'
 import { zoteroReadUrlPdfRequestSchema, zoteroReleaseUrlPdfSchema } from '../wire-schemas.js'
 import type { ZoteroUrlPdfView } from '../contract.js'
+import type { ZoteroAttachmentLocationView } from '../contract.js'
 /**
  * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
  * endpoints: browse, collection path, search, item detail, citation/BibTeX
@@ -67,7 +68,7 @@ declare module '@deepseek-ai/cordis' {
 export class ZoteroLibraryService extends TypertRemoteService {
   private readonly urlPdf: UrlPdfReader
   private readonly pdfFiles = new PdfReadingFiles()
-  private readonly reading = new Set<Promise<ZoteroUrlPdfView>>()
+  private readonly reading = new Set<Promise<unknown>>()
   static readonly Config = LibraryConfigSchema
   static readonly inject = ['zotero']
 
@@ -80,8 +81,6 @@ export class ZoteroLibraryService extends TypertRemoteService {
     resolveLibraryConfig(config)
     this.urlPdf = new UrlPdfReader({
       allowed: () => resolveLibraryConfig(this.config).allowUrlPdfRead,
-      resolve: (ref, signal) =>
-        requireZoteroService(this.ctx, signal).resolveAttachment(ref, signal),
       resolver: dnsAddressResolver,
       dispatcher: createPinnedDispatcher,
       fetch: globalThis.fetch,
@@ -112,39 +111,50 @@ export class ZoteroLibraryService extends TypertRemoteService {
           'URL PDF reading is disabled in Literature panel settings.',
           'ZOTERO_URL_PDF_DISABLED',
         )
-      const fs = this.ctx.get('fs')
-      if (!fs) throw new Error('The host filesystem required for PDF reading is unavailable.')
-      const pdf = await this.urlPdf.read(zoteroReadUrlPdfRequestSchema.parse(request).ref, signal)
-      const file = await this.pdfFiles.stage(pdf.data, signal)
-      try {
-        const mapped = fs.processPathFromHostPath(file.path)
-        if (!mapped) throw new Error('The session filesystem cannot read host PDF files.')
-        const target = await fs.resolve(mapped, { signal })
-        if (fs.fileUrl(target) !== pathToFileURL(file.path).href)
-          throw new Error('The session filesystem has no verified mapping for this PDF.')
-        signal.throwIfAborted()
-        if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
-          throw new ZoteroError(
-            'URL PDF reading permission was revoked.',
-            'ZOTERO_URL_PDF_DISABLED',
-          )
-        return {
-          ref: pdf.ref,
-          title: pdf.title,
-          contentType: pdf.contentType,
-          path: fs.processPath(target),
-          lease: file.lease,
-        }
-      } catch (error) {
-        await this.pdfFiles.release(file.lease)
-        throw error
-      }
+      const ref = zoteroReadUrlPdfRequestSchema.parse(request).ref
+      const attachment = await requireZoteroService(this.ctx, signal).resolveAttachment(ref, signal)
+      return await this.readResolvedUrlPdf(attachment, signal)
     })
     this.reading.add(task)
     try {
       return await task
     } finally {
       this.reading.delete(task)
+    }
+  }
+
+  private async readResolvedUrlPdf(
+    attachment: ZoteroAttachmentLocationView,
+    signal: AbortSignal,
+  ): Promise<ZoteroUrlPdfView> {
+    if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
+      throw new ZoteroError(
+        'URL PDF reading is disabled in Literature panel settings.',
+        'ZOTERO_URL_PDF_DISABLED',
+      )
+    const fs = this.ctx.get('fs')
+    if (!fs) throw new Error('The host filesystem required for PDF reading is unavailable.')
+    const pdf = await this.urlPdf.read(attachment, signal)
+    const file = await this.pdfFiles.stage(pdf.data, signal)
+    try {
+      const mapped = fs.processPathFromHostPath(file.path)
+      if (!mapped) throw new Error('The session filesystem cannot read host PDF files.')
+      const target = await fs.resolve(mapped, { signal })
+      if (fs.fileUrl(target) !== pathToFileURL(file.path).href)
+        throw new Error('The session filesystem has no verified mapping for this PDF.')
+      signal.throwIfAborted()
+      if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
+        throw new ZoteroError('URL PDF reading permission was revoked.', 'ZOTERO_URL_PDF_DISABLED')
+      return {
+        ref: pdf.ref,
+        title: pdf.title,
+        contentType: pdf.contentType,
+        path: fs.processPath(target),
+        lease: file.lease,
+      }
+    } catch (error) {
+      await this.pdfFiles.release(file.lease)
+      throw error
     }
   }
 
