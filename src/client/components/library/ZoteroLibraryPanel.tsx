@@ -3,6 +3,7 @@ import {
   useLibraryPreferenceSource,
   useLibraryPreferences,
   libraryViewMemory,
+  clearLibraryConversationViewMemory,
   type LibraryPreferenceSource,
 } from '../../library-preferences.tsx'
 /**
@@ -253,6 +254,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   useEffect(() => {
     if (sessionRemoved) {
       try {
+        clearLibraryConversationViewMemory(props.sessionId)
         clearLibraryConversationState(props.sessionId)
       } catch (error) {
         setCleanupError(String(error))

@@ -76,6 +76,8 @@ export function useLibraryPreferenceSource(
   return useSyncExternalStore(source.subscribe, source.getSnapshot)
 }
 export interface LibraryViewMemory {
+  readonly serverId: string
+  readonly sessionId: string
   resetPending?: boolean
   childPages?: {
     ref: string
@@ -83,8 +85,19 @@ export interface LibraryViewMemory {
   }
   snapshot?: LibraryStoredState
   scroll: Record<string, number>
-  saveScroll?: () => void
+  saveScroll?: (flush?: boolean) => void
+  saveScrollKey?: string
+  scheduleScrollSave: () => void
+  flushScrollSave: () => void
+  cancelScrollSave: () => void
   disclosure?: { ref: string; overrides: Partial<Record<LibrarySection, boolean>> }
+}
+export type LibraryScrollScheduler = (callback: () => void, delayMs: number) => () => void
+
+const SCROLL_SAVE_DELAY_MS = 100
+const scheduleScrollSave: LibraryScrollScheduler = (callback, delayMs) => {
+  const timer = setTimeout(callback, delayMs)
+  return () => clearTimeout(timer)
 }
 export const LibraryPreferencesContext = createContext<
   LibraryPreferenceSnapshot & { memory?: LibraryViewMemory }
@@ -94,11 +107,18 @@ export const useLibraryPreferences = () => useContext(LibraryPreferencesContext)
 const memories = new Map<string, Set<LibraryViewMemory>>()
 export function clearLibraryViewMemory(serverId: string, sessionId: string): void {
   for (const memory of memories.get(JSON.stringify([serverId, sessionId])) ?? []) {
+    memory.cancelScrollSave()
     memory.snapshot = undefined
     memory.childPages = undefined
     memory.scroll = {}
     memory.disclosure = undefined
     memory.resetPending = true
+  }
+}
+export function clearLibraryConversationViewMemory(sessionId: string): void {
+  for (const [identity] of memories) {
+    const [serverId, storedSessionId] = JSON.parse(identity) as [string, string]
+    if (storedSessionId === sessionId) clearLibraryViewMemory(serverId, sessionId)
   }
 }
 
@@ -108,6 +128,7 @@ export function libraryViewMemory(
   signal: AbortSignal,
   serverId: string,
   sessionId = '',
+  scheduler: LibraryScrollScheduler = scheduleScrollSave,
 ): LibraryViewMemory {
   let instances = viewOccurrences.get(signal)
   if (!instances) {
@@ -125,17 +146,45 @@ export function libraryViewMemory(
   const instanceKey = JSON.stringify([serverId, sessionId])
   let memory = instances.get(instanceKey)
   if (!memory) {
-    memory = { scroll: {} }
+    let cancelScheduled: (() => void) | undefined
+    const created: LibraryViewMemory = {
+      serverId,
+      sessionId,
+      scroll: {},
+      scheduleScrollSave: () => {
+        cancelScheduled?.()
+        cancelScheduled = scheduler(() => {
+          cancelScheduled = undefined
+          created.saveScroll?.(false)
+        }, SCROLL_SAVE_DELAY_MS)
+      },
+      flushScrollSave: () => {
+        if (cancelScheduled === undefined) return
+        const cancel = cancelScheduled
+        cancelScheduled = undefined
+        cancel()
+        created.saveScroll?.(true)
+      },
+      cancelScrollSave: () => {
+        if (cancelScheduled === undefined) return
+        cancelScheduled()
+        cancelScheduled = undefined
+      },
+    }
+    memory = created
     instances.set(instanceKey, memory)
     const key = JSON.stringify([serverId, sessionId])
     const held = memories.get(key) ?? new Set<LibraryViewMemory>()
     held.add(memory)
     memories.set(key, held)
-    const created = memory
+    const heldMemory = memory
     signal.addEventListener(
       'abort',
       () => {
-        held.delete(created)
+        if (heldMemory.saveScrollKey === JSON.stringify([serverId, sessionId]))
+          heldMemory.flushScrollSave()
+        else heldMemory.cancelScrollSave()
+        held.delete(heldMemory)
         if (!held.size) memories.delete(key)
       },
       { once: true },
@@ -156,7 +205,7 @@ export function useLibraryScroll(key: string, ready: boolean, revision?: unknown
     onScroll: (event: React.UIEvent<HTMLElement>) => {
       if (!memory) return
       memory.scroll[key] = event.currentTarget.scrollTop
-      memory.saveScroll?.()
+      memory.scheduleScrollSave()
     },
   }
 }

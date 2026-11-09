@@ -32,9 +32,33 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
+function controlledScrollScheduler() {
+  let queued: (() => void) | undefined
+  let schedules = 0
+  const schedule = (callback: () => void, _delayMs: number) => {
+    schedules += 1
+    queued = callback
+    return () => {
+      if (queued === callback) queued = undefined
+    }
+  }
+  const run = () => {
+    const callback = queued
+    queued = undefined
+    callback?.()
+  }
+  return {
+    schedule,
+    hasPending: () => queued !== undefined,
+    schedules: () => schedules,
+    run,
+  }
+}
+
 it('restores each content scroll position and saves user scrolling through the owning memory', () => {
   const signal = new AbortController()
-  const memory = libraryViewMemory(signal.signal, 'S1', 's1')
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 's1', scheduler.schedule)
   memory.scroll = { list: 180, other: 40 }
   memory.saveScroll = vi.fn()
   function Scroller({ id }: { id: string }) {
@@ -47,9 +71,15 @@ it('restores each content scroll position and saves user scrolling through the o
     </LibraryPreferencesContext.Provider>,
   )
   expect(screen.getByTestId('scroll').scrollTop).toBe(180)
+  fireEvent.scroll(screen.getByTestId('scroll'), { target: { scrollTop: 210 } })
   fireEvent.scroll(screen.getByTestId('scroll'), { target: { scrollTop: 230 } })
   expect(memory.scroll.list).toBe(230)
-  expect(memory.saveScroll).toHaveBeenCalledOnce()
+  expect(memory.saveScroll).not.toHaveBeenCalled()
+  expect(scheduler.schedules()).toBe(2)
+  expect(scheduler.hasPending()).toBe(true)
+  act(scheduler.run)
+  expect(memory.saveScroll).toHaveBeenCalledTimes(1)
+  expect(memory.saveScroll).toHaveBeenLastCalledWith(false)
   view.rerender(
     <LibraryPreferencesContext.Provider value={{ preferences: LIBRARY_DEFAULTS, memory }}>
       <Scroller id="other" />
@@ -154,23 +184,132 @@ it('removes positions for one conversation across servers and preserves other co
   expect(localStorage.getItem(libraryStorageKey('S1', 's2'))).toBe('three')
 })
 
-it('writes scrolled positions through the active feed and reports a later quota failure', async () => {
+it('flushes queued scroll persistence when the tab occurrence aborts', async () => {
   const first = setupLibraryFeed()
   const face = first.face
   first.unmount()
   const signal = new AbortController()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1')
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const { result, unmount } = renderHook(() =>
+    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+  )
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  memory.scroll.list = 145
+  act(() => memory.scheduleScrollSave())
+  expect(scheduler.hasPending()).toBe(true)
+  act(() => signal.abort())
+  expect(scheduler.hasPending()).toBe(false)
+  expect(readLibraryState('S1', 'session-1')?.scroll?.list).toBe(145)
+  unmount()
+})
+
+it('does not persist a memory under a different feed server/session', async () => {
+  const first = setupLibraryFeed()
+  const face = first.face
+  first.unmount()
+  localStorage.removeItem(libraryStorageKey('S1', 'session-1'))
+  const signal = new AbortController()
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const { result } = renderHook(() =>
+    useLibraryFeed(face, 'S2', true, 'session-2', LIBRARY_DEFAULTS, memory),
+  )
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  memory.scroll.list = 160
+  act(() => memory.scheduleScrollSave())
+  expect(scheduler.hasPending()).toBe(true)
+  act(() => signal.abort())
+  expect(scheduler.hasPending()).toBe(false)
+  expect(localStorage.getItem(libraryStorageKey('S1', 'session-1'))).toBeNull()
+  expect(localStorage.getItem(libraryStorageKey('S2', 'session-2'))).toBeNull()
+})
+
+it('flushes queued scroll persistence when the feed unmounts', async () => {
+  const first = setupLibraryFeed()
+  const face = first.face
+  first.unmount()
+  const signal = new AbortController()
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const { result, unmount } = renderHook(() =>
+    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+  )
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  memory.scroll.list = 170
+  act(() => memory.scheduleScrollSave())
+  act(unmount)
+  expect(scheduler.hasPending()).toBe(false)
+  expect(readLibraryState('S1', 'session-1')?.scroll?.list).toBe(170)
+  signal.abort()
+})
+
+it('flushes queued scroll persistence on pagehide', async () => {
+  const first = setupLibraryFeed()
+  const face = first.face
+  first.unmount()
+  const signal = new AbortController()
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const { result } = renderHook(() =>
+    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+  )
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  memory.scroll.list = 175
+  act(() => memory.scheduleScrollSave())
+  memory.scroll.list = 185
+  act(() => memory.scheduleScrollSave())
+  const writes = vi.spyOn(Storage.prototype, 'setItem')
+  act(() => window.dispatchEvent(new Event('pagehide')))
+  expect(scheduler.schedules()).toBe(2)
+  expect(writes).toHaveBeenCalledTimes(1)
+  expect(scheduler.hasPending()).toBe(false)
+  expect(readLibraryState('S1', 'session-1')?.scroll?.list).toBe(185)
+  signal.abort()
+})
+
+it('cancels queued position writes when the user resets the browsing position', async () => {
+  const first = setupLibraryFeed()
+  const face = first.face
+  first.unmount()
+  const signal = new AbortController()
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const { result } = renderHook(() =>
+    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+  )
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  memory.scroll.list = 190
+  act(() => memory.scheduleScrollSave())
+  act(() => result.current.clearPosition())
+  expect(scheduler.hasPending()).toBe(false)
+  act(scheduler.run)
+  expect(readLibraryState('S1', 'session-1')?.scroll).toEqual({})
+  signal.abort()
+})
+
+it('writes scrolled positions on the scheduled frame and reports a later quota failure', async () => {
+  const first = setupLibraryFeed()
+  const face = first.face
+  first.unmount()
+  const signal = new AbortController()
+  const scheduler = controlledScrollScheduler()
+  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result } = renderHook(() =>
     useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 125
-  act(() => memory.saveScroll?.())
+  act(() => memory.scheduleScrollSave())
+  expect(readLibraryState('S1', 'session-1')?.scroll?.list).not.toBe(125)
+  expect(scheduler.hasPending()).toBe(true)
+  act(scheduler.run)
   expect(readLibraryState('S1', 'session-1')?.scroll?.list).toBe(125)
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
     throw new Error('scroll quota')
   })
-  act(() => memory.saveScroll?.())
+  act(() => memory.scheduleScrollSave())
+  act(scheduler.run)
   expect(result.current.storageError).toBe('scroll quota')
   signal.abort()
 })

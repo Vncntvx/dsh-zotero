@@ -134,6 +134,8 @@ export function useLibraryFeed(
   // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
   const initialView = readLibrarySessionMemory(sessionId)
   const [storageError, setStorageError] = useState<string>()
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
   const [libraries, setLibraries] = useState<LibraryFeed['libraries']>({ phase: 'loading' })
   const [currentLibrary, setCurrentLibrary] = useState<SupportedLocalLibrary>(PERSONAL_LIBRARY)
   const [prefixes, setPrefixes] = useState<Readonly<Record<string, number>>>({})
@@ -350,7 +352,14 @@ export function useLibraryFeed(
   // identical value. Serializing inside the effect prevents JSON.stringify
   // from running on every keystroke/render tick.
   useEffect(() => {
-    if (!active || storageError || serverId === undefined || hydratedView !== viewIdentity) return
+    if (
+      !active ||
+      storageError ||
+      serverId === undefined ||
+      hydratedView !== viewIdentity ||
+      (memory !== undefined && (memory.serverId !== serverId || memory.sessionId !== sessionId))
+    )
+      return
     const persistedState: LibraryStoredState = {
       version: 3,
       prefixes: navigation.prefixes,
@@ -379,11 +388,22 @@ export function useLibraryFeed(
       return
     if (memory) {
       memory.snapshot = persistedState
-      memory.saveScroll = () => {
-        if (!visible || !memory.snapshot) return
+      const ownerServerId = serverId
+      const ownerSessionId = sessionId
+      const ownerKey = JSON.stringify([ownerServerId, ownerSessionId])
+      memory.saveScrollKey = ownerKey
+      memory.saveScroll = (flush = false) => {
+        if (
+          memory.serverId !== ownerServerId ||
+          memory.sessionId !== ownerSessionId ||
+          memory.saveScrollKey !== ownerKey ||
+          memory.snapshot === undefined
+        )
+          return
+        if (!visibleRef.current && !flush) return
         const state = { ...memory.snapshot, scroll: { ...memory.scroll } }
         try {
-          writeLibraryState(serverId, sessionId, state)
+          writeLibraryState(ownerServerId, ownerSessionId, state)
         } catch (error) {
           setStorageError(messageOf(error))
         }
@@ -421,6 +441,24 @@ export function useLibraryFeed(
     selectedRef,
     narrowPane,
   ])
+
+  useEffect(() => {
+    const flush = () => memory?.flushScrollSave()
+    if (!active || !visible) {
+      flush()
+      return
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
+  }, [active, visible, serverId, sessionId, memory])
 
   // The debounced query drives requests; the raw input drives the text box.
   useEffect(() => {
@@ -737,6 +775,7 @@ export function useLibraryFeed(
       navigation.cancelLocate()
       resetLibraryState(PERSONAL_LIBRARY)
       if (memory) {
+        memory.cancelScrollSave()
         memory.childPages = undefined
         memory.snapshot = undefined
         memory.scroll = {}
