@@ -49,6 +49,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
+import { ParsingSettingsSection } from './ParsingSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-face.ts'
@@ -56,6 +57,8 @@ import { reportCrashedSurface } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import type { ScholarlyCredentialPort } from './scholarly-form-controller.ts'
+import { ParsingFormController } from './parsing-form-controller.ts'
+import type { ParsingCredentialPort } from './parsing-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
 import { CitationFormController } from './citation-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
@@ -65,7 +68,11 @@ import {
   type ZoteroDiagnosticsView,
   type ZoteroStatusView,
 } from '../contract.ts'
-import { SCHOLARLY_SETTINGS_NAMESPACE, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.ts'
+import {
+  PARSING_SETTINGS_NAMESPACE,
+  SCHOLARLY_SETTINGS_NAMESPACE,
+  ZOTERO_SETTINGS_NAMESPACE,
+} from '../settings-namespace.ts'
 import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
@@ -159,6 +166,7 @@ interface UiSurfaces {
   readonly form: ConfigForm<Record<string, unknown>>
   readonly card: ZoteroCardController
   readonly scholarlyCard: ScholarlyFormController
+  readonly parsingCard: ParsingFormController
   readonly libraryForm: ConfigForm<Record<string, unknown>>
   readonly libraryCard: LibraryFormController
   readonly citationCard: CitationFormController
@@ -245,7 +253,7 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  * (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { card, scholarlyCard, libraryCard, citationCard, probe } = surfaces
+  const { card, scholarlyCard, parsingCard, libraryCard, citationCard, probe } = surfaces
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -261,8 +269,8 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   )
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
-  // The page renders the unified 6-tab form through ZoteroSettingsSection and stages edits
-  // over zotero, scholarly, and library namespaces.
+  // The page renders the unified 7-tab form through ZoteroSettingsSection and stages edits
+  // over zotero, scholarly, library, and parsing namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -273,6 +281,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         inject: () => {
           const zoteroFace = card.inject()
           const scholarlyFace = scholarlyCard.inject()
+          const parsingFace = parsingCard.inject()
           const libraryFace = libraryCard.inject()
           const citationFace = citationCard.inject()
           return {
@@ -282,10 +291,12 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
             hooks: {
               zoteroCard: zoteroFace.hooks.zoteroCard,
               scholarlyCard: scholarlyFace.hooks.scholarlyCard,
+              parsingCard: parsingFace.hooks.parsingCard,
               libraryCard: libraryFace.hooks.libraryCard,
               citationCard: citationFace.hooks.citationCard,
             },
             scholarly: scholarlyFace,
+            parsing: parsingFace,
             library: libraryFace,
             citation: citationFace,
           }
@@ -315,6 +326,30 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         ),
       ),
     'dsh-zotero: scholarly row config',
+  )
+
+  // Dedicated row configuration for the parsing subsystem (plugins.row.config),
+  // opened from the "Configure" button on the dsh-zotero#parsing row. It covers
+  // the free/pro switch, the MinerU token, the egress gate, and the output dir.
+  // whileServed guards it to the host serving the parsing namespace (the row is
+  // disabled by default), so the row shows no config while the component is off.
+  ctx.effect(
+    () =>
+      ctx.configForms.whileServed([PARSING_SETTINGS_NAMESPACE], () =>
+        ctx.slots.inject('plugins.row.config', () =>
+          ctx.slots.register(
+            {
+              name: 'plugins.row.config',
+              key: `${ZOTERO_REMOTE_PACKAGE}#parsing`,
+              locale: NS,
+              registrant: REGISTRANT,
+              inject: () => parsingCard.inject(),
+            },
+            ParsingSettingsSection,
+          ),
+        ),
+      ),
+    'dsh-zotero: parsing row config',
   )
 
   // Dedicated row configuration for the library subsystem (plugins.row.config),
@@ -880,15 +915,17 @@ function registerUi(ctx: ClientContext): void {
   // All live as long as the client fiber.
   const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
   const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
+  const parsingForm = ctx.configForms.get<Record<string, unknown>>(PARSING_SETTINGS_NAMESPACE)
   const libraryForm = ctx.configForms.get<Record<string, unknown>>(
     ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   )
   const card = new ZoteroCardController(form)
-  const credentialPort: ScholarlyCredentialPort = {
+  const credentialPort: ScholarlyCredentialPort & ParsingCredentialPort = {
     describe: (refs) => ctx.remote.credentials.describe([...refs]),
     set: (ref, value) => ctx.remote.credentials.set(ref, value),
   }
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
+  const parsingCard = new ParsingFormController(parsingForm, credentialPort)
   const libraryCard = new LibraryFormController(libraryForm)
   const citationCard = new CitationFormController(form)
   // Live connectivity for the conversation tab's status strip. This fiber is
@@ -933,6 +970,7 @@ function registerUi(ctx: ClientContext): void {
     form,
     card,
     scholarlyCard,
+    parsingCard,
     libraryForm,
     libraryCard,
     citationCard,
@@ -950,6 +988,7 @@ function registerUi(ctx: ClientContext): void {
     () => () => {
       card.dispose()
       scholarlyCard.dispose()
+      parsingCard.dispose()
       libraryCard.dispose()
       citationCard.dispose()
     },
@@ -959,8 +998,9 @@ function registerUi(ctx: ClientContext): void {
     () =>
       ctx.remote.$on('credentials/reference-updated', (ref) => {
         scholarlyCard.refreshCredential(ref)
+        parsingCard.refreshCredential(ref)
       }),
-    'dsh-zotero: scholarly credential invalidations',
+    'dsh-zotero: scholarly & parsing credential invalidations',
   )
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)

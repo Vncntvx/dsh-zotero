@@ -48,6 +48,7 @@ import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
 import { scholarlyPublicAccess } from '../transport/connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
+import type { FulltextEnhancer } from '../local/fulltext-enhancer.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -124,6 +125,11 @@ export class ScholarlyService extends Service {
       // `undefined` when the local Zotero component is not composed, which is
       // exactly the in-library link's absent behavior.
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
+      // The parsing component is a separate, optional bundle row. Read its
+      // enhancer lazily by context key so scholarly neither imports parsing
+      // nor holds a stale reference when the row mounts or unmounts.
+      parsingEnhancer: (): FulltextEnhancer | undefined =>
+        (ctx.get('parsing') as { enhancer?: FulltextEnhancer } | undefined)?.enhancer,
       ctx,
     }
 

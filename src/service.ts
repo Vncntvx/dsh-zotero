@@ -23,6 +23,7 @@
 
 import type { ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView } from './contract.js'
 import { ZOTERO_SOURCE_PROJECTION_FAILED, type ZoteroStatusView } from './contract.js'
+import type { FulltextEnhancer } from './local/fulltext-enhancer.js'
 import { Service, type Context, type Fiber, type LoggerLevel } from '@deepseek-ai/cordis'
 import { FIBER_STATE } from './fiber-state.js'
 // Type-only: brings the loader `loader/volatile-update` Events merge into
@@ -227,6 +228,14 @@ export class ZoteroService extends Service {
   readonly jobRunner: ZoteroJobRunner
   /** Disposer of the currently registered `local` provider, released after a rebuild's new registration lands. */
   private providerDispose: (() => void) | undefined
+  /**
+   * Optional higher-quality full-text enhancer installed by the parsing
+   * component. The core owns only the slot and the pure type; it never imports
+   * the parsing component, holds no external transport, and runs its unchanged
+   * loopback path while the slot is empty. The provider reads this live per
+   * request, so mounting or unmounting the parsing row needs no rebuild.
+   */
+  private fulltextEnhancer: FulltextEnhancer | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
   /** The live write authorizer; absent while writes are disabled. */
@@ -545,6 +554,7 @@ export class ZoteroService extends Service {
       writer,
       authorizer,
       this.diagnostics.sink,
+      () => this.fulltextEnhancer,
     )
     // The swap is synchronous: registerProvider installs the new provider
     // under the stable id before this releases the old registration (whose
@@ -710,6 +720,16 @@ export class ZoteroService extends Service {
     this.requireCapability(provider, 'metadata')
     const childPage = this.requireMethod(provider, 'getChildPage')
     return await childPage(request, signal)
+  }
+
+  /**
+   * Install or withdraw the optional document-parsing enhancer.
+   * Called by `dsh-zotero/parsing` from a fiber-scoped effect, so unmounting
+   * the row clears the slot. Passing `undefined` is the withdrawal.
+   * @param enhancer - the enhancer to use, or none.
+   */
+  setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void {
+    this.fulltextEnhancer = enhancer
   }
 
   /**

@@ -28,8 +28,9 @@ graph LR
 | `dsh-zotero`           | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页 |
 | `dsh-zotero/library`   | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面 |
 | `dsh-zotero/scholarly` | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取       |
+| `dsh-zotero/parsing`   | `parsing`                                 | `parsing`    | 关闭 | 可选 MinerU 文档解析与本地落盘   |
 
-三者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心；显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在。
+四者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心；显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在；文档解析组件同样是独立授权边界，不注册工具与提示词段，只通过核心服务上的可选全文增强器槽接入读取链路。
 
 ## 核心分层
 
@@ -106,6 +107,17 @@ graph LR
 - 后台任务：`scholarly_read` / `scholarly_search` / `scholarly_verify` 复用核心的 `ZoteroJobRunner`（`src/job-runner.ts`），作业 kind 为 `scholarly`，输出上限 256 KiB；显式后台由 `run_in_background` 请求，前台超时按 `enableRunInBackground` / `promoteOnTimeout` / `foregroundWaitMs` 提升；组件卸载时 `ZoteroJobRunner.killAll` 终止本组件启动的作业。
 - 公开面：`src/scholarly/index.ts` 只导出服务类、配置 schema 与领域类型；传输、主机表、存储与融合内部实现均不导出。
 
+## 文档解析子系统 (`src/parsing/`)
+
+`dsh-zotero/parsing` 是独立 bundle 组件，随包发布但默认禁用。挂载即授权组件联系 MinerU；组件不注册模型工具、不注入提示词段、不注册技能。发送文档字节还需要组件内独立的 `allowParsingUpload` 数据出境授权，两者同时成立时才会发出请求。
+
+- 增强器槽：核心 `ZoteroService` 只持有一个可选 `FulltextEnhancer` 槽（类型与纯谓词定义在 `src/local/fulltext-enhancer.ts`，纯类型，不 import `src/parsing/**`）。`FulltextEnhancer` 是 `{ lookup, enhance }` 对象：`lookup` 只读缓存与探测源（本地 stat、URL HEAD、bytes 指纹），不下载文档、不请求 MinerU；`enhance` 做完整解析。组件挂载时经 `ctx.inject(['zotero'])` 把对象装入槽，卸载时清除；核心与学术检索都按需读取它，槽为空时行为逐字节不变。依赖方向是 parsing → core，核心不持有 MinerU 传输、主机表或凭据。
+- 接入点：`zotero_retrieve` 的 `best` 与多附件策略、`scholarly_read` 的 PDF 分支在抽取前尝试增强器；`ok` 走增强文本，`fatal`（凭据/输出目录配置失败）直接抛出，`fallback`（任务/归档/输入/授权失败或短文本）按原本地路径回退并把带错误码的原因写入诊断环。学术检索在下载 PDF 前先 `lookup`，命中即不再下载。
+- 传输：`src/parsing/transport.ts` 自建请求路径，复用 `src/transport/` 的公网地址词法门、DNS 解析与固定连接、逐跳重定向重校验与有界读取；API 返回的签名上传 URL、结果 CDN 地址与缓存 HEAD 的源 URL 都视为不可信输入。`Authorization` 只发往固定的 `mineru.net` API 主机，签名上传、结果下载与源 HEAD 绝不携带凭据。签名上传不附加任何 header（预签名签名不覆盖 `Content-Type`）；非 2xx 响应体被截断、去 URL 后作为错误详情保留。所有请求显式传阶段超时：30 分钟总预算、900 次轮询、提交/轮询 60 秒、上传 20 分钟、结果下载 10 分钟、源传输 20 分钟、HEAD 15 秒。
+- 模式与凭据：`mode`（`free` / `pro`）是独立配置字段，host 按它分派接口；`free` 不解析 Token 凭据。`pro` 模式下引用名解析失败按 fail-closed 报 `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED`，不降级免费或匿名。已有缓存产物在没有 Token 时仍可读取。
+- 解析编排：`src/parsing/parse-once.ts` 在单个异步体内完成提交 → 签名上传 → 轮询 → 下载 → 解压 → 落盘，受总时限、轮询次数上限与共享 flight 的 signal 约束；不注册后台作业、不引入常驻轮询器。`ParseFlight` 每 `ParsingService` 一个，共享任务不继承任何调用者的 signal，某个等待者取消不会取消其他人；等待者归零才中止共享任务。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
+- 缓存与产物：内容产物按 `<outputDir>/<sha256>/` 落 `full.md`、`meta.json`（精准模式另含 `content_list.json`），`meta.json` 最后写入作为提交标记。源索引 `<outputDir>/sources/<sha256>.json` 记录 `identity + mode` 的产物与源戳；本地附件只 stat，URL 源用一次 HEAD 比较 ETag/Last-Modified/Content-Length，命中直接读本地产物。原始 URL 的 query/fragment 不写入 `meta.json`。`src/parsing/output-dir.ts` 用 realpath 规范化系统根、home 与 `~/.ssh`/`~/.gnupg`（macOS `/private/etc`、`/private/var` 同样拒绝），配置错误按 fatal；`src/parsing/zip.ts` 限制总条目 4096、wanted 2，重复 wanted、越界名、超大条目均拒绝，图片条目只跳过不落盘。
+
 ## 文献库子组件 (`src/library/`)
 
 - 服务：`ZoteroLibraryService`（派生自 `TypertRemoteService`）注册 `ctx.zoteroLibrary`，独占 `library` 设置命名空间；端点 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`。本地库只读端点经 `requireZoteroService` 转交核心；写入经 `executeLibraryWrite` 进入标准写入审批链；
@@ -148,8 +160,8 @@ graph LR
 
 ### 设置与插件管理表面
 
-- `plugins.bundle.config` 在插件详情页承载统一的 6 标签页配置表单（基础设置、本地连接、检索提取、文献面板、学术检索、高级选项），管理 `zotero`、`library`、`scholarly` 三个命名空间，保留未提交草稿；
-- `plugins.row.config` 为 `dsh-zotero#library` 与 `dsh-zotero#scholarly` 提供组件行配置；
+- `plugins.bundle.config` 在插件详情页承载统一的 7 标签页配置表单（基础设置、本地连接、检索提取、文献面板、学术检索、文档解析、高级选项），管理 `zotero`、`library`、`scholarly`、`parsing` 四个命名空间，保留未提交草稿；
+- `plugins.row.config` 为 `dsh-zotero#library`、`dsh-zotero#scholarly` 与 `dsh-zotero#parsing` 提供组件行配置；
 - `plugins.bundle.activation` 在启用插件时弹出连通性引导；`plugins.detail.section` 提供实时状态卡与诊断卡；
 - 文献轨迹的写回执、导出元数据与同步 diff/job 分别由 `write-decoder.ts`、`export-decoder.ts`、`sync-decoder.ts` 解码，其余工具结果由 `decoders.ts` 解码。
 
@@ -166,7 +178,7 @@ graph LR
 ## 远程通信与设置
 
 - 宿主半侧分别通过 `ZoteroRuntime`（`zoteroRemote`）和 `ZoteroLibraryService`（`zoteroLibrary`）在 `zotero` wire 命名空间下注册 Typert 端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；
-- 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly` 三个命名空间的共享设置表单；
+- 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly`、`parsing` 四个命名空间的共享设置表单；
 - 文献面板设置同时提供 11 项 `library` 偏好和 2 项核心 CSL 默认值的直接编辑；`CitationFormController` 为后两项持有独立暂存模型，两个入口共用该模型，不会提交连接等其他字段的草稿。`tests/client/settings/citation-defaults.spec.tsx` 验证真实表单组合、保存拒绝与入口一致性；`tests/client/cards/zotero-card-parity.spec.ts` 验证两个核心字段表合并后与宿主 schema 完整对应；打包后浏览器验收由 `smoke:web-composition` 验证保存和刷新持久化。
 - 配置全字段声明为 volatile，支持热重载；
 - `openProtocol` 协议唤醒：WSL 与 Windows 环境统一采用 `powershell.exe` 调用宿主系统默认程序唤醒 `zotero://` 链接；host 端点失败时抛 `zotero/protocol-failed`，浏览器半侧通过 `shell.overlay` 的 toast 与诊断上报呈现失败，不再保留 DOM anchor 回退。
@@ -186,7 +198,7 @@ graph LR
 ## 设计边界
 
 - 文献库权限：默认只读；开启 `writeEnabled` 后仅允许写入个人库（`zotero://user/0/`）；
-- 网络边界：本地请求严格限制在环回地址（`127.0.0.1`、`localhost`、`::1`），拒绝重定向；外部请求只来自学术检索组件；
+- 网络边界：本地请求严格限制在环回地址（`127.0.0.1`、`localhost`、`::1`），拒绝重定向；Agent 外部请求只来自学术检索组件与文档解析组件，用户主动的 URL PDF 阅读由文献面板独立授权；
 - 进程管理：无后台轮询守护进程与遥测收集，长任务统一交由 `ctx.jobs` 按需管理；
 - 段落排序：对条目自身的片段语料做 BM25 词频匹配，不使用向量或嵌入模型；
 - 轨迹边界：文献轨迹只展示本会话读类工具与导出产生的事实，不记录写入，也不含库外文献；

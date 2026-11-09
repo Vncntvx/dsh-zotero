@@ -96,6 +96,15 @@ Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped
 
 External retrieval belongs to the agent entry point. With its separate `allowUrlPdfRead` permission enabled, the literature panel downloads PDFs only when a user clicks an existing URL attachment in the library; it performs no external search.
 
+## Document Parsing (Optional Component)
+
+Document parsing is provided by the `dsh-zotero/parsing` component, shipped with the package but off by default. Enabling that component row authorizes requests to MinerU; sending PDF bytes additionally needs the component's `allowParsingUpload` data-egress authorization, and requests are issued only while both hold. The component registers no model tools and injects no prompt section.
+
+- `free` uses the token-free Agent lightweight API (API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤600 pages) and needs a token. The mode is independent of whether a token is configured.
+- `zotero_retrieve` and `scholarly_read` prefer the parsed text over local extraction; task/archive/input failures fall back locally with a stated reason, while a credential failure or an unusable output directory fails closed.
+- Parsed Markdown lands under `<outputDir>/<sha256>/`; a local attachment is cached by size/mtime plus content fingerprint, and a URL source by URL with one HEAD revalidation. A cache hit downloads no PDF and does not contact MinerU. The raw URL's query and fragment are not persisted.
+- The output directory accepts an absolute or `~/` path; a relative path is refused at save time, and a missing, unwritable, or sensitive directory fails on first use with `ZOTERO_PARSING_OUTPUT_INVALID`.
+
 ## Capabilities and Tools at a Glance
 
 | Capability                                | Conversation (agent tools)                           | Literature panel (human)                 | Literature trail                                |
@@ -104,6 +113,7 @@ External retrieval belongs to the agent entry point. With its separate `allowUrl
 | Search                                    | `zotero_search`                                      | Item-list search and filters             | Records criteria and hits                       |
 | Details and notes/attachments/annotations | `zotero_get`                                         | Item inspection and child sets           | Records the items and passages read             |
 | Passages                                  | `zotero_retrieve`                                    | Not offered                              | Records passages and sources                    |
+| Higher-quality full text (optional)       | `zotero_retrieve` / `scholarly_read` use parsed text | Not offered                              | Records the read                                |
 | Locate PDF                                | `zotero_get` (`locations="best"`)                    | Read PDF                                 | Records the location result                     |
 | Citations and exports                     | `zotero_export`                                      | Copy citation, BibTeX, and other formats | Records export output                           |
 | Writes                                    | Fifteen write tools (optional)                       | Approved writes                          | Not recorded                                    |

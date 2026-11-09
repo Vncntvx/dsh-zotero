@@ -87,6 +87,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             keys: await host.keys(),
             store: host.cache,
             signal,
+            enhancer: host.parsingEnhancer?.(),
           })
           onProgress({
             phase: 'read',

@@ -20,3 +20,12 @@
     - id: scholarly
       name: dsh-zotero/scholarly
       disabled: true
+    # The parsing component provides optional MinerU document parsing, raising
+    # the quality of full-text the model reads. It ships off. Mounting the row
+    # authorizes requests to MinerU; sending document bytes additionally needs
+    # the component's own allowParsingUpload switch (data-egress authorization).
+    # The component registers no model tools and no prompt section: it feeds
+    # the existing read tools through an optional full-text enhancer slot.
+    - id: parsing
+      name: dsh-zotero/parsing
+      disabled: true

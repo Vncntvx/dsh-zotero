@@ -105,6 +105,8 @@ export const en = {
     'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
   scholarlyDisabled:
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
+  parsingDisabled:
+    'Document parsing comes from the dsh-zotero/parsing component. Enable that component under "Included components", then grant the data-egress switch below, to turn MinerU parsing on; document bytes are then sent to MinerU. Nothing here is configurable while the component is off.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCredentialRef:
     'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
@@ -120,6 +122,9 @@ export const en = {
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
     'Multi-source academic search, API keys, and fulltext quotas from the dsh-zotero/scholarly component. Enabling that component turns the external tools on.',
+  tabParsing: 'Document Parsing',
+  tabParsingDesc:
+    'Optional MinerU document parsing for higher-quality full text. Choose the free or pro API, configure the token, and set where parsed files are stored.',
   tabAdvanced: 'Advanced',
   groupLibrarySidebar: 'Sidebar Display',
   groupLibrarySidebarDesc:
@@ -149,6 +154,42 @@ export const en = {
     'Contact email for the Polite Pool, credential references for optional academic API keys, and the key values stored in the credentials store.',
   groupScholarlyLimits: 'Search & Full-text Quotas',
   groupScholarlyLimitsDesc: 'Maximum results per search and the full-text reading limit.',
+  groupParsingMode: 'Parsing Mode',
+  groupParsingModeDesc:
+    'Pick which MinerU API reads the document. This switch is independent of whether a token is configured.',
+  parsingMode: 'API mode',
+  parsingModeHint:
+    'Free uses the lightweight Agent API (rate-limited, up to 20 pages, no token). Pro uses the precise API (up to 600 pages) and needs a token. Switching back to free stops using the token even if one is configured.',
+  parsingModeFree: 'Free (Agent lightweight)',
+  parsingModePro: 'Pro (precise)',
+  groupParsingAuth: 'MinerU Token',
+  groupParsingAuthDesc:
+    'A pro-mode token lives in the credentials store under a reference name, never in configuration.',
+  parsingTokenRef: 'Token credential reference',
+  parsingTokenRefHint:
+    'Environment-variable name holding the MinerU precise-API token (suggested: {suggested}). Only read in pro mode; leave blank for free mode.',
+  parsingToken: 'MinerU precise-API token',
+  parsingTokenHint:
+    'Stored in the credentials store under the reference above, never in configuration.',
+  parsingTokenNeedsReference:
+    'Set a valid credential reference above before storing a token. Free mode needs no token.',
+  groupParsingOutput: 'Output & Authorization',
+  groupParsingOutputDesc:
+    'Where parsed files are written locally, and whether document bytes may be sent to MinerU.',
+  parsingOutputDir: 'Parsed-file directory',
+  parsingOutputDirHint:
+    'Absolute directory for parsed Markdown files. Leave blank to use the default location; Reset to default clears a custom path.',
+  parsingOutputDirDefault: 'Default (~/.dsh/zotero-parsed)',
+  parsingOutputDirInvalid:
+    'Enter an absolute directory path (or a ~/... path), or leave blank for the default.',
+  parsingAllowUpload: 'Allow sending documents to MinerU',
+  parsingAllowUploadHint:
+    'Data-egress authorization. Local attachments and URL PDFs are sent to MinerU only while this is on. Off by default.',
+  parsingUploadRiskTitle: 'Allow document upload?',
+  parsingUploadRiskDescription:
+    'Turning this on sends your PDF bytes to MinerU, an external service, for parsing. Local library attachments and downloaded URL PDFs will leave this machine. Leave it off to keep all reading local.',
+  parsingUploadRiskAcknowledge: 'I understand that documents will be sent to an external service.',
+  parsingUploadRiskConfirm: 'Allow upload',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
   groupJobsDesc: 'Background task offloading policies and automatic timeout escalation.',
   groupDiagnosticsDesc: 'Diagnostics logging and verbose troubleshooting traces.',
@@ -850,6 +891,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
   scholarlyDisabled:
     '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
+  parsingDisabled:
+    '文档解析由 dsh-zotero/parsing 组件提供。在插件列表的「包含的组件」中启用该组件，并打开下方的数据出境开关，即启用 MinerU 解析；此后文档字节会发送给 MinerU。组件未启用时此处不可配置。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCredentialRef:
     '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
@@ -864,6 +907,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   tabScholarly: '学术检索',
   tabScholarlyDesc:
     'dsh-zotero/scholarly 组件提供的多源学术检索、API 密钥与全文配额。启用该组件即启用外部检索。',
+  tabParsing: '文档解析',
+  tabParsingDesc:
+    '可选的 MinerU 文档解析，获得更高质量的全文。选择免费或专业接口、配置 Token、设置解析文件存储位置。',
   tabAdvanced: '高级选项',
   groupLibrarySidebar: '侧边栏显示设置',
   groupLibrarySidebarDesc: '选择是否在 DeepSeek Harness 右侧边栏显示文献面板标签页。',
@@ -888,6 +934,36 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     '配置邮箱以加入 Polite Pool 获得更优限速配额，填写可选学术 API 密钥的凭据引用，并在凭据存储中保存密钥值。',
   groupScholarlyLimits: '学术检索与全文配额',
   groupScholarlyLimitsDesc: '全网检索最大返回篇数与全文提取字符上限。',
+  groupParsingMode: '解析模式',
+  groupParsingModeDesc: '选择使用哪套 MinerU 接口解析文档。此开关与是否配置 Token 相互独立。',
+  parsingMode: '接口模式',
+  parsingModeHint:
+    '免费使用 Agent 轻量接口（IP 限频、20 页以内、无需 Token）；专业使用精准接口（600 页以内）且需要 Token。切回免费即停用 Token，即便已配置。',
+  parsingModeFree: '免费（Agent 轻量）',
+  parsingModePro: '专业（精准）',
+  groupParsingAuth: 'MinerU Token',
+  groupParsingAuthDesc: '专业模式的 Token 以凭据引用名存于凭据存储，绝不写入配置。',
+  parsingTokenRef: 'Token 凭据引用',
+  parsingTokenRefHint:
+    '保存 MinerU 精准接口 Token 的环境变量名（建议：{suggested}）；仅在专业模式读取，免费模式留空即可。',
+  parsingToken: 'MinerU 精准接口 Token',
+  parsingTokenHint: '存于上方引用名对应的凭据存储中，绝不写入配置。',
+  parsingTokenNeedsReference: '请先在上方填写有效的凭据引用名再保存 Token。免费模式无需 Token。',
+  groupParsingOutput: '输出与授权',
+  groupParsingOutputDesc: '解析文件写入本机何处，以及是否允许将文档字节发送给 MinerU。',
+  parsingOutputDir: '解析文件目录',
+  parsingOutputDirHint:
+    '解析后 Markdown 文件的绝对目录。留空使用默认位置；「恢复默认」可清除自定义路径。',
+  parsingOutputDirDefault: '默认（~/.dsh/zotero-parsed）',
+  parsingOutputDirInvalid: '请填写绝对目录路径（或以 ~/ 开头），留空表示使用默认位置。',
+  parsingAllowUpload: '允许向 MinerU 发送文档',
+  parsingAllowUploadHint:
+    '数据出境授权。仅当开启时，本地附件与 URL PDF 才会发送给 MinerU。默认关闭。',
+  parsingUploadRiskTitle: '允许上传文档？',
+  parsingUploadRiskDescription:
+    '开启后会把 PDF 字节发送到外部服务 MinerU 进行解析，本地文库附件与下载的 URL PDF 将离开本机。保持关闭则所有读取都在本机完成。',
+  parsingUploadRiskAcknowledge: '我了解文档会被发送到外部服务。',
+  parsingUploadRiskConfirm: '允许上传',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
   groupJobsDesc: '耗时操作的后台异步执行策略与超时自动提升。',
   groupDiagnosticsDesc: '本地排错与详细运行日志输出。',

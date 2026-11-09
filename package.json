@@ -28,13 +28,19 @@
       "types": "./lib/library/index.d.ts",
       "default": "./lib/library/index.js"
     },
+    "./parsing": {
+      "types": "./lib/parsing/index.d.ts",
+      "default": "./lib/parsing/index.js"
+    },
     "./client": "./lib/client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
     "./library/locale/*.json": "./locale/library/*.json",
     "./library/icon": "./docs/images/icon.png",
     "./scholarly/locale/*.json": "./locale/scholarly/*.json",
-    "./scholarly/icon": "./docs/images/icon.png"
+    "./scholarly/icon": "./docs/images/icon.png",
+    "./parsing/locale/*.json": "./locale/parsing/*.json",
+    "./parsing/icon": "./docs/images/icon.png"
   },
   "engines": {
     "node": ">=24.15.0",
@@ -157,6 +163,7 @@
     "@deepseek-ai/schemastery": "^3.19.0",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.2",
     "undici": "8.12.4",
     "unpdf": "^2.1.0",
     "zod": "4.4.3"

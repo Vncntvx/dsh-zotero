@@ -23,3 +23,16 @@ export const SCHOLARLY_KEY_FIELD_PAIRS = [
   ['ncbiKey', 'ncbiApiKeyEnv'],
   ['openalexKey', 'openalexApiKeyEnv'],
 ] as const
+
+/** Suggested environment-variable name for the MinerU precise-API token. */
+export const PARSING_CREDENTIAL_REFERENCE_NAMES = {
+  mineru: 'MINERU_API_TOKEN',
+} as const
+
+/**
+ * The document-parsing component's single write-only secret and the
+ * reference field that feeds it, as a `[secretKey, referenceField]` pair.
+ * Kept separate from {@link SCHOLARLY_KEY_FIELD_PAIRS}: the scholarly parity
+ * spec pins that tuple's length, and the two resolvers are independent.
+ */
+export const PARSING_KEY_FIELD_PAIRS = [['mineruToken', 'mineruTokenRef']] as const

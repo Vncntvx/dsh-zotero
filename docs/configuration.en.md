@@ -2,17 +2,18 @@
 
 # Configuration Reference
 
-dsh-zotero configuration is split across three settings namespaces. Each namespace gets its field defaults from its own Schemastery schema and is validated on load or save; an invalid value blocks plugin loading or that namespace's configuration write.
+dsh-zotero configuration is split across four settings namespaces. Each namespace gets its field defaults from its own Schemastery schema and is validated on load or save; an invalid value blocks plugin loading or that namespace's configuration write.
 
 - Core `zotero` namespace: `src/config.ts`, 37 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 11 fields;
-- Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields.
+- Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields;
+- Document parsing `parsing` namespace: `src/parsing/config.ts`, 4 fields.
 
-The three groups total 57 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly`) in the current profile's `cordis.patch.yml`.
+The four groups total 61 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `parsing`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
-The configuration area of the plugin detail page is a 6-tab form that edits all three namespaces at once. Tabs, namespaces, and fields line up as follows:
+The configuration area of the plugin detail page is a 7-tab form that edits all four namespaces at once. Tabs, namespaces, and fields line up as follows:
 
 | Tab                 | Settings namespace  | Fields | Groups and fields                                                                                                                                                                                                                                                                                                                       |
 | ------------------- | ------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,6 +22,7 @@ The configuration area of the plugin detail page is a 6-tab form that edits all 
 | Search & Extraction | `zotero`            | 13     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars` |
 | Literature panel    | `library`, `zotero` | 13     | 11 panel preferences for display, details, browsing, PDF reading, citations and conversation; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                                                        |
 | Scholarly Search    | `scholarly`         | 9      | Identity and credential references: `email`, `s2ApiKeyEnv`, `ncbiApiKeyEnv`, `openalexApiKeyEnv`; Search & Full-text Quotas: `maxResults`, `maxContentChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`                                                                                         |
+| Document Parsing    | `parsing`           | 4      | Mode and output: `mode`, `mineruTokenRef`, `allowParsingUpload`, `outputDir`                                                                                                                                                                                                                                                            |
 | Advanced            | `zotero`            | 11     | Output limits: `maxInlineResultTokens`, `maxInlineResultBytes`, `maxResponseBytes`, `maxExportChars`, `maxExportRefs`, `maxBrowseResults`, `maxChangesResults`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`; Diagnostics: `debug`                                                                 |
 
 `webEnabled` sits under "General → Literature trail", and the toggle is named "Show literature trail"; it decides whether the literature trail tab appears at the top of the conversation. The literature panel also needs the `dsh-zotero/library` component row to be composed and this component's `rightSidebarEnabled` to be on, as described below in "Literature panel component configuration".
@@ -91,11 +93,11 @@ The 11 literature panel preferences are validated at mount and on every commit a
 Schema defaults → Composition entry config → the current profile's Cordis patch layer
 ```
 
-All three namespaces follow the same order. The override layer (`config` on the matching entry in the current profile's `cordis.patch.yml`) outranks schema defaults and entry config; a home patch or command-line overlay outranks it, and a form write that they would override is refused.
+All four namespaces follow the same order. The override layer (`config` on the matching entry in the current profile's `cordis.patch.yml`) outranks schema defaults and entry config; a home patch or command-line overlay outranks it, and a form write that they would override is refused.
 
 ## Plugin configuration page
 
-Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 6-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`) and edits the `zotero`, `library`, and `scholarly` namespaces in one place:
+Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 7-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`) and edits the `zotero`, `library`, `scholarly`, and `parsing` namespaces in one place:
 
 - Edits are written to the `config` override on the matching entry in the current profile's `cordis.patch.yml`;
 - Saves take effect at once: transport configuration and write-gate changes rebuild the matching components inside the service instance, and pure limit fields are read live by the provider;
@@ -105,8 +107,8 @@ Open the **dsh-zotero** detail page in the plugin manager; its configuration are
 
 The same form state has two more entry points, and the three relate as follows:
 
-1. Unified settings page tabs: the 6-tab form in the plugin detail page's configuration area;
-2. Component row configuration: the "Configure" button on the `dsh-zotero#library` and `dsh-zotero#scholarly` rows under "Included components", each editing its own namespace;
+1. Unified settings page tabs: the 7-tab form in the plugin detail page's configuration area;
+2. Component row configuration: the "Configure" button on the `dsh-zotero#library`, `dsh-zotero#scholarly`, and `dsh-zotero#parsing` rows under "Included components", each editing its own namespace;
 3. Configuration file: edit `config` on the matching entry in the current profile's `cordis.patch.yml` directly.
 
 The first two are two views of one `ConfigForm` state, synced live over both channels; the third is the configuration override layer, which a form write takes as its highest priority. While a component row is not composed, the matching tab of the settings page shows only a disabled pointer to "Included components" and renders no field, and the component row configuration entry is not registered either.
@@ -158,7 +160,7 @@ The literature panel is an independent DSH bundle subcomponent. It ships with th
 
 Component fields have three entry points:
 
-1. Unified settings page, "Literature panel" tab: switch to "Literature panel" in the 6-tab form of the plugin detail page;
+1. Unified settings page, "Literature panel" tab: switch to "Literature panel" in the 7-tab form of the plugin detail page;
 2. Included components row configuration: click the "Configure" button on the `dsh-zotero#library` row under "Included components";
 3. Configuration file: declare it under `config` on the matching entry in the current profile's `cordis.patch.yml`.
 
@@ -185,3 +187,46 @@ Browsing positions use v3 storage, isolated by browser, Zotero `serverId` and co
 URL PDF reading accepts only a qualified attachment ref belonging to the current local Zotero instance. The service resolves the URL itself and accepts no arbitrary URL input. Every host passes public-address and DNS checks, connections use the pinned answers, and every redirect is revalidated with HTTPS downgrade refused. Requests carry no browser cookies, credentials or Referer. Downloads are limited to 32 MiB, 60 seconds, 5 redirects and 2 concurrent reads; media type and PDF signature are checked. Failures never return partial files or retry automatically; revoking permission cancels active downloads. Complete PDFs are staged in private random temporary directories and opened through the public host file reader in the owning session's sidebar or floating panel. Closing the last reader or unloading the plugin releases its file; at most 16 reading files are retained. Saving settings and restoring tabs never initiates an external download. The browser retains the attachment source ref; a restored reader offers an explicit Reload PDF tab-menu action that revalidates permission and source before replacing the original session tab. Download URLs are never persisted. This permission enables no external index searches, Agent tools or scholarly prompt section.
 
 The panel requires a composed component row and `rightSidebarEnabled`; `webEnabled` controls only the literature trail. Without the component, no panel surface or endpoint call exists. Panel writes retain the core approval seam and require the owning session to be running.
+
+---
+
+## Document parsing component configuration (`dsh-zotero/parsing`)
+
+Document parsing is a separate DSH bundle sub-component, shipped with the package but disabled by default (`cordis.patch.yml` contains `- id: parsing` / `name: dsh-zotero/parsing` / `disabled: true`). Enabling that row authorizes the component to contact MinerU; it registers no model tools and no prompt section. It feeds `zotero_retrieve` and `scholarly_read` through one optional full-text enhancer slot on the core service, producing higher-quality Markdown from PDFs. While the component is unmounted the slot is empty and both read paths keep their original local-extraction behavior unchanged.
+
+Sending document bytes additionally needs the component's own data-egress authorization, `allowParsingUpload` (off by default; the form asks for confirmation before enabling). MinerU receives PDF bytes only while both authorizations hold. Every external request is issued by this component; the core holds no MinerU transport, host table, or credentials.
+
+The component's fields have three entry points:
+
+1. **Unified settings page "Document Parsing" tab**: switch to it in the plugin detail page's 7-tab form;
+2. **Included-components row configuration**: the "Configure" button on the `dsh-zotero#parsing` row;
+3. **Configuration file**: declare them under `config` on that entry in the current profile's `cordis.patch.yml`.
+
+| Field                | Default | Values and behavior                                                                                                                                                                                                                                                          |
+| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`               | `free`  | `free` uses the token-free Agent lightweight API (IP rate-limited, API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤600 pages) and needs a token. Page counts and API byte caps are enforced by MinerU; the client does not pre-check pages |
+| `mineruTokenRef`     | `''`    | Credential reference name for the MinerU precise-API token (suggested `MINERU_API_TOKEN`); resolved only in `pro` mode, and `free` mode does not resolve the credential                                                                                                      |
+| `allowParsingUpload` | `false` | Data-egress authorization: whether local attachment and URL-PDF bytes may be sent to MinerU; independent of mounting the component                                                                                                                                           |
+| `outputDir`          | `''`    | Absolute directory for parsed artifacts (or a `~/...` path); empty resolves the default `~/.dsh/zotero-parsed` at runtime. A relative path is refused by the schema/form                                                                                                     |
+
+The mode switch is fully decoupled from the token: `mode` is its own field, the host dispatches on it, and `free` never resolves the token credential, so a user who configured one can still switch back to the free API. When `mode` is `pro` and `mineruTokenRef` does not resolve, the call fails closed with `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED`; it never silently degrades to the free API or an anonymous request.
+
+Parsed artifacts are written to `<outputDir>/<sha256>/` keyed by a content fingerprint (source, mode, and the SHA-256 of the PDF bytes): `full.md`, `meta.json` (source, mode, task ID, file list, plus pages only when `pro` returned `total_pages`), and `content_list.json` for the precise API. `meta.json` is written last and acts as the completeness marker.
+
+The cache has two levels: content artifacts by fingerprint, and a source index at `<outputDir>/sources/<sha256>/` mapping `identity + mode` to an artifact and a source stamp. A local attachment is only `stat`ed (size and mtime); a change falls back to the content fingerprint. A URL source receives one token-free HEAD and is compared by `ETag`/`Last-Modified`/`Content-Length`; a match reads the local artifact **without downloading the PDF or contacting MinerU**, while a mismatch or a failed HEAD falls back to the URL identity or a fresh download. The raw URL's query and fragment are not written to `meta.json` (origin and path only). Deleting the matching entry under `<outputDir>/sources` forces a re-parse.
+
+The output directory is fully validated on first use: a relative path is refused by the schema/form; a missing, unwritable, sensitive system path (including macOS `/private/etc` and `/private/var`, and `~/.ssh`/`~/.gnupg`), or a symlink escape fails **fatally** with `ZOTERO_PARSING_OUTPUT_INVALID` and does not fall back. The free API's size cap (>10 MiB) falls back to local extraction with `ZOTERO_PARSING_UNSUPPORTED_INPUT` in the reason, never a silent truncation.
+
+The default parse budget is 30 minutes with 900 polls (one every 2 seconds); submit and one poll get 60 seconds, the signed upload 20 minutes, the result download 10 minutes, a source PDF transfer 20 minutes, and a cache HEAD 15 seconds. Parsed Markdown below 500 characters is treated as a fallback; identical bytes are parsed once per `ParsingService`, and one caller's cancellation does not cancel the other waiters.
+
+Error classification:
+
+| Code                                   | Class    | Behavior                                                                                |
+| -------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED` | fatal    | The pro token reference does not resolve; the read fails                                |
+| `ZOTERO_PARSING_OUTPUT_INVALID`        | fatal    | The output directory is unusable; the read fails and no document bytes are sent         |
+| `ZOTERO_PARSING_TASK_FAILED`           | fallback | Submit/task/poll failure or timeout; local extraction                                   |
+| `ZOTERO_PARSING_ARCHIVE_INVALID`       | fallback | Malformed or unsafe result zip; local extraction                                        |
+| `ZOTERO_PARSING_UNSUPPORTED_INPUT`     | fallback | Over the selected API's byte cap or not a PDF; local extraction with the code preserved |
+
+With `allowParsingUpload` off, no new document bytes are sent and the read falls back locally; an existing local artifact remains readable. Only credential resolution and an unusable output directory fail closed; other runtime failures fall back with a stated reason recorded in the diagnostics ring.

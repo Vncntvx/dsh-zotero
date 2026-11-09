@@ -121,22 +121,28 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
-/** The tab partition identifiers for the 6-tab settings view. */
+/** The tab partition identifiers for the 7-tab settings view. */
 export type SettingsTabId =
-  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'advanced'
+  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'parsing' | 'advanced'
 
 /** Description of one tab partition and the configuration groups it carries. */
 interface SettingsTabDescriptor {
   readonly id: SettingsTabId
   readonly labelKey:
-    'tabFeatures' | 'tabConnection' | 'tabSearch' | 'tabLibrary' | 'tabScholarly' | 'tabAdvanced'
+    | 'tabFeatures'
+    | 'tabConnection'
+    | 'tabSearch'
+    | 'tabLibrary'
+    | 'tabScholarly'
+    | 'tabParsing'
+    | 'tabAdvanced'
   readonly groupKeys: readonly GroupKey[]
 }
 
 /**
- * The six tab partitions, in display order. `groupKeys` lists the configuration
- * groups each one carries; library and scholarly leave it empty because their
- * own form controllers manage them.
+ * The seven tab partitions, in display order. `groupKeys` lists the configuration
+ * groups each one carries; library, scholarly, and parsing leave it empty because
+ * their own form controllers manage them.
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
@@ -162,6 +168,11 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   {
     id: 'scholarly',
     labelKey: 'tabScholarly',
+    groupKeys: [],
+  },
+  {
+    id: 'parsing',
+    labelKey: 'tabParsing',
     groupKeys: [],
   },
   {

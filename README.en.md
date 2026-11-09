@@ -31,7 +31,7 @@ All operations interact with Zotero through its local API (`127.0.0.1:23119`). R
   - Search & reading: Search papers by title, author, year, or full text, and read bibliographic metadata, notes, and local PDF full text.
   - Passage extraction: Locate relevant passages across full text, notes, and annotations for specific research questions, with original page numbers preserved on PDF annotations.
   - Citation & export: Generate in-text citations or bibliographies in specified CSL styles, and export BibTeX, RIS, or CSL-JSON.
-  - Writing & extensions (optional): With write access enabled, create notes and update tags or collections (each write requires approval); with the scholarly component enabled, search across seven external indexes and verify references.
+  - Writing & extensions (optional): With write access enabled, create notes and update tags or collections (each write requires approval); with the scholarly component enabled, search across seven external indexes and verify references; with the document parsing component enabled, let MinerU turn PDFs into higher-quality Markdown for the read tools (sending document bytes additionally needs `allowParsingUpload`).
 - **Literature Trail**
   - Search history: The session header shows query terms, scopes, filter conditions, and hit counts for every tool call on the first screen.
   - Passage review: Review extracted passages and annotations grouped by paper, complete with source tags and page numbers for easy verification.
@@ -131,13 +131,13 @@ The fifteen write tools (notes, tags and collection membership, collections, ite
 
 ### Usage
 
-| Document                                      | Covers                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [Getting started](docs/getting-started.en.md) | Installation, connection verification, and the first task                                              |
-| [Product model](docs/product-model.en.md)     | Two entry points, two UI surfaces, component division, and system boundaries                           |
-| [Features](docs/features.en.md)               | Conversation capabilities, the literature trail, the literature panel, writes, and scholarly retrieval |
-| [Research SOP skills](docs/skills.en.md)      | Seven on-demand research workflows, batching budgets and evidence boundaries                           |
-| [Troubleshooting](docs/troubleshooting.en.md) | Common issues, diagnostic steps, and remedies                                                          |
+| Document                                      | Covers                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [Getting started](docs/getting-started.en.md) | Installation, connection verification, and the first task                                                                |
+| [Product model](docs/product-model.en.md)     | Two entry points, two UI surfaces, component division, and system boundaries                                             |
+| [Features](docs/features.en.md)               | Conversation capabilities, the literature trail, the literature panel, writes, scholarly retrieval, and document parsing |
+| [Research SOP skills](docs/skills.en.md)      | Seven on-demand research workflows, batching budgets and evidence boundaries                                             |
+| [Troubleshooting](docs/troubleshooting.en.md) | Common issues, diagnostic steps, and remedies                                                                            |
 
 ### Maintenance
 

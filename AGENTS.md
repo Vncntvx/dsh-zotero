@@ -1,21 +1,22 @@
 # AGENTS.md
 
-dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when enabled and approved) write a local Zotero library through the loopback Local API (`127.0.0.1:23119/api`). It ships three Cordis bundle components: core, `dsh-zotero/library` (enabled), `dsh-zotero/scholarly` (disabled). Read `docs/product-model.md` before naming a component, surface, or scope.
+dsh-zotero is a DeepSeek Harness plugin: agents search, read, cite, and (when enabled and approved) write a local Zotero library through the loopback Local API (`127.0.0.1:23119/api`). It ships four Cordis bundle components: core, `dsh-zotero/library` (enabled), `dsh-zotero/scholarly` (disabled), and `dsh-zotero/parsing` (disabled). Read `docs/product-model.md` before naming a component, surface, or scope.
 
 ## Repository map
 
-| Path             | Ownership                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `src/`           | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider                           |
-| `src/local/`     | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write |
-| `src/library/`   | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                   |
-| `src/scholarly/` | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)         |
-| `src/tools/`     | The 23 host tools: 8 read + 15 write (write tools disabled by default)                           |
-| `src/client/`    | Browser half bundled into `lib/client.js`: settings, 文献轨迹, 文献面板, tool cards              |
-| `tests/`         | Seven declared lanes by ownership and verification level; rules in `tests/README.md`             |
-| `docs/`          | Product and technical docs, maintained as zh/en pairs                                            |
-| `scripts/`       | Build, pack verification, harness pinning, test lint, smoke probes                               |
-| `lib/`           | Generated output from `tsc` and `esbuild`; never edited                                          |
+| Path             | Ownership                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `src/`           | Host runtime: `ZoteroService` (`ctx.zotero`), HTTP transport, provider                                     |
+| `src/local/`     | Local API domain pipelines behind the provider: search, browse, retrieve, export, changes, write           |
+| `src/library/`   | `dsh-zotero/library` component: `ctx.zoteroLibrary` panel endpoints and config                             |
+| `src/scholarly/` | `dsh-zotero/scholarly` component: external search, fusion, fulltext, citations (7 tools)                   |
+| `src/parsing/`   | `dsh-zotero/parsing` component: MinerU transport, parse-once, artifact store, enhancer `{lookup, enhance}` |
+| `src/tools/`     | The 23 host tools: 8 read + 15 write (write tools disabled by default)                                     |
+| `src/client/`    | Browser half bundled into `lib/client.js`: settings (including parsing), 文献轨迹, 文献面板, tool cards    |
+| `tests/`         | Seven declared lanes by ownership and verification level; rules in `tests/README.md`                       |
+| `docs/`          | Product and technical docs, maintained as zh/en pairs                                                      |
+| `scripts/`       | Build, pack verification, harness pinning, test lint, smoke probes                                         |
+| `lib/`           | Generated output from `tsc` and `esbuild`; never edited                                                    |
 
 ## Sources of truth
 
@@ -51,14 +52,15 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 ## Invariants
 
 - **Harness pin**: every `@deepseek-ai/dsh-*` in `dependencies`, `devDependencies`, and `overrides` is an exact version; `peerDependencies` and `engines.dsh` use `>=`. Never hand-edit versions: run `npm run harness:pin -- <ver>`, then `npm install --package-lock-only`. Vendored `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` floors must match the sibling's `vendor/<pkg>/package.json`. The browser bundle's third-party runtime dependencies mirror the sibling's `packages/client/*` declarations and move with the harness, never on their own; `npm run deps:check` excludes them.
-- **Component authorization**: mounting `dsh-zotero/scholarly` authorizes external scholarly retrieval, its 7 tools, and its prompt section. User-initiated URL PDF reading has separate `library.allowUrlPdfRead` authorization and grants no scholarly tools or prompt. The core is request-driven: no external calls, background pollers, or load-time network I/O.
+- **Component authorization**: mounting `dsh-zotero/scholarly` authorizes external scholarly retrieval, its 7 tools, and its prompt section. Mounting `dsh-zotero/parsing` authorizes requests to MinerU; sending document bytes additionally needs its `allowParsingUpload` data-egress switch. User-initiated URL PDF reading has separate `library.allowUrlPdfRead` authorization and grants no scholarly tools or prompt. The core is request-driven: no external calls, background pollers, or load-time network I/O.
+- **Parsing seam**: parsing depends on core, never the reverse. The core holds only the pure `FulltextEnhancer` slot (`{lookup, enhance}`) from `src/local/fulltext-enhancer.ts`; `lookup` must never download a document or contact MinerU, and only `enhance` may. All MinerU transport, host table, credentials, artifact store, and source index live under `src/parsing/`. The signed upload sends no headers and no token; `Authorization` is host-scoped to `mineru.net`; signed upload, result CDN, and cache HEAD never receive it. A cache hit reads local artifacts only (a URL may be revalidated with one token-free HEAD).
 - **Write seam**: every write targets the personal library (`zotero://user/0/`) and passes through `ctx.zotero`: capability gate → `ctx.approval.request` → plan-review card. No bypass; a stale `writeConfirm: false` cannot opt out. Writes never retry: `committed-unverified` is reconciled, not retried. Shell commands that write to the Local API are intercepted by `src/shell-write-detector.ts`.
 - **Client graph**: browser code may value-import only `src/client/**` and the pure modules allowlisted in `scripts/client-graph-authority.mjs`; never `@deepseek-ai/schemastery`, `src/config.ts`, `src/status-codec.ts`, or `src/typert.ts`. Keep `zod` external: the build refuses an inlined copy. `src/client/index.ts` must `await ctx.remote.$mount` before injecting on `remote.zotero`.
 - **Zotero wire**: `src/search-text.ts` must keep mirroring Zotero's `normalizeForSearch`. A bare `/items/{key}/children` never returns annotations; request `?itemType=annotation`. Server-paged listings require a valid `Total-Results` header, and collection and saved-search pages additionally require a valid `Last-Modified-Version`.
 - **文献轨迹**: a read-only ledger projected from `ChatSnapshot`; it records read calls and exports, never writes or external results.
 - **文献面板**: reaches the library only through `ctx.zoteroLibrary` / `ctx.remote.zotero` (`browse`, `collectionPath`, `search`, `item`, `childPage`, `export`, `write`, `readUrlPdf`, `releaseUrlPdf`). The web UI never dispatches model tools; `export` is read-only and shares the core export domain.
 - **Client styling**: feature CSS consumes the host design system and defines none of it: no `--dsw-*` declaration, no literal colour outside a `mask-image`, no literal size outside the 16px `@media (pointer: coarse)` focus-zoom guard, and the reader's `--dsh-content-font-*` axis on every body-text surface. State borders are 1px, every full-round radius pairs `corner-shape: round`, and every transition is reduced under `prefers-reduced-motion: reduce`. Every control is an `@deepseek-ai/dsh-client-ui-primitives` `Button`; icon-only controls use the local `IconButton` adapter, which composes `Button`. A `className` may carry layout only, never geometry or colour; text-link actions use the single `src/client/components/link.module.css`. `npm run style:check` (spec: `tests/unit/style-guard.spec.ts`) enforces it against the token snapshot in `tests/fixtures/style-tokens.json`; a host upgrade means `npm run tokens:write`.
-- **Teardown**: disposing the plugin does not abort in-flight foreground requests; they settle on provider deadlines. The plugin's own background jobs are the exception: teardown kills them (`ZoteroJobRunner.killAll`), aborting their in-flight work by design.
+- **Teardown**: disposing the plugin does not abort in-flight foreground requests; they settle on provider deadlines. The plugin's own background jobs are the exception: teardown kills them (`ZoteroJobRunner.killAll`), aborting their in-flight work by design. The parsing component has no background jobs; its per-service `ParseFlight` aborts only when its last waiter leaves, never because one caller was disposed.
 
 ## Development rules
 
@@ -76,6 +78,6 @@ Interactive launches (full plugin vs host-only HMR) and the opt-in write probe (
 
 ## Safety
 
-- **Loopback only**: `resolveConfig` rejects a non-loopback `baseUrl`; redirects are refused. External hosts are governed by the scholarly allowlist (`src/scholarly/transport/hosts.ts`); PDF exceptions are explicit user reading under `library.allowUrlPdfRead` and the open-access PDF fulltext arm (`allowPublicPdf`), which may contact any public HTTP(S) host under the two-gate public-address check (lexical gate in `allowlist.ts`, connect-time public-DNS resolution and pinning in `network.ts`, ports 80/443 only, per-hop redirect re-validation).
-- **Credentials**: the Zotero write grant lives in the harness credentials seam (`dsh-credentials`), never in plugin config. Never log, commit, or expose it. Scholarly API keys are credential references only: `src/scholarly/credentials.ts` resolves them through `ctx.credentials` per call, and a configured reference that does not resolve fails the call rather than degrading to anonymous access.
+- **Loopback only**: `resolveConfig` rejects a non-loopback `baseUrl`; redirects are refused. External hosts are governed by the scholarly allowlist (`src/scholarly/transport/hosts.ts`); PDF exceptions are explicit user reading under `library.allowUrlPdfRead` and the open-access PDF fulltext arm (`allowPublicPdf`), which may contact any public HTTP(S) host under the two-gate public-address check (lexical gate in `allowlist.ts`, connect-time public-DNS resolution and pinning in `network.ts`, ports 80/443 only, per-hop redirect re-validation). MinerU requests are the parsing component's own boundary: the fixed API host is `mineru.net`; signed upload, result CDN, and cache HEAD URLs are dynamic untrusted public addresses under the same double gate, with the token never attached to them.
+- **Credentials**: the Zotero write grant lives in the harness credentials seam (`dsh-credentials`), never in plugin config. Never log, commit, or expose it. Scholarly API keys are credential references only: `src/scholarly/credentials.ts` resolves them through `ctx.credentials` per call, and a configured reference that does not resolve fails the call rather than degrading to anonymous access. The MinerU precise-API token is the same shape: `src/parsing/credentials.ts` resolves its reference per parse in `pro` mode, and a configured reference that does not resolve fails closed with `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED`.
 - **Generated output**: `lib/` is produced by `tsc` and `esbuild`; rebuild instead of editing.

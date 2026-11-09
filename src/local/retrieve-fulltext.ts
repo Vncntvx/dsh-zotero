@@ -5,10 +5,51 @@
 import { mapWithConcurrency } from '../concurrency.js'
 import { isNotFoundError, NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
 import { chunkText, type EvidenceChunk } from '../evidence.js'
-import { libraryPrefix } from '../refs.js'
+import { libraryPrefix, refStringFor } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
+import type { DiagnosticSink } from '../diagnostics.js'
+import {
+  isPdfContentType,
+  type FulltextEnhancer,
+  type FulltextEnhancerInput,
+} from './fulltext-enhancer.js'
+
+/**
+ * The full-text deps. `enhancer` is the optional document-parsing slot the
+ * core holds for `dsh-zotero/parsing`; when it is absent every read below runs
+ * exactly the original loopback path. `sink` records an explicit reason when
+ * the enhancer declines, so a fallback is never a silent success.
+ */
+export interface FulltextDeps {
+  readonly client: ZoteroHttpClient
+  readonly limits: LocalApiLimits
+  readonly enhancer?: FulltextEnhancer
+  readonly sink?: DiagnosticSink
+}
+
+/**
+ * Try the optional higher-quality parser for one PDF. Returns its text on
+ * success, `undefined` when the caller should keep local extraction, and
+ * rethrows a fatal (authorization/configuration) failure. A recoverable
+ * fallback is reported to the diagnostics ring with its stated reason.
+ */
+export async function tryEnhanceFulltext(
+  deps: FulltextDeps,
+  input: FulltextEnhancerInput,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  if (deps.enhancer === undefined) return undefined
+  const outcome = await deps.enhancer.enhance(input, signal)
+  if (outcome.kind === 'ok') return outcome.text
+  if (outcome.kind === 'fatal') throw outcome.error
+  deps.sink?.warn('parsing.fallback', outcome.reason)
+  return undefined
+}
+
+/** Only PDF candidates are offered to the parser; known non-PDF types skip it. */
+export const isPdfCandidate = isPdfContentType
 import type {
   SupportedLocalLibrary,
   ZoteroCoverage,
@@ -29,16 +70,37 @@ import type {
 export type FulltextSource = {
   readonly key: string
   readonly contentType?: string
+  /** Internal provenance flag; never projected into the tool's wire schema. */
+  readonly enhanced?: boolean
 } & (
   | {
       readonly status: 'indexed'
-      readonly coverage: ZoteroCoverage
+      /** Absent for MinerU-derived text, which has no Zotero index coverage. */
+      readonly coverage?: ZoteroCoverage
       readonly inputTruncated: boolean
       readonly chunks: readonly EvidenceChunk[]
     }
   | { readonly status: 'unindexed' }
   | { readonly status: 'unread' }
 )
+
+/** Cut enhanced or index text to a per-source budget and chunk it. */
+export function chunkFulltext(
+  text: string,
+  perSourceChars: number,
+  limits: LocalApiLimits,
+): {
+  readonly bounded: string
+  readonly inputTruncated: boolean
+  readonly chunks: readonly EvidenceChunk[]
+} {
+  const bounded = truncateText(text, perSourceChars)
+  return {
+    bounded: bounded.text,
+    inputTruncated: bounded.truncated,
+    chunks: chunkText(bounded.text, limits.fulltextChunkWords, limits.maxEvidenceChars),
+  }
+}
 
 /**
  * Full-text indexing coverage as reported by Zotero. `complete` is derived
@@ -105,7 +167,7 @@ export function attachmentFactOf(source: FulltextSource): {
  * pass at the end.
  */
 export async function readFulltextSources(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: FulltextDeps,
   ref: ZoteroObjectRef,
   serverId: string | undefined,
   candidates: readonly { key: string; contentType?: string }[],
@@ -121,6 +183,39 @@ export async function readFulltextSources(
         key: candidate.key,
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
       }
+
+      // Prefer the optional higher-quality parser for PDF candidates. A
+      // `fatal` outcome propagates (fail-closed); `ok` text is chunked under
+      // the same per-source budget as a Zotero index; a `fallback` is reported
+      // and the original loopback read runs unchanged.
+      if (isPdfCandidate(candidate.contentType) && deps.enhancer !== undefined) {
+        const attachmentRef = refStringFor(
+          ref.library as SupportedLocalLibrary,
+          'attachment',
+          candidate.key,
+          serverId,
+        )
+        const enhanced = await tryEnhanceFulltext(
+          deps,
+          {
+            key: attachmentRef,
+            source: { kind: 'local', attachmentRef },
+            contentType: candidate.contentType,
+          },
+          poolSignal,
+        )
+        if (enhanced !== undefined) {
+          const chunked = chunkFulltext(enhanced, perSourceChars, deps.limits)
+          return {
+            ...base,
+            status: 'indexed',
+            enhanced: true,
+            inputTruncated: chunked.inputTruncated,
+            chunks: chunked.chunks,
+          }
+        }
+      }
+
       let payload: ZoteroFulltextPayload
       try {
         payload = await fetchFulltext(
@@ -136,20 +231,17 @@ export async function readFulltextSources(
         }
         throw error
       }
-      const bounded = truncateText(
+      const chunked = chunkFulltext(
         typeof payload.content === 'string' ? payload.content : '',
         perSourceChars,
+        deps.limits,
       )
       return {
         ...base,
         status: 'indexed',
         coverage: normalizeCoverage(payload),
-        inputTruncated: bounded.truncated,
-        chunks: chunkText(
-          bounded.text,
-          deps.limits.fulltextChunkWords,
-          deps.limits.maxEvidenceChars,
-        ),
+        inputTruncated: chunked.inputTruncated,
+        chunks: chunked.chunks,
       }
     },
     { signal },

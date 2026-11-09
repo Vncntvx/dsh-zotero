@@ -8,7 +8,6 @@
  * @module dsh-zotero/local/retrieve
  */
 
-import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
 import { chunkText, rankChunks, tokenize } from '../evidence.js'
@@ -29,12 +28,15 @@ import {
 } from '../normalize-children.js'
 import { plainNoteText, truncateText } from '../normalize-context.js'
 import { loadChildRows } from './detail.js'
-import type { LocalApiLimits } from './limits.js'
 import {
   attachmentFactOf,
+  chunkFulltext,
   fetchFulltext,
+  isPdfCandidate,
   normalizeCoverage,
   readFulltextSources,
+  tryEnhanceFulltext,
+  type FulltextDeps,
   type FulltextSource,
 } from './retrieve-fulltext.js'
 import type {
@@ -103,13 +105,30 @@ interface FulltextPolicyOutcome {
 /** The payload shape the fulltext reads produce and coverage is normalized from. */
 type FulltextPayload = Awaited<ReturnType<typeof fetchFulltext>>
 
+/** Append one attachment's chunks as fulltext passages. */
+function appendFulltextChunks(
+  passages: RetrievePassage[],
+  attachmentRef: string,
+  chunks: readonly { text: string; index: number }[],
+): void {
+  for (const chunk of chunks) {
+    passages.push({
+      source: 'fulltext',
+      sourceRef: attachmentRef,
+      text: chunk.text,
+      chunkIndex: chunk.index,
+      chunkCount: chunks.length,
+    })
+  }
+}
+
 /**
  * The `best` policy's fulltext read: the linked attachment when Zotero names
  * one, else the first PDF child. An unindexed attachment degrades like an
  * absent one — the other requested sources still answer.
  */
 async function readBestFulltext(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: FulltextDeps,
   ref: ZoteroObjectRef,
   serverId: string | undefined,
   linkAttachment: ReturnType<typeof bestAttachmentFromLinks>,
@@ -147,26 +166,43 @@ async function readBestFulltext(
       if (selectedContentType !== undefined && selectedContentType !== '') {
         attachmentContentType = selectedContentType
       }
-      const payload = await (fulltextPromise ??
-        fetchFulltext(deps, attachmentKey, ref.library as SupportedLocalLibrary, serverId, signal))
-      const content = typeof payload.content === 'string' ? payload.content : ''
-      const bounded = truncateText(content, deps.limits.maxFulltextChars)
-      fulltextWasCut = bounded.truncated
-      const chunks = chunkText(
-        bounded.text,
-        deps.limits.fulltextChunkWords,
-        deps.limits.maxEvidenceChars,
-      )
-      for (const chunk of chunks) {
-        passages.push({
-          source: 'fulltext',
-          sourceRef: attachmentRef,
-          text: chunk.text,
-          chunkIndex: chunk.index,
-          chunkCount: chunks.length,
-        })
+
+      // Prefer the optional higher-quality parser for a PDF. A `fatal` result
+      // propagates; `ok` text is chunked under the same budget as the index;
+      // a `fallback` is reported and the original loopback read runs as before.
+      const enhanced =
+        isPdfCandidate(selectedContentType) && deps.enhancer !== undefined
+          ? await tryEnhanceFulltext(
+              deps,
+              {
+                key: attachmentRef,
+                source: { kind: 'local', attachmentRef },
+                contentType: selectedContentType,
+              },
+              signal,
+            )
+          : undefined
+
+      if (enhanced !== undefined) {
+        // MinerU text has no Zotero index coverage; leave `coverage` unset.
+        const chunked = chunkFulltext(enhanced, deps.limits.maxFulltextChars, deps.limits)
+        fulltextWasCut = chunked.inputTruncated
+        appendFulltextChunks(passages, attachmentRef, chunked.chunks)
+      } else {
+        const payload = await (fulltextPromise ??
+          fetchFulltext(
+            deps,
+            attachmentKey,
+            ref.library as SupportedLocalLibrary,
+            serverId,
+            signal,
+          ))
+        const content = typeof payload.content === 'string' ? payload.content : ''
+        const chunked = chunkFulltext(content, deps.limits.maxFulltextChars, deps.limits)
+        fulltextWasCut = chunked.inputTruncated
+        appendFulltextChunks(passages, attachmentRef, chunked.chunks)
+        coverage = normalizeCoverage(payload)
       }
-      coverage = normalizeCoverage(payload)
     } catch (error) {
       // An unindexed attachment degrades like an absent one: the other
       // requested sources still answer, and `sourcesSkipped` reports it.
@@ -192,7 +228,7 @@ async function readBestFulltext(
  * first-class source, and each passage carries its own attachment provenance.
  */
 async function readMultiAttachmentFulltext(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: FulltextDeps,
   ref: ZoteroObjectRef,
   serverId: string | undefined,
   prefix: string,
@@ -344,7 +380,7 @@ async function readMultiAttachmentFulltext(
 }
 
 export async function retrieve(
-  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
+  deps: FulltextDeps,
   request: ZoteroRetrieveRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroRetrieveResult> {
@@ -382,8 +418,12 @@ export async function retrieve(
   // fulltext rejection that lands while children are still in flight from
   // being reported as unhandled before the try below awaits it.
   const bestFulltextKey = wantsFulltext && policy === 'best' ? linkAttachment?.key : undefined
+  // With an enhancer installed the higher-quality parser is tried first; an
+  // eager index read would be wasted work whenever it succeeds. The fallback
+  // path starts the same loopback request after the enhancer declines. With no
+  // enhancer, the original overlap with the children fetch is preserved.
   const fulltextPromise =
-    bestFulltextKey === undefined
+    bestFulltextKey === undefined || deps.enhancer !== undefined
       ? undefined
       : fetchFulltext(deps, bestFulltextKey, ref.library as SupportedLocalLibrary, serverId, signal)
   fulltextPromise?.catch(() => {})

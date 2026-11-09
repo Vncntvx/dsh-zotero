@@ -17,6 +17,12 @@ import { fetchPmcFullTextXml, lookupEuropePmc } from '../sources/pmc.js'
 import { lookupSemanticScholar } from '../sources/semanticscholar.js'
 import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
+import {
+  FULLTEXT_ENHANCER_MIN_TEXT_CHARS,
+  hasEnoughParsedText,
+  type FulltextEnhancer,
+  type FulltextSourceStamp,
+} from '../../local/fulltext-enhancer.js'
 import type { FullTextRecord, ScholarlyTextStore } from './store.js'
 import { arxivHtmlToMarkdown, extractPdfText, jatsToMarkdown } from './markup.js'
 
@@ -69,7 +75,7 @@ type PdfFailure = 'not-a-pdf' | 'too-short' | 'fetch' | 'parse'
 
 /** Outcome of one PDF attempt: text, or the reason it yielded none. */
 type PdfOutcome =
-  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'text'; readonly text: string; readonly source?: string }
   | { readonly kind: 'none'; readonly reason: PdfFailure; readonly detail?: string }
 
 /**
@@ -78,16 +84,52 @@ type PdfOutcome =
  * Every failure is named. The caller composes the terminal message from these
  * reasons, so "the host rejected us" and "the PDF had no extractable text"
  * never collapse into one claim.
+ *
+ * With an enhancer installed, `lookup` is asked first: a cache hit returns its
+ * text without downloading the PDF, and a miss still reports the source stamp
+ * so the subsequent `enhance` need not probe the URL again. A short enhanced
+ * result is not a terminal `too-short`: the bytes are downloaded and the local
+ * extractor gets its own chance, because MinerU's short answer may be a parse
+ * limitation rather than an empty document.
  * @param url - the PDF address.
  * @param http - the scholarly transport.
  * @param signal - caller cancellation.
+ * @param enhancer - optional higher-quality document parser.
  * @returns the extracted text or a classified reason.
  */
 async function fetchPdfText(
   url: string,
   http: ScholarlyHttp,
   signal?: AbortSignal,
+  enhancer?: FulltextEnhancer,
 ): Promise<PdfOutcome> {
+  let fallbackNote: string | undefined
+  let sourceStamp: FulltextSourceStamp | undefined
+  let lookupSettled = false
+
+  if (enhancer !== undefined) {
+    const lookup = await enhancer.lookup(
+      { key: url, source: { kind: 'url', url }, contentType: 'application/pdf' },
+      signal,
+    )
+    if (lookup.outcome?.kind === 'fatal') throw lookup.outcome.error
+    if (lookup.outcome?.kind === 'ok') {
+      if (hasEnoughParsedText(lookup.outcome.text)) {
+        return {
+          kind: 'text',
+          text: lookup.outcome.text,
+          source: lookup.outcome.source ?? 'MinerU',
+        }
+      }
+      fallbackNote = `cached MinerU text was under ${FULLTEXT_ENHANCER_MIN_TEXT_CHARS} characters`
+      lookupSettled = true
+    } else if (lookup.outcome?.kind === 'fallback') {
+      fallbackNote = lookup.outcome.reason
+      lookupSettled = true
+    }
+    sourceStamp = lookup.stamp
+  }
+
   let bytes: Uint8Array
   try {
     bytes = await http.bytes(url, {
@@ -107,6 +149,28 @@ async function fetchPdfText(
     return { kind: 'none', reason: 'not-a-pdf', detail: 'response body is not a PDF' }
   }
 
+  if (enhancer !== undefined && !lookupSettled) {
+    const outcome = await enhancer.enhance(
+      {
+        key: url,
+        source: { kind: 'url', url },
+        contentType: 'application/pdf',
+        bytes,
+        ...(sourceStamp !== undefined ? { sourceStamp } : {}),
+      },
+      signal,
+    )
+    if (outcome.kind === 'fatal') throw outcome.error
+    if (outcome.kind === 'ok') {
+      if (hasEnoughParsedText(outcome.text)) {
+        return { kind: 'text', text: outcome.text, source: outcome.source ?? 'MinerU' }
+      }
+      fallbackNote = `MinerU returned under ${FULLTEXT_ENHANCER_MIN_TEXT_CHARS} characters`
+    } else {
+      fallbackNote = outcome.reason
+    }
+  }
+
   let extracted: string
   try {
     extracted = await extractPdfText(bytes)
@@ -114,10 +178,21 @@ async function fetchPdfText(
     return { kind: 'none', reason: 'parse', detail: errorMessageOf(error) }
   }
 
-  if (extracted.replace(/\[page \d+\]/g, '').trim().length < 500) {
-    return { kind: 'none', reason: 'too-short', detail: 'no extractable text' }
+  if (extracted.replace(/\[page \d+\]/g, '').trim().length < FULLTEXT_ENHANCER_MIN_TEXT_CHARS) {
+    return {
+      kind: 'none',
+      reason: 'too-short',
+      detail:
+        fallbackNote === undefined ? 'no extractable text' : `no extractable text; ${fallbackNote}`,
+    }
   }
-  return { kind: 'text', text: extracted }
+  return {
+    kind: 'text',
+    text: extracted,
+    ...(fallbackNote !== undefined
+      ? { source: `local PDF text (MinerU fallback: ${fallbackNote})` }
+      : {}),
+  }
 }
 
 /**
@@ -164,12 +239,14 @@ async function tryHtmlRoute(
  * @param id - the arXiv identifier.
  * @param http - the scholarly transport.
  * @param signal - caller cancellation.
+ * @param enhancer - optional higher-quality document parser.
  * @returns a record, or the accumulated reasons every route failed.
  */
 async function resolveArxivFullText(
   id: string,
   http: ScholarlyHttp,
   signal?: AbortSignal,
+  enhancer?: FulltextEnhancer,
 ): Promise<{ record: FullTextRecord } | { reasons: string[] }> {
   const reasons: string[] = []
 
@@ -192,10 +269,15 @@ async function resolveArxivFullText(
   reasons.push(ar5iv.reason)
 
   const pdfUrl = `https://arxiv.org/pdf/${id}`
-  const pdf = await fetchPdfText(pdfUrl, http, signal)
+  const pdf = await fetchPdfText(pdfUrl, http, signal, enhancer)
   if (pdf.kind === 'text') {
     return {
-      record: { text: pdf.text, source: 'the arXiv PDF', structured: false, url: pdfUrl },
+      record: {
+        text: pdf.text,
+        source: pdf.source ?? 'the arXiv PDF',
+        structured: false,
+        url: pdfUrl,
+      },
     }
   }
   reasons.push(`arXiv PDF: ${pdf.reason}${pdf.detail === undefined ? '' : ` (${pdf.detail})`}`)
@@ -208,13 +290,15 @@ interface ScholarlyResolutionContext {
   readonly keys?: ScholarlyKeys
   readonly store?: ScholarlyTextStore
   readonly signal?: AbortSignal
+  /** Optional higher-quality document parser, read lazily from `ctx.parsing`. */
+  readonly enhancer?: FulltextEnhancer
 }
 
 export async function resolveScholarlyFullText(
   target: PaperIdentifier,
   context: ScholarlyResolutionContext,
 ): Promise<FullTextRecord> {
-  const { http, keys, store, signal } = context
+  const { http, keys, store, signal, enhancer } = context
   const cacheKey = `${target.kind}-${target.id}`
   const reasons: string[] = []
 
@@ -246,7 +330,7 @@ export async function resolveScholarlyFullText(
 
   // 1. arXiv directly
   if (target.kind === 'arxiv') {
-    const resolved = await resolveArxivFullText(target.id, http, signal)
+    const resolved = await resolveArxivFullText(target.id, http, signal, enhancer)
     if ('record' in resolved) return await remember(resolved.record)
     throw new Error(
       `arXiv has no readable copy of ${target.id} right now. Tried: ${resolved.reasons.join('; ')}.`,
@@ -255,11 +339,11 @@ export async function resolveScholarlyFullText(
 
   // 2. Direct PDF URL
   if (target.kind === 'url') {
-    const pdf = await fetchPdfText(target.id, http, signal)
+    const pdf = await fetchPdfText(target.id, http, signal, enhancer)
     if (pdf.kind === 'text') {
       return await remember({
         text: pdf.text,
-        source: 'the PDF at that URL',
+        source: pdf.source ?? 'the PDF at that URL',
         structured: false,
         url: target.id,
       })
@@ -272,7 +356,7 @@ export async function resolveScholarlyFullText(
   }
 
   // 3. DOI / PMID / PMCID resolution
-  const record = await resolveDoiLikeRoute(target, http, keys, signal, reasons, remember)
+  const record = await resolveDoiLikeRoute(target, http, keys, signal, reasons, remember, enhancer)
   if (record !== undefined) return record
 
   const tried =
@@ -300,6 +384,7 @@ async function resolveDoiLikeRoute(
   signal: AbortSignal | undefined,
   reasons: string[],
   remember: (record: FullTextRecord) => Promise<FullTextRecord>,
+  enhancer?: FulltextEnhancer,
 ): Promise<FullTextRecord | undefined> {
   let pmcid: string | undefined = target.kind === 'pmcid' ? target.id : undefined
   let doi: string | undefined = target.kind === 'doi' ? target.id : undefined
@@ -396,7 +481,7 @@ async function resolveDoiLikeRoute(
       const preprintId = work.arxiv ?? (work.pdfUrl ? extractArxivId(work.pdfUrl) : undefined)
       if (preprintId !== undefined) {
         attemptedArxivIds.add(preprintId)
-        const preprint = await resolveArxivFullText(preprintId, http, signal)
+        const preprint = await resolveArxivFullText(preprintId, http, signal, enhancer)
         if ('record' in preprint) {
           return await remember({
             ...preprint.record,
@@ -437,7 +522,7 @@ async function resolveDoiLikeRoute(
     const arxivPreprint = extractArxivId(candidate.url)
     if (arxivPreprint !== undefined && !attemptedArxivIds.has(arxivPreprint)) {
       attemptedArxivIds.add(arxivPreprint)
-      const preprint = await resolveArxivFullText(arxivPreprint, http, signal)
+      const preprint = await resolveArxivFullText(arxivPreprint, http, signal, enhancer)
       if ('record' in preprint) {
         return await remember({
           ...preprint.record,
@@ -448,11 +533,11 @@ async function resolveDoiLikeRoute(
       continue
     }
 
-    const pdf = await fetchPdfText(candidate.url, http, signal)
+    const pdf = await fetchPdfText(candidate.url, http, signal, enhancer)
     if (pdf.kind === 'text') {
       return await remember({
         text: pdf.text,
-        source: `an open-access PDF (found via ${candidate.from})`,
+        source: pdf.source ?? `an open-access PDF (found via ${candidate.from})`,
         structured: false,
         url: candidate.url,
       })

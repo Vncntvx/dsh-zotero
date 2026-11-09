@@ -8,7 +8,7 @@ Read these in order to get from installation to daily use:
 
 1. [Getting started](getting-started.en.md): install, verify the connection, and run the first task
 2. [Product model](product-model.en.md): two entry points, two UI surfaces, component division, and system boundaries
-3. [Features](features.en.md): conversation capabilities, the literature trail, the literature panel, writes, and scholarly retrieval
+3. [Features](features.en.md): conversation capabilities, the literature trail, the literature panel, writes, scholarly retrieval, and document parsing
 4. [Research SOP skills](skills.en.md): seven on-demand research workflows, batch budgets, and evidence boundaries
 5. [Troubleshooting](troubleshooting.en.md): common issues, diagnostic steps, and remedies
 
@@ -16,7 +16,7 @@ Read these in order to get from installation to daily use:
 
 - [Architecture](architecture.en.md): data flow, layer responsibilities, component boundaries, and design boundaries
 - [Tool reference](tools.en.md): parameters, return values, and error codes for the 23 local tools and 7 scholarly retrieval tools
-- [Configuration reference](configuration.en.md): the three settings namespaces, field defaults, and hot-reload behavior
+- [Configuration reference](configuration.en.md): the four settings namespaces, field defaults, and hot-reload behavior
 - [Development guide](development.en.md): build, test, debug, and release workflow
 
 ## Internal

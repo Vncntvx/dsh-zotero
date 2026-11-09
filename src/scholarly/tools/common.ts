@@ -10,6 +10,7 @@ import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
 import type { JobPolicy, ZoteroJobRunner } from '../../job-runner.js'
 import type { ZoteroServiceLike } from '../zotero-link.js'
+import type { FulltextEnhancer } from '../../local/fulltext-enhancer.js'
 
 export interface ScholarlyToolHost {
   http: ScholarlyHttp
@@ -18,6 +19,8 @@ export interface ScholarlyToolHost {
   jobPolicy(): JobPolicy
   jobRunner(): ZoteroJobRunner
   zoteroService?(): ZoteroServiceLike | undefined
+  /** Optional higher-quality document parser from the parsing component. */
+  parsingEnhancer?(): FulltextEnhancer | undefined
   ctx?: Context
 }
 
