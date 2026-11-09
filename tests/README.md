@@ -46,6 +46,15 @@ never in a file named after a number or a function.
   `unit/library/`, host composition and write entry under `host/library/`, and
   browser behaviour under `client/library/`. Do not duplicate a suite to make
   a feature appear under one directory.
+- Parsing tests keep their ownership across the existing lanes rather than
+  adding an eighth root lane: pure preferences, host table, output-dir safety,
+  zip safety, and config resolution under `unit/parsing-*`; the transport,
+  service enhancer, source bytes, artifact store, and parse orchestration under
+  `host/parsing-*`; the core read-chain slot under
+  `local/parsing-enhancer.spec.ts`; the scholarly PDF boundary under
+  `scholarly/parsing-read-enhancer.spec.ts` and
+  `scholarly/parsing-credentials.spec.ts`; the settings surface under
+  `client/parsing/`.
 - For a new or substantially reorganized module, record its production scope,
   test locations, primary verification levels, and relevant acceptance packs
   in a short module README or the change description. Update that record when

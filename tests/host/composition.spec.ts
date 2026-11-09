@@ -19,7 +19,11 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import ZoteroService from '../../src/index.js'
 import ScholarlyService from '../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../src/library/index.js'
-import { SCHOLARLY_SETTINGS_NAMESPACE } from '../../src/settings-namespace.js'
+import ParsingService from '../../src/parsing/index.js'
+import {
+  PARSING_SETTINGS_NAMESPACE,
+  SCHOLARLY_SETTINGS_NAMESPACE,
+} from '../../src/settings-namespace.js'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../src/contract.js'
 import { expectValue } from '../helpers/lanes/host-lane.js'
 import { setupCompositionLane, type CompositionLane } from '../helpers/lanes/composition-lane.js'
@@ -161,5 +165,30 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     expect(row!.config).toEqual({
       rightSidebarEnabled: true,
     })
+  })
+
+  it('declares the parsing subcomponent row disabled by default', async () => {
+    const bundlePatch = await readFile(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
+    const parsed = load(bundlePatch) as PatchOptions[]
+    const rows = parsed.flatMap((patch) => patch.insert ?? [])
+    const row = rows.find((entry) => entry.name === 'dsh-zotero/parsing')
+    expect(row).toBeDefined()
+    // The row id is the settings namespace the browser's config form
+    // addresses, and the shipped layer keeps the component off.
+    expect(row!.id).toBe(PARSING_SETTINGS_NAMESPACE)
+    expect(row!.disabled).toBe(true)
+  })
+
+  it('mounts the parsing component without adding tools or a prompt section', async () => {
+    lane = await setupCompositionLane([{ id: 'parsing', disabled: false }])
+
+    expect(lane.context.get('parsing')).toBeInstanceOf(ParsingService)
+    // The component is an enhancer source, not a tool provider: the read-tool
+    // set and prompt sections stay exactly what the core (and an off scholarly
+    // row) declare.
+    const names = lane.registeredToolNames()
+    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
+    const assembly = await lane.context.systemPrompt.assemble()
+    expect(assembly.sections.some((entry) => entry.name === 'parsing:policy')).toBe(false)
   })
 })

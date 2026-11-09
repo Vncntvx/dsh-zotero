@@ -64,6 +64,7 @@ describe('client graph authority', () => {
         'src/creators.ts',
         'src/media-types.ts',
         'src/credential-names.ts',
+        'src/parsing-preferences.ts',
         'node_modules/clsx/dist/clsx.mjs',
         'node_modules/@deepseek-ai/dsh-util-values/lib/index.js',
       ]),

@@ -29,6 +29,7 @@ export default defineConfig({
         'src/index.ts',
         'src/types.ts',
         'src/library/index.ts',
+        'src/parsing/index.ts',
         'src/scholarly/index.ts',
         'src/scholarly/types.ts',
         'src/client/css-modules.d.ts',
@@ -86,6 +87,11 @@ export default defineConfig({
         'src/client/components/**': { statements: 95, branches: 95, functions: 99, lines: 97 },
         'src/client/**': { statements: 97, branches: 95.2, functions: 96.9, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
+        // The parsing component is an optional subsystem with a live-network
+        // transport and a filesystem store; its floors sit just under the
+        // measured values, and the transport/store adapters are exercised
+        // against a temp directory and a scripted client.
+        'src/parsing/**': { statements: 93, branches: 85, functions: 98, lines: 95 },
         statements: 97,
         branches: 94,
         functions: 98,

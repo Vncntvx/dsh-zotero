@@ -8,7 +8,7 @@
  * @module tests/provider/retrieve-graph
  */
 
-import { ITEM_KEY } from '../../helpers/server/keys.js'
+import { ITEM_KEY, ATTACHMENT_KEY } from '../../helpers/server/keys.js'
 import {
   annotationRow,
   attachment,
@@ -38,6 +38,22 @@ export const RETRIEVE_PARENT = paperItem({
 export const RETRIEVE_PARENT_WITHOUT_ATTACHMENT = item({
   meta: { numChildren: 3 },
   data: { abstractNote: ABSTRACT },
+})
+
+/**
+ * The same paper whose attachment link has no `attachmentType`: the shape
+ * `bestAttachmentFromLinks` reports as an empty content type. A PDF here must
+ * still be offered to the parser; the byte-level signature is authoritative.
+ */
+export const RETRIEVE_PARENT_WITHOUT_ATTACHMENT_TYPE = paperItem({
+  meta: { numChildren: 3 },
+  data: { abstractNote: ABSTRACT },
+  links: {
+    attachment: {
+      href: `http://localhost:23119/api/users/0/items/${ATTACHMENT_KEY}`,
+      type: 'application/json',
+    },
+  },
 })
 
 /**

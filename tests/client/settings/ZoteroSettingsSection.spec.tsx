@@ -36,6 +36,11 @@ import {
   type LibraryCardFace,
   type LibraryCardState,
 } from '../../../src/client/library-form-controller.ts'
+import {
+  ParsingFormController,
+  type ParsingCardFace,
+  type ParsingCardState,
+} from '../../../src/client/parsing-form-controller.ts'
 import { fakeScope, type FakeScope } from '../helpers/fake-scope.ts'
 import { emptyCredentialPort } from '../helpers/credential-port.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
@@ -52,6 +57,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 function Harness({
   face,
   scholarlyFace,
+  parsingFace,
   libraryFace,
   probe,
   revokeWriteGrant,
@@ -59,6 +65,7 @@ function Harness({
 }: {
   face: ZoteroCardFace
   scholarlyFace?: ScholarlyCardFace
+  parsingFace?: ParsingCardFace
   libraryFace?: LibraryCardFace
   probe?: ZoteroSettingsSectionProps['probe']
   revokeWriteGrant?: ZoteroSettingsSectionProps['revokeWriteGrant']
@@ -83,6 +90,10 @@ function Harness({
     libraryFace ? libraryFace.hooks.libraryCard.subscribe : () => () => {},
     libraryFace ? libraryFace.hooks.libraryCard.getSnapshot : () => undefined as any,
   )
+  const parsingState = useSyncExternalStore(
+    parsingFace ? parsingFace.hooks.parsingCard.subscribe : () => () => {},
+    parsingFace ? parsingFace.hooks.parsingCard.getSnapshot : () => undefined as any,
+  )
   const props = {
     // `plugins.bundle.config` renders its entries with `view: 'page'` only.
     view: 'page',
@@ -100,6 +111,10 @@ function Harness({
     useLibraryCard: libraryFace
       ? (selector: (snapshot: LibraryCardState) => unknown) => selector(libraryState)
       : undefined,
+    useParsingCard: parsingFace
+      ? (selector: (snapshot: ParsingCardState) => unknown) => selector(parsingState)
+      : undefined,
+    parsing: parsingFace,
     edit: face.edit,
     resetField: face.resetField,
     save: face.save,
@@ -335,7 +350,7 @@ describe('ZoteroSettingsSection', () => {
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders SegmentedTabs with all 6 tabs and features as default selected tab', () => {
+  it('renders SegmentedTabs with all 7 tabs and features as default selected tab', () => {
     scope = fakeScope({ value: {} })
     mount()
 
@@ -343,13 +358,14 @@ describe('ZoteroSettingsSection', () => {
     expect(tabList).toBeDefined()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(6)
+    expect(tabs).toHaveLength(7)
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       zh.tabFeatures,
       zh.tabConnection,
       zh.tabSearch,
       zh.tabLibrary,
       zh.tabScholarly,
+      zh.tabParsing,
       zh.tabAdvanced,
     ])
 
@@ -362,6 +378,20 @@ describe('ZoteroSettingsSection', () => {
 
     const connectionPanel = document.getElementById('zotero-panel-connection')
     expect(connectionPanel?.getAttribute('hidden')).toBe('')
+  })
+
+  it('renders the parsing tab form when the parsing namespace is served', () => {
+    scope = fakeScope({ value: {} })
+    const parsingScope = fakeScope({ value: {} })
+    const parsingController = new ParsingFormController(parsingScope, emptyCredentialPort)
+    const controller = new ZoteroCardController(scope)
+    render(<Harness face={controller.inject()} parsingFace={parsingController.inject()} />)
+
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabParsing }))
+    const panel = document.getElementById('zotero-panel-parsing')
+    expect(panel?.getAttribute('hidden')).toBeNull()
+    expect(screen.getByText(zh.groupParsingMode)).toBeDefined()
+    parsingController.dispose()
   })
 
   it('switches active tab on click, toggling aria-selected and hidden attribute on panels', () => {
