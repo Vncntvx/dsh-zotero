@@ -44,7 +44,7 @@ describe('core research skills', () => {
     expect(catalog.map(({ name }) => name).sort()).toEqual(CORE_SOPS.map(({ name }) => name).sort())
     for (const summary of catalog) {
       expect(summary.description.length).toBeLessThan(300)
-      expect(summary.invocation).toEqual({ modelInvocable: true, userInvocable: true })
+      expect(summary.invocation).toEqual({ modelInvocable: true, userInvocable: false })
       expect(summary).not.toHaveProperty('content')
       const loaded = await lane.ctx.skills.get(summary.name)
       expect(loaded?.content).toContain('## Phase 1:')

@@ -12,6 +12,7 @@ Catalog names, descriptions and trigger keywords are English-only. The model mat
 | ----------------------------------- | --------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `zotero-research-landscape`         | Scholarly | Research question → search log, topic clusters, anchors and tentative gaps                  | Proposal/scoping discovery, not seed-paper citation tracing                           |
 | `zotero-citation-lineage`           | Scholarly | Seed DOI/arXiv/PMID → directed citation edges and uncovered branches                        | Citations do not establish support or causation; similarity edges stay separate       |
+| `zotero-paper-digest`               | Core      | Single paper → metadata, located core evidence and BibTeX brief                             | Single-paper rapid reading; no cross-paper synthesis or topic discovery               |
 | `zotero-evidence-synthesis`         | Core      | Fixed 2–12 papers → located experiment/method comparison matrix                             | Compares research evidence, not individual draft claims                               |
 | `zotero-manuscript-reference-audit` | Core      | Supplied draft/bibliography → claim/citation/record/passage audit                           | Does not edit manuscript files or discover new topics                                 |
 | `zotero-library-governance`         | Core      | Explicit existing-library scope → field/tag/collection differences and reviewed corrections | No outside intake, automatic duplicate merging or deletion                            |
@@ -28,6 +29,7 @@ Every SOP has four ordered phases, structured recipes, failure/termination rules
 | ---------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landscape        | Frame → search → anchors → themes/gaps                           | Two query formulations plus one filter adjustment, at most 3 searches; 8 results each and 5 detailed anchors; stop after two searches add no included work or themes are covered                     |
 | Lineage          | Seed → first hop → selected frontier → directed relations        | Two hops, 5 graph calls, expand at most 3 first-hop nodes, 10 results per call; deduplicate visited nodes and stop on an empty frontier                                                              |
+| Digest           | Metadata/attachments → focused evidence → citation → brief       | Bounded to single paper; at most 4 passages; abstract-only fallback if unindexed; stop on brief output                                                                                               |
 | Synthesis        | Corpus/axes → locate → BM25 → compare                            | At most two BM25 calls per paper, including one reformulation; up to 6 local passages subject to smaller live limits, 5 external; final fallback is one targeted section/chunk up to 4000 characters |
 | Manuscript audit | Inventory → identity → support → differences                     | At most two BM25 calls per unique claim/ref question, 4 passages each; rematch once only when the input fingerprint changes; stop with an outcome for every input                                    |
 | Governance       | Bound → inspect → proposal → approve/reconcile                   | Default 5 pages and 100 top-level items; user may explicitly expand scope once before execution; incomplete directories block writes; no standing scan                                               |
@@ -46,7 +48,7 @@ Prefer batch metadata for known local refs: up to 50 unique refs, standard field
 
 ## Registration and maintenance
 
-`src/skills/` is Host-only. Each SOP declares TypeScript data and Markdown instructions; `definition.ts` renders shared contracts and JSON recipes, while `register.ts` uses optional `ctx.inject(['skills'])` registration. Core owns 3 SOPs and Scholarly owns 4. Fibers remove registrations when components or the registry unload; a late or replaced registry rebinds automatically.
+`src/skills/` is Host-only. Each SOP declares TypeScript data and Markdown instructions; `definition.ts` renders shared contracts and JSON recipes, while `register.ts` uses optional `ctx.inject(['skills'])` registration. Core owns 4 SOPs and Scholarly owns 4. Fibers remove registrations when components or the registry unload; a late or replaced registry rebinds automatically.
 
 The Harness base composition supplies the `dsh-skill` registry and `dsh-tool-skill` consumer. Custom compositions need both. Versions are generated with `npm run harness:pin -- 0.2.2-rc.1`, and npm updates the lockfile.
 

@@ -101,7 +101,7 @@ export function skillRegistration(sop: ResearchSop): SkillRegistration {
     description: sop.description,
     whenToUse: sop.whenToUse,
     source: 'runtime',
-    invocation: { modelInvocable: true, userInvocable: true },
+    invocation: { modelInvocable: true, userInvocable: false },
     metadata: { component: sop.component, triggerKeywords: [...sop.triggerKeywords] },
     content: [
       `# ${sop.name}`,
