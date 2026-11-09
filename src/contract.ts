@@ -26,6 +26,8 @@
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
+import type { SourceWorkspace } from './sources/model.js'
+import type { SourceFilter } from './sources/filters.js'
 import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -402,6 +404,76 @@ export function zoteroOpenProtocolInvocation(
  * by hand; that module is host-only, while both halves and the browser bundle
  * import this contract file.
  */
+
+/** One bounded literature-trail list, always read from the full session ledger. */
+export type ZoteroSourcePageTarget =
+  | { readonly kind: 'sources'; readonly filter: SourceFilter }
+  | {
+      readonly kind: 'source'
+      readonly key: string
+      readonly rows: 'searches' | 'evidence' | 'exports'
+    }
+  | { readonly kind: 'session'; readonly rows: 'exports' }
+
+export interface ZoteroSourcePageRequestView {
+  readonly sessionId: string
+  readonly target: ZoteroSourcePageTarget
+  /** Connected instance fact used by the issues filter; never triggers a probe. */
+  readonly currentServerId?: string
+  /** Page size; the host clamps it to the target's serving cap. */
+  readonly limit?: number
+  /** How many rows of the target list the caller already shows; the host continues from there. */
+  readonly offset?: number
+  /**
+   * Inclusive session watermark; -1 denotes an empty log. A continuation must
+   * carry it: a trail that moved since the caller's page is refused rather
+   * than silently continued against a different fold.
+   */
+  readonly revision?: number
+}
+
+export interface ZoteroSourcePageResultView {
+  readonly sessionId: string
+  readonly target: ZoteroSourcePageTarget
+  readonly revision: number
+  readonly offset: number
+  readonly limit: number
+  readonly total: number
+  readonly nextCursor?: string
+  /** Bounded rows only, with exact session-wide and per-source totals. */
+  readonly workspace: SourceWorkspace
+}
+
+export const ZOTERO_SOURCE_PAGE_METHOD = 'sourcePage'
+export const ZOTERO_SOURCE_PAGE_INVOCATION_ID = 'dsh-zotero#zotero/sourcePage'
+export const ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroSourcePageRequestView'
+export const ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroSourcePageResultView'
+
+/**
+ * Build one sourcePage invocation descriptor around parameter and result codecs.
+ *
+ * The endpoint rides the core service: the literature trail is a conversation
+ * surface, so it must page whether or not the optional library component is
+ * mounted.
+ * @param param - the strict parameter codec for the page request.
+ * @param result - the strict result codec for the page result.
+ * @returns a complete invocation descriptor.
+ */
+export function zoteroSourcePageInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SOURCE_PAGE_INVOCATION_ID,
+    service: ZOTERO_STATUS_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SOURCE_PAGE_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
 
 /** The browse kinds the library panel lists; the tool-facing kinds stay tool-only. */
 export type ZoteroLibraryBrowseKind =

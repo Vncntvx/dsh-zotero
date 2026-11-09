@@ -6,7 +6,10 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ZoteroComposerButton } from '../../../src/client/components/composer/ZoteroComposerButton.tsx'
+import {
+  ZoteroComposerButton,
+  ZoteroComposerSlot,
+} from '../../../src/client/components/composer/ZoteroComposerButton.tsx'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -36,5 +39,13 @@ describe('ZoteroComposerButton', () => {
     const button = screen.getByRole('button', { name: mockT('tabLibrary') })
     fireEvent.click(button)
     expect(handleClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders ZoteroComposerSlot and passes onOpen through as click handler', () => {
+    const handleOpen = vi.fn()
+    render(<ZoteroComposerSlot t={t} onOpen={handleOpen} />)
+    const button = screen.getByRole('button', { name: mockT('tabLibrary') })
+    fireEvent.click(button)
+    expect(handleOpen).toHaveBeenCalledTimes(1)
   })
 })

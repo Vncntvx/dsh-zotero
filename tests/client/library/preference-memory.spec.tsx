@@ -313,3 +313,32 @@ it('writes scrolled positions on the scheduled frame and reports a later quota f
   expect(result.current.storageError).toBe('scroll quota')
   signal.abort()
 })
+
+it('schedules and cancels scroll saves with the default timer scheduler', () => {
+  vi.useFakeTimers()
+  try {
+    const signal = new AbortController()
+    const memory = libraryViewMemory(signal.signal, 'S-default', 'session-default')
+    let saved = false
+    memory.saveScroll = () => {
+      saved = true
+    }
+    memory.scheduleScrollSave()
+    expect(saved).toBe(false)
+    act(() => {
+      vi.advanceTimersByTime(120)
+    })
+    expect(saved).toBe(true)
+
+    saved = false
+    memory.scheduleScrollSave()
+    memory.cancelScrollSave()
+    act(() => {
+      vi.advanceTimersByTime(120)
+    })
+    expect(saved).toBe(false)
+    signal.abort()
+  } finally {
+    vi.useRealTimers()
+  }
+})

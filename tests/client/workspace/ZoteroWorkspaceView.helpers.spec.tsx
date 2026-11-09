@@ -8,17 +8,45 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { effectiveSelectionOf } from '../../../src/client/components/workspace/ZoteroWorkspaceView.tsx'
+import {
+  appendedSourceRows,
+  effectiveSelectionOf,
+} from '../../../src/client/components/workspace/ZoteroWorkspaceView.tsx'
 import {
   filterLineOf,
   modeLabelOf,
   scopeLabelOf,
 } from '../../../src/client/components/workspace/SourceOverview.tsx'
+import type { ZoteroSourcePageResultView } from '../../../src/contract.ts'
+import type { SourceItem } from '../../../src/sources/model.js'
+import { artifactOf, passageOf, searchOf, sourceOf } from '../helpers/source-fixtures.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT
+
+function pageFixture(item?: SourceItem): ZoteroSourcePageResultView {
+  return {
+    sessionId: 'session-1',
+    target: { kind: 'source', key: 'k-1', rows: 'evidence' },
+    revision: 1,
+    offset: 0,
+    limit: 50,
+    total: 1,
+    workspace: {
+      sources: item ? [item] : [],
+      sourceTotal: item ? 1 : 0,
+      exports: [],
+      exportTotal: 0,
+      exportOperations: { running: 0, failed: 0, stopped: 0 },
+      omittedRows: 0,
+      filterCounts: { all: 1, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
+      evidencePassageTotal: 0,
+      exportedRefCount: 0,
+    },
+  }
+}
 
 describe('selection', () => {
   it('keeps a selection a filter hides, and falls back only when the workspace lacks it', () => {
@@ -68,5 +96,37 @@ describe('overview label helpers', () => {
     expect(filterLineOf([], [], t)).toBe('')
     expect(modeLabelOf('metadata', t)).toBe(zh.modeMetadata)
     expect(modeLabelOf('everything', t)).toBe(zh.modeEverything)
+  })
+
+  it('collects appended source rows and skips empty page sources', () => {
+    const passageA = passageOf({ text: 'Passage A' })
+    const passageB = passageOf({ text: 'Passage B' })
+    const searchA = searchOf({ callId: 's-1' })
+    const exportA = artifactOf({ callId: 'e-1' })
+
+    const page1 = pageFixture(
+      sourceOf({
+        evidence: [passageA],
+        searches: [searchA],
+        exports: [exportA],
+      }),
+    )
+    const emptyPage = pageFixture(undefined)
+    const page2 = pageFixture(
+      sourceOf({
+        evidence: [passageB],
+        searches: [],
+        exports: [],
+      }),
+    )
+
+    const evidence = appendedSourceRows([page1, emptyPage, page2], 'evidence')
+    expect(evidence).toEqual([passageA, passageB])
+
+    const searches = appendedSourceRows([page1, emptyPage], 'searches')
+    expect(searches).toEqual([searchA])
+
+    const exports = appendedSourceRows([page1, emptyPage], 'exports')
+    expect(exports).toEqual([exportA])
   })
 })

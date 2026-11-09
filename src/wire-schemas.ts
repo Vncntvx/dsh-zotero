@@ -4,6 +4,13 @@ import {
   type ZoteroUrlPdfView,
 } from './contract.js'
 import { refFieldsOf } from './ref-grammar.js'
+import { sourceWorkspaceSchema } from './sources/workspace-schema.js'
+import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
+import {
+  ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL,
+  zoteroSourcePageInvocation,
+} from './contract.js'
 /**
  * The wire boundary's single source: every zod schema the `zotero` namespace
  * validates with, and the one shared invocation list both halves register.
@@ -76,6 +83,8 @@ import {
 } from './contract.js'
 import {
   ZOTERO_CHILD_PAGE_MAX_ROWS,
+  ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
+  ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SORT_FIELDS,
@@ -211,6 +220,65 @@ export const zoteroOpenProtocolResultSchema = z
   })
   .strict()
   .readonly()
+
+export const zoteroSourcePageTargetSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('sources'),
+      filter: z.enum(['all', 'pdf', 'retrieved', 'evidence', 'exported', 'issues']),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('source'),
+      key: z.string().min(1),
+      rows: z.enum(['searches', 'evidence', 'exports']),
+    })
+    .strict(),
+  z.object({ kind: z.literal('session'), rows: z.literal('exports') }).strict(),
+])
+
+export const zoteroSourcePageRequestSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    target: zoteroSourcePageTargetSchema,
+    currentServerId: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).optional(),
+    offset: z.number().int().nonnegative().optional(),
+    revision: z.number().int().min(-1).optional(),
+  })
+  .strict()
+  .refine(
+    (request) =>
+      request.offset === undefined || request.offset === 0 || request.revision !== undefined,
+    {
+      message: 'A continuation requires its revision.',
+    },
+  ) satisfies z.ZodType<ZoteroSourcePageRequestView>
+
+export const zoteroSourcePageResultSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    target: zoteroSourcePageTargetSchema,
+    revision: z.number().int().min(-1),
+    offset: z.number().int().nonnegative(),
+    limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES),
+    total: z.number().int().nonnegative(),
+    workspace: sourceWorkspaceSchema,
+  })
+  .strict()
+  .refine(
+    (result) =>
+      result.workspace.sources.length <= ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES &&
+      result.workspace.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+      result.workspace.sources.every(
+        (item) =>
+          item.searches.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+          item.evidence.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+          item.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
+      ),
+    { message: 'Source pages must remain bounded.' },
+  ) satisfies z.ZodType<ZoteroSourcePageResultView>
 
 // ── Library panel endpoints ────────────────────────────────────────────────
 
@@ -798,6 +866,10 @@ export const ZOTERO_URL_PDF_CODEC = strictCodec('dsh-zotero#ZoteroUrlPdfView', z
 export const zoteroReleaseUrlPdfSchema = z.object({ lease: z.uuid() }).strict()
 
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroSourcePageInvocation(
+    strictCodec(ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL, zoteroSourcePageRequestSchema),
+    strictCodec(ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL, zoteroSourcePageResultSchema),
+  ),
   zoteroReleaseUrlPdfInvocation(
     strictCodec('dsh-zotero#ReleaseUrlPdfRequest', zoteroReleaseUrlPdfSchema),
     strictCodec('dsh-zotero#PdfReleaseResult', z.object({ released: z.literal(true) }).strict()),

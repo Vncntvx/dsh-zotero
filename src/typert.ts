@@ -46,6 +46,7 @@ import {
   ZOTERO_REVOKE_WRITE_GRANT_METHOD,
   ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
+  ZOTERO_SOURCE_PAGE_METHOD,
 } from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
 
@@ -94,6 +95,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
             kind: 'method',
             name: ZOTERO_REVOKE_WRITE_GRANT_METHOD,
             signature: 'revokeWriteGrant(signal: AbortSignal): Promise<ZoteroWriteGrantRevokeView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_SOURCE_PAGE_METHOD,
+            signature:
+              'sourcePage(request: ZoteroSourcePageRequestView, signal: AbortSignal): Promise<ZoteroSourcePageResultView>',
           },
         ],
         types: [],

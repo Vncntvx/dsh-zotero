@@ -14,10 +14,8 @@ import {
   workspaceOf,
   type SourceLedgerState,
 } from '../../src/sources/event-ledger.js'
-import {
-  sourceLedgerProjection,
-  sourceWorkspaceSchema,
-} from '../../src/session-projection/source-ledger.js'
+import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
+import { sourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
 
 let seq = 0
 

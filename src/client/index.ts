@@ -1,8 +1,10 @@
 import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMenu.tsx'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { createPdfReaderRegistry } from './url-pdf-readers.ts'
+import { createPdfReaderRegistry, type PdfReaderRegistry } from './url-pdf-readers.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { createLibraryPreferenceSource, clearLibraryViewMemory } from './library-preferences.tsx'
+import type { LibraryPreferenceSource } from './library-preferences.tsx'
+import type { LibraryPreferences } from '../library-preferences.js'
 /**
  * Zotero settings, browser half: one surface over the `zotero` namespace,
  * rendered in the plugin manager detail page (`plugins.bundle.config`), carrying
@@ -163,6 +165,15 @@ interface UiSurfaces {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   /** The one client face; root props and out-of-tree consumers read it here. */
   readonly client: ZoteroClientFace
+  /**
+   * The reading-file leases, shared by every surface that opens a PDF: the
+   * registry owns the lease until the reader tab that holds the file closes.
+   */
+  readonly pdfReaders: PdfReaderRegistry
+  /** The committed library preferences; the surfaces read them when they act. */
+  readonly libraryPreferences: () => LibraryPreferences | undefined
+  /** The one preference source; the panel publishes it through its context. */
+  readonly preferenceSource: LibraryPreferenceSource
 }
 
 /**
@@ -400,6 +411,16 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
             inject: (): SourcesTabFace => ({
               status: () => probe(),
               resolveAttachment: (ref: string) => ctx.remote.zotero.resolveAttachment(ref),
+              exportCitation: (request) => ctx.remote.zotero.export(request),
+              sourcePage: (request) => ctx.remote.zotero.sourcePage(request),
+              readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
+              releaseUrlPdf: (lease) =>
+                ctx.remote.zotero.releaseUrlPdf({ lease }).then((result) => {
+                  if (!result.ok) throw result.error
+                }),
+              trackPdf: surfaces.pdfReaders.track,
+              forgetPdf: surfaces.pdfReaders.forget,
+              libraryPreferences: surfaces.libraryPreferences,
               // The tab owns the Session identity and the workspace root it
               // resolves against (`useSessions`), so it builds the whole
               // address and hands the entry a ready URL. This fiber cannot do
@@ -441,9 +462,8 @@ function sidebarEnabledOf(
  * @param surfaces - the shared facts every registration group reads.
  */
 function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { form, libraryForm, probe, client } = surfaces
-  const preferenceSource = createLibraryPreferenceSource(libraryForm, form)
-  ctx.effect(() => () => preferenceSource.dispose())
+  const { form, libraryForm, probe, client, pdfReaders } = surfaces
+  const preferenceSource = surfaces.preferenceSource
   const panelT = ctx.locale.bind(NS)
 
   /**
@@ -460,21 +480,6 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     childPage: (request) => ctx.remote.zotero.childPage(request),
     export: (request) => ctx.remote.zotero.export(request),
   })
-  const pdfReaders = createPdfReaderRegistry({
-    inventory: ctx.sidebarRight.openTabs,
-    storage: {
-      getItem: (key) => globalThis.localStorage.getItem(key),
-      setItem: (key, value) => globalThis.localStorage.setItem(key, value),
-      removeItem: (key) => globalThis.localStorage.removeItem(key),
-    },
-    release: async (lease) => {
-      const result = await ctx.remote.zotero.releaseUrlPdf({ lease })
-      if (!result.ok) throw result.error
-    },
-    report: (error) =>
-      reportCrashedSurface('action:release-pdf', error, undefined, client.reportClientError),
-  })
-  ctx.effect(() => () => pdfReaders.dispose())
   const refreshBindings = new Map<string, { refresh: () => void; clear: () => void }>()
   const refreshKey = (sessionId: string, tabId: string) => JSON.stringify([sessionId, tabId])
   const bindRefresh = (
@@ -900,6 +905,30 @@ function registerUi(ctx: ClientContext): void {
     inFlightProbe = task
     return task
   }
+  // One registry owns every reading-file lease, whichever surface opened the
+  // file: the lease lives until the reader tab that holds it closes.
+  const pdfReaders = createPdfReaderRegistry({
+    inventory: ctx.sidebarRight.openTabs,
+    storage: {
+      getItem: (key) => globalThis.localStorage.getItem(key),
+      setItem: (key, value) => globalThis.localStorage.setItem(key, value),
+      removeItem: (key) => globalThis.localStorage.removeItem(key),
+    },
+    release: async (lease) => {
+      const result = await ctx.remote.zotero.releaseUrlPdf({ lease })
+      if (!result.ok) throw result.error
+    },
+    report: (error) =>
+      reportCrashedSurface('action:release-pdf', error, undefined, client.reportClientError),
+  })
+  ctx.effect(() => () => pdfReaders.dispose())
+  // The library preferences are read when a surface acts, not when it renders,
+  // so a plain getter is enough: a reader that opens a URL PDF asks for the
+  // current permission at the moment of the click.
+  const preferenceSource = createLibraryPreferenceSource(libraryForm, form)
+  ctx.effect(() => () => preferenceSource.dispose(), 'dsh-zotero: library preferences')
+  const libraryPreferences = (): LibraryPreferences | undefined =>
+    preferenceSource.getSnapshot().preferences
   const surfaces: UiSurfaces = {
     form,
     card,
@@ -909,6 +938,9 @@ function registerUi(ctx: ClientContext): void {
     citationCard,
     probe,
     client,
+    pdfReaders,
+    libraryPreferences,
+    preferenceSource,
   }
   // Shared effects still register first: dictionaries, session cache teardown,
   // root props, protocol toast, and crash intake precede the controllers' own

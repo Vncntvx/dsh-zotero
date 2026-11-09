@@ -12,15 +12,19 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../../sources/model.js'
 import { incompleteExportsNoteOf } from '../operations.ts'
 import { ExportSections } from '../ExportSections.tsx'
+import { SourcePageControls } from './SourcePageControls.tsx'
+import type { SourcePager } from './useSourcePage.ts'
 import css from './workspace.module.css'
 
 interface ExportsPageProps {
   readonly workspace: SourceWorkspace
+  /** The pager that appends the exports behind the page's head. */
+  readonly pager?: SourcePager
   readonly t: TranslateNS<'zotero'>
 }
 
 /** The exports page: format sections and the incomplete-operations note. */
-export function ExportsPage({ workspace, t }: ExportsPageProps) {
+export function ExportsPage({ workspace, pager, t }: ExportsPageProps) {
   const incomplete = incompleteExportsNoteOf(workspace.exportOperations, t)
   return (
     <div className={css.exportsPage}>
@@ -32,6 +36,7 @@ export function ExportsPage({ workspace, t }: ExportsPageProps) {
       {workspace.exportTotal > workspace.exports.length && (
         <p className={css.note}>{t('exportsOmittedNote', { count: workspace.exportTotal })}</p>
       )}
+      {pager !== undefined && <SourcePageControls pager={pager} label={t('lensExports')} t={t} />}
     </div>
   )
 }

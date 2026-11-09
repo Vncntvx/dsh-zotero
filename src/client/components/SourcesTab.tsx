@@ -26,7 +26,15 @@ import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/clie
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroAttachmentLocationView } from '../../contract.ts'
+import type {
+  ZoteroAttachmentLocationView,
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
+  ZoteroSourcePageRequestView,
+  ZoteroSourcePageResultView,
+  ZoteroUrlPdfView,
+} from '../../contract.ts'
+import type { LibraryPreferences } from '../../library-preferences.js'
 import type { ZoteroStatusView } from '../remote.ts'
 import { callNameOf, formatTime, isSettledTool } from '../../sources/presenters.js'
 import { buildSourceWorkspace } from '../../sources/ledger.js'
@@ -102,6 +110,27 @@ export interface SourcesTabFace {
   status: () => Promise<RemoteResult<ZoteroStatusView>>
   /** Resolve an attachment ref into its local file path or web URL. */
   resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  /** Export one source through the separately permission-gated library endpoint. */
+  exportCitation?: (
+    request: ZoteroLibraryExportRequestView,
+  ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
+  /** Read one bounded page of the trail behind the projection's window. */
+  sourcePage?: (
+    request: ZoteroSourcePageRequestView,
+  ) => Promise<RemoteResult<ZoteroSourcePageResultView>>
+  /** Download one URL attachment under the user-reading permission. */
+  readUrlPdf?: (
+    request: { ref: string },
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroUrlPdfView>>
+  /** Release one reading-file lease; the reader tab that held it is gone. */
+  releaseUrlPdf?: (lease: string) => Promise<void>
+  /** Publish a reading-file lease under the address the reader tab opens. */
+  trackPdf?: (address: string, lease: string, ref: string) => void
+  /** Forget a lease whose read failed before the tab opened. */
+  forgetPdf?: (address: string) => void
+  /** The committed library preferences, read when an action runs. */
+  libraryPreferences?: () => LibraryPreferences | undefined
   /**
    * Reveal one resolved resource address in the right sidebar. The tab builds
    * the address itself (it holds the Session identity and reads the workspace
@@ -248,6 +277,13 @@ export function SourcesTab(props: SourcesTabProps) {
 function SourcesTabBody({
   status,
   resolveAttachment,
+  exportCitation,
+  sourcePage,
+  readUrlPdf,
+  releaseUrlPdf,
+  trackPdf,
+  forgetPdf,
+  libraryPreferences,
   openResource,
   t,
   sessionId,
@@ -270,7 +306,9 @@ function SourcesTabBody({
   // request and says why instead of rendering a permanent error.
   const canStatus = useRemoteAccess('zotero/status')
   const canResolve = useRemoteAccess('zotero/resolveAttachment')
+  const canExport = useRemoteAccess('zotero/export')
   const canOpen = useRemoteAccess('zotero/openProtocol')
+  const canReadUrlPdf = useRemoteAccess('zotero/readUrlPdf')
   const { state: probeState, runProbe } = useZoteroProbe(status, {
     initialAutoRun: true,
     enabled: canStatus,
@@ -351,6 +389,40 @@ function SourcesTabBody({
     )
   }
 
+  // The URL-PDF opener the evidence jump prefers over the resolved-path
+  // fallback. It mirrors the library panel's flow: resolve, then either open
+  // the local file the resolver named or download under the user-reading
+  // permission. The lease follows the reader tab through the shared registry,
+  // so closing the tab releases the file.
+  const readPdf =
+    openResource === undefined || !canResolve || resolveAttachment === undefined
+      ? undefined
+      : async (ref: string): Promise<void> => {
+          const location = await resolveAttachment(ref)
+          if (!location.ok) throw location.error
+          if (location.value.kind === 'file') {
+            if (!location.value.path) throw new Error(t('pdfFileNotFound'))
+            openResource(fileAddressFor(sessionId, cwd, location.value.path))
+            return
+          }
+          const preferences = libraryPreferences?.()
+          if (!preferences?.allowUrlPdfRead) throw new Error(t('libraryUrlPdfDisabled'))
+          if (!canReadUrlPdf || readUrlPdf === undefined || trackPdf === undefined) {
+            throw new Error(t('libraryPdfReaderUnavailable'))
+          }
+          const pdf = await readUrlPdf({ ref })
+          if (!pdf.ok) throw pdf.error
+          const address = fileAddressFor(sessionId, cwd, pdf.value.path)
+          trackPdf(address, pdf.value.lease, pdf.value.ref)
+          try {
+            openResource(address)
+          } catch (error) {
+            forgetPdf?.(address)
+            await releaseUrlPdf?.(pdf.value.lease)
+            throw error
+          }
+        }
+
   return (
     <ResultSessionContext.Provider value={sessionId}>
       <ZoteroWorkspaceView
@@ -367,6 +439,11 @@ function SourcesTabBody({
               }
         }
         resolveAttachment={canResolve ? resolveAttachment : undefined}
+        canExport={canExport}
+        exportCitation={canExport ? exportCitation : undefined}
+        sessionId={sessionId}
+        sourcePage={sourcePage}
+        openPdf={readPdf}
         openProtocol={canOpen ? client.openProtocol : undefined}
         t={t}
       />

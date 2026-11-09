@@ -9,6 +9,7 @@
  * @module dsh-zotero/client/sources/selectors
  */
 
+import { normalizeRefKey } from '../../sources/evidence-match.js'
 import type { ExportArtifact, ExportDocumentItem } from '../../sources/model.js'
 
 export {
@@ -69,6 +70,61 @@ export interface ExportSection {
    * downloadable, instead of failing the whole export.
    */
   readonly unresolvedItems: readonly UnresolvedItemGroup[]
+}
+
+/**
+ * Keep only export content that can be attributed to one source. Batch bodies
+ * are narrowed with Zotero's recorded item boundaries; if a boundary is
+ * missing or invalid, the body is omitted rather than exposing other sources.
+ */
+export function sourceExportsOf(
+  exports: readonly ExportArtifact[],
+  ref: string,
+): readonly ExportArtifact[] {
+  const key = normalizeRefKey(ref)
+  const sourceExports: ExportArtifact[] = []
+  for (const artifact of exports) {
+    if (!artifact.refs.some((candidate) => normalizeRefKey(candidate) === key)) continue
+    const uniqueRefs = new Set(artifact.refs.map(normalizeRefKey))
+    if (uniqueRefs.size === 1) {
+      if (artifact.text.trim() !== '') sourceExports.push(artifact)
+      continue
+    }
+    if (artifact.items === undefined || artifact.items.length === 0) continue
+    const matches = artifact.items.filter((item) => normalizeRefKey(item.ref) === key)
+    if (matches.length !== 1) continue
+    const item = matches[0]!
+    let text: string
+    let isolatedItem: ExportDocumentItem
+    if (artifact.format === 'csljson') {
+      const records = parseCslRecords(artifact)
+      const record = item.entryIndex === undefined ? undefined : records?.[item.entryIndex]
+      if (typeof record !== 'object' || record === null) continue
+      text = JSON.stringify([record])
+      isolatedItem = { ...item, entryIndex: 0 }
+    } else {
+      if (
+        item.start === undefined ||
+        item.end === undefined ||
+        item.start < 0 ||
+        item.end <= item.start ||
+        item.end > artifact.text.length
+      ) {
+        continue
+      }
+      text = artifact.text.slice(item.start, item.end).trim()
+      if (text === '') continue
+      isolatedItem = { ...item, start: 0, end: text.length }
+    }
+    sourceExports.push({
+      ...artifact,
+      refs: [ref],
+      refsOmitted: 0,
+      items: [isolatedItem],
+      text,
+    })
+  }
+  return sourceExports
 }
 
 /** The mutable build shape of one export section. */

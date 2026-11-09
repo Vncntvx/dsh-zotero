@@ -36,6 +36,12 @@ import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { blocksOf, type SourceLedgerProjectionState } from './sources/event-ledger.js'
+import { buildSourceWorkspace } from './sources/ledger.js'
+import type { SourceWorkspace } from './sources/model.js'
+import { readSourcePage } from './source-page.js'
+import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
 import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
 import { ZoteroHttpClient } from './http-client.js'
 import { ZoteroRuntime } from './remote.js'
@@ -61,6 +67,7 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
   ZoteroError,
+  domainCall,
   errorMessageOf,
 } from './errors.js'
 import { ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS, ZOTERO_TOOL_NAMES } from './constants.js'
@@ -193,7 +200,7 @@ export class ZoteroService extends Service {
   private sourceProjectionState: ZoteroStatusView['sourceProjection'] = { state: 'not-composed' }
   private sourceProjectionFiber: (Fiber & PromiseLike<Fiber>) | undefined
   private sourceProjectionReady: Promise<void> | undefined
-  private sourceProjectionHandle: ProjectionHandle<unknown> | undefined
+  private sourceProjectionHandle: ProjectionHandle<SourceLedgerProjectionState> | undefined
   private sourceProjectionGeneration = 0
   static inject = ['tools', 'systemPrompt']
 
@@ -438,6 +445,47 @@ export class ZoteroService extends Service {
     // the constructed `not-composed`; that reads as pending, not as absence.
     if (this.sourceProjectionState.state === 'not-composed') return { state: 'pending' }
     return this.sourceProjectionState
+  }
+
+  /** Read the complete ledger at one synchronous Session cut; never serves it directly on the wire. */
+  async sourceWorkspace(
+    session: Session,
+    signal: AbortSignal,
+    currentServerId?: string,
+  ): Promise<{ readonly revision: number; readonly workspace: SourceWorkspace }> {
+    const status = await this.sourceProjectionStatus(signal)
+    const handle = this.sourceProjectionHandle
+    if (status.state !== 'ready' || handle === undefined) {
+      throw new ZoteroError(
+        'The literature-trail projection is unavailable.',
+        ZOTERO_CAPABILITY_UNAVAILABLE,
+      )
+    }
+    signal.throwIfAborted()
+    const state = handle.stateOf(session)
+    const revision = session.seq - 1
+    const workspace = buildSourceWorkspace(blocksOf(state.ledger), {
+      windowed: false,
+      currentServerId,
+    })
+    return { revision, workspace }
+  }
+
+  /**
+   * One bounded page of the literature trail, read from the complete ledger.
+   *
+   * The trail belongs to the core, not to the optional library component, so
+   * the endpoint lives here: a session that never mounts the library panel
+   * still pages its own trail.
+   * @param request - the requested page.
+   * @param signal - caller cancellation.
+   * @returns the bounded page with its exact totals.
+   */
+  async sourcePage(
+    request: ZoteroSourcePageRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroSourcePageResultView> {
+    return domainCall(() => readSourcePage(this.ctx, request, signal))
   }
 
   /** Wait for the registration fiber, converting an aborted signal into a rejection. */

@@ -6,12 +6,16 @@
  * @module dsh-zotero/client/components/workspace/SourceEvidence
  */
 
+import { useState } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { EvidencePassage, SourceItem } from '../../../sources/model.js'
 import { emptyEvidenceNoteOf, sourceLabelKeyOf } from '../../evidence-labels.ts'
+import { messageOf } from '../../error-text.ts'
+import { SourcePageControls } from './SourcePageControls.tsx'
+import type { SourcePager } from './useSourcePage.ts'
 import css from './workspace.module.css'
 
 /** The summary line of one item's retrieves: runs, kept, reported, truncated. */
@@ -31,33 +35,52 @@ interface SourceEvidenceProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
+  readonly openPdf?: (ref: string) => Promise<void>
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  /** The pager that appends the passages behind the feed's head. */
+  readonly pager?: SourcePager
 }
 
 interface PassageCardProps {
   readonly passage: EvidencePassage
   readonly item: SourceItem
   readonly openFile?: (path: string) => void
+  readonly openPdf?: (ref: string) => Promise<void>
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly t: TranslateNS<'zotero'>
 }
 
 /** One rich passage card with its source tag, page label, jump action, and grounding context. */
-function PassageCard({ passage, item, openFile, resolveAttachment, t }: PassageCardProps) {
+function PassageCard({ passage, item, openFile, openPdf, resolveAttachment, t }: PassageCardProps) {
+  const [error, setError] = useState<string>()
+  const [opening, setOpening] = useState(false)
   const targetPdfRef =
     passage.attachmentRef ?? item.retrievalFacts?.attachmentRef ?? item.attachment?.ref
   const filePath = item.attachment?.location
 
   const handleJump = async () => {
-    if (filePath && openFile) {
-      openFile(filePath)
-      return
-    }
-    if (targetPdfRef && resolveAttachment && openFile) {
-      const res = await resolveAttachment(targetPdfRef)
-      if (res.ok && res.value.kind === 'file' && res.value.path) {
+    if (opening) return
+    setError(undefined)
+    setOpening(true)
+    try {
+      if (openPdf && targetPdfRef) {
+        await openPdf(targetPdfRef)
+      } else if (targetPdfRef && resolveAttachment) {
+        const res = await resolveAttachment(targetPdfRef)
+        if (!res.ok) throw res.error
+        if (res.value.kind !== 'file') throw new Error(t('libraryPdfReaderUnavailable'))
+        if (!res.value.path) throw new Error(t('pdfFileNotFound'))
+        if (!openFile) throw new Error(t('libraryNoSessionForOpen'))
         openFile(res.value.path)
+      } else if (filePath && openFile) {
+        openFile(filePath)
+      } else {
+        throw new Error(t('libraryPdfReaderUnavailable'))
       }
+    } catch (cause) {
+      setError(messageOf(cause))
+    } finally {
+      setOpening(false)
     }
   }
 
@@ -70,7 +93,7 @@ function PassageCard({ passage, item, openFile, resolveAttachment, t }: PassageC
             <span className={css.note}>{t('pageLabel', { label: passage.pageLabel })}</span>
           )}
         </div>
-        {targetPdfRef !== undefined && openFile !== undefined && (
+        {targetPdfRef !== undefined && (openPdf !== undefined || openFile !== undefined) && (
           <Button
             variant="ghost"
             size="sm"
@@ -78,11 +101,17 @@ function PassageCard({ passage, item, openFile, resolveAttachment, t }: PassageC
             onClick={() => {
               void handleJump()
             }}
+            disabled={opening}
           >
-            {t('jumpToPageInSidebar')}
+            {opening ? t('libraryLoading') : t('jumpToPageInSidebar')}
           </Button>
         )}
       </div>
+      {error !== undefined && (
+        <p role="alert" className={css.warning}>
+          {error}
+        </p>
+      )}
 
       <blockquote className={css.quoteBody}>
         “{passage.text}”{passage.previewTruncated ? ` ${t('truncatedPreview')}` : ''}
@@ -103,7 +132,14 @@ function PassageCard({ passage, item, openFile, resolveAttachment, t }: PassageC
 }
 
 /** The passages feed: summary head and the list of rich passage cards. */
-export function SourceEvidence({ item, t, openFile, resolveAttachment }: SourceEvidenceProps) {
+export function SourceEvidence({
+  item,
+  t,
+  openFile,
+  openPdf,
+  resolveAttachment,
+  pager,
+}: SourceEvidenceProps) {
   if (item.retrievalFacts === undefined) {
     return (
       <div className={css.panel}>
@@ -127,6 +163,7 @@ export function SourceEvidence({ item, t, openFile, resolveAttachment }: SourceE
               passage={passage}
               item={item}
               openFile={openFile}
+              openPdf={openPdf}
               resolveAttachment={resolveAttachment}
               t={t}
             />
@@ -135,6 +172,9 @@ export function SourceEvidence({ item, t, openFile, resolveAttachment }: SourceE
       )}
       {item.evidenceTotal > item.evidence.length && (
         <p className={css.note}>{t('evidenceOmittedNote', { count: item.evidenceTotal })}</p>
+      )}
+      {pager !== undefined && (
+        <SourcePageControls pager={pager} label={t('groundingPassagesTitle')} t={t} />
       )}
     </div>
   )

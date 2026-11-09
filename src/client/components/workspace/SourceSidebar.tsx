@@ -33,6 +33,8 @@ import type { SourceItem, SourceWorkspace } from '../../../sources/model.js'
 import { type SourceFilter, type SourceFilterCounts } from '../../sources/selectors.ts'
 import { FILTERS, type MobilePane, type SelectionState } from './ZoteroWorkspaceView.tsx'
 import { SourceListItem } from './SourceListItem.tsx'
+import { SourcePageControls } from './SourcePageControls.tsx'
+import type { SourcePager } from './useSourcePage.ts'
 import { IconButton } from '../IconButton.tsx'
 import linkCss from '../link.module.css'
 import css from './workspace.module.css'
@@ -42,6 +44,8 @@ interface SourceSidebarProps {
   readonly filter: SourceFilter
   readonly counts: SourceFilterCounts
   readonly visible: readonly SourceItem[]
+  /** The pager that appends the rows behind the list's head. */
+  readonly pager?: SourcePager
   readonly selection: SelectionState
   readonly selectedKey: string | undefined
   readonly setFilter: (filter: SourceFilter) => void
@@ -67,6 +71,7 @@ export function SourceSidebar({
   filter,
   counts,
   visible,
+  pager,
   selection,
   selectedKey,
   setFilter,
@@ -283,6 +288,7 @@ export function SourceSidebar({
           ))}
         </div>
       )}
+      {pager !== undefined && <SourcePageControls pager={pager} label={t('lensSources')} t={t} />}
     </aside>
   )
 }

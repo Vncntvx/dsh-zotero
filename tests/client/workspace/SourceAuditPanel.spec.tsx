@@ -8,8 +8,14 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { SourceAuditPanel } from '../../../src/client/components/workspace/SourceAuditPanel.tsx'
-import { artifactOf, searchOf, sourceOf } from '../helpers/source-fixtures.ts'
+import type {
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
+} from '../../../src/contract.ts'
+import { searchOf, sourceOf } from '../helpers/source-fixtures.ts'
+import { deferred } from '../../helpers/sync.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { primitivesStub } = await import('../helpers/primitives-stub.ts')
@@ -22,92 +28,159 @@ import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
 const t = mockT
 const writeClipboard = await writeClipboardSpy()
 
+const BIBTEX_RESULT: ZoteroLibraryExportResultView = {
+  format: 'bibtex',
+  text: '@article{authoritative2024,\n  title = {Authoritative title}\n}',
+}
+
+function exportStub(result: ZoteroLibraryExportResultView = BIBTEX_RESULT): (
+  request: ZoteroLibraryExportRequestView,
+) => Promise<{
+  ok: true
+  value: ZoteroLibraryExportResultView
+}> {
+  return vi.fn(async () => ({ ok: true as const, value: result }))
+}
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
 })
 
 describe('SourceAuditPanel component', () => {
-  it('synthesizes BibTeX from item fields and copies on button click', async () => {
+  it('renders and copies only the authoritative remote citation', async () => {
+    const exportCitation = exportStub()
     const item = sourceOf({
       key: 'zotero://user/0/item/ITEMKEY1',
       ref: 'zotero://user/0/item/ITEMKEY1',
-      title: 'Attention Is All You Need',
-      creators: 'Vaswani et al.',
-      year: 2017,
-      venue: 'NeurIPS',
+      title: 'Local title that must not be fabricated',
+      creators: 'Local author',
     })
 
-    render(<SourceAuditPanel item={item} t={t} />)
+    render(<SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />)
 
-    expect(screen.getByText(/@article\{zotero_ITEMKEY1,/)).toBeTruthy()
-    expect(screen.getByText(/title = \{Attention Is All You Need\},/)).toBeTruthy()
-    expect(screen.getByText(/author = \{Vaswani et al\.\},/)).toBeTruthy()
-    expect(screen.getByText(/year = \{2017\},/)).toBeTruthy()
-    expect(screen.getByText(/journal = \{NeurIPS\},/)).toBeTruthy()
+    expect(await screen.findByText(/@article\{authoritative2024,/)).toBeTruthy()
+    expect(screen.queryByText(/Local title that must not be fabricated/)).toBeNull()
+    expect(exportCitation).toHaveBeenCalledWith({ refs: [item.ref], format: 'bibtex' })
 
-    const copyBtn = screen.getAllByRole('button', { name: t('copy') })[0]!
     await act(async () => {
-      fireEvent.click(copyBtn)
+      fireEvent.click(screen.getAllByRole('button', { name: t('copy') })[0]!)
     })
-    expect(writeClipboard).toHaveBeenCalledWith(
-      expect.stringContaining('@article{zotero_ITEMKEY1,'),
-    )
+    expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_RESULT.text)
   })
 
-  it('uses existing export artifact text for BibTeX when available', () => {
-    const customBibtex = '@article{custom2023,\n  title = {Custom Title}\n}'
-    const item = sourceOf({
-      key: 'zotero://user/0/item/ITEMKEY2',
-      ref: 'zotero://user/0/item/ITEMKEY2',
-      exports: [
-        artifactOf({
-          format: 'bibtex',
-          text: customBibtex,
-        }),
-      ],
+  it('requests Zotero GB/T bibliography output without synthesizing missing metadata', async () => {
+    const exportCitation = exportStub({
+      format: 'bibliography',
+      text: '<div class="csl-entry">Zotero GB/T result</div>',
     })
-
-    const { container } = render(<SourceAuditPanel item={item} t={t} />)
-    expect(container.querySelector('code')?.textContent).toBe(customBibtex)
-  })
-
-  it('switches to GB/T 7714 citation format and handles fallbacks', async () => {
     const item = sourceOf({
-      key: 'zotero://user/0/item/ITEMKEY3',
       ref: 'zotero://user/0/item/ITEMKEY3',
-      title: '深度学习研究',
-      creators: '张三和李四',
-      year: 2021,
-      venue: '计算机学报',
-    })
-
-    render(<SourceAuditPanel item={item} t={t} />)
-
-    const gbtTab = screen.getByRole('tab', { name: t('gbt7714Format') })
-    await act(async () => {
-      fireEvent.click(gbtTab)
-    })
-
-    expect(screen.getByText(/张三和李四\. 深度学习研究\[J\/OL\]\. 计算机学报, 2021\./)).toBeTruthy()
-
-    // Test fallback with missing fields
-    const minimalItem = sourceOf({
-      key: 'zotero://user/0/item/ITEMKEY4',
-      ref: 'zotero://user/0/item/ITEMKEY4',
       title: undefined,
       creators: undefined,
       year: undefined,
       venue: undefined,
     })
 
-    cleanup()
-    render(<SourceAuditPanel item={minimalItem} t={t} />)
-    const gbtTab2 = screen.getByRole('tab', { name: t('gbt7714Format') })
+    render(<SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />)
     await act(async () => {
-      fireEvent.click(gbtTab2)
+      fireEvent.click(screen.getByRole('tab', { name: t('gbt7714Format') }))
     })
-    expect(screen.getByText(/佚名\. 无题\[J\/OL\]\./)).toBeTruthy()
+
+    expect(await screen.findByText('Zotero GB/T result')).toBeTruthy()
+    expect(screen.queryByText(/佚名|无题/)).toBeNull()
+    expect(exportCitation).toHaveBeenLastCalledWith({
+      refs: [item.ref],
+      format: 'bibliography',
+      style: 'china-national-standard-gb-t-7714-2015-numeric',
+      locale: 'zh-CN',
+    })
+  })
+
+  it('shows remote failures as visible errors without fallback content', async () => {
+    const exportCitation = vi.fn(async (_request: ZoteroLibraryExportRequestView) => ({
+      ok: false as const,
+      error: new RemoteError('zotero/domain', 'Zotero export failed', {
+        code: 'ZOTERO_EXPORT_FAILED',
+      }),
+    }))
+    const item = sourceOf({ title: 'Failure title' })
+    render(<SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />)
+    expect((await screen.findByRole('alert')).textContent).toContain('Zotero export failed')
+    expect(screen.queryByText(/Failure title/)).toBeNull()
+  })
+
+  it('surfaces promise rejections from citation export as alerts', async () => {
+    const exportCitation = vi.fn().mockRejectedValue(new Error('Network disconnected'))
+    const item = sourceOf({ title: 'Rejection title' })
+    render(<SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />)
+    expect((await screen.findByRole('alert')).textContent).toContain('Network disconnected')
+  })
+
+  it('shows denied and empty citation states without fallback content', async () => {
+    const item = sourceOf({ title: 'Must not become a citation' })
+    const { unmount } = render(<SourceAuditPanel item={item} t={t} />)
+    expect(screen.getByText(t('sourceCitationDenied'))).toBeTruthy()
+    expect(screen.queryByText(/@article/)).toBeNull()
+    unmount()
+
+    render(
+      <SourceAuditPanel
+        item={item}
+        t={t}
+        canExport
+        exportCitation={exportStub({ format: 'bibtex', text: '   ' })}
+      />,
+    )
+    expect(await screen.findByText(t('sourceCitationEmpty'))).toBeTruthy()
+    expect(screen.queryByText(/Must not become a citation/)).toBeNull()
+  })
+
+  it('reports an unavailable exporter instead of a citation when the workspace has none', () => {
+    const item = sourceOf({ title: 'Must not become a citation' })
+    render(<SourceAuditPanel item={item} t={t} canExport />)
+    expect(screen.getByText(t('sourceCitationUnavailable'))).toBeTruthy()
+    expect(screen.queryByText(/@article/)).toBeNull()
+  })
+
+  it('keeps the citation out of reach until the request settles', () => {
+    const pending = deferred<{ ok: true; value: ZoteroLibraryExportResultView }>()
+    const exportCitation = vi.fn(() => pending.promise)
+    const item = sourceOf({ title: 'Must not become a citation' })
+    render(<SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />)
+    expect(screen.getByText(t('sourceCitationLoading'))).toBeTruthy()
+    const copyBtn = screen.getAllByRole('button', { name: t('copy') })[0]! as HTMLButtonElement
+    expect(copyBtn.disabled).toBe(true)
+  })
+
+  it('drops a late citation response after the selected source changes', async () => {
+    const first = deferred<{ ok: true; value: ZoteroLibraryExportResultView }>()
+    const second = deferred<{ ok: true; value: ZoteroLibraryExportResultView }>()
+    const exportCitation = vi
+      .fn<
+        (
+          request: ZoteroLibraryExportRequestView,
+        ) => Promise<{ ok: true; value: ZoteroLibraryExportResultView }>
+      >()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const itemA = sourceOf({ key: 'a', ref: 'zotero://user/0/item/AAAAAAA1' })
+    const itemB = sourceOf({ key: 'b', ref: 'zotero://user/0/item/BBBBBBB2' })
+    const view = render(
+      <SourceAuditPanel item={itemA} t={t} canExport exportCitation={exportCitation} />,
+    )
+    view.rerender(<SourceAuditPanel item={itemB} t={t} canExport exportCitation={exportCitation} />)
+    await act(async () => {
+      second.resolve({ ok: true, value: { format: 'bibtex', text: '@book{B}' } })
+      await second.promise
+    })
+    expect(await screen.findByText(/@book\{B\}/)).toBeTruthy()
+    await act(async () => {
+      first.resolve({ ok: true, value: { format: 'bibtex', text: '@book{A}' } })
+      await first.promise
+    })
+    expect(screen.queryByText(/@book\{A\}/)).toBeNull()
+    expect(screen.getByText(/@book\{B\}/)).toBeTruthy()
   })
 
   it('renders indexing coverage bar for complete, page-based, and char-based metrics', () => {

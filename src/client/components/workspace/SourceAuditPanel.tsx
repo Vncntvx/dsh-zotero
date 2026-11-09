@@ -6,7 +6,7 @@
  * @module dsh-zotero/client/components/workspace/SourceAuditPanel
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   IconCheckOutlineRegular,
@@ -15,10 +15,18 @@ import {
   Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type {
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
+} from '../../../contract.ts'
 import type { SourceItem } from '../../../sources/model.js'
 import { mapTuple } from '../../segmented-tabs.ts'
 import { coverageLineOf } from '../../evidence-labels.ts'
+import { messageOf } from '../../error-text.ts'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
+import { SourcePageControls } from './SourcePageControls.tsx'
+import type { SourcePager } from './useSourcePage.ts'
 import { filterLineOf, modeLabelOf, scopeLabelOf } from './SourceOverview.tsx'
 import css from './workspace.module.css'
 
@@ -32,55 +40,131 @@ const CITATION_TABS: readonly [
   { id: 'gbt7714', key: 'gbt7714Format' },
 ]
 
+type CitationState =
+  | { readonly key: string; readonly format: CitationTab; readonly phase: 'loading' }
+  | {
+      readonly key: string
+      readonly format: CitationTab
+      readonly phase: 'ready'
+      readonly text: string
+    }
+  | { readonly key: string; readonly format: CitationTab; readonly phase: 'denied' }
+  | { readonly key: string; readonly format: CitationTab; readonly phase: 'unavailable' }
+  | { readonly key: string; readonly format: CitationTab; readonly phase: 'empty' }
+  | {
+      readonly key: string
+      readonly format: CitationTab
+      readonly phase: 'error'
+      readonly message: string
+    }
+
 interface SourceAuditPanelProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
+  readonly canExport?: boolean
+  readonly exportCitation?: (
+    request: ZoteroLibraryExportRequestView,
+  ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
+  /** The pager that appends the retrieval episodes behind the timeline's head. */
+  readonly pager?: SourcePager
 }
 
-function synthesizeBibtex(item: SourceItem): string {
-  // Use existing export artifact text when available
-  const existingArtifact = item.exports.find(
-    (exp) => exp.format === 'bibtex' || exp.format === 'biblatex',
-  )
-  if (existingArtifact !== undefined && existingArtifact.text.trim() !== '') {
-    return existingArtifact.text.trim()
+function citationRequestOf(ref: string, format: CitationTab): ZoteroLibraryExportRequestView {
+  return format === 'bibtex'
+    ? { refs: [ref], format: 'bibtex' }
+    : {
+        refs: [ref],
+        format: 'bibliography',
+        style: 'china-national-standard-gb-t-7714-2015-numeric',
+        locale: 'zh-CN',
+      }
+}
+
+function citationTextOf(
+  expected: CitationTab,
+  result: ZoteroLibraryExportResultView,
+): string | undefined {
+  if (expected === 'bibtex' && result.format === 'bibtex') return result.text.trim() || undefined
+  if (expected === 'gbt7714' && result.format === 'bibliography') {
+    const document = new DOMParser().parseFromString(result.text, 'text/html')
+    return document.body.textContent?.trim() || undefined
   }
-
-  const citeKey =
-    item.exports[0]?.items?.[0]?.citationKey ??
-    item.key.replace(/^zotero:\/\/user\/0\/item\//, 'zotero_')
-  const author = item.creators ?? 'Unknown'
-  const title = item.title ?? 'Untitled'
-  const year = item.year !== undefined ? String(item.year) : ''
-  const venue = item.venue ?? ''
-
-  const lines = [`@article{${citeKey},`, `  title = {${title}},`, `  author = {${author}},`]
-  if (year !== '') lines.push(`  year = {${year}},`)
-  if (venue !== '') lines.push(`  journal = {${venue}},`)
-  lines.push(`  url = {${item.ref}}`)
-  lines.push(`}`)
-  return lines.join('\n')
+  return undefined
 }
 
-function synthesizeGbt7714(item: SourceItem): string {
-  const author = item.creators
-    ? item.creators.replace(/([a-zA-Z])(和)([a-zA-Z])/g, '$1 $2 $3')
-    : '佚名'
-  const title = item.title ?? '无题'
-  const venue = item.venue ? ` ${item.venue},` : ''
-  const year = item.year !== undefined ? ` ${item.year}.` : '.'
-  return `${author}. ${title}[J/OL].${venue}${year}`
-}
-
-export function SourceAuditPanel({ item, t }: SourceAuditPanelProps) {
+export function SourceAuditPanel({
+  item,
+  t,
+  canExport = false,
+  exportCitation,
+  pager,
+}: SourceAuditPanelProps) {
   const [format, setFormat] = useState<CitationTab>('bibtex')
-  const citationCopyFeedback = useCopyFeedback(`${item.key}-cite`)
+  const [citationState, setCitationState] = useState<CitationState>()
+  const citationCopyFeedback = useCopyFeedback(`${item.key}-cite-${format}`)
   const refCopyFeedback = useCopyFeedback(`${item.key}-ref`)
+  const request = useMemo(() => citationRequestOf(item.ref, format), [item.ref, format])
 
-  const citationText = useMemo(
-    () => (format === 'bibtex' ? synthesizeBibtex(item) : synthesizeGbt7714(item)),
-    [item, format],
-  )
+  useEffect(() => {
+    let current = true
+    const settle = (next: CitationState): void => {
+      if (current) setCitationState(next)
+    }
+    if (!canExport) {
+      settle({ key: item.key, format, phase: 'denied' })
+      return () => {
+        current = false
+      }
+    }
+    if (exportCitation === undefined) {
+      settle({ key: item.key, format, phase: 'unavailable' })
+      return () => {
+        current = false
+      }
+    }
+    settle({ key: item.key, format, phase: 'loading' })
+    void exportCitation(request).then(
+      (result) => {
+        if (!current) return
+        if (!result.ok) {
+          settle({ key: item.key, format, phase: 'error', message: messageOf(result.error) })
+          return
+        }
+        const text = citationTextOf(format, result.value)
+        settle(
+          text === undefined
+            ? { key: item.key, format, phase: 'empty' }
+            : { key: item.key, format, phase: 'ready', text },
+        )
+      },
+      (error: unknown) => {
+        settle({ key: item.key, format, phase: 'error', message: messageOf(error) })
+      },
+    )
+    return () => {
+      current = false
+    }
+  }, [canExport, exportCitation, format, item.key, request])
+
+  const activeCitationState: CitationState =
+    citationState?.key === item.key && citationState.format === format
+      ? citationState
+      : canExport
+        ? { key: item.key, format, phase: 'loading' }
+        : { key: item.key, format, phase: 'denied' }
+  const citationText = activeCitationState.phase === 'ready' ? activeCitationState.text : ''
+  const citationMessage =
+    activeCitationState.phase === 'loading'
+      ? t('sourceCitationLoading')
+      : activeCitationState.phase === 'denied'
+        ? t('sourceCitationDenied')
+        : activeCitationState.phase === 'unavailable'
+          ? t('sourceCitationUnavailable')
+          : activeCitationState.phase === 'empty'
+            ? t('sourceCitationEmpty')
+            : activeCitationState.phase === 'error'
+              ? t('sourceCitationFailed', { message: activeCitationState.message })
+              : undefined
 
   const facts = item.retrievalFacts
   const coverage = facts?.coverage
@@ -157,6 +241,7 @@ export function SourceAuditPanel({ item, t }: SourceAuditPanelProps) {
             variant="outline"
             size="sm"
             className={css.citationCopyBtn}
+            disabled={activeCitationState.phase !== 'ready'}
             onClick={() => {
               citationCopyFeedback.copyText(citationText)
             }}
@@ -171,9 +256,15 @@ export function SourceAuditPanel({ item, t }: SourceAuditPanelProps) {
             {citationCopyFeedback.phase === 'done' ? t('copied') : t('copy')}
           </Button>
         </div>
-        <pre className={css.citationPre}>
-          <code>{citationText}</code>
-        </pre>
+        {citationMessage !== undefined ? (
+          <p className={css.note} role={activeCitationState.phase === 'error' ? 'alert' : 'status'}>
+            {citationMessage}
+          </p>
+        ) : (
+          <pre className={css.citationPre}>
+            <code>{citationText}</code>
+          </pre>
+        )}
       </div>
 
       {/* 2. Full-text index coverage */}
@@ -195,6 +286,9 @@ export function SourceAuditPanel({ item, t }: SourceAuditPanelProps) {
         <div className={css.section}>
           <h4 className={css.auditSectionTitle}>{t('retrievalTimeline')}</h4>
           <ul className={css.passages}>{searchRows}</ul>
+          {pager !== undefined && (
+            <SourcePageControls pager={pager} label={t('retrievalTimeline')} t={t} />
+          )}
         </div>
       ) : (
         <div className={css.section}>

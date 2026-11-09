@@ -11,6 +11,7 @@ import {
   filterCountsOf,
   filterSources,
   hasIssue,
+  sourceExportsOf,
 } from '../../../src/client/sources/selectors.ts'
 import { artifactOf, passageOf, sourceOf } from '../helpers/source-fixtures.ts'
 
@@ -47,6 +48,85 @@ const SOURCES: readonly SourceItem[] = [
     operations: { running: 0, failed: 1, stopped: 0 },
   }),
 ]
+
+describe('sourceExportsOf', () => {
+  it('isolates A and B entries from one batch while keeping the session artifact complete', () => {
+    const refA = 'zotero://user/0/item/AAAAAAA1'
+    const refB = 'zotero://user/0/item/BBBBBBB2'
+    const text = '@article{a,\n title={A}\n}\n\n@article{b,\n title={B}\n}'
+    const batch = artifactOf({
+      refs: [refA, refB],
+      text,
+      items: [
+        { ref: refA, exportKey: 'a', start: 0, end: text.indexOf('@article{b,') },
+        { ref: refB, exportKey: 'b', start: text.indexOf('@article{b,'), end: text.length },
+      ],
+    })
+
+    expect(sourceExportsOf([batch], refA)[0]?.text).toBe('@article{a,\n title={A}\n}')
+    expect(sourceExportsOf([batch], refB)[0]?.text).toBe('@article{b,\n title={B}\n}')
+    expect(exportSectionsOf([batch])[0]?.documents.map((doc) => doc.exportKey)).toEqual(['a', 'b'])
+  })
+
+  it('omits a batch body whose boundary is only half recorded', () => {
+    const refA = 'zotero://user/0/item/AAAAAAA1'
+    const refB = 'zotero://user/0/item/BBBBBBB2'
+    const text = '@article{a,\n title={A}\n}\n\n@article{b,\n title={B}\n}'
+    const batch = artifactOf({
+      refs: [refA, refB],
+      text,
+      items: [
+        { ref: refA, exportKey: 'a', start: 0, end: text.indexOf('@article{b,') },
+        // The provider records both bounds or neither; half a boundary cannot
+        // claim a span, so the body stays hidden instead of leaking the tail.
+        { ref: refB, exportKey: 'b', start: text.indexOf('@article{b,') },
+      ],
+    })
+    expect(sourceExportsOf([batch], refA)[0]?.text).toBe('@article{a,\n title={A}\n}')
+    expect(sourceExportsOf([batch], refB)).toEqual([])
+  })
+
+  it('does not expose an unlocatable batch body in a source workspace', () => {
+    const refA = 'zotero://user/0/item/AAAAAAA1'
+    const refB = 'zotero://user/0/item/BBBBBBB2'
+    const batch = artifactOf({
+      refs: [refA, refB],
+      text: '@article{a,}\n\n@article{b,}',
+      items: [
+        { ref: refA, exportKey: 'a' },
+        { ref: refB, exportKey: 'b' },
+      ],
+    })
+    expect(sourceExportsOf([batch], refA)).toEqual([])
+  })
+
+  it('isolates a CSL-JSON record by entryIndex and drops unresolvable entries', () => {
+    const refA = 'zotero://user/0/item/AAAAAAA1'
+    const refB = 'zotero://user/0/item/BBBBBBB2'
+    const cslA = { id: 'a', title: 'Paper A' }
+    const cslB = { id: 'b', title: 'Paper B' }
+    const batch = artifactOf({
+      format: 'csljson',
+      refs: [refA, refB],
+      text: JSON.stringify([cslA, cslB]),
+      items: [
+        { ref: refA, exportKey: 'a', entryIndex: 0 },
+        { ref: refB, exportKey: 'b', entryIndex: 1 },
+      ],
+    })
+    const isolatedA = sourceExportsOf([batch], refA)
+    expect(isolatedA[0]?.text).toBe(JSON.stringify([cslA]))
+    expect(isolatedA[0]?.items?.[0]?.entryIndex).toBe(0)
+
+    const invalidBatch = artifactOf({
+      format: 'csljson',
+      refs: [refA, refB],
+      text: JSON.stringify([cslA]),
+      items: [{ ref: refA, exportKey: 'a', entryIndex: 99 }],
+    })
+    expect(sourceExportsOf([invalidBatch], refA)).toEqual([])
+  })
+})
 
 describe('filterSources', () => {
   it('passes everything through the all filter', () => {

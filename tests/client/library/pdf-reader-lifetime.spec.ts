@@ -124,3 +124,43 @@ it('reports teardown release failures while completing registry disposal', async
   expect(report).toHaveBeenCalledWith(failure)
   expect(registry.source('pdf')).toBeUndefined()
 })
+
+it('persists without ref as empty array entry in storage', async () => {
+  const store: Record<string, string> = {}
+  const registry = createPdfReaderRegistry({
+    inventory: createSnapshotStore([]),
+    release: vi.fn(async () => {}),
+    report: vi.fn(),
+    storage: {
+      getItem: (k) => store[k] ?? null,
+      setItem: (k, v) => {
+        store[k] = v
+      },
+      removeItem: (k) => {
+        delete store[k]
+      },
+    },
+  })
+  registry.track('pdf-noref', 'lease-noref')
+  expect(store['dsh-zotero:url-pdf-readers:1']).toBe('[]')
+  await registry.dispose()
+})
+
+it('returns existing in-flight release promise on concurrent release', async () => {
+  const inventory = createSnapshotStore([{ contentId: 'pdf' }])
+  const pending = deferred<void>()
+  const release = vi.fn(() => pending.promise)
+  const registry = createPdfReaderRegistry({
+    inventory,
+    release,
+    report: vi.fn(),
+  })
+  registry.track('pdf', 'lease')
+  inventory.set([])
+  expect(release).toHaveBeenCalledTimes(1)
+  inventory.set([{ contentId: 'other' }])
+  inventory.set([])
+  expect(release).toHaveBeenCalledTimes(1)
+  pending.resolve()
+  await registry.dispose()
+})

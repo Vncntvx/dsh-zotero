@@ -41,6 +41,8 @@ import {
   type ZoteroReportResultView,
   type ZoteroStatusView,
   type ZoteroWriteGrantRevokeView,
+  type ZoteroSourcePageRequestView,
+  type ZoteroSourcePageResultView,
 } from './contract.js'
 import type { ZoteroStatus } from './types.js'
 
@@ -246,6 +248,22 @@ export class ZoteroRuntime extends TypertRemoteService {
   async resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView> {
     const service = requireZoteroService(this.ctx, signal)
     return await domainCall(() => service.resolveAttachment(ref, signal))
+  }
+
+  /**
+   * One bounded page of the literature trail, read from the core's complete
+   * ledger rather than the projection's windowed view. The endpoint rides the
+   * core service: the trail is a conversation surface, so a session that never
+   * mounts the library panel still pages its own trail.
+   * @param request - the requested page.
+   * @returns the bounded page with its exact totals.
+   */
+  async sourcePage(
+    request: ZoteroSourcePageRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroSourcePageResultView> {
+    const service = requireZoteroService(this.ctx, signal)
+    return await domainCall(() => service.sourcePage(request, signal))
   }
 
   /**

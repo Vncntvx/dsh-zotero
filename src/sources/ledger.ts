@@ -57,6 +57,8 @@ import type { ZoteroResolvedScope } from '../contract.js'
 interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */
   readonly currentServerId?: string
+  /** Keep the existing bounded view; internal session paging requests the full fold. */
+  readonly windowed?: boolean
 }
 
 /** One folded logical search: consecutive continuations share one identity. */
@@ -748,8 +750,11 @@ export function buildSourceWorkspace(
     exports: item.exports.slice(0, rowCap),
     exportsTotal: item.exports.length,
   })
-  const windowedSources = sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowItem)
-  const windowedExports = exports.slice(0, rowCap)
+  const windowedSources =
+    options.windowed === false
+      ? sources
+      : sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowItem)
+  const windowedExports = options.windowed === false ? exports : exports.slice(0, rowCap)
 
   return {
     sources: windowedSources,

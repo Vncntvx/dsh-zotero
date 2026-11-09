@@ -19,6 +19,7 @@ import { ZoteroLocateActions } from '../open/ZoteroLocateActions.tsx'
 import type { MobilePane } from './ZoteroWorkspaceView.tsx'
 import { SourceEvidence } from './SourceEvidence.tsx'
 import { SourceExports } from './SourceExports.tsx'
+import type { SourcePager } from './useSourcePage.ts'
 import css from './workspace.module.css'
 
 interface SourceInspectorProps {
@@ -32,6 +33,12 @@ interface SourceInspectorProps {
   readonly openFile?: (path: string) => void
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly openProtocol?: (url: string) => Promise<boolean>
+  /** The pager that appends the passages behind the feed's head. */
+  readonly evidencePager?: SourcePager
+  /** The pager that appends the export records behind the list's head. */
+  readonly exportsPager?: SourcePager
+  /** Open one URL attachment's PDF into the right reader; absent keeps the fallback. */
+  readonly openPdf?: (ref: string) => Promise<void>
 }
 
 /** The inspector: unified grounding feed for the selected source item. */
@@ -45,6 +52,9 @@ export function SourceInspector({
   openFile,
   resolveAttachment,
   openProtocol,
+  evidencePager,
+  exportsPager,
+  openPdf,
 }: SourceInspectorProps) {
   const selected = useMemo(
     () => workspace.sources.find((item) => item.key === selectedKey),
@@ -198,6 +208,8 @@ export function SourceInspector({
             t={t}
             openFile={openFile}
             resolveAttachment={resolveAttachment}
+            openPdf={openPdf}
+            pager={evidencePager}
           />
         </div>
 
@@ -209,7 +221,7 @@ export function SourceInspector({
               <span className={css.detailTabCount}>{selected.exports.length}</span>
             )}
           </h3>
-          <SourceExports item={selected} t={t} />
+          <SourceExports item={selected} t={t} pager={exportsPager} />
         </div>
       </div>
     </main>

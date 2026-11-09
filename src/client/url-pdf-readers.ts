@@ -9,12 +9,21 @@ export interface PdfReaderInventory {
   getSnapshot(): readonly { readonly contentId: string }[]
   subscribe(listener: () => void): () => void
 }
+/** The reading-file leases one registry owns. */
+export interface PdfReaderRegistry {
+  track(address: string, lease: string, ref?: string): void
+  forget(address: string): void
+  source(address: string): string | undefined
+  recoveryError(): unknown
+  dispose(): Promise<void>
+}
+
 export function createPdfReaderRegistry(port: {
   inventory: PdfReaderInventory
   release(lease: string): Promise<void>
   report(error: unknown): void
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
-}) {
+}): PdfReaderRegistry {
   const files = new Map<
     string,
     { lease: string; ref?: string; opened: boolean; releasing?: Promise<void> }

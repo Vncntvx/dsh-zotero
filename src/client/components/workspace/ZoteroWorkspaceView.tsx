@@ -15,8 +15,13 @@
 import { useMemo, useState } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
-import type { SourceWorkspace } from '../../../sources/model.js'
+import type {
+  ZoteroAttachmentLocationView,
+  ZoteroLibraryExportRequestView,
+  ZoteroLibraryExportResultView,
+  ZoteroSourcePageResultView,
+} from '../../../contract.ts'
+import type { SourceItem, SourceWorkspace } from '../../../sources/model.js'
 import { mapTuple } from '../../segmented-tabs.ts'
 import { filterSources, type SourceFilter } from '../../sources/selectors.ts'
 import { WorkspaceToolbar } from './WorkspaceToolbar.tsx'
@@ -27,6 +32,7 @@ import { WorkspaceEmptyState } from './WorkspaceEmptyState.tsx'
 import { ExportsPage } from './ExportsPage.tsx'
 import { EvidenceOverview } from './EvidenceOverview.tsx'
 import { SourceAuditPanel } from './SourceAuditPanel.tsx'
+import { useSourcePage, type SourcePageCall } from './useSourcePage.ts'
 import css from './workspace.module.css'
 
 /** The workspace view's top-level lenses: the sources workspace or the exports page. */
@@ -47,6 +53,16 @@ export type MobilePane = 'list' | 'detail'
 interface ZoteroWorkspaceViewProps {
   readonly workspace: SourceWorkspace
   readonly connection: ConnectionView
+  readonly canExport?: boolean
+  readonly exportCitation?: (
+    request: ZoteroLibraryExportRequestView,
+  ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
+  /** The session the trail belongs to; the paging endpoint is session-scoped. */
+  readonly sessionId?: string
+  /** The bounded-list pager; absent leaves every list at the view's head. */
+  readonly sourcePage?: SourcePageCall
+  /** Open one URL attachment's PDF into the right reader; absent keeps the resolved-path fallback. */
+  readonly openPdf?: (ref: string) => Promise<void>
   /** Composer prefill; absent on surfaces without an input. */
   readonly setDraft?: (text: string) => void
   readonly onRefresh: () => void
@@ -112,10 +128,37 @@ interface SourceItemLike {
   readonly key: string
 }
 
+/**
+ * The rows the accepted pages contributed for one source's row list.
+ *
+ * The page carries the paged source itself, so the rows come from its first
+ * entry; the caller appends them to the rows the view already shows.
+ * @param pages - the accepted pages, oldest first.
+ * @param rows - the row list to collect.
+ * @returns the collected rows.
+ */
+export function appendedSourceRows<K extends 'searches' | 'evidence' | 'exports'>(
+  pages: readonly ZoteroSourcePageResultView[],
+  rows: K,
+): SourceItem[K] {
+  const collected: unknown[] = []
+  for (const page of pages) {
+    const item = page.workspace.sources[0]
+    if (item === undefined) continue
+    collected.push(...(item[rows] as readonly unknown[]))
+  }
+  return collected as SourceItem[K]
+}
+
 /** The workspace view: toolbar, lens bar, and the master-detail surface. */
 export function ZoteroWorkspaceView({
   workspace,
   connection,
+  canExport,
+  exportCitation,
+  sessionId,
+  sourcePage,
+  openPdf,
   setDraft,
   onRefresh,
   t,
@@ -148,6 +191,86 @@ export function ZoteroWorkspaceView({
   // The exports lens counts distinct exported documents, not export calls.
   const exportedCount = workspace.exportedRefCount
 
+  // The projection's view is windowed: the rows behind that window are fetched
+  // one page at a time. Each pager asks only when its own list is truncated,
+  // so a session that fits the window never issues a request.
+  const sourcesPager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'sources', filter },
+    offset: visible.length,
+    total: counts[filter],
+    enabled: counts[filter] > visible.length,
+  })
+  const evidencePager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'source', key: selectedKey ?? '', rows: 'evidence' },
+    offset: selectedItem?.evidence.length ?? 0,
+    total: selectedItem?.evidenceTotal ?? 0,
+    enabled: (selectedItem?.evidenceTotal ?? 0) > (selectedItem?.evidence.length ?? 0),
+  })
+  const sourceExportsPager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'source', key: selectedKey ?? '', rows: 'exports' },
+    offset: selectedItem?.exports.length ?? 0,
+    total: selectedItem?.exportsTotal ?? 0,
+    enabled: (selectedItem?.exportsTotal ?? 0) > (selectedItem?.exports.length ?? 0),
+  })
+  const searchesPager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'source', key: selectedKey ?? '', rows: 'searches' },
+    offset: selectedItem?.searches.length ?? 0,
+    total: selectedItem?.searchesTotal ?? 0,
+    enabled: (selectedItem?.searchesTotal ?? 0) > (selectedItem?.searches.length ?? 0),
+  })
+  const sessionExportsPager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'session', rows: 'exports' },
+    offset: workspace.exports.length,
+    total: workspace.exportTotal,
+    enabled: workspace.exportTotal > workspace.exports.length,
+  })
+
+  // The paged rows join the view's own head: the head is the list's prefix,
+  // so appending the pages behind it yields the complete list.
+  const pagedSources = useMemo(
+    () => sourcesPager.pages.flatMap((page) => page.workspace.sources),
+    [sourcesPager.pages],
+  )
+  const listedSources = useMemo(
+    () => [...workspace.sources, ...pagedSources],
+    [workspace.sources, pagedSources],
+  )
+  const listedVisible = useMemo(() => [...visible, ...pagedSources], [visible, pagedSources])
+  const pagedItem = useMemo(() => {
+    if (selectedItem === undefined) return undefined
+    return {
+      ...selectedItem,
+      evidence: [
+        ...selectedItem.evidence,
+        ...appendedSourceRows(evidencePager.pages, 'evidence'),
+      ] as SourceItem['evidence'],
+      exports: [
+        ...selectedItem.exports,
+        ...appendedSourceRows(sourceExportsPager.pages, 'exports'),
+      ] as SourceItem['exports'],
+      searches: [
+        ...selectedItem.searches,
+        ...appendedSourceRows(searchesPager.pages, 'searches'),
+      ] as SourceItem['searches'],
+    }
+  }, [evidencePager.pages, searchesPager.pages, selectedItem, sourceExportsPager.pages])
+  const pagedWorkspace = useMemo(
+    () => ({
+      ...workspace,
+      sources: listedSources.map((item) => (item.key === selectedKey ? (pagedItem ?? item) : item)),
+      exports: [
+        ...workspace.exports,
+        ...sessionExportsPager.pages.flatMap((page) => page.workspace.exports),
+      ],
+    }),
+    [listedSources, pagedItem, selectedKey, sessionExportsPager.pages, workspace],
+  )
+
   const lensTabItems = useMemo(
     () =>
       mapTuple(LENSES, (entry) => ({
@@ -179,7 +302,7 @@ export function ZoteroWorkspaceView({
           lensTabItems={lensTabItems}
         />
         <EvidenceOverview
-          workspace={workspace}
+          workspace={pagedWorkspace}
           openFile={openFile}
           resolveAttachment={resolveAttachment}
           openProtocol={openProtocol}
@@ -208,14 +331,14 @@ export function ZoteroWorkspaceView({
         connection={connection}
         onRefresh={onRefresh}
         t={t}
-        workspace={workspace}
+        workspace={pagedWorkspace}
         lens={lens}
         setLens={setLens}
         lensTabItems={lensTabItems}
       />
       {lens === 'exports' ? (
-        <ExportsPage workspace={workspace} t={t} />
-      ) : workspace.sources.length === 0 ? (
+        <ExportsPage workspace={pagedWorkspace} pager={sessionExportsPager} t={t} />
+      ) : listedSources.length === 0 ? (
         <WorkspaceEmptyState setDraft={setDraft} t={t} />
       ) : (
         <div className={css.workspace} data-pane={mobilePane}>
@@ -223,7 +346,8 @@ export function ZoteroWorkspaceView({
             workspace={workspace}
             filter={filter}
             counts={counts}
-            visible={visible}
+            visible={listedVisible}
+            pager={sourcesPager}
             selection={selection}
             selectedKey={selectedKey}
             setFilter={setFilter}
@@ -240,20 +364,36 @@ export function ZoteroWorkspaceView({
             // Exports) never strands the next source on an empty panel. An
             // effect would paint that stale tab first and correct it after.
             key={selectedKey}
-            workspace={workspace}
+            workspace={pagedWorkspace}
             selectedKey={selectedKey}
             selectionHidden={
-              selectedKey !== undefined && !visible.some((item) => item.key === selectedKey)
+              selectedKey !== undefined && !listedVisible.some((item) => item.key === selectedKey)
             }
             setMobilePane={setMobilePane}
             setDraft={setDraft}
             openFile={openFile}
             resolveAttachment={resolveAttachment}
             openProtocol={openProtocol}
+            openPdf={openPdf}
+            evidencePager={evidencePager}
+            exportsPager={sourceExportsPager}
             t={t}
           />
           <aside className={css.auditSidebar}>
-            {selectedItem && <SourceAuditPanel item={selectedItem} t={t} />}
+            {pagedItem && (
+              // A narrow container hides this aside with CSS while the tree
+              // keeps it mounted; the citation export must not fire for a
+              // surface the user cannot see, so the pane state gates it.
+              <div hidden={mobilePane === 'list'}>
+                <SourceAuditPanel
+                  item={pagedItem}
+                  canExport={canExport === true && mobilePane === 'detail'}
+                  exportCitation={mobilePane === 'detail' ? exportCitation : undefined}
+                  pager={searchesPager}
+                  t={t}
+                />
+              </div>
+            )}
           </aside>
         </div>
       )}

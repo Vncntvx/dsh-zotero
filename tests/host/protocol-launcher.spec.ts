@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile, chmod } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { executeOpenProtocol } from '../../src/remote.ts'
 import { rejectionOf } from './support/open-protocol.ts'
 
 let directory: string | undefined
@@ -52,4 +53,15 @@ it('renders a non-Error launcher throw through errorMessageOf', async () => {
     details: { url, reason: String(thrown) },
   })
   expect(failure.cause).toBe(thrown)
+})
+
+it.runIf(process.platform !== 'win32')('successfully launches with defaultLauncher', async () => {
+  directory = await mkdtemp(join(tmpdir(), 'zotero-launch-'))
+  const binaryName = process.platform === 'darwin' ? 'open' : 'xdg-open'
+  const executable = join(directory, binaryName)
+  await writeFile(executable, '#!/bin/sh\nexit 0\n')
+  await chmod(executable, 0o700)
+  vi.stubEnv('PATH', directory)
+  const result = await executeOpenProtocol('zotero://select/')
+  expect(result).toEqual({ success: true })
 })
