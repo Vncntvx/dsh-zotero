@@ -12,7 +12,7 @@
 
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
-import { chunkText, tokenize } from '../evidence.js'
+import { chunkText, tokenize, type EvidenceChunk } from '../evidence.js'
 import { queryTermsAcross } from './evidence-ranker.js'
 import { asRecord, asString } from '../json.js'
 import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
@@ -38,7 +38,7 @@ import {
   isPdfCandidate,
   normalizeCoverage,
   readFulltextSources,
-  tryEnhanceFulltext,
+  lookupParsedFulltext,
   type FulltextDeps,
   type FulltextSource,
 } from './retrieve-fulltext.js'
@@ -83,7 +83,10 @@ const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'ab
  * flag, never by silently editing passage text.
  */
 /** One evidence passage accumulated by the retrieve policies, before ranking. */
-interface RetrievePassage {
+interface RetrievePassage extends Pick<
+  ZoteroEvidence,
+  'textFormat' | 'artifact' | 'start' | 'end'
+> {
   source: ZoteroEvidenceSource
   sourceRef: string
   text: string
@@ -97,7 +100,7 @@ interface RetrievePassage {
 }
 
 /** What one fulltext policy arm contributed; `skippedFulltext` reports the source's absence. */
-interface FulltextPolicyOutcome {
+interface FulltextPolicyOutcome extends Pick<ZoteroRetrieveResult, 'textFormat' | 'artifact'> {
   readonly skippedFulltext: boolean
   readonly fulltextWasCut: boolean
   readonly attachmentRef?: string
@@ -114,13 +117,18 @@ type FulltextPayload = Awaited<ReturnType<typeof fetchFulltext>>
 function appendFulltextChunks(
   passages: RetrievePassage[],
   attachmentRef: string,
-  chunks: readonly { text: string; index: number }[],
+  chunks: readonly EvidenceChunk[],
+  facts: Pick<ZoteroEvidence, 'textFormat' | 'artifact'>,
 ): void {
   for (const chunk of chunks) {
     passages.push({
       source: 'fulltext',
       sourceRef: attachmentRef,
       text: chunk.text,
+      ...facts,
+      ...(chunk.start === undefined || chunk.end === undefined
+        ? {}
+        : { start: chunk.start, end: chunk.end }),
       chunkIndex: chunk.index,
       chunkCount: chunks.length,
     })
@@ -147,6 +155,8 @@ async function readBestFulltext(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
+  let textFormat: ZoteroRetrieveResult['textFormat']
+  let artifact: ZoteroRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachmentKey = bestFulltextKey
   // The link arm reports Zotero's own type (possibly empty); the child
@@ -161,40 +171,41 @@ async function readBestFulltext(
     }
   }
   if (attachmentKey !== undefined) {
-    try {
-      attachmentRef = refStringFor(
-        ref.library as SupportedLocalLibrary,
-        'attachment',
-        attachmentKey,
-        serverId,
-      )
-      if (selectedContentType !== undefined && selectedContentType !== '') {
-        attachmentContentType = selectedContentType
-      }
+    attachmentRef = refStringFor(
+      ref.library as SupportedLocalLibrary,
+      'attachment',
+      attachmentKey,
+      serverId,
+    )
+    if (selectedContentType !== undefined && selectedContentType !== '') {
+      attachmentContentType = selectedContentType
+    }
 
-      // Prefer the optional higher-quality parser for a PDF. Every non-`ok`
-      // outcome propagates fail-closed; `ok` text is chunked under the same
-      // budget as the index.
-      const enhanced =
-        isPdfCandidate(selectedContentType) && deps.enhancer !== undefined
-          ? await tryEnhanceFulltext(
-              deps,
-              {
-                key: attachmentRef,
-                source: { kind: 'local', attachmentRef },
-                contentType: selectedContentType,
-              },
-              signal,
-            )
-          : undefined
+    const parsed =
+      isPdfCandidate(selectedContentType) && deps.enhancer !== undefined
+        ? await lookupParsedFulltext(
+            deps,
+            {
+              key: attachmentRef,
+              source: { kind: 'local', attachmentRef },
+              contentType: selectedContentType,
+            },
+            signal,
+          )
+        : undefined
 
-      if (enhanced !== undefined) {
-        // MinerU text has no Zotero index coverage; leave `coverage` unset.
-        const chunked = chunkFulltext(enhanced, deps.limits.maxFulltextChars, deps.limits)
-        fulltextWasCut = chunked.inputTruncated
-        appendFulltextChunks(passages, attachmentRef, chunked.chunks)
-      } else {
-        const payload = await (fulltextPromise ??
+    if (parsed !== undefined) {
+      const chunked = chunkFulltext(parsed.text, deps.limits.maxFulltextChars, deps.limits)
+      fulltextWasCut = chunked.inputTruncated
+      textFormat = parsed.format
+      artifact = parsed.provenance
+      appendFulltextChunks(passages, attachmentRef, chunked.chunks, { textFormat, artifact })
+    } else {
+      // Only an absent Zotero index is a skipped source. Artifact faults must
+      // propagate even when their code happens to name an index condition.
+      let payload: FulltextPayload | undefined
+      try {
+        payload = await (fulltextPromise ??
           fetchFulltext(
             deps,
             attachmentKey,
@@ -202,19 +213,20 @@ async function readBestFulltext(
             serverId,
             signal,
           ))
+      } catch (error) {
+        if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
+          skippedFulltext = true
+        } else {
+          throw error
+        }
+      }
+      if (payload !== undefined) {
         const content = typeof payload.content === 'string' ? payload.content : ''
         const chunked = chunkFulltext(content, deps.limits.maxFulltextChars, deps.limits)
         fulltextWasCut = chunked.inputTruncated
-        appendFulltextChunks(passages, attachmentRef, chunked.chunks)
+        textFormat = 'text'
+        appendFulltextChunks(passages, attachmentRef, chunked.chunks, { textFormat })
         coverage = normalizeCoverage(payload)
-      }
-    } catch (error) {
-      // An unindexed attachment degrades like an absent one: the other
-      // requested sources still answer, and `sourcesSkipped` reports it.
-      if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
-        skippedFulltext = true
-      } else {
-        throw error
       }
     }
   }
@@ -223,6 +235,8 @@ async function readBestFulltext(
     fulltextWasCut,
     ...(attachmentRef !== undefined ? { attachmentRef } : {}),
     ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
+    ...(textFormat !== undefined ? { textFormat } : {}),
+    ...(artifact !== undefined ? { artifact } : {}),
     ...(coverage !== undefined ? { coverage } : {}),
     passages,
   }
@@ -247,6 +261,8 @@ async function readMultiAttachmentFulltext(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
+  let textFormat: ZoteroRetrieveResult['textFormat']
+  let artifact: ZoteroRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachments: ZoteroRetrieveAttachment[] | undefined
   let candidates: { key: string; contentType?: string }[]
@@ -339,15 +355,10 @@ async function readMultiAttachmentFulltext(
         serverId,
       )
       fulltextWasCut = fulltextWasCut || source.inputTruncated
-      for (const chunk of source.chunks) {
-        passages.push({
-          source: 'fulltext',
-          sourceRef: passageAttachmentRef,
-          text: chunk.text,
-          chunkIndex: chunk.index,
-          chunkCount: source.chunks.length,
-        })
-      }
+      appendFulltextChunks(passages, passageAttachmentRef, source.chunks, {
+        textFormat: source.textFormat,
+        ...(source.artifact === undefined ? {} : { artifact: source.artifact }),
+      })
     }
     attachments = sources.map((source) => ({
       ref: refStringFor(ref.library as SupportedLocalLibrary, 'attachment', source.key, serverId),
@@ -370,6 +381,8 @@ async function readMultiAttachmentFulltext(
       if (source.contentType !== undefined && source.contentType !== '') {
         attachmentContentType = source.contentType
       }
+      textFormat = source.textFormat
+      artifact = source.artifact
       coverage = source.coverage
     }
   }
@@ -378,6 +391,8 @@ async function readMultiAttachmentFulltext(
     fulltextWasCut,
     ...(attachmentRef !== undefined ? { attachmentRef } : {}),
     ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
+    ...(textFormat !== undefined ? { textFormat } : {}),
+    ...(artifact !== undefined ? { artifact } : {}),
     ...(coverage !== undefined ? { coverage } : {}),
     ...(attachments !== undefined ? { attachments } : {}),
     passages,
@@ -448,6 +463,8 @@ export async function retrieve(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
+  let textFormat: ZoteroRetrieveResult['textFormat']
+  let artifact: ZoteroRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachments: ZoteroRetrieveAttachment[] | undefined
   const passages: RetrievePassage[] = []
@@ -480,6 +497,8 @@ export async function retrieve(
     fulltextWasCut = fulltext.fulltextWasCut
     attachmentRef = fulltext.attachmentRef
     attachmentContentType = fulltext.attachmentContentType
+    textFormat = fulltext.textFormat
+    artifact = fulltext.artifact
     coverage = fulltext.coverage
     attachments = fulltext.attachments
     passages.push(...fulltext.passages)
@@ -591,6 +610,11 @@ export async function retrieve(
       source: passage.source,
       sourceRef: passage.sourceRef,
       text: passage.text,
+      ...(passage.textFormat === undefined ? {} : { textFormat: passage.textFormat }),
+      ...(passage.artifact === undefined ? {} : { artifact: passage.artifact }),
+      ...(passage.start === undefined || passage.end === undefined
+        ? {}
+        : { start: passage.start, end: passage.end }),
       ...(passage.chunkIndex !== undefined ? { chunkIndex: passage.chunkIndex } : {}),
       ...(passage.chunkCount !== undefined ? { chunkCount: passage.chunkCount } : {}),
       ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
@@ -609,6 +633,8 @@ export async function retrieve(
     ref: refStringFor(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
     ...(attachmentRef !== undefined ? { attachmentRef } : {}),
     ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),
+    ...(textFormat !== undefined ? { textFormat } : {}),
+    ...(artifact !== undefined ? { artifact } : {}),
     ...(coverage !== undefined ? { coverage } : {}),
     ...(attachments !== undefined ? { attachments } : {}),
     evidence,

@@ -1,5 +1,6 @@
 /** MinerU retry, deadline, concurrency and redirect contracts. @module tests/host/enrichment-transport-resilience */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { MineruClient } from '../../src/enrichment/transport.ts'
 import { PublicAddressError } from '../../src/transport/public-url.ts'
 import { deferred, progress } from '../helpers/sync.ts'
 import { clientOf } from './support/mineru-transport.ts'
@@ -18,6 +19,63 @@ describe('MineruClient resilience', () => {
     ).rejects.toMatchObject({ status: 429, apiCode: -10001, traceId: 'trace-1' })
     expect(calls).toHaveLength(3)
   })
+
+  it.each([429, 503])(
+    'makes only one HEAD attempt after HTTP %i without falling back to GET',
+    async (status) => {
+      const { client, calls } = clientOf(
+        async () => new Response(null, { status, headers: { 'retry-after': '0' } }),
+      )
+      await expect(
+        client.head('https://cdn.example/source.pdf', { method: 'HEAD' }),
+      ).rejects.toMatchObject({ status })
+      expect(calls.map(({ init }) => init.method)).toEqual(['HEAD'])
+    },
+  )
+
+  it('does not retry a HEAD network failure', async () => {
+    const failure = new TypeError('offline')
+    const { client, calls } = clientOf(async () => {
+      throw failure
+    })
+    await expect(client.head('https://cdn.example/source.pdf', { method: 'HEAD' })).rejects.toBe(
+      failure,
+    )
+    expect(calls.map(({ init }) => init.method)).toEqual(['HEAD'])
+  })
+
+  it.each(['get', 'head'] as const)(
+    '%s retains caller cancellation until pinned connection cleanup finishes',
+    async (method) => {
+      const closing = deferred()
+      const cleanup = deferred()
+      const controller = new AbortController()
+      const reason = new Error('cancelled during cleanup')
+      let settled = false
+      const close = vi.fn(async () => {
+        closing.resolve()
+        await cleanup.promise
+      })
+      const client = new MineruClient({
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {} as never, close }),
+        fetch: async () => new Response('done'),
+      })
+      const pending = client[method]('https://cdn.example/source.pdf', {
+        method: 'GET',
+        signal: controller.signal,
+      }).finally(() => {
+        settled = true
+      })
+      const rejected = expect(pending).rejects.toBe(reason)
+      await closing.promise
+      controller.abort(reason)
+      expect(settled).toBe(false)
+      cleanup.resolve()
+      await rejected
+      expect(close).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it('does not replay a submission on service failure', async () => {
     const { client, calls } = clientOf(

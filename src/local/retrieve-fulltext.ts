@@ -14,6 +14,7 @@ import {
   isPdfContentType,
   type FulltextEnhancer,
   type FulltextEnhancerInput,
+  type FulltextLookupResult,
 } from './fulltext-enhancer.js'
 import type { EvidenceRanker } from './evidence-ranker.js'
 
@@ -34,19 +35,19 @@ export interface FulltextDeps {
 }
 
 /**
- * Try the optional higher-quality parser for one PDF. Returns its text on
- * success, `undefined` when no enhancer is installed, and propagates any
- * enhancer failure.
+ * Reuse a valid parsed artifact for one PDF. A missing artifact returns
+ * `undefined` so the caller reads Zotero's index; storage faults propagate.
  */
-export async function tryEnhanceFulltext(
+export async function lookupParsedFulltext(
   deps: FulltextDeps,
   input: FulltextEnhancerInput,
   signal: AbortSignal | undefined,
-): Promise<string | undefined> {
+): Promise<Extract<FulltextLookupResult, { kind: 'hit' }> | undefined> {
   if (deps.enhancer === undefined) return undefined
-  const outcome = await deps.enhancer.enhance(input, signal)
-  if (outcome.kind === 'ok') return outcome.text
-  throw outcome.error
+  const outcome = await deps.enhancer.lookup(input, signal)
+  if (outcome.kind === 'hit') return outcome
+  if (outcome.kind === 'fault') throw outcome.error
+  return undefined
 }
 
 /** Only PDF candidates are offered to the parser; known non-PDF types skip it. */
@@ -56,7 +57,7 @@ import type {
   ZoteroCoverage,
   ZoteroFulltextPayload,
   ZoteroObjectRef,
-  ZoteroRetrieveAttachmentStatus,
+  ZoteroRetrieveAttachment,
 } from '../types.js'
 
 /**
@@ -71,11 +72,11 @@ import type {
 export type FulltextSource = {
   readonly key: string
   readonly contentType?: string
-  /** Internal provenance flag; never projected into the tool's wire schema. */
-  readonly enhanced?: boolean
 } & (
   | {
       readonly status: 'indexed'
+      readonly textFormat: 'markdown' | 'text'
+      readonly artifact?: Extract<FulltextLookupResult, { kind: 'hit' }>['provenance']
       /** Absent for MinerU-derived text, which has no Zotero index coverage. */
       readonly coverage?: ZoteroCoverage
       readonly inputTruncated: boolean
@@ -138,16 +139,15 @@ export function normalizeCoverage(payload: ZoteroFulltextPayload): ZoteroCoverag
  * which is itself the finding ("Zotero's index has no text for this file" /
  * "this call did not read it").
  */
-export function attachmentFactOf(source: FulltextSource): {
-  status: ZoteroRetrieveAttachmentStatus
-  coverage?: ZoteroCoverage
-  inputTruncated?: boolean
-  passages?: number
-} {
+export function attachmentFactOf(
+  source: FulltextSource,
+): Omit<ZoteroRetrieveAttachment, 'ref' | 'contentType'> {
   if (source.status !== 'indexed') return { status: source.status }
   return {
     status: 'indexed',
-    coverage: source.coverage,
+    textFormat: source.textFormat,
+    ...(source.artifact === undefined ? {} : { artifact: source.artifact }),
+    ...(source.coverage === undefined ? {} : { coverage: source.coverage }),
     inputTruncated: source.inputTruncated,
     passages: source.chunks.length,
   }
@@ -185,9 +185,8 @@ export async function readFulltextSources(
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
       }
 
-      // Prefer the optional higher-quality parser for PDF candidates. Every
-      // non-`ok` outcome propagates fail-closed; `ok` text is chunked under
-      // the same per-source budget as a Zotero index.
+      // A valid artifact carries its own format and immutable provenance.
+      // Misses keep the index path; faults propagate before any index read.
       if (isPdfCandidate(candidate.contentType) && deps.enhancer !== undefined) {
         const attachmentRef = refStringFor(
           ref.library as SupportedLocalLibrary,
@@ -195,7 +194,7 @@ export async function readFulltextSources(
           candidate.key,
           serverId,
         )
-        const enhanced = await tryEnhanceFulltext(
+        const parsed = await lookupParsedFulltext(
           deps,
           {
             key: attachmentRef,
@@ -204,12 +203,13 @@ export async function readFulltextSources(
           },
           poolSignal,
         )
-        if (enhanced !== undefined) {
-          const chunked = chunkFulltext(enhanced, perSourceChars, deps.limits)
+        if (parsed !== undefined) {
+          const chunked = chunkFulltext(parsed.text, perSourceChars, deps.limits)
           return {
             ...base,
             status: 'indexed',
-            enhanced: true,
+            textFormat: parsed.format,
+            artifact: parsed.provenance,
             inputTruncated: chunked.inputTruncated,
             chunks: chunked.chunks,
           }
@@ -239,6 +239,7 @@ export async function readFulltextSources(
       return {
         ...base,
         status: 'indexed',
+        textFormat: 'text',
         coverage: normalizeCoverage(payload),
         inputTruncated: chunked.inputTruncated,
         chunks: chunked.chunks,

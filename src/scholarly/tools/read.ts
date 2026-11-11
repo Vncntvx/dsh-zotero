@@ -48,6 +48,13 @@ export function noPassageMessage(
   )
 }
 
+export const PLAIN_TEXT_OUTLINE_MESSAGE =
+  'This copy contains plain text extracted from a PDF and has no section headings. Read in chunks or search with query.'
+export const MARKDOWN_OUTLINE_MESSAGE =
+  'This Markdown copy has no section headings. Read in chunks or search with query.'
+export const NO_SECTION_HEADINGS_MESSAGE =
+  'This copy has no section headings; read in chunks or use query.'
+
 export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition {
   return defineTool({
     name: 'scholarly_read',
@@ -128,7 +135,16 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             message: `Read ${fullText.text.length} characters from ${fullText.source}`,
           })
 
-          const sections = fullText.structured ? extractOutline(fullText.text) : []
+          const sections = fullText.format === 'markdown' ? extractOutline(fullText.text) : []
+          const documentSource = {
+            id: raw,
+            provider: fullText.provider,
+            format: fullText.format,
+            source: fullText.source,
+            url: fullText.url,
+            sourceIdentity: fullText.sourceIdentity,
+            ...(fullText.provider === 'mineru' ? { provenance: fullText.provenance } : {}),
+          }
           const header = `${raw} — ${fullText.text.length} characters (source: ${fullText.source})${
             fullText.url ? `\nLink: ${fullText.url}` : ''
           }`
@@ -137,11 +153,9 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           if (args.outline) {
             if (sections.length === 0) {
               return {
-                text: `${header}\n\nNotice: This document was read from an unstructured PDF and has no section headings. Please read in chunks or search with query.`,
+                text: `${header}\n\nNotice: ${fullText.format === 'text' ? PLAIN_TEXT_OUTLINE_MESSAGE : MARKDOWN_OUTLINE_MESSAGE}`,
                 document: toCleanJsonRecord({
-                  id: raw,
-                  source: fullText.source,
-                  url: fullText.url,
+                  ...documentSource,
                   sections: [],
                 }),
               }
@@ -157,9 +171,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             return {
               text: `${header}\n\nSections (use section="..." to read):\n${outlineText}`,
               document: toCleanJsonRecord({
-                id: raw,
-                source: fullText.source,
-                url: fullText.url,
+                ...documentSource,
                 sections: sections.map((sec) => ({
                   id: sec.id,
                   title: sec.title,
@@ -170,6 +182,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           }
 
           let activeText = fullText.text
+          let sourceStart = 0
           let scopeLabel = ''
 
           // 2. Read specific Section
@@ -182,12 +195,13 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
                 .join(', ')
               throw new ZoteroError(
                 sections.length === 0
-                  ? 'This copy has no structured headings; please read in chunks or use query.'
+                  ? NO_SECTION_HEADINGS_MESSAGE
                   : `Section "${args.section}" not found. Available main sections: ${available}`,
                 ZOTERO_INVALID_ARGUMENT,
               )
             }
             activeText = fullText.text.slice(sec.start, sec.end)
+            sourceStart = sec.start
             scopeLabel = ` [Section ${sec.id}: ${sec.title}]`
           }
 
@@ -213,15 +227,19 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
               return {
                 text: `${header}${scopeLabel}\n\n${noPassageMessage(args.query.trim(), routes)}`,
                 document: toCleanJsonRecord({
-                  id: raw,
-                  source: fullText.source,
+                  ...documentSource,
                   query: args.query,
                   passages: [],
                 }),
               }
             }
 
-            const passagesText = ranked
+            const sourcePassages = ranked.map((passage) => ({
+              ...passage,
+              start: passage.start + sourceStart,
+              end: passage.end + sourceStart,
+            }))
+            const passagesText = sourcePassages
               .map(
                 (p, idx) =>
                   `--- Passage ${idx + 1} (${p.matchKind} match, chars ${p.start}-${p.end}) ---\n${p.text.trim()}`,
@@ -231,10 +249,9 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             return {
               text: `${header}${scopeLabel}\n\nTop passages matching "${args.query}":\n\n${passagesText}`,
               document: toCleanJsonRecord({
-                id: raw,
-                source: fullText.source,
+                ...documentSource,
                 query: args.query,
-                passages: ranked.map(toCleanJsonRecord),
+                passages: sourcePassages.map(toCleanJsonRecord),
               }),
             }
           }
@@ -266,7 +283,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
 
           const hint =
             start === 0 && isTruncated && sections.length > 0 && !scopeLabel
-              ? ' (Tip: This paper has structured sections; use outline=true to inspect them).'
+              ? ' (Tip: This paper has section headings; use outline=true to inspect them).'
               : ''
 
           onProgress({
@@ -279,11 +296,11 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
               end,
             )}`,
             document: toCleanJsonRecord({
-              id: raw,
-              source: fullText.source,
-              url: fullText.url,
+              ...documentSource,
               start,
               end,
+              sourceStart: sourceStart + start,
+              sourceEnd: sourceStart + end,
               isTruncated,
               text: activeText.slice(start, end),
             }),

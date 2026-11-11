@@ -83,6 +83,21 @@ const RETRIEVE_PARAMETERS = {
 
 type RetrieveArgs = InferArgs<typeof RETRIEVE_PARAMETERS>
 
+const FULLTEXT_FORMAT = { type: 'string', enum: ['markdown', 'text'] } as const
+
+const ARTIFACT_RECORD = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    parser: { type: 'string', enum: ['mineru'], required: true },
+    mode: { type: 'string', enum: ['free', 'pro'], required: true },
+    artifactId: { type: 'string', required: true },
+    fingerprint: { type: 'string', required: true },
+    sourceId: { type: 'string', required: true },
+    generation: { type: 'string', required: true },
+  },
+} as const
+
 const EVIDENCE_RECORD = {
   type: 'object',
   additionalProperties: false,
@@ -94,6 +109,10 @@ const EVIDENCE_RECORD = {
     },
     sourceRef: { type: 'string', required: true },
     text: { type: 'string', required: true },
+    textFormat: FULLTEXT_FORMAT,
+    artifact: ARTIFACT_RECORD,
+    start: { type: 'integer' },
+    end: { type: 'integer' },
     chunkIndex: { type: 'integer' },
     chunkCount: { type: 'integer' },
     comment: { type: 'string' },
@@ -127,6 +146,8 @@ const RETRIEVE_ATTACHMENT_RECORD = {
     ref: { type: 'string', required: true },
     contentType: { type: 'string' },
     status: { type: 'string', enum: ['indexed', 'unindexed', 'unread'], required: true },
+    textFormat: FULLTEXT_FORMAT,
+    artifact: ARTIFACT_RECORD,
     coverage: COVERAGE_RECORD,
     inputTruncated: { type: 'boolean' },
     passages: { type: 'integer' },
@@ -140,6 +161,8 @@ const RETRIEVE_OUTPUT_SCHEMA = {
     ref: { type: 'string', required: true },
     attachmentRef: { type: 'string' },
     attachmentContentType: { type: 'string' },
+    textFormat: FULLTEXT_FORMAT,
+    artifact: ARTIFACT_RECORD,
     coverage: COVERAGE_RECORD,
     attachments: { type: 'array', items: RETRIEVE_ATTACHMENT_RECORD },
     evidence: { type: 'array', required: true, items: EVIDENCE_RECORD },

@@ -1,4 +1,5 @@
 import { libraryEn, libraryZh } from './library-settings-locales.ts'
+import { parseEn, parseZh } from './enrichment/parse-locales.ts'
 /**
  * Locale bundles for the Zotero plugin: the Settings page (fixed chrome,
  * groups, and the field table) and the Sources panel. English declares the key
@@ -21,6 +22,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
   ...libraryEn,
+  ...parseEn,
+  libraryParsePdf: 'Parse this PDF',
+  libraryParsePdfNamed: 'Parse PDF: {title}',
+  libraryParseUrl: 'Parse PDF URL',
+  libraryParseConfigError: 'Could not read committed parsing settings: {message}',
   childPageResult: 'Requested page: offset {offset}, {returned} of {total} records',
   childCompleteResult: 'Complete: {total} records',
   childDisplayPreview: 'Card preview: {shown} records',
@@ -106,7 +112,7 @@ export const en = {
   scholarlyDisabled:
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
   enrichmentDisabled:
-    'Document parsing comes from the dsh-zotero/enrichment component. Enabling that component under "Included components" authorizes sending documents to the external MinerU service for extraction. Nothing here is configurable while the component is off.',
+    'Document parsing comes from the dsh-zotero/enrichment component. Enable that component under "Included components" to make parsing available. Sending a document to MinerU also requires the deployment upload gate and your explicit submission of that PDF.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCredentialRef:
     'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
@@ -124,7 +130,7 @@ export const en = {
     'Multi-source academic search, API keys, and fulltext quotas from the dsh-zotero/scholarly component. Enabling that component turns the external tools on.',
   tabEnrichment: 'Document Enrichment',
   tabEnrichmentDesc:
-    'Optional MinerU document parsing. Enabling the component authorizes sending documents to MinerU to extract high-quality Markdown.',
+    'Optional MinerU document parsing. Review one PDF in the session library panel and submit it explicitly after the deployment allows uploads.',
   tabAdvanced: 'Advanced',
   groupLibrarySidebar: 'Sidebar Display',
   groupLibrarySidebarDesc:
@@ -164,7 +170,7 @@ export const en = {
   enrichmentModePro: 'Precision Extract',
   allowDocumentUpload: 'Send documents to MinerU',
   allowDocumentUploadHint:
-    'Authorizes sending local attachments and URL PDFs to MinerU for extraction. This is the data-egress switch; turning it off stops new uploads while cached artifacts stay readable.',
+    'Permits explicitly submitted local PDF attachments and public PDF URLs to be sent to MinerU. Enabling this gate starts no work and authorizes no document. Existing valid artifacts remain readable when disabled.',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
     'Access credential for the Precision Extract API. Tokens are valid for 3 months and can be generated at mineru.net.',
@@ -891,6 +897,11 @@ export const en = {
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
   ...libraryZh,
+  ...parseZh,
+  libraryParsePdf: '解析此 PDF',
+  libraryParsePdfNamed: '解析 PDF：{title}',
+  libraryParseUrl: '解析 PDF URL',
+  libraryParseConfigError: '无法读取已提交解析设置：{message}',
   childPageResult: '指定页：偏移 {offset}，返回 {returned} / {total} 条',
   childCompleteResult: '完整读取：{total} 条',
   childDisplayPreview: '卡片预览：{shown} 条',
@@ -970,7 +981,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scholarlyDisabled:
     '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
   enrichmentDisabled:
-    '文档解析由 dsh-zotero/enrichment 组件提供。开启该组件将向外部服务 MinerU 发送文档进行解析。请在插件列表的「包含的组件」中启用该组件。',
+    '文档解析由 dsh-zotero/enrichment 组件提供。在插件列表的「包含的组件」中启用后可使用解析功能；向 MinerU 发送 PDF 还需部署允许上传，并由你明确提交该文档。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCredentialRef:
     '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
@@ -987,7 +998,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     'dsh-zotero/scholarly 组件提供的多源学术检索、API 密钥与全文配额。启用该组件即启用外部检索。',
   tabEnrichment: '文档解析',
   tabEnrichmentDesc:
-    '可选的 MinerU 文档解析。开启该组件即授权向 MinerU 发送文档，解析为高质量 Markdown。',
+    '可选的 MinerU 文档解析。部署允许上传后，在会话文献面板中核对一个具体 PDF，再明确提交。',
   tabAdvanced: '高级选项',
   groupLibrarySidebar: '侧边栏显示设置',
   groupLibrarySidebarDesc: '选择是否在 DeepSeek Harness 右侧边栏显示文献面板标签页。',
@@ -1021,7 +1032,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentModePro: '精准解析',
   allowDocumentUpload: '向 MinerU 发送文档',
   allowDocumentUploadHint:
-    '授权把本地附件与 URL PDF 发送给 MinerU 解析，这是数据出境开关；关闭后不再发起新的上传，已缓存产物仍可读取。',
+    '允许把你明确提交的本地 PDF 附件或公开 PDF URL 发送给 MinerU。开启只放开部署闸门，不启动任务，也不授权任何文档；关闭后已有有效产物仍可读取。',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
     '精准解析 API 的访问凭据。每个 Token 有效期为 3 个月，可在 MinerU 官网（mineru.net）创建。',

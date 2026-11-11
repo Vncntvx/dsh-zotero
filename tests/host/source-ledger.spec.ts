@@ -16,6 +16,8 @@ import {
 } from '../../src/sources/event-ledger.js'
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
 import { sourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
+import { projectRetrieveMeta } from '../../src/presentation-meta.js'
+import type { FulltextArtifactProvenance } from '../../src/local/fulltext-enhancer.js'
 
 let seq = 0
 
@@ -38,6 +40,39 @@ const SEARCH_META = {
 /** Fold the event list, starting from the empty state. */
 function fold(events: readonly never[]): SourceLedgerState {
   return events.reduce((state, entry) => foldLedgerEvent(state, entry), emptyLedgerState())
+}
+
+const ARTIFACT: FulltextArtifactProvenance = {
+  parser: 'mineru',
+  mode: 'free',
+  artifactId: 'artifact-ledger',
+  fingerprint: 'a'.repeat(64),
+  sourceId: 'b'.repeat(64),
+  generation: 'c'.repeat(64),
+}
+
+/** Replay retrieve presentation facts through the durable event boundary. */
+function retrieveState(items: readonly unknown[]): SourceLedgerState {
+  return fold([
+    event('tool/call', {
+      callId: 'artifact-read',
+      name: 'zotero_retrieve',
+      arguments: JSON.stringify({ ref: REF, query: 'attention' }),
+    }),
+    event('tool/result', {
+      message: { toolCallId: 'artifact-read', content: [] },
+      meta: { count: items.length, items, truncated: false, sourceAvailability: {} },
+    }),
+  ])
+}
+
+const FULLTEXT_ITEM = {
+  source: 'fulltext',
+  sourceRef: REF,
+  preview: 'attention evidence',
+  previewTruncated: false,
+  textFormat: 'markdown',
+  artifact: ARTIFACT,
 }
 
 describe('the host literature-trail fold', () => {
@@ -130,6 +165,106 @@ describe('the host literature-trail fold', () => {
     expect(item?.retrievalSummary?.runCount).toBe(1)
     expect(item?.evidence[0]?.text).toContain('Self-attention')
   })
+
+  it('keeps identical fulltext excerpts at different source offsets distinct after JSON replay', () => {
+    const state = retrieveState([
+      { ...FULLTEXT_ITEM, start: 0, end: 18 },
+      { ...FULLTEXT_ITEM, start: 100, end: 118 },
+    ])
+    const roundTripped: SourceLedgerState = JSON.parse(JSON.stringify(state))
+    const workspace = sourceWorkspaceSchema.parse(workspaceOf(roundTripped))
+    const passages = workspace.sources[0]!.evidence
+    expect(passages).toHaveLength(2)
+    expect(passages.map((entry) => [entry.start, entry.end])).toEqual([
+      [0, 18],
+      [100, 118],
+    ])
+    expect(passages.every((entry) => entry.textFormat === 'markdown')).toBe(true)
+    expect(passages.map((entry) => entry.artifact)).toEqual([ARTIFACT, ARTIFACT])
+  })
+
+  it('keeps absent source offsets absent through presentation and replay', () => {
+    const meta = projectRetrieveMeta(
+      {
+        ref: REF,
+        evidence: [
+          {
+            source: 'fulltext',
+            sourceRef: REF,
+            text: 'attention',
+            matchKind: 'lexical',
+            textFormat: 'markdown',
+            artifact: ARTIFACT,
+          },
+        ],
+        sourcesSkipped: [],
+        truncated: false,
+        queryTerms: ['attention'],
+      },
+      ['fulltext'],
+    )
+    const workspace = sourceWorkspaceSchema.parse(workspaceOf(retrieveState(meta.items)))
+    const passage = workspace.sources[0]!.evidence[0]
+    expect(passage).toMatchObject({ textFormat: 'markdown', artifact: ARTIFACT })
+    expect(passage).not.toHaveProperty('start')
+    expect(passage).not.toHaveProperty('end')
+  })
+
+  it.each([
+    { start: 0 },
+    { end: 18 },
+    { start: -1, end: 18 },
+    { start: 20, end: 18 },
+    { start: 0.5, end: 18 },
+    { start: 0, end: Number.MAX_SAFE_INTEGER + 1 },
+    { start: '0', end: 18 },
+  ])('rejects malformed source offsets %j without recording a passage', (offsets) => {
+    const workspace = workspaceOf(retrieveState([{ ...FULLTEXT_ITEM, ...offsets }]))
+    expect(workspace.sources[0]?.evidence).toEqual([])
+  })
+
+  it.each([
+    { artifact: { ...ARTIFACT, generation: undefined } },
+    { artifact: { ...ARTIFACT, sourceId: '' } },
+    { textFormat: 'text' },
+    { textFormat: 'html' },
+  ])('rejects malformed artifact facts %j without recording a passage', (facts) => {
+    const workspace = workspaceOf(retrieveState([{ ...FULLTEXT_ITEM, ...facts }]))
+    expect(workspace.sources[0]?.evidence).toEqual([])
+  })
+
+  it.each(['annotation', 'note', 'abstract'] as const)(
+    'omits fulltext artifact and offset fields from a projected or replayed %s',
+    (source) => {
+      const canonical = {
+        ref: REF,
+        evidence: [
+          {
+            source,
+            sourceRef: REF,
+            text: 'attention',
+            matchKind: 'lexical' as const,
+            textFormat: 'markdown' as const,
+            artifact: ARTIFACT,
+            start: 1,
+            end: 10,
+          },
+        ],
+        sourcesSkipped: [],
+        truncated: false,
+        queryTerms: ['attention'],
+      }
+      const projected = projectRetrieveMeta(canonical, [source]).items[0]!
+      const workspace = sourceWorkspaceSchema.parse(
+        workspaceOf(retrieveState([{ ...FULLTEXT_ITEM, source, start: 1, end: 10 }])),
+      )
+      for (const entry of [projected, workspace.sources[0]!.evidence[0]!]) {
+        for (const field of ['textFormat', 'artifact', 'start', 'end']) {
+          expect(entry).not.toHaveProperty(field)
+        }
+      }
+    },
+  )
 
   it('counts an unsettled call that names an item as a running operation', () => {
     const state = fold([

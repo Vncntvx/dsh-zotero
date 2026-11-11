@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "role": "regression-and-diagnostic-only-never-fit",
+  "legacySource": "tests/helpers/semantic-recall-fixtures.ts",
+  "legacySourceSha256": "966d1bb75167561478f2c90fb738bb4476d38c8bcde4d2b395823fa80bfae1b8",
+  "provenance": "Frozen copy of pre-existing synthetic regression queries, answers, distractors and diagnostic probes. MIT repository license. These are neither external annotations nor additional independent samples.",
+  "policy": "Reject exact normalized query/document overlap with any train, calibration, heldout or background row. Keep all legacy intent families and diagnostics out of fitting, bank selection and threshold selection. Broad domain separation remains a human review obligation: text hashing cannot detect paraphrases.",
+  "legacyCases": [
+    {
+      "id": "en-01",
+      "query": "What mechanisms explain the relationship between institutional trust and compliance?",
+      "answer": "The role of perceived legitimacy in regulatory adherence."
+    },
+    {
+      "id": "en-02",
+      "query": "Why do citizens follow rules they consider fair?",
+      "answer": "Procedural justice increases voluntary acceptance of authority decisions."
+    },
+    {
+      "id": "en-03",
+      "query": "How do bacteria attach to surfaces?",
+      "answer": "Microbial adhesion is governed by extracellular polymer production."
+    },
+    {
+      "id": "en-04",
+      "query": "What sustains cooperation when a resource is shared?",
+      "answer": "Common-pool dilemmas are mitigated by reciprocal norms and monitoring."
+    },
+    {
+      "id": "en-05",
+      "query": "How does sleep deprivation affect memory?",
+      "answer": "Hippocampal consolidation deteriorates after prolonged wakefulness."
+    },
+    {
+      "id": "en-06",
+      "query": "Why do prices rise when supply falls?",
+      "answer": "Scarcity of available units bids up the equilibrium clearing level."
+    },
+    {
+      "id": "en-07",
+      "query": "What makes a vaccine protective?",
+      "answer": "Neutralising antibody titres correlate with reduced clinical attack rates."
+    },
+    {
+      "id": "en-08",
+      "query": "Why do firms adopt new standards?",
+      "answer": "Organisational conformance follows isomorphic pressure from regulators."
+    },
+    {
+      "id": "en-09",
+      "query": "Which design choices reduce energy use in buildings?",
+      "answer": "Passive ventilation and thermal mass lower the cooling load."
+    },
+    {
+      "id": "en-10",
+      "query": "How do voters react to corruption scandals?",
+      "answer": "Incumbent electoral penalties widen where accountability is salient."
+    },
+    {
+      "id": "en-11",
+      "query": "institutional trust and compliance",
+      "answer": "Institutional trust predicts compliance with reporting duties."
+    },
+    {
+      "id": "en-12",
+      "query": "trust trust trust compliance compliance",
+      "answer": "Public trust in institutions shapes voluntary compliance."
+    },
+    {
+      "id": "zh-01",
+      "query": "制度信任与合规之间是什么关系？",
+      "answer": "感知正当性在监管遵从中的作用"
+    },
+    {
+      "id": "zh-02",
+      "query": "为什么公民愿意遵守公平的规则",
+      "answer": "程序正义提升自愿接受权威决定"
+    },
+    { "id": "zh-03", "query": "细菌如何附着在表面", "answer": "微生物黏附受胞外聚合物支配" },
+    { "id": "zh-04", "query": "公共资源中的合作如何维持", "answer": "互惠规范与监督缓解公地困境" },
+    { "id": "zh-05", "query": "睡眠不足怎样影响记忆", "answer": "长时间清醒损害海马巩固" },
+    { "id": "zh-06", "query": "供给下降为何推高价格", "answer": "可得单位稀缺抬升均衡出清水平" },
+    {
+      "id": "zh-07",
+      "query": "疫苗为何具有保护作用",
+      "answer": "中和抗体滴度与临床发作率下降相关"
+    },
+    { "id": "zh-08", "query": "企业为何采纳新标准", "answer": "规制压力下的组织趋同与合规" },
+    { "id": "zh-09", "query": "哪些设计能降低建筑能耗", "answer": "自然通风与蓄热体削减冷负荷" },
+    { "id": "zh-10", "query": "选民怎样回应腐败丑闻", "answer": "问责显著时现任者的选举惩罚扩大" },
+    { "id": "zh-11", "query": "制度信任 合规", "answer": "制度信任水平影响合规行为" },
+    { "id": "zh-12", "query": "合规 合规 合规 信任 信任", "answer": "合规行为与信任水平相关" }
+  ],
+  "distractors": [
+    "Table 2 reports the and of the in the with the and the",
+    "Irrigation scheduling in arid basins depends on soil salinity readings.",
+    "Stellar spectroscopy resolves metallicity from narrow absorption bands.",
+    "Medieval manuscript cataloguing records watermarks and quire structure.",
+    "Harbour sediment sampling tracks grain size across tidal cycles.",
+    "Alpine beetle distribution follows elevation and snow cover duration.",
+    "Railway timetable optimisation minimises platform conflicts at junctions.",
+    "Ceramic glaze chemistry controls craquelure through thermal expansion.",
+    "Transformer winding insulation ages under repeated thermal cycling.",
+    "表二所列之其与并在了的和及以",
+    "干旱灌区的灌溉调度取决于土壤盐分读数。",
+    "恒星光谱通过窄吸收带测定金属丰度。",
+    "中世纪手稿编目记录水印与书帖结构。",
+    "港口沉积物采样追踪潮周期中的粒径变化。",
+    "高山甲虫分布随海拔与积雪时长变化。",
+    "铁路时刻表优化减少枢纽站台冲突。",
+    "陶瓷釉料化学经由热膨胀控制开片。",
+    "变压器绕组绝缘在反复热循环下老化。"
+  ],
+  "diagnosticProbes": [
+    "How does photosynthesis convert light energy into chemical energy?",
+    "Chloroplasts capture photons and drive the Calvin cycle to fix carbon dioxide into sugars.",
+    "光合作用利用叶绿体把光能转化为储存在糖类中的化学能。",
+    "What does the Fisher equation say about nominal interest rates and inflation?",
+    "The nominal interest rate equals the real rate plus expected inflation, per the Fisher equation.",
+    "费雪方程指出名义利率约等于实际利率加预期通货膨胀率。",
+    "How does a database B-tree index speed up point queries?",
+    "A B-tree index keeps keys sorted so point queries descend a logarithmic-height tree instead of scanning the table.",
+    "B 树索引通过有序的多路平衡树把点查询从全表扫描降为对数级查找。",
+    "Why do vaccines induce adaptive immunity against a virus?",
+    "Vaccines present antigen so the adaptive immune system builds memory B and T cells before exposure.",
+    "疫苗通过递呈抗原让适应性免疫系统在感染前生成记忆性 B 细胞与 T 细胞。",
+    "What causes overfitting when training a machine-learning model?",
+    "Overfitting arises when a model memorizes training noise instead of the underlying signal, hurting held-out accuracy.",
+    "过拟合指模型记住了训练集中的噪声而非规律，导致在留出集上表现变差。",
+    "How does supply-chain bullwhip effect amplify demand variability?",
+    "The bullwhip effect amplifies small retail demand swings into large upstream order swings through forecasting and batching.",
+    "牛鞭效应经预测与批量订货把零售端的小幅需求波动放大为上游的大幅订单波动。"
+  ]
+}

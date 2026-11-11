@@ -1,49 +1,47 @@
 /**
- * Resolve and validate the directory parsed artifacts are written to.
- *
- * The default is the harness user-data root (`dshHomePath('zotero-parsed')`),
- * resolved at runtime so a home relocation does not strand stored state. The
- * validation rule set (absolute, resolvable, a real writable directory, no
- * sensitive or symlink-escaped path, compared in canonical space on both
- * sides) lives in `safe-directory.ts` and is shared with the semantic-model
- * directory; this wrapper only pins the default root, the creation policy —
- * a configured path must already exist, the default is created — and the
- * error code.
+ * Resolve the parsed-artifact root. Active callers retain the default creation
+ * policy; cache lookup requests a safe canonical root without creating it or
+ * requiring write access. Directory checks are shared with semantic models.
  * @module dsh-zotero/enrichment/output-dir
  */
 
-import { access, mkdir, realpath, stat } from 'node:fs/promises'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { ZOTERO_ENRICHMENT_OUTPUT_INVALID } from '../errors.js'
-import { resolveSafeDirectory, type SafeDirectoryDeps } from './safe-directory.js'
+import {
+  hostSafeDirectoryDeps,
+  resolveSafeDirectory,
+  type SafeDirectoryDeps,
+} from './safe-directory.js'
 
-/** Filesystem seams, injectable so unit tests never touch the real disk. */
 export type OutputDirDeps = SafeDirectoryDeps
+export const hostDeps: OutputDirDeps = hostSafeDirectoryDeps
 
-export const hostDeps: OutputDirDeps = {
-  realpath,
-  stat,
-  access,
-  mkdir: async (path) => {
-    await mkdir(path, { recursive: true })
-  },
+export interface OutputDirOptions {
+  /** Override the default policy: create the default root, require configured roots to exist. */
+  readonly create?: boolean
+  readonly readOnly?: boolean
+  readonly allowMissing?: boolean
 }
 
 /**
- * Resolve the output directory, creating it when needed.
- * @param configured - the configured path; empty means the default.
- * @param deps - filesystem seams (defaults to the real host).
- * @returns the absolute, validated directory path.
- * @throws {ZoteroError} `ZOTERO_ENRICHMENT_OUTPUT_INVALID` for any unsafe value.
+ * Resolve an artifact root under the caller's read or creation policy.
+ * @param configured - the configured path; empty means the harness default.
+ * @param deps - injectable filesystem seams.
+ * @param options - explicit creation, readability, and absence policy.
+ * @returns the safe canonical directory, including a permitted missing suffix.
+ * @throws {ZoteroError} `ZOTERO_ENRICHMENT_OUTPUT_INVALID` for unsafe or inaccessible paths.
  */
 export async function resolveOutputDir(
   configured: string,
   deps: OutputDirDeps = hostDeps,
+  options: OutputDirOptions = {},
 ): Promise<string> {
   return await resolveSafeDirectory({
     configured,
     defaultRoot: dshHomePath('zotero-parsed'),
-    create: false,
+    create: options.create ?? configured.trim() === '',
+    readOnly: options.readOnly,
+    allowMissing: options.allowMissing,
     errorCode: ZOTERO_ENRICHMENT_OUTPUT_INVALID,
     label: 'enrichment output directory',
     deps,

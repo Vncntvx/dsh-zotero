@@ -4,9 +4,9 @@
  *
  * The content cache is keyed by a fingerprint of the exact bytes, so it can
  * only be consulted after the bytes exist. The source index closes that gap:
- * it records which content artifact belonged to one `identity + mode` pair and
- * what the source looked like when it was fetched. A hit therefore needs no
- * PDF read and no MinerU call.
+ * it records which latest committed artifact belonged to one canonical source
+ * and what the source looked like when it was fetched. A hit needs no PDF read
+ * and no MinerU call; the selected parsing mode does not change this index.
  *
  * URL hits require a common freshness validator. A URL or a matching byte
  * length alone cannot prove that its content has not changed.
@@ -14,14 +14,12 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { FulltextSourceStamp } from '../local/fulltext-enhancer.js'
-import type { EnrichmentMode } from '../enrichment-preferences.js'
+import type { FulltextSourceStamp } from './types.js'
+import { canonicalSourceIdentityOf } from './identity.js'
 
-/** The per-source index key: identity and mode, never user-visible text. */
-export function sourceKeyOf(identity: string, mode: EnrichmentMode): string {
-  return createHash('sha256')
-    .update(JSON.stringify([identity, mode]))
-    .digest('hex')
+/** SHA-256 of the canonical primary or verified alias, independent of mode. */
+export function sourceKeyOf(identity: string): string {
+  return createHash('sha256').update(canonicalSourceIdentityOf(identity)).digest('hex')
 }
 
 /**

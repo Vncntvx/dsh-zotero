@@ -280,6 +280,7 @@ describe('retrieve source selection', () => {
       {
         ref: 'zotero://user/0/attachment/LINK0001',
         status: 'indexed',
+        textFormat: 'text',
         inputTruncated: false,
         passages: 1,
         coverage: { complete: false },

@@ -1,0 +1,896 @@
+{
+  "schemaVersion": 1,
+  "split": "train",
+  "families": [
+    {
+      "id": "t01-mangrove-recruitment",
+      "topic": "mangrove seedling recruitment",
+      "documentFamily": "invented-estuary-plot-notebook",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "In the invented Estuary Plot experiment, mesh shelters reduced the removal of newly planted mangrove propagules by crabs. Sheltered plots retained 31 of 40 propagules after one week; open plots retained 12 of 40. The notebook attributes the early difference to access by consumers, not to a measured change in salinity.",
+            "zh": "在虚构的河口样地实验中，网罩减少了螃蟹移走新种红树胚轴的机会。一周后有罩样地保留40株中的31株，开放样地保留40株中的12株。记录将早期差异归于消费者能否接近，而没有测得盐度变化。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "A second entry in Estuary Plot records that tied supports prevented propagules from floating away during the first high tide. The supports were removed after rooting. Both entries concern establishment during the first week; neither follows mature trees.",
+            "zh": "河口样地的另一则记录指出，系绳支撑防止胚轴在第一次高潮时漂走，生根后即拆除。两则记录都只涉及第一周定植，没有追踪成年树。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Estuary Plot equipment ledger\n| Plot | Sensor | Maintenance |\n| North | water-level logger | battery replaced |\n| South | conductivity probe | rinsed |\nNo seedling-height series, carbon measurements or storm observations were collected.",
+            "zh": "河口样地设备账\n| 样地 | 仪器 | 维护 |\n| 北侧 | 水位记录仪 | 更换电池 |\n| 南侧 | 电导探头 | 冲洗 |\n未收集苗高序列、碳量或风暴观测。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "establishment",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which interventions prevented early loss of mangrove propagules in Estuary Plot?",
+            "zh": "河口样地中哪些措施防止了红树胚轴的早期损失？"
+          },
+          "variants": {
+            "en": [
+              "How were newly planted propagules kept in the plots?",
+              "What kept the initial mangrove planting from being removed or washed away?",
+              "Name the measures that improved first-week retention at Estuary Plot.",
+              "Which protections helped the propagules remain until rooting?"
+            ],
+            "zh": [
+              "新种下的胚轴怎样留在样地里？",
+              "哪些措施避免了初期红树种植物被移走或冲走？",
+              "河口样地用什么办法提高第一周保留率？",
+              "生根之前有哪些保护使胚轴留在原处？"
+            ]
+          },
+          "rationale": "Both consumer exclusion and prevention of tidal displacement directly answer early retention."
+        },
+        {
+          "id": "mature-carbon",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "How much additional carbon did mature sheltered mangroves store after ten years?",
+            "zh": "加罩红树成年十年后多储存了多少碳？"
+          },
+          "rationale": "Only first-week establishment is observed; mature carbon is unmeasured."
+        },
+        {
+          "id": "salinity-optimum",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What salinity maximized mangrove seedling height in Estuary Plot?",
+            "zh": "河口样地中何种盐度使红树苗高最大？"
+          },
+          "rationale": "Equipment maintenance is not a salinity-response experiment or height series."
+        },
+        {
+          "id": "storm-survival",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "Did tied propagules survive a cyclone better than untied plants?",
+            "zh": "系绳胚轴在气旋中是否比未系绳植株存活更好？"
+          },
+          "rationale": "The observed high tide is not a cyclone and no storm comparison exists."
+        }
+      ]
+    },
+    {
+      "id": "t02-lithium-plating",
+      "topic": "low-temperature cell charging",
+      "documentFamily": "invented-cedar-cell-lab",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Cedar Cell is an invented bench study. At minus ten degrees Celsius, the graphite half-cell showed a voltage relaxation feature consistent with metallic lithium deposition after fast charging. Reducing the charging current removed that feature in the next trial. No claim was made about a complete vehicle battery.",
+            "zh": "雪松电芯是虚构的台架研究。在零下十摄氏度，石墨半电池快充后出现与金属锂沉积一致的电压松弛特征。下一次试验降低充电电流后该特征消失。记录没有讨论整车电池。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Cedar Cell protocol note: a warming step increased electrolyte transport before charging. The schematic relation J = D(c_bulk - c_surface)/L describes diffusion through a layer of thickness L; it is not a fitted lifetime law. Warming and slower current were separate ways of reducing transport stress.",
+            "zh": "雪松电芯方案说明：充电前升温改善电解液传输。示意关系J = D(c_bulk - c_surface)/L描述厚度L内的扩散，并非拟合寿命定律。升温和降低电流分别用于减轻传输压力。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Cedar Cell safety sheet lists gloves, eye protection and the local ventilation switch. It records neither cycle-life endpoints nor cathode gas measurements. Only graphite half-cells were used.",
+            "zh": "雪松电芯安全表列出手套、护目镜与局部通风开关，没有循环寿命终点或正极气体测量，试验只使用石墨半电池。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "mitigation",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which changes reduced transport stress or plating signs during cold charging in Cedar Cell?",
+            "zh": "雪松电芯低温充电中哪些调整减轻了传输压力或析锂迹象？"
+          },
+          "rationale": "Lower current and prewarming are the two stated interventions."
+        },
+        {
+          "id": "vehicle-lifetime",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "How many vehicle service years were gained by the Cedar Cell warming step?",
+            "zh": "雪松电芯升温步骤使整车使用寿命增加了几年？"
+          },
+          "rationale": "Half-cell observations provide no vehicle service-life estimate."
+        },
+        {
+          "id": "gas-composition",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What fraction of cathode gas was oxygen during the cold-charge trial?",
+            "zh": "低温充电试验中正极气体有多大比例是氧气？"
+          },
+          "rationale": "No cathode gas measurement is present."
+        },
+        {
+          "id": "diffusion-coefficient",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What measured diffusion coefficient D was obtained at minus ten degrees in Cedar Cell?",
+            "zh": "雪松电芯在零下十度测得的扩散系数D是多少？"
+          },
+          "rationale": "A symbolic schematic supplies no numerical diffusion coefficient."
+        }
+      ]
+    },
+    {
+      "id": "t03-river-edna",
+      "topic": "river environmental DNA detection",
+      "documentFamily": "invented-brook-filter-survey",
+      "documents": [
+        {
+          "id": "a",
+          "format": "simulated-extraction",
+          "text": {
+            "en": "BROOK FILTER / Methods / synthetic extraction-style text\nRiver water was passed through a membrane before DNA isolation. Blank filters traveled with the sample bottles and were processed in the same batch. A positive signal on a blank marked the batch for contamination review; it did not identify the contamination source.\nResults: no abundance estimates were made.",
+            "zh": "溪流滤膜／方法／合成的模拟抽取文本\n河水先经过滤膜，再分离DNA。空白滤膜随采样瓶运输，并与样本同批处理。空白出现阳性信号时该批进入污染复核，但不能据此确定污染来源。\n结果：未估计丰度。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Brook Filter used a second independent amplification on low-signal samples. Repeated detection was required before the team marked a sample as detected. This check addressed sporadic amplification; it did not locate individual fish.",
+            "zh": "溪流滤膜对弱信号样本进行了第二次独立扩增，重复检出后才标为检出。该检查针对偶发扩增，不能定位单条鱼。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Brook Filter site register\n| Site | Water volume |\n| Bridge | 1 litre |\n| Bend | 1 litre |\nNo fish were captured, weighed, aged or tracked.",
+            "zh": "溪流滤膜站点表\n| 站点 | 水量 |\n| 桥边 | 1升 |\n| 河弯 | 1升 |\n没有捕获、称重、测龄或追踪鱼类。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "checks",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "What checks limited false detections in the Brook Filter DNA survey?",
+            "zh": "溪流滤膜DNA调查用哪些检查约束误检？"
+          },
+          "rationale": "Travel blanks and repeated amplification are stated detection checks."
+        },
+        {
+          "id": "fish-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many living fish occupied the bridge site according to Brook Filter?",
+            "zh": "溪流滤膜表明桥边站点有多少条活鱼？"
+          },
+          "rationale": "Detection and water volume do not measure fish abundance."
+        },
+        {
+          "id": "contamination-origin",
+          "kind": "missing-cause",
+          "relevant": [],
+          "text": {
+            "en": "Which technician introduced DNA into the Brook Filter blank?",
+            "zh": "哪位技术员把DNA带入了溪流滤膜的空白样本？"
+          },
+          "rationale": "The contamination source is explicitly undetermined."
+        },
+        {
+          "id": "migration-speed",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What upstream migration speed was measured for tagged fish at the river bend?",
+            "zh": "河弯处标记鱼的上游迁移速度测得多少？"
+          },
+          "rationale": "No tagging or tracking was performed."
+        }
+      ]
+    },
+    {
+      "id": "t04-acoustic-localization",
+      "topic": "microphone time-delay localization",
+      "documentFamily": "invented-triangle-array-notes",
+      "documents": [
+        {
+          "id": "a",
+          "format": "formula",
+          "text": {
+            "en": "Triangle Array is a fictional room experiment. A pulse was recorded by three synchronized microphones. Pairwise arrival differences constrained the source to intersecting hyperbolas: delta_t = (r_1 - r_2)/c. The note assumes a measured sound speed c but gives no numerical value for it.",
+            "zh": "三角阵列是虚构的室内实验。三个同步麦克风记录脉冲，两两到达时间差将声源约束在相交双曲线上：delta_t = (r_1 - r_2)/c。说明假定声速c已测得，但未给出其数值。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Triangle Array discarded late correlation peaks before solving the arrival differences. The first consistent peak was used to reduce reflected-path errors. Synchronized clocks and rejection of late echoes were both needed for a stable location estimate.",
+            "zh": "三角阵列在求到达时间差前丢弃较晚的相关峰，使用首个一致峰以减少反射路径误差。时钟同步与排除晚到回声共同保障定位稳定。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Triangle Array drawing shows microphone positions on the floor plan. It contains no speech transcripts, underwater trials or calibration temperature record.",
+            "zh": "三角阵列图标注了麦克风在平面图上的位置，没有语音转录、水下试验或校准温度记录。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "localization",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "How did Triangle Array turn pulse timing into a stable source location?",
+            "zh": "三角阵列怎样把脉冲计时转为稳定的声源位置？"
+          },
+          "rationale": "Arrival-difference geometry and echo rejection both explain the procedure."
+        },
+        {
+          "id": "sound-speed",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What numerical sound speed was used in the Triangle Array calculation?",
+            "zh": "三角阵列计算采用的声速数值是多少？"
+          },
+          "rationale": "The equation names c without reporting its value."
+        },
+        {
+          "id": "spoken-words",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "Which words did Triangle Array recognize from the recorded speech?",
+            "zh": "三角阵列从所录语音中识别出哪些词？"
+          },
+          "rationale": "A pulse-localization experiment is not speech recognition."
+        },
+        {
+          "id": "underwater-range",
+          "kind": "wrong-environment",
+          "relevant": [],
+          "text": {
+            "en": "How far could this microphone array locate sources underwater?",
+            "zh": "这套麦克风阵列在水下能定位多远的声源？"
+          },
+          "rationale": "No underwater test exists."
+        }
+      ]
+    },
+    {
+      "id": "t05-archive-ink",
+      "topic": "manuscript ink examination",
+      "documentFamily": "invented-folio-lamp-conservation",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Folio Lamp is an invented conservation case. Infrared images made an erased line legible because its ink absorbed differently from the later overwriting. The recovered line supplied a place name, but neither a writer's signature nor a calendar date.",
+            "zh": "书页灯是虚构的修复案例。被擦除行的墨水与后加文字吸收特性不同，红外图像因而使其可读。复原行提供一个地名，却没有作者签名或历日。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "markdown",
+          "text": {
+            "en": "# Folio Lamp handling\n## Non-contact inspection\nA raking-light image revealed shallow grooves under the erased line. Imaging was performed before any cleaning so that surface disturbance would not remove the remaining evidence.",
+            "zh": "# 书页灯操作\n## 无接触检查\n侧光图像显示擦除行下有浅沟痕。所有成像在清洁之前完成，以免表面扰动破坏残余证据。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Folio Lamp's storage log lists an acid-free folder and a support board. No chemical dating, pigment chromatography or ownership investigation was undertaken.",
+            "zh": "书页灯保存记录列有无酸文件夹与衬板，没有化学测年、颜料色谱或所有权调查。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "recover-evidence",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which imaging choices exposed evidence beneath the erased Folio Lamp line?",
+            "zh": "哪些成像选择揭示了书页灯擦除行下的证据？"
+          },
+          "rationale": "Infrared absorption and raking-light grooves are both directly described."
+        },
+        {
+          "id": "writer-identity",
+          "kind": "missing-identity",
+          "relevant": [],
+          "text": {
+            "en": "Who wrote the erased line in the Folio Lamp manuscript?",
+            "zh": "书页灯手稿中被擦除的一行是谁写的？"
+          },
+          "rationale": "A place name is not a writer identification."
+        },
+        {
+          "id": "ink-date",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "In which calendar year was the underlying Folio Lamp ink applied?",
+            "zh": "书页灯底层墨迹写于哪一个历年？"
+          },
+          "rationale": "No date or dating analysis is available."
+        },
+        {
+          "id": "ownership",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Which institution legally owned the Folio Lamp leaf before conservation?",
+            "zh": "书页灯书页修复前由哪家机构合法拥有？"
+          },
+          "rationale": "Handling and storage do not establish legal provenance."
+        }
+      ]
+    },
+    {
+      "id": "t06-pulsar-timing",
+      "topic": "pulsar arrival-time correction",
+      "documentFamily": "invented-clock-ridge-observations",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Clock Ridge is a fictional timing exercise. Arrival times from two radio bands showed a delay that increased at lower frequency. The exercise removed a dispersion term before comparing pulse phases across the observing nights.",
+            "zh": "时钟岭是虚构的计时练习。两个射电波段的到达时刻显示低频延迟更大，练习先扣除色散项，再比较各观测夜的脉冲相位。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "The Clock Ridge worksheet transforms observatory timestamps to a common solar-system reference point. Its schematic delay is delta_t = K DM / nu^2. No fitted DM, neutron-star mass or orbital solution is supplied; the worksheet demonstrates corrections only.",
+            "zh": "时钟岭工作表把台站时间戳转换到统一的太阳系参考点，示意延迟为delta_t = K DM / nu^2。表中没有拟合DM、中子星质量或轨道解，只演示校正过程。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Clock Ridge observation log\n| Night | Usable scans |\n| A | 6 |\n| B | 5 |\nThe log counts scans, not astrophysical events.",
+            "zh": "时钟岭观测记录\n| 夜次 | 可用扫描 |\n| A | 6 |\n| B | 5 |\n此表统计扫描次数，不是天体事件数。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "corrections",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which corrections made Clock Ridge pulse arrival times comparable?",
+            "zh": "时钟岭用哪些校正使脉冲到达时刻可比较？"
+          },
+          "rationale": "Dispersion removal and common-reference transformation are stated."
+        },
+        {
+          "id": "star-mass",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What neutron-star mass was inferred from Clock Ridge timing?",
+            "zh": "时钟岭计时推断出的中子星质量是多少？"
+          },
+          "rationale": "No mass inference or orbital solution is given."
+        },
+        {
+          "id": "dm-value",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What fitted dispersion measure DM did the Clock Ridge worksheet report?",
+            "zh": "时钟岭工作表报告的拟合色散量DM是多少？"
+          },
+          "rationale": "The formula contains a variable without a fitted value."
+        },
+        {
+          "id": "glitch-count",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "How many spin glitches occurred during the Clock Ridge observing nights?",
+            "zh": "时钟岭观测夜中发生了多少次自转突变？"
+          },
+          "rationale": "Usable scan counts do not measure glitches."
+        }
+      ]
+    },
+    {
+      "id": "t07-forest-firebreak",
+      "topic": "surface fuel firebreak experiment",
+      "documentFamily": "invented-pine-strip-burn",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Pine Strip is an invented small controlled burn. Removing dry litter from a narrow strip interrupted the continuous surface fuel bed. The low flame front stopped at the cleared strip in calm conditions; tree crowns did not ignite.",
+            "zh": "松带是虚构的小规模控制燃烧。窄带清除干枯凋落物后，连续的地表燃料层被切断。平静天气下低火焰前锋停在清理带处，树冠未被点燃。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Pine Strip crews also wetted the receiving edge before ignition. The notebook records damp fuel as the second barrier to surface spread. It explicitly restricts interpretation to the mild wind and shallow litter of this trial.",
+            "zh": "松带人员还在点火前湿润承接边缘，记录把潮湿燃料列为阻止地表蔓延的第二道屏障。解释明确限于本次轻风与浅凋落层条件。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Pine Strip staffing sheet lists water checks and radio calls. No houses, evacuations, smoke chemistry or post-fire bird surveys were part of the trial.",
+            "zh": "松带人员表列有供水检查与无线电通话，本试验不涉及房屋、疏散、烟气化学或火后鸟类调查。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "surface-spread",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "What interrupted surface-fire spread in the Pine Strip trial?",
+            "zh": "松带试验中什么阻断了地表火蔓延？"
+          },
+          "rationale": "A gap in litter and a wetted edge are reported barriers."
+        },
+        {
+          "id": "crown-wind",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "Would the Pine Strip barrier stop a crown fire in gale-force wind?",
+            "zh": "松带屏障能否在强风中阻止树冠火？"
+          },
+          "rationale": "A calm surface burn cannot establish that outcome."
+        },
+        {
+          "id": "smoke-pm",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What fine-particle concentration did smoke reach downwind of Pine Strip?",
+            "zh": "松带下风向烟气的细颗粒物浓度达到多少？"
+          },
+          "rationale": "No smoke chemistry or concentration was measured."
+        },
+        {
+          "id": "bird-recovery",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "How quickly did bird richness recover after the Pine Strip burn?",
+            "zh": "松带燃烧后鸟类丰富度恢复得多快？"
+          },
+          "rationale": "No ecological follow-up was conducted."
+        }
+      ]
+    },
+    {
+      "id": "t08-membrane-fouling",
+      "topic": "water-filter membrane fouling",
+      "documentFamily": "invented-clear-loop-filtration",
+      "documents": [
+        {
+          "id": "a",
+          "format": "table",
+          "text": {
+            "en": "Clear Loop is an invented filter test at fixed inlet pressure.\n| Step | Flux, arbitrary units |\n| Clean start | 20 |\n| After particle feed | 11 |\n| After backwash | 18 |\nThe partial recovery after reversing flow is consistent with a removable surface cake.",
+            "zh": "清环是固定入口压力下的虚构过滤试验。\n| 阶段 | 通量，任意单位 |\n| 清洁起点 | 20 |\n| 颗粒进料后 | 11 |\n| 反洗后 | 18 |\n逆流后的部分恢复与可移除表面滤饼一致。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Clear Loop microscopy showed particles on the membrane entrance face. A coarse prefilter reduced the incoming particle load and slowed the observed flux decline. Dissolved chemicals and microorganisms were not assayed.",
+            "zh": "清环显微图显示颗粒位于膜的入口面。粗预滤降低进入颗粒负荷，使观测到的通量下降变慢。没有检测溶解化学物或微生物。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Clear Loop used one membrane type and room-temperature feed. The notebook gives neither pore-size distributions nor manufacturing costs or drinking-water certification.",
+            "zh": "清环仅使用一种膜和室温进料，记录不提供孔径分布、制造成本或饮用水认证。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "cake-control",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "What evidence and interventions link Clear Loop flux loss to particulate fouling?",
+            "zh": "哪些证据和干预把清环通量损失与颗粒污染联系起来？"
+          },
+          "rationale": "Backwash recovery, microscopy and prefiltration directly address particle fouling."
+        },
+        {
+          "id": "virus-removal",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "What log reduction of infectious viruses did Clear Loop achieve?",
+            "zh": "清环对感染性病毒实现了几个对数的去除？"
+          },
+          "rationale": "Particle flux tests do not assay virus removal."
+        },
+        {
+          "id": "pore-radius",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What was the median pore radius of the Clear Loop membrane?",
+            "zh": "清环膜的孔半径中位数是多少？"
+          },
+          "rationale": "No pore-size distribution is reported."
+        },
+        {
+          "id": "annual-cost",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What annual municipal operating cost follows from installing Clear Loop filters?",
+            "zh": "安装清环过滤器后市政年运行成本是多少？"
+          },
+          "rationale": "A bench test provides no municipal costing."
+        }
+      ]
+    },
+    {
+      "id": "t09-court-translation",
+      "topic": "court interpretation accuracy",
+      "documentFamily": "invented-amber-hearing-training",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Amber Hearing is a fictional interpreter-training exercise. A bilingual reviewer found that a translated witness answer omitted a negation. Replaying the recording and comparing complete clauses exposed the reversal in meaning. No actual litigants or court decisions were used.",
+            "zh": "琥珀听证是虚构的口译训练。双语复核员发现译出的证人回答漏掉否定词，回放录音并比较完整分句后识别了意义反转。没有使用真实当事人或裁判。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "markdown",
+          "text": {
+            "en": "# Amber Hearing review\nA second interpreter checked names and numbers against the source audio before the practice transcript was released. The exercise recommends both clause-level meaning checks and a separate pass for factual tokens.",
+            "zh": "# 琥珀听证复核\n练习转录发布前，第二名口译员根据源音频核对姓名与数字。练习建议既检查分句含义，也单独核对事实性词项。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Amber Hearing's attendance sheet records training hours. It does not record verdicts, compensation, accreditation examination scores or the prevalence of errors in real courts.",
+            "zh": "琥珀听证签到表记录培训时数，不记录判决、赔偿、资格考试分数或真实法院错误流行率。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "review-methods",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which review steps detected meaning and factual errors in Amber Hearing?",
+            "zh": "琥珀听证哪些复核步骤识别了意义及事实错误？"
+          },
+          "rationale": "Clause comparison and name/number checks are direct answers."
+        },
+        {
+          "id": "verdict-effect",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "Did correcting the Amber Hearing translation change a defendant's verdict?",
+            "zh": "更正琥珀听证翻译是否改变了被告的判决？"
+          },
+          "rationale": "The exercise has no real defendant or verdict."
+        },
+        {
+          "id": "court-error-rate",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "What percentage of real court interpretations omit a negation?",
+            "zh": "真实法庭口译有多大比例遗漏否定词？"
+          },
+          "rationale": "One invented training error cannot estimate prevalence."
+        },
+        {
+          "id": "exam-threshold",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What examination score qualifies an Amber Hearing interpreter for accreditation?",
+            "zh": "琥珀听证口译员须取得多少考试分数才能获资格？"
+          },
+          "rationale": "Attendance hours are not accreditation criteria."
+        }
+      ]
+    },
+    {
+      "id": "t10-robot-grasp",
+      "topic": "robot tactile slip control",
+      "documentFamily": "invented-soft-pincer-bench",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Soft Pincer is an invented tabletop experiment with foam blocks. A rise in tangential vibration preceded visible slip. The controller increased normal force when that signal crossed its trigger, which prevented drops in the demonstrated slow lifts.",
+            "zh": "软钳是以泡沫块为对象的虚构桌面实验。切向振动上升先于可见滑移，信号越过触发点时控制器增大法向力，在所演示的慢速提升中避免了掉落。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Soft Pincer also limited the commanded force to avoid crushing the blocks. Its illustrative controller was F_next = min(F_limit, F_now + gain times slip_signal). The note supplies no fitted gain or force limit; the second safeguard is the force cap.",
+            "zh": "软钳还限制指令力以免压坏泡沫块，示意控制为F_next = min(F_limit, F_now + gain times slip_signal)。记录没有给出拟合增益或力上限，第二项保护是限力。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Soft Pincer object list contains foam blocks only. No glassware, human skin, outdoor debris or high-speed conveyor trials were tested.",
+            "zh": "软钳物体清单仅有泡沫块，没有测试玻璃器皿、人体皮肤、户外碎屑或高速输送带。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "grip-control",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "How did Soft Pincer balance avoiding drops against crushing during slow lifts?",
+            "zh": "软钳在慢速提升中怎样兼顾防掉落与防压坏？"
+          },
+          "rationale": "Slip-triggered force increases and a force cap answer the two constraints."
+        },
+        {
+          "id": "gain-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What numerical gain was fitted for the Soft Pincer force controller?",
+            "zh": "软钳力控制器拟合出的增益数值是多少？"
+          },
+          "rationale": "A schematic equation does not supply a gain."
+        },
+        {
+          "id": "skin-safety",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "What skin injury threshold makes Soft Pincer safe for human contact?",
+            "zh": "何种皮肤损伤阈值使软钳可安全接触人体？"
+          },
+          "rationale": "Foam block trials provide no human-contact safety threshold."
+        },
+        {
+          "id": "conveyor-throughput",
+          "kind": "wrong-environment",
+          "relevant": [],
+          "text": {
+            "en": "How many glass bottles per minute could Soft Pincer pick from a conveyor?",
+            "zh": "软钳每分钟能从输送带抓取多少玻璃瓶？"
+          },
+          "rationale": "Neither glass bottles nor conveyor throughput were tested."
+        }
+      ]
+    },
+    {
+      "id": "t11-microplastic-sampling",
+      "topic": "coastal microplastic sample contamination",
+      "documentFamily": "invented-shell-sieve-protocol",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Shell Sieve is an invented coastal-sand protocol. Operators covered glass dishes between transfers and wore cotton coats to reduce airborne synthetic fibres. Open procedural blanks were examined beside the samples to detect contamination introduced during handling.",
+            "zh": "贝筛是虚构的海岸沙样方案。操作员在转移间隙盖住玻璃皿，穿棉质外衣以减少空气中合成纤维，另将敞开的流程空白与样品并列检查，以发现处理时引入的污染。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Shell Sieve confirmed a subset of visually selected particles with infrared spectra. This step checked polymer identity rather than relying on colour alone. The sampling frame covered beach sand, with no animal feeding or exposure study.",
+            "zh": "贝筛对目视选出的部分颗粒以红外光谱复核，检查聚合物身份，而非仅凭颜色。采样范围为海滩沙，不涉及动物摄食或暴露试验。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Shell Sieve storage\n| Container | Closure |\n| Glass jar | metal lid |\n| Blank dish | glass cover |\nNo digestion dose-response or seafood consumption data are present.",
+            "zh": "贝筛保存表\n| 容器 | 盖子 |\n| 玻璃罐 | 金属盖 |\n| 空白皿 | 玻璃罩 |\n未提供消化剂量反应或海产品摄入数据。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "quality-checks",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "How did Shell Sieve limit contamination and check particle identity?",
+            "zh": "贝筛怎样约束污染并核对颗粒身份？"
+          },
+          "rationale": "Handling controls, blanks and infrared confirmation address the query."
+        },
+        {
+          "id": "fish-toxicity",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "What microplastic dose reduced fish growth in the Shell Sieve experiment?",
+            "zh": "贝筛实验中何种微塑料剂量降低了鱼类生长？"
+          },
+          "rationale": "Beach-sand sampling is not a fish exposure study."
+        },
+        {
+          "id": "human-intake",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "How much plastic did seafood consumers ingest daily according to Shell Sieve?",
+            "zh": "贝筛表明海产品消费者每天摄入多少塑料？"
+          },
+          "rationale": "No consumption or uptake data are collected."
+        },
+        {
+          "id": "polymer-half-life",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What environmental degradation half-life was measured for the confirmed polymer?",
+            "zh": "已确认聚合物的环境降解半衰期测得多少？"
+          },
+          "rationale": "Identity spectra do not provide degradation kinetics."
+        }
+      ]
+    },
+    {
+      "id": "t12-bridge-fatigue",
+      "topic": "steel bridge joint fatigue monitoring",
+      "documentFamily": "invented-rivet-span-monitoring",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Rivet Span is an invented steel-joint monitoring study. A strain gauge beside a weld recorded repeated load cycles. The team grouped strain ranges rather than using the single largest reading, because repeated moderate cycles also contributed to the fatigue history.",
+            "zh": "铆跨是虚构的钢接头监测试验，焊缝旁应变计记录重复载荷循环。团队按应变幅分组而非只看最大读数，因为重复的中等循环也构成疲劳历程。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Rivet Span paired the strain history with dye-penetrant inspections of the weld toe. The inspection checked for surface cracks that the load record alone could not locate. The report is a monitoring demonstration, with no remaining-life prediction.",
+            "zh": "铆跨把应变历程与焊趾渗透检测结合，检查载荷记录本身无法定位的表面裂纹。报告是监测演示，没有剩余寿命预测。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Rivet Span maintenance sheet records gauge adhesive replacement and cable routing. It contains no earthquake excitation, concrete chloride test or replacement contract price.",
+            "zh": "铆跨维护表记录应变计胶黏剂更换与走线，没有地震激励、混凝土氯盐检测或更换合同价格。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "monitoring",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "Which complementary observations assessed fatigue at the Rivet Span weld?",
+            "zh": "哪些互补观测评估了铆跨焊缝的疲劳情况？"
+          },
+          "rationale": "Grouped load-cycle history and direct crack inspection are complementary observations."
+        },
+        {
+          "id": "remaining-years",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many safe service years remain for Rivet Span?",
+            "zh": "铆跨还剩多少年安全服役寿命？"
+          },
+          "rationale": "The report explicitly does not predict remaining life."
+        },
+        {
+          "id": "quake-capacity",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What earthquake magnitude can the monitored bridge withstand?",
+            "zh": "被监测桥梁能够承受多大震级的地震？"
+          },
+          "rationale": "Fatigue monitoring does not establish seismic capacity."
+        },
+        {
+          "id": "chloride-depth",
+          "kind": "wrong-material",
+          "relevant": [],
+          "text": {
+            "en": "How deep had chloride penetrated the Rivet Span concrete deck?",
+            "zh": "铆跨混凝土桥面的氯盐侵入了多深？"
+          },
+          "rationale": "The data concern a steel weld, not concrete chloride profiles."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,896 @@
+{
+  "schemaVersion": 1,
+  "split": "heldout",
+  "families": [
+    {
+      "id": "h01-refrigerant-cycle",
+      "topic": "vapour-compression refrigerant cycle",
+      "documentFamily": "invented-cool-coil-demonstration",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Cool Coil is a fictional refrigeration demonstration. The evaporator absorbed heat as the working fluid boiled at low pressure. After compression, the condenser rejected heat while the fluid condensed. The expansion valve then lowered pressure before the fluid returned to the evaporator.",
+            "zh": "冷盘管是虚构的制冷演示。工质在低压下沸腾时蒸发器吸热，压缩后工质冷凝时冷凝器放热，随后膨胀阀降压使工质返回蒸发器。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Cool Coil component labels\n| Label | Component |\n| E | evaporator |\n| C | condenser |\nThis is a cycle diagram with qualitative flow arrows, not a performance measurement. The working-fluid chemical identity is unspecified.",
+            "zh": "冷盘管部件标记\n| 标记 | 部件 |\n| E | 蒸发器 |\n| C | 冷凝器 |\n这是带定性流向箭头的循环图，不是性能测量，工质化学身份未指定。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "A Cool Coil installation sketch places a drain under the cabinet and a handle beside the service panel. The sketch describes cabinet assembly rather than refrigerant chemistry or energy performance.",
+            "zh": "冷盘管安装图把排水口画在箱体下方，把把手画在检修板旁。图示描述箱体装配，而非工质化学或能耗性能。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "heat-path",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Where did Cool Coil absorb and reject heat during its refrigerant cycle?",
+            "zh": "冷盘管制冷循环在哪里吸热和放热？"
+          },
+          "variants": {
+            "en": [
+              "Which components take in heat and send it out in Cool Coil?",
+              "Describe the heat-transfer roles of the Cool Coil evaporator and condenser.",
+              "How is heat moved through the boiling and condensing stages?",
+              "What are the heat exchange locations in the Cool Coil diagram?"
+            ],
+            "zh": [
+              "冷盘管哪些部件吸收和排出热量？",
+              "冷盘管蒸发器与冷凝器分别怎样传热？",
+              "沸腾和冷凝阶段怎样搬运热量？",
+              "冷盘管图中的换热位置分别在哪？"
+            ]
+          },
+          "rationale": "The cycle states absorption at the evaporator and rejection at the condenser."
+        },
+        {
+          "id": "cop-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What measured coefficient of performance did Cool Coil achieve at full load?",
+            "zh": "冷盘管满负荷时实测性能系数是多少？"
+          },
+          "rationale": "Qualitative stages and cabinet drawings provide no measured COP."
+        },
+        {
+          "id": "chemical-formula",
+          "kind": "missing-identity",
+          "relevant": [],
+          "text": {
+            "en": "What is the chemical formula of the Cool Coil working fluid?",
+            "zh": "冷盘管工质的化学式是什么？"
+          },
+          "rationale": "The diagram does not identify its working fluid."
+        },
+        {
+          "id": "food-safety",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "For how many days did Cool Coil keep stored fish microbiologically safe?",
+            "zh": "冷盘管使所存鱼肉保持微生物安全多少天？"
+          },
+          "rationale": "There is no food storage experiment."
+        }
+      ]
+    },
+    {
+      "id": "h02-electrophoresis",
+      "topic": "DNA gel size separation",
+      "documentFamily": "invented-blue-lane-gel",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Blue Lane is an invented agarose-gel exercise. Under the applied field, shorter DNA fragments moved farther through the gel during the same run. A size ladder in a separate lane provided reference bands for comparing migration distances. The exercise demonstrated relative fragment sizes.",
+            "zh": "蓝泳道是虚构的琼脂糖凝胶练习。在外加电场下，较短DNA片段在同一运行时间内穿过凝胶更远。独立泳道中的大小标准提供参考条带以比较迁移距离，练习演示相对片段大小。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Blue Lane staining made the reference and sample bands visible. A blurry lane was rerun because it could not be reliably compared with the ladder. The visible band positions were not DNA sequence reads.",
+            "zh": "蓝泳道染色使标准与样品条带可见，一条模糊泳道因无法与标准可靠比较而重跑。可见条带位置不是DNA序列读数。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Blue Lane supplies\n| Item | Role |\n| Agarose | gel matrix |\n| Buffer | conductive liquid |\nThe inventory is a preparation list, not a diagnostic validation cohort.",
+            "zh": "蓝泳道耗材\n| 物品 | 用途 |\n| 琼脂糖 | 凝胶基质 |\n| 缓冲液 | 导电液体 |\n清单是制备材料表，不是诊断验证人群。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "size-comparison",
+          "kind": "multiple-answers",
+          "relevant": ["a", "b"],
+          "text": {
+            "en": "How were relative DNA fragment sizes assessed in Blue Lane?",
+            "zh": "蓝泳道怎样评估DNA片段的相对大小？"
+          },
+          "rationale": "Migration against the ladder plus visibility/reliability checks answer the assessment."
+        },
+        {
+          "id": "base-sequence",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "What exact nucleotide sequence was read from the farthest Blue Lane band?",
+            "zh": "蓝泳道最远条带读出的精确核苷酸序列是什么？"
+          },
+          "rationale": "Size separation does not determine base sequence."
+        },
+        {
+          "id": "patient-sensitivity",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "What clinical diagnostic sensitivity did Blue Lane achieve in infected patients?",
+            "zh": "蓝泳道在感染患者中的临床诊断敏感度是多少？"
+          },
+          "rationale": "A preparation exercise has no patient validation cohort."
+        },
+        {
+          "id": "mutation-rate",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What spontaneous mutation rate was inferred from Blue Lane fragment migration?",
+            "zh": "蓝泳道片段迁移推断出的自发突变率是多少？"
+          },
+          "rationale": "Band migration is not a mutation-rate experiment."
+        }
+      ]
+    },
+    {
+      "id": "h03-glacier-albedo",
+      "topic": "snow surface darkening",
+      "documentFamily": "invented-ice-patch-radiometry",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Ice Patch is a fictional snow-surface comparison. A thin dark dust layer reduced the fraction of incoming shortwave light reflected by a marked patch relative to clean snow beside it. Under the same illumination, the darker patch absorbed more radiant energy. Only surface optical measurements were made.",
+            "zh": "冰斑是虚构的雪面比较。薄层深色尘土使标记雪斑反射的入射短波比例低于旁边洁净雪面，同一光照下较暗雪斑吸收更多辐射能量。测量仅限表面光学。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Ice Patch defines albedo as reflected shortwave flux divided by incoming shortwave flux. The worksheet does not provide the two flux numbers. It covers a patch observed for an afternoon rather than the glacier's seasonal mass balance.",
+            "zh": "冰斑把反照率定义为反射短波通量除以入射短波通量，工作表没有给出两个通量数值。它只涉及一个下午的雪斑，不是冰川季节质量平衡。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Ice Patch markers were retrieved after the optical survey. The equipment log concerns radiometer leveling and marker placement on the snow surface.",
+            "zh": "冰斑光学调查后收回标记物，设备记录涉及辐射计调平及雪面标记位置。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "darkening",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did the dusty Ice Patch absorb more shortwave energy than adjacent clean snow?",
+            "zh": "为什么带尘冰斑比邻近洁净雪面吸收更多短波能量？"
+          },
+          "rationale": "Lower reflected fraction increases absorbed energy under the same input."
+        },
+        {
+          "id": "glacier-loss",
+          "kind": "wrong-scale",
+          "relevant": [],
+          "text": {
+            "en": "How many cubic kilometres of glacier ice were lost over the Ice Patch summer?",
+            "zh": "冰斑所在冰川整个夏季损失多少立方千米冰？"
+          },
+          "rationale": "An afternoon optical patch study gives no glacier mass balance."
+        },
+        {
+          "id": "albedo-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What exact albedo value was calculated for the dark Ice Patch?",
+            "zh": "深色冰斑计算得到的反照率精确值是多少？"
+          },
+          "rationale": "The ratio definition lacks numerical flux inputs."
+        },
+        {
+          "id": "dust-origin",
+          "kind": "missing-cause",
+          "relevant": [],
+          "text": {
+            "en": "Which desert supplied the dust deposited on Ice Patch?",
+            "zh": "沉积在冰斑上的尘土来自哪片沙漠？"
+          },
+          "rationale": "No transport or source attribution is reported."
+        }
+      ]
+    },
+    {
+      "id": "h04-bird-navigation",
+      "topic": "avian orientation cue experiment",
+      "documentFamily": "invented-compass-dome-trials",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Compass Dome is an invented orientation exercise. With a rotated artificial star pattern, birds shifted their preferred hopping direction relative to the unrotated display. The change supports use of the displayed celestial pattern as one orientation cue under the dome conditions.",
+            "zh": "罗盘穹顶是虚构的定向练习。人工星图旋转时，鸟类偏好跳跃方向相对未旋转显示发生变化。这支持它们在穹顶条件下把所显示天体图案作为一种定向线索。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Compass Dome trial order\n| Block | Display |\n| First | unrotated |\n| Second | rotated |\nThe exercise records preferred headings indoors, not migration tracks or a magnetic manipulation.",
+            "zh": "罗盘穹顶试验顺序\n| 区段 | 显示 |\n| 第一段 | 未旋转 |\n| 第二段 | 旋转 |\n练习记录室内偏好朝向，不是迁徙轨迹或磁场操控。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Compass Dome husbandry log gives feeding and cleaning times. It has no genetic assay or record of survival after release.",
+            "zh": "罗盘穹顶饲养记录给出喂食与清洁时间，没有遗传检测或放归后的存活记录。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "celestial-cue",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What cue use was supported by the Compass Dome heading shift?",
+            "zh": "罗盘穹顶朝向改变支持使用哪种线索？"
+          },
+          "rationale": "The manipulated star pattern is the supported cue."
+        },
+        {
+          "id": "migration-route",
+          "kind": "wrong-environment",
+          "relevant": [],
+          "text": {
+            "en": "Which ocean route did released Compass Dome birds take during migration?",
+            "zh": "放归罗盘穹顶鸟类迁徙时采用哪条越洋路线？"
+          },
+          "rationale": "Indoor preferred headings are not outdoor migration tracks."
+        },
+        {
+          "id": "magnetic-strength",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "At what magnetic-field strength did Compass Dome orientation fail?",
+            "zh": "罗盘穹顶定向在多大磁场强度下失效？"
+          },
+          "rationale": "The experiment rotates a star display, not a magnetic field."
+        },
+        {
+          "id": "navigation-gene",
+          "kind": "missing-identity",
+          "relevant": [],
+          "text": {
+            "en": "Which gene variant caused the observed Compass Dome response?",
+            "zh": "哪个基因变体导致了所观察到的罗盘穹顶反应？"
+          },
+          "rationale": "No genotype or causal genetic test is available."
+        }
+      ]
+    },
+    {
+      "id": "h05-enzymatic-inhibition",
+      "topic": "enzyme initial-rate inhibition",
+      "documentFamily": "invented-copper-cuvette-assay",
+      "documents": [
+        {
+          "id": "a",
+          "format": "formula",
+          "text": {
+            "en": "Copper Cuvette is an invented enzyme assay. Adding a reversible competitor increased the substrate concentration needed to reach a given initial rate, while high-substrate rates approached the same plateau. The worksheet describes the qualitative competitive-inhibition pattern using v = Vmax S / (alpha Km + S). No fitted parameters are printed.",
+            "zh": "铜比色皿是虚构的酶测定。加入可逆竞争物后，达到给定初速需要更高底物浓度，而高底物时速率趋近同一平台。工作表用v = Vmax S / (alpha Km + S)描述竞争抑制的定性模式，未印出拟合参数。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Copper Cuvette measured absorbance change in a buffered solution. It was a cell-free assay, with no administered medicine, patient outcomes or drug metabolism measurements.",
+            "zh": "铜比色皿在缓冲液中测吸光度变化，是无细胞测定，没有给药、患者结局或药物代谢测量。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Copper Cuvette cuvettes were rinsed and positioned in a fixed orientation. The cleaning note contains no protein sequence or molecular structure determination.",
+            "zh": "铜比色皿使用前冲洗并固定摆放方向，清洁说明没有蛋白序列或分子结构测定。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "pattern",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What rate pattern supported competitive inhibition in Copper Cuvette?",
+            "zh": "铜比色皿哪种速率模式支持竞争抑制？"
+          },
+          "rationale": "Higher required substrate with the same high-substrate plateau is stated."
+        },
+        {
+          "id": "ki-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What numerical inhibition constant Ki was fitted in Copper Cuvette?",
+            "zh": "铜比色皿拟合出的抑制常数Ki数值是多少？"
+          },
+          "rationale": "A symbolic rate equation supplies no fitted constant."
+        },
+        {
+          "id": "patient-dose",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "Which oral dose of the Copper Cuvette inhibitor cured patients?",
+            "zh": "铜比色皿抑制物的哪种口服剂量治愈了患者？"
+          },
+          "rationale": "A cell-free assay is not a clinical trial."
+        },
+        {
+          "id": "binding-residue",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Which amino-acid residue directly bound the Copper Cuvette competitor?",
+            "zh": "铜比色皿竞争物直接结合了哪个氨基酸残基？"
+          },
+          "rationale": "Kinetic pattern alone does not locate a structural binding residue."
+        }
+      ]
+    },
+    {
+      "id": "h06-radar-rainfall",
+      "topic": "weather radar reflectivity conversion",
+      "documentFamily": "invented-rain-ring-radar",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Rain Ring is a fictional weather-radar worksheet. Reflectivity was converted to a rainfall-rate estimate with an assumed drop-size relation. Ground gauges were then used to check accumulated rainfall. The note warns that a different drop-size distribution can change the reflectivity-to-rain conversion.",
+            "zh": "雨环是虚构的气象雷达工作表，使用假定雨滴谱关系把反射率换算为雨强，再以地面雨量计检查累计雨量。说明指出雨滴尺度分布不同会改变反射率到降雨的换算。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Rain Ring writes Z = a R^b symbolically. Neither a nor b is numerically estimated in this exercise. It compares observation methods and does not forecast a future storm or model river inundation.",
+            "zh": "雨环以符号写Z = a R^b，本练习没有数值估计a或b。它比较观测方法，不预报未来风暴，也不模拟河流淹没。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "simulated-extraction",
+          "text": {
+            "en": "RAIN RING / synthetic layout\nGauge checks: funnel clear; clock aligned.\nRadar checks: clutter screen applied.\nMaintenance notes refer to the observation instruments.",
+            "zh": "雨环／合成排版\n雨量计检查：漏斗畅通；时钟对齐。\n雷达检查：应用杂波筛除。\n维护说明涉及观测仪器。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "conversion-check",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did Rain Ring compare radar rainfall estimates with ground gauges?",
+            "zh": "雨环为何用地面雨量计比较雷达降雨估计？"
+          },
+          "rationale": "An assumed drop-size conversion requires an accumulation check."
+        },
+        {
+          "id": "exponent",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What fitted exponent b did Rain Ring obtain for its Z-R relation?",
+            "zh": "雨环Z-R关系拟合得到的指数b是多少？"
+          },
+          "rationale": "The equation is symbolic with no estimated coefficients."
+        },
+        {
+          "id": "tomorrow-storm",
+          "kind": "wrong-timescale",
+          "relevant": [],
+          "text": {
+            "en": "At what hour will tomorrow's storm reach the Rain Ring gauge?",
+            "zh": "明天风暴会在几点到达雨环雨量计？"
+          },
+          "rationale": "Observation-method comparison supplies no forecast."
+        },
+        {
+          "id": "flood-depth",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What flood depth did Rain Ring predict for houses beside the river?",
+            "zh": "雨环预测河边房屋的淹水深度是多少？"
+          },
+          "rationale": "Rainfall observation is not an inundation model."
+        }
+      ]
+    },
+    {
+      "id": "h07-optical-fibre",
+      "topic": "optical fibre pulse dispersion",
+      "documentFamily": "invented-prism-link-bench",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Prism Link is an invented fibre-optic bench test. A short input pulse broadened after propagation because different spectral components acquired different delays. Narrowing the source spectrum reduced the measured pulse spread in the same fibre length. The observation concerns chromatic dispersion.",
+            "zh": "棱链是虚构的光纤台架试验。短输入脉冲传播后展宽，因为不同光谱成分获得不同延迟。同一光纤长度下，缩窄光源谱宽降低了所测脉冲扩展。该观察涉及色散。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Prism Link adjustments\n| Trial | Source spectrum |\n| Wide | broad |\n| Narrow | restricted |\nThe table names settings without reporting bit-error rate, optical attenuation or deployment cost.",
+            "zh": "棱链调整\n| 试验 | 光源光谱 |\n| 宽 | 较宽 |\n| 窄 | 受限 |\n表中仅列设置，没有报告误码率、光衰减或部署成本。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Prism Link cleaned connector faces before the run and used a fixed spool. It is an indoor pulse-shape demonstration rather than a submarine-cable reliability record.",
+            "zh": "棱链在运行前清洁连接端面并使用固定线盘，是室内脉冲形状演示，不是海底电缆可靠性记录。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "spectral-width",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did narrowing the Prism Link source spectrum reduce pulse spreading?",
+            "zh": "为何缩窄棱链光源谱宽会减少脉冲扩展？"
+          },
+          "rationale": "Fewer wavelength-dependent delays reduce chromatic spread."
+        },
+        {
+          "id": "error-rate",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What digital bit-error rate was measured on Prism Link?",
+            "zh": "棱链测得的数字误码率是多少？"
+          },
+          "rationale": "Pulse-width observations are not bit-error measurements."
+        },
+        {
+          "id": "ocean-life",
+          "kind": "wrong-environment",
+          "relevant": [],
+          "text": {
+            "en": "How many years did the Prism Link cable survive on the ocean floor?",
+            "zh": "棱链电缆在海底存活了多少年？"
+          },
+          "rationale": "The spool was used indoors, with no seabed deployment."
+        },
+        {
+          "id": "attenuation",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What attenuation in decibels per kilometre did Prism Link measure?",
+            "zh": "棱链测得每千米多少分贝的衰减？"
+          },
+          "rationale": "Pulse temporal broadening alone does not report optical power attenuation."
+        }
+      ]
+    },
+    {
+      "id": "h08-sourdough-acid",
+      "topic": "sourdough fermentation acidity",
+      "documentFamily": "invented-rye-bowl-starter",
+      "documents": [
+        {
+          "id": "a",
+          "format": "table",
+          "text": {
+            "en": "Rye Bowl is an invented starter observation.\n| Stage | pH |\n| After mixing | 5.7 |\n| After resting | 4.2 |\nThe decline records increasing acidity during the rest. These are fictional teaching values, not a food-safety validation.",
+            "zh": "黑麦碗是虚构的酵种观察。\n| 阶段 | pH |\n| 搅拌后 | 5.7 |\n| 静置后 | 4.2 |\npH下降记录静置中酸性增强。这些是虚构教学值，不是食品安全验证。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Rye Bowl also developed visible gas bubbles during the rest. The note treats bubbles as fermentation activity without identifying the organisms responsible. The recipe specifies rye flour and water only.",
+            "zh": "黑麦碗静置时还出现可见气泡，记录把气泡视为发酵活动，但未鉴定负责的生物。配方仅指定黑麦粉与水。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Rye Bowl utensils were washed and dried between batches. A preparation card lists the bowl and spoon, rather than pathogen challenge results or allergen assays.",
+            "zh": "黑麦碗批次之间清洗并晾干器具，准备卡列出碗与勺子，而非病原挑战结果或过敏原检测。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "observed-ph",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What pH did Rye Bowl reach after resting, and what direction did acidity change?",
+            "zh": "黑麦碗静置后pH达到多少，酸性朝什么方向变化？"
+          },
+          "rationale": "The table directly gives 4.2 and increasing acidity."
+        },
+        {
+          "id": "wrong-stage",
+          "kind": "same-topic-wrong-answer",
+          "relevant": [],
+          "text": {
+            "en": "What pH did Rye Bowl have after baking in the oven?",
+            "zh": "黑麦碗在烤箱烘烤后的pH是多少？"
+          },
+          "rationale": "The two table values are mixing and resting values, not a baked sample."
+        },
+        {
+          "id": "strain-identity",
+          "kind": "missing-identity",
+          "relevant": [],
+          "text": {
+            "en": "Which sequenced bacterial strain produced Rye Bowl acidity?",
+            "zh": "哪个经测序的细菌菌株产生了黑麦碗酸性？"
+          },
+          "rationale": "Gas and pH observations do not identify strains."
+        },
+        {
+          "id": "pathogen-kill",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "How many logs of Salmonella were killed during the Rye Bowl rest?",
+            "zh": "黑麦碗静置期间杀灭了几个对数的沙门氏菌？"
+          },
+          "rationale": "A fictional pH table supplies no challenge-test reduction."
+        }
+      ]
+    },
+    {
+      "id": "h09-market-auction",
+      "topic": "auction allocation rule",
+      "documentFamily": "invented-sealed-envelope-classroom",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Sealed Envelope is an invented classroom second-price auction. The highest bidder received the object but paid the second-highest bid. In the example, bids were 18, 13 and 9 tokens, so the winner paid 13 tokens. The example illustrates a payment rule rather than measured bidder behaviour.",
+            "zh": "封口信封是虚构的课堂第二价格拍卖。最高出价者获得物品，却支付第二高报价。例中报价为18、13、9枚代币，所以赢家付13枚。该例演示支付规则，不是实测竞买行为。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Sealed Envelope contrasts a first-price rule, under which the same highest bidder would pay 18 tokens. The exercise uses a single allocation of one object and contains no repeated-market revenue data.",
+            "zh": "封口信封对比第一价格规则：同一最高出价者将支付18枚代币。练习仅分配一次单件物品，没有重复市场收入数据。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "markdown",
+          "text": {
+            "en": "# Sealed Envelope administration\nCollect bids before revealing them. Record the payment rule on the board. The instructions do not establish whether participants colluded or stated their private valuations truthfully.",
+            "zh": "# 封口信封管理\n先收齐报价，再揭示；把支付规则写在板上。这些说明不能证明参与者是否串通或如实表达私人估值。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "second-payment",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How much did the winner pay under the Sealed Envelope second-price rule?",
+            "zh": "封口信封第二价格规则下赢家付了多少？"
+          },
+          "rationale": "The second-highest bid of 13 is the actual example payment."
+        },
+        {
+          "id": "winner-valuation",
+          "kind": "same-topic-wrong-answer",
+          "relevant": [],
+          "text": {
+            "en": "What was the winning Sealed Envelope bidder's private valuation of the object?",
+            "zh": "封口信封赢家对物品的私人估值是多少？"
+          },
+          "rationale": "A bid of 18 is not an observed private valuation."
+        },
+        {
+          "id": "revenue-ranking",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "Which auction rule earned more average revenue across repeated Sealed Envelope markets?",
+            "zh": "封口信封重复市场中哪种拍卖规则平均收入更高？"
+          },
+          "rationale": "One numerical allocation cannot establish repeated-market means."
+        },
+        {
+          "id": "collusion-rate",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What fraction of Sealed Envelope participants were found to collude?",
+            "zh": "封口信封参与者被发现串通的比例是多少？"
+          },
+          "rationale": "Collection instructions do not detect collusion."
+        }
+      ]
+    },
+    {
+      "id": "h10-soil-infiltration",
+      "topic": "soil ring infiltration",
+      "documentFamily": "invented-ring-drop-fieldsheet",
+      "documents": [
+        {
+          "id": "a",
+          "format": "table",
+          "text": {
+            "en": "Ring Drop is an invented infiltration demonstration on one soil patch.\n| Interval | Water-level fall |\n| First ten minutes | 24 mm |\n| Next ten minutes | 11 mm |\nThe decreasing fall over equal intervals indicates a slowing intake rate under the demonstration conditions.",
+            "zh": "环滴是单块土壤上的虚构入渗演示。\n| 时段 | 水位下降 |\n| 前十分钟 | 24毫米 |\n| 后十分钟 | 11毫米 |\n等长时段水位降幅减小说明演示条件下入渗速率放缓。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Ring Drop kept the ring edge sealed to limit lateral surface escape. The worksheet concerns water entering the soil surface, with no observation well or solute tracer.",
+            "zh": "环滴密封环边以限制地表侧向漏水，工作表涉及水进入土表，没有观测井或溶质示踪剂。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Ring Drop staff marked the ring location and rinsed the ruler. The equipment record is not a catchment flood model or a soil nutrient profile.",
+            "zh": "环滴人员标记环位置并冲洗标尺，设备记录不是流域洪水模型或土壤养分剖面。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "rate-change",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How did the intake rate change between the two equal Ring Drop intervals?",
+            "zh": "环滴两个等长时段之间入渗速率怎样变化？"
+          },
+          "rationale": "Water fall decreases from 24 to 11 millimetres over equal times."
+        },
+        {
+          "id": "water-table",
+          "kind": "same-topic-wrong-answer",
+          "relevant": [],
+          "text": {
+            "en": "How many millimetres did the groundwater table fall during Ring Drop?",
+            "zh": "环滴期间地下水位下降了多少毫米？"
+          },
+          "rationale": "Ring surface water-level fall is not groundwater-table decline."
+        },
+        {
+          "id": "nitrate-leaching",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What nitrate mass leached below the root zone in Ring Drop?",
+            "zh": "环滴中有多少硝酸盐质量淋失到根区以下？"
+          },
+          "rationale": "No solute tracer or nutrient profile was measured."
+        },
+        {
+          "id": "catchment-peak",
+          "kind": "wrong-scale",
+          "relevant": [],
+          "text": {
+            "en": "What peak river discharge did Ring Drop predict after the next storm?",
+            "zh": "环滴预测下一场暴雨后的河流洪峰流量是多少？"
+          },
+          "rationale": "A ring demonstration on one patch does not model a catchment."
+        }
+      ]
+    },
+    {
+      "id": "h11-ultrasound-beam",
+      "topic": "ultrasound beam focusing",
+      "documentFamily": "invented-echo-block-phantom",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Echo Block is an invented ultrasound phantom exercise. Adjusting element delays made emitted waves arrive together at a selected focal depth. A wire target near that depth gave a narrower lateral response than targets far from focus. The exercise concerns beam geometry in a test block.",
+            "zh": "回声块是虚构的超声体模练习。调整阵元延迟使发射波在选定焦深同时到达，该深度附近细丝靶的横向响应比远离焦点靶更窄。练习涉及测试块中的声束几何。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Echo Block coupling gel excluded air between the probe and phantom. The operator used wire echoes to inspect beam width rather than to classify tissue disease. No patient was scanned.",
+            "zh": "回声块用耦合胶排除探头与体模间空气，操作员利用细丝回声检查束宽，而不是分类组织疾病，没有扫描患者。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "formula",
+          "text": {
+            "en": "Echo Block labels travel time as path length divided by sound speed. The sketch contains no attenuation coefficient, safety dose calculation or fitted tissue sound speed.",
+            "zh": "回声块把传播时间记为路程除以声速，草图没有衰减系数、安全剂量计算或拟合组织声速。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "focus",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How did Echo Block element delays narrow the response near the chosen depth?",
+            "zh": "回声块阵元延迟怎样使选定深度附近响应变窄？"
+          },
+          "rationale": "Coordinated arrival at the focal depth is the stated mechanism."
+        },
+        {
+          "id": "tumour-accuracy",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "What tumour-detection accuracy did Echo Block achieve in patients?",
+            "zh": "回声块在患者中取得了多少肿瘤检出准确率？"
+          },
+          "rationale": "Wire-target geometry is not patient diagnostic performance."
+        },
+        {
+          "id": "tissue-speed",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What fitted sound speed did Echo Block report for human liver tissue?",
+            "zh": "回声块报告的人肝组织拟合声速是多少？"
+          },
+          "rationale": "A schematic travel-time relation gives no fitted tissue speed."
+        },
+        {
+          "id": "thermal-safety",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What maximum safe exposure time was established from Echo Block tissue heating?",
+            "zh": "回声块组织升温确定的最大安全暴露时间是多少？"
+          },
+          "rationale": "No tissue heating or safety dose study exists."
+        }
+      ]
+    },
+    {
+      "id": "h12-social-network-diffusion",
+      "topic": "network message diffusion simulation",
+      "documentFamily": "invented-rumour-grid-simulation",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Rumour Grid is an invented network simulation. Each informed node sent a message to its immediate neighbours at the next step. Adding a bridge between two otherwise separate clusters allowed the message to enter the second cluster. The simulation illustrates connectivity, not belief or persuasion.",
+            "zh": "传讯格是虚构的网络模拟。每个已知节点在下一步向直接邻居发送消息，在两个原本分离的群之间加桥接边后，消息可以进入第二群。模拟演示连通性，不代表相信或说服。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Rumour Grid states\n| State | Definition |\n| Informed | message received |\n| Uninformed | no message received |\nNo state represents endorsing the message, and no real person participated.",
+            "zh": "传讯格状态\n| 状态 | 定义 |\n| 已知 | 收到消息 |\n| 未知 | 未收到消息 |\n没有状态代表赞同消息，也没有真人参与。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Rumour Grid run log stores edge lists and simulation step numbers. It does not contain platform recommendation rules, election outcomes or observed user demographics.",
+            "zh": "传讯格运行日志保存边列表与模拟步号，没有平台推荐规则、选举结果或实测用户人口属性。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "bridge",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did a bridge edge let the Rumour Grid message reach the second cluster?",
+            "zh": "为何桥接边使传讯格消息能到达第二个群？"
+          },
+          "rationale": "The bridge creates a path between previously separate clusters."
+        },
+        {
+          "id": "belief-change",
+          "kind": "same-topic-wrong-answer",
+          "relevant": [],
+          "text": {
+            "en": "What fraction of Rumour Grid recipients came to believe the message?",
+            "zh": "传讯格接收者有多大比例开始相信消息？"
+          },
+          "rationale": "Receiving a message is distinct from belief and no belief state exists."
+        },
+        {
+          "id": "election-effect",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "How many real votes were changed by the Rumour Grid diffusion?",
+            "zh": "传讯格传播改变了多少张真实选票？"
+          },
+          "rationale": "No people or election outcomes are observed."
+        },
+        {
+          "id": "recommender-rule",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Which commercial recommendation algorithm generated the Rumour Grid edges?",
+            "zh": "哪种商业推荐算法生成了传讯格的边？"
+          },
+          "rationale": "An authored edge list supplies no commercial-platform provenance."
+        }
+      ]
+    }
+  ]
+}

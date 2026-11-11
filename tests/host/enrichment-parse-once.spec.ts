@@ -6,13 +6,20 @@
  * @module tests/host/enrichment-parse-once
  */
 
+import { createHash } from 'node:crypto'
 import { zipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import { ParseFlight, parseOnce, type ParseOnceDeps } from '../../src/enrichment/parse-once.ts'
+import {
+  cacheKeyOf,
+  ParseFlight,
+  parseOnce,
+  type ParseOnceDeps,
+} from '../../src/enrichment/parse-once.ts'
 import type { MineruClient } from '../../src/enrichment/transport.ts'
 import type { ParsedArtifact } from '../../src/enrichment/types.ts'
-import { ZOTERO_ENRICHMENT_TASK_FAILED } from '../../src/errors.ts'
+import { ZOTERO_ENRICHMENT_TASK_FAILED, ZOTERO_INVALID_ARGUMENT } from '../../src/errors.ts'
 import { SUBMIT_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../../src/enrichment/limits.ts'
+import { attachmentRef } from '../helpers/server/keys.ts'
 
 const encoder = new TextEncoder()
 
@@ -36,24 +43,16 @@ function scriptedClient(handler: (url: string, options: ScriptedOptions) => unkn
   calls: RecordedCall[]
 } {
   const calls: RecordedCall[] = []
-  const record = (url: string, options: ScriptedOptions): void => {
+  const request = async (url: string, options: ScriptedOptions): Promise<unknown> => {
     calls.push({
       url,
       method: options.method,
       ...(options.headers !== undefined ? { headers: options.headers } : {}),
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     })
+    return handler(url, options)
   }
-  const client = {
-    async json(url: string, options: ScriptedOptions) {
-      record(url, options)
-      return handler(url, options)
-    },
-    async bytes(url: string, options: ScriptedOptions) {
-      record(url, options)
-      return handler(url, options)
-    },
-  } as unknown as MineruClient
+  const client = { json: request, bytes: request } as unknown as MineruClient
   return { client, calls }
 }
 
@@ -74,25 +73,71 @@ function storeOf(hit?: ParsedArtifact): {
 }
 
 const context = {
-  identity: 'zotero://user/0/attachment/ABCD',
+  identity: attachmentRef(),
+  generation: '7e8148b0-924e-4d05-9c87-1d56792df325',
   bytes: encoder.encode('%PDF-1.7 body'),
 } as const
+const sourceId = createHash('sha256').update(context.identity).digest('hex')
+const fingerprint = createHash('sha256').update(context.bytes).digest('hex')
 
 describe('parseOnce', () => {
-  it('returns a cache hit without contacting MinerU', async () => {
-    const hit: ParsedArtifact = {
-      markdown: '# cached',
-      meta: { identity: 'x', mode: 'free', contentFingerprint: 'f', taskId: 't', files: [] },
-    }
-    const { client, calls } = scriptedClient(() => {
-      throw new Error('should not be called')
-    })
-    const { store } = storeOf(hit)
-    await expect(
-      parseOnce({ ...context, mode: 'free' }, { client, store, flight: new ParseFlight() }),
-    ).resolves.toBe(hit)
-    expect(calls).toHaveLength(0)
-  })
+  it.each(['parse-job-1', '7e8148b0-924e-4d05-9c87-invalid'])(
+    'rejects non-UUID generation %s before reading the store or contacting MinerU',
+    async (generation) => {
+      const { client, calls } = scriptedClient(() => {
+        throw new Error('should not be called')
+      })
+      const { store, put } = storeOf()
+      const get = vi.spyOn(store, 'get')
+      await expect(
+        parseOnce(
+          { ...context, generation, mode: 'free' },
+          { client, store, flight: new ParseFlight() },
+        ),
+      ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
+      expect(get).not.toHaveBeenCalled()
+      expect(put).not.toHaveBeenCalled()
+      expect(calls).toHaveLength(0)
+    },
+  )
+
+  it.each(['initial', 'shared-flight'])(
+    'returns a cache hit from the %s lookup without contacting MinerU',
+    async (lookup) => {
+      const hit: ParsedArtifact = {
+        markdown: '# cached',
+        meta: {
+          version: 2,
+          parser: 'mineru',
+          format: 'markdown',
+          sourceId,
+          generation: context.generation,
+          identity: context.identity,
+          mode: 'free',
+          contentFingerprint: fingerprint,
+          taskId: 't',
+          files: ['full.md'],
+        },
+      }
+      const { client, calls } = scriptedClient(() => {
+        throw new Error('should not be called')
+      })
+      const { store, put } = storeOf(hit)
+      if (lookup === 'shared-flight') vi.spyOn(store, 'get').mockResolvedValueOnce(undefined)
+      const result = await parseOnce(
+        { ...context, mode: 'free' },
+        { client, store, flight: new ParseFlight() },
+      )
+      expect(result).toEqual({
+        artifact: hit,
+        cacheKey: cacheKeyOf({ ...context, mode: 'free' }),
+        cached: true,
+      })
+      expect(result.artifact).toBe(hit)
+      expect(put).not.toHaveBeenCalled()
+      expect(calls).toHaveLength(0)
+    },
+  )
 
   it('resumes an already-uploaded task without re-submitting or uploading', async () => {
     // A receipt left by an earlier run: the task was submitted and uploaded,
@@ -119,12 +164,14 @@ describe('parseOnce', () => {
       putTask: async () => {},
       deleteTask: async () => {},
     } as unknown as ParseOnceDeps['store']
-    const artifact = await parseOnce(
+    const { artifact, cacheKey, cached } = await parseOnce(
       { ...context, mode: 'free' },
       { client, store, flight: new ParseFlight() },
     )
     expect(artifact.markdown).toContain('resumed')
     expect(artifact.meta.taskId).toBe('resumed')
+    expect(cacheKey).toBe(cacheKeyOf({ ...context, mode: 'free' }))
+    expect(cached).toBe(false)
     // No submit (POST) and no PUT: only the poll GET and the result download.
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0)
     expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(0)
@@ -157,13 +204,26 @@ describe('parseOnce', () => {
     })
     const { store, put } = storeOf()
 
-    const artifact = await parseOnce(
+    const { artifact, cacheKey, cached } = await parseOnce(
       { ...context, mode: 'free' },
       { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 5 } },
     )
     expect(artifact.markdown).toBe('# Parsed Markdown')
-    expect(artifact.meta.mode).toBe('free')
-    expect(put).toHaveBeenCalledTimes(1)
+    expect(artifact.meta).toEqual({
+      version: 2,
+      parser: 'mineru',
+      format: 'markdown',
+      sourceId,
+      generation: context.generation,
+      identity: context.identity,
+      mode: 'free',
+      contentFingerprint: fingerprint,
+      taskId: 't1',
+      files: ['full.md'],
+    })
+    expect(cacheKey).toBe(cacheKeyOf({ ...context, mode: 'free' }))
+    expect(cached).toBe(false)
+    expect(put).toHaveBeenCalledExactlyOnceWith(cacheKey, artifact)
     expect(calls.map((call) => call.method)).toEqual(['POST', 'PUT', 'GET', 'GET', 'GET'])
     const upload = calls.find((call) => call.method === 'PUT')
     expect(upload?.headers?.['content-type']).toBeUndefined()
@@ -203,13 +263,27 @@ describe('parseOnce', () => {
     })
     const { store } = storeOf()
 
-    const artifact = await parseOnce(
+    const { artifact, cacheKey, cached } = await parseOnce(
       { ...context, mode: 'pro', token: 'secret' },
       { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 5 } },
     )
     expect(artifact.markdown).toBe('# Precise Markdown')
     expect(artifact.contentList).toBe('[{"type":"text"}]')
-    expect(artifact.meta.pageCount).toBe(7)
+    expect(artifact.meta).toEqual({
+      version: 2,
+      parser: 'mineru',
+      format: 'markdown',
+      sourceId,
+      generation: context.generation,
+      identity: context.identity,
+      mode: 'pro',
+      contentFingerprint: fingerprint,
+      taskId: 'b1',
+      files: ['full.md', 'content_list.json'],
+      pageCount: 7,
+    })
+    expect(cacheKey).toBe(cacheKeyOf({ ...context, mode: 'pro' }))
+    expect(cached).toBe(false)
   })
 
   it('treats an empty precise result list as pending, then completes', async () => {
@@ -248,7 +322,11 @@ describe('parseOnce', () => {
         { ...context, mode: 'pro', token: 'secret' },
         { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 5 } },
       ),
-    ).resolves.toMatchObject({ markdown: '# Eventually' })
+    ).resolves.toMatchObject({
+      artifact: { markdown: '# Eventually', meta: { files: ['full.md'] } },
+      cacheKey: cacheKeyOf({ ...context, mode: 'pro' }),
+      cached: false,
+    })
     expect(polls).toBe(2)
   })
 
@@ -295,66 +373,44 @@ describe('parseOnce', () => {
     })
   })
 
-  it('fails when the submit response is unreadable', async () => {
+  it.each([
+    { mode: 'free' as const, message: 'bad token' },
+    { mode: 'pro' as const, message: 'precise submit' },
+  ])('fails when the $mode submit response is unreadable', async ({ mode, message }) => {
     const { client } = scriptedClient(() => ({ code: 1, msg: 'bad token' }))
     const { store } = storeOf()
     await expect(
       parseOnce(
-        { ...context, mode: 'free' },
+        { ...context, mode, ...(mode === 'pro' ? { token: 'secret' } : {}) },
         { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 2 } },
       ),
     ).rejects.toMatchObject({
       code: ZOTERO_ENRICHMENT_TASK_FAILED,
-      message: expect.stringContaining('bad token'),
+      message: expect.stringContaining(message),
     })
   })
 
-  it('fails when the pro submit response is unreadable', async () => {
-    const { client } = scriptedClient(() => ({ code: 1, msg: 'bad token' }))
-    const { store } = storeOf()
-    await expect(
-      parseOnce(
-        { ...context, mode: 'pro', token: 'secret' },
-        { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 2 } },
-      ),
-    ).rejects.toMatchObject({
-      code: ZOTERO_ENRICHMENT_TASK_FAILED,
-      message: expect.stringContaining('precise submit'),
-    })
-  })
-
-  it('fails when the free poll status is unreadable', async () => {
+  it.each([
+    {
+      mode: 'free' as const,
+      submitPath: '/api/v1/agent/parse/file',
+      data: { task_id: 't1', file_url: 'https://oss.example/u' },
+    },
+    {
+      mode: 'pro' as const,
+      submitPath: '/api/v4/file-urls/batch',
+      data: { batch_id: 'b1', file_urls: ['https://oss.example/u'] },
+    },
+  ])('fails when the $mode poll status is unreadable', async ({ mode, submitPath, data }) => {
     const { client } = scriptedClient((url) => {
-      if (url.includes('/api/v1/agent/parse/file')) {
-        return { code: 0, data: { task_id: 't1', file_url: 'https://oss.example/u' } }
-      }
+      if (url.includes(submitPath)) return { code: 0, data }
       if (url === 'https://oss.example/u') return new Uint8Array()
       return { code: 1 }
     })
     const { store } = storeOf()
     await expect(
       parseOnce(
-        { ...context, mode: 'free' },
-        { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 2 } },
-      ),
-    ).rejects.toMatchObject({
-      code: ZOTERO_ENRICHMENT_TASK_FAILED,
-      message: expect.stringContaining('request rejected'),
-    })
-  })
-
-  it('fails when the pro poll status is unreadable', async () => {
-    const { client } = scriptedClient((url) => {
-      if (url.includes('/api/v4/file-urls/batch')) {
-        return { code: 0, data: { batch_id: 'b1', file_urls: ['https://oss.example/u'] } }
-      }
-      if (url === 'https://oss.example/u') return new Uint8Array()
-      return { code: 1 }
-    })
-    const { store } = storeOf()
-    await expect(
-      parseOnce(
-        { ...context, mode: 'pro', token: 'secret' },
+        { ...context, mode, ...(mode === 'pro' ? { token: 'secret' } : {}) },
         { client, store, flight: new ParseFlight(), timing: { pollIntervalMs: 1, maxPolls: 2 } },
       ),
     ).rejects.toMatchObject({

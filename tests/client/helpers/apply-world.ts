@@ -13,7 +13,11 @@ import {
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../../src/settings-namespace.ts'
 import { ZOTERO_LIBRARY_SETTINGS_NAMESPACE } from '../../../src/contract.ts'
-import { createRemoteAccessStub, createRemoteZoteroStub } from './remote-stubs.ts'
+import {
+  createRemoteAccessStub,
+  createRemoteZoteroStub,
+  createParseRuntimeStub,
+} from './remote-stubs.ts'
 import { fakeScope } from './fake-scope.ts'
 import { createFakeContextMenus, type FakeContextMenuRegistration } from './fake-context-menus.ts'
 import { fakeProvideRoot } from './fake-slot-root.ts'
@@ -118,11 +122,8 @@ export function fakeWorld(
   const scope = fakeScope()
   const libraryScope = fakeScope()
   const scholarlyScope = fakeScope()
-  // One form per settings namespace. The `zotero` form resolves through
-  // `world.scope` at call time so a spec can replace it wholesale (the
-  // webEnabled gating specs do); a test that writes `rightSidebarEnabled`
-  // through that form must not move the library toggles, which is exactly the
-  // namespace mismatch this harness exists to catch.
+  // Keep shared forms distinct: library flags written through the core form do not apply.
+  // Resolve world.scope live so settings-gating specs can replace the core form.
   const forms: Record<string, ReturnType<typeof fakeScope>> = {
     [ZOTERO_LIBRARY_SETTINGS_NAMESPACE]: libraryScope,
     [SCHOLARLY_SETTINGS_NAMESPACE]: scholarlyScope,
@@ -207,11 +208,10 @@ export function fakeWorld(
     whileServedRegistrations,
     whileServedDisposes: 0,
   }
-  // Effects registered while a fiber's callback runs belong to that fiber, so
-  // disposing the fiber unwinds exactly what it registered: the same
-  // ownership cordis gives `ctx.effect`.
+  // Effects belong to the active fiber; disposing it unwinds its registrations.
   let collector: Array<() => void> | undefined
   const ctx = {
+    ...createParseRuntimeStub(),
     effect: (register: () => unknown): (() => void) => {
       const dispose = register()
       const disposer = typeof dispose === 'function' ? (dispose as () => void) : () => {}

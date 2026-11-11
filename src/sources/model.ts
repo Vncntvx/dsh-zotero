@@ -10,6 +10,7 @@
  */
 
 import type { SourceFilterCounts } from './filters.js'
+import type { EvidenceItem } from '../evidence-item.js'
 
 /** Provable outcome facts; every field is produced by successful calls only. */
 interface SourceFacts {
@@ -84,7 +85,10 @@ export interface SearchOccurrence {
 }
 
 /** One deduplicated evidence passage with the calls that returned it. */
-export interface EvidencePassage {
+export interface EvidencePassage extends Pick<
+  EvidenceItem,
+  'textFormat' | 'artifact' | 'start' | 'end'
+> {
   readonly source: string
   readonly sourceRef: string
   readonly text: string

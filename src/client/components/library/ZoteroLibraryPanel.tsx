@@ -65,6 +65,10 @@ import {
 import { LIBRARY_SORTS, libraryKeyOf, type LibrarySelectorState } from './library-model.ts'
 import { LibraryTree } from './LibraryTree.tsx'
 import { LibraryItemList } from './LibraryItemList.tsx'
+import {
+  useDocumentParseSurface,
+  type DocumentParseSurfacePort,
+} from '../../enrichment/parse-surface.tsx'
 import { LibraryInspector } from './LibraryInspector.tsx'
 import { LibraryFilters } from './LibraryFilters.tsx'
 import { LibraryWrite } from './LibraryWrite.tsx'
@@ -81,6 +85,7 @@ import css from './library.module.css'
  * composer for the chat actions — are always reachable.
  */
 export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
+  readonly parse?: DocumentParseSurfacePort
   readonly readUrlPdf?: (
     request: { ref: string },
     signal: AbortSignal,
@@ -276,6 +281,23 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const canResolveAttachment = props.useRemoteAccess('zotero/resolveAttachment')
   const canReadUrlPdf = props.useRemoteAccess('zotero/readUrlPdf')
   const canOpenProtocol = props.useRemoteAccess('zotero/openProtocol')
+  const canStartParse = props.useAccess('zotero/startDocumentParse')
+  const canReadArtifact = props.useAccess('zotero/documentArtifact')
+  const canReadParseReceipt = props.useAccess('zotero/documentParseReceipt')
+  const canListParseJobs = props.useAccess('job/list')
+  const canFollowParseJobs = props.useAccess('job/follow')
+  const canCancelParse = props.useAccess('job/kill')
+  const parseSurface = useDocumentParseSurface(
+    props.parse,
+    {
+      sessionId: props.sessionId,
+      sessionAllowed: !sessionRemoved,
+      startAllowed: canStartParse,
+      readAllowed: canReadArtifact && canReadParseReceipt && canListParseJobs && canFollowParseJobs,
+      cancelAllowed: canCancelParse,
+    },
+    t,
+  )
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = (path: string): void => {
@@ -427,6 +449,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             />
           </div>
 
+          {parseSurface.openUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={parseSurface.openUrl}
+              disabled={sessionRemoved}
+            >
+              {t('libraryParseUrl')}
+            </Button>
+          )}
           <span className={css.spacer} />
 
           <div className={css.statusGroup}>
@@ -643,6 +675,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   childStates={feed.childStates}
                   retryChild={feed.retryChild}
                   readPdf={canResolveAttachment ? readPdf : undefined}
+                  parsePdf={parseSurface.openAttachment}
                   openFile={openFile}
                   resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
@@ -652,6 +685,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             </div>
           </>
         )}
+        {parseSurface.dialog}
       </div>
     </LibraryPreferencesContext.Provider>
   )

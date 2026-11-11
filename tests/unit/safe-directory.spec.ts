@@ -1,8 +1,7 @@
 /**
  * The shared writable-directory resolver: absolute shape, existence/writability,
  * sensitive-root and symlink-escape refusals in canonical space, the creation
- * policy (default root is created; a configured path only when `create`), and
- * validation of a created path's nearest existing ancestor.
+ * policy, and validation of the complete canonical candidate before creation.
  * @module tests/unit/safe-directory
  */
 
@@ -62,7 +61,7 @@ describe('resolveSafeDirectory', () => {
       label: 'model directory',
       deps: deps(),
     })
-    expect(resolved).toBe(defaultRoot)
+    expect(resolved).toBe(await realpath(defaultRoot))
   })
 
   it('refuses a relative configured path', async () => {
@@ -90,7 +89,7 @@ describe('resolveSafeDirectory', () => {
         label: 'output directory',
         deps: deps(),
       }),
-    ).rejects.toThrow(/does not exist or is not resolvable/)
+    ).rejects.toThrow(/does not exist \(ENOENT\)/)
   })
 
   it('creates a missing configured path when creation is on, after validating the ancestor', async () => {

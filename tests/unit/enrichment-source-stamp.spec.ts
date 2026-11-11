@@ -1,21 +1,54 @@
 /**
  * The source-index stamp comparison: local file stamps compare size and mtime,
- * URL stamps compare a shared validator and fall back to URL identity when
- * neither side has one, and byte stamps compare fingerprints.
+ * URL stamps require common freshness validators, and byte stamps compare
+ * fingerprints. Source identities are canonical and independent of parse mode.
  * @module tests/unit/enrichment-source-stamp
  */
 
 import { describe, expect, it } from 'vitest'
 import { sourceKeyOf, stampMatches } from '../../src/enrichment/source-stamp.ts'
+import {
+  ATTACHMENT_KEY,
+  GROUP_LIBRARY,
+  SECOND_ITEM_KEY,
+  attachmentRef,
+  itemRef,
+  refOf,
+} from '../helpers/server/keys.ts'
 
 describe('sourceKeyOf', () => {
-  it('changes with identity or mode and is a stable digest', () => {
-    const a = sourceKeyOf('zotero://user/0/attachment/ABCD', 'free')
-    expect(a).toMatch(/^[0-9a-f]{64}$/)
-    expect(sourceKeyOf('zotero://user/0/attachment/ABCD', 'free')).toBe(a)
-    expect(sourceKeyOf('zotero://user/0/attachment/ABCD', 'pro')).not.toBe(a)
-    expect(sourceKeyOf('zotero://user/0/attachment/OTHER', 'free')).not.toBe(a)
+  it('is a stable digest of one attachment identity', () => {
+    const key = sourceKeyOf(attachmentRef())
+    expect(key).toMatch(/^[0-9a-f]{64}$/)
+    expect(sourceKeyOf(attachmentRef())).toBe(key)
+    expect(sourceKeyOf(attachmentRef(SECOND_ITEM_KEY))).not.toBe(key)
+    expect(sourceKeyOf(refOf('attachment', ATTACHMENT_KEY, GROUP_LIBRARY))).not.toBe(key)
   })
+
+  it('canonicalizes URL host and default port before hashing', () => {
+    expect(sourceKeyOf('HTTPS://EXAMPLE.ORG:443/paper.pdf')).toBe(
+      sourceKeyOf('https://example.org/paper.pdf'),
+    )
+  })
+
+  it('ignores URL fragments that do not select different source bytes', () => {
+    const url = 'https://example.org/paper.pdf?download=1'
+    expect(sourceKeyOf(`${url}#page=1`)).toBe(sourceKeyOf(url))
+    expect(sourceKeyOf(`${url}#page=2`)).toBe(sourceKeyOf(url))
+  })
+
+  it('retains URL queries that may select different source bytes', () => {
+    const url = 'https://example.org/paper.pdf'
+    expect(sourceKeyOf(`${url}?version=1`)).not.toBe(sourceKeyOf(`${url}?version=2`))
+    expect(sourceKeyOf(`${url}?version=1`)).not.toBe(sourceKeyOf(url))
+  })
+
+  it.each([itemRef(), `${attachmentRef()}#page=1`])(
+    'rejects an identity that is not an exact attachment ref: %s',
+    (identity) => {
+      expect(() => sourceKeyOf(identity)).toThrow()
+    },
+  )
 })
 
 describe('stampMatches', () => {

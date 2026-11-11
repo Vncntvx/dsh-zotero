@@ -463,6 +463,15 @@ export function projectRetrieveMeta(
       sourceRef: entry.sourceRef,
       preview,
       previewTruncated: entry.text.length > preview.length,
+      ...(entry.source !== 'fulltext'
+        ? {}
+        : {
+            ...(entry.textFormat === undefined ? {} : { textFormat: entry.textFormat }),
+            ...(entry.artifact === undefined ? {} : { artifact: entry.artifact }),
+            ...(entry.start === undefined || entry.end === undefined
+              ? {}
+              : { start: entry.start, end: entry.end }),
+          }),
       matchKind: entry.matchKind,
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
       ...(entry.attachmentRef === undefined ? {} : { attachmentRef: entry.attachmentRef }),

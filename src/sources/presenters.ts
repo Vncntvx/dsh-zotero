@@ -157,11 +157,14 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
     const attachmentRef = stringField(item, 'attachmentRef')
     const matchKind = matchKindOf(item['matchKind'])
     const matchedFields = matchedFieldsOf(item['matchedFields'])
+    const fulltextFacts = source === 'fulltext' ? fulltextFactsOf(item) : {}
+    if (fulltextFacts === null) return null
     rows.push({
       source,
       sourceRef,
       preview,
       previewTruncated,
+      ...fulltextFacts,
       ...(pageLabel === undefined ? {} : { pageLabel }),
       ...(attachmentRef === undefined ? {} : { attachmentRef }),
       ...(matchKind === undefined ? {} : { matchKind }),
@@ -169,6 +172,57 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
     })
   }
   return rows
+}
+
+/** Decode optional fulltext facts without accepting partial or conflicting provenance. */
+function fulltextFactsOf(
+  item: Record<string, unknown>,
+): Pick<EvidenceItem, 'textFormat' | 'artifact' | 'start' | 'end'> | null {
+  const textFormat = item['textFormat']
+  if (textFormat !== undefined && textFormat !== 'markdown' && textFormat !== 'text') return null
+  const artifact = artifactOf(item['artifact'])
+  if (item['artifact'] !== undefined && (artifact === undefined || textFormat !== 'markdown')) {
+    return null
+  }
+  const start = item['start']
+  const end = item['end']
+  if (
+    (start !== undefined || end !== undefined) &&
+    (typeof start !== 'number' ||
+      typeof end !== 'number' ||
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      end < start)
+  ) {
+    return null
+  }
+  return {
+    ...(textFormat === undefined ? {} : { textFormat }),
+    ...(artifact === undefined ? {} : { artifact }),
+    ...(typeof start === 'number' && typeof end === 'number' ? { start, end } : {}),
+  }
+}
+
+/** Every artifact identity field is needed to attribute a replayed passage. */
+function artifactOf(value: unknown): EvidenceItem['artifact'] {
+  if (!isRecord(value)) return undefined
+  const { parser, mode, artifactId, fingerprint, sourceId, generation } = value
+  if (
+    parser !== 'mineru' ||
+    (mode !== 'free' && mode !== 'pro') ||
+    typeof artifactId !== 'string' ||
+    artifactId.length === 0 ||
+    typeof fingerprint !== 'string' ||
+    fingerprint.length === 0 ||
+    typeof sourceId !== 'string' ||
+    sourceId.length === 0 ||
+    typeof generation !== 'string' ||
+    generation.length === 0
+  ) {
+    return undefined
+  }
+  return { parser, mode, artifactId, fingerprint, sourceId, generation }
 }
 
 /**

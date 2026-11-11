@@ -6,6 +6,7 @@
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { bestAttachmentFromLinks } from './attachments.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
+import { PDF_CONTENT_TYPE } from './media-types.js'
 import { asJsonValue, asRecord, asString, isObjectKey } from './json.js'
 import { refStringFor, relationTargetRef } from './refs.js'
 import { ITEM_WITHOUT_KEY_MESSAGE, plainNoteText, truncateText } from './normalize-context.js'
@@ -265,7 +266,13 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
 
   let bestAttachment: ZoteroAttachmentRecord | undefined
   const linkAttachment = bestAttachmentFromLinks(input.parent)
-  if (linkAttachment !== undefined) {
+  if (itemType === 'attachment' && data?.contentType === PDF_CONTENT_TYPE) {
+    bestAttachment = {
+      ref: refStringFor(context.library, 'attachment', key, context.serverId),
+      title: asString(data?.title) ?? '',
+      contentType: PDF_CONTENT_TYPE,
+    }
+  } else if (linkAttachment !== undefined) {
     const child = partitioned?.attachments.find((candidate) => candidate.key === linkAttachment.key)
     bestAttachment = {
       ref: refStringFor(context.library, 'attachment', linkAttachment.key, context.serverId),

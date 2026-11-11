@@ -54,17 +54,50 @@ const searchOccurrenceSchema = z
   })
   .strict()
 
+const artifactProvenanceSchema = z
+  .object({
+    parser: z.literal('mineru'),
+    mode: z.enum(['free', 'pro']),
+    artifactId: z.string().min(1),
+    fingerprint: z.string().min(1),
+    sourceId: z.string().min(1),
+    generation: z.string().min(1),
+  })
+  .strict()
+
 const evidencePassageSchema = z
   .object({
     source: z.string(),
     sourceRef: z.string(),
     text: z.string(),
     previewTruncated: z.boolean(),
+    textFormat: z.enum(['markdown', 'text']).optional(),
+    artifact: artifactProvenanceSchema.optional(),
+    start: z.number().int().nonnegative().optional(),
+    end: z.number().int().nonnegative().optional(),
     pageLabel: z.string().optional(),
     attachmentRef: z.string().optional(),
     callIds: z.array(z.string()),
   })
   .strict()
+  .refine(
+    (value) =>
+      (value.start === undefined && value.end === undefined) ||
+      (value.start !== undefined && value.end !== undefined && value.end >= value.start),
+    { message: 'Fulltext offsets must be a complete [start, end) pair' },
+  )
+  .refine(
+    (value) =>
+      value.source === 'fulltext' ||
+      (value.textFormat === undefined &&
+        value.artifact === undefined &&
+        value.start === undefined &&
+        value.end === undefined),
+    { message: 'Only fulltext evidence carries artifact and offset facts' },
+  )
+  .refine((value) => value.artifact === undefined || value.textFormat === 'markdown', {
+    message: 'An artifact identifies Markdown fulltext',
+  })
 
 const exportDocumentItemSchema = z
   .object({

@@ -7,7 +7,23 @@ import { refFieldsOf } from './ref-grammar.js'
 import { sourceWorkspaceSchema } from './sources/workspace-schema.js'
 import { ENRICHMENT_OUTPUT_DIR_PATTERN } from './enrichment-preferences.js'
 import { SEMANTIC_DOWNLOAD_SOURCES, SEMANTIC_MODEL_KEYS } from './enrichment-model-catalog.js'
-import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
+import type {
+  ZoteroSourcePageRequestView,
+  ZoteroSourcePageResultView,
+  ZoteroStartDocumentParseRequestView,
+  ZoteroStartDocumentParseResultView,
+  ZoteroDocumentArtifactRequestView,
+  ZoteroDocumentArtifactResultView,
+  ZoteroDocumentParseReceiptRequestView,
+  ZoteroDocumentParseReceiptResultView,
+  ZoteroParseReceiptView,
+} from './contract.js'
+import {
+  zoteroDocumentParseInvocation,
+  ZOTERO_START_DOCUMENT_PARSE_METHOD,
+  ZOTERO_DOCUMENT_ARTIFACT_METHOD,
+  ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+} from './contract.js'
 import {
   ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL,
   ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL,
@@ -953,7 +969,153 @@ export const zoteroSemanticModelVerifyRequestSchema = z
   })
   .strict() satisfies z.ZodType<ZoteroSemanticModelVerifyRequestView>
 
+export const zoteroParseTargetSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('attachment'),
+      ref: z
+        .string()
+        .max(1024)
+        .refine((value) => {
+          const ref = refFieldsOf(value)
+          return ref?.kind === 'attachment'
+        }, 'expected a Zotero attachment reference'),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('url'),
+      url: z
+        .string()
+        .max(8192)
+        .url()
+        .refine((value) => {
+          try {
+            const url = new URL(value)
+            return (
+              (url.protocol === 'https:' || url.protocol === 'http:') &&
+              !url.username &&
+              !url.password
+            )
+          } catch {
+            return false
+          }
+        }, 'expected an HTTP(S) URL without credentials'),
+    })
+    .strict(),
+])
+
+export const zoteroStartDocumentParseRequestSchema = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    operationId: z.uuid(),
+    target: zoteroParseTargetSchema,
+    action: z.enum(['parse', 'reparse', 'retry']),
+  })
+  .strict() satisfies z.ZodType<ZoteroStartDocumentParseRequestView>
+
+export const zoteroParseReceiptSchema = z
+  .object({
+    operationId: z.uuid(),
+    generation: z.uuid(),
+    sourceId: z.string().regex(/^[a-f0-9]{64}$/),
+    targetLabel: z.string().min(1).max(2048),
+    mode: z.enum(['free', 'pro']),
+    cached: z.boolean(),
+    artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    format: z.literal('markdown'),
+    characterCount: z.number().int().nonnegative(),
+    preview: z.string().max(4096),
+    pageCount: z.number().int().positive().optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroParseReceiptView>
+
+export const zoteroStartDocumentParseResultSchema = z
+  .object({
+    operationId: z.uuid(),
+    generation: z.uuid(),
+    jobId: z.string().min(1).max(256),
+    status: z.enum(['started', 'joined', 'completed']),
+    receipt: zoteroParseReceiptSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroStartDocumentParseResultView>
+
+export const zoteroDocumentArtifactRequestSchema = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    target: zoteroParseTargetSchema,
+  })
+  .strict() satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
+
+export const zoteroDocumentArtifactResultSchema = z.union([
+  z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
+  z
+    .object({
+      kind: z.literal('ready'),
+      sourceId: z.string().regex(/^[a-f0-9]{64}$/),
+      targetLabel: z.string().min(1).max(2048),
+      mode: z.enum(['free', 'pro']),
+      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+      fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      characterCount: z.number().int().nonnegative(),
+      pageCount: z.number().int().positive().optional(),
+    })
+    .strict(),
+]) satisfies z.ZodType<ZoteroDocumentArtifactResultView>
+
+export const zoteroDocumentParseReceiptRequestSchema = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    operationId: z.uuid(),
+  })
+  .strict() satisfies z.ZodType<ZoteroDocumentParseReceiptRequestView>
+
+export const zoteroDocumentParseReceiptResultSchema = z.union([
+  z
+    .object({ kind: z.literal('pending'), jobId: z.string().min(1).max(256), generation: z.uuid() })
+    .strict(),
+  z.object({ kind: z.literal('completed'), receipt: zoteroParseReceiptSchema }).strict(),
+  z
+    .object({
+      kind: z.enum(['failed', 'cancelled']),
+      code: z.string().min(1),
+      message: z.string().max(2048),
+    })
+    .strict(),
+]) satisfies z.ZodType<ZoteroDocumentParseReceiptResultView>
+
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroDocumentParseInvocation(
+    ZOTERO_START_DOCUMENT_PARSE_METHOD,
+    strictCodec(
+      'dsh-zotero#ZoteroStartDocumentParseRequestView',
+      zoteroStartDocumentParseRequestSchema,
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroStartDocumentParseResultView',
+      zoteroStartDocumentParseResultSchema,
+    ),
+  ),
+  zoteroDocumentParseInvocation(
+    ZOTERO_DOCUMENT_ARTIFACT_METHOD,
+    strictCodec(
+      'dsh-zotero#ZoteroDocumentArtifactRequestView',
+      zoteroDocumentArtifactRequestSchema,
+    ),
+    strictCodec('dsh-zotero#ZoteroDocumentArtifactResultView', zoteroDocumentArtifactResultSchema),
+  ),
+  zoteroDocumentParseInvocation(
+    ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+    strictCodec(
+      'dsh-zotero#ZoteroDocumentParseReceiptRequestView',
+      zoteroDocumentParseReceiptRequestSchema,
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroDocumentParseReceiptResultView',
+      zoteroDocumentParseReceiptResultSchema,
+    ),
+  ),
   zoteroSemanticModelStatusInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL,

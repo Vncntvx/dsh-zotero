@@ -20,9 +20,14 @@ import type { ScholarlyKeys } from '../types.js'
 import {
   FULLTEXT_ENHANCER_MIN_TEXT_CHARS,
   type FulltextEnhancer,
-  type FulltextSourceStamp,
 } from '../../local/fulltext-enhancer.js'
-import type { FullTextRecord, ScholarlyTextStore } from './store.js'
+import {
+  scholarlySourceIdentityOf,
+  type FullTextCacheEntry,
+  type FullTextRecord,
+  type MarkdownRecord,
+  type ScholarlyTextStore,
+} from './store.js'
 import { arxivHtmlToMarkdown, extractPdfText, jatsToMarkdown } from './markup.js'
 
 type PaperIdentifier =
@@ -74,45 +79,56 @@ type PdfFailure = 'not-a-pdf' | 'too-short' | 'fetch' | 'parse'
 
 /** Outcome of one PDF attempt: text, or the reason it yielded none. */
 type PdfOutcome =
-  | { readonly kind: 'text'; readonly text: string; readonly source?: string }
+  | { readonly kind: 'record'; readonly record: FullTextRecord }
   | { readonly kind: 'none'; readonly reason: PdfFailure; readonly detail?: string }
 
 /**
- * Fetch and extract one PDF.
- *
- * Every failure is named. The caller composes the terminal message from these
- * reasons, so "the host rejected us" and "the PDF had no extractable text"
- * never collapse into one claim.
- *
- * With an enhancer installed, `lookup` is asked first: a cache hit returns its
- * text without downloading the PDF, and a miss still reports the source stamp
- * so the subsequent parse can reuse the probe. Enhancer failures propagate;
- * valid short documents retain their parsed content.
- * @param url - the PDF address.
- * @param http - the scholarly transport.
- * @param signal - caller cancellation.
- * @param enhancer - optional higher-quality document parser.
- * @returns the extracted text or a classified reason.
+ * Look up the current artifact for one canonical PDF source. Faults propagate;
+ * absence and expiry remain distinct so only absence can reuse plain text.
  */
-async function fetchPdfText(
+async function lookupPdfArtifact(
   url: string,
+  enhancer: FulltextEnhancer | undefined,
+  signal?: AbortSignal,
+): Promise<FullTextRecord | 'absent' | 'expired'> {
+  if (!enhancer) return 'absent'
+  const lookup = await enhancer.lookup(
+    { key: url, source: { kind: 'url', url }, contentType: 'application/pdf' },
+    signal,
+  )
+  if (lookup.kind === 'fault') throw lookup.error
+  if (lookup.kind === 'miss') return lookup.reason
+  return {
+    provider: 'mineru',
+    format: lookup.format,
+    text: lookup.text,
+    source: lookup.source,
+    url,
+    sourceIdentity: url,
+    provenance: lookup.provenance,
+  }
+}
+
+async function fetchPdfText(
+  rawUrl: string,
   http: ScholarlyHttp,
   signal?: AbortSignal,
   enhancer?: FulltextEnhancer,
+  source = 'the PDF at that URL',
 ): Promise<PdfOutcome> {
-  let sourceStamp: FulltextSourceStamp | undefined
+  const url = scholarlySourceIdentityOf(rawUrl)
+  const lookup = await lookupPdfArtifact(url, enhancer, signal)
+  if (typeof lookup !== 'string') return { kind: 'record', record: lookup }
+  return await extractRemotePdf(url, http, source, signal)
+}
 
-  if (enhancer !== undefined) {
-    const lookup = await enhancer.lookup(
-      { key: url, source: { kind: 'url', url }, contentType: 'application/pdf' },
-      signal,
-    )
-    if (lookup.outcome?.kind === 'fatal') throw lookup.outcome.error
-    if (lookup.outcome?.kind === 'ok')
-      return { kind: 'text', text: lookup.outcome.text, source: lookup.outcome.source ?? 'MinerU' }
-    sourceStamp = lookup.stamp
-  }
-
+/** Download and locally extract only after artifact lookup has selected this path. */
+async function extractRemotePdf(
+  url: string,
+  http: ScholarlyHttp,
+  source: string,
+  signal?: AbortSignal,
+): Promise<PdfOutcome> {
   let bytes: Uint8Array
   try {
     bytes = await http.bytes(url, {
@@ -132,21 +148,6 @@ async function fetchPdfText(
     return { kind: 'none', reason: 'not-a-pdf', detail: 'response body is not a PDF' }
   }
 
-  if (enhancer !== undefined) {
-    const outcome = await enhancer.enhance(
-      {
-        key: url,
-        source: { kind: 'url', url },
-        contentType: 'application/pdf',
-        bytes,
-        ...(sourceStamp !== undefined ? { sourceStamp } : {}),
-      },
-      signal,
-    )
-    if (outcome.kind === 'fatal') throw outcome.error
-    return { kind: 'text', text: outcome.text, source: outcome.source ?? 'MinerU' }
-  }
-
   let extracted: string
   try {
     extracted = await extractPdfText(bytes)
@@ -162,8 +163,15 @@ async function fetchPdfText(
     }
   }
   return {
-    kind: 'text',
-    text: extracted,
+    kind: 'record',
+    record: {
+      provider: 'pdf-extract',
+      format: 'text',
+      text: extracted,
+      source,
+      url,
+      sourceIdentity: url,
+    },
   }
 }
 
@@ -187,6 +195,7 @@ async function tryHtmlRoute(
   url: string,
   http: ScholarlyHttp,
   label: string,
+  provider: MarkdownRecord['provider'],
   signal?: AbortSignal,
 ): Promise<AttemptOutcome> {
   let html: string
@@ -202,7 +211,14 @@ async function tryHtmlRoute(
   }
   return {
     kind: 'record',
-    record: { text: markdown, source: label, structured: true, url },
+    record: {
+      provider,
+      text: markdown,
+      source: label,
+      format: 'markdown',
+      url,
+      sourceIdentity: scholarlySourceIdentityOf(url),
+    },
   }
 }
 
@@ -226,6 +242,7 @@ async function resolveArxivFullText(
     `https://arxiv.org/html/${id}`,
     http,
     "arXiv's HTML version (LaTeXML)",
+    'arxiv-html',
     signal,
   )
   if (html.kind === 'record') return { record: html.record }
@@ -235,23 +252,15 @@ async function resolveArxivFullText(
     `https://ar5iv.labs.arxiv.org/html/${id}`,
     http,
     "ar5iv's HTML version",
+    'ar5iv-html',
     signal,
   )
   if (ar5iv.kind === 'record') return { record: ar5iv.record }
   reasons.push(ar5iv.reason)
 
   const pdfUrl = `https://arxiv.org/pdf/${id}`
-  const pdf = await fetchPdfText(pdfUrl, http, signal, enhancer)
-  if (pdf.kind === 'text') {
-    return {
-      record: {
-        text: pdf.text,
-        source: pdf.source ?? 'the arXiv PDF',
-        structured: false,
-        url: pdfUrl,
-      },
-    }
-  }
+  const pdf = await fetchPdfText(pdfUrl, http, signal, enhancer, 'the arXiv PDF')
+  if (pdf.kind === 'record') return { record: pdf.record }
   reasons.push(`arXiv PDF: ${pdf.reason}${pdf.detail === undefined ? '' : ` (${pdf.detail})`}`)
 
   return { reasons }
@@ -271,12 +280,26 @@ export async function resolveScholarlyFullText(
   context: ScholarlyResolutionContext,
 ): Promise<FullTextRecord> {
   const { http, keys, store, signal, enhancer } = context
-  const cacheKey = `${target.kind}-${target.id}`
+  const cacheKey = `${target.kind}-${target.kind === 'url' ? scholarlySourceIdentityOf(target.id) : target.id}`
   const reasons: string[] = []
+  let cachedPdf: Extract<FullTextCacheEntry, { kind: 'pdf' }> | undefined
 
   if (store !== undefined) {
     const cached = await store.get(cacheKey)
-    if (cached.kind === 'hit') return cached.record
+    if (cached.kind === 'hit') {
+      const identity =
+        cached.entry.kind === 'pdf'
+          ? cached.entry.sourceIdentity
+          : cached.entry.record.sourceIdentity
+      if (target.kind === 'url' && identity !== scholarlySourceIdentityOf(target.id)) {
+        await store.delete(cacheKey)
+        reasons.push('cache: evicted a different URL source')
+      } else if (cached.entry.kind === 'document') {
+        return cached.entry.record
+      } else {
+        cachedPdf = cached.entry
+      }
+    }
     if (cached.kind === 'corrupt') {
       // The corrupt entry is evicted and re-fetched. It is a fact worth naming
       // in the terminal error, not a silent miss.
@@ -300,6 +323,30 @@ export async function resolveScholarlyFullText(
     return record
   }
 
+  // Revalidate the exact PDF source, including discovered DOI/preprint targets.
+  // A hit clears any prior local extraction from the cache; only absence may
+  // reuse plain text. Expiry removes both tiers before attempting a refetch.
+  if (cachedPdf) {
+    const lookup = await lookupPdfArtifact(cachedPdf.url, enhancer, signal)
+    if (typeof lookup !== 'string') {
+      if (!cachedPdf.record) return lookup
+      await store!.delete(cacheKey)
+      return await remember(lookup)
+    }
+    if (lookup === 'absent' && cachedPdf.record) return cachedPdf.record
+    if (lookup === 'expired') await store!.delete(cacheKey)
+    const pdf = await extractRemotePdf(
+      cachedPdf.url,
+      http,
+      cachedPdf.record?.source ?? 'the PDF at that URL',
+      signal,
+    )
+    if (pdf.kind === 'record') return await remember(pdf.record)
+    throw new Error(
+      `The cached PDF source did not yield readable text (${pdf.reason}${pdf.detail ? `: ${pdf.detail}` : ''}).`,
+    )
+  }
+
   // 1. arXiv directly
   if (target.kind === 'arxiv') {
     const resolved = await resolveArxivFullText(target.id, http, signal, enhancer)
@@ -312,14 +359,7 @@ export async function resolveScholarlyFullText(
   // 2. Direct PDF URL
   if (target.kind === 'url') {
     const pdf = await fetchPdfText(target.id, http, signal, enhancer)
-    if (pdf.kind === 'text') {
-      return await remember({
-        text: pdf.text,
-        source: pdf.source ?? 'the PDF at that URL',
-        structured: false,
-        url: target.id,
-      })
-    }
+    if (pdf.kind === 'record') return await remember(pdf.record)
     throw new Error(
       `That URL did not yield readable PDF text (${pdf.reason}${
         pdf.detail === undefined ? '' : `: ${pdf.detail}`
@@ -344,7 +384,7 @@ export async function resolveScholarlyFullText(
 
 /**
  * The DOI / PMID / PMCID route: Europe PMC, OpenAlex, and Unpaywall lookups
- * start concurrently, PMC JATS XML is the preferred structured source, then
+ * start concurrently, PMC JATS XML is the preferred Markdown source, then
  * the discovered open-access PDF candidates are tried in order. `reasons`
  * accumulates by reference so the caller's terminal error names every route;
  * the helper returns undefined when no route answered.
@@ -416,7 +456,7 @@ async function resolveDoiLikeRoute(
     if (doi === undefined && epmc.doi !== undefined) doi = epmc.doi
   }
 
-  // If PMC JATS XML is available, this is the highest-priority structured source
+  // PMC JATS XML retains priority over discovered PDF sources.
   if (pmcid !== undefined) {
     let xml: string | undefined
     try {
@@ -429,10 +469,12 @@ async function resolveDoiLikeRoute(
       const markdown = jatsToMarkdown(xml)
       if (markdown !== undefined) {
         return await remember({
+          provider: 'pmc-jats',
           text: markdown,
           source: `PubMed Central (${pmcid})`,
-          structured: true,
+          format: 'markdown',
           url: `https://europepmc.org/article/PMC/${pmcid}`,
+          sourceIdentity: `https://europepmc.org/article/PMC/${pmcid}`,
         })
       }
       reasons.push(`PMC full text (${pmcid}): JATS XML carried no article body`)
@@ -505,15 +547,14 @@ async function resolveDoiLikeRoute(
       continue
     }
 
-    const pdf = await fetchPdfText(candidate.url, http, signal, enhancer)
-    if (pdf.kind === 'text') {
-      return await remember({
-        text: pdf.text,
-        source: pdf.source ?? `an open-access PDF (found via ${candidate.from})`,
-        structured: false,
-        url: candidate.url,
-      })
-    }
+    const pdf = await fetchPdfText(
+      candidate.url,
+      http,
+      signal,
+      enhancer,
+      `an open-access PDF (found via ${candidate.from})`,
+    )
+    if (pdf.kind === 'record') return await remember(pdf.record)
     reasons.push(
       `open-access PDF via ${candidate.from}: ${pdf.reason}${
         pdf.detail === undefined ? '' : ` (${pdf.detail})`

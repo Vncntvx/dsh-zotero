@@ -22,12 +22,18 @@ import {
 export const ENRICHMENT_MODE_CHOICES = ['free', 'pro'] as const
 export type EnrichmentMode = (typeof ENRICHMENT_MODE_CHOICES)[number]
 
+/** Input byte caps are enforced locally; MinerU enforces the page ceilings. */
+export const ENRICHMENT_DOCUMENT_LIMITS = Object.freeze({
+  free: Object.freeze({ maxBytes: 10 * 1024 * 1024, maxPages: 20 }),
+  pro: Object.freeze({ maxBytes: 200 * 1024 * 1024, maxPages: 200 }),
+})
+
 export interface EnrichmentPreferences {
   /** Which MinerU API to use. Independent of whether a token is configured. */
   readonly mode: EnrichmentMode
   /** Credential-reference name for the precise-API token (a name, never the value). */
   readonly mineruTokenRef: string
-  /** Authorizes sending document bytes to MinerU (data egress). */
+  /** Deployment gate for explicitly requested document uploads; enabling it starts no work. */
   readonly allowDocumentUpload: boolean
   /** Absolute output directory; empty means the harness default is resolved at runtime. */
   readonly outputDir: string
@@ -46,7 +52,7 @@ export type EnrichmentPreferenceKey = keyof EnrichmentPreferences
 export const ENRICHMENT_DEFAULTS: EnrichmentPreferences = Object.freeze({
   mode: 'free',
   mineruTokenRef: ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru,
-  allowDocumentUpload: true,
+  allowDocumentUpload: false,
   outputDir: '',
   enableSemanticSearch: false,
   semanticModel: DEFAULT_SEMANTIC_MODEL,

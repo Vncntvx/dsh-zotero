@@ -23,14 +23,16 @@ graph LR
 
 ## 组件与边界
 
-| 组件                    | Cordis 键                                 | 设置命名空间 | 默认 | 职责                             |
-| ----------------------- | ----------------------------------------- | ------------ | ---- | -------------------------------- |
-| `dsh-zotero`            | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页 |
-| `dsh-zotero/library`    | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面 |
-| `dsh-zotero/scholarly`  | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取       |
-| `dsh-zotero/enrichment` | `enrichment`                              | `enrichment` | 关闭 | 可选 MinerU 文档解析与本地落盘   |
+| 组件                    | Cordis 键                                 | 设置命名空间 | 默认 | 职责                                 |
+| ----------------------- | ----------------------------------------- | ------------ | ---- | ------------------------------------ |
+| `dsh-zotero`            | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页     |
+| `dsh-zotero/library`    | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面     |
+| `dsh-zotero/scholarly`  | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取           |
+| `dsh-zotero/enrichment` | `enrichment`                              | `enrichment` | 关闭 | 主动解析、产物查询与本地语义模型管理 |
 
-四者不是同类同级：核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心；显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置；学术检索组件是外部授权边界，未挂载时服务、传输层与工具都不存在；文档解析组件同样是独立授权边界，不注册工具与提示词段，只通过核心服务上的可选全文增强器槽接入读取链路。
+核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心，显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置。学术检索组件是 Agent 外部检索授权边界，未挂载时服务、传输层与工具都不存在。文档解析组件的挂载只使解析和模型管理能力可用；上传须再通过部署开关和用户针对具体文档的主动提交。其目标接入方式是只读产物查询与独立的主动解析操作，均不注册模型工具或提示词段。
+
+本文将 enrichment 的实施前基线 `a3f4759` 与 WP0 目标契约分开说明，下文的实现状态描述均以该基线为准。WP1 的只读接缝、WP2 的主动解析任务和 WP7 的前台资源排空按设计描述，由各执行包实现与验收；本次文档修改不确认并行实现的完成状态。
 
 ## 核心分层
 
@@ -64,7 +66,7 @@ graph LR
 - 查询参数编码由 `src/local/search-query.ts` 负责；路径片段由 `src/local/scope-paths.ts` 提供；
 - 全文读取、coverage 解释和附件来源事实由 `src/local/retrieve-fulltext.ts` 负责；changes cursor 的 identity、coverage 和版本构造由 `src/local/changes-cursor.ts` 负责；
 - Scope listing 规范化与名称匹配位于 `src/normalize-scope.ts`，saved-search 条件解码位于 `src/normalize-saved-search.ts`；search hit、item detail、child row 与共享上下文分别由 `src/normalize-search.ts`、`src/normalize-item-detail.ts`、`src/normalize-children.ts`、`src/normalize-context.ts` 承担；
-- 原文片段基于 BM25 词频算法排序；
+- 原文片段经 `EvidenceRanker` 槽排序，核心默认使用 BM25，enrichment 可提供本地语义混合排序；
 - 导出遵循 Zotero 本地接口的单次请求限制：除 `citation` 外的五种格式都在单次请求内取回全部条目（`itemKey` 单次上限 50 条），超出直接拒绝；`ris`/`csljson` 只需该次批请求，`bibtex`/`biblatex` 另外并行发出一次元数据批请求，用于把导出结果对齐到各条目；`citation` 按 50 一组发出多个请求；合并正文的逐条文档定位只服务于工具结果，面板端点只取渲染文本/引文；
 - 写入领域支持跨库文献关系（`dc:relation`），群组库条目自动映射至规范的 `http://zotero.org/groups/<id>/items/<key>` URI；
 - 非幂等写入的提交证明、拒绝映射及 `committed-unverified` 结果由 `src/local/write-verdicts.ts` 集中负责；操作域只负责构造请求和解释已验证回执；
@@ -93,8 +95,8 @@ graph LR
 - BM25 参数为 k1=1.2, b=0.75；词频统计以条目内部片段集合为语料基准，不跨条目统计；
 - 查询侧单独归一：英中功能词不参与计分、重复词项只计一次，避免自然语言提问里的虚词产生伪证据；折叠索引与段落文本都不改写，也不按段落覆盖率把词项权重归零（全篇讨论同一术语时该术语仍是有效查询词）；
 - `Intl.Segmenter` 只解决无空格语言的切分，功能词过滤也只解决虚词噪声，二者都不改变「按词项重合排序」这一性质；
-- 排除零分段落：与查询没有任何词项重合的段落不计入结果。
-- 排序策略经 `src/local/evidence-ranker.ts` 的 `EvidenceRanker` 槽注入：核心自带词面 BM25 排序器；enrichment 组件挂载且开启语义检索时换装混合排序器（词面 + 本地语义向量，RRF 融合，见文档解析子系统）。每次调用实时读取槽，因此挂载/卸载与设置开关都即时生效。结果携带 `rankedRoutes`，空结果的文案据此措辞——只跑过词面路线时不得宣称"含义也未命中"。
+- 词面路线排除零分段落：与查询没有任何词项重合的段落不计入该路线结果。
+- 排序策略经 `src/local/evidence-ranker.ts` 的 `EvidenceRanker` 槽注入：核心自带完整词面 BM25 排序器；enrichment 组件挂载且开启语义检索时换装混合排序器（词面 + 本地语义向量，RRF 融合，不调用 MinerU）。当前每次排序实时读取槽与配置；WP7 将在来源 I/O 前固定整次读取的配置、模型目标与服务世代，并在读取结束后释放作用域，尚未实现。结果携带 `rankedRoutes`，空结果只描述实际执行过的路线；`matchKind` 标明命中路线，RRF 分数仅用于排序。语义准入的当前缺口见文档解析子系统。
 - `scholarly_search` 的主题路由不是语义路由：`src/scholarly/router.ts` 用两组正则短语表，`routeQuery()` 按短语命中分支选择数据源。
 
 ## 学术文献子系统 (`src/scholarly/`)
@@ -113,21 +115,49 @@ graph LR
 
 ## 文档解析子系统 (`src/enrichment/`)
 
-`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用。挂载即授权组件联系 MinerU 并发送文档字节进行解析（配置项 `allowDocumentUpload` 默认开启）；组件不注册模型工具、不注入提示词段、不注册技能。
+`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用，不注册模型工具、提示词段或技能。挂载只使解析与模型管理能力可用。目标契约要求 `allowDocumentUpload` 默认为 `false`，作为部署级禁止开关；上传还须用户主动提交具体文档并通过远程动作与会话门禁。实施前基线保留 `{ lookup, enhance }` 接缝和 `true` 上传默认值，普通读取在未命中产物后可能进入解析；WP1/WP2 负责消除这些差距。
 
-- 两个槽：核心 `ZoteroService` 持有可选 `FulltextEnhancer` 槽（`{ lookup, enhance }`，类型在 `src/local/fulltext-enhancer.ts`，纯类型，不 import `src/enrichment/**`）和 `EvidenceRanker` 槽（`src/local/evidence-ranker.ts`，核心自带词面排序器作为空槽默认值）。组件挂载时经 `ctx.inject(['zotero'])` 一并装入，卸载时清除并释放会话；依赖方向是 enrichment → core，核心不持有 MinerU 传输、主机表、凭据或嵌入运行时。
-- 接入点：`zotero_retrieve` 的 `best` 与多附件策略、`scholarly_read` 的 PDF 分支在本地抽取前使用增强器；`ok` 返回解析文本（包括有效短文档），任何 `fatal` 错误直接抛出。已授权的 MinerU 解析失败不改用本地文本或免费接口。学术检索在下载 PDF 前先 `lookup`。
-- 传输：`src/enrichment/transport.ts` 自建请求路径，复用 `src/transport/` 的公网地址词法门、DNS 解析与固定连接、逐跳重定向重校验与有界读取；API 返回的签名上传 URL、结果 CDN 地址与缓存 HEAD 的源 URL 都视为不可信输入。`Authorization` 只发往固定的 `mineru.net` API 主机，签名上传、结果下载与源 HEAD 绝不携带凭据。签名上传不附加任何 header（预签名签名不覆盖 `Content-Type`）；非 2xx 响应体被截断、去 URL 后作为错误详情保留。所有请求显式传阶段超时：30 分钟总预算、900 次轮询、提交/轮询 60 秒、上传 20 分钟、结果下载 10 分钟、源传输 20 分钟、HEAD 15 秒。
-- 模式与凭据：`mode`（`free` / `pro`）是独立配置字段，host 按它分派接口；`free` 不解析 Token 凭据。`pro` 模式下引用名解析失败按 fail-closed 报 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`，不降级免费或匿名。已有缓存产物在没有 Token 时仍可读取。
-- 解析编排：`src/enrichment/parse-once.ts` 在单个异步体内完成提交 → 签名上传 → 轮询 → 下载 → 解压 → 落盘，受总时限、轮询次数上限与共享 flight 的 signal 约束；不注册后台作业、不引入常驻轮询器。`ParseFlight` 每 `EnrichmentService` 一个，共享任务不继承任何调用者的 signal，某个等待者取消不会取消其他人；等待者归零才中止共享任务。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
-- 缓存与产物：内容产物按 `<outputDir>/<sha256>/` 落 `full.md`、`meta.json`（精准模式另含 `content_list.json`），`meta.json` 最后写入作为提交标记。源索引 `<outputDir>/sources/<sha256>.json` 记录 `identity + mode` 的产物与源戳；本地附件只 stat，URL 源用一次 HEAD 比较 ETag/Last-Modified/Content-Length，命中直接读本地产物。原始 URL 的 query/fragment 不写入 `meta.json`。`src/enrichment/output-dir.ts` 用 realpath 规范化系统根、home 与 `~/.ssh`/`~/.gnupg`（macOS `/private/etc`、`/private/var` 同样拒绝），配置错误按 fatal；`src/enrichment/zip.ts` 限制总条目 4096、wanted 2，重复 wanted、越界名、超大条目均拒绝，图片条目只跳过不落盘。
+### 只读产物接缝（WP1 目标契约）
+
+核心 `ZoteroService` 保留两个来自 `src/local/` 的纯接口槽。`FulltextEnhancer`（`fulltext-enhancer.ts`）只暴露 `lookup`，不表达 `enhance`、原始文档字节或上传操作；`EvidenceRanker`（`evidence-ranker.ts`）在空槽时使用核心完整的 BM25 排序器。组件经 `ctx.inject(['zotero'])` 装入并在卸载时撤槽，依赖方向始终是 enrichment → core。MinerU 传输、主机表、凭据、产物存储、源索引、嵌入运行时与模型下载均归 enrichment 所有。
+
+`zotero_retrieve` 的 `best`、`specified`、`allIndexed` PDF 路径与 `scholarly_read` 的 PDF 分支只查询同一来源、仍有效的 Markdown。命中时优先使用，包括有效短文档；正常未命中时，本地读取 Zotero `/fulltext`，学术读取沿已有授权下载 PDF 后执行 `extractPdfText()`。摘要、笔记和批注保持各自来源。上传关闭不妨碍读取已有有效产物。不存在或源戳变化属于正常未命中；权限、I/O、协议损坏等故障须明确报告，不能吞成未命中。
+
+`lookup` 先查源索引，没有候选产物就不额外探测源；有候选时可 stat 本地附件，或至多发一次不带 token 的 HEAD 校验 URL。它不下载文档、不联系 MinerU，也不创建或恢复解析任务。无法证实有效时不提供过期 Markdown、不隐式重解析。普通读取、PDF 打开、设置保存和服务启动均受此约束。
+
+### 主动解析与任务生命周期（WP2 设计）
+
+主动解析目标采用闭合联合 `{kind:'attachment',ref}` 或 `{kind:'url',url}`，分别覆盖子附件、顶层 PDF 附件及具体公开 PDF URL；拒绝主机路径、会话文件、原始字节和未知字段。请求携带会话与每次用户操作的幂等标识，解析模式固定为已提交配置快照。宿主校验附件 ref、实例、库和 PDF 类型；公开 URL 逐跳经过公网地址、DNS 固定连接、端口、重定向、字节与 PDF 文件头校验。
+
+界面须先展示目标名称或脱敏 URL、MinerU、所选模式、上传含义与限制，用户明确提交后才调用 enrichment 自有的短端点。上传同时要求组件已挂载、`allowDocumentUpload` 允许、具体目标操作明确，以及远程动作和会话访问获准；不借用 scholarly 或 `library.allowUrlPdfRead` 的阅读许可。解析不需要 query 或语义模型；失败明确失败，不切模式、不以本地抽取文本冒充成功。新接口不增加旧名称、配置或缓存格式的别名与迁移。
+
+设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
+
+任务取消须同步、幂等发出中止，`done` 只在真实清理完成后落定。关闭界面只释放观察；明确取消、会话关闭或卸载撤销对应等待者，最后一个等待者离开才中止共享 `ParseFlight`。卸载停止接纳、杀死组件自己的解析作业与下载任务并等待清理。重新解析使用新 generation，保留上一份有效产物，完整写入新产物后才原子切换源指针；失败或取消不删除上一份有效产物。只有主动重试可恢复未完成任务，普通读取不能恢复。
+
+实施前基线的 `parse-once.ts` 在一个异步调用中完成提交 → 签名上传 → 轮询 → 下载 → 解压 → 落盘，受总时限、轮询次数与共享 flight 的 signal 约束，没有注册解析后台作业。每服务一份 `ParseFlight` 已使单个等待者取消不影响其他等待者；主动入口、会话任务和完整清理契约由 WP2 实现与验收。
+
+### 前台读取与模型资源（WP7 设计）
+
+本地 retrieve 与 scholarly query 应在任何来源 I/O 前同步接纳可释放的 ranking scope，固定已提交配置、模型目标与服务世代，整次读取在 `finally` 释放。接纳时不提前加载模型；尚未开始排序的请求在组件卸载后仍可按固定目标懒加载，并遵守原请求 deadline。模型切换只在新模型加载成功后提交；新模型失败向其请求报错，旧实例仍被管理，不能代答新目标。旧实例要等最后一个 scope 与实际推理结束才释放。
+
+卸载应立即撤槽并禁止新接纳，允许已接纳的前台作用域排空，等待实际 load/run 结束后一次性释放；重新注入使用新世代。组件自有后台解析与下载按上一节中止和清理。实施前基线的 loader 没有这些作用域与排空管理，teardown 会调用下载取消与 embedder 释放；模型切换或卸载时的前台资源安全须由 WP7 验收。
+
+### 现有传输与产物存储
+
+`src/enrichment/transport.ts` 自建请求路径，复用 `src/transport/` 的公网地址词法门、DNS 解析与固定连接、逐跳重定向重校验与有界读取；API 返回的签名上传、结果 CDN 与缓存 HEAD 地址均视为不可信输入。`Authorization` 只发往固定的 `mineru.net` API 主机，签名上传、结果下载与源 HEAD 不携带凭据。签名上传不附加任何 header；非 2xx 正文有界截断并去 URL。阶段时限包括 30 分钟总预算、900 次轮询、提交/轮询 60 秒、上传 20 分钟、结果下载 10 分钟、源传输 20 分钟与 HEAD 15 秒。
+
+`mode`（`free` / `pro`）独立选择接口；`free` 不解析 token。`pro` 引用无法解析时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 明确失败，不降级免费或匿名；已有缓存产物无需 token 即可读取。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
+
+当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/<sha256>.json` 按 `identity + mode` 记录产物与源戳，本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。源索引查询顺序及普通读取不受当前模式切换影响的产物选择仍需后续实现。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，图片跳过不落盘。
 
 ### 本地语义排序与模型资产
 
-- 模型目录：`src/enrichment-model-catalog.ts`（浏览器与宿主共用的纯模块）钉死六个语义档位与各自的物理模型、revision、逐文件字节与 SHA-256、维度、上下文窗口、许可，以及推理元数据（池化方式、是否归一化、查询/文档指令前缀）——池化与前缀逐条对照上游 `1_Pooling/config.json` 与模型卡核验，不是约定俗成。`scripts/semantic-model-catalog.mjs` 是构建侧镜像，drift 测试比较两侧与 `manifestOf()` 输出。
-- 模型资产：默认落 `~/.dsh/models/<physicalKey>/`（或经 `semanticModelDir` 配置的目录，经 `safe-directory.ts` 与产物目录同一套 realpath/敏感根/符号链接校验）。下载按 revision 取文件，逐跳过公网地址双门（`src/enrichment/model-download-client.ts`），content-length 预检、流式字节上限、SHA-256 校验通过后才原子改名；60 秒无字节中止、单文件 30 分钟总时限。`manifest.json` 由 `manifestOf()` 写出、最后落盘作为提交标记。`ModelDownloadManager` 每服务实例一份，状态键 `<model>|<目录>`，`dispose` 中止全部在途下载；host 端不支持代理（CLI 脚本支持 `--proxy`）。
-- 语义管线：`src/enrichment/semantic/` 按 `tokenizer → onnxruntime-web (WASM, Node) → 池化 → L2 归一化` 产出向量；加载前 `semantic/bundle.ts` 校验 manifest 与目录逐文件一致并对全部文件做 SHA-256，校验不过即 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` fail-closed，绝不静默回退词面。命中阈值不用人工常数：`semantic/ranker.ts` 首次加载时用内置的双语主题探针集实测"同题最弱余弦"与"跨题最强余弦"的中点作为该模型的阈值，随后 LRUC 缓存向量（按模型+revision+文本摘要键控）。
-- 失败语义：`enableSemanticSearch` 关闭 → 纯词面；开启但模型缺失/损坏/运行时失败 → 读取调用以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 失败（错误信息含补救动作），文档下载失败报 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
+本地语义排序与 MinerU 解析是独立能力：排序消费已有文本和本地模型，不联系 MinerU、不需要上传开关或解析凭据；主动解析也不依赖模型。关闭 `enableSemanticSearch` 使用完整 BM25；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败，不静默改为词面结果。模型下载失败使用 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
+
+`src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；`scripts/semantic-model-catalog.mjs` 是构建侧镜像，drift 测试比较两侧与 `manifestOf()`。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。下载、安装和取消的完整性修复归 WP4，不能仅据这些现有检查宣称验收完成。
+
+`src/enrichment/semantic/` 当前按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。生产 `ranker.ts` 当前用全语料最高余弦减 `0.02` 作为准入门槛，没有调用双语探针校准；该相对门槛不能拒绝全无关的非空语料。当前只有单次排序内的文本去重，没有跨请求向量 LRU。WP6 仍须实现模型匹配的独立校准与无答案验收，WP8 仍须实现有界向量缓存；不得声称首次探针校准、向量缓存或六档模型效果验收已经完成。`matchKind` 说明命中路线，RRF 分数只表示排序；词项重合也不证明片段回答了问题。
 
 ## 文献库子组件 (`src/library/`)
 
@@ -188,7 +218,8 @@ graph LR
 
 ## 远程通信与设置
 
-- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；`EnrichmentService`（`enrichment`）负责语义模型的 `semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`verifySemanticModel`——接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答，模型下载能力随挂载存在；
+- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；基线中的 `EnrichmentService`（`enrichment`）只有语义模型的 `semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`verifySemanticModel`。接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答，模型下载能力随挂载存在。主动解析启动/加入、产物状态与有界任务回执端点由 WP2 实现与验收；
+- enrichment 远程边界的目标契约要求统一经 `errors.ts` 的 `domainCall` 保留领域错误码，并区分取消与 Gateway 错误。只有确切的 `gateway/service-unavailable` 表示组件缺席；权限、连接、目录或协议失败须报告实际原因，不能改写成组件不可用。基线模型端点没有统一该错误边界；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly`、`enrichment` 四个命名空间的共享设置表单；
 - 文献面板设置同时提供 11 项 `library` 偏好和 2 项核心 CSL 默认值的直接编辑；`CitationFormController` 为后两项持有独立暂存模型，两个入口共用该模型，不会提交连接等其他字段的草稿。`tests/client/settings/citation-defaults.spec.tsx` 验证真实表单组合、保存拒绝与入口一致性；`tests/client/cards/zotero-card-parity.spec.ts` 验证两个核心字段表合并后与宿主 schema 完整对应；打包后浏览器验收由 `smoke:web-composition` 验证保存和刷新持久化。
 - 配置全字段声明为 volatile，支持热重载；
@@ -209,8 +240,8 @@ graph LR
 ## 设计边界
 
 - 文献库权限：默认只读；开启 `writeEnabled` 后仅允许写入个人库（`zotero://user/0/`）；
-- 网络边界：本地请求严格限制在环回地址（`127.0.0.1`、`localhost`、`::1`），拒绝重定向；Agent 外部请求只来自学术检索组件与文档解析组件，用户主动的 URL PDF 阅读由文献面板独立授权；
-- 进程管理：无后台轮询守护进程与遥测收集，长任务统一交由 `ctx.jobs` 按需管理；
+- 网络边界：本地请求严格限制在环回地址（`127.0.0.1`、`localhost`、`::1`），拒绝重定向；外部学术检索由 scholarly 授权，用户主动的 URL PDF 阅读由文献面板独立授权。目标契约下，MinerU 请求只由用户针对具体目标主动提交的 enrichment 解析任务发起；本地语义不联系 MinerU，模型下载独立发起；
+- 进程管理：无常驻轮询守护进程与遥测收集；核心与 scholarly 长任务已有 `ctx.jobs`，enrichment 主动解析计划在 WP2 接入。后台解析与下载在卸载时中止并等待清理，前台读取作用域排空仍需 WP7；
 - 段落排序：经 `EvidenceRanker` 槽执行——核心对条目自身片段语料做 BM25 词频匹配，enrichment 组件在其模型启用时换装词面+语义的混合排序器；
 - 轨迹边界：文献轨迹只展示本会话读类工具与导出产生的事实，不记录写入，也不含库外文献；
 - 范围边界：回收站是文献面板专有范围，模型工具 schema 不提供。

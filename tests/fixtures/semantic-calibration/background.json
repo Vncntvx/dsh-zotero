@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "role": "fixed-background-only",
+  "provenance": "Original synthetic English/Chinese references under the manifest provenance and repository MIT license. No labels, model scores or external extraction. Excluded from all scored query/document pools.",
+  "families": [
+    {
+      "id": "b01-loom",
+      "topic": "loom warp tension",
+      "documentFamily": "invented-weft-reference",
+      "query": {
+        "en": "How is even warp tension maintained on a hand loom?",
+        "zh": "手织机怎样保持经线张力均匀？"
+      },
+      "document": {
+        "en": "An even warp beam and separately adjusted loose threads keep the woven edge from drawing inward. The weaver checks the shed before each pass of the shuttle.",
+        "zh": "均匀的经轴与对松线的单独调整防止织边内缩，织工在每次投梭前检查梭口。"
+      }
+    },
+    {
+      "id": "b02-tide",
+      "topic": "tidal constituent analysis",
+      "documentFamily": "invented-tide-reference",
+      "query": {
+        "en": "Why are several harmonic terms used to represent a tide record?",
+        "zh": "为什么用多个谐波项表示潮汐记录？"
+      },
+      "document": {
+        "en": "A tidal record combines periodic contributions with different astronomical frequencies. Adding constituent sinusoids represents their changing phase relationships at the station.",
+        "zh": "潮汐记录组合了不同天文频率的周期贡献，叠加分潮正弦项可表示站点上不断变化的相位关系。"
+      }
+    },
+    {
+      "id": "b03-mosaic",
+      "topic": "mosaic tessera conservation",
+      "documentFamily": "invented-tessera-reference",
+      "query": {
+        "en": "How can a conservator record loose mosaic pieces before lifting them?",
+        "zh": "修复员在移走松动马赛克块之前怎样记录它们？"
+      },
+      "document": {
+        "en": "A numbered photographic grid preserves each tessera's position and orientation. Temporary facing holds adjacent pieces together while the unstable backing is repaired.",
+        "zh": "编号摄影网格保存每块镶嵌物的位置和朝向，临时贴面在修复不稳定底层时将相邻块固定在一起。"
+      }
+    },
+    {
+      "id": "b04-queue",
+      "topic": "service queue arrival accounting",
+      "documentFamily": "invented-counter-reference",
+      "query": {
+        "en": "What distinguishes a queue's arrival rate from its service rate?",
+        "zh": "队列到达率与服务率有何区别？"
+      },
+      "document": {
+        "en": "Arrival rate counts new customers per interval, while service rate counts completed customers when a server is busy. Their balance influences how the waiting line grows.",
+        "zh": "到达率统计每时段新顾客，服务率统计服务台忙碌时完成的顾客，二者平衡影响等待队列增长。"
+      }
+    },
+    {
+      "id": "b05-lichen",
+      "topic": "lichen substrate mapping",
+      "documentFamily": "invented-lichen-reference",
+      "query": {
+        "en": "How are lichen occurrences compared across rock surfaces?",
+        "zh": "怎样比较不同岩面的地衣出现情况？"
+      },
+      "document": {
+        "en": "Equal-area quadrats give a common observation unit for recording thallus cover. Rock orientation and moisture notes help describe the sampled microhabitats.",
+        "zh": "等面积样方为记录地衣体覆盖提供共同观测单位，岩面朝向与湿度记录用于描述采样微生境。"
+      }
+    },
+    {
+      "id": "b06-piano",
+      "topic": "piano string beats",
+      "documentFamily": "invented-tuning-reference",
+      "query": {
+        "en": "Why are beats heard when two nearly matched piano strings sound together?",
+        "zh": "两根接近同音的钢琴弦同时发声为什么出现拍音？"
+      },
+      "document": {
+        "en": "Slightly different frequencies alternate between constructive and destructive interference. Adjusting one string's tension changes the beat rate as the frequencies approach agreement.",
+        "zh": "略有差别的频率在相长与相消干涉之间交替，调整一根弦的张力会在频率趋同时改变拍频。"
+      }
+    },
+    {
+      "id": "b07-ship",
+      "topic": "ship ballast trimming",
+      "documentFamily": "invented-ballast-reference",
+      "query": {
+        "en": "How can moving ballast change a vessel's trim?",
+        "zh": "移动压载怎样改变船舶纵倾？"
+      },
+      "document": {
+        "en": "Redistributing ballast forward or aft changes the longitudinal weight moment. The resulting change in bow and stern drafts is checked against the loading plan.",
+        "zh": "向艏或向艉重新分配压载改变纵向重量矩，随后根据装载计划核对艏艉吃水变化。"
+      }
+    },
+    {
+      "id": "b08-clay",
+      "topic": "clay pottery forming moisture",
+      "documentFamily": "invented-potter-reference",
+      "query": {
+        "en": "Why does a potter cover a newly formed clay rim while it dries?",
+        "zh": "陶工为什么在新成形黏土口沿干燥时遮盖它？"
+      },
+      "document": {
+        "en": "Covering an exposed rim slows water loss relative to the thicker body. More even drying reduces differential shrinkage before firing; this reference concerns forming, not glaze chemistry.",
+        "zh": "遮盖暴露口沿可减慢其相对厚器身的失水，较均匀的干燥减少烧制前差异收缩。此参考涉及成形而非釉料化学。"
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "id": "vaccine-ceramic",
+      "role": "diagnostic-only-never-fit",
+      "provenance": "Synthetic regression adapted from the approved WP6 failure description; overlaps legacy topics deliberately and is quarantined from fitting and CI sample counts.",
+      "query": { "en": "What makes a vaccine protective?", "zh": "疫苗为何具有保护作用" },
+      "documents": [
+        {
+          "en": "Ceramic glaze chemistry controls craquelure through thermal expansion.",
+          "zh": "陶瓷釉料化学经由热膨胀控制开片。"
+        }
+      ],
+      "expectedSemanticHits": 0
+    }
+  ]
+}

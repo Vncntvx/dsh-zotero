@@ -489,11 +489,25 @@ export interface ZoteroRetrieveRequest {
  */
 export type ZoteroEvidenceField = EvidenceField
 
+/** Provenance remains a pure core contract; retrieval never imports enrichment runtime. */
+export type ZoteroArtifactProvenance =
+  import('./local/fulltext-enhancer.js').FulltextArtifactProvenance
+
+/** The format of a fulltext source's exact text. */
+export type ZoteroFulltextFormat = 'markdown' | 'text'
+
 /** One bounded evidence passage. Fulltext passages never carry page locators. */
 export interface ZoteroEvidence {
   source: ZoteroEvidenceSource
   sourceRef: string
   text: string
+  /** Fulltext format; absent for annotations, notes, and abstracts. */
+  textFormat?: ZoteroFulltextFormat
+  /** Exact parsed artifact used by a fulltext cache hit; absent for Zotero index text. */
+  artifact?: ZoteroArtifactProvenance
+  /** Original fulltext character span [start, end); reported only as a pair. */
+  start?: number
+  end?: number
   /** Position within a multi-chunk source (note/fulltext), so the Agent can locate the span. */
   chunkIndex?: number
   /** Total chunks of the source this passage belongs to. */
@@ -537,7 +551,10 @@ export interface ZoteroRetrieveAttachment {
   ref: string
   contentType?: string
   status: ZoteroRetrieveAttachmentStatus
-  /** Zotero's own indexing coverage for this file; present when indexed. */
+  /** Format and artifact of the text this source contributed. */
+  textFormat?: ZoteroFulltextFormat
+  artifact?: ZoteroArtifactProvenance
+  /** Zotero's own indexing coverage for this file; absent for parsed artifacts. */
   coverage?: ZoteroCoverage
   /** True when this file's share of the call's character budget cut its text. */
   inputTruncated?: boolean
@@ -564,6 +581,9 @@ export interface ZoteroRetrieveResult {
   attachmentRef?: string
   /** The content type of the attachment `attachmentRef` points at; absent when Zotero reported none. */
   attachmentContentType?: string
+  /** Fulltext facts when exactly one attachment contributed. */
+  textFormat?: ZoteroFulltextFormat
+  artifact?: ZoteroArtifactProvenance
   coverage?: ZoteroCoverage
   /**
    * Every full-text source a multi-attachment policy considered, with its

@@ -72,27 +72,35 @@ describe('MineruClient request', () => {
     ).rejects.toBeInstanceOf(PublicAddressError)
   })
 
-  it('follows a redirect and revalidates the next hop', async () => {
-    let hop = 0
-    const { client, calls } = clientOf(async () => {
-      hop += 1
-      if (hop === 1) {
-        return new Response(null, {
-          status: 302,
-          headers: { location: 'https://cdn-mineru.openxlab.org.cn/r.md' },
+  it.each(['request', 'get', 'head'] as const)(
+    '%s returns the validated terminal request URL without consulting Response.url',
+    async (method) => {
+      const resolver = vi.fn(async (_host: string) => [
+        { address: '93.184.216.34', family: 4 as const },
+      ])
+      const finalUrl = 'https://cdn.example/final.pdf?version=2'
+      const { client, calls } = clientOf(async (url, init) => {
+        if (url !== finalUrl) {
+          return new Response(null, { status: 302, headers: { location: finalUrl } })
+        }
+        const response = new Response(init?.method === 'HEAD' ? null : '# done')
+        Object.defineProperty(response, 'url', {
+          get: () => {
+            throw new Error('Response.url is not provenance')
+          },
         })
-      }
-      return new Response('# done', { status: 200 })
-    })
-    const bytes = await client.bytes('https://cdn.example/original.md', {
-      method: 'GET',
-    })
-    expect(new TextDecoder().decode(bytes)).toBe('# done')
-    expect(calls).toHaveLength(2)
-    // The token rode the first hop only; the CDN hop must not receive it.
-    expect(headersOf(calls[0]!.init).authorization).toBeUndefined()
-    expect(headersOf(calls[1]!.init).authorization).toBeUndefined()
-  })
+        return response
+      }, resolver)
+      const result = await client[method]('https://example.org/original.pdf', { method: 'GET' })
+      expect(result.finalUrl).toBe(finalUrl)
+      expect(calls.map(({ url }) => url)).toEqual(['https://example.org/original.pdf', finalUrl])
+      expect(resolver.mock.calls.map(([host]) => host)).toEqual(['example.org', 'cdn.example'])
+      expect(calls.map(({ init }) => init.method)).toEqual(
+        method === 'head' ? ['HEAD', 'HEAD'] : ['GET', 'GET'],
+      )
+      for (const { init } of calls) expect(headersOf(init).authorization).toBeUndefined()
+    },
+  )
 
   it('refuses an HTTPS redirect that downgrades to HTTP', async () => {
     const { client } = clientOf(
@@ -137,11 +145,12 @@ describe('MineruClient request', () => {
       async () =>
         new Response(null, { status: 200, headers: { etag: '"v1"', 'content-length': '42' } }),
     )
-    const { status, headers } = await client.head('https://cdn.example/r.pdf', {
+    const { status, headers, finalUrl } = await client.head('https://cdn.example/r.pdf', {
       method: 'HEAD',
       token: 'secret-token',
     })
     expect(status).toBe(200)
+    expect(finalUrl).toBe('https://cdn.example/r.pdf')
     expect(headers.get('etag')).toBe('"v1"')
     expect(calls[0]!.init.method).toBe('HEAD')
     expect(headersOf(calls[0]!.init).authorization).toBeUndefined()
@@ -235,6 +244,7 @@ describe('MineruClient request', () => {
     )
     const result = await client.get('https://cdn.example/r.pdf', { method: 'GET' })
     expect(new TextDecoder().decode(result.bytes)).toBe('body')
+    expect(result.finalUrl).toBe('https://cdn.example/r.pdf')
     expect(result.headers.get('etag')).toBe('"v1"')
   })
 

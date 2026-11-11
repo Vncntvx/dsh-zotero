@@ -50,20 +50,26 @@ describe('enrichment host adapters', () => {
   it('writes and reads an artifact on the real filesystem', async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-zotero-enrichment-store-'))
     const store = new ParsedArtifactStore(dir)
-    await store.put('key-a', {
+    const key = 'a'.repeat(64)
+    await store.put(key, {
       markdown: '# Real',
       contentList: '[]',
       meta: {
-        identity: 'i',
+        version: 2,
+        parser: 'mineru',
+        format: 'markdown',
+        sourceId: '1'.repeat(64),
+        generation: '3c343ed6-f65a-45df-a0c5-b20c93b4b6c8',
+        identity: 'https://example.org/…',
         mode: 'free',
-        contentFingerprint: 'f',
+        contentFingerprint: 'f'.repeat(64),
         taskId: 't',
-        files: [],
+        files: ['full.md', 'content_list.json'],
       },
     })
-    const read = await store.get('key-a')
+    const read = await store.get(key)
     expect(read?.markdown).toBe('# Real')
-    expect(await store.get('absent')).toBeUndefined()
+    expect(await store.get('b'.repeat(64))).toBeUndefined()
   })
 
   it('reads a real local file through the production source-byte deps', async () => {

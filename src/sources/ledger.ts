@@ -272,13 +272,27 @@ function exportRefsOf(
 }
 
 /** The dedup identity of one evidence passage: its verbatim fields, no hashing. */
-function evidenceKeyOf(
-  source: string,
-  sourceRef: string,
-  text: string,
-  pageLabel: string | undefined,
-): string {
-  return `${source}|${sourceRef}|${pageLabel ?? ''}|${text}`
+function evidenceKeyOf(item: import('../evidence-item.js').EvidenceItem): string {
+  const artifact = item.artifact
+  return JSON.stringify([
+    item.source,
+    item.sourceRef,
+    item.pageLabel,
+    item.preview,
+    item.textFormat,
+    item.start,
+    item.end,
+    artifact === undefined
+      ? null
+      : [
+          artifact.parser,
+          artifact.mode,
+          artifact.artifactId,
+          artifact.fingerprint,
+          artifact.sourceId,
+          artifact.generation,
+        ],
+  ])
 }
 
 /**
@@ -409,7 +423,7 @@ export function buildSourceWorkspace(
     }
     if (view.items !== null) {
       for (const item of view.items) {
-        const key = evidenceKeyOf(item.source, item.sourceRef, item.preview, item.pageLabel)
+        const key = evidenceKeyOf(item)
         const existing = draft.evidence.get(key)
         if (existing === undefined) {
           draft.evidence.set(key, {
@@ -418,6 +432,11 @@ export function buildSourceWorkspace(
               sourceRef: item.sourceRef,
               text: item.preview,
               previewTruncated: item.previewTruncated,
+              ...(item.textFormat === undefined ? {} : { textFormat: item.textFormat }),
+              ...(item.artifact === undefined ? {} : { artifact: item.artifact }),
+              ...(item.start === undefined || item.end === undefined
+                ? {}
+                : { start: item.start, end: item.end }),
               ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
               ...(item.attachmentRef === undefined ? {} : { attachmentRef: item.attachmentRef }),
               callIds: [callId],

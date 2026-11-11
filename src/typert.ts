@@ -51,6 +51,9 @@ import {
   ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
   ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
   ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
+  ZOTERO_START_DOCUMENT_PARSE_METHOD,
+  ZOTERO_DOCUMENT_ARTIFACT_METHOD,
+  ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
   ZOTERO_ENRICHMENT_SERVICE_KEY,
 } from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
@@ -114,9 +117,27 @@ export const TYPERT_MANIFEST: TypertContribution = {
         key: ZOTERO_ENRICHMENT_SERVICE_KEY,
         exportName: 'EnrichmentService',
         description:
-          'Serves the optional enrichment component: local semantic-model status, download, cancel, and verification. Answers only while the component row is composed.',
+          'Serves the optional enrichment component: explicit session-owned document parsing, artifact receipts, and local semantic-model management. Answers only while the component row is composed.',
         tags: [],
         members: [
+          {
+            kind: 'method',
+            name: ZOTERO_START_DOCUMENT_PARSE_METHOD,
+            signature:
+              'startDocumentParse(request: ZoteroStartDocumentParseRequestView, signal: AbortSignal): Promise<ZoteroStartDocumentParseResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_DOCUMENT_ARTIFACT_METHOD,
+            signature:
+              'documentArtifact(request: ZoteroDocumentArtifactRequestView, signal: AbortSignal): Promise<ZoteroDocumentArtifactResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+            signature:
+              'documentParseReceipt(request: ZoteroDocumentParseReceiptRequestView, signal: AbortSignal): Promise<ZoteroDocumentParseReceiptResultView>',
+          },
           {
             kind: 'method',
             name: ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,

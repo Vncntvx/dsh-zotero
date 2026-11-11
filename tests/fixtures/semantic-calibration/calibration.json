@@ -1,0 +1,896 @@
+{
+  "schemaVersion": 1,
+  "split": "calibration",
+  "families": [
+    {
+      "id": "c01-peat-respiration",
+      "topic": "peat incubation respiration",
+      "documentFamily": "invented-moss-jar-incubation",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Moss Jar is a fictional peat incubation. Drained jars released more carbon dioxide than waterlogged jars over four days. The interpretation was that air entry increased access to oxygen for decomposition. Methane was not measured, so the experiment did not estimate a net greenhouse-gas balance.",
+            "zh": "苔罐是虚构的泥炭培养。四天内排水罐释放的二氧化碳多于水浸罐，解释为空气进入提高分解过程的氧可得性。试验没有测甲烷，因而没有估算净温室气体收支。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Moss Jar handling register\n| Treatment | Lid sampling |\n| Drained | daily |\n| Waterlogged | daily |\nTemperature was held constant. No field drainage depth, methane flux or seasonal series is reported.",
+            "zh": "苔罐操作记录\n| 处理 | 盖口采样 |\n| 排水 | 每日 |\n| 水浸 | 每日 |\n温度保持不变，未报告野外排水深度、甲烷通量或季节序列。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "A Moss Jar replicate had a leaking stopper and was excluded before flux comparison. The exclusion avoided interpreting room-air exchange as peat respiration. The report supplies no site-scale carbon inventory.",
+            "zh": "一个苔罐重复的塞子漏气，在比较通量前被排除，以免把室内空气交换解释为泥炭呼吸。报告没有站点尺度的碳储量。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "oxygen",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did drained Moss Jar peat release more carbon dioxide over four days?",
+            "zh": "为什么排水苔罐泥炭在四天内释放更多二氧化碳？"
+          },
+          "variants": {
+            "en": [
+              "What mechanism was proposed for the larger drained-jar carbon dioxide flux?",
+              "How was the drainage response in peat respiration interpreted?",
+              "What role did air entry play in the Moss Jar result?",
+              "Explain the increased carbon dioxide release after drainage in this incubation."
+            ],
+            "zh": [
+              "排水罐二氧化碳通量增大的机制解释是什么？",
+              "培养中的泥炭呼吸对排水的响应怎样解释？",
+              "空气进入在苔罐结果中起了什么作用？",
+              "怎样解释这次培养排水后增加的二氧化碳释放？"
+            ]
+          },
+          "rationale": "The proposed oxygen-access mechanism is explicitly given."
+        },
+        {
+          "id": "methane-balance",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "Did drainage reduce total warming once methane was included in Moss Jar?",
+            "zh": "苔罐把甲烷计入后排水是否减少了总增温效应？"
+          },
+          "rationale": "Methane and net greenhouse balance are unmeasured."
+        },
+        {
+          "id": "seasonal-maximum",
+          "kind": "wrong-timescale",
+          "relevant": [],
+          "text": {
+            "en": "In which season did the field peatland have its highest respiration flux?",
+            "zh": "野外泥炭地在哪个季节呼吸通量最高？"
+          },
+          "rationale": "A constant-temperature four-day incubation has no seasonal field series."
+        },
+        {
+          "id": "carbon-stock",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many tonnes of carbon per hectare remained at the Moss Jar site?",
+            "zh": "苔罐站点每公顷还剩多少吨碳？"
+          },
+          "rationale": "Jar fluxes and leak exclusions are not a site carbon inventory."
+        }
+      ]
+    },
+    {
+      "id": "c02-desalination-energy",
+      "topic": "reverse-osmosis pressure recovery",
+      "documentFamily": "invented-salt-wheel-pilot",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Salt Wheel is an invented reverse-osmosis pilot. A pressure exchanger transferred hydraulic work from the concentrated outlet stream to incoming feed. With the same target permeate flow, the pump drew less electrical power when the exchanger was engaged. The report supplies no numerical power readings.",
+            "zh": "盐轮是虚构的反渗透中试。压力交换器把浓水出口流的水力功传给进料。在相同目标产水流量下，启用交换器时泵的耗电功率降低。报告没有提供功率数值。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Salt Wheel worksheet: specific energy = electrical work / permeate volume. This is a definition, not a reported plant value. The pilot did not assay boron, pathogens or marine effects of the brine discharge.",
+            "zh": "盐轮工作表：比能耗 = 电功 / 产水体积。这是定义，不是已报告的工厂数值。中试没有检测硼、病原体或排浓水的海洋影响。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Salt Wheel operators bypassed the exchanger during a seal inspection. The operating log records valve positions, not a life-cycle cost analysis or membrane rejection test.",
+            "zh": "盐轮操作员检查密封时旁路了交换器，运行记录写的是阀门位置，不是生命周期成本分析或膜截留试验。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "energy-path",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How did Salt Wheel reuse brine pressure to reduce pump demand?",
+            "zh": "盐轮怎样复用浓水压力以降低泵需求？"
+          },
+          "rationale": "Hydraulic transfer from outlet to feed directly answers the mechanism."
+        },
+        {
+          "id": "specific-number",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What exact kilowatt-hours per cubic metre did Salt Wheel achieve?",
+            "zh": "盐轮实现的每立方米千瓦时精确值是多少？"
+          },
+          "rationale": "The definition gives no measured energy or volume values."
+        },
+        {
+          "id": "boron-rejection",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What percentage of boron did the Salt Wheel membrane reject?",
+            "zh": "盐轮膜截留了百分之多少的硼？"
+          },
+          "rationale": "A pressure-recovery study reports no boron assay."
+        },
+        {
+          "id": "marine-impact",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "How did Salt Wheel discharge change seagrass cover near the outlet?",
+            "zh": "盐轮排水怎样改变了出口附近的海草覆盖？"
+          },
+          "rationale": "No receiving-environment study exists."
+        }
+      ]
+    },
+    {
+      "id": "c03-seismic-microzonation",
+      "topic": "sediment resonance measurement",
+      "documentFamily": "invented-valley-noise-transect",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Valley Noise is a fictional ambient-vibration transect. Horizontal-to-vertical spectral ratios had a lower-frequency peak on thick sediment than on nearby rock. The authors interpreted the contrast as a local resonance difference, while warning that the ratio alone did not provide a complete amplification function.",
+            "zh": "谷噪是虚构的环境振动剖面。厚沉积层上的水平与垂直谱比峰值频率低于邻近岩地，作者把差异解释为局地共振不同，同时说明仅凭谱比不能得到完整放大函数。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "simulated-extraction",
+          "text": {
+            "en": "VALLEY NOISE — synthetic extraction layout\nStation V: sediment / Station R: rock\nInstrument leveling checked before recording. Traffic intervals removed.\nNo earthquake date prediction, building loss survey or depth inversion is included.",
+            "zh": "谷噪——合成的模拟抽取排版\nV站：沉积层／R站：岩地\n记录前检查仪器调平，去除交通干扰时段。\n不包括地震日期预测、建筑损失调查或深度反演。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Valley Noise appendix explains how sensor orientation was logged. It lists no calibrated shear-wave velocity profile and no numerical sediment thickness.",
+            "zh": "谷噪附录说明如何记录传感器方位，没有经校准的剪切波速剖面或沉积厚度数值。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "peak-contrast",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What did the lower-frequency spectral peak over Valley Noise sediment suggest?",
+            "zh": "谷噪沉积层较低频率的谱峰说明什么？"
+          },
+          "rationale": "Local resonance contrast is the stated limited interpretation."
+        },
+        {
+          "id": "quake-date",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "On what date will the next earthquake strike the Valley Noise valley?",
+            "zh": "谷噪所在山谷下一次地震会在何日发生？"
+          },
+          "rationale": "Ambient resonance is not earthquake prediction."
+        },
+        {
+          "id": "sediment-depth",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What sediment thickness was numerically inverted at Valley Noise station V?",
+            "zh": "谷噪V站反演出的沉积层厚度数值是多少？"
+          },
+          "rationale": "No depth inversion or velocity profile is provided."
+        },
+        {
+          "id": "loss-ratio",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "What fraction of local buildings collapsed in the Valley Noise survey?",
+            "zh": "谷噪调查中当地建筑有多大比例倒塌？"
+          },
+          "rationale": "There is no earthquake damage survey."
+        }
+      ]
+    },
+    {
+      "id": "c04-reading-braille",
+      "topic": "tactile symbol learning",
+      "documentFamily": "invented-dot-path-training",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Dot Path is an invented tactile-learning session with adult volunteers unfamiliar with Braille. Raised-dot cards were presented with spoken labels, followed by a delayed matching task. Accuracy improved within the session when labels were paired consistently. The study did not test fluent sentence reading.",
+            "zh": "点径是针对不熟悉盲文的成年志愿者设计的虚构触觉学习。凸点卡片配以口头标签，随后延迟匹配。一节课内，标签配对一致时准确率提高，但没有测试流畅句子阅读。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Dot Path session order\n| Stage | Task |\n| Practice | card-label pairing |\n| Check | delayed card matching |\nNo children, neurological scans or follow-up months were included.",
+            "zh": "点径课程顺序\n| 阶段 | 任务 |\n| 练习 | 卡片标签配对 |\n| 检查 | 延迟卡片匹配 |\n未纳入儿童、神经影像或数月随访。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Dot Path materials were cleaned between volunteers. The inventory counts cards, not cells in a cortical map or words read per minute.",
+            "zh": "点径材料在志愿者之间清洁，清单统计卡片数，不是皮层图谱细胞数或每分钟阅读词数。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "pairing",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Which training condition improved adult raised-dot matching in Dot Path?",
+            "zh": "点径中哪种训练条件改善了成人凸点匹配？"
+          },
+          "rationale": "Consistent spoken-label pairing is the stated condition."
+        },
+        {
+          "id": "child-fluency",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "How many words per minute could blind children read after Dot Path?",
+            "zh": "点径训练后盲童每分钟能读多少词？"
+          },
+          "rationale": "Adults did symbol matching, not children reading sentences."
+        },
+        {
+          "id": "cortical-area",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Which cortical area expanded on scans after Dot Path training?",
+            "zh": "点径训练后影像显示哪个皮层区域扩大？"
+          },
+          "rationale": "No scans were taken."
+        },
+        {
+          "id": "long-retention",
+          "kind": "wrong-timescale",
+          "relevant": [],
+          "text": {
+            "en": "What proportion of Dot Path symbols was retained twelve months later?",
+            "zh": "十二个月后还保留了多大比例的点径符号记忆？"
+          },
+          "rationale": "The experiment ends within the session."
+        }
+      ]
+    },
+    {
+      "id": "c05-fungal-spore",
+      "topic": "fungal spore release timing",
+      "documentFamily": "invented-cap-chamber-observation",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Cap Chamber is a fictional microscopy exercise. A small droplet grew beside each selected fungal spore before detachment. Frames showed the droplet merging with surface liquid just before the spore moved. The exercise links rapid liquid rearrangement to the launch event, without measuring airborne travel distance.",
+            "zh": "菌盖室是虚构的显微练习。所选真菌孢子旁的小液滴在脱离前长大，逐帧画面显示孢子运动前液滴与表面液体融合。练习把液体快速重排与发射事件联系起来，没有测空中传播距离。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Cap Chamber kept the stage humid to prevent the droplets drying during imaging. The log contains no species-level pathogenicity tests or field spore-trap counts.",
+            "zh": "菌盖室保持载台湿润，以免成像时液滴干燥。记录没有物种致病性试验或野外孢子捕集计数。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "markdown",
+          "text": {
+            "en": "# Cap Chamber image handling\nOnly temporal order is demonstrated. There is no calibrated droplet volume, launch energy or aerodynamic trajectory fit.",
+            "zh": "# 菌盖室图像处理\n这里只演示时间先后，没有经校准的液滴体积、发射能量或空气动力学轨迹拟合。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "launch-sequence",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What liquid event immediately preceded spore launch in Cap Chamber?",
+            "zh": "菌盖室中孢子发射前紧接着发生了什么液体现象？"
+          },
+          "rationale": "Droplet merging is directly observed in temporal order."
+        },
+        {
+          "id": "travel-distance",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many metres did Cap Chamber spores travel through outdoor air?",
+            "zh": "菌盖室孢子在户外空气中传播了多少米？"
+          },
+          "rationale": "Microscopy of detachment supplies no outdoor trajectory."
+        },
+        {
+          "id": "infectious-dose",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "What infectious spore dose caused disease in Cap Chamber animals?",
+            "zh": "菌盖室动物中引发疾病的感染性孢子剂量是多少？"
+          },
+          "rationale": "No animal or pathogenicity experiment exists."
+        },
+        {
+          "id": "launch-energy",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What calibrated energy in joules drove a Cap Chamber spore launch?",
+            "zh": "菌盖室单次孢子发射经校准的焦耳能量是多少？"
+          },
+          "rationale": "Temporal frames do not supply energy calibration."
+        }
+      ]
+    },
+    {
+      "id": "c06-wind-wake",
+      "topic": "wind-turbine wake measurements",
+      "documentFamily": "invented-two-rotor-tunnel",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Two Rotor is an invented wind-tunnel demonstration. The downstream model turbine received slower flow when aligned with the upstream rotor. Moving it laterally outside the measured wake increased its rotation rate under the same tunnel setting. Electrical output was not instrumented.",
+            "zh": "双转子是虚构的风洞演示。与上游转子对齐时，下游模型风机接收的气流更慢；把它横向移出所测尾流后，同一风洞设置下转速提高。试验没有测电功率。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Two Rotor run record\n| Position | Flow description |\n| Aligned | wake centre |\n| Offset | outside wake |\nNo annual wind distribution, seabird observations or acoustic survey was collected.",
+            "zh": "双转子运行表\n| 位置 | 气流描述 |\n| 对齐 | 尾流中心 |\n| 偏移 | 尾流之外 |\n没有收集全年风况、海鸟观测或声学调查。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "The Two Rotor appendix documents model spacing and tunnel startup order. It supplies no full-scale turbine fatigue spectrum or grid connection study.",
+            "zh": "双转子附录记录模型间距与风洞启动顺序，没有全尺寸风机疲劳谱或并网研究。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "offset-effect",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why did laterally offsetting the downstream Two Rotor model increase rotation?",
+            "zh": "为何横向偏移双转子下游模型会提高转速？"
+          },
+          "rationale": "It moves the rotor out of the slower measured wake."
+        },
+        {
+          "id": "annual-energy",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What annual megawatt-hour gain did Two Rotor establish for an offshore wind farm?",
+            "zh": "双转子证明海上风场每年能增发多少兆瓦时？"
+          },
+          "rationale": "No electrical measurement or annual wind distribution exists."
+        },
+        {
+          "id": "bird-mortality",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Did the Two Rotor offset reduce seabird collision mortality?",
+            "zh": "双转子偏移是否降低了海鸟碰撞死亡率？"
+          },
+          "rationale": "A tunnel model has no seabird observations."
+        },
+        {
+          "id": "blade-fatigue",
+          "kind": "wrong-scale",
+          "relevant": [],
+          "text": {
+            "en": "What full-scale blade fatigue life followed from the measured wake?",
+            "zh": "所测尾流对应的全尺寸叶片疲劳寿命是多少？"
+          },
+          "rationale": "Rotation and flow descriptions provide no fatigue spectrum or lifetime."
+        }
+      ]
+    },
+    {
+      "id": "c07-cave-isotope",
+      "topic": "cave drip isotope sampling",
+      "documentFamily": "invented-drop-stone-monitoring",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Drop Stone is a fictional cave-monitoring note. Drip water varied less in oxygen-isotope ratio than rainfall collected outside the cave. The note proposes mixing and storage above the cave as a smoothing process. It does not date any stalagmite layers or reconstruct historical temperatures.",
+            "zh": "滴石是虚构的洞穴监测记录。滴水氧同位素比的变化小于洞外收集雨水，记录提出洞上混合与储存起平滑作用，没有为石笋层定年或重建历史温度。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "formula",
+          "text": {
+            "en": "Drop Stone defines delta notation relative to a reference ratio: delta = (R_sample / R_reference - 1) times 1000. The definition supplies no dated climate sequence or numerical residence-time estimate.",
+            "zh": "滴石定义相对参考比值的delta记法：delta = (R_sample / R_reference - 1) times 1000。这一定义不提供已定年的气候序列或停留时间数值估计。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Drop Stone bottles were capped immediately after collection. The field sheet contains bottle identifiers and collection dates only, with no cave-air carbon dioxide data.",
+            "zh": "滴石采水后立即盖瓶，野外表仅有瓶号与采集日期，没有洞内空气二氧化碳数据。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "smoothing",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What process was proposed to smooth rainfall isotope variability before Drop Stone dripping?",
+            "zh": "滴石提出什么过程在滴水前平滑了降雨同位素变化？"
+          },
+          "rationale": "Above-cave mixing and storage is the proposed mechanism."
+        },
+        {
+          "id": "medieval-temperature",
+          "kind": "wrong-timescale",
+          "relevant": [],
+          "text": {
+            "en": "What medieval summer temperature did Drop Stone reconstruct?",
+            "zh": "滴石重建出的中世纪夏季温度是多少？"
+          },
+          "rationale": "No dated stalagmite or temperature reconstruction exists."
+        },
+        {
+          "id": "residence-time",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many years was the estimated water residence time above Drop Stone cave?",
+            "zh": "滴石洞上水体估计停留了几年？"
+          },
+          "rationale": "A smoothing proposal gives no residence-time estimate."
+        },
+        {
+          "id": "cave-co2",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What cave-air carbon dioxide concentration accompanied the Drop Stone isotope shift?",
+            "zh": "滴石同位素变化时洞内空气二氧化碳浓度是多少？"
+          },
+          "rationale": "No cave-air gas measurements are reported."
+        }
+      ]
+    },
+    {
+      "id": "c08-lidar-canopy",
+      "topic": "airborne lidar canopy heights",
+      "documentFamily": "invented-crown-flight-pointcloud",
+      "documents": [
+        {
+          "id": "a",
+          "format": "markdown",
+          "text": {
+            "en": "# Crown Flight, an invented point-cloud exercise\nGround-classified returns defined a local terrain surface. Subtracting that surface elevation from upper returns produced heights above ground, avoiding confusion between hillside elevation and tree height. No species classifier was trained.",
+            "zh": "# 冠飞：虚构的点云练习\n地面分类回波定义局地地形面，用上部回波高程减去该面高程得到离地高度，避免混淆山坡海拔和树高。没有训练树种分类器。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Crown Flight flagged sparse ground returns under dense foliage as a source of terrain uncertainty. The exercise demonstrated geometric height normalization only and gave no harvested biomass or carbon conversion factors.",
+            "zh": "冠飞把浓密叶层下稀少的地面回波标为地形不确定性来源。练习仅演示几何高度归一化，没有收获生物量或碳换算因子。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Crown Flight data fields\n| Field | Meaning |\n| z | elevation |\n| class | return category |\nNo leaf chemistry, bird nests or tree age field exists.",
+            "zh": "冠飞数据字段\n| 字段 | 含义 |\n| z | 高程 |\n| class | 回波类别 |\n没有叶片化学、鸟巢或树龄字段。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "terrain-removal",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How did Crown Flight separate tree height from hillside elevation?",
+            "zh": "冠飞怎样把树高与山坡高程分开？"
+          },
+          "rationale": "Subtracting the ground surface gives height above local terrain."
+        },
+        {
+          "id": "species-accuracy",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "What accuracy did Crown Flight achieve when classifying tree species?",
+            "zh": "冠飞树种分类取得了多少准确率？"
+          },
+          "rationale": "No species classifier was trained."
+        },
+        {
+          "id": "carbon-total",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How much canopy carbon was estimated from Crown Flight harvest validation?",
+            "zh": "冠飞通过收获验证估计了多少冠层碳？"
+          },
+          "rationale": "Geometric heights have no harvest calibration or conversion factors."
+        },
+        {
+          "id": "tree-age",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "What was the oldest tree age in the Crown Flight point cloud?",
+            "zh": "冠飞点云中最老的树龄是多少？"
+          },
+          "rationale": "The listed point fields do not measure age."
+        }
+      ]
+    },
+    {
+      "id": "c09-yeast-osmotic",
+      "topic": "yeast osmotic response",
+      "documentFamily": "invented-salt-bud-culture",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Salt Bud is an invented yeast-culture exercise. Cells initially shrank after transfer to a more concentrated external solution. Later images showed partial volume recovery, accompanied by accumulation of intracellular glycerol. The note interprets glycerol as contributing to osmotic balance rather than as evidence of cell division.",
+            "zh": "盐芽是虚构的酵母培养练习。转入更浓的外液后细胞先收缩，较晚图像显示体积部分恢复，并伴随胞内甘油积累。记录把甘油解释为参与渗透平衡，而非细胞分裂证据。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Salt Bud kept the nutrient recipe fixed between conditions. It did not assay ethanol production, sequence mutants or test antifungal drugs.",
+            "zh": "盐芽在不同条件间保持营养配方不变，没有检测乙醇产量、突变体测序或抗真菌药物。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "table",
+          "text": {
+            "en": "Salt Bud imaging log\n| Phase | Observation |\n| Early | shrinkage |\n| Later | partial recovery |\nNo numerical glycerol concentration or doubling-time estimate is supplied.",
+            "zh": "盐芽成像表\n| 阶段 | 观察 |\n| 早期 | 收缩 |\n| 后期 | 部分恢复 |\n没有甘油浓度数值或倍增时间估计。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "volume-recovery",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What intracellular change was linked to partial volume recovery in Salt Bud?",
+            "zh": "盐芽体积部分恢复与哪种胞内变化相关？"
+          },
+          "rationale": "Intracellular glycerol accumulation is directly given."
+        },
+        {
+          "id": "ethanol-yield",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "How many grams of ethanol per litre did the Salt Bud culture produce?",
+            "zh": "盐芽培养每升产生多少克乙醇？"
+          },
+          "rationale": "No ethanol production assay exists."
+        },
+        {
+          "id": "drug-susceptibility",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "Which antifungal drug had the lowest inhibitory concentration in Salt Bud?",
+            "zh": "盐芽中哪种抗真菌药的抑菌浓度最低？"
+          },
+          "rationale": "No drug testing was performed."
+        },
+        {
+          "id": "glycerol-value",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What exact intracellular glycerol concentration was measured after Salt Bud recovery?",
+            "zh": "盐芽恢复后测得的胞内甘油精确浓度是多少？"
+          },
+          "rationale": "The observation is qualitative and supplies no concentration."
+        }
+      ]
+    },
+    {
+      "id": "c10-color-perception",
+      "topic": "visual simultaneous contrast",
+      "documentFamily": "invented-grey-square-display",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Grey Square is an invented display demonstration. Two central patches had identical luminance values, but the one on a darker surround appeared lighter to the observers. The demonstration illustrates dependence of perceived lightness on the surrounding context rather than a physical difference between the central patches.",
+            "zh": "灰方是虚构的显示演示。两个中心色块亮度值相同，观察者却觉得深色背景上的那块更亮。演示说明明度知觉依赖周围情境，而非中心色块本身的物理差异。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Grey Square used one calibrated monitor in a darkened room. No retinal disease screening, colour-vision genotype test or age-group comparison was performed.",
+            "zh": "灰方在暗室使用一台经校准的显示器，没有做视网膜疾病筛查、色觉基因型检测或年龄组比较。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "formula",
+          "text": {
+            "en": "Grey Square names display luminance L and surround luminance S but fits no equation relating them to perceived lightness. The demonstration reports no observer-level numerical ratings.",
+            "zh": "灰方用L表示显示亮度、S表示背景亮度，但没有拟合二者与知觉明度之间的方程，也没有报告观察者级数值评分。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "context",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "Why could physically identical central patches look different in Grey Square?",
+            "zh": "灰方中物理相同的中心色块为什么看起来不同？"
+          },
+          "rationale": "The different surrounds provide the stated contextual explanation."
+        },
+        {
+          "id": "retinal-diagnosis",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "Which retinal disease did the Grey Square observers have?",
+            "zh": "灰方观察者患有哪种视网膜疾病？"
+          },
+          "rationale": "No disease screening is reported."
+        },
+        {
+          "id": "age-difference",
+          "kind": "wrong-population",
+          "relevant": [],
+          "text": {
+            "en": "How much weaker was simultaneous contrast in older Grey Square observers?",
+            "zh": "灰方老年观察者的同时对比弱了多少？"
+          },
+          "rationale": "No age-group comparison or ratings exist."
+        },
+        {
+          "id": "fitted-law",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What fitted coefficient maps Grey Square surround luminance to perceived lightness?",
+            "zh": "把灰方背景亮度映射到知觉明度的拟合系数是多少？"
+          },
+          "rationale": "Named variables are not a fitted model."
+        }
+      ]
+    },
+    {
+      "id": "c11-satellite-orbit",
+      "topic": "low-orbit atmospheric drag",
+      "documentFamily": "invented-copper-orbit-notebook",
+      "documents": [
+        {
+          "id": "a",
+          "format": "formula",
+          "text": {
+            "en": "Copper Orbit is a fictional orbital-mechanics worksheet. Atmospheric drag opposes velocity and removes orbital energy. The worksheet uses F_drag = one half times rho times C_D times A times v squared, and explains that higher density increases drag for the same vehicle and speed. It provides no density time series.",
+            "zh": "铜轨是虚构的轨道力学工作表。大气阻力与速度反向并移走轨道能量，示意式为F_drag = one half times rho times C_D times A times v squared。同一飞行器与速度下，密度提高会增大阻力，但表中没有密度时间序列。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "prose",
+          "text": {
+            "en": "Copper Orbit contrasts coasting with a short reboost maneuver that adds energy. No spacecraft identification, maneuver fuel measurement, debris collision event or reentry forecast is supplied.",
+            "zh": "铜轨比较无动力飞行与补充能量的短时升轨机动，没有提供航天器身份、机动燃料测量、碎片碰撞事件或再入预报。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Copper Orbit drawings mark the direction of drag on a schematic ellipse. They are not observations of a particular satellite and do not specify an atmospheric composition profile.",
+            "zh": "铜轨图在示意椭圆上标出阻力方向，并非某颗卫星的观测，也未指定大气成分剖面。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "density-drag",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "How does higher atmospheric density affect the same Copper Orbit vehicle's drag?",
+            "zh": "更高的大气密度怎样影响同一铜轨飞行器的阻力？"
+          },
+          "rationale": "The equation and prose both say drag increases with density."
+        },
+        {
+          "id": "reentry-date",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "What exact reentry date was predicted for the Copper Orbit satellite?",
+            "zh": "铜轨卫星预报的精确再入日期是哪天？"
+          },
+          "rationale": "There is no particular satellite or density history."
+        },
+        {
+          "id": "fuel-used",
+          "kind": "missing-quantity",
+          "relevant": [],
+          "text": {
+            "en": "How many kilograms of propellant did the Copper Orbit reboost consume?",
+            "zh": "铜轨升轨消耗了多少千克推进剂？"
+          },
+          "rationale": "A conceptual reboost comparison gives no fuel measurement."
+        },
+        {
+          "id": "collision-cause",
+          "kind": "adjacent-topic",
+          "relevant": [],
+          "text": {
+            "en": "Which debris fragment caused the collision recorded by Copper Orbit?",
+            "zh": "铜轨所记录的碰撞由哪块碎片造成？"
+          },
+          "rationale": "No debris collision was recorded."
+        }
+      ]
+    },
+    {
+      "id": "c12-urban-heat",
+      "topic": "street shade surface temperature",
+      "documentFamily": "invented-lantern-pavement-walk",
+      "documents": [
+        {
+          "id": "a",
+          "format": "prose",
+          "text": {
+            "en": "Lantern Pavement is an invented midday street walk. Shaded paving stones had lower infrared surface temperatures than adjacent sunlit stones of the same material. The note attributes the contrast to reduced direct solar input, while distinguishing surface temperature from the air temperature people breathe.",
+            "zh": "灯街铺面是虚构的午间街道步测。同材质相邻石板中，阴影处红外表面温度低于日晒处。记录把差异归于直射太阳输入减少，并区分表面温度与人所呼吸的空气温度。"
+          }
+        },
+        {
+          "id": "b",
+          "format": "table",
+          "text": {
+            "en": "Lantern Pavement observations\n| Pair | Material |\n| A | stone |\n| B | stone |\nAir sensors, hospital records and night measurements were not included.",
+            "zh": "灯街铺面观测\n| 配对 | 材质 |\n| A | 石材 |\n| B | 石材 |\n未纳入空气传感器、医院记录或夜间测量。"
+          }
+        },
+        {
+          "id": "c",
+          "format": "prose",
+          "text": {
+            "en": "Lantern Pavement recorded shadow positions during the walk. It did not randomize tree planting or measure leaf-level transpiration, humidity or electricity demand.",
+            "zh": "灯街铺面记录步测时的阴影位置，没有随机安排植树，也没有测叶片蒸腾、湿度或电力需求。"
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "shade",
+          "kind": "answer",
+          "relevant": ["a"],
+          "text": {
+            "en": "What explains the cooler shaded stone surfaces in Lantern Pavement?",
+            "zh": "什么解释了灯街铺面阴影石面的较低温度？"
+          },
+          "rationale": "Reduced direct solar input is the stated surface mechanism."
+        },
+        {
+          "id": "air-cooling",
+          "kind": "wrong-outcome",
+          "relevant": [],
+          "text": {
+            "en": "By how many degrees did breathing-height air cool along Lantern Pavement?",
+            "zh": "灯街铺面呼吸高度的空气降温了几度？"
+          },
+          "rationale": "Only infrared surface temperature was measured."
+        },
+        {
+          "id": "hospital-admissions",
+          "kind": "unsupported-extrapolation",
+          "relevant": [],
+          "text": {
+            "en": "How many heat-related hospital admissions were prevented by Lantern Pavement shade?",
+            "zh": "灯街铺面阴影避免了多少起高温相关住院？"
+          },
+          "rationale": "No health outcome or causal intervention is observed."
+        },
+        {
+          "id": "nighttime-effect",
+          "kind": "wrong-timescale",
+          "relevant": [],
+          "text": {
+            "en": "Did Lantern Pavement shade lower midnight air temperature after sunset?",
+            "zh": "灯街铺面阴影在日落后是否降低了午夜气温？"
+          },
+          "rationale": "The data are midday surface observations only."
+        }
+      ]
+    }
+  ]
+}

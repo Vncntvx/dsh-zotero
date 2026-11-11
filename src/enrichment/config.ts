@@ -1,8 +1,8 @@
 /**
  * Configuration schema for the optional document-enrichment component.
  *
- * The component's presence is the authorization to contact MinerU; the schema
- * describes only how it behaves once mounted. Every field is volatile so a
+ * Mounting makes the capability available. Uploading a selected document also
+ * requires the deployment gate and an explicit user parse operation. Every field is volatile so a
  * settings commit lands in the running fiber without remounting, and each read
  * resolves the live value. Defaults live in the shared `enrichment-preferences`
  * contract; `resolveEnrichmentConfig` only unwraps volatile references and
@@ -44,7 +44,7 @@ export const EnrichmentConfigSchema = Schema.object({
   allowDocumentUpload: Schema.boolean()
     .default(ENRICHMENT_DEFAULTS.allowDocumentUpload)
     .description(
-      'Authorize sending document bytes (local attachments and URL PDFs) to MinerU. Defaults to true when mounting the component.',
+      'Allow explicitly requested PDF uploads to MinerU. Disabled by default; enabling it does not parse or upload documents.',
     )
     .volatile(),
   outputDir: Schema.string()

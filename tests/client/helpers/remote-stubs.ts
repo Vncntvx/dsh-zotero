@@ -5,6 +5,23 @@
  * @module tests/client/helpers/remote-stubs
  */
 
+import type { IJobs } from '@deepseek-ai/dsh-api-job-controller/client'
+
+/** Client services used only after the Zotero Remote namespace is mounted. */
+export function createParseRuntimeStub() {
+  const snapshot = { rows: {}, observed: {} }
+  const jobs: IJobs = {
+    state: { getSnapshot: () => snapshot, subscribe: () => () => {} },
+    watchRows: () => () => {},
+    observe: () => () => {},
+    kill: async () => ({ ok: true, value: { outcome: 'requested' } }),
+  }
+  return {
+    jobs,
+    connection: { state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} } },
+  }
+}
+
 /**
  * A Client access seam fake: every action is granted by default (the owner); a
  * spec narrows the set to model a viewer without the grant.

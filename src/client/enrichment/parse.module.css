@@ -1,0 +1,98 @@
+/* The host owns the modal and controls. This sheet only arranges their seats. */
+.surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: var(--dsw-font-s-14-font-family);
+  font-size: var(--dsh-content-font-size);
+  line-height: var(--dsw-font-s-14-line-height);
+  color: var(--dsw-alias-label-primary);
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-font-size);
+  padding: var(--dsw-font-s-14-font-size);
+}
+
+.header {
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font: inherit;
+  font-weight: var(--dsw-font-s-strong-14-font-weight);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-font-size);
+  padding: var(--dsw-font-s-14-font-size);
+  overflow: auto;
+  min-width: 0;
+}
+
+.body p,
+.facts {
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-radius-xs);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--dsw-radius-xs) var(--dsw-font-xs-13-font-size);
+  overflow-wrap: anywhere;
+}
+
+.facts dt,
+.secondary {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.facts dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-font-size);
+  padding-block: var(--dsw-font-xs-13-font-size);
+  border-block: 1px solid var(--dsw-alias-border-l2);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.preview {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
+.footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+@media (pointer: coarse) {
+  .field input:focus {
+    font-size: 16px;
+  }
+}

@@ -14,11 +14,11 @@ import {
 } from '../../src/enrichment-preferences.ts'
 
 describe('enrichment preferences', () => {
-  it('defaults to the free mode with egress authorized and no output override', () => {
+  it('defaults to free mode with document uploads disabled and no output override', () => {
     expect(enrichmentPreferencesOf({})).toEqual({
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: true,
+      allowDocumentUpload: false,
       outputDir: '',
       enableSemanticSearch: false,
       semanticModel: 'balanced',

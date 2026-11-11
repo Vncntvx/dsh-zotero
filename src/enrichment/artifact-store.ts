@@ -1,38 +1,91 @@
-/**
- * Durable store for parsed artifacts, plus the per-source index that lets a
- * cache hit be answered before the document is read or downloaded.
- *
- * One directory per content cache key under the resolved output root. A write
- * stages every file, then lands `meta.json` last as the commit marker: `get`
- * treats an artifact without a valid `meta.json` as a miss, so a half-written
- * directory is never served and a kill mid-write leaves no false hit. Each
- * file is written temp-then-rename, matching `ScholarlyTextStore`. A cached
- * artifact is pure local text — reading it opens no socket.
- *
- * The source index lives under `<root>/sources/<sourceKey>.json`; it records
- * which content artifact belonged to one `identity + mode` pair and the source
- * stamp at fetch time. `lookupSource` validates the stamp, reads the artifact,
- * and evicts the index when its artifact is gone. The index file name is a
- * SHA-256 digest, so no user text reaches the filesystem.
- * @module dsh-zotero/enrichment/artifact-store
- */
-
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+/** Durable v2 artifacts and an atomically published, mode-independent source index. */
+import { lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { z } from 'zod'
-import type { FulltextSourceStamp } from '../local/fulltext-enhancer.js'
+import {
+  artifactMetaSchema,
+  SHA256,
+  SOURCE_INDEX_MAX_BYTES,
+  sourceIndexSchema,
+  sourceRecordSchema,
+  type SourceIndexRecord,
+} from './artifact-schema.js'
 import { stampMatches } from './source-stamp.js'
-import type { ParsedArtifact, ParsedArtifactMeta } from './types.js'
+import type { FulltextSourceStamp, ParsedArtifact } from './types.js'
 
-/** Host seams, injectable so unit tests never touch the real filesystem. */
+export type { SourceIndexRecord } from './artifact-schema.js'
+
+/** External filesystem and cross-process lock ports. */
 export interface ArtifactStoreDeps {
-  /** Create the directory and any missing parents. */
   readonly mkdir: (path: string) => Promise<void>
   readonly readFile: (path: string) => Promise<Uint8Array>
   readonly writeFile: (path: string, data: Uint8Array | string) => Promise<void>
   readonly rename: (from: string, to: string) => Promise<void>
   readonly rm: (path: string, options: { recursive: boolean; force: boolean }) => Promise<void>
+  readonly readSourceIndex?: (path: string, maxBytes: number) => Promise<Uint8Array>
+  readonly withSourceLock?: typeof withFileLock
+}
+
+/** Inspect the source directory and lock before using the public file lock. */
+async function requireRegular(path: string, directory = false): Promise<void> {
+  const info = await lstat(path)
+  if (info.isSymbolicLink() || (directory ? !info.isDirectory() : !info.isFile())) {
+    throw new Error('The parsed source index path is not a regular filesystem entry')
+  }
+}
+async function sourceDirectory(path: string): Promise<void> {
+  await requireRegular(dirname(path), true)
+}
+const hostSourceLock: typeof withFileLock = async (path, operation, options) => {
+  await sourceDirectory(path)
+  try {
+    await requireRegular(`${path}.lock`)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  let entered = false
+  try {
+    return await withFileLock(
+      path,
+      async () => {
+        await sourceDirectory(path)
+        await requireRegular(`${path}.lock`)
+        entered = true
+        return await operation()
+      },
+      options,
+    )
+  } catch (error) {
+    if (!entered) options?.signal?.throwIfAborted()
+    throw error
+  }
+}
+
+/** Bound allocation and streaming reads even if the index grows after stat. */
+async function readIndexFile(path: string, maxBytes: number): Promise<Uint8Array> {
+  await sourceDirectory(path)
+  await requireRegular(path)
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  try {
+    const info = await file.stat()
+    if (!info.isFile() || info.size > maxBytes)
+      throw new Error('The parsed source index is too large or is not a file')
+    const buffer = Buffer.alloc(Math.min(maxBytes + 1, info.size + 1))
+    let length = 0
+    for (;;) {
+      if (length === buffer.byteLength)
+        throw new Error('The parsed source index changed size while reading')
+      const { bytesRead } = await file.read(buffer, length, buffer.byteLength - length, null)
+      if (bytesRead === 0) return buffer.subarray(0, length)
+      length += bytesRead
+      if (length > maxBytes) throw new Error('The parsed source index is too large')
+    }
+  } finally {
+    await file.close()
+  }
 }
 
 const hostDeps: ArtifactStoreDeps = {
@@ -45,97 +98,30 @@ const hostDeps: ArtifactStoreDeps = {
   },
   rename,
   rm,
+  readSourceIndex: readIndexFile,
+  withSourceLock: hostSourceLock,
 }
-
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const encoder = new TextEncoder()
 
-/** One source-index entry: which content artifact and which source stamp. */
-export interface SourceIndexRecord {
-  readonly version: 1
-  readonly cacheKey: string
-  readonly fingerprint: string
-  readonly stamp: FulltextSourceStamp
-}
-
-function metaOf(value: unknown): ParsedArtifactMeta | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const m = value as Partial<ParsedArtifactMeta>
-  if (
-    typeof m.identity !== 'string' ||
-    (m.mode !== 'free' && m.mode !== 'pro') ||
-    typeof m.contentFingerprint !== 'string' ||
-    typeof m.taskId !== 'string' ||
-    !Array.isArray(m.files)
-  )
-    return undefined
-  return m as ParsedArtifactMeta
-}
-
-function stampOf(value: unknown): FulltextSourceStamp | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const stamp = value as Partial<FulltextSourceStamp> & Record<string, unknown>
-  if (stamp.kind === 'file') {
-    return typeof stamp.size === 'number' && typeof stamp.mtimeMs === 'number'
-      ? { kind: 'file', size: stamp.size, mtimeMs: stamp.mtimeMs }
-      : undefined
-  }
-  if (stamp.kind === 'bytes') {
-    return typeof stamp.fingerprint === 'string'
-      ? { kind: 'bytes', fingerprint: stamp.fingerprint }
-      : undefined
-  }
-  if (stamp.kind === 'url') {
-    if (typeof stamp.url !== 'string') return undefined
-    return {
-      kind: 'url',
-      url: stamp.url,
-      ...(typeof stamp.etag === 'string' ? { etag: stamp.etag } : {}),
-      ...(typeof stamp.lastModified === 'string' ? { lastModified: stamp.lastModified } : {}),
-      ...(typeof stamp.contentLength === 'number' ? { contentLength: stamp.contentLength } : {}),
-    }
-  }
-  return undefined
-}
-
-function sourceRecordOf(value: unknown): SourceIndexRecord | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const record = value as Partial<SourceIndexRecord>
-  if (
-    record.version !== 1 ||
-    typeof record.cacheKey !== 'string' ||
-    !/^[A-Za-z0-9_-]+$/.test(record.cacheKey) ||
-    typeof record.fingerprint !== 'string'
-  ) {
-    return undefined
-  }
-  const stamp = stampOf(record.stamp)
-  if (stamp === undefined) return undefined
-  return {
-    version: 1,
-    cacheKey: record.cacheKey,
-    fingerprint: record.fingerprint,
-    stamp,
-  }
-}
-
-/** Durable receipt: a failed poll/download resumes this task without another POST. */
 const taskBase = z.object({
   taskId: z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/),
   createdAt: z.number().finite().nonnegative(),
 })
 const taskReceipt = z.discriminatedUnion('uploaded', [
-  taskBase.extend({ uploaded: z.literal(true) }),
-  taskBase.extend({
-    uploaded: z.literal(false),
-    uploadUrl: z
-      .string()
-      .url()
-      .refine((value) => {
-        const url = new URL(value)
-        return url.protocol === 'https:' && !url.username && !url.password
-      }),
-  }),
+  taskBase.extend({ uploaded: z.literal(true) }).strict(),
+  taskBase
+    .extend({
+      uploaded: z.literal(false),
+      uploadUrl: z
+        .string()
+        .url()
+        .refine((value) => {
+          const url = new URL(value)
+          return url.protocol === 'https:' && !url.username && !url.password
+        }),
+    })
+    .strict(),
 ])
 export type ParseTaskRecord = z.infer<typeof taskReceipt>
 
@@ -147,7 +133,41 @@ export class ParsedArtifactStore {
     private readonly deps: ArtifactStoreDeps = hostDeps,
   ) {}
 
-  /** Keep a task receipt across transient failures; only ENOENT is a miss. */
+  private ensureRoot(): Promise<void> {
+    this.rootEnsured ??= this.deps.mkdir(this.root).catch((error) => {
+      this.rootEnsured = undefined
+      throw error
+    })
+    return this.rootEnsured
+  }
+
+  private dir(cacheKey: string): string {
+    return join(this.root, SHA256.parse(cacheKey))
+  }
+
+  private taskPath(cacheKey: string): string {
+    return join(this.root, 'tasks', `${SHA256.parse(cacheKey)}.json`)
+  }
+
+  private indexPath(): string {
+    return join(this.root, 'sources', 'index.json')
+  }
+
+  private async atomicWrite(
+    path: string,
+    data: Uint8Array | string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const temp = `${path}.tmp-${randomUUID()}`
+    try {
+      await this.deps.writeFile(temp, data)
+      signal?.throwIfAborted()
+      await this.deps.rename(temp, path)
+    } finally {
+      await this.deps.rm(temp, { recursive: false, force: true })
+    }
+  }
+
   async getTask(cacheKey: string): Promise<ParseTaskRecord | undefined> {
     let bytes: Uint8Array
     try {
@@ -156,162 +176,137 @@ export class ParsedArtifactStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
     }
-    const result = taskReceipt.safeParse(JSON.parse(decoder.decode(bytes)))
-    if (!result.success) throw new Error('Invalid MinerU task receipt')
-    return result.data
+    return taskReceipt.parse(JSON.parse(decoder.decode(bytes)))
   }
 
   async putTask(cacheKey: string, task: ParseTaskRecord): Promise<void> {
+    const record = taskReceipt.parse(task)
     await this.deps.mkdir(join(this.root, 'tasks'))
-    await this.atomicWrite(this.taskPath(cacheKey), JSON.stringify(task))
+    await this.atomicWrite(this.taskPath(cacheKey), JSON.stringify(record))
   }
 
   async deleteTask(cacheKey: string): Promise<void> {
-    await this.deps.rm(this.taskPath(cacheKey), {
-      recursive: false,
-      force: true,
-    })
+    await this.deps.rm(this.taskPath(cacheKey), { recursive: false, force: true })
   }
 
-  private taskPath(cacheKey: string): string {
-    if (!/^[A-Za-z0-9_-]+$/.test(cacheKey)) throw new Error('Invalid artifact task key')
-    return join(this.root, 'tasks', `${cacheKey}.json`)
-  }
-
-  private ensureRoot(): Promise<void> {
-    if (this.rootEnsured === undefined) {
-      this.rootEnsured = this.deps.mkdir(this.root).catch((error) => {
-        this.rootEnsured = undefined
-        throw error
-      })
-    }
-    return this.rootEnsured
-  }
-
-  private dir(cacheKey: string): string {
-    if (!/^[A-Za-z0-9_-]+$/.test(cacheKey)) throw new Error('Invalid artifact cache key')
-    return join(this.root, cacheKey)
-  }
-
-  private sourcesDir(): string {
-    return join(this.root, 'sources')
-  }
-
-  private sourcePath(sourceKey: string): string {
-    if (!/^[A-Za-z0-9_-]+$/.test(sourceKey)) throw new Error('Invalid artifact source key')
-    return join(this.sourcesDir(), `${sourceKey}.json`)
-  }
-
-  private async atomicWrite(path: string, data: Uint8Array | string): Promise<void> {
-    const temp = `${path}.tmp-${randomUUID()}`
-    try {
-      await this.deps.writeFile(temp, data)
-      await this.deps.rename(temp, path)
-    } finally {
-      await this.deps.rm(temp, { recursive: false, force: true })
-    }
-  }
-
-  /**
-   * Missing or malformed artifacts are evicted. Filesystem failures propagate
-   * so an unreadable cache cannot cause an unnecessary external submission.
-   */
+  /** Reads never create directories, acquire locks, evict, or repair corrupt data. */
   async get(cacheKey: string): Promise<ParsedArtifact | undefined> {
-    await this.ensureRoot()
     const dir = this.dir(cacheKey)
-    const evict = async (): Promise<undefined> => {
-      await this.deps.rm(dir, { recursive: true, force: true })
-      return undefined
-    }
     try {
-      const metaBytes = await this.deps.readFile(join(dir, 'meta.json'))
-      const meta = metaOf(JSON.parse(decoder.decode(metaBytes)))
-      if (meta === undefined) return await evict()
-      const markdown = decoder.decode(await this.deps.readFile(join(dir, 'full.md')))
-      if (markdown.trim() === '') return await evict()
-      let contentList: string | undefined
-      if (meta.files.includes('content_list.json')) {
-        contentList = decoder.decode(await this.deps.readFile(join(dir, 'content_list.json')))
-        if (!Array.isArray(JSON.parse(contentList))) return await evict()
-      }
-      return {
-        markdown,
-        ...(contentList !== undefined ? { contentList } : {}),
-        meta,
-      }
-    } catch (error) {
-      if (
-        !(error instanceof SyntaxError) &&
-        !(error instanceof TypeError) &&
-        (error as NodeJS.ErrnoException).code !== 'ENOENT'
+      const meta = artifactMetaSchema.parse(
+        JSON.parse(decoder.decode(await this.deps.readFile(join(dir, 'meta.json')))),
       )
-        throw error
-      return await evict()
+      const markdown = decoder.decode(await this.deps.readFile(join(dir, 'full.md')))
+      if (markdown.trim() === '') throw new Error('The stored parsed artifact is invalid')
+      let contentList: string | undefined
+      if (meta.files.length === 2) {
+        contentList = decoder.decode(await this.deps.readFile(join(dir, 'content_list.json')))
+        if (!Array.isArray(JSON.parse(contentList)))
+          throw new Error('The stored parsed content list is invalid')
+      }
+      return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
     }
   }
 
-  /**
-   * Write an artifact. `meta.json` is written last so it is the commit marker.
-   */
+  /** Validate before I/O; meta.json is the artifact's final commit marker. */
   async put(cacheKey: string, artifact: ParsedArtifact): Promise<void> {
-    await this.ensureRoot()
+    const meta = artifactMetaSchema.parse(artifact.meta)
+    if (artifact.markdown.trim() === '') throw new Error('The parsed Markdown is empty')
+    if ((artifact.contentList !== undefined) !== (meta.files.length === 2))
+      throw new Error('The parsed artifact file list does not match its payload')
+    if (artifact.contentList !== undefined && !Array.isArray(JSON.parse(artifact.contentList)))
+      throw new Error('The parsed content list is invalid')
     const dir = this.dir(cacheKey)
+    await this.ensureRoot()
     await this.deps.mkdir(dir)
-    const files = ['full.md']
     await this.atomicWrite(join(dir, 'full.md'), encoder.encode(artifact.markdown))
-    if (artifact.contentList !== undefined) {
-      files.push('content_list.json')
+    if (artifact.contentList !== undefined)
       await this.atomicWrite(join(dir, 'content_list.json'), encoder.encode(artifact.contentList))
-    }
-    const meta: ParsedArtifactMeta = { ...artifact.meta, files }
     await this.atomicWrite(join(dir, 'meta.json'), encoder.encode(JSON.stringify(meta)))
   }
 
-  /**
-   * Record which content artifact belongs to one source identity and what the
-   * source looked like. The write is atomic; a stale record is harmless because
-   * `lookupSource` compares the stamp first.
-   */
-  async putSource(sourceKey: string, record: SourceIndexRecord): Promise<void> {
-    await this.ensureRoot()
-    await this.deps.mkdir(this.sourcesDir())
-    await this.atomicWrite(this.sourcePath(sourceKey), encoder.encode(JSON.stringify(record)))
+  private async sourceSnapshot(): Promise<z.infer<typeof sourceIndexSchema>> {
+    let bytes: Uint8Array
+    try {
+      bytes =
+        this.deps.readSourceIndex !== undefined
+          ? await this.deps.readSourceIndex(this.indexPath(), SOURCE_INDEX_MAX_BYTES)
+          : await this.deps.readFile(this.indexPath())
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { version: 2, sources: {} }
+      throw error
+    }
+    if (bytes.byteLength > SOURCE_INDEX_MAX_BYTES)
+      throw new Error('The parsed source index is too large')
+    return sourceIndexSchema.parse(JSON.parse(decoder.decode(bytes)))
   }
 
-  /**
-   * Serve a stored artifact when the source still matches its stamp. A missing
-   * or malformed index is a miss; an index whose artifact is gone is removed.
-   */
+  /** One rename commits all primary/verified aliases, retaining unrelated sources. */
+  async putSources(
+    sourceKeys: readonly string[],
+    record: SourceIndexRecord,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const keys = [...new Set(sourceKeys.map((key) => SHA256.parse(key)))]
+    if (keys.length === 0) throw new Error('A source publication requires at least one identity')
+    const value = sourceRecordSchema.parse(record)
+    signal?.throwIfAborted()
+    await this.ensureRoot()
+    await this.deps.mkdir(join(this.root, 'sources'))
+    await (this.deps.withSourceLock ?? withFileLock)(
+      this.indexPath(),
+      async () => {
+        signal?.throwIfAborted()
+        const current = await this.sourceSnapshot()
+        for (const key of keys) current.sources[key] = value
+        const snapshot = sourceIndexSchema.parse(current)
+        const bytes = encoder.encode(JSON.stringify(snapshot))
+        if (bytes.byteLength > SOURCE_INDEX_MAX_BYTES)
+          throw new Error('The parsed source index is too large')
+        signal?.throwIfAborted()
+        await this.atomicWrite(this.indexPath(), bytes, signal)
+      },
+      { waitMs: 60_000, ...(signal !== undefined ? { signal } : {}) },
+    )
+  }
+
+  async putSource(
+    sourceKey: string,
+    record: SourceIndexRecord,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.putSources([sourceKey], record, signal)
+  }
+
+  async sourceRecord(sourceKey: string): Promise<SourceIndexRecord | undefined> {
+    SHA256.parse(sourceKey)
+    return (await this.sourceSnapshot()).sources[sourceKey]
+  }
+
+  /** The caller may have already read the candidate before probing its source. */
+  async artifactFor(record: SourceIndexRecord): Promise<ParsedArtifact | undefined> {
+    const candidate = sourceRecordSchema.parse(record)
+    const artifact = await this.get(candidate.cacheKey)
+    if (
+      artifact !== undefined &&
+      (artifact.meta.contentFingerprint !== candidate.fingerprint ||
+        artifact.meta.generation !== candidate.generation ||
+        artifact.meta.parser !== candidate.parser ||
+        artifact.meta.format !== candidate.format)
+    )
+      throw new Error('The parsed artifact does not match its source index')
+    return artifact
+  }
+
   async lookupSource(
     sourceKey: string,
     stamp: FulltextSourceStamp,
   ): Promise<ParsedArtifact | undefined> {
-    await this.ensureRoot()
-    const path = this.sourcePath(sourceKey)
-    let record: SourceIndexRecord
-    try {
-      const parsed = sourceRecordOf(JSON.parse(decoder.decode(await this.deps.readFile(path))))
-      if (parsed === undefined) {
-        await this.deps.rm(path, { recursive: false, force: true })
-        return undefined
-      }
-      record = parsed
-    } catch (error) {
-      if (
-        !(error instanceof SyntaxError) &&
-        !(error instanceof TypeError) &&
-        (error as NodeJS.ErrnoException).code !== 'ENOENT'
-      )
-        throw error
-      await this.deps.rm(path, { recursive: false, force: true })
-      return undefined
-    }
-    if (!stampMatches(record.stamp, stamp)) return undefined
-    const artifact = await this.get(record.cacheKey)
-    if (artifact === undefined || artifact.meta.contentFingerprint !== record.fingerprint) {
-      await this.deps.rm(path, { recursive: false, force: true })
-      return undefined
-    }
-    return artifact
+    const record = await this.sourceRecord(sourceKey)
+    if (record === undefined || !stampMatches(record.stamp, stamp)) return undefined
+    return await this.artifactFor(record)
   }
 }

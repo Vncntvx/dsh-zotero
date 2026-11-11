@@ -216,6 +216,7 @@ describe('retrieve tolerances', () => {
         ref: 'zotero://user/0/attachment/SECD0001',
         contentType: 'application/pdf',
         status: 'indexed',
+        textFormat: 'text',
         coverage: { complete: false },
         inputTruncated: false,
         passages: 1,

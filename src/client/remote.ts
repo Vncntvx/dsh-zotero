@@ -8,6 +8,12 @@ import type {
   ZoteroSemanticModelDownloadResultView,
   ZoteroSemanticModelCancelRequestView,
   ZoteroSemanticModelCancelResultView,
+  ZoteroStartDocumentParseRequestView,
+  ZoteroStartDocumentParseResultView,
+  ZoteroDocumentArtifactRequestView,
+  ZoteroDocumentArtifactResultView,
+  ZoteroDocumentParseReceiptRequestView,
+  ZoteroDocumentParseReceiptResultView,
   ZoteroSemanticModelVerifyRequestView,
 } from '../contract.ts'
 /**
@@ -77,6 +83,18 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   // read `ctx.remote.zotero` resolves it on that fiber.
   /** The `zotero` namespace face mounted under `ctx.remote.zotero`. */
   interface TypertRemoteNamespace$7a6f7465726f {
+    startDocumentParse: (
+      request: ZoteroStartDocumentParseRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroStartDocumentParseResultView>>
+    documentArtifact: (
+      request: ZoteroDocumentArtifactRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDocumentArtifactResultView>>
+    documentParseReceipt: (
+      request: ZoteroDocumentParseReceiptRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDocumentParseReceiptResultView>>
     sourcePage: (
       request: ZoteroSourcePageRequestView,
       signal?: AbortSignal,
@@ -131,6 +149,18 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
   }
   interface TypertRemoteMap {
+    'zotero/startDocumentParse': (
+      request: ZoteroStartDocumentParseRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroStartDocumentParseResultView>>
+    'zotero/documentArtifact': (
+      request: ZoteroDocumentArtifactRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDocumentArtifactResultView>>
+    'zotero/documentParseReceipt': (
+      request: ZoteroDocumentParseReceiptRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDocumentParseReceiptResultView>>
     'zotero/semanticModelStatus': (
       request: ZoteroSemanticModelStatusRequestView,
       signal?: AbortSignal,

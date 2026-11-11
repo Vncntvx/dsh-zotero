@@ -43,14 +43,14 @@ Empirical results indicate strong convergence under AdamW schedule.
   })
 
   it('supports outline inspection and BM25 passage querying', async () => {
-    // A temp root: the default is the harness cache path, which a test must
-    // never write to.
     const cache = new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-tools-')))
     await cache.set('arxiv-2301.07041', {
+      provider: 'arxiv-html',
+      format: 'markdown',
       text: dummyDoc,
       source: 'arxiv_html',
-      structured: true,
-      url: 'https://arxiv.org/abs/2301.07041',
+      url: 'https://arxiv.org/html/2301.07041',
+      sourceIdentity: 'https://arxiv.org/html/2301.07041',
     })
 
     const host = createMockHost(createMockHttp(() => new Response('{}')))

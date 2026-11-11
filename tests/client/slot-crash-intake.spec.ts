@@ -23,6 +23,7 @@ import { apply } from '../../src/client/index.ts'
 import { RETIRED_ENTRY } from '../../src/client/actions/error-reporter.ts'
 import type { ZoteroClientErrorReport } from '../../src/contract.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
+import { createParseRuntimeStub } from './helpers/remote-stubs.ts'
 import { createFakeContextMenus, type FakeContextMenuSink } from './helpers/fake-context-menus.ts'
 import { fakeEntryErrorSeam } from './helpers/slot-crash-seam.ts'
 
@@ -84,6 +85,7 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
     contextMenuDisposes: 0,
   }
   const ctx = {
+    ...createParseRuntimeStub(),
     effect: (register: () => unknown): (() => void) => {
       const dispose = register()
       const disposer = typeof dispose === 'function' ? (dispose as () => void) : () => {}

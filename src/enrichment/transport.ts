@@ -69,6 +69,14 @@ export interface MineruRequestOptions {
   readonly maxBytes?: number
 }
 
+export interface MineruResponse {
+  readonly status: number
+  readonly bytes: Uint8Array
+  readonly headers: Headers
+  /** The validated terminal request URL, independent of Response.url. */
+  readonly finalUrl: string
+}
+
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 const ERROR_DETAIL_MAX_BYTES = 4 * 1024
@@ -168,12 +176,9 @@ export class MineruClient {
 
   /**
    * Perform one request, following redirects with per-hop re-validation.
-   * @returns the bounded response bytes, status, and final response headers.
+   * @returns the bounded bytes, status, headers, and validated terminal URL.
    */
-  private async attempt(
-    url: string,
-    options: MineruRequestOptions,
-  ): Promise<{ status: number; bytes: Uint8Array; headers: Headers }> {
+  private async attempt(url: string, options: MineruRequestOptions): Promise<MineruResponse> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
     const timeout = AbortSignal.timeout(timeoutMs)
@@ -256,11 +261,16 @@ export class MineruClient {
         }
         if (options.method === 'HEAD') {
           combined.throwIfAborted()
-          return { status: response.status, bytes: new Uint8Array(), headers: response.headers }
+          return {
+            status: response.status,
+            bytes: new Uint8Array(),
+            headers: response.headers,
+            finalUrl: parsed.href,
+          }
         }
         const bytes = await readBoundedBytes(response, maxBytes)
         combined.throwIfAborted()
-        return { status: response.status, bytes, headers: response.headers }
+        return { status: response.status, bytes, headers: response.headers, finalUrl: parsed.href }
       } finally {
         await connection.close()
       }
@@ -269,14 +279,13 @@ export class MineruClient {
   }
 
   /** Retry only idempotent operations, bounded by one shared request deadline. */
-  async request(
-    url: string,
-    options: MineruRequestOptions,
-  ): Promise<{ status: number; bytes: Uint8Array; headers: Headers }> {
+  async request(url: string, options: MineruRequestOptions): Promise<MineruResponse> {
     const timeout = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
     const signal =
       options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal])
-    const attempts = options.method === 'POST' ? 1 : 3
+    // Cache revalidation is one HEAD operation; a failed probe cannot create
+    // extra network requests or silently acquire the document with GET.
+    const attempts = options.method === 'POST' || options.method === 'HEAD' ? 1 : 3
     for (let attempt = 0; attempt < attempts; attempt++) {
       signal.throwIfAborted()
       if (this.blockedUntil > Date.now()) await pause(this.blockedUntil - Date.now(), signal)
@@ -285,7 +294,9 @@ export class MineruClient {
       try {
         release = await this.gate.acquire(signal)
         if (this.blockedUntil > Date.now()) await pause(this.blockedUntil - Date.now(), signal)
-        return await this.attempt(url, { ...options, signal })
+        const response = await this.attempt(url, { ...options, signal })
+        signal.throwIfAborted()
+        return response
       } catch (error) {
         signal.throwIfAborted()
         const transient =
@@ -341,9 +352,10 @@ export class MineruClient {
   ): Promise<{
     bytes: Uint8Array
     headers: Headers
+    finalUrl: string
   }> {
-    const { bytes, headers } = await this.request(url, { ...options, method: 'GET' })
-    return { bytes, headers }
+    const { bytes, headers, finalUrl } = await this.request(url, { ...options, method: 'GET' })
+    return { bytes, headers, finalUrl }
   }
 
   /** HEAD used by the cache to revalidate a URL source without downloading it. */
@@ -353,9 +365,10 @@ export class MineruClient {
   ): Promise<{
     status: number
     headers: Headers
+    finalUrl: string
   }> {
-    const { status, headers } = await this.request(url, { ...options, method: 'HEAD' })
-    return { status, headers }
+    const { status, headers, finalUrl } = await this.request(url, { ...options, method: 'HEAD' })
+    return { status, headers, finalUrl }
   }
 
   /** Decode bounded bytes as UTF-8 text (Markdown download). */

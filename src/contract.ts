@@ -475,6 +475,94 @@ export function zoteroSourcePageInvocation(
   }
 }
 
+/** A user-selected PDF, never a host path or caller-supplied document bytes. */
+export type ZoteroParseTargetView =
+  | { readonly kind: 'attachment'; readonly ref: string }
+  | { readonly kind: 'url'; readonly url: string }
+
+export interface ZoteroStartDocumentParseRequestView {
+  readonly sessionId: string
+  /** Replaying this exact operation joins its job; it does not submit twice. */
+  readonly operationId: string
+  readonly target: ZoteroParseTargetView
+  readonly action: 'parse' | 'reparse' | 'retry'
+}
+
+export interface ZoteroParseReceiptView {
+  readonly operationId: string
+  readonly generation: string
+  readonly sourceId: string
+  readonly targetLabel: string
+  readonly mode: 'free' | 'pro'
+  readonly cached: boolean
+  readonly artifactId: string
+  readonly fingerprint: string
+  readonly format: 'markdown'
+  readonly characterCount: number
+  readonly preview: string
+  readonly pageCount?: number
+}
+
+export interface ZoteroStartDocumentParseResultView {
+  readonly operationId: string
+  readonly generation: string
+  readonly jobId: string
+  readonly status: 'started' | 'joined' | 'completed'
+  readonly receipt?: ZoteroParseReceiptView
+}
+
+export interface ZoteroDocumentArtifactRequestView {
+  readonly sessionId: string
+  readonly target: ZoteroParseTargetView
+}
+
+export type ZoteroDocumentArtifactResultView =
+  | { readonly kind: 'missing' | 'expired' }
+  | {
+      readonly kind: 'ready'
+      readonly sourceId: string
+      readonly targetLabel: string
+      readonly mode: 'free' | 'pro'
+      readonly artifactId: string
+      readonly fingerprint: string
+      readonly characterCount: number
+      readonly pageCount?: number
+    }
+
+export interface ZoteroDocumentParseReceiptRequestView {
+  readonly sessionId: string
+  readonly operationId: string
+}
+
+export type ZoteroDocumentParseReceiptResultView =
+  | { readonly kind: 'pending'; readonly jobId: string; readonly generation: string }
+  | { readonly kind: 'completed'; readonly receipt: ZoteroParseReceiptView }
+  | { readonly kind: 'failed' | 'cancelled'; readonly code: string; readonly message: string }
+
+export const ZOTERO_START_DOCUMENT_PARSE_METHOD = 'startDocumentParse'
+export const ZOTERO_DOCUMENT_ARTIFACT_METHOD = 'documentArtifact'
+export const ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD = 'documentParseReceipt'
+
+export function zoteroDocumentParseInvocation(
+  method:
+    | typeof ZOTERO_START_DOCUMENT_PARSE_METHOD
+    | typeof ZOTERO_DOCUMENT_ARTIFACT_METHOD
+    | typeof ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: `dsh-zotero#zotero/${method}`,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
+
 export interface ZoteroSemanticModelStatusRequestView {
   readonly model?: string
   readonly modelDir?: string

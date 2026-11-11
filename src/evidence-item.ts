@@ -7,6 +7,8 @@
  * @module dsh-zotero/evidence-item
  */
 
+import type { FulltextArtifactProvenance } from './local/fulltext-enhancer.js'
+
 /** Evidence sources `zotero_retrieve` can rank against the query. */
 export type EvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
@@ -58,6 +60,12 @@ export interface EvidenceItem {
   readonly sourceRef: string
   readonly preview: string
   readonly previewTruncated: boolean
+  /** Fulltext facts from the exact source; absent on other source kinds. */
+  readonly textFormat?: 'markdown' | 'text'
+  readonly artifact?: FulltextArtifactProvenance
+  /** Original fulltext span [start, end), even when this preview is shortened. */
+  readonly start?: number
+  readonly end?: number
   /** Zotero-owned page label (annotations only); never invented. */
   readonly pageLabel?: string
   /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */

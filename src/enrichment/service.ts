@@ -1,11 +1,9 @@
 /**
  * Cordis Service plugin providing `ctx.enrichment`.
  *
- * The component's presence is the authorization to contact MinerU; it
- * registers no model tools, no prompt section, and no skill. It feeds the
- * existing read tools through one optional slot in the core service — a
- * `FulltextEnhancer` — so mounting/unmounting the row is the only switch that
- * changes whether external requests can happen.
+ * The component registers no model tools, prompt section, or skill. Ordinary
+ * read tools consume committed artifacts through a read-only FulltextEnhancer.
+ * Explicit enrichment jobs own document acquisition and MinerU submission.
  *
  * **Dependency direction.** enrichment → core. The core defines the pure
  * `FulltextEnhancer` type and holds an optional slot; enrichment imports that
@@ -13,12 +11,10 @@
  * MinerU transport, host table, or credentials, and keeps its loopback path
  * byte-for-byte unchanged when the slot is empty.
  *
- * **Cache before bytes.** `lookup` probes the source without reading it (a
- * local `stat`, a URL HEAD, or a digest of caller-supplied bytes) and serves a
- * stored artifact when its source stamp still matches. Only `enhance` obtains
- * bytes, resolves the pro token, and submits to MinerU. A cache hit therefore
- * sends nothing and downloads nothing; the upload authorization governs new
- * egress, not reading an artifact that already exists.
+ * **Cache before bytes.** `lookup` checks the source index before probing a
+ * local attachment with stat or an indexed URL with HEAD. A hit only reads
+ * local artifacts. Upload authorization is checked by the active-parse domain
+ * before any source probe or document acquisition.
  *
  * **Failures propagate.** Configuration, authorization, source, protocol,
  * task, archive, and storage failures are explicit errors. The output path
@@ -32,11 +28,9 @@ import type {} from '@deepseek-ai/dsh-settings'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
   errorMessageOf,
+  domainCall,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
   ZOTERO_ENRICHMENT_TASK_FAILED,
-  ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-  ZOTERO_ENRICHMENT_OUTPUT_INVALID,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from '../errors.js'
@@ -54,32 +48,41 @@ import type {
   ZoteroSemanticModelCancelRequestView,
   ZoteroSemanticModelCancelResultView,
   ZoteroSemanticModelVerifyRequestView,
+  ZoteroAttachmentLocationView,
+  ZoteroStartDocumentParseRequestView,
+  ZoteroStartDocumentParseResultView,
+  ZoteroDocumentArtifactRequestView,
+  ZoteroDocumentArtifactResultView,
+  ZoteroDocumentParseReceiptRequestView,
+  ZoteroDocumentParseReceiptResultView,
 } from '../contract.js'
+import {
+  ENRICHMENT_DOCUMENT_LIMITS,
+  type EnrichmentPreferences,
+} from '../enrichment-preferences.js'
 import { ZOTERO_ENRICHMENT_SERVICE_KEY, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.js'
 import {
   isPdfContentType,
   type FulltextEnhancer,
   type FulltextEnhancerInput,
-  type FulltextEnhancerOutcome,
   type FulltextLookupResult,
 } from '../local/fulltext-enhancer.js'
 import { EnrichmentConfigSchema, resolveEnrichmentConfig, type EnrichmentConfig } from './config.js'
-import { resolveMineruToken } from './credentials.js'
-import { ENRICHMENT_CREDENTIAL_REFERENCE_NAMES } from '../credential-names.js'
 import { dnsAddressResolver, createPinnedDispatcher } from '../transport/connections.js'
 import { MineruClient } from './transport.js'
-import {
-  hostSourceBytesDeps,
-  obtainSourceBytes,
-  probeSource,
-  type SourceBytesDeps,
-} from './source-bytes.js'
+import { hostSourceBytesDeps, probeSource } from './source-bytes.js'
 import { resolveOutputDir } from './output-dir.js'
 import { ParsedArtifactStore } from './artifact-store.js'
-import { cacheKeyOf, contentFingerprintOf, ParseFlight, parseOnce } from './parse-once.js'
-import { parsedIdentityOf } from './identity.js'
-import { sourceKeyOf } from './source-stamp.js'
-import { limitsFor } from './types.js'
+import { ParseFlight, type parseOnce } from './parse-once.js'
+import { parseDocument } from './parse-document.js'
+import {
+  DiskParseJobPersistence,
+  EnrichmentParseJobs,
+  type ParseJobPersistence,
+} from './parse-jobs.js'
+import { resolveMineruToken } from './credentials.js'
+import { sourceKeyOf, stampMatches } from './source-stamp.js'
+import { canonicalSourceIdentityOf } from './identity.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
 import { SemanticEmbedderLoader, semanticTargetOf } from './semantic/loader.js'
@@ -100,22 +103,16 @@ declare module '@deepseek-ai/cordis' {
 interface EnrichmentCoreLink {
   setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void
   setEvidenceRanker(ranker: EvidenceRanker | undefined): void
-  resolveAttachment(
-    ref: string,
-    signal?: AbortSignal,
-  ): Promise<{
-    kind: 'file' | 'url'
-    path?: string
-    url?: string
-  }>
+  resolveAttachment(ref: string, signal?: AbortSignal): Promise<ZoteroAttachmentLocationView>
 }
 
 /** Host seams, injectable so a spec never opens a socket or writes to disk. */
 export interface EnrichmentServiceDeps {
   readonly client?: MineruClient
   readonly parse?: typeof parseOnce
-  readonly store?: () => Promise<ParsedArtifactStore>
+  readonly store?: (config: EnrichmentPreferences, create: boolean) => Promise<ParsedArtifactStore>
   readonly flight?: ParseFlight
+  readonly parsePersistence?: ParseJobPersistence
   /** The model-asset manager; tests inject a scripted one. */
   readonly downloads?: ModelDownloadManager
 }
@@ -131,18 +128,16 @@ function parsingErrorOf(error: unknown): Error {
       )
 }
 
-function fatalOf(error: unknown): { readonly kind: 'fatal'; readonly error: Error } {
-  return { kind: 'fatal', error: error instanceof Error ? error : new Error(String(error)) }
-}
-
 export class EnrichmentService extends TypertRemoteService {
   static readonly Config = EnrichmentConfigSchema
 
   private readonly client: MineruClient
-  private readonly parse: typeof parseOnce
-  private readonly storeFactory: () => Promise<ParsedArtifactStore>
-  private readonly flight: ParseFlight
-  private readonly resolveAttachment: SourceBytesDeps['resolveAttachment']
+  private readonly storeFactory: (
+    config: EnrichmentPreferences,
+    create: boolean,
+  ) => Promise<ParsedArtifactStore>
+  private readonly resolveAttachment: EnrichmentCoreLink['resolveAttachment']
+  private readonly parsing: EnrichmentParseJobs
 
   /** The enhancer installed into the core. Stable identity for cleanup. */
   public readonly enhancer: FulltextEnhancer
@@ -175,9 +170,8 @@ export class EnrichmentService extends TypertRemoteService {
         dispatcher: createPinnedDispatcher,
         fetch: globalThis.fetch,
       })
-    this.parse = deps.parse ?? parseOnce
-    this.storeFactory = deps.store ?? (async () => await this.store())
-    this.flight = deps.flight ?? new ParseFlight()
+    this.storeFactory =
+      deps.store ?? (async (config, create) => await this.storeFor(config, create))
     this.resolveAttachment = async (ref, signal) => {
       const core = ctx.get('zotero') as EnrichmentCoreLink | undefined
       if (core === undefined) {
@@ -188,6 +182,33 @@ export class EnrichmentService extends TypertRemoteService {
       }
       return await core.resolveAttachment(ref, signal)
     }
+    const flight = deps.flight ?? new ParseFlight()
+    this.parsing = new EnrichmentParseJobs(ctx, {
+      config: () => resolveEnrichmentConfig(this.config),
+      resolveAttachment: this.resolveAttachment,
+      execute: async ({ input, config, generation, signal, onProgress }) =>
+        await parseDocument(
+          input,
+          {
+            config,
+            generation,
+            client: this.client,
+            store: async (snapshot) => await this.storeFactory(snapshot, true),
+            ...(deps.parse !== undefined ? { parse: deps.parse } : {}),
+            flight,
+            resolveAttachment: this.resolveAttachment,
+            resolveToken: async (reference) => await resolveMineruToken(ctx, reference),
+            onProgress,
+          },
+          signal,
+        ),
+      lookup: async (input, config, signal) => await this.lookup(input, signal, config),
+      persistence:
+        deps.parsePersistence ??
+        new DiskParseJobPersistence(
+          async (config, create) => (await this.storeFactory(config, create)).root,
+        ),
+    })
     this.rankerLoader = new SemanticEmbedderLoader()
     this.liveEvidenceRanker = {
       rank: async (request: EvidenceRankRequest) => {
@@ -204,7 +225,6 @@ export class EnrichmentService extends TypertRemoteService {
 
     this.enhancer = {
       lookup: async (input, signal) => await this.lookup(input, signal),
-      enhance: async (input, signal) => await this.enhance(input, signal),
     }
 
     // This component ships its own settings page; the schema-generated page
@@ -218,7 +238,7 @@ export class EnrichmentService extends TypertRemoteService {
     // The component-level teardown: abort every owned download and release
     // the resident embedder, whether or not the core is composed.
     ctx.effect(() => async () => {
-      await this.downloads.dispose()
+      await Promise.all([this.parsing.dispose(), this.downloads.dispose()])
       await this.rankerLoader.dispose()
     })
 
@@ -236,6 +256,34 @@ export class EnrichmentService extends TypertRemoteService {
         await this.rankerLoader.dispose()
       })
     })
+  }
+
+  /** Parsing endpoints retain the current invocation context for action/session checks. */
+  async startDocumentParse(
+    request: ZoteroStartDocumentParseRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroStartDocumentParseResultView> {
+    return await domainCall(
+      async () => await this.parsing.startDocumentParse(request, signal, this.ctx),
+    )
+  }
+
+  async documentArtifact(
+    request: ZoteroDocumentArtifactRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroDocumentArtifactResultView> {
+    return await domainCall(
+      async () => await this.parsing.documentArtifact(request, signal, this.ctx),
+    )
+  }
+
+  async documentParseReceipt(
+    request: ZoteroDocumentParseReceiptRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroDocumentParseReceiptResultView> {
+    return await domainCall(
+      async () => await this.parsing.documentParseReceipt(request, signal, this.ctx),
+    )
   }
 
   /** The model endpoints live here, on the component: unmounting the row
@@ -256,27 +304,31 @@ export class EnrichmentService extends TypertRemoteService {
     request: ZoteroSemanticModelStatusRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSemanticModelStatusResultView> {
-    signal.throwIfAborted()
-    const parsed = this.parseWire(zoteroSemanticModelStatusRequestSchema, request)
-    const cfg = resolveEnrichmentConfig(this.config)
-    return await this.downloads.status(
-      parsed.model ?? cfg.semanticModel,
-      parsed.modelDir ?? cfg.semanticModelDir,
-    )
+    return await domainCall(async () => {
+      signal.throwIfAborted()
+      const parsed = this.parseWire(zoteroSemanticModelStatusRequestSchema, request)
+      const cfg = resolveEnrichmentConfig(this.config)
+      return await this.downloads.status(
+        parsed.model ?? cfg.semanticModel,
+        parsed.modelDir ?? cfg.semanticModelDir,
+      )
+    })
   }
 
   async downloadSemanticModel(
     request: ZoteroSemanticModelDownloadRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSemanticModelDownloadResultView> {
-    signal.throwIfAborted()
-    const parsed = this.parseWire(zoteroSemanticModelDownloadRequestSchema, request)
-    const cfg = resolveEnrichmentConfig(this.config)
-    return await this.downloads.start({
-      model: parsed.model ?? cfg.semanticModel,
-      source: parsed.source ?? cfg.semanticDownloadSource,
-      modelDir: parsed.modelDir ?? cfg.semanticModelDir,
-      force: parsed.force,
+    return await domainCall(async () => {
+      signal.throwIfAborted()
+      const parsed = this.parseWire(zoteroSemanticModelDownloadRequestSchema, request)
+      const cfg = resolveEnrichmentConfig(this.config)
+      return await this.downloads.start({
+        model: parsed.model ?? cfg.semanticModel,
+        source: parsed.source ?? cfg.semanticDownloadSource,
+        modelDir: parsed.modelDir ?? cfg.semanticModelDir,
+        force: parsed.force,
+      })
     })
   }
 
@@ -284,209 +336,105 @@ export class EnrichmentService extends TypertRemoteService {
     request: ZoteroSemanticModelCancelRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSemanticModelCancelResultView> {
-    signal.throwIfAborted()
-    const parsed = this.parseWire(zoteroSemanticModelCancelRequestSchema, request)
-    const cfg = resolveEnrichmentConfig(this.config)
-    return {
-      cancelled: await this.downloads.cancel(
-        parsed.model ?? cfg.semanticModel,
-        parsed.modelDir ?? cfg.semanticModelDir,
-      ),
-    }
+    return await domainCall(async () => {
+      signal.throwIfAborted()
+      const parsed = this.parseWire(zoteroSemanticModelCancelRequestSchema, request)
+      const cfg = resolveEnrichmentConfig(this.config)
+      return {
+        cancelled: await this.downloads.cancel(
+          parsed.model ?? cfg.semanticModel,
+          parsed.modelDir ?? cfg.semanticModelDir,
+        ),
+      }
+    })
   }
 
   async verifySemanticModel(
     request: ZoteroSemanticModelVerifyRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSemanticModelStatusResultView> {
-    signal.throwIfAborted()
-    const parsed = this.parseWire(zoteroSemanticModelVerifyRequestSchema, request)
-    const cfg = resolveEnrichmentConfig(this.config)
-    return await this.downloads.verify(
-      parsed.model ?? cfg.semanticModel,
-      parsed.modelDir ?? cfg.semanticModelDir,
-    )
+    return await domainCall(async () => {
+      signal.throwIfAborted()
+      const parsed = this.parseWire(zoteroSemanticModelVerifyRequestSchema, request)
+      const cfg = resolveEnrichmentConfig(this.config)
+      return await this.downloads.verify(
+        parsed.model ?? cfg.semanticModel,
+        parsed.modelDir ?? cfg.semanticModelDir,
+      )
+    })
   }
 
-  /**
-   * Resolve the output directory for the current config value. The resolved
-   * store is memoized per configured string — the resolution costs a dozen
-   * realpath/stat calls — and a settings edit re-resolves by key change.
-   */
-  private storeMemo:
-    { readonly configured: string; readonly store: ParsedArtifactStore } | undefined
-
-  private async store(): Promise<ParsedArtifactStore> {
-    const configured = resolveEnrichmentConfig(this.config).outputDir
-    if (this.storeMemo?.configured === configured) return this.storeMemo.store
-    const dir = await resolveOutputDir(configured)
-    const store = new ParsedArtifactStore(dir)
-    this.storeMemo = { configured, store }
-    return store
+  /** Directory validation belongs to the accepted snapshot and is repeated on every operation. */
+  private async storeFor(
+    config: EnrichmentPreferences,
+    create: boolean,
+  ): Promise<ParsedArtifactStore> {
+    const dir = await resolveOutputDir(
+      config.outputDir,
+      undefined,
+      create ? { create: true } : { create: false, readOnly: true, allowMissing: true },
+    )
+    return new ParsedArtifactStore(dir)
   }
 
   /**
    * Read a stored artifact when the source has not changed. This arm never
    * obtains document bytes and never contacts MinerU; a local source is
-   * `stat`ed, a URL gets one HEAD, supplied bytes are hashed.
+   * `stat`ed and an indexed URL gets one HEAD. Selection is independent of
+   * the currently configured parsing mode and upload gate.
    */
   private async lookup(
     input: FulltextEnhancerInput,
     signal?: AbortSignal,
+    snapshot?: EnrichmentPreferences,
   ): Promise<FulltextLookupResult> {
-    let cfg
     try {
-      cfg = resolveEnrichmentConfig(this.config)
-    } catch (error) {
-      return { outcome: fatalOf(error) }
-    }
-    if (!isPdfContentType(input.contentType)) return {}
-
-    try {
-      const store = await this.storeFactory()
-      const maxBytes = limitsFor(cfg.mode).maxBytes
+      const cfg = snapshot ?? resolveEnrichmentConfig(this.config)
+      if (!isPdfContentType(input.contentType)) return { kind: 'miss', reason: 'absent' }
+      signal?.throwIfAborted()
+      const store = await this.storeFactory(cfg, false)
+      signal?.throwIfAborted()
+      const identity = canonicalSourceIdentityOf(input.key)
+      const sourceIdentity = canonicalSourceIdentityOf(
+        input.source.kind === 'url' ? input.source.url : input.source.attachmentRef,
+      )
+      if (identity !== sourceIdentity) throw new Error('The parsed source identity is inconsistent')
+      const sourceKey = sourceKeyOf(identity)
+      const candidate = await store.sourceRecord(sourceKey)
+      signal?.throwIfAborted()
+      if (candidate === undefined) return { kind: 'miss', reason: 'absent' }
       const stamp = await probeSource(
         input,
-        maxBytes,
+        ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
         hostSourceBytesDeps(this.resolveAttachment, this.client),
         signal,
       )
-      const artifact = await store.lookupSource(sourceKeyOf(input.key, cfg.mode), stamp)
-      if (artifact === undefined) return { stamp }
-      return { outcome: this.outcomeOf(artifact, cfg), stamp }
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason ?? error
-      return { outcome: fatalOf(parsingErrorOf(error)) }
-    }
-  }
-
-  /**
-   * Produce higher-quality full text for one PDF or an explicit error.
-   */
-  private async enhance(
-    input: FulltextEnhancerInput,
-    signal?: AbortSignal,
-  ): Promise<FulltextEnhancerOutcome> {
-    let cfg
-    try {
-      cfg = resolveEnrichmentConfig(this.config)
-    } catch (error) {
-      return fatalOf(error)
-    }
-
-    if (!isPdfContentType(input.contentType)) {
-      return fatalOf(
-        new ZoteroError(
-          'Only PDF attachments are eligible for MinerU parsing',
-          ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-        ),
-      )
-    }
-
-    // The output directory is a configuration fact: resolve it before any
-    // document bytes are read or sent, so a bad path never uploads a file.
-    let store: ParsedArtifactStore
-    try {
-      store = await this.storeFactory()
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason ?? error
-      if (error instanceof ZoteroError && error.code === ZOTERO_ENRICHMENT_OUTPUT_INVALID) {
-        return fatalOf(error)
-      }
-      return fatalOf(parsingErrorOf(error))
-    }
-
-    const maxBytes = limitsFor(cfg.mode).maxBytes
-    const sourceKey = sourceKeyOf(input.key, cfg.mode)
-    const byteDeps = hostSourceBytesDeps(this.resolveAttachment, this.client)
-
-    try {
-      const stamp = await probeSource(input, maxBytes, byteDeps, signal)
-      const cached = await store.lookupSource(sourceKey, stamp)
-      if (cached !== undefined) return this.outcomeOf(cached, cfg)
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason ?? error
-      return fatalOf(parsingErrorOf(error))
-    }
-
-    if (!cfg.allowDocumentUpload) {
-      return fatalOf(
-        new ZoteroError(
-          'MinerU parsing requires allowDocumentUpload; no bytes were sent',
-          ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-        ),
-      )
-    }
-
-    // Token is read only in pro mode. Free mode never touches it, which is what
-    // lets a configured token coexist with a deliberate free-mode choice. A
-    // cache hit above already returned, so a cached pro artifact needs no token.
-    let token: string | undefined
-    if (cfg.mode === 'pro') {
-      const ref = cfg.mineruTokenRef?.trim() || ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru
-      try {
-        token = await resolveMineruToken(this.ctx, ref)
-      } catch (error) {
-        return fatalOf(error)
-      }
-    }
-
-    try {
-      const source = await obtainSourceBytes(input, maxBytes, byteDeps, signal)
-      // One hash of the document feeds the parse input, the cache key, and the
-      // source-index write; nobody hashes these bytes again.
-      const fingerprint = contentFingerprintOf(source.bytes)
-      const artifact = await this.parse(
-        {
-          identity: input.key,
-          metaIdentity: parsedIdentityOf(input.key),
-          mode: cfg.mode,
-          bytes: source.bytes,
-          fingerprint,
-          ...(token !== undefined ? { token } : {}),
-          ...(signal !== undefined ? { signal } : {}),
+      signal?.throwIfAborted()
+      if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
+      const artifact = await store.artifactFor(candidate)
+      signal?.throwIfAborted()
+      if (artifact === undefined) return { kind: 'miss', reason: 'expired' }
+      if (artifact.markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
+      return {
+        kind: 'hit',
+        text: artifact.markdown,
+        format: 'markdown',
+        source: `MinerU (${artifact.meta.mode})`,
+        provenance: {
+          parser: 'mineru',
+          mode: artifact.meta.mode,
+          artifactId: candidate.cacheKey,
+          fingerprint: artifact.meta.contentFingerprint,
+          sourceId: artifact.meta.sourceId,
+          generation: artifact.meta.generation,
         },
-        { client: this.client, store, flight: this.flight },
-      )
-      await store.putSource(sourceKey, {
-        version: 1,
-        cacheKey: cacheKeyOf({
-          identity: input.key,
-          mode: cfg.mode,
-          bytes: source.bytes,
-          fingerprint,
-        }),
-        fingerprint: artifact.meta.contentFingerprint,
-        stamp: source.stamp,
-      })
-      return this.outcomeOf(artifact, cfg)
+        ...(artifact.meta.pageCount !== undefined ? { pageCount: artifact.meta.pageCount } : {}),
+      }
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error
-      if (
-        error instanceof ZoteroError &&
-        (error.code === ZOTERO_ENRICHMENT_OUTPUT_INVALID ||
-          error.code === ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED)
-      ) {
-        return fatalOf(error)
-      }
-      return fatalOf(parsingErrorOf(error))
-    }
-  }
-
-  /** Turn one artifact into the enhancer's answer, refusing untrustworthy text. */
-  private outcomeOf(
-    artifact: Awaited<ReturnType<typeof parseOnce>>,
-    cfg: ReturnType<typeof resolveEnrichmentConfig>,
-  ): FulltextEnhancerOutcome {
-    if (artifact.markdown.trim() === '')
-      return fatalOf(
-        new ZoteroError('MinerU returned empty Markdown', ZOTERO_ENRICHMENT_TASK_FAILED),
-      )
-    return {
-      kind: 'ok',
-      text: artifact.markdown,
-      ...(artifact.meta.pageCount !== undefined ? { pageCount: artifact.meta.pageCount } : {}),
-      source: `MinerU (${cfg.mode})`,
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        return { kind: 'miss', reason: 'expired' }
+      return { kind: 'fault', error: parsingErrorOf(error) }
     }
   }
 }

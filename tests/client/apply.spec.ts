@@ -189,6 +189,8 @@ describe('the browser-half entry', () => {
     const worldServed = fakeWorld()
     await applyEntry(worldServed)
     expect(worldServed.whileServedRegistrations).toEqual([
+      // Parse capability source follows enrichment independently of the panel row.
+      { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
       { namespaces: [SCHOLARLY_SETTINGS_NAMESPACE] },
       { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
       { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
@@ -320,6 +322,8 @@ describe('the browser-half entry', () => {
     expect(world.injectDeps).toEqual([
       [
         'remote.zotero',
+        'jobs',
+        'connection',
         'remote.credentials',
         'remoteAccess',
         'locale',

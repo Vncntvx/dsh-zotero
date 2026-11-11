@@ -4,15 +4,14 @@
  * No registered job and no resident poller: the submit → upload → poll →
  * download loop lives in this one call, bounded by a total deadline, a
  * poll-count cap, and the shared flight's signal. Each parse is cached on disk
- * and single-flighted per `EnrichmentService`, so a second read of the same bytes
- * never re-submits.
+ * and single-flighted per `EnrichmentService` and job generation. Retrying a
+ * generation resumes its receipt; a new generation creates a new parse.
  *
  * **Cancellation belongs to one caller.** The shared flight runs on its own
  * `AbortController`; a caller's abort only rejects that caller's wait. The
- * flight is aborted when its last waiter leaves, so one cancelled tool call
- * can neither kill a concurrent reader nor keep the work alive after everyone
- * has gone. Nothing here reaches a read tool directly; the service calls it
- * through the enhancer slot.
+ * flight is aborted when its last waiter leaves, so one cancelled job cannot
+ * kill another waiter. Only the private active-parse domain calls this module;
+ * ordinary readers consume artifacts through the lookup slot.
  * @module dsh-zotero/enrichment/parse-once
  */
 
@@ -28,7 +27,7 @@ import {
   MineruApiError,
 } from './api.js'
 import { raceWithSignal } from '../race-signal.js'
-import { ZOTERO_ENRICHMENT_TASK_FAILED, ZoteroError } from '../errors.js'
+import { ZOTERO_ENRICHMENT_TASK_FAILED, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import type { EnrichmentMode } from '../enrichment-preferences.js'
 import type { ParsedArtifact, ParsedArtifactMeta } from './types.js'
 import { MINERU_ENDPOINTS, PRO_MODEL_VERSION } from './hosts.js'
@@ -36,6 +35,9 @@ import { MineruClient } from './transport.js'
 import type { ParsedArtifactStore } from './artifact-store.js'
 import { extractParsedFiles, ZIP_MAX_ARCHIVE_BYTES } from './zip.js'
 import { parsedIdentityOf } from './identity.js'
+import { canonicalSourceIdentityOf } from './identity.js'
+import { sourceKeyOf } from './source-stamp.js'
+import { PARSE_GENERATION, SHA256 } from './artifact-schema.js'
 import {
   MAX_POLLS,
   PARSE_TOTAL_TIMEOUT_MS,
@@ -61,11 +63,14 @@ export interface ParseOnceDeps {
   }
 }
 
+export type ParsePhase =
+  'acquiring' | 'uploading' | 'waiting' | 'downloading' | 'validating' | 'writing'
+
 export interface ParseOnceInput {
   /** Stable identity (attachment ref or URL); also the cache-key input. */
   readonly identity: string
-  /** Provenance identity; defaults to the redacted identity. */
-  readonly metaIdentity?: string
+  /** Job-owned parse attempt: retries keep it; explicit re-parses replace it. */
+  readonly generation: string
   readonly mode: EnrichmentMode
   readonly bytes: Uint8Array
   /**
@@ -78,6 +83,7 @@ export interface ParseOnceInput {
   /** Resolved precise-API token; present only in pro mode. */
   readonly token?: string
   readonly signal?: AbortSignal
+  readonly onProgress?: (phase: ParsePhase) => void
 }
 
 function sha256(text: string | Uint8Array): string {
@@ -89,13 +95,38 @@ export function contentFingerprintOf(bytes: Uint8Array): string {
   return sha256(bytes)
 }
 
-/** Cache key folds identity, mode, and a content fingerprint. */
-export function cacheKeyOf(input: ParseOnceInput): string {
+export interface ParseOnceResult {
+  readonly artifact: ParsedArtifact
+  readonly cacheKey: string
+  /** True only when this generation reused an already committed artifact. */
+  readonly cached: boolean
+}
+
+type ParseCacheIdentity = Pick<ParseOnceInput, 'identity' | 'generation' | 'mode'> &
+  (
+    | { readonly fingerprint: string; readonly bytes?: Uint8Array }
+    | { readonly fingerprint?: string; readonly bytes: Uint8Array }
+  )
+
+/** Cache key folds identity, mode, generation, and the exact content fingerprint. */
+export function cacheKeyOf(input: ParseCacheIdentity): string {
+  if (!PARSE_GENERATION.safeParse(input.generation).success) {
+    throw new ZoteroError('A UUID parse generation is required.', ZOTERO_INVALID_ARGUMENT)
+  }
+  const fingerprint =
+    input.fingerprint ?? (input.bytes !== undefined ? contentFingerprintOf(input.bytes) : undefined)
+  if (!SHA256.safeParse(fingerprint).success) {
+    throw new ZoteroError(
+      'A SHA-256 document fingerprint or bytes are required.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
   return sha256(
     JSON.stringify({
-      identity: input.identity,
+      identity: canonicalSourceIdentityOf(input.identity),
       mode: input.mode,
-      fingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
+      generation: input.generation,
+      fingerprint,
     }),
   )
 }
@@ -248,6 +279,7 @@ async function downloadResult(
   state: Extract<PollState, { kind: 'done' }>,
   client: MineruClient,
   combined: AbortSignal,
+  onProgress?: (phase: ParsePhase) => void,
 ): Promise<{ markdown: string; contentList?: string }> {
   if (state.markdownUrl !== undefined) {
     const bytes = await client.bytes(state.markdownUrl, {
@@ -256,6 +288,8 @@ async function downloadResult(
       timeoutMs: RESULT_TIMEOUT_MS,
       maxBytes: RESULT_MAX_BYTES,
     })
+    onProgress?.('validating')
+    combined.throwIfAborted()
     const markdown = MineruClient.textOf(bytes, RESULT_MAX_BYTES).trim()
     if (markdown === '') {
       throw new ZoteroError(
@@ -271,11 +305,13 @@ async function downloadResult(
     timeoutMs: RESULT_TIMEOUT_MS,
     maxBytes: ZIP_MAX_ARCHIVE_BYTES,
   })
+  onProgress?.('validating')
+  combined.throwIfAborted()
   return await Promise.resolve(extractParsedFiles(zipBytes))
 }
 
 interface FlightEntry {
-  readonly promise: Promise<ParsedArtifact>
+  readonly promise: Promise<ParseOnceResult>
   readonly controller: AbortController
   waiters: number
 }
@@ -293,26 +329,29 @@ export class ParseFlight {
   run(
     key: string,
     callerSignal: AbortSignal | undefined,
-    task: (flightSignal: AbortSignal) => Promise<ParsedArtifact>,
-  ): Promise<ParsedArtifact> {
+    task: (flightSignal: AbortSignal) => Promise<ParseOnceResult>,
+  ): Promise<ParseOnceResult> {
     callerSignal?.throwIfAborted()
     const existing = this.entries.get(key)
     const entry = existing ?? this.start(key, task)
     entry.waiters += 1
     const wait =
       callerSignal === undefined ? entry.promise : raceWithSignal(entry.promise, callerSignal)
-    return wait.finally(() => {
+    return wait.finally(async () => {
       entry.waiters -= 1
       if (entry.waiters === 0) {
         if (this.entries.get(key) === entry) this.entries.delete(key)
         entry.controller.abort()
+        // A cancelled last waiter owns cleanup of the work it stopped. Jobs
+        // cannot report cancellation while an upload/stream/store is still live.
+        await entry.promise.catch(() => {})
       }
     })
   }
 
   private start(
     key: string,
-    task: (flightSignal: AbortSignal) => Promise<ParsedArtifact>,
+    task: (flightSignal: AbortSignal) => Promise<ParseOnceResult>,
   ): FlightEntry {
     const controller = new AbortController()
     const promise = task(controller.signal)
@@ -330,18 +369,31 @@ export class ParseFlight {
   }
 }
 
+function cachedResultOf(artifact: ParsedArtifact, input: ParseOnceInput, cacheKey: string): ParseOnceResult {
+  if (
+    artifact.meta.sourceId !== sourceKeyOf(input.identity) ||
+    artifact.meta.generation !== input.generation ||
+    artifact.meta.mode !== input.mode ||
+    artifact.meta.contentFingerprint !== (input.fingerprint ?? contentFingerprintOf(input.bytes))
+  ) {
+    throw new ZoteroError('The parsed artifact does not match its cache identity.', ZOTERO_ENRICHMENT_TASK_FAILED)
+  }
+  return { artifact, cacheKey, cached: true }
+}
+
 /**
- * Parse one document once, reusing a cached artifact when present.
+ * Parse one generation, reusing only that generation's committed artifact.
  * @throws {ZoteroError} on any submit/task/runtime failure.
  */
 export async function parseOnce(
   input: ParseOnceInput,
   deps: ParseOnceDeps,
-): Promise<ParsedArtifact> {
+): Promise<ParseOnceResult> {
   input.signal?.throwIfAborted()
   const cacheKey = cacheKeyOf(input)
   const cached = await deps.store.get(cacheKey)
-  if (cached !== undefined) return cached
+  input.signal?.throwIfAborted()
+  if (cached !== undefined) return cachedResultOf(cached, input, cacheKey)
 
   if (input.mode === 'pro' && !input.token?.trim())
     throw new MineruApiError('MinerU precise mode requires a token')
@@ -361,9 +413,13 @@ export async function parseOnce(
       // Re-check inside the shared flight: another caller may have committed
       // between the outer cache read and joining this flight.
       const cached = await deps.store.get(cacheKey)
-      if (cached !== undefined) return cached
+      combined.throwIfAborted()
+      if (cached !== undefined) return cachedResultOf(cached, input, cacheKey)
       let task = await deps.store.getTask(cacheKey)
+      combined.throwIfAborted()
       if (task === undefined) {
+        input.onProgress?.('uploading')
+        combined.throwIfAborted()
         const submitted = await submit(input, deps.client, combined)
         task = { ...submitted, uploaded: false, createdAt: Date.now() }
         await deps.store.putTask(cacheKey, task)
@@ -390,6 +446,8 @@ export async function parseOnce(
               ZOTERO_ENRICHMENT_TASK_FAILED,
             )
           }
+          input.onProgress?.('uploading')
+          combined.throwIfAborted()
           await upload(task.uploadUrl, documentBytes, deps.client, combined)
           documentBytes = undefined
           task = { taskId, createdAt: task.createdAt, uploaded: true }
@@ -398,6 +456,8 @@ export async function parseOnce(
           documentBytes = undefined
         }
 
+        input.onProgress?.('waiting')
+        combined.throwIfAborted()
         let done: Extract<PollState, { kind: 'done' }> | undefined
         let pageCount: number | undefined
         for (let attempt = 0; attempt < maxPolls; attempt++) {
@@ -428,7 +488,9 @@ export async function parseOnce(
           )
         }
 
-        const payload = await downloadResult(done, deps.client, combined)
+        input.onProgress?.('downloading')
+        combined.throwIfAborted()
+        const payload = await downloadResult(done, deps.client, combined, input.onProgress)
         if (/^\s*(?:<!doctype\s+html|<html|<head|<body|<\?xml)/i.test(payload.markdown))
           throw new MineruApiError(
             'MinerU returned an HTML/XML error document instead of Markdown',
@@ -437,11 +499,16 @@ export async function parseOnce(
             taskId,
           )
         const meta: ParsedArtifactMeta = {
-          identity: input.metaIdentity ?? parsedIdentityOf(input.identity),
+          version: 2,
+          parser: 'mineru',
+          format: 'markdown',
+          sourceId: sourceKeyOf(input.identity),
+          generation: input.generation,
+          identity: parsedIdentityOf(input.identity),
           mode: input.mode,
           contentFingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
           taskId,
-          files: [],
+          files: payload.contentList === undefined ? ['full.md'] : ['full.md', 'content_list.json'],
           ...(pageCount !== undefined ? { pageCount } : {}),
         }
         const artifact: ParsedArtifact = {
@@ -449,10 +516,11 @@ export async function parseOnce(
           ...(payload.contentList !== undefined ? { contentList: payload.contentList } : {}),
           meta,
         }
+        input.onProgress?.('writing')
         combined.throwIfAborted()
         await deps.store.put(cacheKey, artifact)
         await deps.store.deleteTask(cacheKey)
-        return artifact
+        return { artifact, cacheKey, cached: false }
       } catch (error) {
         if (error instanceof MineruApiError && error.terminal) await deps.store.deleteTask(cacheKey)
         throw error

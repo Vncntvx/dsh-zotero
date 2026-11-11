@@ -24,6 +24,13 @@ import type { LibraryPreferences } from '../library-preferences.js'
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createElement } from 'react'
+import type {} from '@deepseek-ai/dsh-api-job-controller/client'
+import type {} from '@deepseek-ai/dsh-client-connection/client'
+import {
+  createDocumentParseSurface,
+  type DocumentParseClientContext,
+  type DocumentParseSurfacePort,
+} from './enrichment/parse-surface.tsx'
 // Type-only Context merges: locale (ctx.locale) arrives through its package's
 // client declaration; the Remote face (ctx.remote) through the api-remotes
 // assembly; ui-settings supplies the `configForms` service; ui-renderer the
@@ -183,6 +190,7 @@ interface UiSurfaces {
   readonly libraryPreferences: () => LibraryPreferences | undefined
   /** The one preference source; the panel publishes it through its context. */
   readonly preferenceSource: LibraryPreferenceSource
+  readonly parse: DocumentParseSurfacePort
 }
 
 /**
@@ -532,6 +540,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     }
   }
   const panelFace = (): ZoteroLibraryPanelFace => ({
+    parse: surfaces.parse,
     preferenceSource,
     readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
     releaseUrlPdf: (lease) =>
@@ -1007,7 +1016,20 @@ function registerUi(ctx: ClientContext): void {
   ctx.effect(() => () => preferenceSource.dispose(), 'dsh-zotero: library preferences')
   const libraryPreferences = (): LibraryPreferences | undefined =>
     preferenceSource.getSnapshot().preferences
+  // The declared client services are supplied by the post-mount UI fiber.
+  // Host contracts also merge a jobs key into Cordis; keep this client seam typed as IJobs.
+  const parse = createDocumentParseSurface(
+    {
+      remote: ctx.remote,
+      jobs: ctx.jobs as unknown as DocumentParseClientContext['jobs'],
+      connection: (ctx as unknown as Pick<DocumentParseClientContext, 'connection'>).connection,
+      configForms: ctx.configForms,
+    },
+    enrichmentForm,
+  )
+  ctx.effect(() => () => parse.dispose(), 'dsh-zotero: document parsing surface')
   const surfaces: UiSurfaces = {
+    parse,
     form,
     card,
     scholarlyCard,
@@ -1074,6 +1096,8 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const ui = ctx.inject(
     [
       'remote.zotero',
+      'jobs',
+      'connection',
       'remote.credentials',
       'remoteAccess',
       'locale',

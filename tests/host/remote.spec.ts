@@ -179,6 +179,9 @@ describe('the zotero typert manifest', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
     expect(TYPERT_MANIFEST.face).toBe('host')
     expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
+      'startDocumentParse',
+      'documentArtifact',
+      'documentParseReceipt',
       'semanticModelStatus',
       'downloadSemanticModel',
       'cancelSemanticModelDownload',
@@ -218,6 +221,9 @@ describe('the zotero typert manifest', () => {
         expect(invocation.service).toBe('zoteroLibrary')
       } else if (
         [
+          'startDocumentParse',
+          'documentArtifact',
+          'documentParseReceipt',
           'semanticModelStatus',
           'downloadSemanticModel',
           'cancelSemanticModelDownload',

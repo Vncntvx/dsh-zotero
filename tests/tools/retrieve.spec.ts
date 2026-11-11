@@ -6,6 +6,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import type { FulltextArtifactProvenance } from '../../src/local/fulltext-enhancer.js'
+import { buildSourceWorkspace } from '../../src/sources/ledger.js'
+import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
+import type { ToolBlockLike } from '../../src/sources/block-types.js'
+import { ITEM_KEY, attachmentRef, itemRef } from '../helpers/server/keys.js'
+import { serveItemGraph } from '../helpers/server/serve.js'
 import { invalidRefMessage } from '../../src/refs.js'
 import {
   ATTACHMENT_LIMIT_NOTE,
@@ -136,6 +143,101 @@ describe('zotero_retrieve tool', () => {
     const text = (result.content[0] as { text: string }).text
     expect(text).toContain('zotero://user/0/item/ABCD1234?server=S1')
     expect(text).toContain('fulltext')
+  })
+
+  it('retains distinct artifact generations through tool output and the source ledger', async () => {
+    serveItemGraph(mock, { serverId: null })
+    const text = `\n\n# Attention results\n\n${'attention  **evidence**\n'.repeat(40)}`
+    const provenance: FulltextArtifactProvenance = {
+      parser: 'mineru',
+      mode: 'free',
+      artifactId: 'artifact-first',
+      fingerprint: 'a'.repeat(64),
+      sourceId: 'b'.repeat(64),
+      generation: 'c'.repeat(64),
+    }
+    let current = provenance
+    lane.ctx.zotero.setFulltextEnhancer({
+      async lookup() {
+        return {
+          kind: 'hit',
+          text,
+          format: 'markdown',
+          source: 'MinerU (free)',
+          provenance: current,
+        }
+      },
+    })
+    const args = {
+      ref: itemRef(ITEM_KEY),
+      query: 'attention',
+      sources: ['fulltext'],
+      attachmentPolicy: 'allIndexed',
+    }
+    const blocks: ToolBlockLike[] = []
+    for (const [index, generation] of [
+      provenance.generation,
+      provenance.generation,
+      'd'.repeat(64),
+    ].entries()) {
+      // Identical body and artifact key still represent a distinct generation.
+      current = { ...provenance, generation }
+      const result = expectValue(await runTool('zotero_retrieve', args), 'zotero_retrieve')
+      expect(result.value).toMatchObject({
+        textFormat: 'markdown',
+        artifact: current,
+        attachments: [{ textFormat: 'markdown', artifact: current }],
+        evidence: [
+          {
+            textFormat: 'markdown',
+            artifact: current,
+            start: expect.any(Number),
+            end: expect.any(Number),
+          },
+        ],
+      })
+      blocks.push({
+        kind: 'tool-result',
+        callId: `artifact-${index}`,
+        seq: index,
+        time: index,
+        name: 'zotero_retrieve',
+        args: PartialArguments.fromText(JSON.stringify(args)),
+        call: { name: 'zotero_retrieve', argsRaw: JSON.stringify(args) },
+        callTime: index,
+        content: result.content,
+        isError: false,
+        meta: result.meta,
+        subCalls: [],
+      })
+    }
+
+    const workspace = sourceWorkspaceSchema.parse(buildSourceWorkspace(blocks))
+    const evidence = workspace.sources[0]!.evidence
+    expect(evidence).toHaveLength(2)
+    expect(evidence.map((entry) => entry.artifact?.generation)).toEqual([
+      provenance.generation,
+      'd'.repeat(64),
+    ])
+    expect(evidence.map((entry) => entry.callIds)).toEqual([
+      ['artifact-0', 'artifact-1'],
+      ['artifact-2'],
+    ])
+    for (const entry of evidence) {
+      expect(entry).toMatchObject({
+        source: 'fulltext',
+        sourceRef: attachmentRef(),
+        textFormat: 'markdown',
+        artifact: { ...provenance, generation: entry.artifact!.generation },
+        previewTruncated: true,
+      })
+      expect(entry.start).toEqual(expect.any(Number))
+      expect(entry.end).toEqual(expect.any(Number))
+      expect(text.slice(entry.start, entry.end).startsWith(entry.text)).toBe(true)
+      expect(entry.end! - entry.start!).toBeGreaterThan(entry.text.length)
+      expect(entry.pageLabel).toBeUndefined()
+    }
+    expect(mock.requests.some((entry) => entry.pathname.endsWith('/fulltext'))).toBe(false)
   })
 
   it('searches My Publications end to end through the tool', async () => {

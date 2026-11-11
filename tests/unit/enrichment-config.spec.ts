@@ -19,7 +19,7 @@ describe('resolveEnrichmentConfig', () => {
     expect(resolveEnrichmentConfig()).toEqual({
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: true,
+      allowDocumentUpload: false,
       outputDir: '',
       enableSemanticSearch: false,
       semanticModel: 'balanced',

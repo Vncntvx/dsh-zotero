@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "wp6-synthetic-preparation-v1",
+  "provenance": {
+    "synthetic": true,
+    "origin": "Original bilingual examples authored by an AI assistant for this WP6 preparation task on 2026-11-11. Measurements, study names, documents, questions and relevance labels are invented.",
+    "license": "MIT; repository LICENSE applies to these original fixtures.",
+    "externalSources": [],
+    "externalIndependentAnnotation": false,
+    "humanAdjudication": false,
+    "realExtraction": false,
+    "sanitization": "No personal-library text, credentials, downloaded data or external document excerpts used.",
+    "labelDefinition": "A relevant passage directly supplies at least one requested answer. Shared topic, missing quantities, wrong population, different outcome and unsupported extrapolation are not answers. These are author judgments, not independently adjudicated labels.",
+    "translation": "English and Chinese versions were co-authored, not independent samples. Translations, phrasings, corpus sizes and repeated sources share one intent ID."
+  },
+  "partitions": {
+    "train": "train.json",
+    "calibration": "calibration.json",
+    "heldout": "heldout.json"
+  },
+  "background": "background.json",
+  "quarantine": "quarantine.json",
+  "protocol": {
+    "scoringVersion": "fixed-reference-five-features-v1",
+    "features": [
+      "cosine",
+      "cosine-minus-query-background",
+      "cosine-minus-document-background",
+      "log1p-query-codepoints",
+      "log1p-document-codepoints"
+    ],
+    "kCandidates": [1, 2, 4],
+    "ridgeCandidates": [0.001, 0.01, 0.1, 1],
+    "folds": 3,
+    "thresholdCandidates": [0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999],
+    "alpha": 0.05,
+    "negativeAnyHitUpperTarget": 0.01,
+    "mixedPrecisionLowerTarget": 0.95,
+    "minimumNegativeQueriesPerLanguage": 300,
+    "corpusSizes": [1, 8, 64],
+    "phrasingCounts": [1, 2, 3, 4, 5],
+    "languages": ["en", "zh"],
+    "directions": ["en-en", "en-zh", "zh-en", "zh-zh"],
+    "seed": 20261111,
+    "bootstrapReplicates": 2000,
+    "negativeUnit": "One unique language plus intent ID; any semantic hit across corpus sizes, duplicate sources and authored phrasings is one failure. Off-topic and hard-negative scenarios do not create new trials.",
+    "calibrationSelection": "Train-only grouped CV chooses k and ridge by mean per-query log loss. Standardization is fitted inside each training fold. Banks are fixed and disjoint. Select the lowest feasible threshold on calibration only, using Bonferroni over the fixed threshold grid, language groups and two budgets. Too few queries or no feasible threshold fails closed.",
+    "heldoutPolicy": "Heldout is authored synthetic data reserved for a future frozen-threshold run. No encoding, scores or outcome-dependent edits occurred in this task. Authorship by the same assistant does not establish independent annotation or statistical independence.",
+    "precisionUnit": "Deduplicated returned query/document text pairs in the mixed corpus; exact binomial bounds are descriptive because pairs share queries/documents. Also report a topic-family cluster bootstrap; neither licenses an external validity claim.",
+    "stressPolicy": "Corpora larger than the disjoint split's available document pool repeat source handles deterministically. Repetitions are stress conditions only, never independent evidence. The configured production maximum is not assumed; prepare.mjs requires an explicit --max-corpus value to add it."
+  },
+  "limitations": [
+    "Only en and zh are authored; no claim about any other catalog language.",
+    "Synthetic labels and distinct question strings do not establish independent negative sampling. No language meets the WP6 external heldout acceptance requirement.",
+    "Each partition has 12 families and 36 negative intents per language, below 300. Even zero observed failures at n=36 has an exact one-sided 95% upper bound above 1%.",
+    "Markdown, tables, formulas and simulated extraction artifacts are authored text, not real MinerU/PDF extraction. Production chunking, offsets and long-context truncation are not validated here.",
+    "Only selected intents have five manually authored phrasings. Missing phrasing coverage is reported, never padded by duplicate queries.",
+    "Fixed banks are small synthetic references; their representativeness and label policy require independent review.",
+    "Many hard-negative documents explicitly say that a requested measurement was not collected; this linguistic cue may make rejection easier than on independently sampled real text.",
+    "There are no genuinely long documents or verified production chunks. Cross-family off-topic labels are author assumptions, and the stress exporter repeats source texts when its finite pool is exhausted.",
+    "No model was loaded or downloaded; no embedding file, fitted coefficients, calibration threshold or production artifact is included."
+  ]
+}

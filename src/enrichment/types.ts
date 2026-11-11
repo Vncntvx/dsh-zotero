@@ -4,43 +4,51 @@
  * @module dsh-zotero/enrichment/types
  */
 
-import type { EnrichmentMode } from '../enrichment-preferences.js'
+import { ENRICHMENT_DOCUMENT_LIMITS, type EnrichmentMode } from '../enrichment-preferences.js'
+import type { FulltextEnhancerInput } from '../local/fulltext-enhancer.js'
 
-/**
- * The one input limit this component enforces locally. The page ceilings
- * (free 20, precise 200) are enforced by MinerU itself: a page count cannot be
- * known before the document is uploaded, and an artifact returned for an
- * over-limit request is already the service's answer.
- */
-export interface EnrichmentLimits {
+/** Source validators are private to enrichment, never an upload input to core reads. */
+export type FulltextSourceStamp =
+  | { readonly kind: 'file'; readonly size: number; readonly mtimeMs: number }
+  | {
+      readonly kind: 'url'
+      readonly url: string
+      readonly etag?: string
+      readonly lastModified?: string
+      readonly contentLength?: number
+    }
+  | { readonly kind: 'bytes'; readonly fingerprint: string }
+
+/** Internal acquisition input; browser requests never supply bytes or source stamps. */
+export interface ParseSourceInput extends FulltextEnhancerInput {
+  readonly bytes?: Uint8Array
+  readonly sourceStamp?: FulltextSourceStamp
+}
+
+/** Local byte and remote page limits, shared with the submission confirmation. */
+export function limitsFor(mode: EnrichmentMode): {
   readonly maxBytes: number
+  readonly maxPages: number
+} {
+  return ENRICHMENT_DOCUMENT_LIMITS[mode]
 }
 
-/** Free Agent lightweight API: 10 MiB input; MinerU caps it at 20 pages. */
-export const FREE_LIMITS: EnrichmentLimits = Object.freeze({
-  maxBytes: 10 * 1024 * 1024,
-})
-
-/** Precise API: 200 MB input; MinerU caps it at 200 pages. */
-export const PRO_LIMITS: EnrichmentLimits = Object.freeze({
-  maxBytes: 200 * 1024 * 1024,
-})
-
-export function limitsFor(mode: EnrichmentMode): EnrichmentLimits {
-  return mode === 'pro' ? PRO_LIMITS : FREE_LIMITS
-}
-
-/** Provenance stored alongside one parsed artifact in `meta.json`. */
+/** Provenance stored alongside one committed Markdown artifact in `meta.json`. */
 export interface ParsedArtifactMeta {
-  /** Provenance identity: a local ref, or a URL with query and fragment removed. */
+  readonly version: 2
+  readonly parser: 'mineru'
+  readonly format: 'markdown'
+  /** SHA-256 of the canonical primary identity, never the alias used to read. */
+  readonly sourceId: string
+  readonly generation: string
+  /** Canonical attachment ref or origin-only redacted URL display. */
   readonly identity: string
   readonly mode: EnrichmentMode
-  /** SHA-256 of the exact bytes that were sent, so edits invalidate the cache. */
+  /** SHA-256 of the exact bytes that were sent. */
   readonly contentFingerprint: string
   readonly taskId: string
-  /** Files written into the artifact directory. */
-  readonly files: readonly string[]
-  /** Present only when the precise API reported the total page count. */
+  /** The exact files represented by this artifact, in commit order. */
+  readonly files: readonly ['full.md'] | readonly ['full.md', 'content_list.json']
   readonly pageCount?: number
 }
 
