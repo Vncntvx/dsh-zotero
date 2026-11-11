@@ -147,6 +147,16 @@ describe('locale bundles', () => {
       // would restate it where it could disagree with it.
       'scholarlyEnabled',
       'scholarlyEnabledHint',
+      // The library settings form dropped the opening shared-settings note.
+      'librarySharedSettingsHint',
+      // The enrichment form dropped the redundant upload switch and its risk dialog;
+      // enabling the component is the authorization to parse documents with MinerU.
+      'enrichmentAllowUpload',
+      'enrichmentAllowUploadHint',
+      'enrichmentUploadRiskTitle',
+      'enrichmentUploadRiskDescription',
+      'enrichmentUploadRiskAcknowledge',
+      'enrichmentUploadRiskConfirm',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

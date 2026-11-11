@@ -38,3 +38,6 @@ coverage/
 
 # Local vitest reporter output (a probe can write it anywhere)
 .vitest/
+
+# Opt-in model bundles: downloaded on demand by the user, never bundled into git or packages
+assets/semantic/models/*

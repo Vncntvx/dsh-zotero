@@ -96,14 +96,15 @@ Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped
 
 External retrieval belongs to the agent entry point. With its separate `allowUrlPdfRead` permission enabled, the literature panel downloads PDFs only when a user clicks an existing URL attachment in the library; it performs no external search.
 
-## Document Parsing (Optional Component)
+## Document Enrichment (Optional Component)
 
-Document parsing is provided by the `dsh-zotero/parsing` component, shipped with the package but off by default. Enabling that component row authorizes requests to MinerU; sending PDF bytes additionally needs the component's `allowParsingUpload` data-egress authorization, and requests are issued only while both hold. The component registers no model tools and injects no prompt section.
+Document parsing is provided by the `dsh-zotero/enrichment` component, shipped with the package but off by default. Enabling that component row authorizes requests to MinerU and sending documents for extraction (`allowDocumentUpload` defaults to `true` when enabled). The component registers no model tools and injects no prompt section.
 
-- `free` uses the token-free Agent lightweight API (API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤600 pages) and needs a token. The mode is independent of whether a token is configured.
-- `zotero_retrieve` and `scholarly_read` prefer the parsed text over local extraction; task/archive/input failures fall back locally with a stated reason, while a credential failure or an unusable output directory fails closed.
-- Parsed Markdown lands under `<outputDir>/<sha256>/`; a local attachment is cached by size/mtime plus content fingerprint, and a URL source by URL with one HEAD revalidation. A cache hit downloads no PDF and does not contact MinerU. The raw URL's query and fragment are not persisted.
-- The output directory accepts an absolute or `~/` path; a relative path is refused at save time, and a missing, unwritable, or sensitive directory fails on first use with `ZOTERO_PARSING_OUTPUT_INVALID`.
+- `free` uses the token-free Agent lightweight API (API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤200 pages) and needs a token. The mode is independent of whether a token is configured.
+- `zotero_retrieve` and `scholarly_read` prefer the parsed text over local extraction; all parsing, authorization, protocol, archive, and storage failures stop the read with an explicit error. Valid short documents retain their parsed content.
+- Parsed Markdown lands under `<outputDir>/<sha256>/`; a local attachment is cached by size/mtime plus content fingerprint, and a URL source by URL with one HEAD revalidation. A source-index hit requires a matching ETag or Last-Modified plus Content-Length and downloads no PDF or contacts MinerU. Provenance metadata excludes the URL query and fragment; private task receipts retain a signed upload URL only until upload succeeds.
+- The output directory accepts an absolute or `~/` path; a relative path is refused at save time, and a missing, unwritable, or sensitive directory fails on first use with `ZOTERO_ENRICHMENT_OUTPUT_INVALID`.
+- Optional local semantic ranking: provides stable semantic tier keys decoupled from physical model versions (`balanced` general & balanced recommended default · backed by Qwen3-0.6B, `lightweight` ultra-lightweight · backed by Granite-97M, `bilingual` Chinese-English · backed by KaLM-0.5B, `english` English long-context · backed by Nomic-137M, `hybrid` multi-vector hybrid · backed by BGE-M3, `academic` classic academic · backed by GTE-Base). Decoupling config from physical models ensures user configs never break when models are updated. Models require manual download before enabling (supports HF-Mirror and Hugging Face channels). Falls back cleanly to BM25 lexical ranking when disabled; with it enabled but the selected model not downloaded, reads fail loudly with `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` and a download notice — never a silent degrade. Model sizes are kept between 100M and 600M to suit 16GB RAM CPU-only machines. The settings interface displays explicit guidance notices if semantic search is enabled without a downloaded model, or if Precision Extract is selected without a configured API token.
 
 ## Capabilities and Tools at a Glance
 

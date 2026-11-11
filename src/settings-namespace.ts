@@ -18,5 +18,13 @@ export const ZOTERO_SETTINGS_NAMESPACE = 'zotero'
 /** Settings namespace of the scholarly component's configuration section. */
 export const SCHOLARLY_SETTINGS_NAMESPACE = 'scholarly'
 
-/** Settings namespace of the document-parsing component's configuration section. */
-export const PARSING_SETTINGS_NAMESPACE = 'parsing'
+/** Settings namespace of the document-enrichment component's configuration section. */
+export const ENRICHMENT_SETTINGS_NAMESPACE = 'enrichment'
+
+/**
+ * The wire service key the enrichment component's remote endpoints answer on.
+ * Declared in the core's Typert manifest like the library service's, but the
+ * receiver is this component's Cordis service, so the endpoints exist only
+ * while the row is composed.
+ */
+export const ZOTERO_ENRICHMENT_SERVICE_KEY = 'enrichment'

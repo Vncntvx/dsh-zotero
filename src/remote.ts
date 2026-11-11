@@ -197,7 +197,12 @@ export async function executeOpenProtocol(
 /** Newest entries one diagnostics snapshot serves; the panel renders fewer. */
 const SNAPSHOT_SERVE_LIMIT = 200
 
-/** The zotero settings page's host service: the web tab's connectivity probe. */
+/**
+ * The zotero settings page's host service. Its namesake job is the web tab's
+ * live connectivity probe, but the surface also carries the attachment
+ * resolution, diagnostics, client-error reports, protocol wake-up, and the
+ * write-grant revocation the settings plane needs.
+ */
 export class ZoteroRuntime extends TypertRemoteService {
   /**
    * Register the service under the shared cordis key bound to the `zotero`

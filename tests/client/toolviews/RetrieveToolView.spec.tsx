@@ -171,6 +171,57 @@ describe('RetrieveToolView', () => {
     expect(screen.getByText(zh.matchedInText)).toBeTruthy()
     expect(screen.queryAllByText(zh.matchedInComment)).toHaveLength(1)
   })
+  it('badges a meaning-only hit and leaves a lexical one unlabelled', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({
+          ref: 'zotero://user/0/item/ABCD1234',
+          query: 'institutional trust',
+        }),
+      },
+      meta: {
+        count: 2,
+        sources: ['fulltext'],
+        truncated: false,
+        sourcesSkipped: [],
+        items: [
+          {
+            source: 'fulltext',
+            sourceRef: 'zotero://user/0/attachment/WXYZ6789',
+            preview: 'perceived legitimacy drives regulatory adherence',
+            previewTruncated: false,
+            // The passage shares no wording with the query, so the card must
+            // not let it read as a term hit.
+            matchKind: 'semantic',
+          },
+          {
+            source: 'fulltext',
+            sourceRef: 'zotero://user/0/attachment/WXYZ6789',
+            preview: 'a passage that does contain the words',
+            previewTruncated: false,
+            matchKind: 'lexical',
+          },
+        ],
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(screen.getByText(zh.matchSemantic)).toBeTruthy()
+    expect(screen.queryAllByText(zh.matchSemantic)).toHaveLength(1)
+    // The card labels every passage, including the ordinary one: a bare card
+    // with one "meaning only" badge would leave the others ambiguous between
+    // "matched the words" and "recorded before the field existed".
+    expect(screen.queryAllByText(zh.matchLexical)).toHaveLength(1)
+  })
   it('renders running state with retrieve running indicator', () => {
     const block = running({
       name: 'zotero_retrieve',

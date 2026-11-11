@@ -10,3 +10,7 @@ package-lock.json
 .workbuddy/
 .zcode/
 .codebuddy/
+
+# Model bundles are byte-pinned by SHA-256 in the catalog; `manifest.json` is
+# compared verbatim by the loader, so prettier must never touch it.
+assets/semantic/models/

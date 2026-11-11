@@ -37,10 +37,10 @@ import {
   type LibraryCardState,
 } from '../../../src/client/library-form-controller.ts'
 import {
-  ParsingFormController,
-  type ParsingCardFace,
-  type ParsingCardState,
-} from '../../../src/client/parsing-form-controller.ts'
+  EnrichmentFormController,
+  type EnrichmentCardFace,
+  type EnrichmentCardState,
+} from '../../../src/client/enrichment-form-controller.ts'
 import { fakeScope, type FakeScope } from '../helpers/fake-scope.ts'
 import { emptyCredentialPort } from '../helpers/credential-port.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
@@ -57,7 +57,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 function Harness({
   face,
   scholarlyFace,
-  parsingFace,
+  enrichmentFace,
   libraryFace,
   probe,
   revokeWriteGrant,
@@ -65,7 +65,7 @@ function Harness({
 }: {
   face: ZoteroCardFace
   scholarlyFace?: ScholarlyCardFace
-  parsingFace?: ParsingCardFace
+  enrichmentFace?: EnrichmentCardFace
   libraryFace?: LibraryCardFace
   probe?: ZoteroSettingsSectionProps['probe']
   revokeWriteGrant?: ZoteroSettingsSectionProps['revokeWriteGrant']
@@ -90,9 +90,9 @@ function Harness({
     libraryFace ? libraryFace.hooks.libraryCard.subscribe : () => () => {},
     libraryFace ? libraryFace.hooks.libraryCard.getSnapshot : () => undefined as any,
   )
-  const parsingState = useSyncExternalStore(
-    parsingFace ? parsingFace.hooks.parsingCard.subscribe : () => () => {},
-    parsingFace ? parsingFace.hooks.parsingCard.getSnapshot : () => undefined as any,
+  const enrichmentState = useSyncExternalStore(
+    enrichmentFace ? enrichmentFace.hooks.enrichmentCard.subscribe : () => () => {},
+    enrichmentFace ? enrichmentFace.hooks.enrichmentCard.getSnapshot : () => undefined as any,
   )
   const props = {
     // `plugins.bundle.config` renders its entries with `view: 'page'` only.
@@ -111,10 +111,10 @@ function Harness({
     useLibraryCard: libraryFace
       ? (selector: (snapshot: LibraryCardState) => unknown) => selector(libraryState)
       : undefined,
-    useParsingCard: parsingFace
-      ? (selector: (snapshot: ParsingCardState) => unknown) => selector(parsingState)
+    useEnrichmentCard: enrichmentFace
+      ? (selector: (snapshot: EnrichmentCardState) => unknown) => selector(enrichmentState)
       : undefined,
-    parsing: parsingFace,
+    enrichment: enrichmentFace,
     edit: face.edit,
     resetField: face.resetField,
     save: face.save,
@@ -365,7 +365,7 @@ describe('ZoteroSettingsSection', () => {
       zh.tabSearch,
       zh.tabLibrary,
       zh.tabScholarly,
-      zh.tabParsing,
+      zh.tabEnrichment,
       zh.tabAdvanced,
     ])
 
@@ -380,18 +380,18 @@ describe('ZoteroSettingsSection', () => {
     expect(connectionPanel?.getAttribute('hidden')).toBe('')
   })
 
-  it('renders the parsing tab form when the parsing namespace is served', () => {
+  it('renders the enrichment tab form when the enrichment namespace is served', () => {
     scope = fakeScope({ value: {} })
-    const parsingScope = fakeScope({ value: {} })
-    const parsingController = new ParsingFormController(parsingScope, emptyCredentialPort)
+    const enrichmentScope = fakeScope({ value: {} })
+    const enrichmentController = new EnrichmentFormController(enrichmentScope, emptyCredentialPort)
     const controller = new ZoteroCardController(scope)
-    render(<Harness face={controller.inject()} parsingFace={parsingController.inject()} />)
+    render(<Harness face={controller.inject()} enrichmentFace={enrichmentController.inject()} />)
 
-    fireEvent.click(screen.getByRole('tab', { name: zh.tabParsing }))
-    const panel = document.getElementById('zotero-panel-parsing')
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabEnrichment }))
+    const panel = document.getElementById('zotero-panel-enrichment')
     expect(panel?.getAttribute('hidden')).toBeNull()
-    expect(screen.getByText(zh.groupParsingMode)).toBeDefined()
-    parsingController.dispose()
+    expect(screen.getByText(zh.groupEnrichmentMode)).toBeDefined()
+    enrichmentController.dispose()
   })
 
   it('switches active tab on click, toggling aria-selected and hidden attribute on panels', () => {

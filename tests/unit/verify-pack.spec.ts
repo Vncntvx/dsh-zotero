@@ -39,7 +39,7 @@ describe('packReportOf', () => {
     expect(JSON.parse(packReportOf(objectShape))).toEqual({ 'dsh-zotero': { files: [] } })
   })
 
-  it('refuses a stream with no report at all instead of parsing prose', () => {
+  it('refuses a stream with no report at all instead of enrichment prose', () => {
     expect(() => packReportOf('prepare failed\n')).toThrow(/printed no JSON report/)
     expect(() => packReportOf('')).toThrow(/printed no JSON report/)
   })

@@ -81,5 +81,30 @@ export function createRemoteZoteroStub(world: RemoteZoteroWorld) {
         ({ ok: true as const, value: { success: true as const } } as unknown)
       )
     },
+    semanticModelStatus: async (request: { model?: string }) => ({
+      ok: true as const,
+      value: {
+        model: request?.model ?? 'balanced',
+        ready: false,
+        downloading: false,
+        path: '',
+        downloadedBytes: 0,
+        totalBytes: 0,
+        percent: 0,
+      },
+    }),
+    downloadSemanticModel: async (request: { model?: string }) => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: request?.model ?? 'balanced',
+        status: 'started' as const,
+        path: '',
+      },
+    }),
+    cancelSemanticModelDownload: async () => ({
+      ok: true as const,
+      value: { cancelled: true },
+    }),
   }
 }

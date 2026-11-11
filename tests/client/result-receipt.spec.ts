@@ -20,7 +20,7 @@ const BLOCKS = [
   { type: 'file', attachment: { attachmentId: 'attachment', name: 'r.json', bytes: 12 } },
 ]
 
-describe('result receipt parsing', () => {
+describe('result receipt enrichment', () => {
   it('accepts one complete receipt line the same way on both halves', () => {
     expect(parseReceiptLine(TEXT)).toEqual(RECEIPT)
     expect(announcedReceipt(BLOCKS, 'attachment')).toEqual(RECEIPT)

@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
 import {
-  PARSING_SETTINGS_NAMESPACE,
+  ENRICHMENT_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
@@ -57,7 +57,7 @@ describe('the browser-half entry', () => {
     expect(world.formIds).toEqual([
       ZOTERO_SETTINGS_NAMESPACE,
       SCHOLARLY_SETTINGS_NAMESPACE,
-      PARSING_SETTINGS_NAMESPACE,
+      ENRICHMENT_SETTINGS_NAMESPACE,
       ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
     ])
   })
@@ -185,12 +185,12 @@ describe('the browser-half entry', () => {
     expect(configInject.hooks.zoteroCard).toBeDefined()
   })
 
-  it('guards scholarly, parsing, and library row configs with whileServed so they register only when served', async () => {
+  it('guards scholarly, enrichment, and library row configs with whileServed so they register only when served', async () => {
     const worldServed = fakeWorld()
     await applyEntry(worldServed)
     expect(worldServed.whileServedRegistrations).toEqual([
       { namespaces: [SCHOLARLY_SETTINGS_NAMESPACE] },
-      { namespaces: [PARSING_SETTINGS_NAMESPACE] },
+      { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
       { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
       // The panel gate: the library surfaces follow the same served watch.
       { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
@@ -199,15 +199,15 @@ describe('the browser-half entry', () => {
     expect(rowEntries).toHaveLength(3)
     for (const entry of rowEntries) entry.register()
 
-    const parsingConfig = worldServed.registered.find(
-      (e) => e.name === 'plugins.row.config' && e.options.key === 'dsh-zotero#parsing',
+    const enrichmentConfig = worldServed.registered.find(
+      (e) => e.name === 'plugins.row.config' && e.options.key === 'dsh-zotero#enrichment',
     )
-    expect(parsingConfig).toBeDefined()
-    expect(parsingConfig?.options.locale).toBe('zotero')
-    const parsingFace = (
-      parsingConfig?.options.inject as () => { hooks: { parsingCard: unknown } }
+    expect(enrichmentConfig).toBeDefined()
+    expect(enrichmentConfig?.options.locale).toBe('zotero')
+    const enrichmentFace = (
+      enrichmentConfig?.options.inject as () => { hooks: { enrichmentCard: unknown } }
     )()
-    expect(parsingFace.hooks.parsingCard).toBeDefined()
+    expect(enrichmentFace.hooks.enrichmentCard).toBeDefined()
 
     const scholarlyConfig = worldServed.registered.find(
       (e) => e.name === 'plugins.row.config' && e.options.key === 'dsh-zotero#scholarly',

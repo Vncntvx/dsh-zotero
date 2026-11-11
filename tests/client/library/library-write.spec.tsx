@@ -526,7 +526,7 @@ describe('LibraryWrite component', () => {
     })
   })
 
-  it('handles batch json field parsing and submission', async () => {
+  it('handles batch json field enrichment and submission', async () => {
     const writeSpy = vi.fn().mockResolvedValue({
       ok: true,
       value: { kind: 'applied', message: 'Batch complete' },

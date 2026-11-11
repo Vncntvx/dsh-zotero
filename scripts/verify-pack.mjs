@@ -154,6 +154,7 @@ export function packReportOf(stdout) {
 function verifyPack() {
   const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
   const { paths: expected, problems } = expectedPaths(manifest)
+  expected.sort()
   if (problems.length > 0) {
     for (const problem of problems) console.error(`verify-pack: ${problem}`)
     process.exitCode = 1

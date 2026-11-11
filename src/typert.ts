@@ -47,6 +47,11 @@ import {
   ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
   ZOTERO_SOURCE_PAGE_METHOD,
+  ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
+  ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
+  ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
+  ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
+  ZOTERO_ENRICHMENT_SERVICE_KEY,
 } from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
 
@@ -101,6 +106,40 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_SOURCE_PAGE_METHOD,
             signature:
               'sourcePage(request: ZoteroSourcePageRequestView, signal: AbortSignal): Promise<ZoteroSourcePageResultView>',
+          },
+        ],
+        types: [],
+      },
+      {
+        key: ZOTERO_ENRICHMENT_SERVICE_KEY,
+        exportName: 'EnrichmentService',
+        description:
+          'Serves the optional enrichment component: local semantic-model status, download, cancel, and verification. Answers only while the component row is composed.',
+        tags: [],
+        members: [
+          {
+            kind: 'method',
+            name: ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
+            signature:
+              'semanticModelStatus(request: ZoteroSemanticModelStatusRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelStatusResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
+            signature:
+              'downloadSemanticModel(request: ZoteroSemanticModelDownloadRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelDownloadResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
+            signature:
+              'cancelSemanticModelDownload(request: ZoteroSemanticModelCancelRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelCancelResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
+            signature:
+              'verifySemanticModel(request: ZoteroSemanticModelVerifyRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelStatusResultView>',
           },
         ],
         types: [],

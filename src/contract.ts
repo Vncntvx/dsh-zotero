@@ -28,7 +28,7 @@ import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
 import type { SourceWorkspace } from './sources/model.js'
 import type { SourceFilter } from './sources/filters.js'
-import { ZOTERO_SETTINGS_NAMESPACE } from './settings-namespace.js'
+import { ZOTERO_SETTINGS_NAMESPACE, ZOTERO_ENRICHMENT_SERVICE_KEY } from './settings-namespace.js'
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     'zotero/domain': { readonly code: string }
@@ -475,6 +475,118 @@ export function zoteroSourcePageInvocation(
   }
 }
 
+export interface ZoteroSemanticModelStatusRequestView {
+  readonly model?: string
+  readonly modelDir?: string
+}
+
+export interface ZoteroSemanticModelStatusResultView {
+  readonly model: string
+  readonly ready: boolean
+  readonly downloading: boolean
+  readonly path: string
+  readonly downloadedBytes: number
+  readonly totalBytes: number
+  readonly percent: number
+  readonly currentFile?: string
+  readonly error?: string
+}
+
+export const ZOTERO_SEMANTIC_MODEL_STATUS_METHOD = 'semanticModelStatus'
+export const ZOTERO_SEMANTIC_MODEL_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/semanticModelStatus'
+export const ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelStatusRequestView'
+export const ZOTERO_SEMANTIC_MODEL_STATUS_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelStatusResultView'
+
+export function zoteroSemanticModelStatusInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SEMANTIC_MODEL_STATUS_INVOCATION_ID,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
+
+export interface ZoteroSemanticModelDownloadRequestView {
+  readonly model?: string
+  readonly source?: string
+  readonly modelDir?: string
+  /** Replace an existing bundle instead of answering `already-ready`. */
+  readonly force?: boolean
+}
+
+export interface ZoteroSemanticModelDownloadResultView {
+  readonly success: boolean
+  readonly model: string
+  readonly status: 'started' | 'already-ready' | 'downloading'
+  readonly path: string
+}
+
+export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD = 'downloadSemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID =
+  'dsh-zotero#zotero/downloadSemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelDownloadRequestView'
+export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelDownloadResultView'
+
+export function zoteroSemanticModelDownloadInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
+
+export interface ZoteroSemanticModelCancelRequestView {
+  readonly model?: string
+  readonly modelDir?: string
+}
+
+export interface ZoteroSemanticModelCancelResultView {
+  readonly cancelled: boolean
+}
+
+export const ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD = 'cancelSemanticModelDownload'
+export const ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID =
+  'dsh-zotero#zotero/cancelSemanticModelDownload'
+export const ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelCancelRequestView'
+export const ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelCancelResultView'
+
+export function zoteroSemanticModelCancelInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
+
 /** The browse kinds the library panel lists; the tool-facing kinds stay tool-only. */
 export type ZoteroLibraryBrowseKind =
   'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes'
@@ -829,6 +941,7 @@ export const ZOTERO_LIBRARY_SETTINGS_NAMESPACE = 'library'
 
 /** Cordis service key for the library panel remote service. */
 export const ZOTERO_LIBRARY_SERVICE_KEY = 'zoteroLibrary'
+export { ZOTERO_ENRICHMENT_SERVICE_KEY }
 
 /**
  * Panel writes use the same closed arguments and execution pipeline as the
@@ -1076,4 +1189,32 @@ export function zoteroReleaseUrlPdfInvocation(
   result: InvocationDescriptor['result'],
 ): InvocationDescriptor {
   return libraryInvocation('dsh-zotero#zotero/releaseUrlPdf', 'releaseUrlPdf', param, result)
+}
+
+export interface ZoteroSemanticModelVerifyRequestView {
+  readonly model?: string
+  readonly modelDir?: string
+}
+
+export const ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD = 'verifySemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_VERIFY_INVOCATION_ID = 'dsh-zotero#zotero/verifySemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelVerifyRequestView'
+export const ZOTERO_SEMANTIC_MODEL_VERIFY_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelStatusResultView'
+
+export function zoteroSemanticModelVerifyInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SEMANTIC_MODEL_VERIFY_INVOCATION_ID,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
 }

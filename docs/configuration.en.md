@@ -7,9 +7,9 @@ dsh-zotero configuration is split across four settings namespaces. Each namespac
 - Core `zotero` namespace: `src/config.ts`, 37 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 11 fields;
 - Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields;
-- Document parsing `parsing` namespace: `src/parsing/config.ts`, 4 fields.
+- Document parsing `enrichment` namespace: `src/enrichment/config.ts`, 8 fields.
 
-The four groups total 61 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `parsing`) in the current profile's `cordis.patch.yml`.
+The four groups total 65 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
@@ -22,7 +22,7 @@ The configuration area of the plugin detail page is a 7-tab form that edits all 
 | Search & Extraction | `zotero`            | 13     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars` |
 | Literature panel    | `library`, `zotero` | 13     | 11 panel preferences for display, details, browsing, PDF reading, citations and conversation; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                                                        |
 | Scholarly Search    | `scholarly`         | 9      | Identity and credential references: `email`, `s2ApiKeyEnv`, `ncbiApiKeyEnv`, `openalexApiKeyEnv`; Search & Full-text Quotas: `maxResults`, `maxContentChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`                                                                                         |
-| Document Parsing    | `parsing`           | 4      | Mode and output: `mode`, `mineruTokenRef`, `allowParsingUpload`, `outputDir`                                                                                                                                                                                                                                                            |
+| Document Enrichment | `enrichment`        | 8      | Mode and output: `mode`, `mineruTokenRef`, `allowDocumentUpload`, `outputDir`; Semantic ranking: `enableSemanticSearch`, `semanticModel`, `semanticDownloadSource`, `semanticModelDir`                                                                                                                                                  |
 | Advanced            | `zotero`            | 11     | Output limits: `maxInlineResultTokens`, `maxInlineResultBytes`, `maxResponseBytes`, `maxExportChars`, `maxExportRefs`, `maxBrowseResults`, `maxChangesResults`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`; Diagnostics: `debug`                                                                 |
 
 `webEnabled` sits under "General → Literature trail", and the toggle is named "Show literature trail"; it decides whether the literature trail tab appears at the top of the conversation. The literature panel also needs the `dsh-zotero/library` component row to be composed and this component's `rightSidebarEnabled` to be on, as described below in "Literature panel component configuration".
@@ -97,7 +97,7 @@ All four namespaces follow the same order. The override layer (`config` on the m
 
 ## Plugin configuration page
 
-Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 7-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`) and edits the `zotero`, `library`, `scholarly`, and `parsing` namespaces in one place:
+Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 7-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`) and edits the `zotero`, `library`, `scholarly`, and `enrichment` namespaces in one place:
 
 - Edits are written to the `config` override on the matching entry in the current profile's `cordis.patch.yml`;
 - Saves take effect at once: transport configuration and write-gate changes rebuild the matching components inside the service instance, and pure limit fields are read live by the provider;
@@ -108,7 +108,7 @@ Open the **dsh-zotero** detail page in the plugin manager; its configuration are
 The same form state has two more entry points, and the three relate as follows:
 
 1. Unified settings page tabs: the 7-tab form in the plugin detail page's configuration area;
-2. Component row configuration: the "Configure" button on the `dsh-zotero#library`, `dsh-zotero#scholarly`, and `dsh-zotero#parsing` rows under "Included components", each editing its own namespace;
+2. Component row configuration: the "Configure" button on the `dsh-zotero#library`, `dsh-zotero#scholarly`, and `dsh-zotero#enrichment` rows under "Included components", each editing its own namespace;
 3. Configuration file: edit `config` on the matching entry in the current profile's `cordis.patch.yml` directly.
 
 The first two are two views of one `ConfigForm` state, synced live over both channels; the third is the configuration override layer, which a form write takes as its highest priority. While a component row is not composed, the matching tab of the settings page shows only a disabled pointer to "Included components" and renders no field, and the component row configuration entry is not registered either.
@@ -190,43 +190,78 @@ The panel requires a composed component row and `rightSidebarEnabled`; `webEnabl
 
 ---
 
-## Document parsing component configuration (`dsh-zotero/parsing`)
+## Document parsing component configuration (`dsh-zotero/enrichment`)
 
-Document parsing is a separate DSH bundle sub-component, shipped with the package but disabled by default (`cordis.patch.yml` contains `- id: parsing` / `name: dsh-zotero/parsing` / `disabled: true`). Enabling that row authorizes the component to contact MinerU; it registers no model tools and no prompt section. It feeds `zotero_retrieve` and `scholarly_read` through one optional full-text enhancer slot on the core service, producing higher-quality Markdown from PDFs. While the component is unmounted the slot is empty and both read paths keep their original local-extraction behavior unchanged.
+Document parsing is a separate DSH bundle sub-component, shipped with the package but disabled by default (`cordis.patch.yml` contains `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`). Enabling that row authorizes the component to contact MinerU; it registers no model tools and no prompt section. It feeds `zotero_retrieve` and `scholarly_read` through one optional full-text enhancer slot on the core service, producing higher-quality Markdown from PDFs. While the component is unmounted the slot is empty and both read paths keep their original local-extraction behavior unchanged.
 
-Sending document bytes additionally needs the component's own data-egress authorization, `allowParsingUpload` (off by default; the form asks for confirmation before enabling). MinerU receives PDF bytes only while both authorizations hold. Every external request is issued by this component; the core holds no MinerU transport, host table, or credentials.
+Enabling the document parsing component authorizes sending documents to MinerU for extraction (`allowDocumentUpload` defaults to `true` when the component is enabled). Every external request is issued by this component; the core holds no MinerU transport, host table, or credentials.
 
 The component's fields have three entry points:
 
-1. **Unified settings page "Document Parsing" tab**: switch to it in the plugin detail page's 7-tab form;
-2. **Included-components row configuration**: the "Configure" button on the `dsh-zotero#parsing` row;
+1. **Unified settings page "Document Enrichment" tab**: switch to it in the plugin detail page's 7-tab form;
+2. **Included-components row configuration**: the "Configure" button on the `dsh-zotero#enrichment` row;
 3. **Configuration file**: declare them under `config` on that entry in the current profile's `cordis.patch.yml`.
 
-| Field                | Default | Values and behavior                                                                                                                                                                                                                                                          |
-| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`               | `free`  | `free` uses the token-free Agent lightweight API (IP rate-limited, API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤600 pages) and needs a token. Page counts and API byte caps are enforced by MinerU; the client does not pre-check pages |
-| `mineruTokenRef`     | `''`    | Credential reference name for the MinerU precise-API token (suggested `MINERU_API_TOKEN`); resolved only in `pro` mode, and `free` mode does not resolve the credential                                                                                                      |
-| `allowParsingUpload` | `false` | Data-egress authorization: whether local attachment and URL-PDF bytes may be sent to MinerU; independent of mounting the component                                                                                                                                           |
-| `outputDir`          | `''`    | Absolute directory for parsed artifacts (or a `~/...` path); empty resolves the default `~/.dsh/zotero-parsed` at runtime. A relative path is refused by the schema/form                                                                                                     |
+| Field                    | Default              | Values and behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`                   | `free`               | `free` uses the token-free Agent Lightweight Parse API (IP rate-limited, API-side ≤10 MB and ≤20 pages); `pro` uses the Precision Extract API (API-side ≤200 MB and ≤200 pages) and needs a token (5,000 free files/day, rate limits: 50 files/min submit, 1,000 req/min query). Page counts and API byte caps are enforced by MinerU; the client does not pre-check pages                                                                                                     |
+| `mineruTokenRef`         | `'MINERU_API_TOKEN'` | Credential reference name for the MinerU precise-API token (defaults to plugin-dedicated `MINERU_API_TOKEN`); resolved in `pro` mode from the credentials store (tokens are valid for 3 months). The UI uses this default automatically without manual entry                                                                                                                                                                                                                   |
+| `allowDocumentUpload`    | `true`               | Data-egress authorization: whether local attachment and URL-PDF bytes may be sent to MinerU; defaults to true when mounting the component                                                                                                                                                                                                                                                                                                                                      |
+| `outputDir`              | `''`                 | Absolute directory for parsed artifacts (or a `~/...` path); empty resolves the default `~/.dsh/zotero-parsed` at runtime. A relative path is refused by the schema/form                                                                                                                                                                                                                                                                                                       |
+| `enableSemanticSearch`   | `false`              | Whether to enable local semantic ranking: opt-in, requires the user to download the model; falls back gracefully to BM25 lexical ranking when disabled or absent                                                                                                                                                                                                                                                                                                               |
+| `semanticModel`          | `'balanced'`         | Selected local embedding model tier: `balanced` (general-purpose balanced, backed by Qwen3-0.6B, recommended default), `lightweight` (ultra-lightweight, backed by Granite-97M, RAM <250MB), `bilingual` (Chinese-English, backed by KaLM-0.5B, instruction-tuned), `english` (English long-context, backed by Nomic-137M, 8K context), `hybrid` (multi-vector dense/sparse, backed by BGE-M3), `academic` (classic multilingual baseline, backed by GTE-Base, 768 dimensions) |
+| `semanticDownloadSource` | `'hf-mirror'`        | Download channel / mirror: `hf-mirror` (hf-mirror.com, recommended in China), `huggingface` (huggingface.co)                                                                                                                                                                                                                                                                                                                                                                   |
+| `semanticModelDir`       | `''`                 | Custom absolute directory for downloaded models (or a `~/...` path); empty uses the default `~/.dsh/models/`                                                                                                                                                                                                                                                                                                                                                                   |
 
-The mode switch is fully decoupled from the token: `mode` is its own field, the host dispatches on it, and `free` never resolves the token credential, so a user who configured one can still switch back to the free API. When `mode` is `pro` and `mineruTokenRef` does not resolve, the call fails closed with `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED`; it never silently degrades to the free API or an anonymous request.
+The mode switch is fully decoupled from the token: `mode` is its own field, the host dispatches on it, and `free` never resolves the token credential, so a user who configured one can still switch back to the free API. When `mode` is `pro` and `mineruTokenRef` does not resolve, the call fails closed with `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`; it never silently degrades to the free API or an anonymous request.
+
+### Local Semantic Search & Model Download
+
+ONNX embedding models require manual download before enabling. To decouple user configurations from physical model versioning and eliminate invalid-config breakages upon future model upgrades, the system addresses models through **intent-driven semantic tier keys (Semantic Tiers)**:
+
+- **Model Tiers**:
+  - `balanced` (General & Balanced · currently backed by `Qwen3-Embedding-0.6B` · ~625 MB, 1024 dimensions, 32K max tokens, Apache 2.0): Next-generation open-source flagship embedding model, C-MTEB Chinese overall 66.33 / retrieval 71.03, supporting 100+ languages and 32K context. Best overall recall, recommended default.
+  - `lightweight` (Ultra-Lightweight · currently backed by `IBM Granite 97M ModernBERT` · ~123 MB, 384 dimensions, 32K max tokens, Apache 2.0): Ultra-low memory footprint (<250 MB) and millisecond CPU latency for resource-constrained or high-throughput batch environments.
+  - `bilingual` (Bilingual Literature · currently backed by `KaLM-Embedding-multilingual-mini-instruct-v2.5` · ~574 MB, 896 dimensions, 32K max tokens, Apache 2.0): Optimized for bilingual English/Chinese mixed retrieval and instruction-tuned literature search.
+  - `english` (English Long-Context · currently backed by `nomic-embed-text-v1.5` · ~141 MB, 768 dimensions, 8192 max tokens, Apache 2.0): Open weights & data, 8K context with dynamic Matryoshka dimension truncation, strong English & academic performance.
+  - `hybrid` (Multi-Vector Hybrid · currently backed by `BAAI BGE-M3` · ~585 MB, 1024 dimensions, 8192 max tokens, Apache 2.0): Gold standard academic benchmark for comprehensive multi-lingual literature and review paper recall.
+  - `academic` (Classic Academic · currently backed by `gte-multilingual-base` · ~357 MB, 768 dimensions, 8192 max tokens, Apache 2.0): SOTA multilingual academic baseline balancing size and high precision across 75+ languages.
+- **Hardware Constraints & Architecture Rationale**:
+  - On typical 16GB RAM machines operating on CPU only, the host OS and environment consume 6~8GB, leaving a safe computation budget of 1.5GB~2.5GB. Offering a spectrum of 97M~600M 2024-2025 models, **4B and 8B models are strictly barred** (even with INT8 quantization, they demand 4.5~8.5GB RAM, causing multi-second CPU query latencies and triggering fatal system Swap thrashing or OOM killer terminations during chunked ingestion).
+  - The retrieval pipeline employs hybrid Reciprocal Rank Fusion (RRF, k=60) combining BM25 lexical ranking and dense vector similarity, achieving top-tier semantic recall without burdening the CPU with a heavy Cross-Encoder reranker.
+- **Multiple Download Channels**:
+  - `hf-mirror` (`https://hf-mirror.com`): Recommended mirror for fast direct downloads in mainland China;
+  - `huggingface` (`https://huggingface.co`): Official Hugging Face repository for direct international access or configured proxies.
+- **Download Command (CLI)**:
+  Run in terminal:
+  ```sh
+  npm run assets:semantic -- --model=<key> --source=<source>
+  ```
+  The script verifies SHA-256 and byte counts for every file. Once downloaded, toggle "Enable local semantic search" in settings to activate. When unconfigured or missing, the pipeline cleanly falls back to BM25 lexical ranking.
+- **Interactive Configuration Guidance**:
+  - **Semantic search enabled without downloaded model**: When "Enable local semantic search" is toggled on but the selected model has not finished downloading (even after saving settings), the form displays a persistent warning banner. It notes that retrieval falls back to BM25 lexical ranking and guides the user to select a model and click "Download model". The warning automatically clears once the model is ready.
+  - **Precision Extract selected without Token**: When switching to "Precision Extract" mode without a configured MinerU API Token, the credential section displays a guidance callout with a direct link to `mineru.net`, prompting the user to register for a free token (5,000 files/day) or revert to the token-free "Agent Lightweight Parse" mode.
 
 Parsed artifacts are written to `<outputDir>/<sha256>/` keyed by a content fingerprint (source, mode, and the SHA-256 of the PDF bytes): `full.md`, `meta.json` (source, mode, task ID, file list, plus pages only when `pro` returned `total_pages`), and `content_list.json` for the precise API. `meta.json` is written last and acts as the completeness marker.
 
-The cache has two levels: content artifacts by fingerprint, and a source index at `<outputDir>/sources/<sha256>/` mapping `identity + mode` to an artifact and a source stamp. A local attachment is only `stat`ed (size and mtime); a change falls back to the content fingerprint. A URL source receives one token-free HEAD and is compared by `ETag`/`Last-Modified`/`Content-Length`; a match reads the local artifact **without downloading the PDF or contacting MinerU**, while a mismatch or a failed HEAD falls back to the URL identity or a fresh download. The raw URL's query and fragment are not written to `meta.json` (origin and path only). Deleting the matching entry under `<outputDir>/sources` forces a re-parse.
+The cache has two levels: fingerprinted artifacts and a source index at `<outputDir>/sources/<sha256>.json`. Local files compare size and mtime. URL sources receive a token-free HEAD and require a matching ETag or matching Last-Modified plus Content-Length, with no contradictory shared validators. A source without useful validators is fetched and checked by its byte fingerprint; probe failures are explicit errors. A valid hit reads local artifacts without downloading a PDF or contacting MinerU. URL provenance metadata retains only origin and path.
 
-The output directory is fully validated on first use: a relative path is refused by the schema/form; a missing, unwritable, sensitive system path (including macOS `/private/etc` and `/private/var`, and `~/.ssh`/`~/.gnupg`), or a symlink escape fails **fatally** with `ZOTERO_PARSING_OUTPUT_INVALID` and does not fall back. The free API's size cap (>10 MiB) falls back to local extraction with `ZOTERO_PARSING_UNSUPPORTED_INPUT` in the reason, never a silent truncation.
+Private task receipts at `<outputDir>/tasks/<sha256>.json` use file mode `0600`. Upload completion removes the signed URL from the receipt. A later read resumes the same task after polling/download failure, cancellation, or restart. Unuploaded URLs expire after the documented 24 hours; expiration and terminal task failures report an error and clear the receipt, allowing a new task on the next explicit read. Successful artifact persistence also clears it. POST submissions are never automatically replayed; GET/HEAD/PUT retry transient failures at most twice, honoring `Retry-After` and phase/total deadlines.
 
-The default parse budget is 30 minutes with 900 polls (one every 2 seconds); submit and one poll get 60 seconds, the signed upload 20 minutes, the result download 10 minutes, a source PDF transfer 20 minutes, and a cache HEAD 15 seconds. Parsed Markdown below 500 characters is treated as a fallback; identical bytes are parsed once per `ParsingService`, and one caller's cancellation does not cancel the other waiters.
+The output directory is fully validated on first use: a relative path is refused by the schema/form; a missing, unwritable, sensitive system path (including macOS `/private/etc` and `/private/var`, and `~/.ssh`/`~/.gnupg`), or a symlink escape fails with `ZOTERO_ENRICHMENT_OUTPUT_INVALID`. An input over the free API's size cap (>10 MiB) fails with `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`; it is never silently truncated.
+
+The default parse budget is 30 minutes with 900 polls (one every 2 seconds); submit and one poll get 60 seconds, the signed upload 20 minutes, the result download 10 minutes, a source PDF transfer 20 minutes, and a cache HEAD 15 seconds. Valid short documents retain their parsed content; empty text, HTML/XML error pages, invalid UTF-8, and malformed content lists fail explicitly; identical bytes are parsed once per `EnrichmentService`, and one caller's cancellation does not cancel the other waiters.
 
 Error classification:
 
-| Code                                   | Class    | Behavior                                                                                |
-| -------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `ZOTERO_PARSING_CREDENTIAL_UNRESOLVED` | fatal    | The pro token reference does not resolve; the read fails                                |
-| `ZOTERO_PARSING_OUTPUT_INVALID`        | fatal    | The output directory is unusable; the read fails and no document bytes are sent         |
-| `ZOTERO_PARSING_TASK_FAILED`           | fallback | Submit/task/poll failure or timeout; local extraction                                   |
-| `ZOTERO_PARSING_ARCHIVE_INVALID`       | fallback | Malformed or unsafe result zip; local extraction                                        |
-| `ZOTERO_PARSING_UNSUPPORTED_INPUT`     | fallback | Over the selected API's byte cap or not a PDF; local extraction with the code preserved |
+| Code                                      | Class | Behavior                                                                                                     |
+| ----------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------ |
+| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` | fatal | The pro token reference does not resolve; the read fails                                                     |
+| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`        | fatal | The output directory is unusable; the read fails and no document bytes are sent                              |
+| `ZOTERO_ENRICHMENT_TASK_FAILED`           | fatal | Submit/task/poll failure or timeout; read fails                                                              |
+| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`       | fatal | Malformed or unsafe result zip; read fails                                                                   |
+| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`     | fatal | Over the selected API's byte cap or not a PDF; read fails with its code preserved                            |
+| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`  | fatal | Semantic ranking on but the model is missing, corrupted, or inference failed; read fails, no lexical degrade |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED` | fatal | The model download failed on every mirror; the settings page shows the reason                                |
 
-With `allowParsingUpload` off, no new document bytes are sent and the read falls back locally; an existing local artifact remains readable. Only credential resolution and an unusable output directory fail closed; other runtime failures fall back with a stated reason recorded in the diagnostics ring.
+If `allowDocumentUpload` is explicitly false, no new document bytes are sent: a cache miss fails, while an existing validated artifact remains readable. All parsing failures propagate to the caller without substituting local extraction or another API mode.

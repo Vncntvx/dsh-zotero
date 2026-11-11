@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The canonical Zotero deep links: URL construction, ref parsing, and
+ * The canonical Zotero deep links: URL construction, ref enrichment, and
  * group-library support, plus the PDF capability of one source.
  * @module tests/client/actions/open-zotero
  */

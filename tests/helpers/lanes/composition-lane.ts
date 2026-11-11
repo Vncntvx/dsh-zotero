@@ -23,7 +23,7 @@ import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/
 import ZoteroService from '../../../src/index.js'
 import ScholarlyService from '../../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../../src/library/index.js'
-import ParsingService from '../../../src/parsing/index.js'
+import EnrichmentService from '../../../src/enrichment/index.js'
 import { MockZotero } from '../mock-zotero.js'
 
 /** One booted real-Loader composition, disposed as a unit by {@link dispose}. */
@@ -66,7 +66,7 @@ export async function setupCompositionLane(
     ['dsh-zotero', ZoteroService],
     ['dsh-zotero/scholarly', ScholarlyService],
     ['dsh-zotero/library', ZoteroLibraryService],
-    ['dsh-zotero/parsing', ParsingService],
+    ['dsh-zotero/enrichment', EnrichmentService],
   ])
   context.loader.internal = {
     version: 'v2',

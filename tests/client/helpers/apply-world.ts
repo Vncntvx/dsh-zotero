@@ -8,7 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { apply } from '../../../src/client/index.ts'
 import {
-  PARSING_SETTINGS_NAMESPACE,
+  ENRICHMENT_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../../src/settings-namespace.ts'
@@ -126,7 +126,7 @@ export function fakeWorld(
   const forms: Record<string, ReturnType<typeof fakeScope>> = {
     [ZOTERO_LIBRARY_SETTINGS_NAMESPACE]: libraryScope,
     [SCHOLARLY_SETTINGS_NAMESPACE]: scholarlyScope,
-    [PARSING_SETTINGS_NAMESPACE]: fakeScope(),
+    [ENRICHMENT_SETTINGS_NAMESPACE]: fakeScope(),
   }
   const whileServedRegistrations: FakeApplyWorld['whileServedRegistrations'] = []
   // Every Zotero endpoint action is granted by default: the world models the

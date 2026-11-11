@@ -11,12 +11,12 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Config as CoreConfig } from '../../src/config.js'
 import {
-  PARSING_CREDENTIAL_REFERENCE_NAMES,
+  ENRICHMENT_CREDENTIAL_REFERENCE_NAMES,
   SCHOLARLY_CREDENTIAL_REFERENCE_NAMES,
 } from '../../src/credential-names.js'
 import { LibraryConfigSchema } from '../../src/library/config.js'
 import { ScholarlyConfig } from '../../src/scholarly/config.js'
-import { ParsingConfigSchema } from '../../src/parsing/config.js'
+import { EnrichmentConfigSchema } from '../../src/enrichment/config.js'
 
 const REPO_ROOT = new URL('../../', import.meta.url)
 
@@ -44,34 +44,39 @@ function fieldsOf(schema: unknown): string[] {
 const coreFields = fieldsOf(CoreConfig)
 const libraryFields = fieldsOf(LibraryConfigSchema)
 const scholarlyFields = fieldsOf(ScholarlyConfig)
-const parsingFields = fieldsOf(ParsingConfigSchema)
+const enrichmentFields = fieldsOf(EnrichmentConfigSchema)
 const totalFields =
-  coreFields.length + libraryFields.length + scholarlyFields.length + parsingFields.length
+  coreFields.length + libraryFields.length + scholarlyFields.length + enrichmentFields.length
 
 describe('configuration docs agree with the schemas', () => {
-  it('lists every field, the scholarly/parsing counts, and the total in both languages', () => {
+  it('lists every field, the scholarly/enrichment counts, and the total in both languages', () => {
     const cases = [
       [
         'docs/configuration.md',
         `四组合计 ${totalFields} 个字段`,
         `${scholarlyFields.length} 个字段`,
-        `${parsingFields.length} 个字段`,
+        `${enrichmentFields.length} 个字段`,
       ],
       [
         'docs/configuration.en.md',
         `The four groups total ${totalFields} fields`,
         `${scholarlyFields.length} fields`,
-        `${parsingFields.length} fields`,
+        `${enrichmentFields.length} fields`,
       ],
     ] as const
-    for (const [path, totalText, scholarlyText, parsingText] of cases) {
+    for (const [path, totalText, scholarlyText, enrichmentText] of cases) {
       const text = docOf(path)
-      for (const field of [...coreFields, ...libraryFields, ...scholarlyFields, ...parsingFields]) {
+      for (const field of [
+        ...coreFields,
+        ...libraryFields,
+        ...scholarlyFields,
+        ...enrichmentFields,
+      ]) {
         expect(text, `${path} is missing the ${field} field`).toContain(field)
       }
       expect(text, `${path} is missing the field total`).toContain(totalText)
       expect(text, `${path} is missing the scholarly field count`).toContain(scholarlyText)
-      expect(text, `${path} is missing the parsing field count`).toContain(parsingText)
+      expect(text, `${path} is missing the enrichment field count`).toContain(enrichmentText)
     }
   })
 
@@ -80,7 +85,7 @@ describe('configuration docs agree with the schemas', () => {
       const text = docOf(path)
       for (const name of [
         ...Object.values(SCHOLARLY_CREDENTIAL_REFERENCE_NAMES),
-        ...Object.values(PARSING_CREDENTIAL_REFERENCE_NAMES),
+        ...Object.values(ENRICHMENT_CREDENTIAL_REFERENCE_NAMES),
       ]) {
         expect(text, `${path} is missing ${name}`).toContain(name)
       }
@@ -104,13 +109,18 @@ describe('component and settings docs stay in lockstep', () => {
 
     expect(docOf('docs/index.md')).toContain('四个设置命名空间')
     expect(docOf('docs/index.en.md')).toContain('four settings namespaces')
-    expect(docOf('docs/development.md')).toContain('四个设置命名空间、61 个字段')
-    expect(docOf('docs/development.en.md')).toContain('Four settings namespaces, 61 fields')
+    // The totals are computed from the live schemas, so a field count can
+    // never silently make these sentences false.
+    const total = totalFields
+    expect(docOf('docs/development.md')).toContain(`四个设置命名空间、${total} 个字段`)
+    expect(docOf('docs/development.en.md')).toContain(`Four settings namespaces, ${total} fields`)
+    expect(docOf('docs/configuration.md')).toContain(`四组合计 ${total} 个字段`)
+    expect(docOf('docs/configuration.en.md')).toContain(`The four groups total ${total} fields`)
     expect(docOf('docs/product-model.en.md')).toContain('four decoupled components')
     expect(docOf('docs/product-model.en.md')).not.toContain('three decoupled components')
   })
 
-  it('names parsing as an external-request boundary and keeps AGENTS current', () => {
+  it('names enrichment as an external-request boundary and keeps AGENTS current', () => {
     for (const [path, stale, current] of [
       ['docs/architecture.md', '外部请求只来自学术检索组件；', '文档解析'],
       [
@@ -121,12 +131,12 @@ describe('component and settings docs stay in lockstep', () => {
     ] as const) {
       const text = docOf(path)
       expect(text, `${path} still carries the stale boundary`).not.toContain(stale)
-      expect(text, `${path} should name the parsing component`).toContain(current)
+      expect(text, `${path} should name the enrichment component`).toContain(current)
     }
 
     const agents = docOf('AGENTS.md')
     expect(agents).toContain('four Cordis bundle components')
-    expect(agents).toContain('src/parsing/')
+    expect(agents).toContain('src/enrichment/')
     expect(agents).toContain('mineru.net')
     expect(agents).toContain('MinerU')
 
@@ -134,9 +144,9 @@ describe('component and settings docs stay in lockstep', () => {
       ['README.md', '文档解析'],
       ['README.en.md', 'document parsing component'],
       ['docs/features.md', '文档解析'],
-      ['docs/features.en.md', 'Document Parsing'],
+      ['docs/features.en.md', 'Document Enrichment'],
     ] as const) {
-      expect(docOf(path), `${path} should describe the parsing component`).toContain(marker)
+      expect(docOf(path), `${path} should describe the enrichment component`).toContain(marker)
     }
   })
 

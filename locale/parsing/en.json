@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "dsh-zotero/parsing",
-    "description": "Optional document-parsing component for DeepSeek Harness: uses MinerU to turn PDFs into high-quality local Markdown, improving the accuracy of the model's reading. Disabled by default; mount it and grant data-egress authorization separately."
-  }
-}

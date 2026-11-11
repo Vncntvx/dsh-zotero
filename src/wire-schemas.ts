@@ -5,11 +5,32 @@ import {
 } from './contract.js'
 import { refFieldsOf } from './ref-grammar.js'
 import { sourceWorkspaceSchema } from './sources/workspace-schema.js'
+import { ENRICHMENT_OUTPUT_DIR_PATTERN } from './enrichment-preferences.js'
+import { SEMANTIC_DOWNLOAD_SOURCES, SEMANTIC_MODEL_KEYS } from './enrichment-model-catalog.js'
 import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
 import {
   ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL,
   ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL,
   zoteroSourcePageInvocation,
+  type ZoteroSemanticModelStatusRequestView,
+  type ZoteroSemanticModelStatusResultView,
+  type ZoteroSemanticModelDownloadRequestView,
+  type ZoteroSemanticModelDownloadResultView,
+  type ZoteroSemanticModelCancelRequestView,
+  type ZoteroSemanticModelCancelResultView,
+  ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_STATUS_RESULT_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_DOWNLOAD_RESULT_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_VERIFY_RESULT_TYPE_SYMBOL,
+  zoteroSemanticModelStatusInvocation,
+  zoteroSemanticModelDownloadInvocation,
+  zoteroSemanticModelCancelInvocation,
+  zoteroSemanticModelVerifyInvocation,
+  type ZoteroSemanticModelVerifyRequestView,
 } from './contract.js'
 /**
  * The wire boundary's single source: every zod schema the `zotero` namespace
@@ -865,7 +886,114 @@ export const zoteroUrlPdfSchema = z
 export const ZOTERO_URL_PDF_CODEC = strictCodec('dsh-zotero#ZoteroUrlPdfView', zoteroUrlPdfSchema)
 export const zoteroReleaseUrlPdfSchema = z.object({ lease: z.uuid() }).strict()
 
+// The directory reaches the filesystem, so the wire carries the same shape
+// rule the settings schema enforces: absolute, `~/...`, a drive, or a UNC path.
+const semanticModelDirSchema = z
+  .string()
+  .regex(ENRICHMENT_OUTPUT_DIR_PATTERN, 'expected an absolute directory or a ~ path')
+const semanticModelEnum = z.enum([...SEMANTIC_MODEL_KEYS] as [string, ...string[]])
+const semanticSourceEnum = z.enum([...SEMANTIC_DOWNLOAD_SOURCES] as [string, ...string[]])
+
+export const zoteroSemanticModelStatusRequestSchema = z
+  .object({
+    model: semanticModelEnum.optional(),
+    modelDir: semanticModelDirSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelStatusRequestView>
+
+export const zoteroSemanticModelStatusResultSchema = z
+  .object({
+    model: z.string(),
+    ready: z.boolean(),
+    downloading: z.boolean(),
+    path: z.string(),
+    downloadedBytes: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    percent: z.number().int().min(0).max(100),
+    currentFile: z.string().optional(),
+    error: z.string().optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelStatusResultView>
+
+export const zoteroSemanticModelDownloadRequestSchema = z
+  .object({
+    model: semanticModelEnum.optional(),
+    source: semanticSourceEnum.optional(),
+    modelDir: semanticModelDirSchema.optional(),
+    force: z.boolean().optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelDownloadRequestView>
+
+export const zoteroSemanticModelDownloadResultSchema = z
+  .object({
+    success: z.boolean(),
+    model: z.string(),
+    status: z.union([z.literal('started'), z.literal('already-ready'), z.literal('downloading')]),
+    path: z.string(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelDownloadResultView>
+
+export const zoteroSemanticModelCancelRequestSchema = z
+  .object({
+    model: semanticModelEnum.optional(),
+    modelDir: semanticModelDirSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelCancelRequestView>
+
+export const zoteroSemanticModelCancelResultSchema = z
+  .object({
+    cancelled: z.boolean(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelCancelResultView>
+
+export const zoteroSemanticModelVerifyRequestSchema = z
+  .object({
+    model: semanticModelEnum.optional(),
+    modelDir: semanticModelDirSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelVerifyRequestView>
+
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
+  zoteroSemanticModelStatusInvocation(
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL,
+      zoteroSemanticModelStatusRequestSchema,
+    ),
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_STATUS_RESULT_TYPE_SYMBOL,
+      zoteroSemanticModelStatusResultSchema,
+    ),
+  ),
+  zoteroSemanticModelDownloadInvocation(
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL,
+      zoteroSemanticModelDownloadRequestSchema,
+    ),
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_DOWNLOAD_RESULT_TYPE_SYMBOL,
+      zoteroSemanticModelDownloadResultSchema,
+    ),
+  ),
+  zoteroSemanticModelCancelInvocation(
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL,
+      zoteroSemanticModelCancelRequestSchema,
+    ),
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL,
+      zoteroSemanticModelCancelResultSchema,
+    ),
+  ),
+  zoteroSemanticModelVerifyInvocation(
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL,
+      zoteroSemanticModelVerifyRequestSchema,
+    ),
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_VERIFY_RESULT_TYPE_SYMBOL,
+      zoteroSemanticModelStatusResultSchema,
+    ),
+  ),
   zoteroSourcePageInvocation(
     strictCodec(ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL, zoteroSourcePageRequestSchema),
     strictCodec(ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL, zoteroSourcePageResultSchema),

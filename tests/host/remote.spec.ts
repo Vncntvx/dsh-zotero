@@ -1,14 +1,19 @@
 /**
- * The zotero Remote service: the dedicated web tab's connectivity probe. The
- * configuration surface reads and writes the namespace through the shared
- * configuration form instead, so the Remote carries only `status`: the one
- * fact the settings plane does not.
+ * The zotero Remote service: the web tab's live surface. The configuration
+ * plane reads and writes the namespace through the shared configuration form,
+ * so the Remote carries the facts and actions the settings plane cannot take
+ * itself: the connectivity probe, attachment resolution, diagnostics,
+ * protocol wake-up, and write-grant revocation.
  * @module tests/remote
  */
 
 import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EnrichmentService } from '../../src/enrichment/index.ts'
 import { executeOpenProtocol, type ProtocolLauncher, ZoteroRuntime } from '../../src/remote.js'
 import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
@@ -174,6 +179,10 @@ describe('the zotero typert manifest', () => {
     expect(TYPERT_MANIFEST.package).toBe('dsh-zotero')
     expect(TYPERT_MANIFEST.face).toBe('host')
     expect(TYPERT_MANIFEST.invocations.map((invocation) => invocation.method)).toEqual([
+      'semanticModelStatus',
+      'downloadSemanticModel',
+      'cancelSemanticModelDownload',
+      'verifySemanticModel',
       'sourcePage',
       'releaseUrlPdf',
       'readUrlPdf',
@@ -207,6 +216,17 @@ describe('the zotero typert manifest', () => {
         ].includes(invocation.method)
       ) {
         expect(invocation.service).toBe('zoteroLibrary')
+      } else if (
+        [
+          'semanticModelStatus',
+          'downloadSemanticModel',
+          'cancelSemanticModelDownload',
+          'verifySemanticModel',
+        ].includes(invocation.method)
+      ) {
+        // The model endpoints answer from the enrichment component, so the
+        // capability exists exactly as long as the row is composed.
+        expect(invocation.service).toBe('enrichment')
       } else {
         expect(invocation.service).toBe('zoteroRemote')
       }
@@ -545,5 +565,43 @@ describe('the zotero revokeWriteGrant endpoint', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(runtime.revokeWriteGrant(controller.signal)).rejects.toThrow()
+  })
+})
+
+describe('the enrichment model endpoints', () => {
+  it('no longer answers on the core runtime', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    const face = runtime as unknown as Record<string, unknown>
+    expect(face.semanticModelStatus).toBeUndefined()
+    expect(face.downloadSemanticModel).toBeUndefined()
+    expect(face.cancelSemanticModelDownload).toBeUndefined()
+    expect(face.verifySemanticModel).toBeUndefined()
+    // And the component is not composed, so nothing answers at all.
+    expect(lane.ctx.get('enrichment')).toBeUndefined()
+  })
+
+  it('answers from the enrichment service while it is composed', async () => {
+    lane = await setupHostLane(undefined, { typert: true })
+    const modelDir = await mkdtemp(join(tmpdir(), 'dsh-model-endpoints-'))
+    const service = new EnrichmentService(
+      lane.ctx,
+      { semanticModelDir: modelDir },
+      {
+        client: {} as never,
+      },
+    )
+    const status = await service.semanticModelStatus({ model: 'balanced' }, LIVE_SIGNAL)
+    expect(status.model).toBe('balanced')
+    expect(status.downloading).toBe(false)
+    expect(status.path).toContain('qwen3-0.6b')
+    expect(await service.cancelSemanticModelDownload({ model: 'balanced' }, LIVE_SIGNAL)).toEqual({
+      cancelled: false,
+    })
+    // An unknown model is refused at the wire boundary, not deep in the
+    // downloader.
+    await expect(
+      service.semanticModelStatus({ model: 'nope' as never }, LIVE_SIGNAL),
+    ).rejects.toThrow()
   })
 })
