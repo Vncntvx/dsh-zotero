@@ -1,12 +1,11 @@
 /**
  * Resolves the directory where local semantic models are stored.
  *
- * Models default to the user's ~/.dsh/models directory (`dshHomePath('models')`),
- * keeping them out of the plugin source tree and package bundle. When a custom
- * path is configured, ~ is expanded to the user's home directory.
- *
- * Models are stored on disk under their underlying physical model key (e.g. `qwen3-0.6b`),
- * allowing stable semantic tier keys (e.g. `balanced`) to map cleanly without disk migration.
+ * Models default to ~/.dsh/models (`dshHomePath('models')`), outside the plugin
+ * source tree and package bundle. A custom path expands ~ to the user's home
+ * directory. Files are stored under their physical model key (e.g.
+ * `qwen3-0.6b`); semantic tier keys (e.g. `balanced`) map to them without disk
+ * migration.
  * @module dsh-zotero/enrichment/model-dir
  */
 

@@ -42,7 +42,7 @@ const modelDir = (key: string) => join(dshHomePath('models'), key)
 describe('semantic model catalog', () => {
   it('is byte-identical to the build-script mirror', () => {
     // The script cannot import TypeScript and the runtime cannot import
-    // scripts/, so the duplication is explicit; this is what keeps it honest.
+    // scripts/, so the two definitions are duplicated here.
     expect(JSON.parse(JSON.stringify(SEMANTIC_MODELS))).toEqual(
       JSON.parse(JSON.stringify(SCRIPT_MODELS)),
     )

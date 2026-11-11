@@ -226,13 +226,24 @@ describe('ModelDownloadManager', () => {
     expect(healed.error).toBeUndefined()
   }, 30_000)
 
-  it('creates the model root under a validated directory', async () => {
+  it('leaves a missing custom root absent on a read-only status', async () => {
     const root = await tempRoot()
     const manager = managerOf()
-    const status = await manager.status('balanced', join(root, 'nested'))
-    // The resolver returns the canonical path, so assert the suffix only.
+    const nested = join(root, 'nested')
+    const status = await manager.status('balanced', nested)
+    // The resolver returns the canonical candidate, so assert the suffix only.
     expect(status.path.endsWith(join('nested', 'tiny'))).toBe(true)
-    expect((await stat(join(root, 'nested'))).isDirectory()).toBe(true)
+    expect(status.ready).toBe(false)
+    // WP4/D3: a status query must not create the root or a draft directory.
+    await expect(stat(nested)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('creates the model root only when a writer is admitted', async () => {
+    const root = await tempRoot()
+    const manager = managerOf()
+    const nested = join(root, 'nested')
+    await manager.start({ model: 'balanced', modelDir: nested })
+    expect((await stat(nested)).isDirectory()).toBe(true)
   })
 
   it('refuses a relative model directory', async () => {

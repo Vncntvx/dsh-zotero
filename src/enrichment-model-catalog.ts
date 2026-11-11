@@ -1,11 +1,10 @@
 /**
  * Static catalog of supported local semantic embedding models and download sources.
  *
- * Models are addressed via stable, semantic tier identifiers to decouple user
- * configuration from specific physical model versions. When underlying models
- * are upgraded or replaced, user configuration keys remain unchanged:
+ * Models are addressed by stable semantic tier keys, so user configuration
+ * keys stay unchanged when physical model versions are upgraded or replaced:
  * - `balanced`: General-purpose balanced retrieval (Qwen3-Embedding-0.6B, default).
- * - `lightweight`: Ultra-lightweight CPU execution (IBM Granite 97M ModernBERT).
+ * - `lightweight`: Lightweight CPU execution (IBM Granite 97M ModernBERT).
  * - `bilingual`: Bilingual Chinese/English research literature (KaLM-Embedding V2.5 0.5B).
  * - `english`: English technical & academic long-context (Nomic Embed 137M).
  * - `hybrid`: Dense/sparse multi-vector academic retrieval (BAAI BGE-M3).
@@ -65,9 +64,8 @@ export interface SemanticModelEntry {
   /** Upstream license. */
   readonly license: string
   /**
-   * Pooling over the token embeddings the encoder returns. Verified against
-   * the upstream `1_Pooling/config.json` for every entry, because a wrong
-   * pooling silently degrades recall without an error.
+   * Pooling over the token embeddings the encoder returns, verified for every
+   * entry against the upstream `1_Pooling/config.json`.
    */
   readonly pooling: 'cls' | 'mean' | 'last_token'
   /** Whether the pooled vector is L2-normalized before cosine scoring. */
@@ -389,10 +387,9 @@ export function allSemanticModels(): readonly SemanticModelEntry[] {
 /**
  * The on-disk commit marker written after a bundle is fully downloaded.
  *
- * The manifest is the one place the installed bytes and the catalog meet: a
- * status check compares this record with the catalog, and the loader refuses a
- * bundle whose manifest disagrees. It carries the inference metadata too, so a
- * manifest-only inspection is enough to know how to run the model.
+ * The manifest records the installed bytes against the catalog. A status check
+ * compares them, and the loader refuses a bundle whose manifest disagrees. It
+ * also carries the inference metadata needed to run the model.
  */
 export interface SemanticModelManifest {
   readonly schema: 2

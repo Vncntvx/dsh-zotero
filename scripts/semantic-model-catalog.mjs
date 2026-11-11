@@ -1,12 +1,12 @@
 /**
  * Catalog of semantic embedding models usable by the local Zotero retriever.
  *
- * Models are addressed via stable semantic tier keys ('balanced', 'lightweight', etc.)
- * rather than brittle vendor-specific names, keeping user configs decoupled from model lifecycles.
+ * Models use stable semantic tier keys ('balanced', 'lightweight', etc.), so user
+ * configs do not depend on vendor names or model lifecycles.
  *
- * Pinned at build time with file lists, exact bytes, and expected sha256 checksums
- * so the asset-fetcher, the verify-pack script, and the runtime manifest can all
- * share one source of truth without importing the plugin's runtime modules.
+ * File lists, exact bytes, and expected sha256 checksums are pinned at build time.
+ * The asset-fetcher, verify-pack script, and runtime manifest use these pins
+ * without importing the plugin's runtime modules.
  *
  * Keep this file in sync with `src/enrichment-model-catalog.ts`.
  * @module dsh-zotero/scripts/semantic-model-catalog

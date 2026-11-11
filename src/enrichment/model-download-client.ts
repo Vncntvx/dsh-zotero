@@ -7,18 +7,18 @@
  * plus `resolvePublicAddresses` with the answers pinned into the connection,
  * HTTPS only, no downgrade, no userinfo, five hops at most.
  *
- * Responses stream to a temp file through a counting Transform that aborts as
- * soon as the byte count passes the pinned size, hashes on the way through,
- * and is guarded by a stall watchdog and a per-file deadline. The digest is
- * checked before the rename, so a wrong bundle never becomes visible at its
- * final path.
+ * A pinned dispatcher is owned by one response-consumption scope: the response
+ * body is drained or cancelled before `close()`. Redirect, error, length,
+ * checksum and abort paths end the body first to avoid deadlocking a slow large
+ * response against a closed connection. Streamed bytes land in an exclusively
+ * created file inside a caller-owned directory; predictable temp symlinks are
+ * not followed.
  * @module dsh-zotero/enrichment/model-download-client
  */
 
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { mkdir, rename, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { lstat, mkdir, open as openFile, realpath, rename, rm } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fetch as undiciFetch } from 'undici'
@@ -86,18 +86,57 @@ export interface DownloadFsDeps {
   readonly mkdir: (path: string) => Promise<void>
   readonly rename: (from: string, to: string) => Promise<void>
   readonly rm: (path: string) => Promise<void>
-  readonly writeStream: (path: string) => NodeJS.WritableStream
+  /** Exclusive create: an existing path (including a symlink) is refused. */
+  readonly openExclusive: (path: string) => Promise<NodeJS.WritableStream>
 }
 
 export const hostDownloadFsDeps: DownloadFsDeps = {
   mkdir: async (path) => {
-    await mkdir(path, { recursive: true })
+    // Resolve the longest existing ancestor to its canonical path first (this
+    // tolerates OS-level root symlinks such as macOS /var -> /private/var), then
+    // create the missing suffix one segment at a time. A symlink planted inside
+    // the owned model tree is still refused rather than followed.
+    const absolute = resolve(path)
+    let existing = absolute
+    const missing: string[] = []
+    for (;;) {
+      try {
+        const info = await lstat(existing)
+        if (!info.isDirectory())
+          throw new Error(`the destination parent is not a directory: ${existing}`)
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        const parent = dirname(existing)
+        if (parent === existing) throw error
+        missing.unshift(basename(existing))
+        existing = parent
+      }
+    }
+    let current = await realpath(existing).catch(() => existing)
+    for (const segment of missing) {
+      current = join(current, segment)
+      const info = await lstat(current).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined
+        throw error
+      })
+      if (info === undefined) await mkdir(current)
+      else if (info.isSymbolicLink() || !info.isDirectory())
+        throw new Error(`the destination parent is not a regular directory: ${current}`)
+    }
+    // Guard against a symlink at the final requested parent as well.
+    const final = await lstat(current).catch(() => undefined)
+    if (final !== undefined && (final.isSymbolicLink() || !final.isDirectory()))
+      throw new Error(`the destination parent is not a regular directory: ${current}`)
   },
   rename,
   rm: async (path) => {
     await rm(path, { force: true })
   },
-  writeStream: (path) => createWriteStream(path),
+  openExclusive: async (path) => {
+    const handle = await openFile(path, 'wx', 0o600)
+    return handle.createWriteStream()
+  },
 }
 
 export interface DownloadClientDeps {
@@ -125,6 +164,17 @@ export interface DownloadPinnedFileResult {
   readonly sha256: string
 }
 
+interface GatedResponse {
+  readonly status: number
+  readonly location: string | null
+  readonly headers: { get(name: string): string | null }
+  readonly body: ReadableStream<Uint8Array> | null
+  /** Owns the connection: run after the body has been drained/cancelled. */
+  readonly release: () => Promise<void>
+  /** End an unused body (redirect, error, length rejection). */
+  readonly discardBody: () => Promise<void>
+}
+
 function downloadFailed(reason: string): ZoteroError {
   return new ZoteroError(
     `Model download failed: ${reason}`,
@@ -132,29 +182,26 @@ function downloadFailed(reason: string): ZoteroError {
   )
 }
 
-/** One gated fetch: lexical gate, DNS answers judged public and pinned. */
+/** One gated fetch. The dispatcher stays owned until `release()` runs. */
 async function gatedFetch(
   url: string,
   deps: Required<Pick<DownloadClientDeps, 'fetch' | 'resolver' | 'dispatcher'>>,
   signal: AbortSignal,
-): Promise<{
-  status: number
-  location: string | null
-  headers: { get(name: string): string | null }
-  body: ReadableStream<Uint8Array> | null
-}> {
+): Promise<GatedResponse> {
   if (!isPublicUrl(url)) {
     throw new PublicAddressError(`model download refused a non-public address (${url})`)
   }
   const { hostname, origin } = new URL(url)
   const addresses = await resolvePublicAddresses(hostname, deps.resolver, signal)
   const pinned = deps.dispatcher(addresses)
+  let body: ReadableStream<Uint8Array> | null = null
   try {
     const response = await deps.fetch(url, {
       redirect: 'manual',
       signal,
       dispatcher: pinned.dispatcher,
     })
+    body = response.body
     const location = response.headers.get('location')
     if (location !== null) {
       // The next hop is untrusted input: it must be absolute HTTPS on a
@@ -168,16 +215,43 @@ async function gatedFetch(
         location: next.toString(),
         headers: response.headers,
         body: null,
+        release: async () => {
+          await pinned.close()
+        },
+        discardBody: async () => {
+          await cancelBody(body, signal)
+        },
       }
     }
     return {
       status: response.status,
       location: null,
       headers: response.headers,
-      body: response.body,
+      body,
+      release: async () => {
+        await pinned.close()
+      },
+      discardBody: async () => {
+        await cancelBody(body, signal)
+      },
     }
-  } finally {
-    await pinned.close()
+  } catch (error) {
+    await cancelBody(body, signal).catch(() => undefined)
+    await pinned.close().catch(() => undefined)
+    throw error
+  }
+}
+
+/** End a response body that will not be consumed, then let go of the socket. */
+async function cancelBody(
+  body: ReadableStream<Uint8Array> | null,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  if (body === null) return
+  try {
+    await body.cancel(signal?.reason)
+  } catch {
+    // A body that is already errored or aborted still releases its connection.
   }
 }
 
@@ -188,6 +262,8 @@ async function gatedFetch(
 export async function downloadPinnedFile(
   options: DownloadPinnedFileOptions,
 ): Promise<DownloadPinnedFileResult> {
+  // An already-aborted caller must not create a directory or open a socket.
+  options.signal?.throwIfAborted()
   const fs = options.deps?.fs ?? hostDownloadFsDeps
   const fetchFn = options.deps?.fetch ?? (undiciFetch as unknown as FetchLike)
   const resolver =
@@ -198,40 +274,69 @@ export async function downloadPinnedFile(
 
   const timeoutMs = options.timeoutMs ?? DOWNLOAD_FILE_TIMEOUT_MS
   const stallMs = options.stallMs ?? DOWNLOAD_STALL_TIMEOUT_MS
-  const dest = `${options.dir}/${options.file.path}`
+  const dest = join(options.dir, options.file.path)
+  // The parent is validated before creation; cancellation here must stop the
+  // attempt before any HTTP request is admitted.
   await fs.mkdir(dirname(dest))
+  options.signal?.throwIfAborted()
 
-  let lastError: Error | undefined
+  let lastError: unknown
   for (const source of options.sources) {
     const mirror = MODEL_SOURCES[source]
     if (mirror === undefined) {
       lastError = downloadFailed(`unknown download source "${source}"`)
       continue
     }
-    const tmp = `${dest}.${source}.tmp`
+    // A private, unpredictable name inside the owned destination parent.
+    const tmp = join(
+      dirname(dest),
+      `.${source}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`,
+    )
     const controller = new AbortController()
-    const onAbort = () => controller.abort()
+    const onAbort = () => controller.abort(options.signal?.reason)
     options.signal?.addEventListener('abort', onAbort, { once: true })
-    const deadline = setTimeout(() => controller.abort(), timeoutMs)
+    if (options.signal?.aborted) controller.abort(options.signal.reason)
+    const deadline = setTimeout(
+      () => controller.abort(new Error('model download deadline')),
+      timeoutMs,
+    )
     let stall: NodeJS.Timeout | undefined
+    let current: GatedResponse | undefined
+    let released = false
+    const releaseCurrent = async () => {
+      if (released || current === undefined) return
+      released = true
+      await cancelBody(current.body, controller.signal).catch(() => undefined)
+      await current.release().catch(() => undefined)
+    }
     try {
-      // Walk redirects manually; every hop re-runs both gates.
+      // Walk redirects manually; every hop re-runs both gates. Each hop owns
+      // one dispatcher until its unused body has been cancelled.
       let url = mirror.url(options.model, options.file.path)
-      let response: Awaited<ReturnType<typeof gatedFetch>> | undefined
       for (let hop = 0; ; hop += 1) {
-        if (controller.signal.aborted) throw downloadFailed('download timed out or was cancelled')
-        response = await gatedFetch(url, gatedDeps, controller.signal)
-        if (response.location === null) break
+        controller.signal.throwIfAborted()
+        const response = await gatedFetch(url, gatedDeps, controller.signal)
+        if (response.location === null) {
+          current = response
+          break
+        }
+        await response.discardBody()
+        await response.release()
         if (hop >= MAX_REDIRECTS) {
           throw downloadFailed(`more than ${MAX_REDIRECTS} redirect hops from ${mirror.label}`)
         }
         url = response.location
       }
-      if (response!.status < 200 || response!.status >= 300 || response!.body === null) {
-        throw downloadFailed(`HTTP ${response!.status} from ${mirror.label}`)
+      options.signal?.throwIfAborted()
+      const response = current!
+      const endBody = releaseCurrent
+      if (response.status < 200 || response.status >= 300 || response.body === null) {
+        await endBody()
+        throw downloadFailed(`HTTP ${response.status} from ${mirror.label}`)
       }
-      const contentLength = response!.headers.get('content-length')
+      const contentLength = response.headers.get('content-length')
       if (contentLength !== null && Number(contentLength) !== options.file.bytes) {
+        await endBody()
         throw downloadFailed(
           `${mirror.label} serves ${contentLength} bytes for ${options.file.path}, expected ${options.file.bytes}`,
         )
@@ -250,33 +355,45 @@ export async function downloadPinnedFile(
           // The watchdog resets on every chunk: a mirror that stops sending
           // mid-body must release the socket, not hang the download forever.
           clearTimeout(stall)
-          stall = setTimeout(() => controller.abort(), stallMs)
+          stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
           cb(null, chunk)
         },
       })
-      stall = setTimeout(() => controller.abort(), stallMs)
-      const body = Readable.fromWeb(response!.body as Parameters<typeof Readable.fromWeb>[0])
-      await pipeline(body, counting, fs.writeStream(tmp))
+      stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
+      let writeFailure: unknown
+      const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
+      try {
+        await pipeline(body, counting, await fs.openExclusive(tmp))
+      } catch (error) {
+        writeFailure = error
+      }
       clearTimeout(stall)
+      // The body and the pinned connection are released only after the full
+      // response has been consumed (or the pipeline has torn it down).
+      await endBody()
+      controller.signal.throwIfAborted()
+      if (writeFailure !== undefined) throw writeFailure
       const digest = hash.digest('hex')
       if (received !== options.file.bytes || digest !== options.file.sha256) {
         throw downloadFailed(
           `checksum failure for ${options.file.path}: expected ${options.file.bytes}B/${options.file.sha256}, got ${received}B/${digest}`,
         )
       }
+      options.signal?.throwIfAborted()
       await fs.rename(tmp, dest)
       return { source, bytes: received, sha256: digest }
     } catch (error) {
+      await releaseCurrent()
       await fs.rm(tmp).catch(() => {})
-      if (options.signal?.aborted) {
-        throw downloadFailed('download cancelled')
-      }
+      if (options.signal?.aborted) throw options.signal.reason
       lastError = error instanceof Error ? error : new Error(String(error))
     } finally {
       clearTimeout(deadline)
       clearTimeout(stall)
       options.signal?.removeEventListener('abort', onAbort)
     }
+    if (options.signal?.aborted) throw options.signal.reason
   }
+  if (options.signal?.aborted) throw options.signal.reason
   throw lastError ?? downloadFailed(`every mirror failed for ${options.file.path}`)
 }
