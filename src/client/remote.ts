@@ -2,6 +2,13 @@ import type {
   ZoteroUrlPdfView,
   ZoteroSourcePageRequestView,
   ZoteroSourcePageResultView,
+  ZoteroSemanticModelStatusRequestView,
+  ZoteroSemanticModelStatusResultView,
+  ZoteroSemanticModelDownloadRequestView,
+  ZoteroSemanticModelDownloadResultView,
+  ZoteroSemanticModelCancelRequestView,
+  ZoteroSemanticModelCancelResultView,
+  ZoteroSemanticModelVerifyRequestView,
 } from '../contract.ts'
 /**
  * The client-side Typert Remote contribution for the dsh-zotero host
@@ -106,8 +113,40 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     export: (
       request: ZoteroLibraryExportRequestView,
     ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
+    semanticModelStatus: (
+      request: ZoteroSemanticModelStatusRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
+    downloadSemanticModel: (
+      request: ZoteroSemanticModelDownloadRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelDownloadResultView>>
+    cancelSemanticModelDownload: (
+      request: ZoteroSemanticModelCancelRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+    verifySemanticModel: (
+      request: ZoteroSemanticModelVerifyRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
   }
   interface TypertRemoteMap {
+    'zotero/semanticModelStatus': (
+      request: ZoteroSemanticModelStatusRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
+    'zotero/downloadSemanticModel': (
+      request: ZoteroSemanticModelDownloadRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelDownloadResultView>>
+    'zotero/cancelSemanticModelDownload': (
+      request: ZoteroSemanticModelCancelRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+    'zotero/verifySemanticModel': (
+      request: ZoteroSemanticModelVerifyRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
     'zotero/sourcePage': (
       request: ZoteroSourcePageRequestView,
       signal?: AbortSignal,

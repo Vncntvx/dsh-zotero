@@ -1,7 +1,7 @@
 /**
  * The Zotero settings page: rendered in the Plugins manager detail page
  * (`plugins.bundle.config` slot, keyed by package name). It edits every field
- * of the `zotero`, `library`, `scholarly`, and `parsing` namespaces across a
+ * of the `zotero`, `library`, `scholarly`, and `enrichment` namespaces across a
  * unified 7-tab interface.
  *
  * Tab 1: General (conversation tab and personal library write gate)
@@ -9,7 +9,7 @@
  * Tab 3: Search & Extraction (query/concurrency quotas, passage and fulltext limits)
  * Tab 4: Library (panel preferences and shared CSL defaults)
  * Tab 5: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
- * Tab 6: Document Parsing (MinerU mode, token, output directory, egress gate)
+ * Tab 6: Document Enrichment (MinerU mode, token, egress switch, output directory,
  * Tab 7: Advanced (output limits, background job policy, diagnostics)
  *
  * Both the Zotero and Scholarly SettingsForm containers remain mounted in the DOM
@@ -38,10 +38,10 @@ import { ZoteroSettingsForm } from './ZoteroSettingsForm.tsx'
 import { ScholarlySettingsForm } from './ScholarlySettingsForm.tsx'
 import { SETTINGS_TABS, type SettingsTabId, type ZoteroCardFace } from './zotero-card-controller.ts'
 import type { ScholarlyCardFace, ScholarlyCardState } from './scholarly-form-controller.ts'
-import type { ParsingCardFace, ParsingCardState } from './parsing-form-controller.ts'
+import type { EnrichmentCardFace, EnrichmentCardState } from './enrichment-form-controller.ts'
 import type { LibraryCardFace, LibraryCardState } from './library-form-controller.ts'
 import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
-import { ParsingSettingsForm } from './ParsingSettingsForm.tsx'
+import { EnrichmentSettingsForm } from './EnrichmentSettingsForm.tsx'
 import { CitationDefaultsForm } from './CitationDefaultsForm.tsx'
 import type { CitationCardFace, CitationCardState } from './citation-form-controller.ts'
 import css from './ZoteroSettingsSection.module.css'
@@ -52,8 +52,8 @@ export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
   InjectFace<ZoteroCardFace> & {
     readonly useScholarlyCard?: SnapshotSelectorHook<ScholarlyCardState>
     readonly scholarly?: ScholarlyCardFace
-    readonly useParsingCard?: SnapshotSelectorHook<ParsingCardState>
-    readonly parsing?: ParsingCardFace
+    readonly useEnrichmentCard?: SnapshotSelectorHook<EnrichmentCardState>
+    readonly enrichment?: EnrichmentCardFace
     readonly useLibraryCard?: SnapshotSelectorHook<LibraryCardState>
     readonly useCitationCard: SnapshotSelectorHook<CitationCardState>
     readonly citation: CitationCardFace
@@ -86,8 +86,8 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
   const scholarlyState = props.useScholarlyCard
     ? props.useScholarlyCard((snapshot) => snapshot)
     : undefined
-  const parsingState = props.useParsingCard
-    ? props.useParsingCard((snapshot) => snapshot)
+  const enrichmentState = props.useEnrichmentCard
+    ? props.useEnrichmentCard((snapshot) => snapshot)
     : undefined
   const libraryState = props.useLibraryCard
     ? props.useLibraryCard((snapshot) => snapshot)
@@ -119,7 +119,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
 
       <div
         className={css.tabPanel}
-        hidden={activeTab === 'scholarly' || activeTab === 'library' || activeTab === 'parsing'}
+        hidden={activeTab === 'scholarly' || activeTab === 'library' || activeTab === 'enrichment'}
       >
         <SettingsForm
           labels={labels}
@@ -201,32 +201,32 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
         )}
       </div>
 
-      <div className={css.tabPanel} hidden={activeTab !== 'parsing'}>
-        {props.parsing && parsingState?.available ? (
+      <div className={css.tabPanel} hidden={activeTab !== 'enrichment'}>
+        {props.enrichment && enrichmentState?.available ? (
           <SettingsForm
             labels={labels}
-            state={parsingState}
-            onSave={props.parsing.save}
-            onDiscard={props.parsing.discard}
+            state={enrichmentState}
+            onSave={props.enrichment.save}
+            onDiscard={props.enrichment.discard}
           >
             <div
               role="tabpanel"
-              id="zotero-panel-parsing"
-              aria-labelledby="zotero-tab-parsing"
+              id="zotero-panel-enrichment"
+              aria-labelledby="zotero-tab-enrichment"
               className={css.tabPanel}
             >
-              <ParsingSettingsForm t={t} state={parsingState} actions={props.parsing} />
+              <EnrichmentSettingsForm t={t} state={enrichmentState} actions={props.enrichment} />
             </div>
           </SettingsForm>
         ) : (
           <div
             role="tabpanel"
-            id="zotero-panel-parsing"
-            aria-labelledby="zotero-tab-parsing"
+            id="zotero-panel-enrichment"
+            aria-labelledby="zotero-tab-enrichment"
             className={css.tabPanel}
           >
             <p className={css.note} role="status">
-              {t('parsingDisabled')}
+              {t('enrichmentDisabled')}
             </p>
           </div>
         )}

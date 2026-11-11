@@ -23,8 +23,6 @@ export const libraryEn = {
   libraryBrowseSettings: 'Browsing',
   libraryPdfSettings: 'PDF reading',
   libraryActionSettings: 'Citations and conversation',
-  librarySharedSettingsHint:
-    'Saved settings apply to every client using this profile. Browsing positions belong to each conversation in this browser.',
   libraryListDensity: 'List density',
   libraryTitleLines: 'Title lines',
   libraryExpandedSections: 'Initially expanded sections',
@@ -98,8 +96,6 @@ export const libraryZh: Record<keyof typeof libraryEn, string> = {
   libraryBrowseSettings: '浏览行为',
   libraryPdfSettings: 'PDF 阅读',
   libraryActionSettings: '引用与对话',
-  librarySharedSettingsHint:
-    '保存的设置由当前 profile 的客户端共享；浏览位置在当前浏览器中按会话保存。',
   libraryListDensity: '列表密度',
   libraryTitleLines: '标题行数',
   libraryExpandedSections: '默认展开的详情分区',

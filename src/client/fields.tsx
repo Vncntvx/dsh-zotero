@@ -10,8 +10,16 @@
  * @module dsh-zotero/client/fields
  */
 
-import { type ReactNode } from 'react'
-import { Button, Checkbox, RiskConfirmation, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useState, type ReactNode } from 'react'
+import {
+  Button,
+  Checkbox,
+  IconChevronDownOutlineRegular,
+  Menu,
+  MenuItemButton,
+  RiskConfirmation,
+  Tag,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { useRiskGate, type BooleanRiskCopy } from './risk-gate.ts'
 import css from './fields.module.css'
 
@@ -98,6 +106,113 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
           }}
         />
       ) : null}
+    </div>
+  )
+}
+
+/** One selectable option of a choice field: the value plus its label. */
+export interface ChoiceOption {
+  readonly value: string
+  readonly label: string
+}
+
+/** Props of the shared choice row; the label doubles as the accessible name. */
+export interface ChoiceFieldProps {
+  /** Stable DOM id for the trigger button. */
+  id: string
+  /** Visible label above the control. */
+  label: string
+  /** One-line explanation rendered under the control. */
+  hint?: string
+  /** The staged value; rendered as its option's label when known. */
+  value: string
+  /** The closed option set, in display order. */
+  options: readonly ChoiceOption[]
+  /** True when saving would leave a user-layer entry for this field. */
+  overridden: boolean
+  /** True when the staged value is outside the option set. */
+  invalid?: boolean
+  /** Disables the control. */
+  disabled: boolean
+  /** Copy for the overridden badge. */
+  overriddenLabel: string
+  /** Copy for the reset control. */
+  resetLabel: string
+  /** Stage the chosen value. */
+  onSelect: (value: string) => void
+  /** Stage a clear so the field re-inherits the composition layer. */
+  onReset: () => void
+}
+
+/**
+ * A staged closed-choice row: label head with the override/reset badges, and
+ * the official `Menu` over an outline button. Both settings forms render their
+ * choice fields through this one component, so an accessibility or styling fix
+ * cannot land in one form and miss the other.
+ * @param props - the field's copy, its options, and the edit actions.
+ * @returns the choice row.
+ */
+export function ChoiceField(props: ChoiceFieldProps): ReactNode {
+  const [open, setOpen] = useState(false)
+  const currentOption = props.options.find((option) => option.value === props.value)
+  return (
+    <div className={css.field}>
+      <div className={css.fieldHead}>
+        <span className={css.fieldLabel}>{props.label}</span>
+        {props.overridden && (
+          <span className={css.badges}>
+            <Tag tone="neutral">{props.overriddenLabel}</Tag>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={props.disabled}
+              aria-label={`${props.resetLabel}: ${props.label}`}
+              onClick={props.onReset}
+            >
+              {props.resetLabel}
+            </Button>
+          </span>
+        )}
+      </div>
+      <Menu
+        open={open && !props.disabled}
+        onClose={() => setOpen(false)}
+        className={css.choiceMenu}
+        portal
+        autoFocus
+        minWidthFromAnchor
+        anchor={
+          <Button
+            id={props.id}
+            variant="outline"
+            size="md"
+            className={css.choiceControl}
+            disabled={props.disabled}
+            onClick={() => setOpen((v) => !v)}
+            aria-label={props.label}
+            aria-haspopup="menu"
+            aria-expanded={open && !props.disabled}
+            aria-invalid={props.invalid}
+          >
+            <span>{currentOption?.label ?? props.value}</span>
+            <IconChevronDownOutlineRegular />
+          </Button>
+        }
+      >
+        {props.options.map((option) => (
+          <MenuItemButton
+            key={option.value}
+            current={option.value === props.value}
+            onSelect={() => {
+              props.onSelect(option.value)
+              setOpen(false)
+            }}
+          >
+            {option.label}
+          </MenuItemButton>
+        ))}
+      </Menu>
+      {props.hint !== undefined && <p className={css.hint}>{props.hint}</p>}
     </div>
   )
 }

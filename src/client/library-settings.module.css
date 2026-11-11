@@ -21,28 +21,6 @@
 }
 
 /* Settings rows follow the shared form: label/reset, full-width value, hint. */
-.fieldHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: calc(var(--dsw-font-xs-13-font-size) / 2);
-}
-.fieldLabel {
-  font-family: inherit;
-  font-size: var(--dsh-content-font-size);
-  line-height: calc(var(--dsw-font-xs-13-line-height) + var(--dsh-content-font-delta));
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-.choiceMenu,
-.choiceControl {
-  width: 100%;
-  min-width: 0;
-}
-.choiceControl {
-  justify-content: space-between;
-}
 .sectionChoices {
   display: flex;
   flex-wrap: wrap;

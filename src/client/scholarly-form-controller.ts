@@ -28,6 +28,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { booleanFieldSpec } from './helpers/settings-fields.ts'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { CREDENTIAL_REFERENCE, credentialRefFieldSpec } from './helpers/credential-reference.ts'
+export { CREDENTIAL_REFERENCE }
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { asFormScope } from './helpers/form-scope.ts'
@@ -118,19 +120,6 @@ export interface ScholarlyCardFace extends SettingsFormActions {
  * `REF_PATTERN` in `@deepseek-ai/dsh-credentials` (which the host's
  * `credentialRef()` enforces); the parity spec pins the two together.
  */
-export const CREDENTIAL_REFERENCE = /^[A-Za-z_][A-Za-z0-9_]*$/
-
-function credentialRefFieldSpec(field: string): SettingsFieldSpec {
-  return {
-    field,
-    format: (value) => (typeof value === 'string' ? value : ''),
-    parse: (text) => {
-      const trimmed = text.trim()
-      if (trimmed === '') return { kind: 'clear' }
-      return CREDENTIAL_REFERENCE.test(trimmed) ? { kind: 'set', value: trimmed } : undefined
-    },
-  }
-}
 
 function fieldSpecs(): SettingsFieldSpec[] {
   return [

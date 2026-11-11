@@ -1,12 +1,9 @@
 /** Complete, staged settings shared by the bundle and component pages. */
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import {
   Button,
   Checkbox,
-  Menu,
-  MenuItemButton,
   Tag,
-  IconChevronDownOutlineRegular,
   type SettingsFormActions,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -17,7 +14,7 @@ import {
   type LibraryPreferences,
 } from '../library-preferences.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
-import { BooleanField } from './fields.tsx'
+import { BooleanField, ChoiceField as ChoiceFieldBase } from './fields.tsx'
 import type { LibraryCardState } from './library-form-controller.ts'
 import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
@@ -86,67 +83,33 @@ function ChoiceField({
   t: T
   disabled: boolean
 }) {
-  const [open, setOpen] = useState(false)
   const label = t(FIELD_LABELS[field])
   const value = draftValue(state, field)
+  // An invalid draft is staged text the closed set cannot render; the shared
+  // control prints the value it is given, so hand it the localized fallback.
+  const staged =
+    state[field].invalid || value === undefined ? t('libraryInvalidDraft') : String(value)
   return (
-    <div className={fieldCss.field}>
-      <div className={libraryCss.fieldHead}>
-        <span className={libraryCss.fieldLabel}>{label}</span>
-        {state[field].overridden && (
-          <span className={fieldCss.badges}>
-            <Tag tone="neutral">{t('overridden')}</Tag>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={disabled}
-              aria-label={`${t('reset')}: ${label}`}
-              onClick={() => actions.resetField(field)}
-            >
-              {t('reset')}
-            </Button>
-          </span>
-        )}
-      </div>
-      <Menu
-        open={open && !disabled}
-        onClose={() => setOpen(false)}
-        className={libraryCss.choiceMenu}
-        portal
-        autoFocus
-        minWidthFromAnchor
-        anchor={
-          <Button
-            variant="outline"
-            size="md"
-            className={libraryCss.choiceControl}
-            disabled={disabled}
-            onClick={() => setOpen((v) => !v)}
-            aria-label={label}
-            aria-haspopup="menu"
-            aria-expanded={open && !disabled}
-            aria-invalid={state[field].invalid}
-          >
-            <span>{t(LIBRARY_CHOICE_LABELS[String(value)] ?? 'libraryInvalidDraft')}</span>
-            <IconChevronDownOutlineRegular />
-          </Button>
-        }
-      >
-        {LIBRARY_CHOICES[field].map((option) => (
-          <MenuItemButton
-            key={String(option)}
-            current={option === value}
-            onSelect={() => {
-              actions.edit(field, JSON.stringify(option))
-              setOpen(false)
-            }}
-          >
-            {t(LIBRARY_CHOICE_LABELS[String(option)]!)}
-          </MenuItemButton>
-        ))}
-      </Menu>
-      <p className={fieldCss.hint}>{t(FIELD_HINTS[field])}</p>
-    </div>
+    <ChoiceFieldBase
+      id={`library-choice-${field}`}
+      label={label}
+      hint={t(FIELD_HINTS[field])}
+      value={staged}
+      options={LIBRARY_CHOICES[field].map((option) => ({
+        value: String(option),
+        label: t(LIBRARY_CHOICE_LABELS[String(option)]!),
+      }))}
+      overridden={state[field].overridden}
+      invalid={state[field].invalid}
+      disabled={disabled}
+      overriddenLabel={t('overridden')}
+      resetLabel={t('reset')}
+      onSelect={(next) => {
+        const option = LIBRARY_CHOICES[field].find((entry) => String(entry) === next)
+        actions.edit(field, JSON.stringify(option))
+      }}
+      onReset={() => actions.resetField(field)}
+    />
   )
 }
 const FIELD_HINTS = {
@@ -220,7 +183,6 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
   )
   return (
     <>
-      <p className={css.groupNote}>{t('librarySharedSettingsHint')}</p>
       {state.invalid && <p role="alert">{t('libraryInvalidDraft')}</p>}
       {group(
         'libraryDisplaySettings',
@@ -229,8 +191,8 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
           {choice('listDensity')}
           {choice('titleLines')}
           <div className={fieldCss.field} role="group" aria-label={t('libraryExpandedSections')}>
-            <div className={libraryCss.fieldHead}>
-              <span className={libraryCss.fieldLabel}>{t('libraryExpandedSections')}</span>
+            <div className={fieldCss.fieldHead}>
+              <span className={fieldCss.fieldLabel}>{t('libraryExpandedSections')}</span>
               {state.detailExpandedSections.overridden && (
                 <span className={fieldCss.badges}>
                   <Tag tone="neutral">{t('overridden')}</Tag>

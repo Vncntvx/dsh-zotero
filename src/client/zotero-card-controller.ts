@@ -123,7 +123,7 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
 
 /** The tab partition identifiers for the 7-tab settings view. */
 export type SettingsTabId =
-  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'parsing' | 'advanced'
+  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'enrichment' | 'advanced'
 
 /** Description of one tab partition and the configuration groups it carries. */
 interface SettingsTabDescriptor {
@@ -134,14 +134,14 @@ interface SettingsTabDescriptor {
     | 'tabSearch'
     | 'tabLibrary'
     | 'tabScholarly'
-    | 'tabParsing'
+    | 'tabEnrichment'
     | 'tabAdvanced'
   readonly groupKeys: readonly GroupKey[]
 }
 
 /**
  * The seven tab partitions, in display order. `groupKeys` lists the configuration
- * groups each one carries; library, scholarly, and parsing leave it empty because
+ * groups each one carries; library, scholarly, and enrichment leave it empty because
  * their own form controllers manage them.
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
@@ -171,8 +171,8 @@ export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
     groupKeys: [],
   },
   {
-    id: 'parsing',
-    labelKey: 'tabParsing',
+    id: 'enrichment',
+    labelKey: 'tabEnrichment',
     groupKeys: [],
   },
   {

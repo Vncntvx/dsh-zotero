@@ -105,8 +105,8 @@ export const en = {
     'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
   scholarlyDisabled:
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
-  parsingDisabled:
-    'Document parsing comes from the dsh-zotero/parsing component. Enable that component under "Included components", then grant the data-egress switch below, to turn MinerU parsing on; document bytes are then sent to MinerU. Nothing here is configurable while the component is off.',
+  enrichmentDisabled:
+    'Document parsing comes from the dsh-zotero/enrichment component. Enabling that component under "Included components" authorizes sending documents to the external MinerU service for extraction. Nothing here is configurable while the component is off.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCredentialRef:
     'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
@@ -122,9 +122,9 @@ export const en = {
   tabScholarly: 'Scholarly Search',
   tabScholarlyDesc:
     'Multi-source academic search, API keys, and fulltext quotas from the dsh-zotero/scholarly component. Enabling that component turns the external tools on.',
-  tabParsing: 'Document Parsing',
-  tabParsingDesc:
-    'Optional MinerU document parsing for higher-quality full text. Choose the free or pro API, configure the token, and set where parsed files are stored.',
+  tabEnrichment: 'Document Enrichment',
+  tabEnrichmentDesc:
+    'Optional MinerU document parsing. Enabling the component authorizes sending documents to MinerU to extract high-quality Markdown.',
   tabAdvanced: 'Advanced',
   groupLibrarySidebar: 'Sidebar Display',
   groupLibrarySidebarDesc:
@@ -154,42 +154,117 @@ export const en = {
     'Contact email for the Polite Pool, credential references for optional academic API keys, and the key values stored in the credentials store.',
   groupScholarlyLimits: 'Search & Full-text Quotas',
   groupScholarlyLimitsDesc: 'Maximum results per search and the full-text reading limit.',
-  groupParsingMode: 'Parsing Mode',
-  groupParsingModeDesc:
-    'Pick which MinerU API reads the document. This switch is independent of whether a token is configured.',
-  parsingMode: 'API mode',
-  parsingModeHint:
-    'Free uses the lightweight Agent API (rate-limited, up to 20 pages, no token). Pro uses the precise API (up to 600 pages) and needs a token. Switching back to free stops using the token even if one is configured.',
-  parsingModeFree: 'Free (Agent lightweight)',
-  parsingModePro: 'Pro (precise)',
-  groupParsingAuth: 'MinerU Token',
-  groupParsingAuthDesc:
-    'A pro-mode token lives in the credentials store under a reference name, never in configuration.',
-  parsingTokenRef: 'Token credential reference',
-  parsingTokenRefHint:
-    'Environment-variable name holding the MinerU precise-API token (suggested: {suggested}). Only read in pro mode; leave blank for free mode.',
-  parsingToken: 'MinerU precise-API token',
-  parsingTokenHint:
-    'Stored in the credentials store under the reference above, never in configuration.',
-  parsingTokenNeedsReference:
-    'Set a valid credential reference above before storing a token. Free mode needs no token.',
-  groupParsingOutput: 'Output & Authorization',
-  groupParsingOutputDesc:
-    'Where parsed files are written locally, and whether document bytes may be sent to MinerU.',
-  parsingOutputDir: 'Parsed-file directory',
-  parsingOutputDirHint:
+  groupEnrichmentMode: 'Enrichment Mode',
+  groupEnrichmentModeDesc:
+    'Document extraction API options: Agent Lightweight Parse or Precision Extract.',
+  enrichmentMode: 'API mode',
+  enrichmentModeHint:
+    'Agent Lightweight Parse: token-free, IP rate-limited, up to 20 pages and 10 MB, Markdown output. Precision Extract: requires API token, up to 200 pages and 200 MB, supports complex layouts, formulas, and tables, with 5,000 free files daily.',
+  enrichmentModeFree: 'Agent Lightweight Parse',
+  enrichmentModePro: 'Precision Extract',
+  allowDocumentUpload: 'Send documents to MinerU',
+  allowDocumentUploadHint:
+    'Authorizes sending local attachments and URL PDFs to MinerU for extraction. This is the data-egress switch; turning it off stops new uploads while cached artifacts stay readable.',
+  groupEnrichmentAuth: 'MinerU Token',
+  groupEnrichmentAuthDesc:
+    'Access credential for the Precision Extract API. Tokens are valid for 3 months and can be generated at mineru.net.',
+  enrichmentTokenRef: 'Token credential reference',
+  enrichmentTokenRefHint: 'Credential reference name for this plugin (default: {suggested}).',
+  enrichmentToken: 'MinerU API Token',
+  enrichmentTokenHint:
+    'Precision Extract allows up to 5,000 files/day free (rate limit: 50 files/min submit, 1,000 req/min query). Tokens expire after 3 months.',
+  enrichmentTokenNeedsReference: 'Credential reference not ready. Defaults to MINERU_API_TOKEN.',
+  enrichmentTokenMissingTag: 'Token Required',
+  enrichmentTokenMissingTitle: 'Precision Extract requires a MinerU API Token',
+  enrichmentTokenMissingDesc:
+    'Precision Extract mode is selected, but no API token is configured. Requests will fail without a token. Please register at mineru.net to create a token (5,000 files/day free) and paste it below. Alternatively, switch to "Agent Lightweight Parse" which requires no token.',
+  enrichmentTokenVisitMineru: 'Visit MinerU (mineru.net) to get an API token ↗',
+  groupEnrichmentOutput: 'Output & Data Notice',
+  groupEnrichmentOutputDesc:
+    'Document enrichment is enabled; local attachments and URL PDFs are sent to MinerU for extraction. Parsed Markdown artifacts are saved in the local directory below.',
+  enrichmentOutputDir: 'Parsed-file directory',
+  enrichmentOutputDirHint:
     'Absolute directory for parsed Markdown files. Leave blank to use the default location; Reset to default clears a custom path.',
-  parsingOutputDirDefault: 'Default (~/.dsh/zotero-parsed)',
-  parsingOutputDirInvalid:
+  enrichmentOutputDirDefault: 'Default (~/.dsh/zotero-parsed)',
+  enrichmentOutputDirInvalid:
     'Enter an absolute directory path (or a ~/... path), or leave blank for the default.',
-  parsingAllowUpload: 'Allow sending documents to MinerU',
-  parsingAllowUploadHint:
-    'Data-egress authorization. Local attachments and URL PDFs are sent to MinerU only while this is on. Off by default.',
-  parsingUploadRiskTitle: 'Allow document upload?',
-  parsingUploadRiskDescription:
-    'Turning this on sends your PDF bytes to MinerU, an external service, for parsing. Local library attachments and downloaded URL PDFs will leave this machine. Leave it off to keep all reading local.',
-  parsingUploadRiskAcknowledge: 'I understand that documents will be sent to an external service.',
-  parsingUploadRiskConfirm: 'Allow upload',
+  groupSemanticRanking: 'Local Semantic Search',
+  groupSemanticRankingDesc:
+    'Enhance evidence retrieval with local embedding models. Models require manual download before enabling.',
+  enableSemanticSearch: 'Enable local semantic search',
+  enableSemanticSearchHint:
+    'When enabled and a local model is downloaded, evidence retrieval combines BM25 lexical matching with semantic embedding vector search using Reciprocal Rank Fusion (RRF).',
+  semanticModel: 'Embedding model',
+  semanticModelHint:
+    'Select a model size according to your library languages and memory resources. Models run locally once downloaded.',
+  semanticDownloadSource: 'Download channel / mirror',
+  semanticDownloadSourceHint:
+    'Select the download channel. hf-mirror.com is recommended for fast downloads in mainland China.',
+  semanticModelDir: 'Model storage directory',
+  semanticModelDirHint:
+    'Custom directory for storing downloaded ONNX models. Leave blank to use the default directory (~/.dsh/models).',
+  semanticModelDirDefault: 'Default (~/.dsh/models)',
+  semanticModelStatus: 'Model status',
+  semanticModelStatusReady: 'Ready',
+  semanticModelStatusNotDownloaded: 'Not downloaded',
+  semanticModelStatusDownloading: 'Downloading',
+  semanticModelStatusFailed: 'Download failed',
+  semanticModelDownloadAction: 'Download model',
+  semanticModelRedownloadAction: 'Redownload',
+  semanticModelVerifyAction: 'Verify model',
+  semanticModelCancelAction: 'Cancel download',
+  semanticModelUnavailable:
+    'The enrichment component is not composed, so model status and downloads are unavailable. Enable it under "Included components".',
+  semanticModelDownloadingFile: 'Downloading: {file}',
+  semanticModelProgress: '{downloaded} / {total} ({percent}%)',
+  semanticModelDownloadedNotice: 'Model is downloaded and ready for local semantic search.',
+  semanticModelDownloadFailedNotice: 'Download failed: {error}',
+  semanticModelNotReadyWarningTag: 'Model Required',
+  semanticModelNotReadyWarningTitle: 'Local semantic search is enabled, but the model is not ready',
+  semanticModelNotReadyWarningDesc:
+    'Until the download completes, retrieval falls back to lexical BM25 matching. Please select a model matching your hardware and click "Download model" below.',
+  semanticModelDownloadingNotice:
+    'Model is downloading. Local semantic search will become active once complete.',
+  semanticModelNotDownloadedWarningNotice:
+    'Local semantic search is enabled; please download the model to activate.',
+  semanticModelBalanced: 'Balanced (balanced · Qwen3-0.6B · Default)',
+  semanticModelBalancedDesc:
+    'General-purpose balanced tier (currently backed by Qwen3-Embedding-0.6B). 1024 dim, 32K context. Strong Chinese and cross-lingual semantic matching. Recommended default.',
+  semanticModelLightweight: 'Lightweight (lightweight · Granite-97M)',
+  semanticModelLightweightDesc:
+    'Ultra-lightweight tier (currently backed by IBM Granite 97M ModernBERT). 384 dim, 32K context. Uses ~200MB RAM with ~15ms CPU latency. Best for low-resource hardware or fast batch indexing.',
+  semanticModelBilingual: 'Bilingual (bilingual · KaLM-0.5B)',
+  semanticModelBilingualDesc:
+    'Bilingual research literature tier (currently backed by KaLM-Embedding-V2.5 0.5B). 896 dim, 32K context. Tuned for Chinese/English scientific retrieval and instruction queries.',
+  semanticModelEnglish: 'English (english · Nomic-137M)',
+  semanticModelEnglishDesc:
+    'English long-context and code tier (currently backed by Nomic Embed 137M v1.5). 768 dim, 8K context. Supports Matryoshka dimension truncation. Best for English literature; weaker on Chinese.',
+  semanticModelHybrid: 'Hybrid (hybrid · BGE-M3)',
+  semanticModelHybridDesc:
+    'Dense/sparse multi-vector tier (currently backed by BAAI BGE-M3). 1024 dim, 8K context. Stable across long paper body paragraphs and cross-lingual matching.',
+  semanticModelAcademic: 'Academic (academic · GTE-Base)',
+  semanticModelAcademicDesc:
+    'Classic academic multilingual tier (currently backed by Alibaba GTE Multilingual Base). 768 dim, 8K context. Covers 75+ languages with balanced recall across languages.',
+  semanticModelGranite_97M: 'Granite 97M (Lightweight · ~123 MB)',
+  semanticModelGranite_97MDesc:
+    'Lightweight model from IBM (384 dim, 32K context). Uses ~200MB RAM with ~15ms CPU latency. Best for low-resource hardware or fast batch indexing of abstracts.',
+  semanticModelNomic_137M: 'Nomic Embed 137M (English Long-Context · ~141 MB)',
+  semanticModelNomic_137MDesc:
+    'English and code embedding model from Nomic (768 dim, 8K context). Supports Matryoshka dimension truncation. Best for English papers; weaker on Chinese.',
+  semanticModelGteBase: 'GTE Base (Multilingual Balanced · ~357 MB)',
+  semanticModelGteBaseDesc:
+    'Multilingual model from Alibaba (768 dim, 8K context). Covers 75+ languages with balanced recall across languages. Suitable for multilingual collections.',
+  semanticModelKalm_05B: 'KaLM 0.5B (Bilingual Instruct · ~574 MB)',
+  semanticModelKalm_05BDesc:
+    'Tuned for Chinese/English bilingual literature and instruction queries (896 dim, 32K context). Works well for mixed bilingual research libraries.',
+  semanticModelBgeM3: 'BGE-M3 (Multilingual Long-Context · ~585 MB)',
+  semanticModelBgeM3Desc:
+    'Multilingual model from BAAI (1024 dim, 8K context). Stable across long body paragraphs and cross-lingual matching. Suitable for review papers and monographs.',
+  semanticModelQwen3_06B: 'Qwen3 0.6B (General & Chinese · ~625 MB · Default)',
+  semanticModelQwen3_06BDesc:
+    'Alibaba embedding model (1024 dim, 32K context). Strong Chinese semantic comprehension and long-context matching. Good default for Chinese-focused libraries.',
+  semanticSourceHfMirror: 'HF-Mirror (hf-mirror.com)',
+  semanticSourceHuggingFace: 'Hugging Face (huggingface.co)',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
   groupJobsDesc: 'Background task offloading policies and automatic timeout escalation.',
   groupDiagnosticsDesc: 'Diagnostics logging and verbose troubleshooting traces.',
@@ -894,8 +969,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
   scholarlyDisabled:
     '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
-  parsingDisabled:
-    '文档解析由 dsh-zotero/parsing 组件提供。在插件列表的「包含的组件」中启用该组件，并打开下方的数据出境开关，即启用 MinerU 解析；此后文档字节会发送给 MinerU。组件未启用时此处不可配置。',
+  enrichmentDisabled:
+    '文档解析由 dsh-zotero/enrichment 组件提供。开启该组件将向外部服务 MinerU 发送文档进行解析。请在插件列表的「包含的组件」中启用该组件。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCredentialRef:
     '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
@@ -910,9 +985,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   tabScholarly: '学术检索',
   tabScholarlyDesc:
     'dsh-zotero/scholarly 组件提供的多源学术检索、API 密钥与全文配额。启用该组件即启用外部检索。',
-  tabParsing: '文档解析',
-  tabParsingDesc:
-    '可选的 MinerU 文档解析，获得更高质量的全文。选择免费或专业接口、配置 Token、设置解析文件存储位置。',
+  tabEnrichment: '文档解析',
+  tabEnrichmentDesc:
+    '可选的 MinerU 文档解析。开启该组件即授权向 MinerU 发送文档，解析为高质量 Markdown。',
   tabAdvanced: '高级选项',
   groupLibrarySidebar: '侧边栏显示设置',
   groupLibrarySidebarDesc: '选择是否在 DeepSeek Harness 右侧边栏显示文献面板标签页。',
@@ -937,36 +1012,109 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     '配置邮箱以加入 Polite Pool 获得更优限速配额，填写可选学术 API 密钥的凭据引用，并在凭据存储中保存密钥值。',
   groupScholarlyLimits: '学术检索与全文配额',
   groupScholarlyLimitsDesc: '全网检索最大返回篇数与全文提取字符上限。',
-  groupParsingMode: '解析模式',
-  groupParsingModeDesc: '选择使用哪套 MinerU 接口解析文档。此开关与是否配置 Token 相互独立。',
-  parsingMode: '接口模式',
-  parsingModeHint:
-    '免费使用 Agent 轻量接口（IP 限频、20 页以内、无需 Token）；专业使用精准接口（600 页以内）且需要 Token。切回免费即停用 Token，即便已配置。',
-  parsingModeFree: '免费（Agent 轻量）',
-  parsingModePro: '专业（精准）',
-  groupParsingAuth: 'MinerU Token',
-  groupParsingAuthDesc: '专业模式的 Token 以凭据引用名存于凭据存储，绝不写入配置。',
-  parsingTokenRef: 'Token 凭据引用',
-  parsingTokenRefHint:
-    '保存 MinerU 精准接口 Token 的环境变量名（建议：{suggested}）；仅在专业模式读取，免费模式留空即可。',
-  parsingToken: 'MinerU 精准接口 Token',
-  parsingTokenHint: '存于上方引用名对应的凭据存储中，绝不写入配置。',
-  parsingTokenNeedsReference: '请先在上方填写有效的凭据引用名再保存 Token。免费模式无需 Token。',
-  groupParsingOutput: '输出与授权',
-  groupParsingOutputDesc: '解析文件写入本机何处，以及是否允许将文档字节发送给 MinerU。',
-  parsingOutputDir: '解析文件目录',
-  parsingOutputDirHint:
+  groupEnrichmentMode: '解析模式',
+  groupEnrichmentModeDesc: '文档解析接口选择。提供 Agent 轻量解析与精准解析两种模式。',
+  enrichmentMode: '接口模式',
+  enrichmentModeHint:
+    'Agent 轻量解析：无需 Token，基于 IP 限频，支持 20 页及 10MB 以内单文件，输出 Markdown；精准解析：需配置 Token，支持 200 页及 200MB 复杂版式、表格与公式，单用户每日可免费解析 5000 份文件。',
+  enrichmentModeFree: 'Agent 轻量解析',
+  enrichmentModePro: '精准解析',
+  allowDocumentUpload: '向 MinerU 发送文档',
+  allowDocumentUploadHint:
+    '授权把本地附件与 URL PDF 发送给 MinerU 解析，这是数据出境开关；关闭后不再发起新的上传，已缓存产物仍可读取。',
+  groupEnrichmentAuth: 'MinerU Token',
+  groupEnrichmentAuthDesc:
+    '精准解析 API 的访问凭据。每个 Token 有效期为 3 个月，可在 MinerU 官网（mineru.net）创建。',
+  enrichmentTokenRef: 'Token 凭据引用',
+  enrichmentTokenRefHint: '插件专用的凭据引用名（默认：{suggested}）。',
+  enrichmentToken: 'MinerU API Token',
+  enrichmentTokenHint:
+    '精准解析支持每日免费解析 5000 份文件（接口限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。Token 有效期为 3 个月，过期请前往官网重新生成。',
+  enrichmentTokenNeedsReference: '凭据引用未就绪。默认使用专属凭据名 MINERU_API_TOKEN。',
+  enrichmentTokenMissingTag: '需要 Token',
+  enrichmentTokenMissingTitle: '精准解析模式需要 MinerU API Token',
+  enrichmentTokenMissingDesc:
+    '当前选择了「精准解析」模式，但尚未配置访问凭据。未配置 Token 时发起解析将报错中断。请前往 MinerU 官网注册并创建 Token 填入下方（每日免费 5000 份）；若无需公式与复杂排版解析，可切换为免 Token 的「Agent 轻量解析」。',
+  enrichmentTokenVisitMineru: '前往 MinerU 官网 (mineru.net) 获取 Token ↗',
+  groupEnrichmentOutput: '输出与数据说明',
+  groupEnrichmentOutputDesc:
+    '已启用文档解析组件，解析时本地附件与 URL PDF 将发送至 MinerU 进行处理。解析后的 Markdown 产物保存于下方本地目录。',
+  enrichmentOutputDir: '解析文件目录',
+  enrichmentOutputDirHint:
     '解析后 Markdown 文件的绝对目录。留空使用默认位置；「恢复默认」可清除自定义路径。',
-  parsingOutputDirDefault: '默认（~/.dsh/zotero-parsed）',
-  parsingOutputDirInvalid: '请填写绝对目录路径（或以 ~/ 开头），留空表示使用默认位置。',
-  parsingAllowUpload: '允许向 MinerU 发送文档',
-  parsingAllowUploadHint:
-    '数据出境授权。仅当开启时，本地附件与 URL PDF 才会发送给 MinerU。默认关闭。',
-  parsingUploadRiskTitle: '允许上传文档？',
-  parsingUploadRiskDescription:
-    '开启后会把 PDF 字节发送到外部服务 MinerU 进行解析，本地文库附件与下载的 URL PDF 将离开本机。保持关闭则所有读取都在本机完成。',
-  parsingUploadRiskAcknowledge: '我了解文档会被发送到外部服务。',
-  parsingUploadRiskConfirm: '允许上传',
+  enrichmentOutputDirDefault: '默认（~/.dsh/zotero-parsed）',
+  enrichmentOutputDirInvalid: '请填写绝对目录路径（或以 ~/ 开头），留空表示使用默认位置。',
+  groupSemanticRanking: '本地模型语义检索',
+  groupSemanticRankingDesc: '使用本地向量嵌入模型增强文献片段检索，模型需手动下载后启用。',
+  enableSemanticSearch: '启用本地语义检索',
+  enableSemanticSearchHint:
+    '启用且本地模型就绪后，检索链路将融合 BM25 词汇重合与向量语义相似度（RRF 算法），有效召回概念转述或同义文献。',
+  semanticModel: '本地嵌入模型',
+  semanticModelHint: '根据文献语言构成和机器内存选择合适规格，模型下载后在本地运行。',
+  semanticDownloadSource: '下载渠道 / 镜像源',
+  semanticDownloadSourceHint: '模型资源下载渠道。国内推荐使用 HF-Mirror 镜像站直连加速。',
+  semanticModelDir: '模型存放目录',
+  semanticModelDirHint: '保存下载 ONNX 模型的绝对目录。留空表示使用默认目录（~/.dsh/models）。',
+  semanticModelDirDefault: '默认（~/.dsh/models）',
+  semanticModelStatus: '模型状态',
+  semanticModelStatusReady: '已就绪',
+  semanticModelStatusNotDownloaded: '未下载',
+  semanticModelStatusDownloading: '下载中',
+  semanticModelStatusFailed: '下载失败',
+  semanticModelVerifyAction: '校验模型',
+  semanticModelDownloadAction: '下载模型',
+  semanticModelRedownloadAction: '重新下载',
+  semanticModelCancelAction: '取消下载',
+  semanticModelUnavailable:
+    '文档解析组件未启用，模型状态与下载不可用。请在「包含的组件」中启用后再试。',
+  semanticModelDownloadingFile: '正在下载：{file}',
+  semanticModelProgress: '{downloaded} / {total} ({percent}%)',
+  semanticModelDownloadedNotice: '模型已保存在本地，可供本地语义检索使用。',
+  semanticModelDownloadFailedNotice: '下载失败：{error}',
+  semanticModelNotReadyWarningTag: '需要下载模型',
+  semanticModelNotReadyWarningTitle: '已开启本地语义检索，但所选模型尚未下载',
+  semanticModelNotReadyWarningDesc:
+    '在模型下载完成前，系统检索将保持使用 BM25 词汇检索。请在下方选择适合您设备配置的模型，并点击「下载模型」完成准备。',
+  semanticModelDownloadingNotice: '模型正在下载中，下载完成后本地语义检索将自动生效。',
+  semanticModelNotDownloadedWarningNotice: '已开启本地语义检索，请下载模型以生效。',
+  semanticModelBalanced: '通用平衡 (balanced · Qwen3-0.6B · 默认)',
+  semanticModelBalancedDesc:
+    '通用平衡档位（当前基于 Qwen3-Embedding-0.6B 开源模型）。1024 维，32K 上下文。中文语义匹配和长文本理解较好，资源消耗适中，适合作为中文为主的文库默认选型。',
+  semanticModelLightweight: '极速轻量 (lightweight · Granite-97M)',
+  semanticModelLightweightDesc:
+    '极致轻量档位（当前基于 IBM Granite 97M ModernBERT）。384 维，32K 上下文。内存占用约 200MB，CPU 推理耗时约 15ms。适合低配设备或对大量文献摘要进行批量快速编码。',
+  semanticModelBilingual: '中英双语 (bilingual · KaLM-0.5B)',
+  semanticModelBilingualDesc:
+    '中英双语档位（当前基于 KaLM-Embedding-V2.5 0.5B）。896 维，32K 上下文。专为中英双语和学术指令微调，适合中英文混杂的科研论文库。',
+  semanticModelEnglish: '英文长文 (english · Nomic-137M)',
+  semanticModelEnglishDesc:
+    '英文长文与代码档位（当前基于 Nomic Embed 137M v1.5）。768 维，8K 上下文。支持 Matryoshka 维度裁剪。适合纯英文文献、学术论文或代码片段检索，中文理解相对较弱。',
+  semanticModelHybrid: '多路混合 (hybrid · BGE-M3)',
+  semanticModelHybridDesc:
+    '多向量与混合检索档位（当前基于智源 BGE-M3）。1024 维，8K 上下文。在论文正文段落与跨语言比对上更稳定，适合检索长篇综述与多语种文献。',
+  semanticModelAcademic: '经典学术 (academic · GTE-Base)',
+  semanticModelAcademicDesc:
+    '经典学术多语言档位（当前基于阿里通义 GTE-Base）。768 维，8K 上下文。覆盖 75 种以上语言，适合收录多国语言文献的混合文库，各语言检索表现平均。',
+  semanticModelGranite_97M: 'Granite 97M (轻量快速 · ~123 MB)',
+  semanticModelGranite_97MDesc:
+    'IBM 发布的轻量模型（384 维，32K 上下文）。内存占用约 200MB，CPU 推理耗时约 15ms。适合低配设备或对大量文献摘要进行批量快速编码。',
+  semanticModelNomic_137M: 'Nomic Embed 137M (英文长文 · ~141 MB)',
+  semanticModelNomic_137MDesc:
+    'Nomic 开发的英文与代码模型（768 维，8K 上下文）。支持 Matryoshka 维度裁剪。适合纯英文文献、学术论文或代码片段检索，中文理解相对较弱。',
+  semanticModelGteBase: 'GTE Base (多语平衡 · ~357 MB)',
+  semanticModelGteBaseDesc:
+    '阿里研发的多语言模型（768 维，8K 上下文）。覆盖 75 种以上语言，适合收录多国语言文献的混合文库，各语言检索表现平均。',
+  semanticModelKalm_05B: 'KaLM 0.5B (中英双语 · ~574 MB)',
+  semanticModelKalm_05BDesc:
+    '专为中英双语和学术指令微调的模型（896 维，32K 上下文）。适合中英文混杂的科研论文库，能较好理解包含特定查询意图的检索词。',
+  semanticModelBgeM3: 'BGE-M3 (多语长篇 · ~585 MB)',
+  semanticModelBgeM3Desc:
+    '智源研发的多语言长文本模型（1024 维，8K 上下文）。在论文正文段落与跨语言比对上更稳定，适合检索长篇综述与多语种文献。',
+  semanticModelQwen3_06B: 'Qwen3 0.6B (中文与通用 · ~625 MB · 默认)',
+  semanticModelQwen3_06BDesc:
+    '阿里研发的新一代嵌入模型（1024 维，32K 上下文）。中文语义匹配和长文本理解较好，资源消耗适中，适合作为中文为主的文库默认选型。',
+  semanticSourceHfMirror: 'HF-Mirror 国内镜像（推荐）',
+  semanticSourceHuggingFace: 'Hugging Face 官方直连',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
   groupJobsDesc: '耗时操作的后台异步执行策略与超时自动提升。',
   groupDiagnosticsDesc: '本地排错与详细运行日志输出。',

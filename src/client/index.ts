@@ -46,10 +46,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 // resolved attachments in the right sidebar.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ModelPortFailure, ModelPortResult } from './enrichment-form-controller.ts'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
-import { ParsingSettingsSection } from './ParsingSettingsSection.tsx'
+import { EnrichmentSettingsSection } from './EnrichmentSettingsSection.tsx'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-face.ts'
@@ -57,8 +58,8 @@ import { reportCrashedSurface } from './actions/error-reporter.ts'
 import { ZoteroCardController } from './zotero-card-controller.ts'
 import { ScholarlyFormController } from './scholarly-form-controller.ts'
 import type { ScholarlyCredentialPort } from './scholarly-form-controller.ts'
-import { ParsingFormController } from './parsing-form-controller.ts'
-import type { ParsingCredentialPort } from './parsing-form-controller.ts'
+import { EnrichmentFormController } from './enrichment-form-controller.ts'
+import type { EnrichmentCredentialPort, EnrichmentModelPort } from './enrichment-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
 import { CitationFormController } from './citation-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
@@ -69,7 +70,7 @@ import {
   type ZoteroStatusView,
 } from '../contract.ts'
 import {
-  PARSING_SETTINGS_NAMESPACE,
+  ENRICHMENT_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../settings-namespace.ts'
@@ -166,7 +167,7 @@ interface UiSurfaces {
   readonly form: ConfigForm<Record<string, unknown>>
   readonly card: ZoteroCardController
   readonly scholarlyCard: ScholarlyFormController
-  readonly parsingCard: ParsingFormController
+  readonly enrichmentCard: EnrichmentFormController
   readonly libraryForm: ConfigForm<Record<string, unknown>>
   readonly libraryCard: LibraryFormController
   readonly citationCard: CitationFormController
@@ -253,7 +254,7 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  * (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { card, scholarlyCard, parsingCard, libraryCard, citationCard, probe } = surfaces
+  const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, probe } = surfaces
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -270,7 +271,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
   // The page renders the unified 7-tab form through ZoteroSettingsSection and stages edits
-  // over zotero, scholarly, library, and parsing namespaces.
+  // over zotero, scholarly, library, and enrichment namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -281,7 +282,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         inject: () => {
           const zoteroFace = card.inject()
           const scholarlyFace = scholarlyCard.inject()
-          const parsingFace = parsingCard.inject()
+          const enrichmentFace = enrichmentCard.inject()
           const libraryFace = libraryCard.inject()
           const citationFace = citationCard.inject()
           return {
@@ -291,12 +292,12 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
             hooks: {
               zoteroCard: zoteroFace.hooks.zoteroCard,
               scholarlyCard: scholarlyFace.hooks.scholarlyCard,
-              parsingCard: parsingFace.hooks.parsingCard,
+              enrichmentCard: enrichmentFace.hooks.enrichmentCard,
               libraryCard: libraryFace.hooks.libraryCard,
               citationCard: citationFace.hooks.citationCard,
             },
             scholarly: scholarlyFace,
-            parsing: parsingFace,
+            enrichment: enrichmentFace,
             library: libraryFace,
             citation: citationFace,
           }
@@ -328,28 +329,28 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     'dsh-zotero: scholarly row config',
   )
 
-  // Dedicated row configuration for the parsing subsystem (plugins.row.config),
-  // opened from the "Configure" button on the dsh-zotero#parsing row. It covers
+  // Dedicated row configuration for the enrichment subsystem (plugins.row.config),
+  // opened from the "Configure" button on the dsh-zotero#enrichment row. It covers
   // the free/pro switch, the MinerU token, the egress gate, and the output dir.
-  // whileServed guards it to the host serving the parsing namespace (the row is
+  // whileServed guards it to the host serving the enrichment namespace (the row is
   // disabled by default), so the row shows no config while the component is off.
   ctx.effect(
     () =>
-      ctx.configForms.whileServed([PARSING_SETTINGS_NAMESPACE], () =>
+      ctx.configForms.whileServed([ENRICHMENT_SETTINGS_NAMESPACE], () =>
         ctx.slots.inject('plugins.row.config', () =>
           ctx.slots.register(
             {
               name: 'plugins.row.config',
-              key: `${ZOTERO_REMOTE_PACKAGE}#parsing`,
+              key: `${ZOTERO_REMOTE_PACKAGE}#enrichment`,
               locale: NS,
               registrant: REGISTRANT,
-              inject: () => parsingCard.inject(),
+              inject: () => enrichmentCard.inject(),
             },
-            ParsingSettingsSection,
+            EnrichmentSettingsSection,
           ),
         ),
       ),
-    'dsh-zotero: parsing row config',
+    'dsh-zotero: enrichment row config',
   )
 
   // Dedicated row configuration for the library subsystem (plugins.row.config),
@@ -915,17 +916,57 @@ function registerUi(ctx: ClientContext): void {
   // All live as long as the client fiber.
   const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
   const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
-  const parsingForm = ctx.configForms.get<Record<string, unknown>>(PARSING_SETTINGS_NAMESPACE)
+  const enrichmentForm = ctx.configForms.get<Record<string, unknown>>(ENRICHMENT_SETTINGS_NAMESPACE)
   const libraryForm = ctx.configForms.get<Record<string, unknown>>(
     ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   )
   const card = new ZoteroCardController(form)
-  const credentialPort: ScholarlyCredentialPort & ParsingCredentialPort = {
+  const credentialPort: ScholarlyCredentialPort & EnrichmentCredentialPort = {
     describe: (refs) => ctx.remote.credentials.describe([...refs]),
     set: (ref, value) => ctx.remote.credentials.set(ref, value),
   }
+  // The model endpoints answer from the enrichment component, so a host whose
+  // row is off (or an older host without them) returns a failure the form
+  // renders as "component not available" — never a fabricated success.
+  // The one-line failure for "the enrichment component's endpoints are not
+  // answering": the same fact a wire call would produce with the row off,
+  // carried in the port's own minimal shape.
+  const MODEL_ENDPOINTS_UNAVAILABLE = (): ModelPortFailure => ({
+    message: 'The enrichment component is not composed; model operations are unavailable.',
+  })
+  const fromWire = <T>(result: RemoteResult<T>): ModelPortResult<T> =>
+    result.ok
+      ? { ok: true, value: result.value }
+      : { ok: false, error: { message: result.error.message } }
+
+  const modelPort: EnrichmentModelPort = {
+    semanticModelStatus: async (request) => {
+      if (typeof ctx.remote.zotero.semanticModelStatus !== 'function') {
+        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
+      }
+      return fromWire(await ctx.remote.zotero.semanticModelStatus(request))
+    },
+    downloadSemanticModel: async (request) => {
+      if (typeof ctx.remote.zotero.downloadSemanticModel !== 'function') {
+        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
+      }
+      return fromWire(await ctx.remote.zotero.downloadSemanticModel(request))
+    },
+    cancelSemanticModelDownload: async (request) => {
+      if (typeof ctx.remote.zotero.cancelSemanticModelDownload !== 'function') {
+        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
+      }
+      return fromWire(await ctx.remote.zotero.cancelSemanticModelDownload(request))
+    },
+    verifySemanticModel: async (request) => {
+      if (typeof ctx.remote.zotero.verifySemanticModel !== 'function') {
+        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
+      }
+      return fromWire(await ctx.remote.zotero.verifySemanticModel(request))
+    },
+  }
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
-  const parsingCard = new ParsingFormController(parsingForm, credentialPort)
+  const enrichmentCard = new EnrichmentFormController(enrichmentForm, credentialPort, modelPort)
   const libraryCard = new LibraryFormController(libraryForm)
   const citationCard = new CitationFormController(form)
   // Live connectivity for the conversation tab's status strip. This fiber is
@@ -970,7 +1011,7 @@ function registerUi(ctx: ClientContext): void {
     form,
     card,
     scholarlyCard,
-    parsingCard,
+    enrichmentCard,
     libraryForm,
     libraryCard,
     citationCard,
@@ -988,7 +1029,7 @@ function registerUi(ctx: ClientContext): void {
     () => () => {
       card.dispose()
       scholarlyCard.dispose()
-      parsingCard.dispose()
+      enrichmentCard.dispose()
       libraryCard.dispose()
       citationCard.dispose()
     },
@@ -998,9 +1039,9 @@ function registerUi(ctx: ClientContext): void {
     () =>
       ctx.remote.$on('credentials/reference-updated', (ref) => {
         scholarlyCard.refreshCredential(ref)
-        parsingCard.refreshCredential(ref)
+        enrichmentCard.refreshCredential(ref)
       }),
-    'dsh-zotero: scholarly & parsing credential invalidations',
+    'dsh-zotero: scholarly & enrichment credential invalidations',
   )
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)
