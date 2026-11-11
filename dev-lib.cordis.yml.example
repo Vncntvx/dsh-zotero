@@ -13,8 +13,8 @@
 # The profile-installed dsh-zotero (id zotero) is disabled in this instance
 # so the watched copy takes its place; the registered model tools still work
 # normally. The scholarly row is disabled for the same reason: the watched
-# reason: the watched copy provides that component too, and two mounted rows
-# would fight over the same service name.
+# copy provides that component too, and two mounted rows would fight over
+# the same service name.
 # The name must be an absolute path to the BUILT entry (plain Node cannot
 # load src/index.ts). Adjust it if your checkout lives elsewhere.
 # The browser half (the settings page) loads only for rows whose name is a
@@ -23,6 +23,8 @@
 - id: zotero
   disabled: true
 - id: scholarly
+  disabled: true
+- id: enrichment
   disabled: true
 - id: hmr
   disabled: false
@@ -42,3 +44,16 @@
     - id: scholarly-dev
       name: <absolute-path-to-dsh-zotero>/lib/scholarly/index.js
       config: {}
+    # The enrichment component (row id `enrichment`) ships disabled; mounting
+    # it only makes user-submitted MinerU parsing, read-only artifact reuse,
+    # and local semantic ranking / model management available. It authorizes no
+    # document upload: `allowDocumentUpload` defaults to `false` and only
+    # permits an explicit user submission of one specific Zotero PDF
+    # attachment or one public PDF URL. Point at the BUILT entry for the same
+    # reason as the scholarly row, and keep it disabled for the read-only
+    # debug stack. There is no `dsh-zotero/parsing` alias or legacy config.
+    - id: enrichment-dev
+      name: <absolute-path-to-dsh-zotero>/lib/enrichment/index.js
+      disabled: true
+      config:
+        allowDocumentUpload: false

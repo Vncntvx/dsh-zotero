@@ -369,14 +369,21 @@ export class ParseFlight {
   }
 }
 
-function cachedResultOf(artifact: ParsedArtifact, input: ParseOnceInput, cacheKey: string): ParseOnceResult {
+function cachedResultOf(
+  artifact: ParsedArtifact,
+  input: ParseOnceInput,
+  cacheKey: string,
+): ParseOnceResult {
   if (
     artifact.meta.sourceId !== sourceKeyOf(input.identity) ||
     artifact.meta.generation !== input.generation ||
     artifact.meta.mode !== input.mode ||
     artifact.meta.contentFingerprint !== (input.fingerprint ?? contentFingerprintOf(input.bytes))
   ) {
-    throw new ZoteroError('The parsed artifact does not match its cache identity.', ZOTERO_ENRICHMENT_TASK_FAILED)
+    throw new ZoteroError(
+      'The parsed artifact does not match its cache identity.',
+      ZOTERO_ENRICHMENT_TASK_FAILED,
+    )
   }
   return { artifact, cacheKey, cached: true }
 }

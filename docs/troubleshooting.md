@@ -167,3 +167,15 @@
 - **操作**：打开插件管理器中的 dsh-zotero 详情页 → 「基础设置」标签页 → 「写入」分组 → 点「撤销已保存的写入授权」，勾选确认后执行。
 - **效果**：删除插件保存在宿主凭据管理器中的 Zotero 写入密钥，并清空进程内授权。之后的第一次写入会重新弹出 Zotero 授权对话框。
 - **边界**：这里只删除插件自己的记录；Zotero 侧已发放的「始终允许」密钥不会自动作废。若同时要清理 Zotero 侧，请在 Zotero 的本地授权列表中另行删除。
+
+## 26. 文档解析组件的错误码
+
+- **现象**：主动解析或语义读取返回 `ZOTERO_ENRICHMENT_*` 错误码。
+- **原因与排查**：
+  - `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`：部署开关 `allowDocumentUpload` 为默认 `false`。挂载组件不授权上传；在设置中打开该开关后，针对一个具体 Zotero PDF 附件或公开 PDF URL 提交。普通读取、PDF 打开、设置保存与服务启动不触发解析或上传。
+  - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`：语义检索已开启，但所选模型缺失、损坏或本地推理运行时不可用。读取以错误失败，不回退为 BM25；下载、修复或校验模型后重试，或关闭语义检索改用完整 BM25。
+  - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`：`pro` 精准模式下配置的 MinerU Token 凭据引用无法解析，读取以错误失败，不降级为免费或匿名。检查引用名与宿主凭据存储中的值。
+  - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`：主动解析需要会话所属 `ctx.jobs` 与实时会话控制器，当前缺失；确认在可用的会话与宿主环境中提交。
+  - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`：同一操作 id 被以不同目标或配置快照重放；用新的操作标识重新提交。
+  - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`：分别是 MinerU 任务失败、归档包校验失败、输入超出接口上限或非 PDF、输出目录校验失败、模型在全部镜像源下载失败。解析失败不切换模式，也不以本地抽取文本冒充成功。
+- 完整错误码清单见[工具参考 · 错误码](tools.md#错误码)；上传相关的网络与授权边界见[产品模型](product-model.md)。

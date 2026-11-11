@@ -30,9 +30,8 @@ export function sourceLabelKeyOf(
 }
 
 /**
- * The locale key of one match kind. A `lexical` passage is the only one whose
- * own text may be quoted as carrying the query's words, so the label spells out
- * which side of that line each passage sits on.
+ * The locale key of one match kind. Only a `lexical` passage's own text may be
+ * quoted as carrying the query's words; the label marks that distinction.
  */
 export function matchLabelKeyOf(
   kind: EvidenceMatchKind,

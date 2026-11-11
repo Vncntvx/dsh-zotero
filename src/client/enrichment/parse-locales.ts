@@ -5,14 +5,14 @@ export const parseEn = {
   parseTarget: 'Selected document',
   parseUrl: 'Public PDF URL',
   parseUrlHint:
-    'Choose one public HTTP(S) PDF URL. Credentials and private addresses are not accepted. The host checks the address and PDF when you submit.',
+    'Choose one public HTTP(S) PDF URL. Credentials and private addresses are refused. The host checks the address and PDF on submission.',
   parseInvalid: 'Choose a valid PDF attachment or public PDF URL before submitting.',
   parseMode: 'Committed mode',
   parseModeFree: 'Free',
   parseModePro: 'Precise',
   parseProvider: 'External service',
   parseUploadMeaning:
-    'Submitting lets the host read this PDF and send its document bytes to MinerU (mineru.net) for parsing. A public URL is downloaded by the host first. Opening or closing this dialog does not upload a document.',
+    'Submission lets the host read this PDF and send its bytes to MinerU (mineru.net) for parsing. The host downloads a public URL first.',
   parseLimits:
     'Maximum {bytes} bytes per PDF; MinerU accepts up to {pages} pages in this mode. The host enforces the byte limit; MinerU enforces the page limit. Page count is shown only when reported.',
   parseNoSemantic: 'Parsing does not require a local semantic model.',
@@ -20,7 +20,7 @@ export const parseEn = {
   parseReparse: 'Submit a new parse',
   parseRetry: 'Retry this parse',
   parseCancel: 'Cancel parsing',
-  parseCancelRequested: 'Cancellation requested. Waiting for the host job to finish cleanup.',
+  parseCancelRequested: 'Cancellation requested. Waiting for the host job to clean up.',
   parseCloseHint:
     'Closing releases this view. The host job continues; use Cancel parsing to stop it.',
   parseChecking: 'Checking existing artifact or parse receipt…',
@@ -33,7 +33,7 @@ export const parseEn = {
   parseWaiting: 'Waiting for the host job state',
   parseReconnect: 'Refresh status',
   parseReconnectHint:
-    'Observation disconnected. Refreshing reads the existing operation; it does not submit another parse.',
+    'Observation disconnected. Refreshing reads the existing operation without submitting another parse.',
   parseReceiptPending: 'Waiting for the bounded parse receipt.',
   parseArtifactReady: 'An existing artifact is available.',
   parseArtifactMissing: 'No current artifact is available.',
@@ -69,7 +69,7 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseModePro: '精准',
   parseProvider: '外部服务',
   parseUploadMeaning:
-    '提交将允许宿主读取此 PDF，并把文档字节发送给 MinerU（mineru.net）进行解析。公开 URL 由宿主先下载。打开或关闭此窗口不会上传文档。',
+    '提交后宿主读取此 PDF，并把文档字节发送给 MinerU（mineru.net）解析。公开 URL 由宿主先下载。',
   parseLimits:
     '每份 PDF 最大 {bytes} 字节；当前模式下 MinerU 最多接受 {pages} 页。宿主执行大小限制，MinerU 执行页数限制；仅在服务报告页数时显示。',
   parseNoSemantic: '主动解析不需要本地语义模型。',
@@ -78,7 +78,7 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseRetry: '重试本次解析',
   parseCancel: '取消解析',
   parseCancelRequested: '已请求取消，等待宿主任务完成清理。',
-  parseCloseHint: '关闭只释放当前视图，宿主任务继续运行；需要停止时请使用「取消解析」。',
+  parseCloseHint: '关闭只释放当前视图，宿主任务继续运行；停止请用「取消解析」。',
   parseChecking: '正在查询已有产物或解析回执…',
   parseSubmitting: '正在提交所选文档…',
   parseRunning: '解析中',
@@ -88,11 +88,11 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseKilled: '已取消',
   parseWaiting: '等待宿主任务状态',
   parseReconnect: '刷新状态',
-  parseReconnectHint: '观察已断开。刷新只读取已有操作，不会重新提交解析。',
+  parseReconnectHint: '观察已断开。刷新只读取已有操作，不重新提交解析。',
   parseReceiptPending: '等待有界解析回执。',
   parseArtifactReady: '已有可用解析产物。',
   parseArtifactMissing: '没有当前有效产物。',
-  parseArtifactExpired: '来源已变化，须主动提交后才会重新解析。',
+  parseArtifactExpired: '来源已变化，重新解析需再次提交。',
   parseCached: '复用产物',
   parseFresh: '新解析产物',
   parseCharacters: '字符数',

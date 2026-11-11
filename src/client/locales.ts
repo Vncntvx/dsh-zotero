@@ -170,7 +170,7 @@ export const en = {
   enrichmentModePro: 'Precision Extract',
   allowDocumentUpload: 'Send documents to MinerU',
   allowDocumentUploadHint:
-    'Permits explicitly submitted local PDF attachments and public PDF URLs to be sent to MinerU. Enabling this gate starts no work and authorizes no document. Existing valid artifacts remain readable when disabled.',
+    'Lets you send explicitly submitted local PDF attachments and public PDF URLs to MinerU. Existing valid artifacts remain readable when disabled.',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
     'Access credential for the Precision Extract API. Tokens are valid for 3 months and can be generated at mineru.net.',
@@ -183,11 +183,11 @@ export const en = {
   enrichmentTokenMissingTag: 'Token Required',
   enrichmentTokenMissingTitle: 'Precision Extract requires a MinerU API Token',
   enrichmentTokenMissingDesc:
-    'Precision Extract mode is selected, but no API token is configured. Requests will fail without a token. Please register at mineru.net to create a token (5,000 files/day free) and paste it below. Alternatively, switch to "Agent Lightweight Parse" which requires no token.',
+    'Precision Extract is selected without an API token. Parsing fails until a token is configured. Create a token at mineru.net (5,000 files/day free) and paste it below, or switch to the token-free "Agent Lightweight Parse".',
   enrichmentTokenVisitMineru: 'Visit MinerU (mineru.net) to get an API token ↗',
   groupEnrichmentOutput: 'Output & Data Notice',
   groupEnrichmentOutputDesc:
-    'Document enrichment is enabled; local attachments and URL PDFs are sent to MinerU for extraction. Parsed Markdown artifacts are saved in the local directory below.',
+    'Document enrichment is enabled. Local attachments and URL PDFs are sent to MinerU for parsing, and the Markdown artifacts are saved in the directory below.',
   enrichmentOutputDir: 'Parsed-file directory',
   enrichmentOutputDirHint:
     'Absolute directory for parsed Markdown files. Leave blank to use the default location; Reset to default clears a custom path.',
@@ -196,16 +196,16 @@ export const en = {
     'Enter an absolute directory path (or a ~/... path), or leave blank for the default.',
   groupSemanticRanking: 'Local Semantic Search',
   groupSemanticRankingDesc:
-    'Enhance evidence retrieval with local embedding models. Models require manual download before enabling.',
+    'Use local embedding models for evidence retrieval. Models require manual download before enabling.',
   enableSemanticSearch: 'Enable local semantic search',
   enableSemanticSearchHint:
-    'When enabled and a local model is downloaded, evidence retrieval combines BM25 lexical matching with semantic embedding vector search using Reciprocal Rank Fusion (RRF).',
+    'With a downloaded local model, evidence retrieval combines BM25 lexical matching with semantic vector search using Reciprocal Rank Fusion (RRF).',
   semanticModel: 'Embedding model',
   semanticModelHint:
     'Select a model size according to your library languages and memory resources. Models run locally once downloaded.',
   semanticDownloadSource: 'Download channel / mirror',
   semanticDownloadSourceHint:
-    'Select the download channel. hf-mirror.com is recommended for fast downloads in mainland China.',
+    'Select the download channel. hf-mirror.com is the mirror for downloads in mainland China.',
   semanticModelDir: 'Model storage directory',
   semanticModelDirHint:
     'Custom directory for storing downloaded ONNX models. Leave blank to use the default directory (~/.dsh/models).',
@@ -215,6 +215,10 @@ export const en = {
   semanticModelStatusNotDownloaded: 'Not downloaded',
   semanticModelStatusDownloading: 'Downloading',
   semanticModelStatusFailed: 'Download failed',
+  semanticModelStatusChecking: 'Checking the bundle…',
+  semanticModelStatusCancelling: 'Cancelling the download…',
+  semanticModelBundleRepairHint:
+    'The bundle is missing or corrupted. Use Download to fetch it, Redownload to replace it, or Verify to check the files already on disk. Semantic search is not auto-disabled.',
   semanticModelDownloadAction: 'Download model',
   semanticModelRedownloadAction: 'Redownload',
   semanticModelVerifyAction: 'Verify model',
@@ -228,47 +232,47 @@ export const en = {
   semanticModelNotReadyWarningTag: 'Model Required',
   semanticModelNotReadyWarningTitle: 'Local semantic search is enabled, but the model is not ready',
   semanticModelNotReadyWarningDesc:
-    'Until the download completes, retrieval falls back to lexical BM25 matching. Please select a model matching your hardware and click "Download model" below.',
+    'With semantic search enabled but the model missing or corrupt, a read fails with ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, without falling back to BM25. Select a model matching your hardware and click "Download model", or turn semantic search off to use BM25 alone.',
   semanticModelDownloadingNotice:
     'Model is downloading. Local semantic search will become active once complete.',
   semanticModelNotDownloadedWarningNotice:
     'Local semantic search is enabled; please download the model to activate.',
   semanticModelBalanced: 'Balanced (balanced · Qwen3-0.6B · Default)',
   semanticModelBalancedDesc:
-    'General-purpose balanced tier (currently backed by Qwen3-Embedding-0.6B). 1024 dim, 32K context. Strong Chinese and cross-lingual semantic matching. Recommended default.',
+    'General-purpose tier (currently backed by Qwen3-Embedding-0.6B). 1024 dim, 32K context. Chinese and cross-lingual semantic matching. Default tier.',
   semanticModelLightweight: 'Lightweight (lightweight · Granite-97M)',
   semanticModelLightweightDesc:
-    'Ultra-lightweight tier (currently backed by IBM Granite 97M ModernBERT). 384 dim, 32K context. Uses ~200MB RAM with ~15ms CPU latency. Best for low-resource hardware or fast batch indexing.',
+    'Lightweight tier (currently backed by IBM Granite 97M ModernBERT). 384 dim, 32K context. Uses ~200MB RAM and ~15ms CPU latency. For low-resource hardware or batch indexing.',
   semanticModelBilingual: 'Bilingual (bilingual · KaLM-0.5B)',
   semanticModelBilingualDesc:
-    'Bilingual research literature tier (currently backed by KaLM-Embedding-V2.5 0.5B). 896 dim, 32K context. Tuned for Chinese/English scientific retrieval and instruction queries.',
+    'Bilingual literature tier (currently backed by KaLM-Embedding-V2.5 0.5B). 896 dim, 32K context. Tuned for Chinese/English scientific retrieval and instruction queries.',
   semanticModelEnglish: 'English (english · Nomic-137M)',
   semanticModelEnglishDesc:
-    'English long-context and code tier (currently backed by Nomic Embed 137M v1.5). 768 dim, 8K context. Supports Matryoshka dimension truncation. Best for English literature; weaker on Chinese.',
+    'English long-context and code tier (currently backed by Nomic Embed 137M v1.5). 768 dim, 8K context. Supports Matryoshka dimension truncation. For English literature; weaker on Chinese.',
   semanticModelHybrid: 'Hybrid (hybrid · BGE-M3)',
   semanticModelHybridDesc:
-    'Dense/sparse multi-vector tier (currently backed by BAAI BGE-M3). 1024 dim, 8K context. Stable across long paper body paragraphs and cross-lingual matching.',
+    'Dense/sparse multi-vector tier (currently backed by BAAI BGE-M3). 1024 dim, 8K context. For long body paragraphs and cross-lingual matching.',
   semanticModelAcademic: 'Academic (academic · GTE-Base)',
   semanticModelAcademicDesc:
-    'Classic academic multilingual tier (currently backed by Alibaba GTE Multilingual Base). 768 dim, 8K context. Covers 75+ languages with balanced recall across languages.',
+    'Academic multilingual tier (currently backed by Alibaba GTE Multilingual Base). 768 dim, 8K context. Covers 75+ languages with balanced recall across languages.',
   semanticModelGranite_97M: 'Granite 97M (Lightweight · ~123 MB)',
   semanticModelGranite_97MDesc:
-    'Lightweight model from IBM (384 dim, 32K context). Uses ~200MB RAM with ~15ms CPU latency. Best for low-resource hardware or fast batch indexing of abstracts.',
+    'Lightweight model from IBM (384 dim, 32K context). Uses ~200MB RAM and ~15ms CPU latency. For low-resource hardware or batch indexing of abstracts.',
   semanticModelNomic_137M: 'Nomic Embed 137M (English Long-Context · ~141 MB)',
   semanticModelNomic_137MDesc:
-    'English and code embedding model from Nomic (768 dim, 8K context). Supports Matryoshka dimension truncation. Best for English papers; weaker on Chinese.',
+    'English and code embedding model from Nomic (768 dim, 8K context). Supports Matryoshka dimension truncation. For English papers; weaker on Chinese.',
   semanticModelGteBase: 'GTE Base (Multilingual Balanced · ~357 MB)',
   semanticModelGteBaseDesc:
-    'Multilingual model from Alibaba (768 dim, 8K context). Covers 75+ languages with balanced recall across languages. Suitable for multilingual collections.',
+    'Multilingual model from Alibaba (768 dim, 8K context). Covers 75+ languages with balanced recall across languages.',
   semanticModelKalm_05B: 'KaLM 0.5B (Bilingual Instruct · ~574 MB)',
   semanticModelKalm_05BDesc:
-    'Tuned for Chinese/English bilingual literature and instruction queries (896 dim, 32K context). Works well for mixed bilingual research libraries.',
+    'Tuned for Chinese/English bilingual literature and instruction queries (896 dim, 32K context). For mixed bilingual research libraries.',
   semanticModelBgeM3: 'BGE-M3 (Multilingual Long-Context · ~585 MB)',
   semanticModelBgeM3Desc:
-    'Multilingual model from BAAI (1024 dim, 8K context). Stable across long body paragraphs and cross-lingual matching. Suitable for review papers and monographs.',
+    'Multilingual model from BAAI (1024 dim, 8K context). For long body paragraphs and cross-lingual matching, including review papers and monographs.',
   semanticModelQwen3_06B: 'Qwen3 0.6B (General & Chinese · ~625 MB · Default)',
   semanticModelQwen3_06BDesc:
-    'Alibaba embedding model (1024 dim, 32K context). Strong Chinese semantic comprehension and long-context matching. Good default for Chinese-focused libraries.',
+    'Alibaba embedding model (1024 dim, 32K context). Chinese semantic comprehension and long-context matching. Default for Chinese-focused libraries.',
   semanticSourceHfMirror: 'HF-Mirror (hf-mirror.com)',
   semanticSourceHuggingFace: 'Hugging Face (huggingface.co)',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
@@ -1032,7 +1036,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentModePro: '精准解析',
   allowDocumentUpload: '向 MinerU 发送文档',
   allowDocumentUploadHint:
-    '允许把你明确提交的本地 PDF 附件或公开 PDF URL 发送给 MinerU。开启只放开部署闸门，不启动任务，也不授权任何文档；关闭后已有有效产物仍可读取。',
+    '允许把你提交的本地 PDF 附件或公开 PDF URL 发送给 MinerU。关闭后已有有效产物仍可读取。',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
     '精准解析 API 的访问凭据。每个 Token 有效期为 3 个月，可在 MinerU 官网（mineru.net）创建。',
@@ -1045,25 +1049,24 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentTokenMissingTag: '需要 Token',
   enrichmentTokenMissingTitle: '精准解析模式需要 MinerU API Token',
   enrichmentTokenMissingDesc:
-    '当前选择了「精准解析」模式，但尚未配置访问凭据。未配置 Token 时发起解析将报错中断。请前往 MinerU 官网注册并创建 Token 填入下方（每日免费 5000 份）；若无需公式与复杂排版解析，可切换为免 Token 的「Agent 轻量解析」。',
+    '已选择「精准解析」但未配置访问凭据，解析将失败直至配置 Token。在 MinerU 官网注册并创建 Token 后填入下方（每日免费 5000 份），或切换为免 Token 的「Agent 轻量解析」。',
   enrichmentTokenVisitMineru: '前往 MinerU 官网 (mineru.net) 获取 Token ↗',
   groupEnrichmentOutput: '输出与数据说明',
   groupEnrichmentOutputDesc:
-    '已启用文档解析组件，解析时本地附件与 URL PDF 将发送至 MinerU 进行处理。解析后的 Markdown 产物保存于下方本地目录。',
+    '文档解析组件已启用。本地附件与 URL PDF 发送至 MinerU 解析，Markdown 产物保存在下方本地目录。',
   enrichmentOutputDir: '解析文件目录',
   enrichmentOutputDirHint:
     '解析后 Markdown 文件的绝对目录。留空使用默认位置；「恢复默认」可清除自定义路径。',
   enrichmentOutputDirDefault: '默认（~/.dsh/zotero-parsed）',
   enrichmentOutputDirInvalid: '请填写绝对目录路径（或以 ~/ 开头），留空表示使用默认位置。',
   groupSemanticRanking: '本地模型语义检索',
-  groupSemanticRankingDesc: '使用本地向量嵌入模型增强文献片段检索，模型需手动下载后启用。',
+  groupSemanticRankingDesc: '使用本地向量嵌入模型做文献片段检索，模型需手动下载后启用。',
   enableSemanticSearch: '启用本地语义检索',
-  enableSemanticSearchHint:
-    '启用且本地模型就绪后，检索链路将融合 BM25 词汇重合与向量语义相似度（RRF 算法），有效召回概念转述或同义文献。',
+  enableSemanticSearchHint: '本地模型就绪后，检索用 RRF 融合 BM25 词汇匹配与向量语义相似度。',
   semanticModel: '本地嵌入模型',
   semanticModelHint: '根据文献语言构成和机器内存选择合适规格，模型下载后在本地运行。',
   semanticDownloadSource: '下载渠道 / 镜像源',
-  semanticDownloadSourceHint: '模型资源下载渠道。国内推荐使用 HF-Mirror 镜像站直连加速。',
+  semanticDownloadSourceHint: '模型资源下载渠道。国内使用 HF-Mirror 镜像站。',
   semanticModelDir: '模型存放目录',
   semanticModelDirHint: '保存下载 ONNX 模型的绝对目录。留空表示使用默认目录（~/.dsh/models）。',
   semanticModelDirDefault: '默认（~/.dsh/models）',
@@ -1072,6 +1075,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelStatusNotDownloaded: '未下载',
   semanticModelStatusDownloading: '下载中',
   semanticModelStatusFailed: '下载失败',
+  semanticModelStatusChecking: '正在校验模型包…',
+  semanticModelStatusCancelling: '正在取消下载…',
+  semanticModelBundleRepairHint:
+    '模型包缺失或损坏。可用「下载模型」获取、「重新下载」替换，或用「校验模型」检查磁盘上已有的文件；语义检索不会被自动关闭。',
   semanticModelVerifyAction: '校验模型',
   semanticModelDownloadAction: '下载模型',
   semanticModelRedownloadAction: '重新下载',
@@ -1085,45 +1092,45 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelNotReadyWarningTag: '需要下载模型',
   semanticModelNotReadyWarningTitle: '已开启本地语义检索，但所选模型尚未下载',
   semanticModelNotReadyWarningDesc:
-    '在模型下载完成前，系统检索将保持使用 BM25 词汇检索。请在下方选择适合您设备配置的模型，并点击「下载模型」完成准备。',
+    '已开启语义检索但模型缺失或损坏时，读取以 ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE 失败，不回退到 BM25。在下方选择适合设备的模型并点击「下载模型」，或关闭语义检索改用 BM25。',
   semanticModelDownloadingNotice: '模型正在下载中，下载完成后本地语义检索将自动生效。',
   semanticModelNotDownloadedWarningNotice: '已开启本地语义检索，请下载模型以生效。',
   semanticModelBalanced: '通用平衡 (balanced · Qwen3-0.6B · 默认)',
   semanticModelBalancedDesc:
-    '通用平衡档位（当前基于 Qwen3-Embedding-0.6B 开源模型）。1024 维，32K 上下文。中文语义匹配和长文本理解较好，资源消耗适中，适合作为中文为主的文库默认选型。',
+    '通用档位（当前基于 Qwen3-Embedding-0.6B 开源模型）。1024 维，32K 上下文。中文语义匹配与长文本理解，资源消耗适中。中文为主文库的默认档位。',
   semanticModelLightweight: '极速轻量 (lightweight · Granite-97M)',
   semanticModelLightweightDesc:
-    '极致轻量档位（当前基于 IBM Granite 97M ModernBERT）。384 维，32K 上下文。内存占用约 200MB，CPU 推理耗时约 15ms。适合低配设备或对大量文献摘要进行批量快速编码。',
+    '轻量档位（当前基于 IBM Granite 97M ModernBERT）。384 维，32K 上下文。内存占用约 200MB，CPU 推理耗时约 15ms。面向低配设备或文献摘要批量编码。',
   semanticModelBilingual: '中英双语 (bilingual · KaLM-0.5B)',
   semanticModelBilingualDesc:
-    '中英双语档位（当前基于 KaLM-Embedding-V2.5 0.5B）。896 维，32K 上下文。专为中英双语和学术指令微调，适合中英文混杂的科研论文库。',
+    '中英双语档位（当前基于 KaLM-Embedding-V2.5 0.5B）。896 维，32K 上下文。面向中英双语与学术指令微调，用于中英文混杂的科研论文库。',
   semanticModelEnglish: '英文长文 (english · Nomic-137M)',
   semanticModelEnglishDesc:
-    '英文长文与代码档位（当前基于 Nomic Embed 137M v1.5）。768 维，8K 上下文。支持 Matryoshka 维度裁剪。适合纯英文文献、学术论文或代码片段检索，中文理解相对较弱。',
+    '英文长文与代码档位（当前基于 Nomic Embed 137M v1.5）。768 维，8K 上下文。支持 Matryoshka 维度裁剪。用于英文文献、学术论文或代码片段检索，中文理解较弱。',
   semanticModelHybrid: '多路混合 (hybrid · BGE-M3)',
   semanticModelHybridDesc:
-    '多向量与混合检索档位（当前基于智源 BGE-M3）。1024 维，8K 上下文。在论文正文段落与跨语言比对上更稳定，适合检索长篇综述与多语种文献。',
+    '多向量与混合检索档位（当前基于智源 BGE-M3）。1024 维，8K 上下文。用于论文正文段落与跨语言比对，含长篇综述与多语种文献。',
   semanticModelAcademic: '经典学术 (academic · GTE-Base)',
   semanticModelAcademicDesc:
-    '经典学术多语言档位（当前基于阿里通义 GTE-Base）。768 维，8K 上下文。覆盖 75 种以上语言，适合收录多国语言文献的混合文库，各语言检索表现平均。',
+    '学术多语言档位（当前基于阿里通义 GTE-Base）。768 维，8K 上下文。覆盖 75 种以上语言，各语言检索表现平均，用于多国语言文献的混合文库。',
   semanticModelGranite_97M: 'Granite 97M (轻量快速 · ~123 MB)',
   semanticModelGranite_97MDesc:
-    'IBM 发布的轻量模型（384 维，32K 上下文）。内存占用约 200MB，CPU 推理耗时约 15ms。适合低配设备或对大量文献摘要进行批量快速编码。',
+    'IBM 发布的轻量模型（384 维，32K 上下文）。内存占用约 200MB，CPU 推理耗时约 15ms。面向低配设备或文献摘要批量编码。',
   semanticModelNomic_137M: 'Nomic Embed 137M (英文长文 · ~141 MB)',
   semanticModelNomic_137MDesc:
-    'Nomic 开发的英文与代码模型（768 维，8K 上下文）。支持 Matryoshka 维度裁剪。适合纯英文文献、学术论文或代码片段检索，中文理解相对较弱。',
+    'Nomic 开发的英文与代码模型（768 维，8K 上下文）。支持 Matryoshka 维度裁剪。用于英文文献、学术论文或代码片段检索，中文理解较弱。',
   semanticModelGteBase: 'GTE Base (多语平衡 · ~357 MB)',
   semanticModelGteBaseDesc:
-    '阿里研发的多语言模型（768 维，8K 上下文）。覆盖 75 种以上语言，适合收录多国语言文献的混合文库，各语言检索表现平均。',
+    '阿里研发的多语言模型（768 维，8K 上下文）。覆盖 75 种以上语言，各语言检索表现平均，用于多国语言文献的混合文库。',
   semanticModelKalm_05B: 'KaLM 0.5B (中英双语 · ~574 MB)',
   semanticModelKalm_05BDesc:
-    '专为中英双语和学术指令微调的模型（896 维，32K 上下文）。适合中英文混杂的科研论文库，能较好理解包含特定查询意图的检索词。',
+    '面向中英双语与学术指令微调的模型（896 维，32K 上下文）。用于中英文混杂的科研论文库，理解含特定查询意图的检索词。',
   semanticModelBgeM3: 'BGE-M3 (多语长篇 · ~585 MB)',
   semanticModelBgeM3Desc:
-    '智源研发的多语言长文本模型（1024 维，8K 上下文）。在论文正文段落与跨语言比对上更稳定，适合检索长篇综述与多语种文献。',
+    '智源研发的多语言长文本模型（1024 维，8K 上下文）。用于论文正文段落与跨语言比对，含长篇综述与多语种文献。',
   semanticModelQwen3_06B: 'Qwen3 0.6B (中文与通用 · ~625 MB · 默认)',
   semanticModelQwen3_06BDesc:
-    '阿里研发的新一代嵌入模型（1024 维，32K 上下文）。中文语义匹配和长文本理解较好，资源消耗适中，适合作为中文为主的文库默认选型。',
+    '阿里研发的嵌入模型（1024 维，32K 上下文）。中文语义匹配与长文本理解，资源消耗适中。中文为主文库的默认档位。',
   semanticSourceHfMirror: 'HF-Mirror 国内镜像（推荐）',
   semanticSourceHuggingFace: 'Hugging Face 官方直连',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',

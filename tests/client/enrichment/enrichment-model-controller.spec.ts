@@ -69,27 +69,15 @@ function controllerOf(model: EnrichmentModelPort) {
 }
 
 describe('EnrichmentFormController model operations', () => {
-  it('re-checks status when the model or directory field is edited or reset', async () => {
+  it('does not send a status RPC on a draft keystroke', async () => {
     const port = modelPortOf()
     const { face } = controllerOf(port)
     face.edit('semanticModel', 'bilingual')
-    await vi.waitFor(() =>
-      expect(port.semanticModelStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'bilingual' }),
-      ),
-    )
     face.edit('semanticModelDir', '/custom/models')
-    await vi.waitFor(() =>
-      expect(port.semanticModelStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ modelDir: '/custom/models' }),
-      ),
-    )
     face.resetField('semanticModelDir')
-    await vi.waitFor(() =>
-      expect(port.semanticModelStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ modelDir: '' }),
-      ),
-    )
+    // Editing a draft is a form-validation fact only; no wire call fires from
+    // the keystrokes themselves.
+    expect(port.semanticModelStatus).not.toHaveBeenCalled()
   })
 
   it('is a no-op without a model port, without throwing', async () => {
@@ -177,11 +165,14 @@ describe('EnrichmentFormController model operations', () => {
     face.edit('semanticDownloadSource', 'huggingface')
     face.edit('semanticModelDir', '/custom/models')
     await face.downloadModel()
-    expect(port.downloadSemanticModel).toHaveBeenCalledWith({
-      model: 'balanced',
-      source: 'huggingface',
-      modelDir: '/custom/models',
-    })
+    expect(port.downloadSemanticModel).toHaveBeenCalledWith(
+      {
+        model: 'balanced',
+        source: 'huggingface',
+        modelDir: '/custom/models',
+      },
+      expect.any(AbortSignal),
+    )
   })
 
   it('sends force only when redownload is asked for', async () => {
@@ -190,10 +181,12 @@ describe('EnrichmentFormController model operations', () => {
     await face.downloadModel()
     expect(port.downloadSemanticModel).toHaveBeenLastCalledWith(
       expect.not.objectContaining({ force: true }),
+      expect.any(AbortSignal),
     )
     await face.downloadModel(true)
     expect(port.downloadSemanticModel).toHaveBeenLastCalledWith(
       expect.objectContaining({ force: true }),
+      expect.any(AbortSignal),
     )
   })
 
@@ -202,10 +195,13 @@ describe('EnrichmentFormController model operations', () => {
     const { face } = controllerOf(port)
     face.edit('semanticModelDir', '/custom/models')
     await face.cancelModelDownload()
-    expect(port.cancelSemanticModelDownload).toHaveBeenCalledWith({
-      model: 'balanced',
-      modelDir: '/custom/models',
-    })
+    expect(port.cancelSemanticModelDownload).toHaveBeenCalledWith(
+      {
+        model: 'balanced',
+        modelDir: '/custom/models',
+      },
+      expect.any(AbortSignal),
+    )
   })
 
   it('verify adopts the returned status, ready or not', async () => {

@@ -53,7 +53,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 // resolved attachments in the right sidebar.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ModelPortFailure, ModelPortResult } from './enrichment-form-controller.ts'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
@@ -934,45 +933,20 @@ function registerUi(ctx: ClientContext): void {
     describe: (refs) => ctx.remote.credentials.describe([...refs]),
     set: (ref, value) => ctx.remote.credentials.set(ref, value),
   }
-  // The model endpoints answer from the enrichment component, so a host whose
-  // row is off (or an older host without them) returns a failure the form
-  // renders as "component not available" — never a fabricated success.
-  // The one-line failure for "the enrichment component's endpoints are not
-  // answering": the same fact a wire call would produce with the row off,
-  // carried in the port's own minimal shape.
-  const MODEL_ENDPOINTS_UNAVAILABLE = (): ModelPortFailure => ({
-    message: 'The enrichment component is not composed; model operations are unavailable.',
-  })
-  const fromWire = <T>(result: RemoteResult<T>): ModelPortResult<T> =>
-    result.ok
-      ? { ok: true, value: result.value }
-      : { ok: false, error: { message: result.error.message } }
-
+  // The model endpoints answer from the enrichment component. A wire failure
+  // keeps its stable code and structured details; only the exact
+  // `gateway/service-unavailable` code means the component is absent. Every
+  // other failure (permission, carrier, directory, hash, lock contention)
+  // shows its real reason and stays recoverable.
   const modelPort: EnrichmentModelPort = {
-    semanticModelStatus: async (request) => {
-      if (typeof ctx.remote.zotero.semanticModelStatus !== 'function') {
-        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
-      }
-      return fromWire(await ctx.remote.zotero.semanticModelStatus(request))
-    },
-    downloadSemanticModel: async (request) => {
-      if (typeof ctx.remote.zotero.downloadSemanticModel !== 'function') {
-        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
-      }
-      return fromWire(await ctx.remote.zotero.downloadSemanticModel(request))
-    },
-    cancelSemanticModelDownload: async (request) => {
-      if (typeof ctx.remote.zotero.cancelSemanticModelDownload !== 'function') {
-        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
-      }
-      return fromWire(await ctx.remote.zotero.cancelSemanticModelDownload(request))
-    },
-    verifySemanticModel: async (request) => {
-      if (typeof ctx.remote.zotero.verifySemanticModel !== 'function') {
-        return { ok: false, error: MODEL_ENDPOINTS_UNAVAILABLE() }
-      }
-      return fromWire(await ctx.remote.zotero.verifySemanticModel(request))
-    },
+    semanticModelStatus: async (request, signal) =>
+      await ctx.remote.zotero.semanticModelStatus(request, signal),
+    downloadSemanticModel: async (request, signal) =>
+      await ctx.remote.zotero.downloadSemanticModel(request, signal),
+    cancelSemanticModelDownload: async (request, signal) =>
+      await ctx.remote.zotero.cancelSemanticModelDownload(request, signal),
+    verifySemanticModel: async (request, signal) =>
+      await ctx.remote.zotero.verifySemanticModel(request, signal),
   }
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
   const enrichmentCard = new EnrichmentFormController(enrichmentForm, credentialPort, modelPort)

@@ -3,14 +3,21 @@
  * (`dsh-zotero/enrichment` row): the API mode, the MinerU token credential
  * reference and value, the data-egress authorization, and the output directory.
  *
- * The mode switch is deliberately independent of the token: `mode` is its own
- * staged field, and the token reference/secret are separate fields. A user who
- * configured a token can still leave or return the mode to `free`, and the host
- * reads the token only in `pro` mode.
+ * The mode switch is independent of the token: `mode` is its own staged field,
+ * and the token reference/secret are separate fields. A user who configured a
+ * token can still leave or return the mode to `free`, and the host reads the
+ * token only in `pro` mode.
  *
  * The token value never enters settings. `mineruTokenRef` holds a credential
  * reference name; the value is written through `ctx.remote.credentials.set`
  * under the committed reference, exactly as the scholarly keys are.
+ *
+ * The model half is a small state machine. Every operation is bound to one
+ * `{model, normalizedDir, generation}` observation target: an edit, reset,
+ * discard, save, or external settings update bumps the generation so an
+ * in-flight result for the old target can never publish. The only fact that
+ * means "the component is absent" is the exact `gateway/service-unavailable`
+ * code; every other failure keeps its own code/details and stays recoverable.
  * @module dsh-zotero/client/enrichment-form-controller
  */
 
@@ -47,8 +54,8 @@ import {
   ENRICHMENT_DEFAULTS,
 } from '../enrichment-preferences.ts'
 import {
-  DEFAULT_SEMANTIC_MODEL,
   isSemanticModelKey,
+  isSemanticDownloadSource,
   SEMANTIC_DOWNLOAD_SOURCES,
   SEMANTIC_MODEL_KEYS,
 } from '../enrichment-model-catalog.ts'
@@ -61,6 +68,9 @@ import {
 export const ENRICHMENT_SECRET_KEY = ENRICHMENT_KEY_FIELD_PAIRS[0][0]
 export const ENRICHMENT_REFERENCE_FIELD = ENRICHMENT_KEY_FIELD_PAIRS[0][1]
 
+/** Only this exact wire code means the enrichment component is not composed. */
+export const COMPONENT_ABSENT_CODE = 'gateway/service-unavailable'
+
 /** The client-side credential operations the form consumes. */
 export interface EnrichmentCredentialPort {
   describe(
@@ -70,41 +80,73 @@ export interface EnrichmentCredentialPort {
 }
 
 /**
- * The model port's failure: one human line. The port deliberately does not
- * transport the wire's `RemoteError` class — the browser half only ever reads
- * the message — so a host without the component is expressible without
- * dragging harness classes into the client bundle.
+ * The model port returns the full `RemoteResult`. Its error branch is the
+ * Gateway's `RemoteError`: a stable `code`, typed `details`, and a diagnostic
+ * `message`. The browser keeps all three, so a permission, carrier, offline,
+ * directory, hash, or lock-contention failure shows its real reason instead of
+ * collapsing into a blanket "component unavailable". No message-only adapter,
+ * no legacy missing-method compat: a host without the component answers with
+ * the exact `gateway/service-unavailable` carrier code. The optional signal is
+ * a client-side observation carrier only: aborting it stops reading a stale
+ * reply, never a host-owned download job.
  */
-export interface ModelPortFailure {
-  readonly message: string
-}
-
-export type ModelPortResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: ModelPortFailure }
-
-/** The client-side model operations the form consumes. */
 export interface EnrichmentModelPort {
   semanticModelStatus(
     request: ZoteroSemanticModelStatusRequestView,
-  ): Promise<ModelPortResult<ZoteroSemanticModelStatusResultView>>
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
   downloadSemanticModel(
     request: ZoteroSemanticModelDownloadRequestView,
-  ): Promise<ModelPortResult<ZoteroSemanticModelDownloadResultView>>
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroSemanticModelDownloadResultView>>
   cancelSemanticModelDownload(
     request: ZoteroSemanticModelCancelRequestView,
-  ): Promise<ModelPortResult<ZoteroSemanticModelCancelResultView>>
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
   verifySemanticModel(
     request: ZoteroSemanticModelVerifyRequestView,
-  ): Promise<ModelPortResult<ZoteroSemanticModelStatusResultView>>
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
+}
+
+/** A recoverable model failure, preserving the wire code and structured details. */
+export interface SemanticModelFailure {
+  readonly code: string
+  readonly message: string
+  readonly details?: unknown
+}
+
+/** A transient user-initiated operation; a status refresh must not clear it. */
+export type SemanticModelPhase = 'idle' | 'checking' | 'cancelling'
+
+/** One valid, trimmed model-operation target parsed from the staged drafts. */
+export interface SemanticModelTarget {
+  readonly model: string
+  readonly normalizedDir: string
+  readonly source: string
 }
 
 /**
- * The wire status view minus its `model` field, which the form already knows.
- * `unavailable` is one specific fact: the enrichment component's endpoints did
- * not answer (the row is off or an older host), so no model operation is
- * possible — never to be confused with "not downloaded".
+ * The single field parser: trim and validate every staged model draft at once.
+ * An invalid draft (a typo, a half-typed directory, a relative path) is a
+ * form-validation fact only — the caller sends no RPC, creates no directory,
+ * and never marks the component unavailable.
  */
+export function parseSemanticModelTarget(
+  modelText: string,
+  sourceText: string,
+  dirText: string,
+): SemanticModelTarget | undefined {
+  const model = modelText.trim()
+  const source = sourceText.trim()
+  const normalizedDir = dirText.trim()
+  if (!isSemanticModelKey(model)) return undefined
+  if (!isSemanticDownloadSource(source)) return undefined
+  if (normalizedDir !== '' && !isEnrichmentOutputDirPath(normalizedDir)) return undefined
+  return { model, normalizedDir, source }
+}
+
+/** The wire status view minus its `model` field, which the form already knows. */
 export type SemanticModelState = Omit<ZoteroSemanticModelStatusResultView, 'model'>
 
 export const SEMANTIC_MODEL_UNAVAILABLE: SemanticModelState = {
@@ -115,6 +157,36 @@ export const SEMANTIC_MODEL_UNAVAILABLE: SemanticModelState = {
   totalBytes: 0,
   percent: 0,
   error: 'unavailable',
+}
+
+function blankModelState(): SemanticModelState {
+  return {
+    ready: false,
+    downloading: false,
+    path: '',
+    downloadedBytes: 0,
+    totalBytes: 0,
+    percent: 0,
+  }
+}
+
+/** Project any thrown value or RemoteError to the display failure shape. */
+function failureOf(error: unknown): SemanticModelFailure {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    const typed = error as { code: string; message: string; details?: unknown }
+    return { code: typed.code, message: typed.message, details: typed.details }
+  }
+  return {
+    code: 'client/model-operation-failed',
+    message: error instanceof Error ? error.message : String(error),
+  }
 }
 
 interface EnrichmentSecretFieldState {
@@ -136,8 +208,12 @@ export interface EnrichmentCardState extends SettingsFormShell {
   readonly semanticDownloadSource: SettingsFieldState
   readonly semanticModelDir: SettingsFieldState
   readonly semanticModelState: SemanticModelState
-  /** True when the model endpoints did not answer; the section renders a note. */
+  /** True only when the exact `gateway/service-unavailable` code answered. */
   readonly semanticModelUnavailable: boolean
+  /** A recoverable failure's real reason; undefined while unavailable. */
+  readonly semanticModelFailure?: SemanticModelFailure
+  /** A transient verify/cancel operation a status refresh must not overwrite. */
+  readonly semanticModelPhase: SemanticModelPhase
 }
 
 export interface EnrichmentCardFace extends SettingsFormActions {
@@ -148,6 +224,19 @@ export interface EnrichmentCardFace extends SettingsFormActions {
   cancelModelDownload(): Promise<void>
   verifyModel(): Promise<void>
   checkModelStatus(): Promise<void>
+}
+
+const MODEL_TARGET_FIELDS: readonly string[] = [
+  'semanticModel',
+  'semanticDownloadSource',
+  'semanticModelDir',
+]
+
+/** One in-flight operation's identity: its target plus the accepting generation. */
+interface ModelBinding {
+  readonly model: string
+  readonly normalizedDir: string
+  readonly generation: number
 }
 
 function modeFieldSpec(): SettingsFieldSpec {
@@ -229,17 +318,18 @@ export class EnrichmentFormController {
   private credentialReadSequence = 0
   private credentialReadQueued = false
   private referenceKey = ''
+  private committedSignature: string | undefined
   private disposed = false
-  private modelState: SemanticModelState = {
-    ready: false,
-    downloading: false,
-    path: '',
-    downloadedBytes: 0,
-    totalBytes: 0,
-    percent: 0,
-  }
+
+  // Model state machine.
+  private modelState: SemanticModelState = blankModelState()
   private modelUnavailable = false
+  private modelFailure: SemanticModelFailure | undefined
+  private semanticModelPhase: SemanticModelPhase = 'idle'
+  private generation = 0
   private modelStatusSequence = 0
+  private readonly signals = new Set<AbortController>()
+  private refreshScheduled = false
 
   constructor(
     private readonly form: ConfigForm<Record<string, unknown>>,
@@ -268,6 +358,87 @@ export class EnrichmentFormController {
     return ENRICHMENT_CREDENTIAL_REFERENCE.test(raw) ? 'ready' : 'invalid'
   }
 
+  /** Signature of the *committed* target fields; staged drafts never change it. */
+  private committedSignatureNow(): string {
+    const value = this.form.getSnapshot().value
+    const read = (key: string): string =>
+      typeof value?.[key] === 'string' ? (value[key] as string) : ''
+    return [read('semanticModel'), read('semanticModelDir'), read('semanticDownloadSource')].join(
+      '\u0000',
+    )
+  }
+
+  private parseTarget(): SemanticModelTarget | undefined {
+    return parseSemanticModelTarget(
+      this.model.field('semanticModel').text,
+      this.model.field('semanticDownloadSource').text,
+      this.model.field('semanticModelDir').text,
+    )
+  }
+
+  private bind(target: SemanticModelTarget): ModelBinding {
+    return {
+      model: target.model,
+      normalizedDir: target.normalizedDir,
+      generation: this.generation,
+    }
+  }
+
+  /** A late result may publish only for the still-current target and generation. */
+  private current(binding: ModelBinding): boolean {
+    if (this.disposed || binding.generation !== this.generation) return false
+    const target = this.parseTarget()
+    return (
+      target !== undefined &&
+      target.model === binding.model &&
+      target.normalizedDir === binding.normalizedDir
+    )
+  }
+
+  private acquireSignal(): AbortController {
+    const controller = new AbortController()
+    this.signals.add(controller)
+    return controller
+  }
+
+  private releaseSignal(controller: AbortController): void {
+    this.signals.delete(controller)
+  }
+
+  /** Invalidate stale observation only; never cancel a host-owned download job. */
+  private invalidate(): void {
+    this.generation++
+    // Abort only the observation carriers: the host owns the actual download
+    // task, so switching the UI drops our read, not another directory's job.
+    for (const controller of this.signals) controller.abort()
+    this.signals.clear()
+    this.modelState = blankModelState()
+    this.modelFailure = undefined
+    this.semanticModelPhase = 'idle'
+    // modelUnavailable is cleared only by a successful status check, so an
+    // invalid draft cannot clear it.
+  }
+
+  /** Re-compare the target and immediately invalidate stale state. */
+  private reconcileTarget(): void {
+    if (this.disposed) return
+    this.invalidate()
+    this.publish()
+    this.scheduleRefresh()
+  }
+
+  /** Coalesce rapid target changes into one serialized status refresh. */
+  private scheduleRefresh(): void {
+    if (this.refreshScheduled || this.disposed) return
+    this.refreshScheduled = true
+    queueMicrotask(() => {
+      this.refreshScheduled = false
+      if (this.disposed) return
+      const target = this.parseTarget()
+      if (target !== undefined) void this.runStatusCheck(target)
+    })
+  }
+
   private project(): EnrichmentCardState {
     const shell = this.model.shell()
     const ref = this.committedRef()
@@ -284,6 +455,8 @@ export class EnrichmentFormController {
       semanticModelDir: this.model.field('semanticModelDir'),
       semanticModelState: this.modelState,
       semanticModelUnavailable: this.modelUnavailable,
+      semanticModelFailure: this.modelFailure,
+      semanticModelPhase: this.semanticModelPhase,
       mineruToken: {
         text: this.model.field(ENRICHMENT_SECRET_KEY).text,
         configured:
@@ -307,19 +480,24 @@ export class EnrichmentFormController {
       edit: (field, text) => {
         actions.edit(field, text)
         if (field === ENRICHMENT_REFERENCE_FIELD) actions.edit(ENRICHMENT_SECRET_KEY, '')
-        if (field === 'semanticModel' || field === 'semanticModelDir') {
-          void this.checkModelStatus()
-        }
+        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget()
       },
       resetField: (field) => {
         actions.resetField(field)
         if (field === ENRICHMENT_REFERENCE_FIELD) actions.edit(ENRICHMENT_SECRET_KEY, '')
-        if (field === 'semanticModel' || field === 'semanticModelDir') {
-          void this.checkModelStatus()
-        }
+        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget()
       },
-      save: actions.save,
-      discard: actions.discard,
+      save: () => {
+        const settled = actions.save()
+        // A save acceptance re-compares the target on settlement; the form's
+        // publish event also reconciles external/late updates via onFormPublished.
+        void Promise.resolve(settled).then(() => this.reconcileTarget())
+        return settled
+      },
+      discard: () => {
+        actions.discard()
+        this.reconcileTarget()
+      },
       downloadModel: (force?: boolean) => this.downloadModel(force),
       cancelModelDownload: () => this.cancelModelDownload(),
       verifyModel: () => this.verifyModel(),
@@ -327,104 +505,178 @@ export class EnrichmentFormController {
     }
   }
 
+  /** The one-shot explicit check: mount, recovery, download/cancel follow-up. */
   async checkModelStatus(): Promise<void> {
-    if (this.disposed || this.modelPort === undefined) return
-    const model = this.model.field('semanticModel').text || DEFAULT_SEMANTIC_MODEL
-    // A staged but unknown spelling is a form-validation fact, not a wire
-    // question: asking the host would render the component unavailable for
-    // what is only a typo.
-    if (!isSemanticModelKey(model)) return
-    const modelDir = this.model.field('semanticModelDir').text
+    const target = this.parseTarget()
+    if (target === undefined || this.modelPort === undefined || this.disposed) return
+    await this.runStatusCheck(target)
+  }
+
+  private async runStatusCheck(target: SemanticModelTarget): Promise<void> {
+    const port = this.modelPort
+    if (port === undefined || this.disposed) return
+    const binding = this.bind(target)
     const sequence = ++this.modelStatusSequence
-    const res = await this.modelPort.semanticModelStatus({ model, modelDir })
-    if (this.disposed || sequence !== this.modelStatusSequence) return
-    if (!res.ok) {
-      // A missing enrichment service (row off) is a fact the section renders,
-      // not an error to swallow silently.
-      this.modelUnavailable = true
-      this.publish()
+    const controller = this.acquireSignal()
+    let result: RemoteResult<ZoteroSemanticModelStatusResultView>
+    try {
+      result = await port.semanticModelStatus(
+        { model: binding.model, modelDir: binding.normalizedDir },
+        controller.signal,
+      )
+    } catch (error) {
+      // A late exception checks disposed/generation before it can publish.
+      if (this.current(binding) && sequence === this.modelStatusSequence) this.applyFailure(error)
+      return
+    } finally {
+      this.releaseSignal(controller)
+    }
+    if (!this.current(binding) || sequence !== this.modelStatusSequence) return
+    if (!result.ok) {
+      this.applyFailure(result.error)
       return
     }
+    this.applyStatus(result.value)
+  }
+
+  private operationFailure(binding: ModelBinding, error: unknown): void {
+    if (this.current(binding)) this.applyFailure(error)
+  }
+
+  /** A status refresh never clears a transient verify/cancel phase. */
+  private applyStatus(value: ZoteroSemanticModelStatusResultView): void {
     this.modelUnavailable = false
+    this.modelFailure = undefined
     this.modelState = {
-      ready: res.value.ready,
-      downloading: res.value.downloading,
-      path: res.value.path,
-      downloadedBytes: res.value.downloadedBytes,
-      totalBytes: res.value.totalBytes,
-      percent: res.value.percent,
-      currentFile: res.value.currentFile,
-      error: res.value.error,
+      ready: value.ready,
+      downloading: value.downloading,
+      path: value.path,
+      downloadedBytes: value.downloadedBytes,
+      totalBytes: value.totalBytes,
+      percent: value.percent,
+      currentFile: value.currentFile,
+      error: value.error,
     }
+    this.publish()
+  }
+
+  private applyFailure(error: unknown): void {
+    const failure = failureOf(error)
+    if (failure.code === COMPONENT_ABSENT_CODE) {
+      this.modelUnavailable = true
+      this.modelFailure = undefined
+      this.modelState = blankModelState()
+    } else {
+      // Permission, carrier, offline, directory, hash and lock-contention
+      // failures keep their real reason and stay recoverable: no gate closes.
+      this.modelUnavailable = false
+      this.modelFailure = failure
+      this.modelState = { ...this.modelState, downloading: false, error: failure.message }
+    }
+    this.publish()
+  }
+
+  private clearPhase(binding: ModelBinding): void {
+    if (!this.current(binding)) return
+    this.semanticModelPhase = 'idle'
     this.publish()
   }
 
   async downloadModel(force = false): Promise<void> {
     const port = this.modelPort
-    if (this.disposed || port === undefined || this.modelUnavailable) return
-    const model = this.model.field('semanticModel').text || DEFAULT_SEMANTIC_MODEL
-    const source = this.model.field('semanticDownloadSource').text
-    const modelDir = this.model.field('semanticModelDir').text
-    this.modelState = {
-      ...this.modelState,
-      downloading: true,
-      error: undefined,
-    }
+    if (port === undefined || this.disposed || this.modelUnavailable) return
+    const target = this.parseTarget()
+    if (target === undefined) return
+    const binding = this.bind(target)
+    this.modelFailure = undefined
+    this.modelState = { ...this.modelState, downloading: true, error: undefined }
     this.publish()
+    const controller = this.acquireSignal()
+    let result: RemoteResult<ZoteroSemanticModelDownloadResultView>
     try {
-      const res = await port.downloadSemanticModel({
-        model,
-        ...(source === '' ? {} : { source }),
-        modelDir,
-        ...(force ? { force: true } : {}),
-      })
-      if (!res.ok) {
-        this.modelState = {
-          ...this.modelState,
-          downloading: false,
-          error: res.error.message,
-        }
-        this.publish()
-        return
-      }
-      await this.checkModelStatus()
-    } catch (err) {
-      this.modelState = {
-        ...this.modelState,
-        downloading: false,
-        error: err instanceof Error ? err.message : String(err),
-      }
-      this.publish()
+      result = await port.downloadSemanticModel(
+        {
+          model: binding.model,
+          ...(target.source === '' ? {} : { source: target.source }),
+          modelDir: binding.normalizedDir,
+          ...(force ? { force: true } : {}),
+        },
+        controller.signal,
+      )
+    } catch (error) {
+      this.operationFailure(binding, error)
+      return
+    } finally {
+      this.releaseSignal(controller)
     }
+    if (!result.ok) {
+      this.operationFailure(binding, result.error)
+      return
+    }
+    if (!this.current(binding)) return
+    await this.runStatusCheck(this.parseTarget() ?? target)
   }
 
   async verifyModel(): Promise<void> {
     const port = this.modelPort
-    if (this.disposed || port === undefined || this.modelUnavailable) return
-    const model = this.model.field('semanticModel').text || DEFAULT_SEMANTIC_MODEL
-    const modelDir = this.model.field('semanticModelDir').text
-    const res = await port.verifySemanticModel({ model, modelDir })
-    if (this.disposed || !res.ok) return
-    this.modelState = {
-      ready: res.value.ready,
-      downloading: res.value.downloading,
-      path: res.value.path,
-      downloadedBytes: res.value.downloadedBytes,
-      totalBytes: res.value.totalBytes,
-      percent: res.value.percent,
-      currentFile: res.value.currentFile,
-      error: res.value.error,
-    }
+    if (port === undefined || this.disposed || this.modelUnavailable) return
+    const target = this.parseTarget()
+    if (target === undefined) return
+    const binding = this.bind(target)
+    this.semanticModelPhase = 'checking'
     this.publish()
+    const controller = this.acquireSignal()
+    let result: RemoteResult<ZoteroSemanticModelStatusResultView>
+    try {
+      result = await port.verifySemanticModel(
+        { model: binding.model, modelDir: binding.normalizedDir },
+        controller.signal,
+      )
+    } catch (error) {
+      this.operationFailure(binding, error)
+      this.clearPhase(binding)
+      return
+    } finally {
+      this.releaseSignal(controller)
+    }
+    if (!result.ok) {
+      this.operationFailure(binding, result.error)
+      this.clearPhase(binding)
+      return
+    }
+    if (this.current(binding)) this.applyStatus(result.value)
+    this.clearPhase(binding)
   }
 
   async cancelModelDownload(): Promise<void> {
     const port = this.modelPort
-    if (this.disposed || port === undefined || this.modelUnavailable) return
-    const model = this.model.field('semanticModel').text || DEFAULT_SEMANTIC_MODEL
-    const modelDir = this.model.field('semanticModelDir').text
-    await port.cancelSemanticModelDownload({ model, modelDir })
-    await this.checkModelStatus()
+    if (port === undefined || this.disposed || this.modelUnavailable) return
+    const target = this.parseTarget()
+    if (target === undefined) return
+    const binding = this.bind(target)
+    this.semanticModelPhase = 'cancelling'
+    this.publish()
+    const controller = this.acquireSignal()
+    let result: RemoteResult<ZoteroSemanticModelCancelResultView>
+    try {
+      result = await port.cancelSemanticModelDownload(
+        { model: binding.model, modelDir: binding.normalizedDir },
+        controller.signal,
+      )
+    } catch (error) {
+      this.operationFailure(binding, error)
+      this.clearPhase(binding)
+      return
+    } finally {
+      this.releaseSignal(controller)
+    }
+    if (!result.ok) {
+      this.operationFailure(binding, result.error)
+      this.clearPhase(binding)
+      return
+    }
+    this.clearPhase(binding)
+    if (this.current(binding)) await this.runStatusCheck(this.parseTarget() ?? target)
   }
 
   /** Re-read the credential after the Host reports its reference changed. */
@@ -435,6 +687,8 @@ export class EnrichmentFormController {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    for (const controller of this.signals) controller.abort()
+    this.signals.clear()
     this.unsubscribe()
     this.model.dispose()
   }
@@ -451,9 +705,20 @@ export class EnrichmentFormController {
   private onFormPublished(): void {
     if (this.disposed) return
     const key = this.committedRef()
-    if (key === this.referenceKey) return
-    this.referenceKey = key
-    this.queueCredentialRead()
+    if (key !== this.referenceKey) {
+      this.referenceKey = key
+      this.queueCredentialRead()
+    }
+    const signature = this.committedSignatureNow()
+    if (this.committedSignature === undefined) {
+      // The constructor's first publish sets the baseline: no RPC, no invalidation.
+      this.committedSignature = signature
+      return
+    }
+    if (signature === this.committedSignature) return
+    // An accepted save or an external settings update re-compares the target.
+    this.committedSignature = signature
+    this.reconcileTarget()
   }
 
   private async readCredential(): Promise<void> {

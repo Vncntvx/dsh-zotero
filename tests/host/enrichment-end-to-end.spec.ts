@@ -1,8 +1,8 @@
 /**
  * Ordinary reads through the real ZoteroService consume artifacts produced by
  * an earlier explicit parse. The real artifact store and source index are
- * seeded through their public writes; the MinerU transport is the external
- * boundary and parsing is a tripwire, never a fixture-generation backdoor.
+ * seeded through their public writes. The MinerU transport is the external
+ * boundary. Parsing fails the test rather than generating fixtures.
  * @module tests/host/enrichment-end-to-end
  */
 

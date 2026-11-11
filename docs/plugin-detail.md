@@ -1,4 +1,4 @@
 - **核心组件**（`dsh-zotero`）：本机 Zotero 连接、8 个读工具与 15 个写工具（默认关闭，启用后每次写入都需在计划审查卡中确认）、文献轨迹与设置页。
 - **文献面板**（`dsh-zotero/library`）：右侧边栏标签页，覆盖全库导航（合集树、保存的搜索、我的出版物、回收站）、条目列表筛选、条目检视、复制引用（CSL 引文、BibTeX、参考文献表、BibLaTeX、RIS、CSL-JSON 与条目信息）以及经审批的受控写入。
 - **学术检索**（`dsh-zotero/scholarly`）：外部文献检索组件，默认关闭；组件挂载即授权对外部学术索引的请求。覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP，支持全文读取、引文网络、参考文献核验与保存到 Zotero。
-- **文档解析**（`dsh-zotero/enrichment`）：可选的 MinerU 解析组件，默认关闭；组件挂载即授权联系 MinerU 并发送文档进行解析。支持 Agent 轻量解析接口与需 Token 的精准解析接口，解析结果以 Markdown 落盘到可配置的本地目录，供现有读取工具使用。
+- **文档解析**（`dsh-zotero/enrichment`）：可选的文档增强组件，默认关闭；挂载提供主动 MinerU 解析、已有产物复用与本地语义排序 / 模型管理能力，不授权文档上传。普通读取通过核心只读 `FulltextEnhancer.lookup` 查询同一来源、仍有效的 Markdown；你针对一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL 提交后才发起 MinerU 解析，并需部署开关 `allowDocumentUpload`（默认关闭）及远程动作与会话访问检查。支持免 Token 的 `free` 轻量接口与需 Token 的 `pro` 精准接口，产物以 Markdown 落盘到可配置的本地目录；本地语义排序独立于 MinerU，语义开启而模型未就绪时读取以错误失败，不回退 BM25。组件不注册模型工具、不注入提示词段。

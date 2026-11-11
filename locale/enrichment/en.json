@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-zotero/enrichment",
-    "description": "Optional document-enrichment component for DeepSeek Harness: uses MinerU to turn PDFs into high-quality local Markdown. Enabling this component authorizes sending document bytes to the external MinerU service for extraction. Disabled by default."
+    "description": "Optional document-enrichment component for DeepSeek Harness: uses MinerU to turn PDFs into local Markdown. Enabling it permits sending document bytes to the external MinerU service for extraction. Disabled by default."
   }
 }

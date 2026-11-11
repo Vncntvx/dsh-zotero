@@ -167,3 +167,15 @@ Note: diagnostic records stay in the current process memory and are cleared when
 - Action: open the dsh-zotero detail page in the plugin manager → "General" tab → "Writing" group → "Revoke saved write grant", acknowledge, and confirm.
 - Effect: deletes the Zotero write key stored in the host credentials manager and clears the in-process grant. The next write opens Zotero's authorization dialog again.
 - Boundary: only this plugin's record is removed; an Always-Allow key already issued by Zotero stays valid until you discard it in Zotero's own local authorization list.
+
+## 26. Document enrichment component error codes
+
+- Symptom: an explicit parse or a semantic read returns a `ZOTERO_ENRICHMENT_*` code.
+- Cause and fix:
+  - `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`: the `allowDocumentUpload` deployment gate is at its default `false`. Mounting the component authorizes no upload; turn the gate on in settings, then submit one specific Zotero PDF attachment or one public PDF URL. Ordinary reads, PDF opening, settings saves, and service startup do not trigger parsing or upload.
+  - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`: semantic search is on but the selected model is missing, corrupted, or its local inference runtime is unavailable. The read fails with an error, without a BM25 fallback; download, repair, or verify the model, or turn semantic search off to use the complete BM25 ranker.
+  - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`: the configured MinerU token credential reference cannot be resolved in `pro` precise mode; the read fails with an error, without a free or anonymous downgrade. Check the reference name and its value in the host credentials store.
+  - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`: explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are missing; submit from a usable session and host environment.
+  - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`: an operation id was replayed with a different target or settings snapshot; resubmit with a fresh operation id.
+  - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`: respectively a MinerU task failure, an archive validation failure, input over the API limit or not a PDF, an output-directory validation failure, and a model download that failed on every mirror. A failed parse does not switch mode or present locally extracted text as a successful parse.
+    The full error-code list is in the [tool reference · error codes](tools.en.md#error-codes); upload network and authorization boundaries are in the [product model](product-model.en.md).

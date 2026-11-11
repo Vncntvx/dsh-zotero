@@ -9,7 +9,7 @@
  * @module dsh-zotero/client/EnrichmentSettingsForm
  */
 
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import {
   SegmentedControl,
   SettingsSecretField,
@@ -74,23 +74,57 @@ export function EnrichmentSettingsForm({
   const disabled = !state.writable || state.saving
   const { checkModelStatus } = actions
   const downloading = state.semanticModelState?.downloading === true
+  const available = state.semanticModelUnavailable === false && state.available === true
+  // Refresh only while a task is active on an available component. A hidden
+  // surface starts no work; visibility is re-checked on every tick and on the
+  // visibilitychange event. One in-flight read at a time keeps the cadence from
+  // overlapping itself, and the controller owns the AbortSignal per operation.
+  const inFlight = useRef(false)
+  const controllerRef = useRef<AbortController | undefined>(undefined)
+  const disposedRef = useRef(false)
 
-  // The model status belongs to this surface, not to the client fiber: one
-  // check when the form opens, and a 1.5 s cadence only while a download is
-  // in flight, cleaned up when it ends or the form unmounts.
   useEffect(() => {
-    void checkModelStatus?.()
-  }, [checkModelStatus])
-
-  useEffect(() => {
-    if (!downloading) return
-    const timer = setInterval(() => {
-      void checkModelStatus?.()
-    }, 1_500)
-    return () => {
-      clearInterval(timer)
+    disposedRef.current = false
+    const refresh = (): void => {
+      if (disposedRef.current || inFlight.current) return
+      if (document.visibilityState !== 'visible') return
+      inFlight.current = true
+      Promise.resolve(checkModelStatus?.())
+        .catch(() => {
+          // A late exception after teardown or a hidden surface is dropped; the
+          // controller itself also guards on disposed/generation.
+        })
+        .finally(() => {
+          inFlight.current = false
+        })
     }
-  }, [downloading, checkModelStatus])
+    // One check when the form opens, only when the component is available.
+    if (available) refresh()
+    if (!downloading || !available) {
+      controllerRef.current?.abort()
+      controllerRef.current = undefined
+      return
+    }
+    const controller = new AbortController()
+    controllerRef.current = controller
+    const tick = (): void => {
+      if (controller.signal.aborted) return
+      refresh()
+    }
+    const timer = setInterval(tick, 1_500)
+    const onVisibility = (): void => {
+      if (controller.signal.aborted) return
+      if (document.visibilityState === 'visible') refresh()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      disposedRef.current = true
+      controller.abort()
+      if (controllerRef.current === controller) controllerRef.current = undefined
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [checkModelStatus, downloading, available])
 
   const modeOptions: readonly SegmentedControlOption<string>[] = useMemo(
     () => [
@@ -341,19 +375,28 @@ export function EnrichmentSettingsForm({
                 <span className={fieldCss.hint}>
                   <strong>{t('semanticModelStatus')}</strong>
                 </span>
-                {state.semanticModelState?.downloading ? (
+                {state.semanticModelPhase === 'cancelling' ? (
+                  <Tag tone="info">{t('semanticModelStatusCancelling')}</Tag>
+                ) : state.semanticModelPhase === 'checking' ? (
+                  <Tag tone="info">{t('semanticModelStatusChecking')}</Tag>
+                ) : state.semanticModelState?.downloading ? (
                   <Tag tone="info">
                     {t('semanticModelStatusDownloading')} ({state.semanticModelState.percent}%)
                   </Tag>
                 ) : state.semanticModelState?.ready ? (
                   <Tag tone="success">{t('semanticModelStatusReady')}</Tag>
-                ) : state.semanticModelState?.error ? (
+                ) : state.semanticModelState?.error || state.semanticModelFailure ? (
                   <Tag tone="danger">{t('semanticModelStatusFailed')}</Tag>
                 ) : (
                   <Tag tone="neutral">{t('semanticModelStatusNotDownloaded')}</Tag>
                 )}
                 {state.semanticModelState?.downloading ? (
-                  <Button variant="ghost" size="sm" onClick={() => actions.cancelModelDownload?.()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={state.semanticModelPhase === 'cancelling'}
+                    onClick={() => actions.cancelModelDownload?.()}
+                  >
                     {t('semanticModelCancelAction')}
                   </Button>
                 ) : state.semanticModelState?.ready ? (
@@ -361,7 +404,7 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={disabled}
+                      disabled={disabled || state.semanticModelPhase === 'checking'}
                       onClick={() => actions.verifyModel?.()}
                     >
                       {t('semanticModelVerifyAction')}
@@ -373,6 +416,36 @@ export function EnrichmentSettingsForm({
                       onClick={() => actions.downloadModel?.(true)}
                     >
                       {t('semanticModelRedownloadAction')}
+                    </Button>
+                  </>
+                ) : state.semanticModelState?.error || state.semanticModelFailure ? (
+                  // A missing or corrupt bundle keeps explicit download, repair
+                  // (redownload) and verify actions; semantic search is never
+                  // auto-disabled on the user's behalf.
+                  <>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={disabled}
+                      onClick={() => actions.downloadModel?.()}
+                    >
+                      {t('semanticModelDownloadAction')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={disabled}
+                      onClick={() => actions.downloadModel?.(true)}
+                    >
+                      {t('semanticModelRedownloadAction')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={disabled || state.semanticModelPhase === 'checking'}
+                      onClick={() => actions.verifyModel?.()}
+                    >
+                      {t('semanticModelVerifyAction')}
                     </Button>
                   </>
                 ) : (
@@ -431,11 +504,24 @@ export function EnrichmentSettingsForm({
               <p className={fieldCss.hint}>{t('semanticModelUnavailable')}</p>
             )}
 
+            {state.semanticModelFailure && !state.semanticModelUnavailable && (
+              <p className={`${fieldCss.hint} ${fieldCss.statusError}`}>
+                {state.semanticModelFailure.message} ({state.semanticModelFailure.code})
+              </p>
+            )}
+
             {state.semanticModelState?.error && (
               <p className={`${fieldCss.hint} ${fieldCss.statusError}`}>
                 {state.semanticModelState.error}
               </p>
             )}
+
+            {!state.semanticModelUnavailable &&
+              !state.semanticModelState?.ready &&
+              !state.semanticModelState?.downloading &&
+              (state.semanticModelState?.error || state.semanticModelFailure) && (
+                <p className={fieldCss.hint}>{t('semanticModelBundleRepairHint')}</p>
+              )}
           </div>
         </div>
       </section>

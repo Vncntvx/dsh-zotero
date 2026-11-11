@@ -76,7 +76,10 @@ describe('EnrichmentSettingsSection model panel', () => {
     const redownload = await screen.findByRole('button', { name: zh.semanticModelRedownloadAction })
     fireEvent.click(redownload)
     await vi.waitFor(() =>
-      expect(downloadSemanticModel).toHaveBeenCalledWith(expect.objectContaining({ force: true })),
+      expect(downloadSemanticModel).toHaveBeenCalledWith(
+        expect.objectContaining({ force: true }),
+        expect.any(AbortSignal),
+      ),
     )
   })
 

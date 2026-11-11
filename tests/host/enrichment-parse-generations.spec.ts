@@ -64,9 +64,14 @@ describe('generation cache facts', () => {
     const world = domain()
     const first = await parseDocument(LOCAL, world.deps)
     await world.fs.deps.rm('/parsed/sources/index.json', { recursive: false, force: true })
-    await world.fs.deps.writeFile(`/parsed/${first.cacheKey}/meta.json`, JSON.stringify({ ...first.artifact.meta, ...change }))
+    await world.fs.deps.writeFile(
+      `/parsed/${first.cacheKey}/meta.json`,
+      JSON.stringify({ ...first.artifact.meta, ...change }),
+    )
     world.fetch.mockClear()
-    await expect(parseDocument(LOCAL, world.deps)).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_TASK_FAILED })
+    await expect(parseDocument(LOCAL, world.deps)).rejects.toMatchObject({
+      code: ZOTERO_ENRICHMENT_TASK_FAILED,
+    })
     expect(world.fetch).not.toHaveBeenCalled()
     expect(await world.store.sourceRecord(sourceKeyOf(LOCAL.key))).toBeUndefined()
   })

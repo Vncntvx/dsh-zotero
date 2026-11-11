@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-zotero/enrichment",
-    "description": "DeepSeek Harness 的可选文档解析组件：借助 MinerU 把 PDF 解析为高质量 Markdown 并落盘本地，提高模型阅读论文的准确度。开启此组件将向 MinerU 云端服务发送文档进行解析。默认关闭。"
+    "description": "DeepSeek Harness 的可选文档解析组件：借助 MinerU 把 PDF 解析为 Markdown 并落盘本地。开启后向 MinerU 云端服务发送文档进行解析。默认关闭。"
   }
 }

@@ -290,16 +290,13 @@ const MATCH_KIND_LABELS = {
 } as const satisfies Record<EvidenceMatchKind, string>
 
 /**
- * The bracket suffix naming why a passage was returned, or nothing for the
- * ordinary case. The ordinary case — the passage's own words carry the query —
- * is what a reader assumes, so it spends no ink; every other kind changes what
- * may be done with the passage, so it is named where the reader is already
- * looking.
+ * The bracket suffix naming why a passage was returned, empty for the ordinary
+ * case (the passage's own words carry the query), which readers assume.
+ * Other kinds change how the passage may be used, so they are labeled.
  *
- * An absent kind renders as nothing rather than as a label: a session recorded
- * before this field existed replays with `matchKind` missing, and a renderer
- * that indexed the label table with `undefined` would print the word
- * "undefined" into the evidence.
+ * An absent kind renders as nothing: sessions recorded before this field
+ * replay with `matchKind` missing, and indexing the label table with
+ * `undefined` would print "undefined" into the evidence.
  * @param kind - the recorded match kind, possibly absent on a replayed record.
  * @returns the suffix, empty when there is nothing to say.
  */
@@ -356,19 +353,16 @@ export const RETRIEVE_TRUNCATED_REMEDY =
   'zotero_get with include:["notes", "annotations"] reads the item\u2019s notes and annotations outside this budget.'
 
 /**
- * What an empty evidence list means when the semantic route ran: both the
- * query's words and its meaning failed to score any passage. It is the one
- * fact this call established, and it refuses the stronger claim — "no passages
- * matched" is routinely read as "the item has nothing on this", which the call
- * cannot know.
+ * What an empty evidence list means when the semantic route ran: neither the
+ * query's words nor its meaning scored any passage. The call establishes only
+ * this, not that the item has nothing on the subject.
  */
 export const NO_MATCH_MESSAGE =
   'No passage matched this query \u2014 neither its terms nor its meaning. That describes this query against the sources this call read; it is not evidence that the item has nothing on the subject.'
 
 /**
- * The same fact when only the lexical route ran: claiming "nor its meaning"
- * would describe a comparison this call never made, because semantic ranking
- * was off or its model did not answer.
+ * The same fact when only the lexical route ran; no semantic comparison was
+ * made because semantic ranking was off or its model did not answer.
  */
 export const NO_MATCH_TERMS_ONLY_MESSAGE =
   'No passage matched this query\u2019s terms (semantic ranking was not part of this call). That describes this query against the sources this call read; it is not evidence that the item has nothing on the subject.'
@@ -378,8 +372,8 @@ export const NO_MATCH_REMEDY =
   'Rephrase with the subject\u2019s own terms, pass queryVariants with your own paraphrases, or widen sources.'
 
 /**
- * The message when the item offered no rankable passage at all: the overlap
- * test never ran, so even the terms claim would overstate what happened.
+ * The message when the item offered no rankable passage at all; the overlap
+ * test did not run.
  */
 export const NO_SOURCES_MESSAGE =
   'This item offered no rankable passage \u2014 no annotation, note, abstract, or indexed full text \u2014 so no overlap test ran. It is not evidence about the item\u2019s content.'
@@ -389,9 +383,8 @@ export const NO_SOURCES_REMEDY =
   'Check that the item has an indexed attachment, or read its files directly with zotero_get.'
 
 /**
- * The reason an empty answer can be expected rather than surprising: the query
- * carried nothing the lexical route could score, so no wording existed to
- * match.
+ * Why an empty answer is expected: the query carried nothing the lexical route
+ * could score.
  */
 export const NO_CONTENT_TERMS_MESSAGE =
   'The query carried no content words (\u201cthe\u201d, \u201cof\u201d and the like are dropped before scoring), so there was nothing to match; ask with the subject\u2019s own terms.'
@@ -403,15 +396,28 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
   if (value.evidence.length === 0) {
     if (value.noMatch === 'no-sources') {
       lines.push(NO_SOURCES_MESSAGE, NO_SOURCES_REMEDY)
-    } else {
+    } else if (value.noMatch === 'no-overlap') {
       // The meaning claim is only made when the semantic route actually ran.
       lines.push(
         value.rankedRoutes?.includes('semantic') === true
           ? NO_MATCH_MESSAGE
           : NO_MATCH_TERMS_ONLY_MESSAGE,
-        value.queryTerms.length === 0 ? NO_CONTENT_TERMS_MESSAGE : NO_MATCH_REMEDY,
       )
+      // A termless query explains an empty answer only when the lexical route
+      // was the whole call. A semantic route can legitimately return nothing
+      // without any content words, so the wording claim would misexplain it.
+      if (value.queryTerms.length === 0 && !value.rankedRoutes?.includes('semantic')) {
+        lines.push(NO_CONTENT_TERMS_MESSAGE)
+      } else {
+        lines.push(NO_MATCH_REMEDY)
+      }
+    } else if (value.truncated) {
+      // Matches existed, but the passage/character budgets omitted every one.
+      // Say that; never claim "no match" alongside "more matches omitted".
+      lines.push(RETRIEVE_TRUNCATED_MESSAGE, RETRIEVE_TRUNCATED_REMEDY)
     }
+    // No `noMatch` and no truncation: an empty evidence list with no recorded
+    // cause is not a fact we can describe, so no claim is emitted.
   }
   if (value.attachmentRef !== undefined) {
     const type =
@@ -448,10 +454,9 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
       entry.chunkCount === undefined || entry.chunkIndex === undefined
         ? ''
         : `, chunk ${entry.chunkIndex + 1}/${entry.chunkCount}`
-    // The ordinary case — the passage's own words carry the query — needs no
-    // label: it is what a reader assumes. Every other kind does, because it
-    // changes what may be done with the passage, so it is named in the bracket
-    // the reader is already scanning.
+    // The ordinary case (the passage's own words carry the query) needs no
+    // label. Other kinds change how the passage may be used, so they are named
+    // in the bracket.
     const kind = matchSuffix(entry.matchKind)
     const comment = entry.comment === undefined ? '' : `\nComment: ${entry.comment}`
     lines.push(`\n[${page}${chunk}${kind}] ${entry.sourceRef}\n${entry.text}${comment}`)
@@ -463,7 +468,10 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
   if (value.sourcesSkipped.length > 0) {
     lines.push(`\nSkipped unavailable sources: ${value.sourcesSkipped.join(', ')}`)
   }
-  if (value.truncated) lines.push(`\n${RETRIEVE_TRUNCATED_MESSAGE} ${RETRIEVE_TRUNCATED_REMEDY}`)
+  // The budget message is already the whole empty-answer explanation above
+  // when every match was omitted; otherwise it accompanies the passages.
+  if (value.truncated && !(value.evidence.length === 0 && value.noMatch === undefined))
+    lines.push(`\n${RETRIEVE_TRUNCATED_MESSAGE} ${RETRIEVE_TRUNCATED_REMEDY}`)
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
