@@ -3,27 +3,18 @@
  * route over a locally embedded corpus, fused with the same reciprocal-rank
  * rule the scholarly subsystem uses.
  *
- * **The threshold is measured, not configured.** A dense retriever returns a
- * nearest neighbor for any query, and returning arbitrary excerpts as
- * "evidence" is exactly what the evidence contract forbids. Rather than pin a
- * magic cosine per model, the ranker calibrates on first use: it embeds a
- * fixed probe set of on-topic and off-topic pairs and takes the midpoint
- * between the weakest same-topic match and the strongest cross-topic match as
- * the hit threshold. The number is the model's own separation measured on our
- * probes, so it adapts per model and cannot be forgotten when a model changes.
+ * Admission is a calibrated per-(phrasing, passage) decision against fixed
+ * background banks with a frozen ridge-logistic classifier; pairs above the
+ * frozen threshold are admitted. A new phrasing adds hits without removing
+ * another phrasing's admitted members.
  *
- * The measured separator is **relative, not absolute**: for every model we
- * probed, same-topic prose and off-topic prose overlap in absolute cosine
- * (this model: same-topic floor 0.70–0.84, real off-topic prose up to 0.82),
- * but the query's own best hit always sits above its distractors by a clear
- * margin. So the route admits chunks within a small delta of that best hit —
- * "the passages the model itself considers the answer" — and lets RRF against
- * the lexical route do the ordering. An absolute floor additionally guards
- * the degenerate tail (a query whose best hit is still noise).
+ * The semantic route orders by best admitted confidence; raw cosine stays in
+ * `semanticScore`. RRF orders results and does not express confidence.
  * @module dsh-zotero/enrichment/semantic/ranker
  */
 
 import {
+  assertUniqueChunkIndexes,
   fuseEvidenceRoutes,
   lexicalRouteScores,
   queryTextsOf,
@@ -33,7 +24,9 @@ import {
   type EvidenceRoute,
   type RouteScores,
 } from '../../local/evidence-ranker.js'
+import { admittedIndexes, validateAdmissionRules, type AdmissionRules } from './admission.js'
 import { cosineSimilarity } from './tensor.js'
+import type { VectorCache } from './vector-cache.js'
 import type { Embedder } from './session.js'
 
 /** One calibration topic: a query, statements that answer it, and ones that do not. */
@@ -43,10 +36,10 @@ export interface CalibrationProbe {
 }
 
 /**
- * The probe set the threshold is measured on. Bilingual on purpose: the probe
- * must expose a model's cross-language separation too, because library
- * queries arrive in both. Every `related` statement belongs to the probe's
- * topic; every other probe's statements are that query's `unrelated` set.
+ * Diagnostic sample probes retained from the baseline; production admission
+ * does not use them. The offline calibration chain in
+ * `scripts/semantic-calibration/` owns the dataset, split, fit, and held-out
+ * evaluation.
  */
 export const RANKER_CALIBRATION_PROBES: readonly CalibrationProbe[] = [
   {
@@ -93,26 +86,20 @@ export const RANKER_CALIBRATION_PROBES: readonly CalibrationProbe[] = [
   },
 ]
 
-/**
- * Measure one embedder's probe separation and report it for diagnostics:
- * the weakest same-topic cosine, the strongest cross-topic cosine, and their
- * midpoint. This is calibration evidence, not a gate — the measurements below
- * showed that same-topic prose and off-topic prose overlap in absolute cosine
- * on every model probed (this model: genuine paraphrases down to 0.70; real
- * off-topic prose up to 0.82), so no absolute line can separate them. The
- * separator that held for every case is the relative margin between a query's
- * best hit and its distractors ({@link SEMANTIC_RELATIVE_DELTA}).
- */
 export interface ProbeSeparation {
   readonly weakestSame: number
   readonly strongestCross: number
   readonly midpoint: number
 }
 
+/**
+ * Measure one embedder's probe separation for diagnostics; `rank()` does not
+ * call it.
+ */
 export const probeSeparationOf = (() => {
-  const calibrationCache = new WeakMap<Embedder, Promise<ProbeSeparation>>()
-  return (embedder: Embedder): Promise<ProbeSeparation> => {
-    const cached = calibrationCache.get(embedder)
+  const diagnosticCache = new WeakMap<Embedder, Promise<ProbeSeparation>>()
+  return async (embedder: Embedder): Promise<ProbeSeparation> => {
+    const cached = diagnosticCache.get(embedder)
     if (cached !== undefined) return cached
     const measured = (async () => {
       const queries = RANKER_CALIBRATION_PROBES.map((probe) => probe.query)
@@ -123,63 +110,77 @@ export const probeSeparationOf = (() => {
       ])
       let weakestSame = Number.POSITIVE_INFINITY
       let strongestCross = Number.NEGATIVE_INFINITY
-      RANKER_CALIBRATION_PROBES.forEach((_, queryIndex) => {
+      RANKER_CALIBRATION_PROBES.forEach((probe, queryIndex) => {
         const queryVector = queryVectors[queryIndex]!
-        // Documents are embedded in probe order; each probe's own block is its
-        // same-topic set, every other block that query's unrelated set.
         let offset = 0
         RANKER_CALIBRATION_PROBES.forEach((other, otherIndex) => {
           other.related.forEach((_, within) => {
             const similarity = cosineSimilarity(queryVector, documentVectors[offset + within]!)
-            if (otherIndex === queryIndex) {
-              if (similarity < weakestSame) weakestSame = similarity
-            } else if (similarity > strongestCross) {
-              strongestCross = similarity
-            }
+            if (otherIndex === queryIndex) weakestSame = Math.min(weakestSame, similarity)
+            else strongestCross = Math.max(strongestCross, similarity)
           })
           offset += other.related.length
         })
       })
-      if (!Number.isFinite(weakestSame) || !Number.isFinite(strongestCross)) {
-        throw new TypeError('calibration produced no comparable cosines')
-      }
+      if (!Number.isFinite(weakestSame) || !Number.isFinite(strongestCross))
+        throw new TypeError('diagnostic probes produced no comparable cosines')
       return { weakestSame, strongestCross, midpoint: (weakestSame + strongestCross) / 2 }
     })()
-    calibrationCache.set(embedder, measured)
+    diagnosticCache.set(embedder, measured)
     return measured
   }
 })()
-
-/**
- * How far below the query's own best semantic hit a chunk may sit and still
- * enter the route. Measured, not configured: for every model we probed,
- * same-topic prose and off-topic prose overlap in absolute cosine, but the
- * query's best hit sits above its distractors by a clear margin (this model:
- * the worst genuine paraphrase is 0.02 below best; real off-topic prose is
- * 0.05+ below). A tight delta keeps the route to the passages the model
- * itself considers the answer.
- */
-export const SEMANTIC_RELATIVE_DELTA = 0.02
 
 export interface SemanticRankerDeps {
   /**
    * Resolve the embedder for the selected model. Implementations load lazily
    * and throw `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` when the model cannot
-   * serve; the rejection propagates to the tool caller, never a silent
-   * lexical-only answer.
+   * serve; the rejection propagates to the tool caller without a lexical-only
+   * fallback.
    */
   readonly embedder: () => Promise<Embedder>
+  /**
+   * The selected tier's admission rules (absolute floor plus relative margin),
+   * fixed in code per model. An unknown tier fails with the semantic-unavailable
+   * code rather than admitting passages on a guess.
+   */
+  readonly profile: () => AdmissionRules
+  /**
+   * Optional bounded cross-request vector cache. The service owns one per
+   * model generation; omitting it (unit tests) still ranks correctly, just
+   * without reuse. A model switch constructs a new cache rather than reusing
+   * an old generation's entries.
+   */
+  readonly vectorCache?: VectorCache
+}
+
+/** Embed through the cache when present, otherwise straight to the embedder. */
+async function embedWithCache(
+  embedder: Embedder,
+  cache: VectorCache | undefined,
+  texts: readonly string[],
+  side: 'query' | 'document',
+  signal: AbortSignal | undefined,
+): Promise<readonly Float32Array[]> {
+  if (cache === undefined) return await embedder.embed(texts, side, signal)
+  return await cache.embed(
+    texts,
+    side,
+    async (missing, runSignal) => await embedder.embed(missing, side, runSignal),
+    signal,
+  )
 }
 
 /**
  * The hybrid ranker over one embedder. Lexical scoring stays in the core;
- * this ranker adds the semantic route and fuses both.
- * @param deps - the embedder source.
+ * this ranker adds the calibrated semantic route and fuses both.
+ * @param deps - the embedder source, the tier profile, and the vector cache.
  */
 export function semanticEvidenceRanker(deps: SemanticRankerDeps): EvidenceRanker {
   return {
     async rank(request: EvidenceRankRequest): Promise<EvidenceRankResult> {
       request.signal?.throwIfAborted()
+      assertUniqueChunkIndexes(request.chunks)
       const texts = queryTextsOf(request.query, request.queryVariants)
       if (texts.length === 0 || request.chunks.length === 0) {
         // Nothing was scored; claiming a meaning comparison would be false.
@@ -187,47 +188,71 @@ export function semanticEvidenceRanker(deps: SemanticRankerDeps): EvidenceRanker
       }
       const lexical: RouteScores = lexicalRouteScores(texts, request.chunks)
 
+      const rules = validateAdmissionRules(deps.profile(), 'the semantic model profile')
       const embedder = await deps.embedder()
-      const queryVectors = await embedder.embed(texts, 'query')
-      // Distinct chunk texts are embedded once; duplicates share a vector.
-      const distinct = new Map<string, number>()
-      const chunkTexts = request.chunks.map((chunk) => chunk.text)
-      chunkTexts.forEach((text, index) => {
-        if (!distinct.has(text)) distinct.set(text, index)
+      request.signal?.throwIfAborted()
+      const queryVectors = await embedWithCache(
+        embedder,
+        deps.vectorCache,
+        texts,
+        'query',
+        request.signal,
+      )
+
+      // Distinct chunk texts are embedded once, but every caller index that
+      // carries a text maps back to that one vector: identity is never lost to
+      // deduplication.
+      const distinct = new Map<string, number[]>()
+      request.chunks.forEach((chunk, position) => {
+        const indexes = distinct.get(chunk.text)
+        if (indexes === undefined) distinct.set(chunk.text, [position])
+        else indexes.push(position)
       })
       const uniqueTexts = [...distinct.keys()]
-      const documentVectors = await embedder.embed(uniqueTexts, 'document')
-      const vectorByIndex = new Map<number, Float32Array>()
-      uniqueTexts.forEach((text, position) => {
-        const firstIndex = distinct.get(text)!
-        vectorByIndex.set(firstIndex, documentVectors[position]!)
-      })
+      const documentVectors = await embedWithCache(
+        embedder,
+        deps.vectorCache,
+        uniqueTexts,
+        'document',
+        request.signal,
+      )
+      request.signal?.throwIfAborted()
 
-      // First pass: each chunk's best cosine across the query's phrasings.
-      const bestByIndex = new Map<number, number>()
-      for (const [index, vector] of vectorByIndex) {
-        let best = Number.NEGATIVE_INFINITY
-        for (const queryVector of queryVectors) {
-          const similarity = cosineSimilarity(queryVector, vector)
-          if (similarity > best) best = similarity
+      // Each phrasing admits independently over its own cosine row, then the
+      // rows are unioned. A new phrasing can add a passage but never remove
+      // another phrasing's hit; the best cosine per passage is retained and
+      // becomes `semanticScore`.
+      const cosineByText = new Map<string, number>()
+      for (let i = 0; i < texts.length; i += 1) {
+        request.signal?.throwIfAborted()
+        const queryVector = queryVectors[i]!
+        const row = uniqueTexts.map((_, position) =>
+          cosineSimilarity(queryVector, documentVectors[position]!),
+        )
+        for (const index of admittedIndexes(row, rules)) {
+          const text = uniqueTexts[index]!
+          const cosine = row[index]!
+          const current = cosineByText.get(text)
+          if (current === undefined || cosine > current) cosineByText.set(text, cosine)
         }
-        bestByIndex.set(index, best)
       }
-      // Second pass: the relative gate. Same-topic prose and off-topic prose
-      // overlap in absolute cosine on every model we measured, so the only
-      // separator that held case by case is the margin between the query's
-      // own best hit and everything else: the route admits chunks within
-      // SEMANTIC_RELATIVE_DELTA of that best hit. Ordering is RRF's job — the
-      // lexical route runs in parallel and the fusion decides the ranking.
-      const routeBest = Math.max(...bestByIndex.values())
-      const routeFloor = routeBest - SEMANTIC_RELATIVE_DELTA
-      const semantic = new Map<number, number>()
-      for (const [index, best] of bestByIndex) {
-        if (best >= routeFloor) semantic.set(index, best)
+
+      const semanticByIndex = new Map<number, number>()
+      for (const [text, positions] of distinct) {
+        const cosine = cosineByText.get(text)
+        if (cosine === undefined) continue
+        for (const position of positions)
+          semanticByIndex.set(request.chunks[position]!.index, cosine)
       }
       request.signal?.throwIfAborted()
+      // RRF orders the two routes; `semanticScore` stays the raw cosine so the
+      // magnitude the model measured is still reported.
+      const matches = fuseEvidenceRoutes(lexical, semanticByIndex).map((entry) => {
+        const cosine = semanticByIndex.get(entry.index)
+        return cosine === undefined ? entry : { ...entry, semanticScore: cosine }
+      })
       return {
-        matches: fuseEvidenceRoutes(lexical, semantic),
+        matches,
         routes: ['lexical', 'semantic'] satisfies readonly EvidenceRoute[],
       }
     },

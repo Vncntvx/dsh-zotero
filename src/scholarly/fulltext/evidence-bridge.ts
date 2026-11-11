@@ -115,7 +115,7 @@ export function findSection(
   return sections.find((s) => s.title.toLowerCase().includes(needle))
 }
 
-/** One ranking request over a source text, named so callers pass what they mean. */
+/** One ranking request over a source text. */
 export interface RankPassagesOptions {
   /** The ranking strategy: the core's lexical ranker, or the hybrid one. */
   readonly ranker: EvidenceRanker
@@ -143,8 +143,8 @@ export interface RankPassagesOptions {
  * core's live limits, so `scholarly_read query=` and `zotero_retrieve` cut the
  * same paper on the same passage boundaries and rank by the same rules.
  * @param options - the ranker, the text, the question, and the boundaries.
- * @returns the best-scoring passages with their character spans, plus the
- * routes that ran, so an empty answer can be phrased honestly.
+ * @returns the best-scoring passages with their character spans and the routes
+ * that ran.
  */
 export async function rankPassages(options: RankPassagesOptions): Promise<{
   passages: RankedPassage[]
@@ -154,32 +154,39 @@ export async function rankPassages(options: RankPassagesOptions): Promise<{
   const maxWords = options.maxWords ?? 180
   const maxCharsPerChunk = options.maxCharsPerChunk ?? 1_200
   if (options.query.trim() === '') return { passages: [], routes: [] }
-  const chunks = chunkText(options.text, maxWords, maxCharsPerChunk)
-  if (chunks.length === 0) return { passages: [], routes: [] }
-
-  const result = await options.ranker.rank({
-    query: options.query,
-    ...(options.queryVariants === undefined ? {} : { queryVariants: options.queryVariants }),
-    chunks,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  })
-
-  const passages: RankedPassage[] = []
-  for (const entry of result.matches) {
-    if (passages.length >= limit) break
-    // A ranker contract violation (unknown index) is skipped rather than
-    // rendered as an empty passage with fabricated offsets.
-    const chunk = chunks[entry.index]
-    if (chunk === undefined) continue
-    passages.push({
-      start: chunk.start ?? 0,
-      end: chunk.end ?? 0,
-      text: chunk.text,
-      score: entry.score,
-      matchKind: entry.matchKind,
-      ...(entry.lexicalScore === undefined ? {} : { lexicalScore: entry.lexicalScore }),
-      ...(entry.semanticScore === undefined ? {} : { semanticScore: entry.semanticScore }),
+  // Admit before chunking: the accepted request keeps its committed ranking
+  // generation for the whole read, even if the component unmounts mid-passage.
+  const scope = options.ranker.admit?.()
+  try {
+    const chunks = chunkText(options.text, maxWords, maxCharsPerChunk)
+    if (chunks.length === 0) return { passages: [], routes: [] }
+    const result = await options.ranker.rank({
+      query: options.query,
+      ...(options.queryVariants === undefined ? {} : { queryVariants: options.queryVariants }),
+      chunks,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(scope === undefined ? {} : { scope: scope.handle }),
     })
+
+    const passages: RankedPassage[] = []
+    for (const entry of result.matches) {
+      if (passages.length >= limit) break
+      // A ranker contract violation (unknown index) is skipped rather than
+      // rendered as an empty passage with fabricated offsets.
+      const chunk = chunks[entry.index]
+      if (chunk === undefined) continue
+      passages.push({
+        start: chunk.start ?? 0,
+        end: chunk.end ?? 0,
+        text: chunk.text,
+        score: entry.score,
+        matchKind: entry.matchKind,
+        ...(entry.lexicalScore === undefined ? {} : { lexicalScore: entry.lexicalScore }),
+        ...(entry.semanticScore === undefined ? {} : { semanticScore: entry.semanticScore }),
+      })
+    }
+    return { passages, routes: result.routes }
+  } finally {
+    scope?.release()
   }
-  return { passages, routes: result.routes }
 }

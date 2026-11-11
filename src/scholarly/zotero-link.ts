@@ -50,9 +50,9 @@ export interface ZoteroServiceLike {
   ): Promise<ZoteroCreateItemCommittedOutcome | { kind: 'declined' }>
   /**
    * The ranking strategy the core holds: its own lexical ranker, or the hybrid
-   * one the enrichment component installed. Declared here so callers stop
-   * casting `ctx.get('zotero')`; optional because a link stub that never ranks
-   * need not carry it, and the reader falls back to the core ranker.
+   * one the enrichment component installed. Declared here so callers need not
+   * cast `ctx.get('zotero')`; optional because a link stub that never ranks can
+   * omit it, and the reader falls back to the core ranker.
    */
   evidenceRanker?(): EvidenceRanker
   /**

@@ -404,6 +404,22 @@ export async function retrieve(
   request: ZoteroRetrieveRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroRetrieveResult> {
+  // Admit the ranking scope before any source I/O so an accepted request keeps
+  // its committed model/config generation for its whole lifetime.
+  const scope = deps.ranker.admit?.()
+  try {
+    return await retrieveWithScope(deps, request, scope?.handle, signal)
+  } finally {
+    scope?.release()
+  }
+}
+
+async function retrieveWithScope(
+  deps: FulltextDeps,
+  request: ZoteroRetrieveRequest,
+  scope: symbol | undefined,
+  signal?: AbortSignal,
+): Promise<ZoteroRetrieveResult> {
   const policy = request.attachmentPolicy ?? 'best'
   if (policy === 'specified' && (request.attachmentRefs?.length ?? 0) === 0) {
     throw new ZoteroError(
@@ -582,6 +598,7 @@ export async function retrieve(
     ...(request.queryVariants === undefined ? {} : { queryVariants: request.queryVariants }),
     chunks: passages.map((passage, index) => ({ text: passage.rankText ?? passage.text, index })),
     ...(signal === undefined ? {} : { signal }),
+    ...(scope === undefined ? {} : { scope }),
   })
   const ranked = rankResult.matches
   // The ranker returns only passages some route hit, so "no entries" is the one

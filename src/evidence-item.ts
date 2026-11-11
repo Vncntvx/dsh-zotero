@@ -33,12 +33,11 @@ export function isEvidenceSource(source: string): source is EvidenceSource {
 export type EvidenceField = 'text' | 'comment'
 
 /**
- * Why a passage was returned. `lexical` means the query's own words occur in
- * it, `semantic` means only the meaning matched, and `hybrid` means both.
+ * Why a passage was returned. `lexical` means the query's words occur in it,
+ * `semantic` means only the meaning matched, and `hybrid` means both.
  *
- * The vocabulary is load-bearing rather than decorative: a reader who is told
- * a passage matched semantically must not then quote it as wording the paper
- * contains, and a reader told it matched lexically may.
+ * The label determines how a passage may be cited: a semantic match does not
+ * mean the source contains the query's wording, while a lexical match does.
  */
 export type EvidenceMatchKind = 'lexical' | 'semantic' | 'hybrid'
 
@@ -72,7 +71,7 @@ export interface EvidenceItem {
   readonly attachmentRef?: string
   /**
    * Why the passage was returned. Absent only when the projection could not
-   * read a value the wire defines, which the decoder rejects before this.
+   * read a wire-defined value, which the decoder rejects first.
    */
   readonly matchKind?: EvidenceMatchKind
   /**

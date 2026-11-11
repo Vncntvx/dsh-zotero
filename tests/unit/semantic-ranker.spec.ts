@@ -1,13 +1,13 @@
 /**
- * The hybrid ranker over a scripted embedder: the measured calibration
- * threshold, threshold filtering into the semantic route, RRF fusion with the
- * lexical route, and the loader's fail-closed error mapping. No model, no
- * WASM — the embedder is a table of vectors.
+ * The hybrid ranker over a scripted embedder and a tier profile: the measured
+ * floor plus margin replaces the old relative `routeBest - 0.02` gate, a wholly
+ * irrelevant corpus is refused, duplicate texts keep every caller handle, a new
+ * phrasing can only add hits, a missing profile fails closed, and the bounded
+ * vector cache is used when supplied. No model, no WASM.
  * @module tests/unit/semantic-ranker
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.ts'
 import {
   probeSeparationOf,
   semanticEvidenceRanker,
@@ -15,15 +15,16 @@ import {
 } from '../../src/enrichment/semantic/ranker.ts'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
+import type { AdmissionRules } from '../../src/enrichment/semantic/admission.ts'
+import { createVectorCache } from '../../src/enrichment/semantic/vector-cache.ts'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../src/errors.ts'
 
-/**
- * A scripted embedder: every text maps to a unit vector through a table with
- * one shared fallback, so tests can place texts at chosen angles.
- */
+const DIMENSION = 8
+
+/** A scripted embedder: every text maps to a vector through a table. */
 function embedderOf(
   table: Record<string, readonly number[]>,
-  fallback: readonly number[],
+  fallback: readonly number[] = new Array<number>(DIMENSION).fill(0),
 ): Embedder {
   return {
     dimension: fallback.length,
@@ -32,116 +33,187 @@ function embedderOf(
   }
 }
 
-/** One-hot helper: unit vectors that are pairwise orthogonal. */
-function oneHot(index: number, dimension: number): readonly number[] {
+/** Unit vector along one axis. */
+function axis(index: number, dimension = DIMENSION): readonly number[] {
   return Array.from({ length: dimension }, (_, i) => (i === index ? 1 : 0))
 }
 
-describe('probeSeparationOf', () => {
-  it('measures the same separation for the same embedder, once', async () => {
-    // Each calibration text gets its own orthogonal direction, so same-topic
-    // cosines are 1 and cross-topic ones are 0: the midpoint is exactly 0.5.
+/**
+ * The admission rules the production table uses: an absolute floor plus a
+ * relative margin. These unit tests pick values that separate the scripted
+ * vectors below, not the measured catalog numbers.
+ */
+function rulesOf(overrides: Partial<AdmissionRules> = {}): AdmissionRules {
+  return { floor: 0.5, margin: 0.06, ...overrides }
+}
+
+/** A corpus where one passage is on-topic and the other two are not. */
+function scoringEmbedder(): Embedder {
+  const table: Record<string, readonly number[]> = {
+    'vaccine question': axis(0),
+    'ceramic sintering': axis(1),
+    'bridges and tunnels': [0.9, Math.sqrt(1 - 0.81), 0, 0, 0, 0, 0, 0],
+    bridges: axis(0),
+    'paraphrase of bridges': [0.95, Math.sqrt(1 - 0.95 * 0.95), 0, 0, 0, 0, 0, 0],
+  }
+  return embedderOf(table)
+}
+
+describe('probeSeparationOf (diagnostic only)', () => {
+  it('measures separation without being a production gate', async () => {
     const table: Record<string, readonly number[]> = {}
     RANKER_CALIBRATION_PROBES.forEach((probe, index) => {
-      const direction = oneHot(index, RANKER_CALIBRATION_PROBES.length)
+      const direction = axis(index, RANKER_CALIBRATION_PROBES.length)
       table[probe.query] = direction
       for (const related of probe.related) table[related] = direction
     })
     const embedder = embedderOf(
       table,
-      oneHot(RANKER_CALIBRATION_PROBES.length, RANKER_CALIBRATION_PROBES.length + 1),
+      axis(RANKER_CALIBRATION_PROBES.length, RANKER_CALIBRATION_PROBES.length + 1),
     )
     const separation = await probeSeparationOf(embedder)
     expect(separation.weakestSame).toBe(1)
     expect(separation.strongestCross).toBe(0)
-    expect(separation.midpoint).toBeGreaterThan(0.49)
-    expect(separation.midpoint).toBeLessThanOrEqual(0.51)
-    // Cached per embedder: the second call does not re-embed anything.
+    // Cached per embedder; a second call does no work.
     const embed = vi.spyOn(embedder, 'embed')
     await probeSeparationOf(embedder)
     expect(embed).not.toHaveBeenCalled()
   })
 })
 
-describe('semanticEvidenceRanker', () => {
-  const probes = RANKER_CALIBRATION_PROBES
-
-  /** A perfect embedder: queries match their own related passages at 0.9, off-topic at 0.1. */
-  function scoringEmbedder(): Embedder {
-    const dimension = probes.length
-    const table: Record<string, readonly number[]> = {}
-    const queryVectors: readonly (readonly number[])[] = probes.map((_, index) =>
-      oneHot(index, dimension),
-    )
-    probes.forEach((probe, index) => {
-      table[probe.query] = queryVectors[index]!
-      for (const related of probe.related) {
-        // Related passages sit at 0.9 cosine from their own query; the spare
-        // mass lands on one other axis, so cross-topic cosines are identical
-        // and the measured threshold sits between 0.9 and that value.
-        const vector = new Array<number>(dimension).fill(0)
-        vector[index] = 0.9
-        vector[(index + 1) % dimension] = Math.sqrt(1 - 0.9 * 0.9)
-        table[related] = vector
-      }
+describe('semanticEvidenceRanker with measured admission', () => {
+  it('fuses a calibrated semantic hit with the lexical route', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => rulesOf(),
     })
-    // The synthetic queries used by the rank tests behave like probe 0's query.
-    table['synthetic query'] = queryVectors[0]!
-    table['bridges'] = queryVectors[0]!
-    // A chunk that shares a word with the lexical query: the relative gate
-    // must still admit it as the query's best hit.
-    table['bridges and tunnels'] = queryVectors[0]!
-    return embedderOf(table, new Array<number>(dimension).fill(0))
-  }
-
-  it('fuses the lexical route with threshold-filtered semantic hits', async () => {
-    const ranker = semanticEvidenceRanker({ embedder: async () => scoringEmbedder() })
     const result = await ranker.rank({
-      query: 'synthetic query',
+      query: 'bridges',
       chunks: [
-        { text: probes[0]!.related[0]!, index: 0 },
-        { text: probes[1]!.related[0]!, index: 1 },
-        { text: 'attention bridges', index: 2 },
+        { text: 'bridges and tunnels', index: 0 },
+        { text: 'ceramic sintering', index: 1 },
       ],
     })
     expect(result.routes).toEqual(['lexical', 'semantic'])
-    const kindOf = new Map(result.matches.map((entry) => [entry.index, entry.matchKind]))
-    // Chunk 0 is a 0.9 semantic hit (and no lexical overlap) — semantic only.
-    expect(kindOf.get(0)).toBe('semantic')
-    // Chunk 1 is off-topic at 0.1 cosine: below the measured threshold, so it
-    // must not ride in on the semantic route.
-    expect(kindOf.get(1)).toBeUndefined()
-    // Chunk 2 shares the word "attention" with nothing here… give it a lexical
-    // hit instead: the query words do not appear, so it is absent too.
-    expect(kindOf.get(2)).toBeUndefined()
     const semantic = result.matches.find((entry) => entry.index === 0)
-    expect(semantic?.semanticScore).toBeGreaterThan(0.8)
+    expect(semantic?.matchKind).toBe('hybrid')
+    expect(semantic?.semanticScore).toBeCloseTo(0.9, 5)
+    // The unrelated passage never enters the semantic route.
+    expect(result.matches.find((entry) => entry.index === 1)?.semanticScore).toBeUndefined()
   })
 
-  it('admits the query\u2019s own best hit regardless of its absolute cosine', async () => {
-    // The relative gate: with one chunk, its cosine IS the best, so it enters
-    // the semantic route whatever its absolute value — and RRF labels the
-    // fusion, not the raw score.
-    const ranker = semanticEvidenceRanker({ embedder: async () => scoringEmbedder() })
+  it('refuses a wholly irrelevant corpus instead of returning a nearest neighbour', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () =>
+        embedderOf({
+          'vaccine question': axis(0),
+          'ceramic sintering': axis(1),
+          'bridge construction': axis(2),
+        }),
+      profile: () => rulesOf(),
+    })
+    const result = await ranker.rank({
+      query: 'vaccine question',
+      chunks: [
+        { text: 'ceramic sintering', index: 0 },
+        { text: 'bridge construction', index: 1 },
+      ],
+    })
+    expect(result.matches).toEqual([])
+  })
+
+  it('keeps every caller handle when two passages share the same text', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => rulesOf(),
+    })
     const result = await ranker.rank({
       query: 'bridges',
-      chunks: [{ text: 'bridges and tunnels', index: 0 }],
+      chunks: [
+        { text: 'bridges and tunnels', index: 11 },
+        { text: 'bridges and tunnels', index: 23 },
+      ],
     })
-    const entry = result.matches[0]
-    expect(entry?.lexicalScore).toBeGreaterThan(0)
-    expect(entry?.semanticScore).toBeGreaterThan(0)
+    expect(result.matches.map((entry) => entry.index)).toEqual([11, 23])
+    expect(result.matches.every((entry) => entry.semanticScore !== undefined)).toBe(true)
   })
 
-  it('returns no matches and only the lexical route for an empty corpus', async () => {
-    const ranker = semanticEvidenceRanker({ embedder: async () => scoringEmbedder() })
+  it('lets a new phrasing add a hit but never remove an existing member', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => rulesOf(),
+    })
+    const chunks = [
+      { text: 'bridges and tunnels', index: 0 },
+      { text: 'ceramic sintering', index: 1 },
+    ]
+    const once = await ranker.rank({ query: 'bridges', chunks })
+    const withVariant = await ranker.rank({
+      query: 'bridges',
+      queryVariants: ['paraphrase of bridges'],
+      chunks,
+    })
+    for (const entry of once.matches)
+      expect(withVariant.matches.some((candidate) => candidate.index === entry.index)).toBe(true)
+  })
+
+  it('fails closed when the tier has no admission profile', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => {
+        throw new ZoteroError('no profile', ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE)
+      },
+    })
+    await expect(
+      ranker.rank({ query: 'bridges', chunks: [{ text: 'bridges and tunnels', index: 0 }] }),
+    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE })
+  })
+
+  it('embeds through the bounded vector cache when one is supplied', async () => {
+    const embedder = scoringEmbedder()
+    const embed = vi.spyOn(embedder, 'embed')
+    const cache = createVectorCache({
+      key: 'balanced',
+      physicalKey: 'qwen3-0.6b',
+      revision: 'a'.repeat(40),
+      dimension: DIMENSION,
+      pooling: 'mean',
+      normalize: true,
+      queryPrefix: '',
+      documentPrefix: '',
+      scoringVersion: 'test',
+      fileDigests: {},
+    })
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => embedder,
+      profile: () => rulesOf(),
+      vectorCache: cache,
+    })
+    const chunks = [{ text: 'bridges and tunnels', index: 0 }]
+    const first = await ranker.rank({ query: 'bridges', chunks })
+    const callsAfterFirst = embed.mock.calls.length
+    const second = await ranker.rank({ query: 'bridges', chunks })
+    expect(second.matches).toEqual(first.matches)
+    // Both the query and the passage are cached: the second read encodes nothing.
+    expect(embed.mock.calls.length).toBe(callsAfterFirst)
+    cache.dispose()
+  })
+
+  it('returns no semantic claim for an empty corpus', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => rulesOf(),
+    })
     const result = await ranker.rank({ query: 'anything', chunks: [] })
     expect(result.matches).toEqual([])
-    // No meaning comparison was made, so the routes must not claim semantic.
     expect(result.routes).toEqual(['lexical'])
   })
 
-  it('propagates cancellation before and after the embedder runs', async () => {
-    const ranker = semanticEvidenceRanker({ embedder: async () => scoringEmbedder() })
+  it('propagates cancellation instead of returning a partial answer', async () => {
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => scoringEmbedder(),
+      profile: () => rulesOf(),
+    })
     const controller = new AbortController()
     controller.abort(new Error('user cancelled'))
     await expect(
@@ -151,14 +223,6 @@ describe('semanticEvidenceRanker', () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow('user cancelled')
-  })
-
-  it('reports only the lexical route while the embedder is the core one', async () => {
-    const result = await bm25EvidenceRanker.rank({
-      query: 'bridges',
-      chunks: [{ text: 'bridges and tunnels', index: 0 }],
-    })
-    expect(result.routes).toEqual(['lexical'])
   })
 })
 

@@ -265,8 +265,8 @@ export function splitEntries(dataset, split) {
   ])
 }
 
-// Every cross-family pair below is an authored off-topic negative assumption;
-// semantic label validity still needs independent review. No cross-split documents.
+// // Cross-family pairs below are authored off-topic negatives; semantic
+// labels still need independent review. No cross-split documents.
 export function pairRows(dataset, split) {
   const families = dataset.partitions[split].families
   const rows = []

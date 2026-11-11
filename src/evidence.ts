@@ -25,18 +25,16 @@ const BM25_K1 = 1.2
 const BM25_B = 0.75
 
 /**
- * Function words removed from the *query scoring side* only. BM25 here takes
- * its idf from the passage corpus of one item, not from a library-wide
- * collection: in a natural-language question, words such as `the`, `of`, `and`
- * (or 的 / 和 / 在) still draw a positive idf and can outrank a passage that
- * actually answers the question. Dropping them at scoring time removes that
- * pseudo-evidence without touching `normalizeForSearch`, `tokenize`, or the
- * returned text.
+ * Function words removed from the query scoring side only. BM25 takes idf from
+ * one item's passage corpus, not a library-wide collection, so words such as
+ * `the`, `of`, `and` (or 的 / 和 / 在) can outrank a passage that answers the
+ * question. Dropping them at scoring time removes this pseudo-evidence without
+ * changing `normalizeForSearch`, `tokenize`, or the returned text.
  *
- * No document-frequency cap is applied on top of this list. A term that occurs
- * in every passage of a homogeneous text (for example `attention` in a paper
- * entirely about attention) is still the user's term: zeroing its idf would
- * make a legitimate single-term query return no evidence at all.
+ * No document-frequency cap is applied: a term occurring in every passage of a
+ * homogeneous text (for example `attention` in a paper about attention) remains
+ * a valid query term, and zeroing its idf would leave a single-term query with
+ * no evidence.
  */
 const QUERY_FUNCTION_WORDS: ReadonlySet<string> = new Set([
   // English determiners, conjunctions, prepositions, auxiliaries, pronouns,
@@ -422,6 +420,12 @@ function termFrequency(tokens: readonly string[]): Map<string, number> {
 export interface PreparedCorpus {
   /** The corpus's own texts, in caller order. */
   readonly texts: readonly string[]
+  /**
+   * The caller's own handles, in the same order as `texts`. Corpus positions
+   * are an implementation detail: a caller may pass sparse, negative, or
+   * reordered indices, and every ranked result must carry the original handle.
+   */
+  readonly indexes: readonly number[]
   readonly documents: readonly (readonly string[])[]
   readonly averageLength: number
   /** Documents containing each term at least once. */
@@ -451,6 +455,7 @@ export function prepareCorpus(chunks: readonly EvidenceChunk[]): PreparedCorpus 
   const frequencyCache = new Map<number, ReadonlyMap<string, number>>()
   return {
     texts: chunks.map((chunk) => chunk.text),
+    indexes: chunks.map((chunk) => chunk.index),
     documents,
     averageLength,
     documentFrequency: (term) => documentFrequency.get(term) ?? 0,
@@ -502,7 +507,11 @@ export function rankPrepared(query: string, corpus: PreparedCorpus): RankedChunk
         tf + BM25_K1 * (1 - BM25_B + BM25_B * (tokens.length / corpus.averageLength))
       score += (idf * (tf * (BM25_K1 + 1))) / denominator
     }
-    return { text: corpus.texts[position] ?? '', index: position, score }
+    return {
+      text: corpus.texts[position] ?? '',
+      index: corpus.indexes[position] ?? position,
+      score,
+    }
   })
   return ranked.sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score

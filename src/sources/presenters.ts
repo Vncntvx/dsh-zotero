@@ -14,12 +14,10 @@ import { REF_IN_TEXT_PATTERN } from '../ref-grammar.js'
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
 /**
- * True when a call block carries its settled result. Local mirror of the
- * harness's `isSettledTool`
- * (`packages/client/ui-chat/src/client/contract/chat-nodes.ts`): that helper
- * lives in a client entry whose runtime bundle requires the loader
- * environment, so this shared module keeps its harness imports type-only and
- * carries the one-line predicate locally instead of value-importing it.
+ * True when a call block carries its settled result. Mirrors the harness's
+ * `isSettledTool` (`packages/client/ui-chat/src/client/contract/chat-nodes.ts`)
+ * locally, keeping harness imports type-only because that helper's client entry
+ * requires the loader environment.
  */
 export function isSettledTool(
   block: ToolBlockLike,
@@ -28,11 +26,10 @@ export function isSettledTool(
 }
 
 /**
- * True while a call is still running, in either of the two running phases:
- * `preparing` (arguments still streaming, so the card has no parsed args yet)
- * and `start` (dispatched, awaiting its result). Cards use this to pick their
- * in-progress copy; testing `phase === 'start'` alone would show a preparing
- * call the settled fallback instead.
+ * True while a call is running, in either `preparing` (arguments still
+ * streaming, no parsed args) or `start` (dispatched, awaiting result). Cards
+ * use this to select their in-progress copy; checking `phase === 'start'` alone
+ * shows a preparing call the settled fallback.
  */
 export function isToolRunning(block: ToolBlockLike): boolean {
   return !isSettledTool(block)
@@ -226,10 +223,10 @@ function artifactOf(value: unknown): EvidenceItem['artifact'] {
 }
 
 /**
- * The recorded match kind, or `undefined` when the record does not name one the
- * wire defines. A replay of a record written before this field existed has no
- * kind, and the badge is simply absent: inventing `lexical` would assert the
- * passage shares the query's wording, which nothing in that record proves.
+ * The recorded match kind, or `undefined` when the record names no kind the
+ * wire defines. Records written before this field existed have no kind, so the
+ * badge is absent; inventing `lexical` would assert shared wording that the
+ * record does not establish.
  */
 function matchKindOf(value: unknown): EvidenceMatchKind | undefined {
   if (typeof value !== 'string') return undefined

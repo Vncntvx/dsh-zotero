@@ -1,8 +1,8 @@
 /**
- * The two schemastery idioms every component config repeats: a closed choice
- * over frozen values, and unwrapping one volatile reference to its live
- * value. One definition here keeps the three config schemas from drifting in
- * how they read a committed field.
+ * Two schemastery idioms shared by component configs: a closed choice over
+ * frozen values, and unwrapping a volatile reference to its live value. One
+ * definition keeps the three config schemas consistent in how they read a
+ * committed field.
  * @module dsh-zotero/schema-helpers
  */
 

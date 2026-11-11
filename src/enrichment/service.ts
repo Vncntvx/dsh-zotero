@@ -85,8 +85,16 @@ import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
-import { SemanticEmbedderLoader, semanticTargetOf } from './semantic/loader.js'
+import {
+  SemanticEmbedderLoader,
+  semanticTargetOf,
+  type RankingScope,
+  type SemanticModelTarget,
+} from './semantic/loader.js'
 import { semanticEvidenceRanker } from './semantic/ranker.js'
+import { admissionProfileOf } from './semantic/model-profiles.js'
+import type { SemanticModelKey } from '../enrichment-model-catalog.js'
+import { createVectorCache, type VectorCache } from './semantic/vector-cache.js'
 import {
   bm25EvidenceRanker,
   type EvidenceRankRequest,
@@ -100,6 +108,14 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Core service face enrichment needs: the two slots and the attachment resolver. */
+/** One committed foreground ranking snapshot, fixed before source I/O. */
+interface RankingSnapshot {
+  readonly tier: SemanticModelKey
+  readonly target: SemanticModelTarget
+  readonly cache: VectorCache
+  readonly loaderScope: RankingScope
+}
+
 interface EnrichmentCoreLink {
   setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void
   setEvidenceRanker(ranker: EvidenceRanker | undefined): void
@@ -147,6 +163,9 @@ export class EnrichmentService extends TypertRemoteService {
 
   /** The model-asset manager: status, download, cancel, verify, per service. */
   private readonly downloads: ModelDownloadManager
+
+  /** One bounded vector cache per model generation; recreated on identity change. */
+  private vectorCache: { readonly digest: string; readonly cache: VectorCache } | undefined
 
   /**
    * The ranker installed into the core. It reads the live config on every
@@ -210,16 +229,83 @@ export class EnrichmentService extends TypertRemoteService {
         ),
     })
     this.rankerLoader = new SemanticEmbedderLoader()
+    // One admitted snapshot per foreground read. `admit()` runs before any
+    // source I/O and fixes config, target, calibration and model generation;
+    // `rank()` consumes the scope's own loader handle so an unmount cannot
+    // release the model while this request is still ranking.
+    const snapshots = new Map<symbol, RankingSnapshot>()
+    const snapshotOf = (): RankingSnapshot | undefined => {
+      const cfg = resolveEnrichmentConfig(this.config)
+      if (!cfg.enableSemanticSearch) return undefined
+      const target = semanticTargetOf(cfg, (physicalKey, configuredDir) =>
+        resolveSemanticModelDir(physicalKey, configuredDir),
+      )
+      const spec = target.spec
+      // The vector cache is bound to the physical model identity: a different
+      // revision or inference contract must not reuse another tier's vectors.
+      const digest = JSON.stringify([
+        spec.physicalKey,
+        spec.revision,
+        spec.dimension,
+        spec.pooling,
+        spec.normalize,
+        spec.queryPrefix,
+        spec.documentPrefix,
+        spec.files.map((file) => [file.path, file.sha256]),
+      ])
+      if (this.vectorCache?.digest !== digest) {
+        this.vectorCache?.cache.dispose()
+        this.vectorCache = {
+          digest,
+          cache: createVectorCache({
+            key: spec.key,
+            physicalKey: spec.physicalKey,
+            revision: spec.revision,
+            dimension: spec.dimension,
+            pooling: spec.pooling,
+            normalize: spec.normalize,
+            queryPrefix: spec.queryPrefix,
+            documentPrefix: spec.documentPrefix,
+            scoringVersion: 'fixed-floor-margin-v1',
+            fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
+          }),
+        }
+      }
+      return {
+        tier: spec.key,
+        target,
+        cache: this.vectorCache.cache,
+        loaderScope: this.rankerLoader.scope(target),
+      }
+    }
     this.liveEvidenceRanker = {
+      admit: () => {
+        const snapshot = snapshotOf()
+        const id = Symbol('ranking-scope')
+        if (snapshot !== undefined) snapshots.set(id, snapshot)
+        return {
+          handle: id,
+          release: () => {
+            const held = snapshots.get(id)
+            snapshots.delete(id)
+            held?.loaderScope.release()
+          },
+        }
+      },
       rank: async (request: EvidenceRankRequest) => {
-        const cfg = resolveEnrichmentConfig(this.config)
-        if (!cfg.enableSemanticSearch) return await bm25EvidenceRanker.rank(request)
-        const target = semanticTargetOf(cfg, (physicalKey, configuredDir) =>
-          resolveSemanticModelDir(physicalKey, configuredDir),
-        )
-        return await semanticEvidenceRanker({
-          embedder: () => this.rankerLoader.get(target),
-        }).rank(request)
+        const admitted = request.scope === undefined ? undefined : snapshots.get(request.scope)
+        const snapshot = admitted ?? snapshotOf()
+        if (snapshot === undefined) return await bm25EvidenceRanker.rank(request)
+        try {
+          return await semanticEvidenceRanker({
+            embedder: () => snapshot.loaderScope.embedder(),
+            profile: () => admissionProfileOf(snapshot.tier),
+            vectorCache: snapshot.cache,
+          }).rank(request)
+        } finally {
+          // A direct rank() without an admitted scope borrowed one; release it.
+          if (admitted === undefined) snapshot.loaderScope.release()
+        }
       },
     }
 
@@ -239,6 +325,8 @@ export class EnrichmentService extends TypertRemoteService {
     // the resident embedder, whether or not the core is composed.
     ctx.effect(() => async () => {
       await Promise.all([this.parsing.dispose(), this.downloads.dispose()])
+      this.vectorCache?.cache.dispose()
+      this.vectorCache = undefined
       await this.rankerLoader.dispose()
     })
 

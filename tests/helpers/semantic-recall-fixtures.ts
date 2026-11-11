@@ -210,12 +210,10 @@ export const RECALL_CASES: readonly RecallCase[] = ROWS.map(
 const round = (value: number): number => Number(value.toFixed(6))
 
 /**
- * Score a ranker over the whole regression set. A returned entry is a match:
- * the rankers drop zero-score passages themselves, exactly as `zotero_retrieve`
- * and `scholarly_read` do, so the metric measures what a caller actually
- * receives. Asynchronous because the ranking seam is: a semantic route has to
- * embed, and a synchronous helper would have forced stage 4 to rewrite both
- * lanes instead of swapping the ranker they pass in.
+ * Score a ranker over the regression set. A returned entry is a match; rankers
+ * drop zero-score passages as `zotero_retrieve` and `scholarly_read` do, so the
+ * metric reflects what a caller receives. Asynchronous because the ranking seam
+ * is, so stage 4 can swap the ranker without rewriting either lane.
  * @param cases - the regression cases to score.
  * @param rank - the ranker under test, one call per case.
  * @returns the metrics plus each case's top-4 indices.

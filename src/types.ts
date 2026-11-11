@@ -469,10 +469,9 @@ export interface ZoteroRetrieveRequest {
   ref: ZoteroObjectRef
   query: string
   /**
-   * Additional phrasings of the same question, ranked alongside `query`: each
-   * is scored on its own and the best score per passage wins, so a paraphrase
-   * can raise a passage the caller's wording missed without letting the two
-   * wordings pool their weights.
+   * Additional phrasings of the same question, ranked alongside `query`. Each
+   * scores independently and the best score per passage wins, so a paraphrase
+   * raises a passage the caller's wording missed without pooling weights.
    */
   queryVariants?: string[]
   sources: ZoteroEvidenceSource[]
@@ -526,8 +525,8 @@ export interface ZoteroEvidence {
    * The passage's fields that carry matched query terms, so a match found in
    * the annotator's own comment is never read as the paper saying it. Present
    * only for the two-field source (an annotation carrying a comment) whose
-   * ranking involved the lexical route; a semantic-only hit names no field,
-   * because naming one would claim wording the passage need not share.
+   * ranking involved the lexical route. A semantic-only hit names no field,
+   * since it shares no specific wording with the query.
    */
   matchedFields?: ZoteroEvidenceField[]
 }
@@ -596,20 +595,18 @@ export interface ZoteroRetrieveResult {
   /** Requested sources the item could not provide; retrieval degrades instead of failing. */
   sourcesSkipped: ZoteroEvidenceSource[]
   /**
-   * The distinct query terms the lexical route scored, across `query` and
-   * `queryVariants`. An empty list means the query carried nothing but
-   * function words, which is the reason an empty `evidence` can be expected
-   * rather than surprising.
+   * The distinct query terms the lexical route scored across `query` and
+   * `queryVariants`. An empty list means the query held only function words, so
+   * an empty `evidence` is expected.
    */
   queryTerms: string[]
   /**
-   * Present exactly when the evidence list is empty, naming the one specific
-   * fact the call established. `no-overlap`: the item offered rankable
-   * passages and no route scored any of them against the query.
-   * `no-sources`: the item offered no rankable passage at all — no annotation,
-   * note, abstract, or full text — so no overlap test ever ran. Neither is
-   * ever evidence that the item has nothing on the subject. Absent when
-   * passages matched but the budgets omitted them (`truncated`).
+   * Present only when the evidence list is empty, naming the fact the call
+   * established. `no-overlap`: the item offered rankable passages and no route
+   * scored any against the query. `no-sources`: the item offered no rankable
+   * passage (no annotation, note, abstract, or full text), so no overlap test
+   * ran. Neither indicates the item has nothing on the subject. Absent when
+   * passages matched but budgets omitted them (`truncated`).
    */
   noMatch?: 'no-overlap' | 'no-sources'
   /**

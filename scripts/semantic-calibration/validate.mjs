@@ -1,5 +1,5 @@
 // node scripts/semantic-calibration/validate.mjs [--require-ready]
-// Writes JSON to stdout only. --require-ready intentionally fails for this preparation set.
+// Writes JSON to stdout only. --require-ready fails for this preparation set.
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {

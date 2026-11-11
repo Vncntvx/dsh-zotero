@@ -32,7 +32,7 @@ graph LR
 
 核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心，显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置。学术检索组件是 Agent 外部检索授权边界，未挂载时服务、传输层与工具都不存在。文档解析组件的挂载只使解析和模型管理能力可用；上传须再通过部署开关和用户针对具体文档的主动提交。其目标接入方式是只读产物查询与独立的主动解析操作，均不注册模型工具或提示词段。
 
-本文将 enrichment 的实施前基线 `a3f4759` 与 WP0 目标契约分开说明，下文的实现状态描述均以该基线为准。WP1 的只读接缝、WP2 的主动解析任务和 WP7 的前台资源排空按设计描述，由各执行包实现与验收；本次文档修改不确认并行实现的完成状态。
+本文将 enrichment 的实施前基线 `a3f4759` 与 WP0 目标契约分开说明，下文的实现状态描述均以该基线为准。WP1 的只读接缝、WP2 的主动解析任务和 WP7 的前台资源排空按设计描述，由各执行包实现与验收。
 
 ## 核心分层
 
@@ -155,9 +155,9 @@ graph LR
 
 本地语义排序与 MinerU 解析是独立能力：排序消费已有文本和本地模型，不联系 MinerU、不需要上传开关或解析凭据；主动解析也不依赖模型。关闭 `enableSemanticSearch` 使用完整 BM25；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败，不静默改为词面结果。模型下载失败使用 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
 
-`src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；`scripts/semantic-model-catalog.mjs` 是构建侧镜像，drift 测试比较两侧与 `manifestOf()`。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。下载、安装和取消的完整性修复归 WP4，不能仅据这些现有检查宣称验收完成。
+`src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；`scripts/semantic-model-catalog.mjs` 是构建侧镜像，drift 测试比较两侧与 `manifestOf()`。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。下载、安装和取消的完整性修复归 WP4。
 
-`src/enrichment/semantic/` 当前按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。生产 `ranker.ts` 当前用全语料最高余弦减 `0.02` 作为准入门槛，没有调用双语探针校准；该相对门槛不能拒绝全无关的非空语料。当前只有单次排序内的文本去重，没有跨请求向量 LRU。WP6 仍须实现模型匹配的独立校准与无答案验收，WP8 仍须实现有界向量缓存；不得声称首次探针校准、向量缓存或六档模型效果验收已经完成。`matchKind` 说明命中路线，RRF 分数只表示排序；词项重合也不证明片段回答了问题。
+`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序；词项重合也不证明片段回答了问题。
 
 ## 文献库子组件 (`src/library/`)
 

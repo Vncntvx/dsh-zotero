@@ -1,17 +1,14 @@
 /**
  * The `zotero_retrieve` lane of the concept-paraphrase regression set.
  *
- * Stage 0 fixes the corpus, the metrics, the thresholds, and a committed
- * baseline of the term-overlap ranker. Stage 4 swaps the ranker this lane
- * passes in and must assert the same thresholds; nothing here may be skipped in
- * the meantime, and every assertion below is active from the day it lands.
+ * Stage 0 fixes the corpus, metrics, thresholds, and a committed baseline of
+ * the term-overlap ranker. Stage 4 swaps the ranker this lane passes in and
+ * asserts the same thresholds; no assertion here is skipped.
  *
- * The lane ranks through `bm25EvidenceRanker` rather than `rankChunks`
- * directly, because that is what `zotero_retrieve` now does: the baseline is a
- * statement about the shipped path, not about a primitive one layer below it.
- * The two agree exactly — the fused value is a strictly monotone function of
- * the BM25 position, and both break ties by chunk index — so the committed
- * numbers do not move.
+ * The lane ranks through `bm25EvidenceRanker`, as `zotero_retrieve` does, so
+ * the baseline describes the shipped path. It agrees with `rankChunks`: the
+ * fused value is strictly monotone in BM25 position and both break ties by
+ * chunk index, so the committed numbers do not change.
  * @module tests/local/retrieve/semantic-recall
  */
 
@@ -98,9 +95,7 @@ describe('concept-paraphrase regression set (zotero_retrieve lane)', () => {
   })
 
   it('orders the seam exactly as the raw BM25 primitive does', async () => {
-    // The baseline was measured on `rankChunks`; this pins the equivalence the
-    // lane now relies on, so a future change to the fusion cannot quietly move
-    // the committed numbers while the numbers still "pass".
+    // The baseline was measured on `rankChunks`; this pins the equivalence so a fusion change cannot move the committed numbers while tests still pass.
     for (const item of RECALL_CASES) {
       const raw = rankChunks(
         item.query,

@@ -81,20 +81,29 @@ export function l2NormalizeInPlace(vector: Float32Array): Float32Array {
 }
 
 /**
- * Cosine similarity of two equal-length vectors. The embedder normalizes its
- * output when the model says so, which makes this a dot product, but the
- * function stays honest for unnormalized vectors.
+ * Cosine similarity of two equal-length, finite vectors. A mismatched width or
+ * a non-finite component is a runtime/calibration error, not a reason to
+ * silently truncate the longer vector or return a plausible number.
  */
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length) {
+    throw new RangeError(`embedding dimension mismatch: ${a.length} vs ${b.length}`)
+  }
   let dot = 0
   let normA = 0
   let normB = 0
-  const length = Math.min(a.length, b.length)
-  for (let i = 0; i < length; i += 1) {
-    dot += a[i]! * b[i]!
-    normA += a[i]! * a[i]!
-    normB += b[i]! * b[i]!
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]!
+    const y = b[i]!
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new RangeError(`non-finite embedding component at ${i}`)
+    }
+    dot += x * y
+    normA += x * x
+    normB += y * y
   }
   if (normA === 0 || normB === 0) return 0
-  return dot / Math.sqrt(normA * normB)
+  const result = dot / Math.sqrt(normA * normB)
+  if (!Number.isFinite(result)) throw new RangeError('cosine produced a non-finite value')
+  return result
 }

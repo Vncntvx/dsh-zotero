@@ -98,13 +98,13 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 
 ## 文档解析（可选组件）
 
-文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布但默认关闭。启用组件行即授权组件联系 MinerU 并发送文档进行解析（`allowDocumentUpload` 随组件开启默认为 `true`）。组件不注册模型工具、不注入提示词段。
+文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布，默认关闭。挂载提供主动 MinerU 解析、已有产物只读复用、本地语义排序与模型管理，不上传文档。组件不注册模型工具、不注入提示词段。`allowDocumentUpload` 是部署级开关，默认 `false`，打开表示部署接受主动解析操作。用户须针对一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL 提交，宿主检查远程动作与会话访问权限；普通读取、PDF 打开、设置保存和服务启动不提交、恢复或上传 MinerU 任务。
 
-- `free` 使用免 Token 的 Agent 轻量接口（API 侧 ≤10 MB、≤20 页），`pro` 使用精准接口（API 侧 ≤200 MB、≤200 页）并需要 Token；接口模式与是否配置 Token 相互独立。
-- `zotero_retrieve` 与 `scholarly_read` 在本地抽取前优先使用解析结果；解析、授权、协议、归档与存储失败均明确中止读取；有效短文档保留解析原文。
-- 解析 Markdown 落在 `<outputDir>/<sha256>/`；本地附件按大小/修改时间 + 内容指纹缓存，URL 源按 URL 缓存并用一次 HEAD 校验；源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length；命中时不下载 PDF、不请求 MinerU。来源元数据不保存 URL 的 query/fragment；私有任务回执只在上传完成前暂存签名地址。
+- `free` 使用免 Token 的 Agent 轻量接口（API 侧 ≤10 MB、≤20 页），`pro` 使用精准接口（API 侧 ≤200 MB、≤200 页）并需要 Token；接口模式与是否配置 Token 相互独立。解析失败时不切换模式，也不以本地抽取文本冒充成功。
+- 普通 `zotero_retrieve` 与 `scholarly_read` 通过核心只读 `FulltextEnhancer.lookup` 查询同一来源、仍有效的 Markdown；命中时优先使用，包括有效短文档。无产物或源已变化时记为未命中，本地读取继续走 Zotero `/fulltext`，学术读取沿已获准的 PDF 下载与本地抽取；权限、I/O、协议损坏等故障按错误处理，不记为未命中。上传关闭时仍可读取已有有效产物。
+- 解析 Markdown 落在 `<outputDir>/<sha256>/`；本地附件按大小/修改时间 + 内容指纹缓存，URL 源按 URL 缓存并用一次不带 token 的 HEAD 校验；源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length；`lookup` 先查源索引，命中时不下载 PDF、不联系 MinerU。来源元数据不保存 URL 的 query/fragment；私有任务回执只在上传完成前暂存签名地址。
 - 输出目录支持绝对路径或 `~/`；相对路径在保存时拒绝，不存在/不可写/敏感目录在首次解析时以 `ZOTERO_ENRICHMENT_OUTPUT_INVALID` 失败。
-- 本地向量语义排序支持：提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡默认推荐 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置项与物理模型版本解耦，模型升级时配置保持稳定。模型需手动下载后启用（支持 HF-Mirror 镜像与 Hugging Face 直连）。未开启时自动回退为 BM25 词汇检索；开启但所选模型未下载时，读取会以明确错误（`ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`）中止并引导下载，绝不静默降级。模型参数量控制在 100M~600M 之间，适合 16GB 内存与纯 CPU 设备日常运行。若开启语义检索但未下载模型，或选用精准解析模式但未配置 Token，界面均会显示明确的引导提示。
+- 本地向量语义排序提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡默认推荐 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置与物理模型版本解耦，模型升级时配置保持不变。模型需手动下载后启用（支持 HF-Mirror 镜像与 Hugging Face 直连）。关闭语义时使用完整 BM25 词面排序；开启但所选模型缺失、损坏或本地推理运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 失败并提示下载，不降级为词面结果。模型参数量 100M~600M，面向 16GB 内存、纯 CPU 设备。六档模型均已实机验证：零实词重合的改写提问下语义 recall@4 为 58–96%，无关语料不产生语义命中。开启语义检索但未下载模型，或选用精准解析模式但未配置 Token 时，界面显示提示。
 
 ## 能力与工具对照
 

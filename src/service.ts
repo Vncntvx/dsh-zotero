@@ -230,18 +230,17 @@ export class ZoteroService extends Service {
   /** Disposer of the currently registered `local` provider, released after a rebuild's new registration lands. */
   private providerDispose: (() => void) | undefined
   /**
-   * Optional higher-quality full-text enhancer installed by the enrichment
-   * component. The core owns only the slot and the pure type; it never imports
-   * the enrichment component, holds no external transport, and runs its unchanged
-   * loopback path while the slot is empty. The provider reads this live per
-   * request, so mounting or unmounting the enrichment row needs no rebuild.
+   * Optional full-text enhancer installed by the enrichment component. The core
+   * holds the slot and the pure type, imports no enrichment code, holds no
+   * external transport, and runs its loopback path unchanged while the slot is
+   * empty. The provider reads it live per request, so mounting or unmounting the
+   * row needs no rebuild.
    */
   private fulltextEnhancer: FulltextEnhancer | undefined
   /**
    * Optional evidence-ranking strategy installed by the enrichment component.
-   * The core owns the slot and the pure type, and ships its own complete
-   * lexical ranker as the value while the slot is empty; installing one
-   * replaces the whole strategy rather than layering on top of it.
+   * The core owns the slot and pure type and supplies its own lexical ranker
+   * while the slot is empty; installing a strategy replaces it.
    */
   private installedEvidenceRanker: EvidenceRanker | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
@@ -762,10 +761,10 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * The live full-text chunk boundaries passage ranking cuts on. Both
-   * `zotero_retrieve` and `scholarly_read` read these, so one settings edit
-   * moves every passage boundary in the plugin; a caller without this core
-   * falls back to the same defaults the config schema ships.
+   * The live full-text chunk boundaries passage ranking cuts on, read by both
+   * `zotero_retrieve` and `scholarly_read`. One settings edit moves every
+   * passage boundary; a caller without this core uses the config schema
+   * defaults.
    * @returns the word and character ceilings per passage.
    */
   evidenceChunkLimits(): { readonly chunkWords: number; readonly chunkChars: number } {

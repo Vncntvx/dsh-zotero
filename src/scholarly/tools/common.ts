@@ -24,9 +24,9 @@ export interface ScholarlyToolHost {
   enrichmentEnhancer?(): FulltextEnhancer | undefined
   /**
    * The ranking strategy passage matching uses: the core's lexical ranker, or
-   * the hybrid one the enrichment component installs. Required rather than
-   * optional — a host that forgot to supply it would silently rank one way for
-   * `scholarly_read` and another for `zotero_retrieve`.
+   * the hybrid one the enrichment component installs. Required: without it,
+   * `scholarly_read` and `zotero_retrieve` can rank the same paper by different
+   * rules.
    */
   evidenceRanker(): EvidenceRanker
   /**

@@ -65,4 +65,16 @@ describe('cosineSimilarity', () => {
   it('is 0 when either side is a zero vector, not NaN', () => {
     expect(cosineSimilarity(new Float32Array([0, 0]), new Float32Array([1, 1]))).toBe(0)
   })
+
+  it('refuses unequal widths instead of truncating to the shorter vector', () => {
+    expect(() => cosineSimilarity(new Float32Array([1, 0, 0]), new Float32Array([1, 0]))).toThrow(
+      /dimension mismatch/,
+    )
+  })
+
+  it('refuses non-finite components instead of returning a plausible cosine', () => {
+    expect(() =>
+      cosineSimilarity(new Float32Array([Number.NaN, 0]), new Float32Array([1, 0])),
+    ).toThrow(/non-finite/)
+  })
 })

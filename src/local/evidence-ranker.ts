@@ -2,16 +2,13 @@
  * The evidence-ranking seam shared by `zotero_retrieve` and
  * `scholarly_read query=`.
  *
- * Both tools ask one question — which of these passages answers the query —
- * and both must answer it the same way, over the same chunk boundaries, or one
- * library gets two descriptions of what a passage is. The ranking therefore
- * sits behind this interface instead of being called directly:
- * `bm25EvidenceRanker` below is the core's own complete lexical ranker, and
- * the optional enrichment component installs a hybrid ranker over it while
- * mounted. The core never imports the component, its model runtime, or its
- * transport; it only holds the slot.
+ * Both tools rank passages over the same chunk boundaries and must return the
+ * same result. Ranking sits behind this interface rather than being called
+ * directly. `bm25EvidenceRanker` is the core's lexical ranker; the enrichment
+ * component installs a hybrid ranker over it while mounted. The core holds the
+ * slot and does not import the component, its model runtime, or its transport.
  *
- * Three facts the seam owns, because the tools render them:
+ * The seam exposes three facts to the tools:
  *
  * - `matchKind` says *why* a passage came back. A meaning-level hit must never
  *   be reported as wording the paper contains, so the label travels with the
@@ -20,13 +17,11 @@
  *   from reciprocal rank, so it orders the answer and says nothing about how
  *   strong the match was. Callers that need magnitude read `lexicalScore` /
  *   `semanticScore`, which are each route's own value on its own scale.
- * - An empty result is one specific fact: no route hit any chunk. A chunk that
- *   no route matches is never returned, because "arbitrary excerpt" would read
- *   as "evidence" and a zero-overlap query would look like a finding.
+ * - An empty result means no route hit any chunk. Chunks that no route matches
+ *   are not returned.
  *
- * Reciprocal-rank fusion, equal weights, `k = 60`: the constant the scholarly
- * subsystem already uses in `src/scholarly/fusion.ts`, so two result lists of
- * different provenance combine the same way across the plugin.
+ * Reciprocal-rank fusion, equal weights, `k = 60`, matching the scholarly
+ * subsystem's constant in `src/scholarly/fusion.ts`.
  * @module dsh-zotero/local/evidence-ranker
  */
 
@@ -37,10 +32,17 @@ import type { EvidenceMatchKind } from '../evidence-item.js'
 export type { EvidenceMatchKind }
 
 /**
- * The reciprocal-rank constant; equal weights across routes. Aliases the
- * shared constant so the scholarly fusion and this seam cannot drift.
+ * The reciprocal-rank constant, equal weights across routes; aliases the
+ * shared constant used by scholarly fusion.
  */
 export const EVIDENCE_RRF_K = ZOTERO_RRF_K
+
+/**
+ * An opaque, per-request handle produced by `EvidenceRanker.admit()`. The core
+ * carries it through the read so the ranker uses the scope admitted before
+ * source I/O, including under concurrent reads.
+ */
+export type RankingScopeHandle = symbol
 
 /** One ranking request: the query, any paraphrases of it, and the corpus. */
 export interface EvidenceRankRequest {
@@ -48,14 +50,31 @@ export interface EvidenceRankRequest {
   readonly query: string
   /**
    * Additional phrasings of the same question. Each is scored independently
-   * and the best score per chunk wins, so a paraphrase can only raise a
-   * passage, never dilute the original query the way pooling the words would.
+   * and the best score per chunk wins, so a paraphrase raises a passage
+   * without pooling weights with the original query.
    */
   readonly queryVariants?: readonly string[]
   /** The passages to rank; `index` is the caller's own handle on each. */
   readonly chunks: readonly EvidenceChunk[]
   /** Caller cancellation, checked before each costly step. */
   readonly signal?: AbortSignal
+  /** The admitted scope handle, when the ranker uses lifecycle scopes. */
+  readonly scope?: RankingScopeHandle
+}
+
+/**
+ * Refuse an ambiguous corpus. Each caller handle identifies exactly one
+ * passage; a duplicate makes ranked results unaddressable and can collapse
+ * two distinct sources into one.
+ */
+export function assertUniqueChunkIndexes(chunks: readonly EvidenceChunk[]): void {
+  const seen = new Set<number>()
+  for (const chunk of chunks) {
+    if (seen.has(chunk.index)) {
+      throw new RangeError(`duplicate evidence chunk index ${chunk.index}`)
+    }
+    seen.add(chunk.index)
+  }
 }
 
 /** One ranked passage: the caller's index plus why and how strongly it matched. */
@@ -76,8 +95,27 @@ export interface RankedEvidence {
   readonly semanticScore?: number
 }
 
-/** A ranking strategy. Asynchronous because a semantic route does real work. */
+/**
+ * One admitted foreground read. Admission happens before any source I/O and
+ * fixes the committed ranking config, model target and service generation; the
+ * caller releases it in `finally`. A scope that has not ranked yet can still
+ * lazily load its fixed target after the component unmounts, on the original
+ * request deadline. The core's lexical ranker admits a no-op scope.
+ */
+export interface RankingScope {
+  /** Release this scope after the read finishes, in a `finally` block. */
+  readonly release: () => void
+  /** Opaque handle the caller passes back as `EvidenceRankRequest.scope`. */
+  readonly handle: RankingScopeHandle
+}
+
+/** A ranking strategy; a semantic route runs asynchronously. */
 export interface EvidenceRanker {
+  /**
+   * Admit one foreground read before its source I/O. Optional so the core's
+   * own ranker and test doubles need no lifecycle machinery.
+   */
+  readonly admit?: () => RankingScope
   /**
    * Rank `chunks` against the request's query.
    * @param request - the query, its paraphrases, the corpus, and cancellation.
@@ -100,10 +138,8 @@ export interface EvidenceRankResult {
 }
 
 /**
- * The query texts to score, in order: the caller's query first, then each
- * distinct non-empty paraphrase. Identical or blank paraphrases are dropped
- * rather than scored twice, because two identical texts can only produce
- * duplicate work and identical scores.
+ * The query texts to score, in order: the caller's query, then each distinct
+ * non-empty paraphrase. Blank and duplicate paraphrases are dropped.
  * @param query - the caller's query.
  * @param variants - paraphrases supplied by the caller.
  * @returns the texts to score, query first.
@@ -243,20 +279,19 @@ export function fuseEvidenceRoutes(
 }
 
 /**
- * The core's lexical ranker: BM25 over the caller's own chunk corpus, scored
- * once per query text, best score per chunk. This is a complete strategy, not
- * a placeholder — with the enrichment component absent it is the whole answer,
- * and with the component mounted the hybrid ranker still feeds it the lexical
- * route.
+ * The core's lexical ranker: BM25 over the caller's chunk corpus, scored once
+ * per query text, best score per chunk. It is the full answer when the
+ * enrichment component is absent; with the component mounted, the hybrid
+ * ranker uses it for the lexical route.
  *
- * `rank` is `async` on purpose: an implementation that throws before its first
- * `await` would otherwise reject synchronously into the caller's stack and read
- * as a thrown exception rather than a failed promise. A cancellation lands as a
- * rejection, the same as any other strategy's.
+ * `rank` is `async` so a throw before its first `await` rejects as a promise
+ * instead of throwing synchronously into the caller's stack. Cancellation
+ * rejects like any other strategy.
  */
 export const bm25EvidenceRanker: EvidenceRanker = {
   async rank(request: EvidenceRankRequest): Promise<EvidenceRankResult> {
     request.signal?.throwIfAborted()
+    assertUniqueChunkIndexes(request.chunks)
     const texts = queryTextsOf(request.query, request.queryVariants)
     if (texts.length === 0 || request.chunks.length === 0) {
       return { matches: [], routes: ['lexical'] }

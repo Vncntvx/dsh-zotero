@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { semanticModelOf } from '../../src/enrichment-model-catalog.ts'
 import {
+  cacheSpecOf,
   embedderOf,
   type Int64TensorFactory,
   type SessionPort,
@@ -116,6 +117,56 @@ describe('embedderOf', () => {
     expect(feedsSeen[0]!.attention_mask).toBeUndefined()
   })
 
+  it('feeds position_ids and zero-length KV caches for decoder-style exports', async () => {
+    const inputs = ['input_ids', 'attention_mask', 'position_ids']
+    for (let layer = 0; layer < 2; layer += 1)
+      for (const kind of ['key', 'value']) inputs.push(`past_key_values.${layer}.${kind}`)
+    const { port, feedsSeen } = portOf(
+      [{ dims: [1, 2, 2], data: new Float32Array([1, 0, 1, 0]) }],
+      { inputs },
+    )
+    ;(port as { cacheSpec?: { kvHeads: number; headDim: number; layers: number } }).cacheSpec = {
+      kvHeads: 8,
+      headDim: 128,
+      layers: 2,
+    }
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await embedder.embed(['ab'], 'query')
+    const feeds = feedsSeen[0]!
+    expect(feeds.position_ids!.data[1]).toBe(1n)
+    const cache = feeds['past_key_values.1.value']!
+    expect(cache.dims).toEqual([1, 8, 0, 128])
+    expect(cache.data).toBeInstanceOf(Float32Array)
+    expect((cache.data as Float32Array).length).toBe(0)
+  })
+
+  it('derives the KV-cache contract from the ONNX inputs and config.json', () => {
+    const cacheInputs = ['input_ids', 'past_key_values.0.key']
+    // Qwen3 shape: explicit head count, head dim and layer count.
+    expect(
+      cacheSpecOf(cacheInputs, {
+        num_key_value_heads: 8,
+        num_hidden_layers: 28,
+        head_dim: 128,
+      }),
+    ).toEqual({ kvHeads: 8, headDim: 128, layers: 28 })
+    // Models that omit head_dim derive it from hidden_size / heads.
+    expect(
+      cacheSpecOf(cacheInputs, {
+        num_hidden_layers: 12,
+        hidden_size: 768,
+        num_attention_heads: 12,
+      }),
+    ).toEqual({ kvHeads: 1, headDim: 64, layers: 12 })
+    // A plain encoder declares no cache inputs at all.
+    expect(cacheSpecOf(['input_ids', 'attention_mask'], {})).toBeUndefined()
+    // Declaring cache inputs without usable dimensions is a hard error.
+    expect(() => cacheSpecOf(cacheInputs, { num_hidden_layers: 4 })).toThrow(
+      /declares a KV cache but config.json omits its dimensions/,
+    )
+  })
+
   it('rejects an encoder whose outputs are neither pooled nor hidden states', () => {
     const bad: SessionPort = {
       inputNames: ['input_ids'],
@@ -135,5 +186,70 @@ describe('embedderOf', () => {
     const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
     const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
     await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/catalog dimension/)
+  })
+
+  it('tokenizes each batch exactly once for feeds and pooling masks', async () => {
+    let batches = 0
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const originalBatch = tokenizerAdapter.batch.bind(tokenizerAdapter)
+    tokenizerAdapter.batch = ((texts, side) => {
+      batches += 1
+      return originalBatch(texts, side)
+    }) as typeof tokenizerAdapter.batch
+    const { port } = portOf([{ dims: [0, 0, 2], data: new Float32Array(0) }])
+    ;(port as { run: SessionPort['run'] }).run = async (feeds) => {
+      const [rows, seq] = feeds.input_ids!.dims
+      return {
+        last_hidden_state: {
+          dims: [rows!, seq!, 2],
+          data: new Float32Array(rows! * seq! * 2).fill(1),
+        },
+      }
+    }
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await embedder.embed(['a', 'b', 'c'], 'query')
+    expect(batches).toBe(1)
+  })
+
+  it('does not start the next batch after cancellation', async () => {
+    const { port, feedsSeen } = portOf([{ dims: [0, 0, 2], data: new Float32Array(0) }])
+    const controller = new AbortController()
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    ;(port as { run: SessionPort['run'] }).run = async (feeds, signal) => {
+      feedsSeen.push(feeds)
+      const [rows, seq] = feeds.input_ids!.dims
+      // The first run lets cancellation arrive before the check after it.
+      controller.abort(new Error('stop'))
+      signal?.throwIfAborted()
+      return {
+        last_hidden_state: {
+          dims: [rows!, seq!, 2],
+          data: new Float32Array(rows! * seq! * 2).fill(1),
+        },
+      }
+    }
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(
+      embedder.embed(
+        Array.from({ length: 20 }, (_, i) => `t${i}`),
+        'query',
+        controller.signal,
+      ),
+    ).rejects.toThrow('stop')
+    expect(feedsSeen).toHaveLength(1)
+  })
+
+  it('rejects a malformed tensor instead of returning a plausible vector', async () => {
+    const { port } = portOf([{ dims: [1, 1, 2], data: new Float32Array([Number.NaN, 1]) }])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/non-finite/)
+  })
+
+  it('rejects a short buffer that disagrees with the declared shape', async () => {
+    const { port } = portOf([{ dims: [1, 1, 2], data: new Float32Array([1]) }])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/shorter than its declared shape/)
   })
 })

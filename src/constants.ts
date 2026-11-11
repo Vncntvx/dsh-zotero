@@ -163,12 +163,10 @@ export const ZOTERO_WRITE_OBJECT_BATCH = 50
 /**
  * How many paraphrases a ranking call may carry alongside its own query.
  *
- * The bound belongs to the tools' contract, not to a component's settings: both
+ * The bound belongs to the tools' contract, not a component's settings: both
  * `zotero_retrieve` and `scholarly_read` accept paraphrases, and the lexical
- * ranker scores them too, so a call that supplied more than this would do that
- * many more full scoring passes over the same passage corpus for a query the
- * caller has not narrowed. Four covers "one per synonym set" without making a
- * single retrieve call cost a dozen sweeps.
+ * ranker scores them too. Each additional paraphrase adds one full scoring pass
+ * over the same passage corpus. The limit is four, one per synonym set.
  */
 export const ZOTERO_MAX_QUERY_VARIANTS = 4
 

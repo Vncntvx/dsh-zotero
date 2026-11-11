@@ -7,14 +7,18 @@
  * releases it. Inference metadata (pooling, normalization, dimension) comes
  * from the catalog entry the bundle was verified against.
  *
- * The session talks to ONNX through the narrow {@link SessionPort} seam so the
- * batching, pooling, and normalization logic is unit-testable without WASM.
+ * Each batch is tokenized exactly once: one `TokenizedBatch` feeds both the
+ * encoder inputs and the pooling masks. A caller `AbortSignal` is checked
+ * before tokenizing and before/after every WASM run; an already executing run
+ * is allowed to finish (WASM cannot be preempted), but no later batch starts.
+ * Output tensors are validated for rank, shape, buffer length, finite values
+ * and vector count before any cosine is computed.
  * @module dsh-zotero/enrichment/semantic/session
  */
 
 import { join } from 'node:path'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
-import type { EmbeddingSide, EmbeddingTokenizer } from './tokenizer.js'
+import type { EmbeddingSide, EmbeddingTokenizer, TokenizedBatch } from './tokenizer.js'
 import { createEmbeddingTokenizer } from './tokenizer.js'
 import { l2NormalizeInPlace, poolTokenEmbeddings } from './tensor.js'
 
@@ -27,11 +31,28 @@ export interface SessionTensor {
   readonly data: Float32Array | BigInt64Array
 }
 
+/**
+ * An explicit KV-cache input the encoder expects. Decoder-style ONNX exports
+ * (Qwen3) need one zero-length `[batch, kvHeads, 0, headDim]` tensor per layer,
+ * plus `position_ids`. The values come from the bundle's `config.json`, never
+ * from a hardcoded guess.
+ */
+export interface CacheInputSpec {
+  readonly kvHeads: number
+  readonly headDim: number
+  readonly layers: number
+}
+
 /** The slice of an ONNX session the embedder needs. */
 export interface SessionPort {
   readonly inputNames: readonly string[]
   readonly outputNames: readonly string[]
-  run(feeds: Readonly<Record<string, SessionTensor>>): Promise<Record<string, SessionTensor>>
+  /** Present only when the export declares explicit `past_key_values.*` inputs. */
+  readonly cacheSpec?: CacheInputSpec
+  run(
+    feeds: Readonly<Record<string, SessionTensor>>,
+    signal?: AbortSignal,
+  ): Promise<Record<string, SessionTensor>>
   release(): Promise<void>
 }
 
@@ -45,8 +66,13 @@ export interface Embedder {
    * Embed texts with the side's instruction prefix, in input order.
    * @param texts - the texts to embed.
    * @param side - which prefix applies.
+   * @param signal - caller cancellation; checked between batches.
    */
-  embed(texts: readonly string[], side: EmbeddingSide): Promise<Float32Array[]>
+  embed(
+    texts: readonly string[],
+    side: EmbeddingSide,
+    signal?: AbortSignal,
+  ): Promise<Float32Array[]>
   /** Release the ONNX session; the embedder is unusable afterwards. */
   dispose(): Promise<void>
 }
@@ -64,13 +90,18 @@ function outputShapeOf(outputNames: readonly string[]): OutputShape {
   )
 }
 
-function feedsOf(
+/** One tokenization drives both the feeds and the pooling masks. */
+function feedsAndMasksOf(
   session: SessionPort,
   tokenizer: EmbeddingTokenizer,
   texts: readonly string[],
   side: EmbeddingSide,
   int64Tensor: Int64TensorFactory,
-): Record<string, SessionTensor> {
+): {
+  readonly feeds: Record<string, SessionTensor>
+  readonly batch: TokenizedBatch
+  readonly masks: BigInt64Array[]
+} {
   const batch = tokenizer.batch(texts, side)
   const dims = [batch.batchSize, batch.sequenceLength]
   const feeds: Record<string, SessionTensor> = {}
@@ -79,67 +110,108 @@ function feedsOf(
   if (has('attention_mask')) feeds.attention_mask = int64Tensor(dims, batch.attentionMask)
   if (has('token_type_ids'))
     feeds.token_type_ids = int64Tensor(dims, new BigInt64Array(batch.inputIds.length))
-  return feeds
-}
-
-function rowsOf(
-  session: SessionPort,
-  output: SessionTensor,
-  shape: OutputShape,
-  spec: SemanticModelEntry,
-  sequenceLength: number,
-  masks: readonly BigInt64Array[],
-): Float32Array[] {
-  if (shape === 'pooled') {
-    if (output.dims.length !== 2 || output.dims[1] !== spec.dimension) {
-      throw new TypeError(
-        `encoder returned dims [${output.dims.join(', ')}]; expected [n, ${spec.dimension}]`,
-      )
+  if (has('position_ids')) {
+    // Causal decoder exports need the position of every token. Padding
+    // positions keep a valid index so the graph has no out-of-range gather.
+    const positions = new BigInt64Array(batch.inputIds.length)
+    for (let row = 0; row < batch.batchSize; row += 1) {
+      for (let column = 0; column < batch.sequenceLength; column += 1) {
+        positions[row * batch.sequenceLength + column] = BigInt(column)
+      }
     }
-    const data = output.data as Float32Array
-    const rows: Float32Array[] = []
-    for (let row = 0; row < output.dims[0]!; row += 1) {
-      const vector = data.slice(row * spec.dimension, (row + 1) * spec.dimension)
-      rows.push(spec.normalize ? l2NormalizeInPlace(vector) : vector)
+    feeds.position_ids = int64Tensor(dims, positions)
+  }
+  if (session.cacheSpec !== undefined) {
+    const { kvHeads, headDim, layers } = session.cacheSpec
+    const empty = new Float32Array(0)
+    for (let layer = 0; layer < layers; layer += 1) {
+      for (const kind of ['key', 'value']) {
+        const name = `past_key_values.${layer}.${kind}`
+        if (has(name)) {
+          feeds[name] = {
+            dims: [batch.batchSize, kvHeads, 0, headDim],
+            data: empty,
+          }
+        }
+      }
     }
-    return rows
   }
-  const [batch, seq, dim] = output.dims as [number, number, number]
-  if (dim !== spec.dimension) {
-    throw new TypeError(
-      `encoder hidden width ${dim} does not match catalog dimension ${spec.dimension}`,
-    )
-  }
-  if (seq !== sequenceLength || batch !== masks.length) {
-    throw new TypeError(
-      `encoder returned [${batch}, ${seq}] for a batch of ${masks.length} × ${sequenceLength}`,
-    )
-  }
-  const data = output.data as Float32Array
-  const rows: Float32Array[] = []
-  for (let row = 0; row < batch; row += 1) {
-    const base = row * seq * dim
-    const slice = data.subarray(base, base + seq * dim)
-    const maskRow = [...masks[row]!].map((value) => (value === 0n ? 0 : 1))
-    const pooled = poolTokenEmbeddings(spec.pooling, slice, dim, seq, maskRow)
-    rows.push(spec.normalize ? l2NormalizeInPlace(pooled) : pooled)
-  }
-  return rows
-}
-
-function masksOf(
-  tokenizer: EmbeddingTokenizer,
-  texts: readonly string[],
-  side: EmbeddingSide,
-): { batch: ReturnType<EmbeddingTokenizer['batch']>; masks: BigInt64Array[] } {
-  const batch = tokenizer.batch(texts, side)
   const masks: BigInt64Array[] = []
   for (let row = 0; row < batch.batchSize; row += 1) {
     masks.push(
       batch.attentionMask.slice(row * batch.sequenceLength, (row + 1) * batch.sequenceLength),
     )
   }
-  return { batch, masks }
+  return { feeds, batch, masks }
+}
+
+function finiteData(output: SessionTensor): Float32Array {
+  if (!(output.data instanceof Float32Array)) {
+    throw new TypeError('encoder output is not a float32 tensor')
+  }
+  const data = output.data
+  for (let i = 0; i < data.length; i += 1) {
+    if (!Number.isFinite(data[i])) throw new RangeError(`non-finite output component at ${i}`)
+  }
+  return data
+}
+
+function rowsOf(
+  output: SessionTensor,
+  shape: OutputShape,
+  spec: SemanticModelEntry,
+  batch: TokenizedBatch,
+  masks: readonly BigInt64Array[],
+  expectedRows: number,
+): Float32Array[] {
+  const { dims } = output
+  if (shape === 'pooled') {
+    if (dims.length !== 2 || dims[0] !== expectedRows || dims[1] !== spec.dimension) {
+      throw new TypeError(
+        `encoder returned dims [${dims.join(', ')}]; expected [${expectedRows}, ${spec.dimension}]`,
+      )
+    }
+    const data = finiteData(output)
+    if (data.length < dims[0]! * spec.dimension) {
+      throw new TypeError('encoder pooled buffer is shorter than its declared shape')
+    }
+    const rows: Float32Array[] = []
+    for (let row = 0; row < dims[0]!; row += 1) {
+      const vector = data.slice(row * spec.dimension, (row + 1) * spec.dimension)
+      rows.push(spec.normalize ? l2NormalizeInPlace(vector) : vector)
+    }
+    return rows
+  }
+  if (dims.length !== 3) {
+    throw new TypeError(`encoder hidden state has rank ${dims.length}; expected 3`)
+  }
+  const [rows, seq, dim] = dims as [number, number, number]
+  if (dim !== spec.dimension) {
+    throw new TypeError(
+      `encoder hidden width ${dim} does not match catalog dimension ${spec.dimension}`,
+    )
+  }
+  if (seq !== batch.sequenceLength || rows !== expectedRows || rows !== masks.length) {
+    throw new TypeError(
+      `encoder returned [${rows}, ${seq}] for a batch of ${expectedRows} × ${batch.sequenceLength}`,
+    )
+  }
+  const data = finiteData(output)
+  if (data.length < rows * seq * dim) {
+    throw new TypeError('encoder hidden buffer is shorter than its declared shape')
+  }
+  const vectors: Float32Array[] = []
+  for (let row = 0; row < rows; row += 1) {
+    const base = row * seq * dim
+    const slice = data.subarray(base, base + seq * dim)
+    const maskRow = [...masks[row]!].map((value) => (value === 0n ? 0 : 1))
+    const pooled = poolTokenEmbeddings(spec.pooling, slice, dim, seq, maskRow)
+    if (pooled.length !== spec.dimension) {
+      throw new TypeError(`pooled vector width ${pooled.length} does not match the catalog`)
+    }
+    vectors.push(spec.normalize ? l2NormalizeInPlace(pooled) : pooled)
+  }
+  return vectors
 }
 
 /**
@@ -160,19 +232,37 @@ export function embedderOf(
       : 'last_hidden_state'
   return {
     dimension: spec.dimension,
-    async embed(texts, side) {
+    async embed(texts, side, signal) {
+      signal?.throwIfAborted()
       const vectors: Float32Array[] = []
       for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
+        signal?.throwIfAborted()
         const slice = texts.slice(start, start + EMBED_BATCH_SIZE)
-        const { masks } = masksOf(tokenizer, slice, side)
-        const feeds = feedsOf(session, tokenizer, slice, side, int64Tensor)
-        const outputs = await session.run(feeds)
+        // One tokenization per batch: feeds and pooling masks share it.
+        const { feeds, batch, masks } = feedsAndMasksOf(
+          session,
+          tokenizer,
+          slice,
+          side,
+          int64Tensor,
+        )
+        signal?.throwIfAborted()
+        const outputs = await session.run(feeds, signal)
+        // A WASM run already in flight is allowed to finish; the next batch
+        // must not start after cancellation.
+        signal?.throwIfAborted()
         const output = outputs[outputName]
         if (output === undefined) {
           throw new TypeError(`encoder produced no ${outputName} output`)
         }
-        const sequenceLength = feeds.input_ids?.dims[1] ?? 0
-        vectors.push(...rowsOf(session, output, shape, spec, sequenceLength, masks))
+        const rows = rowsOf(output, shape, spec, batch, masks, slice.length)
+        if (rows.length !== slice.length) {
+          throw new TypeError(`encoder produced ${rows.length} vectors for ${slice.length} texts`)
+        }
+        vectors.push(...rows)
+      }
+      if (vectors.length !== texts.length) {
+        throw new TypeError(`encoder produced ${vectors.length} vectors for ${texts.length} texts`)
       }
       return vectors
     },
@@ -183,8 +273,43 @@ export function embedderOf(
 }
 
 /**
- * Open the real WASM session for one verified bundle. The ONNX runtime and the
- * tokenizer runtime are loaded here, once, on first use.
+ * Derive the KV-cache feed contract from the ONNX input names and the model's
+ * `config.json`. Returns `undefined` for plain encoders. A decoder export that
+ * declares cache inputs but omits the dimensions is a hard error: guessing
+ * would produce a silently wrong tensor shape.
+ * @param inputNames - the session's declared input tensor names.
+ * @param config - the bundle's parsed `config.json`.
+ */
+export function cacheSpecOf(
+  inputNames: readonly string[],
+  config: Readonly<Record<string, unknown>>,
+): CacheInputSpec | undefined {
+  if (!inputNames.some((name) => name.startsWith('past_key_values.'))) return undefined
+  const kvHeads = config.num_key_value_heads
+  const hiddenSize = config.hidden_size
+  const attentionHeads = config.num_attention_heads
+  const headDim = config.head_dim
+  const layers = config.num_hidden_layers
+  const spec: CacheInputSpec = {
+    kvHeads: typeof kvHeads === 'number' ? kvHeads : 1,
+    headDim:
+      typeof headDim === 'number'
+        ? headDim
+        : typeof hiddenSize === 'number' && typeof attentionHeads === 'number'
+          ? hiddenSize / attentionHeads
+          : 0,
+    layers: typeof layers === 'number' ? layers : 0,
+  }
+  if (spec.headDim <= 0 || spec.layers <= 0) {
+    throw new TypeError('the encoder declares a KV cache but config.json omits its dimensions')
+  }
+  return spec
+}
+
+/**
+ * Open the real WASM session for one verified bundle. Ownership of the ONNX
+ * session transfers to this function: any failure after creation releases it
+ * exactly once, and a release failure never masks the original error.
  * @param spec - the verified catalog entry.
  * @param dir - the bundle directory (already verified on disk).
  */
@@ -197,31 +322,50 @@ export async function openEmbedder(spec: SemanticModelEntry, dir: string): Promi
     executionProviders: ['wasm'],
     graphOptimizationLevel: 'all',
   })
-  const port: SessionPort = {
-    inputNames: session.inputNames,
-    outputNames: session.outputNames,
-    async run(feeds) {
-      const tensorFeeds: Record<string, InstanceType<typeof ort.Tensor>> = {}
-      for (const [name, tensor] of Object.entries(feeds)) {
-        tensorFeeds[name] = new ort.Tensor('int64', tensor.data as BigInt64Array, [...tensor.dims])
-      }
-      const outputs = await session.run(tensorFeeds)
-      const result: Record<string, SessionTensor> = {}
-      for (const [name, tensor] of Object.entries(outputs)) {
-        result[name] = { dims: tensor.dims, data: tensor.data as Float32Array | BigInt64Array }
-      }
-      return result
-    },
-    async release() {
-      await session.release()
-    },
+  let released = false
+  const release = async (): Promise<void> => {
+    if (released) return
+    released = true
+    await session.release()
   }
-  const int64Tensor: Int64TensorFactory = (dims, data) => ({ dims, data })
-  const { readJsonFile } = await import('./bundle.js')
-  const tokenizer = await createEmbeddingTokenizer(
-    await readJsonFile(join(dir, 'tokenizer.json')),
-    await readJsonFile(join(dir, 'tokenizer_config.json')),
-    spec,
-  )
-  return embedderOf(spec, tokenizer, port, int64Tensor)
+  try {
+    const { readJsonFile } = await import('./bundle.js')
+    const config = (await readJsonFile(join(dir, 'config.json'))) as Record<string, unknown>
+    const cacheSpec = cacheSpecOf(session.inputNames, config)
+    const port: SessionPort = {
+      inputNames: session.inputNames,
+      outputNames: session.outputNames,
+      ...(cacheSpec === undefined ? {} : { cacheSpec }),
+      async run(feeds) {
+        const tensorFeeds: Record<string, InstanceType<typeof ort.Tensor>> = {}
+        for (const [name, tensor] of Object.entries(feeds)) {
+          const isFloat = tensor.data instanceof Float32Array
+          tensorFeeds[name] = new ort.Tensor(
+            isFloat ? 'float32' : 'int64',
+            tensor.data as BigInt64Array & Float32Array,
+            [...tensor.dims],
+          )
+        }
+        const outputs = await session.run(tensorFeeds)
+        const result: Record<string, SessionTensor> = {}
+        for (const [name, tensor] of Object.entries(outputs)) {
+          result[name] = { dims: tensor.dims, data: tensor.data as Float32Array | BigInt64Array }
+        }
+        return result
+      },
+      release,
+    }
+    const int64Tensor: Int64TensorFactory = (dims, data) => ({ dims, data })
+    const tokenizer = await createEmbeddingTokenizer(
+      await readJsonFile(join(dir, 'tokenizer.json')),
+      await readJsonFile(join(dir, 'tokenizer_config.json')),
+      spec,
+    )
+    return embedderOf(spec, tokenizer, port, int64Tensor)
+  } catch (error) {
+    // Ownership transfer: the session is ours to release on every failure
+    // after creation. A release failure must not replace the original error.
+    await release().catch(() => undefined)
+    throw error
+  }
 }

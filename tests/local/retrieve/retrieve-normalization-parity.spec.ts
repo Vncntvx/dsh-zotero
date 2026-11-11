@@ -8,11 +8,11 @@
  * query answers "this paper is relevant" and "nothing in it is". The ranking
  * seam sits on top of it, so these cases pin the seam, not the fold.
  *
- * The negative half matters as much as the positive half. The lexical route is
- * term overlap and nothing else: it does not stem, lemmatize, or expand. A test
- * that only asserted the folding cases would let a future change slip
- * morphological normalization into the shared fold — which is exactly what the
- * semantic route exists to do *beside* the fold, never inside it.
+ * The negative half is needed alongside the positive half. The lexical route is
+ * term overlap only: it does not stem, lemmatize, or expand. These cases keep a
+ * future change from adding morphological normalization to the shared fold.
+ * Morphological normalization belongs to the semantic route, beside the fold
+ * and never inside it.
  * @module tests/local/retrieve/retrieve-normalization-parity
  */
 

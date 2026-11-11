@@ -1,15 +1,17 @@
 /**
- * The per-service holder for one loaded semantic embedder.
+ * The per-service holder for loaded semantic embedders.
  *
- * At most one model is resident: selecting another key or directory releases
- * the previous session before the next opens, and disposal releases whatever
- * is resident. Loading is single-flighted, so concurrent ranks share one
- * in-flight load instead of opening two WASM sessions.
+ * A switch is transactional: B becomes resident only after its load succeeds,
+ * and a failed B reports to B's callers while A stays managed. Resident,
+ * pending, and retired instances each carry an identity, a load promise, a
+ * scope count and a run count; an instance is released exactly once, after its
+ * last scope and in-flight run finish. Serialized switches keep at most one
+ * load in flight and bounded concurrent inference.
  *
- * Every failure the resolver or the loader produces surfaces as
- * `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` with the remedy in the message:
- * the caller asked for semantic ranking and the answer is "the model cannot
- * serve", never a silent lexical-only result.
+ * Teardown closes admission, unsets the slot and lets accepted scopes drain;
+ * a re-injection creates a new generation rather than reviving this loader.
+ * Every failure surfaces as `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`, never a
+ * silent lexical-only result.
  * @module dsh-zotero/enrichment/semantic/loader
  */
 
@@ -46,11 +48,13 @@ function unavailable(error: unknown): ZoteroError {
   )
 }
 
+function keyOf(target: SemanticModelTarget): string {
+  return `${target.spec.key}|${target.dir}`
+}
+
 /**
  * Resolve the model target from live enrichment config: the selected tier's
  * spec and its on-disk directory.
- * @param config - the live resolved enrichment preferences.
- * @param resolveDir - maps a physical key plus configured directory to a path.
  */
 export function semanticTargetOf(
   config: { readonly semanticModel: string; readonly semanticModelDir: string },
@@ -60,50 +64,178 @@ export function semanticTargetOf(
   return { spec, dir: resolveDir(spec.physicalKey, config.semanticModelDir) }
 }
 
+interface Managed {
+  readonly id: number
+  readonly key: string
+  readonly target: SemanticModelTarget
+  readonly load: Promise<Embedder>
+  scopes: number
+  running: number
+  retiring: boolean
+  released: boolean
+}
+
+/** One admitted foreground request; released in `finally` by the caller. */
+export interface RankingScope {
+  readonly release: () => void
+  /** The embedder fixed for this scope, loaded on first use. */
+  readonly embedder: () => Promise<Embedder>
+}
+
 export class SemanticEmbedderLoader {
-  private current: { readonly key: string; readonly embedder: Promise<Embedder> } | undefined
+  private resident: Managed | undefined
+  private pending: Managed | undefined
+  private readonly retired = new Set<Managed>()
+  private readonly open: (target: SemanticModelTarget) => Promise<Embedder>
+  private closed = false
+  private generation = 0
+  private nextId = 1
+  /** Serialized switch queue: one load admitted at a time. */
+  private switchQueue: Promise<unknown> = Promise.resolve()
+  private readonly disposals = new Set<Promise<void>>()
 
-  constructor(private readonly deps: SemanticEmbedderLoaderDeps = {}) {}
-
-  /**
-   * The embedder for one target, loading on first use and on target change.
-   * Concurrent calls share the in-flight load; a changed target releases the
-   * previous session once the new one is open.
-   * @param target - which model to load, from live config.
-   */
-  async get(target: SemanticModelTarget): Promise<Embedder> {
-    const key = `${target.spec.key}|${target.dir}`
-    const current = this.current
-    if (current !== undefined && current.key === key) return await current.embedder
-    const open =
-      this.deps.open ??
-      (async (resolved) => await openSemanticEmbedder(resolved.spec, resolved.dir))
-    const embedder = open(target).catch((error: unknown) => {
-      // A failed load must not stay cached: the next call retries (the user
-      // may have installed the bundle in between).
-      if (this.current?.key === key) this.current = undefined
-      throw unavailable(error)
-    })
-    this.current = { key, embedder }
-    const loaded = await embedder
-    // Release the previous resident only after the new session is open, so a
-    // model switch never leaves the caller without an embedder.
-    if (current !== undefined && current.key !== key) {
-      void current.embedder.then((previous) => previous.dispose()).catch(() => {})
-    }
-    return loaded
+  constructor(deps: SemanticEmbedderLoaderDeps = {}) {
+    this.open = deps.open ?? (async (target) => await openSemanticEmbedder(target.spec, target.dir))
   }
 
-  /** Release the resident session, if any, and forget it. */
-  async dispose(): Promise<void> {
-    const current = this.current
-    this.current = undefined
-    if (current === undefined) return
-    try {
-      const embedder = await current.embedder
-      await embedder.dispose()
-    } catch {
-      // A failed load has nothing to release; disposal stays quiet.
+  /**
+   * Admit one foreground scope for a target. The scope keeps its own instance
+   * alive until released, even if the component is unmounted in between; the
+   * target and service generation are fixed at admission.
+   */
+  scope(target: SemanticModelTarget): RankingScope {
+    if (this.closed) throw unavailable(new Error('the semantic loader is closed'))
+    const key = keyOf(target)
+    let managed =
+      this.resident?.key === key
+        ? this.resident
+        : this.pending?.key === key
+          ? this.pending
+          : undefined
+    if (managed === undefined) {
+      managed = this.beginLoad(target)
     }
+    managed.scopes += 1
+    let released = false
+    const held = managed
+    return {
+      release: () => {
+        if (released) return
+        released = true
+        held.scopes -= 1
+        this.maybeRelease(held)
+      },
+      embedder: async () => {
+        held.running += 1
+        try {
+          return await held.load
+        } finally {
+          held.running -= 1
+          this.maybeRelease(held)
+        }
+      },
+    }
+  }
+
+  /** Single-call entry; equivalent to a scope used once. */
+  async get(target: SemanticModelTarget): Promise<Embedder> {
+    const admitted = this.scope(target)
+    try {
+      return await admitted.embedder()
+    } finally {
+      admitted.release()
+    }
+  }
+
+  private beginLoad(target: SemanticModelTarget): Managed {
+    const id = this.nextId++
+    const key = keyOf(target)
+    // The open call starts only after any previous switch has settled.
+    const load = this.switchQueue.then(() => {
+      if (this.closed) throw unavailable(new Error('the semantic loader is closed'))
+      return this.open(target).catch((error: unknown) => {
+        throw unavailable(error)
+      })
+    })
+    const managed: Managed = {
+      id,
+      key,
+      target,
+      load,
+      scopes: 0,
+      running: 0,
+      retiring: false,
+      released: false,
+    }
+    this.pending = managed
+    // Commit B as resident only on success; a failure keeps A and reports to B.
+    void load
+      .then((embedder) => {
+        if (this.closed) {
+          void embedder.dispose().catch(() => undefined)
+          return
+        }
+        const previous = this.resident
+        if (this.pending === managed) this.pending = undefined
+        this.resident = managed
+        if (previous !== undefined && previous !== managed) {
+          previous.retiring = true
+          this.retired.add(previous)
+          this.maybeRelease(previous)
+        }
+      })
+      .catch(() => {
+        // A failed load never becomes resident. A stays managed; B's own
+        // callers already have the rejection from `managed.load`.
+        if (this.pending === managed) this.pending = undefined
+        managed.retiring = true
+        this.retired.add(managed)
+        this.maybeRelease(managed)
+      })
+    this.switchQueue = load.catch(() => undefined)
+    return managed
+  }
+
+  private maybeRelease(managed: Managed): void {
+    if (
+      managed.released ||
+      managed.scopes > 0 ||
+      managed.running > 0 ||
+      (managed === this.resident && !managed.retiring && !this.closed) ||
+      (managed === this.pending && !managed.retiring)
+    )
+      return
+    managed.released = true
+    this.retired.delete(managed)
+    const disposal = managed.load
+      .then((embedder) => embedder.dispose())
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.resident === managed) this.resident = undefined
+        if (this.pending === managed) this.pending = undefined
+      })
+    this.disposals.add(disposal)
+    void disposal.finally(() => this.disposals.delete(disposal))
+  }
+
+  /** Unset the slot, close admission and let accepted scopes drain. */
+  async dispose(): Promise<void> {
+    this.closed = true
+    this.generation += 1
+    const all = new Set<Managed>()
+    if (this.resident !== undefined) all.add(this.resident)
+    if (this.pending !== undefined) all.add(this.pending)
+    for (const managed of this.retired) all.add(managed)
+    for (const managed of all) managed.retiring = true
+    // Wait for the actual loads/runs to settle. Accepted scopes are NOT
+    // force-released here: they drain on their own `release()` and keep their
+    // fixed model alive for the rest of the original request.
+    await Promise.allSettled([...all].map((managed) => managed.load))
+    for (const managed of all) this.maybeRelease(managed)
+    // Wait for the one-time dispose calls that were actually started.
+    await Promise.allSettled([...this.disposals])
+    this.resident = undefined
+    this.pending = undefined
+    this.retired.clear()
   }
 }

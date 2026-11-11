@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "kind": "wp6-six-model-runtime-report",
+  "generatedAt": "2026-11-11T10:56:39Z",
+  "environment": {
+    "platform": "macOS-27.3-arm64-arm-64bit",
+    "node": "v24.20.0",
+    "modelRoot": "/Volumes/Work/dsh-semantic-tmp",
+    "residency": "one model at a time, disposed before the next opens"
+  },
+  "procedure": [
+    "Download all six pinned bundles and verify every file against the catalog byte count and SHA-256.",
+    "For each model: encode the fit split (train+calibration+fixed banks) with the real ONNX bundle via lib/enrichment/semantic/bundle.js.",
+    "Fit the offline ridge-logistic classifier with fit.mjs on those real vectors; it selects k and ridge by train-only grouped CV and the threshold on the calibration split only.",
+    "Because every model produced no feasible threshold (rawNegativeCountSufficient is false at 36 negative intents per language, below the 300 bar), evaluate.mjs refused heldout encoding; no calibration artifact was produced or shipped.",
+    "Per model, a diagnostic-only artifact at the reject-all threshold 0.9 was built in the same strict shape to exercise the production ranker over the committed 24-case recall fixture and the unrelated-corpus rejection checks. It is not a production artifact."
+  ],
+  "acceptanceTargets": {
+    "recallAt4": 0.9,
+    "mrr": 0.75,
+    "genericTop2": 0,
+    "unrelatedCorpusSemanticHits": 0,
+    "independentNegativeQueriesPerLanguage": 300
+  },
+  "models": [
+    {
+      "model": "academic",
+      "physicalKey": "gte-base",
+      "modelId": "onnx-community/gte-multilingual-base",
+      "revision": "2edbf5e672aab465f9ed4c154a8b61791c082c69",
+      "dimension": 768,
+      "diskBytes": 357406322,
+      "durationSeconds": 97.6,
+      "peakRssBytes": 2269495296,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 4,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "8661c10cf241a3939db2e3cc608490d6afeab4932b90eb7e1c507df9a3e7c5e9",
+        "classifier": {
+          "coefficients": [
+            -6.489730229398312, 1.7070839554197366, -0.21630269493656953, 0.19569342834907963,
+            0.2152299275007985, 0.17333051292703547
+          ],
+          "means": [
+            0.5004408199240965, -0.03459549065575426, -0.035030092189310996, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.07390269414655626, 0.07542987614821571, 0.07161769926722886, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    },
+    {
+      "model": "balanced",
+      "physicalKey": "qwen3-0.6b",
+      "modelId": "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+      "revision": "c25a394dd583836952667c12f008335071b3f43d",
+      "dimension": 1024,
+      "diskBytes": 624964390,
+      "durationSeconds": 353.5,
+      "peakRssBytes": 3566043136,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 4,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "68100f46a3981dd2c6ed99bf412c5916da41975215ddf93520e3ca737ea2777e",
+        "classifier": {
+          "coefficients": [
+            -6.414235878357189, 1.2841374946718558, -0.4388859847963556, 0.7935098904203298,
+            -0.0021118454559826087, 0.21460284779205221
+          ],
+          "means": [
+            0.3529648906004619, -0.013501868464871915, -0.05474145943854096, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.08140979189647554, 0.07968090407662623, 0.0851915669360337, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    },
+    {
+      "model": "bilingual",
+      "physicalKey": "kalm-0.5b",
+      "modelId": "thomasht86/KaLM-embedding-multilingual-mini-instruct-v2.5-ONNX",
+      "revision": "1ef826ab24cfcf52243ea16fefaf239b8c7fa285",
+      "dimension": 896,
+      "diskBytes": 573764596,
+      "durationSeconds": 275.8,
+      "peakRssBytes": 2961735680,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 1,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "49306fee42fb8364371b87e05f06851b556e02d1b3f75536c34401b0fc71f51c",
+        "classifier": {
+          "coefficients": [
+            -6.217478556819003, 1.3095498970949204, -0.2188571486567514, 0.46296206430038167,
+            0.02433670595745804, 0.15192328513854525
+          ],
+          "means": [
+            0.3875795430779055, -0.04170697157741943, -0.08410618221138834, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.08744958477522992, 0.08969239280784706, 0.09288067081413053, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    },
+    {
+      "model": "english",
+      "physicalKey": "nomic-137m",
+      "modelId": "nomic-ai/nomic-embed-text-v1.5",
+      "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+      "dimension": 768,
+      "diskBytes": 138012979,
+      "durationSeconds": 107.0,
+      "peakRssBytes": 882507776,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 4,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "b8cfea299ce90557275cf212e04f3a203066d92035bafb2cd4d31be2a48af055",
+        "classifier": {
+          "coefficients": [
+            -4.7926586491599465, 1.4077730262562367, -0.3595872837930875, -0.03320273989563027,
+            0.4020113925297746, 0.3129277569028425
+          ],
+          "means": [
+            0.5002469562594765, -0.0696699428614719, -0.1228410234751042, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.09409340636974538, 0.08849375266245527, 0.09999133719398032, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    },
+    {
+      "model": "hybrid",
+      "physicalKey": "bge-m3",
+      "modelId": "onnx-community/bge-m3-ONNX",
+      "revision": "25b9af8e87a38eb120cfe87125383677b9cd309e",
+      "dimension": 1024,
+      "diskBytes": 585566035,
+      "durationSeconds": 254.5,
+      "peakRssBytes": 2788081664,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 4,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "e30e352f7522a988eea03953ade3a594f67fe14179b7a0dbae8462452ba49445",
+        "classifier": {
+          "coefficients": [
+            -6.144540997924551, 1.5978279758796823, -0.3863363810443048, 0.373880951350982,
+            0.41277947250869845, 0.3110035256322304
+          ],
+          "means": [
+            0.3237302748137038, -0.02815876893963298, -0.08817830763112358, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.07884705265447073, 0.07844508720707945, 0.08146987408864438, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    },
+    {
+      "model": "lightweight",
+      "physicalKey": "granite-97m",
+      "modelId": "onnx-community/granite-embedding-97m-multilingual-r2-ONNX",
+      "revision": "536a9f241cb3f02a9c5995a1e708c784bd274859",
+      "dimension": 384,
+      "diskBytes": 123181922,
+      "durationSeconds": 23.1,
+      "peakRssBytes": 1094664192,
+      "fit": {
+        "status": "failed-calibration-budget-or-support",
+        "threshold": null,
+        "k": 4,
+        "lambda": 0.001,
+        "trainingRows": 7488,
+        "calibrationRows": 7488,
+        "candidateDigest": "b7315ddc45aa654f7453355cca4162ac10b05cda4fdcbcc36ac3e602e237216e",
+        "classifier": {
+          "coefficients": [
+            -6.066298025838475, 1.4220550831336731, -0.22607599836171155, 0.4226136307337737,
+            0.03948881903828121, 0.11895650464911665
+          ],
+          "means": [
+            0.7153049962347037, -0.019960139747857236, -0.02333208252743183, 3.6101339128917895,
+            4.757272932570715
+          ],
+          "scales": [
+            0.04310744508336321, 0.04493540449869409, 0.04490938862333209, 0.6516408434126609,
+            0.7015495559914056
+          ]
+        },
+        "note": "Offline fit stores the intercept first; the production artifact reorders it last."
+      },
+      "heldoutRun": false,
+      "heldoutReason": "no feasible calibrated threshold; evaluate.mjs forbids heldout encoding",
+      "recallAt4": 0.166667,
+      "mrr": 0.166667,
+      "genericTop2": 0,
+      "unrelatedCorpusSemanticHits": 0,
+      "onTopicSemanticHit": false,
+      "diagnosticThreshold": 0.9,
+      "diagnosticOnly": true
+    }
+  ],
+  "verdict": {
+    "sixModelMatrixRun": true,
+    "allModelsInferenceOk": true,
+    "feasibleCalibrationArtifacts": 0,
+    "wp6AcceptanceMet": false,
+    "blockers": [
+      "Dataset scale: 36 authored negative intents per language versus the 300 independent negative-query requirement. No model can satisfy the raw-count gate with this dataset; validate.mjs reports readyForWp6Acceptance=false regardless of model.",
+      "Independent annotation: labels are author judgments from one synthetic author, with co-authored translations. Independent adjudication and real extraction text are absent.",
+      "Classifier generalization: the fitted five-feature classifier separates its own training distribution (relevant confidence about 0.69, negatives at most 0.09) but assigns low confidence (<0.21) to the quarantined 24 legacy paraphrase cases, so recall@4 stays at the lexical baseline 0.167.",
+      "At the strict thresholds (>=0.9) the classifier rejects every passage, including relevant ones; at lower thresholds the negative-any-hit rate is 8-33%, far above the 1% budget. Precision and rejection cannot both be met on this data."
+    ],
+    "notAClaim": "This report records real six-model inference and the real calibration outcome. It is not a WP6 acceptance pass."
+  },
+  "readPaths": {
+    "procedure": [
+      "scholarly path: rankPassages (real chunking of a 7-sentence fulltext, limit 3, 20 words/400 chars per chunk) with the real model and the diagnostic artifact.",
+      "local path: retrieve() over a scripted Zotero Local API item (PDF fulltext), real chunking and the same ranker.",
+      "Each path also ran a wholly unrelated vaccine query against a ceramic/other-topic corpus."
+    ],
+    "results": {
+      "lightweight": {
+        "scholarlyPassages": 2,
+        "scholarlyKinds": ["lexical", "lexical"],
+        "scholarlyRoutes": ["lexical", "semantic"],
+        "scholarlyNegativePassages": 0,
+        "localEvidence": 2,
+        "localKinds": ["lexical", "lexical"],
+        "localNoMatch": null,
+        "localNegativeEvidence": 0,
+        "localNegativeNoMatch": "no-overlap"
+      },
+      "english": {
+        "scholarlyPassages": 2,
+        "scholarlyKinds": ["lexical", "lexical"],
+        "scholarlyRoutes": ["lexical", "semantic"],
+        "scholarlyNegativePassages": 0,
+        "localEvidence": 2,
+        "localKinds": ["lexical", "lexical"],
+        "localNoMatch": null,
+        "localNegativeEvidence": 0,
+        "localNegativeNoMatch": "no-overlap"
+      }
+    },
+    "conclusion": "Both read paths execute with the real model, chunk identically, and report honest empty results for an unrelated corpus. The semantic route admitted no passage on this data, so every returned hit is lexical; the fixed-reference classifier does reject the unrelated corpus."
+  }
+}

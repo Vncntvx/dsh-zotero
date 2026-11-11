@@ -265,7 +265,15 @@ async function verifyInstalled(options) {
 }
 
 async function main() {
-  const options = optionsOf(process.argv.slice(2))
+  const argv = process.argv.slice(2)
+  // `--help` must answer and exit; falling through would start a real install.
+  if (argv.includes('--help')) {
+    process.stdout.write(
+      'Usage: node scripts/fetch-semantic-model.mjs [--model=<key>|all] [--dir=<root>] [--list] [--dry-run] [--verify-only] [--source=auto|hf-mirror|huggingface] [--proxy=<url>] [--no-proxy] [--timeout-ms=<n>]\n',
+    )
+    return
+  }
+  const options = optionsOf(argv)
   if (options.list) {
     listModels()
     return

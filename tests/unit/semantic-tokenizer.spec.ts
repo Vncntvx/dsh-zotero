@@ -1,9 +1,8 @@
 /**
- * The embedding tokenizer's own rules — instruction prefixes, window
- * truncation, batch padding — driven through a scripted tokenizer, because the
- * real `tokenizer.json` files are opt-in model assets no unit test may
- * require. Special-token handling of the HF runtime itself is covered by the
- * opt-in semantic-eval run.
+ * The embedding tokenizer's rules (instruction prefixes, window truncation,
+ * batch padding) driven through a scripted tokenizer; the real `tokenizer.json`
+ * files are opt-in model assets that unit tests do not require. Special-token
+ * handling in the HF runtime is covered by the opt-in semantic-eval run.
  * @module tests/unit/semantic-tokenizer
  */
 

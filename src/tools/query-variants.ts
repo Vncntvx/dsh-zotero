@@ -1,9 +1,8 @@
 /**
- * The `queryVariants` argument both ranking tools accept: the same bound, the
- * same normalization, one owner. A repeated phrasing can only repeat work and
- * produce the same score, so duplicates fold rather than reject; more than the
- * cap is refused because every phrasing is a separate scoring pass over the
- * same passages — "split the call" would multiply the work, not reduce it.
+ * The `queryVariants` argument both ranking tools accept: one owner for the
+ * bound and normalization. Duplicates fold rather than reject; entries beyond
+ * the cap are refused because each phrasing scores the same passages again, so
+ * splitting the call would only add work.
  * @module dsh-zotero/tools/query-variants
  */
 

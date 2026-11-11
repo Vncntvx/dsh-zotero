@@ -1,13 +1,13 @@
 /**
- * The ranking seam's own contract: what `rank` promises to the two tools that
- * call it, independent of which strategy is installed.
+ * The ranking seam's contract: what `rank` promises the two calling tools,
+ * independent of the installed strategy.
  *
- * The core's `bm25EvidenceRanker` is one complete strategy behind this
- * interface, and the enrichment component installs a hybrid one. Both have to
- * agree on the promises below, because `zotero_retrieve` and `scholarly_read`
- * read the result without knowing which one ran: an emptied result means "no
- * overlap", `score` orders but does not measure, `matchKind` says what may be
- * done with the passage, and a paraphrase may only ever raise a passage.
+ * The core's `bm25EvidenceRanker` is one strategy behind this interface; the
+ * enrichment component installs a hybrid one. Both must keep these promises,
+ * since `zotero_retrieve` and `scholarly_read` read the result without knowing
+ * which ran: an empty result means no overlap, `score` orders but does not
+ * measure, `matchKind` says how the passage may be used, and a paraphrase can
+ * only raise a passage.
  * @module tests/local/retrieve/evidence-ranker
  */
 
@@ -27,8 +27,8 @@ function chunksOf(passages: readonly string[]) {
 }
 
 /**
- * The matches half of a lexical ranking, so the spec reads like the array it
- * asserts on; route facts get their own assertions.
+ * The matches half of a lexical ranking, shaped like the array the spec
+ * asserts on; route facts are asserted separately.
  */
 function matchesOf(request: Parameters<typeof bm25EvidenceRanker.rank>[0]) {
   return bm25EvidenceRanker.rank(request).then((result) => result.matches)
@@ -111,8 +111,8 @@ describe('bm25EvidenceRanker', () => {
   })
 
   it('cannot be amplified by repeating the query text as a paraphrase', async () => {
-    // The stage-1 fix, seen from the seam: a reviewer who pastes the same
-    // wording twice must get the same answer, not twice the weight.
+    // // A repeated phrasing returns the same answer without adding
+    // weight.
     const passages = ['trust in institutions', 'trust and compliance', 'unrelated text']
     const once = await matchesOf({ query: 'trust', chunks: chunksOf(passages) })
     const twice = await matchesOf({
@@ -124,8 +124,8 @@ describe('bm25EvidenceRanker', () => {
   })
 
   it('scores a paraphrase separately and keeps the best value per passage', async () => {
-    // Max, not sum: a passage matched by both wordings must not collect two
-    // scores, which is the pooling bug the seam exists to keep out.
+    // // Use max, not sum: a passage matched by both wordings collects one
+    // score.
     const passages = ['legitimacy and adherence', 'a study of perceived legitimacy', 'unrelated']
     const ranked = await matchesOf({
       query: 'regulatory adherence',
@@ -156,13 +156,57 @@ describe('bm25EvidenceRanker', () => {
   })
 
   it('breaks ties by the caller chunk order, like the primitive it wraps', async () => {
-    // Two identical passages carry identical scores; the caller's own order is
-    // the only tie-break that keeps the answer reproducible.
+    // // Identical passages score alike; the caller's order is the only
+    // tie-break, keeping the answer reproducible.
     const ranked = await matchesOf({
       query: 'bridges',
       chunks: chunksOf(['bridges here', 'bridges here']),
     })
     expect(ranked.map((entry) => entry.index)).toEqual([0, 1])
+  })
+
+  it("returns the caller's sparse and reordered handles, not corpus positions", async () => {
+    const ranked = await matchesOf({
+      query: 'bridges',
+      chunks: [
+        { text: 'bridges over rivers', index: 40 },
+        { text: 'unrelated', index: 5 },
+        { text: 'bridges and tunnels', index: -2 },
+      ],
+    })
+    // // Equal route scores tie by ascending caller handle, and the
+    // original handles are preserved.
+    expect(ranked.map((entry) => entry.index)).toEqual([-2, 40])
+    expect(ranked.every((entry) => entry.index !== 0 && entry.index !== 1)).toBe(true)
+  })
+
+  it('refuses duplicate caller handles instead of collapsing two sources', async () => {
+    await expect(
+      bm25EvidenceRanker.rank({
+        query: 'bridges',
+        chunks: [
+          { text: 'bridges here', index: 7 },
+          { text: 'bridges there', index: 7 },
+        ],
+      }),
+    ).rejects.toThrow(/duplicate evidence chunk index 7/)
+  })
+
+  it('keeps every source when two passages carry the same text', async () => {
+    const ranked = await matchesOf({
+      query: 'bridges',
+      chunks: [
+        { text: 'bridges here', index: 11 },
+        { text: 'bridges here', index: 23 },
+      ],
+    })
+    // // The lexical route scores both texts; identical wording does not
+    // drop a source.
+    expect(ranked.map((entry) => entry.index)).toEqual([11, 23])
+    expect(ranked.map((entry) => entry.lexicalScore)).toEqual([
+      ranked[0]!.lexicalScore,
+      ranked[0]!.lexicalScore,
+    ])
   })
 })
 
