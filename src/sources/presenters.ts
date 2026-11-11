@@ -6,8 +6,8 @@
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ArgsView, ToolBlockLike } from './block-types.js'
-import type { EvidenceItem, EvidenceField } from '../evidence-item.js'
-import { isEvidenceSource } from '../evidence-item.js'
+import type { EvidenceItem, EvidenceField, EvidenceMatchKind } from '../evidence-item.js'
+import { isEvidenceMatchKind, isEvidenceSource } from '../evidence-item.js'
 import { boolField, isRecord, stringField } from '../json.js'
 import { REF_IN_TEXT_PATTERN } from '../ref-grammar.js'
 
@@ -155,6 +155,7 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
     const previewTruncated = boolField(item, 'previewTruncated') === true
     const pageLabel = stringField(item, 'pageLabel')
     const attachmentRef = stringField(item, 'attachmentRef')
+    const matchKind = matchKindOf(item['matchKind'])
     const matchedFields = matchedFieldsOf(item['matchedFields'])
     rows.push({
       source,
@@ -163,10 +164,22 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
       previewTruncated,
       ...(pageLabel === undefined ? {} : { pageLabel }),
       ...(attachmentRef === undefined ? {} : { attachmentRef }),
+      ...(matchKind === undefined ? {} : { matchKind }),
       ...(matchedFields === undefined ? {} : { matchedFields }),
     })
   }
   return rows
+}
+
+/**
+ * The recorded match kind, or `undefined` when the record does not name one the
+ * wire defines. A replay of a record written before this field existed has no
+ * kind, and the badge is simply absent: inventing `lexical` would assert the
+ * passage shares the query's wording, which nothing in that record proves.
+ */
+function matchKindOf(value: unknown): EvidenceMatchKind | undefined {
+  if (typeof value !== 'string') return undefined
+  return isEvidenceMatchKind(value) ? value : undefined
 }
 
 /**

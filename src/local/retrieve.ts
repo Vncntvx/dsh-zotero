@@ -1,16 +1,19 @@
 /**
  * The `zotero_retrieve` domain: one item's annotations, notes, abstract, and
- * full-text chunks ranked as a single BM25 passage corpus, with per-passage
- * attachment provenance under the multi-attachment policies. An annotation
- * ranks on its highlight and the reader's comment together, and reports which
- * of the two matched; notes, the abstract, and full-text chunks rank on their
- * own text.
+ * full-text chunks ranked as a single passage corpus by the ranking strategy
+ * `src/local/evidence-ranker.ts` defines, with per-passage attachment
+ * provenance under the multi-attachment policies. An annotation ranks on its
+ * highlight and the reader's comment together, and reports which of the two
+ * matched; notes, the abstract, and full-text chunks rank on their own text.
+ * Each passage reports why it was returned (`matchKind`), so a meaning-level
+ * hit is never presented as wording the source contains.
  * @module dsh-zotero/local/retrieve
  */
 
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
-import { chunkText, rankChunks, tokenize } from '../evidence.js'
+import { chunkText, tokenize } from '../evidence.js'
+import { queryTermsAcross } from './evidence-ranker.js'
 import { asRecord, asString } from '../json.js'
 import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
 import {
@@ -50,13 +53,15 @@ import type {
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
 } from '../types.js'
+import type { EvidenceMatchKind } from '../evidence-item.js'
 
 /** The order `sourcesSkipped` reports in; stable regardless of the request order. */
 const SOURCE_ORDER: readonly ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
 
 /**
  * Gather ranked evidence for one item: annotations, notes, the abstract,
- * and full-text chunks are scored as one passage corpus with BM25. Fetch
+ * and full-text chunks are scored as one passage corpus by `deps.ranker`,
+ * the strategy the core or the enrichment component installed. Fetch
  * stays lazy: children only when annotation/note sources (or a PDF
  * fallback) need them, fulltext only when requested, and under the `best`
  * policy a linked fulltext starts concurrently with children. Annotations
@@ -167,9 +172,9 @@ async function readBestFulltext(
         attachmentContentType = selectedContentType
       }
 
-      // Prefer the optional higher-quality parser for a PDF. A `fatal` result
-      // propagates; `ok` text is chunked under the same budget as the index;
-      // a `fallback` is reported and the original loopback read runs as before.
+      // Prefer the optional higher-quality parser for a PDF. Every non-`ok`
+      // outcome propagates fail-closed; `ok` text is chunked under the same
+      // budget as the index.
       const enhanced =
         isPdfCandidate(selectedContentType) && deps.enhancer !== undefined
           ? await tryEnhanceFulltext(
@@ -553,20 +558,24 @@ export async function retrieve(
     }
   }
 
-  const ranked = rankChunks(
-    request.query,
-    passages.map((passage, index) => ({ text: passage.rankText ?? passage.text, index })),
-  )
-  // Zero-score passages share nothing with the query; returning them as
-  // "evidence" would present arbitrary excerpts as matches. A query with no
-  // token overlap therefore yields an empty evidence array, which the
-  // contract reads as "no match", not "no content".
-  const matched = ranked.filter((entry) => entry.score > 0)
-  const queryTerms = new Set(tokenize(request.query))
+  const rankResult = await deps.ranker.rank({
+    query: request.query,
+    ...(request.queryVariants === undefined ? {} : { queryVariants: request.queryVariants }),
+    chunks: passages.map((passage, index) => ({ text: passage.rankText ?? passage.text, index })),
+    ...(signal === undefined ? {} : { signal }),
+  })
+  const ranked = rankResult.matches
+  // The ranker returns only passages some route hit, so "no entries" is the one
+  // fact it reports: no overlap between this query and the sources read. Zero-
+  // score passages are never returned as "evidence", which would present
+  // arbitrary excerpts as matches. An empty corpus is a different fact — no
+  // overlap test ever ran — and is named separately below.
+  const queryTerms = queryTermsAcross(request.query, request.queryVariants)
+  const queryTermSet = new Set(queryTerms)
   const evidence: ZoteroEvidence[] = []
   let used = 0
-  let truncated = matched.length > request.passages || fulltextWasCut || abstractWasCut
-  for (const entry of matched.slice(0, request.passages)) {
+  let truncated = ranked.length > request.passages || fulltextWasCut || abstractWasCut
+  for (const entry of ranked.slice(0, request.passages)) {
     const passage = passages[entry.index]!
     // The budget charges every character the passage puts in front of the
     // model: the text and, for an annotation, its comment. Charging only the
@@ -577,7 +586,7 @@ export async function retrieve(
       break
     }
     used += charged
-    const matchedFields = matchedFieldsOf(queryTerms, passage)
+    const matchedFields = matchedFieldsOf(queryTermSet, passage, entry.matchKind)
     evidence.push({
       source: passage.source,
       sourceRef: passage.sourceRef,
@@ -587,6 +596,7 @@ export async function retrieve(
       ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
       ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
       ...(passage.attachmentRef !== undefined ? { attachmentRef: passage.attachmentRef } : {}),
+      matchKind: entry.matchKind,
       ...(matchedFields !== undefined ? { matchedFields } : {}),
     })
   }
@@ -604,6 +614,14 @@ export async function retrieve(
     evidence,
     truncated,
     sourcesSkipped,
+    queryTerms,
+    rankedRoutes: [...rankResult.routes],
+    ...(ranked.length === 0
+      ? {
+          noMatch: (passages.length === 0 ? 'no-sources' : 'no-overlap') as
+            'no-sources' | 'no-overlap',
+        }
+      : {}),
   }
 }
 
@@ -611,20 +629,29 @@ export async function retrieve(
  * Which of a passage's ranked fields carry query terms. An annotation is the
  * only two-field source (the highlight a reader selected and the comment
  * they wrote), and the comment is the reader's own view rather than the
- * paper's, so the evidence names the field that matched. A ranked passage
- * always matched somewhere (`score > 0` means a query term sits in its
- * text-or-comment token stream, and a single field's tokens are a subset of
- * that stream), so the returned list is never empty.
+ * paper's, so the evidence names the field that matched.
+ *
+ * A `semantic` match names no field at all: the passage answered the query
+ * without sharing its wording, so claiming a field carried the terms would
+ * assert an overlap that does not exist. For a lexical or hybrid match a ranked
+ * passage always matched somewhere, and a single field's tokens are a subset of
+ * the stream that was scored.
+ * @param queryTerms - the distinct terms the lexical route scored.
+ * @param passage - the passage's two text fields, when it has a comment.
+ * @param matchKind - why the passage was returned.
+ * @returns the matched field names, or `undefined` when none apply.
  */
 function matchedFieldsOf(
   queryTerms: ReadonlySet<string>,
   passage: { readonly text: string; readonly comment?: string },
+  matchKind: EvidenceMatchKind,
 ): ZoteroEvidenceField[] | undefined {
+  if (matchKind === 'semantic') return undefined
   if (passage.comment === undefined) return undefined
   const fields: ZoteroEvidenceField[] = []
   if (carriesQueryTerm(queryTerms, passage.text)) fields.push('text')
   if (carriesQueryTerm(queryTerms, passage.comment)) fields.push('comment')
-  return fields
+  return fields.length === 0 ? undefined : fields
 }
 
 /** Whether any query term appears in a field's own tokens. */

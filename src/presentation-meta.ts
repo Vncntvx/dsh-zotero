@@ -463,6 +463,7 @@ export function projectRetrieveMeta(
       sourceRef: entry.sourceRef,
       preview,
       previewTruncated: entry.text.length > preview.length,
+      matchKind: entry.matchKind,
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
       ...(entry.attachmentRef === undefined ? {} : { attachmentRef: entry.attachmentRef }),
       ...(entry.matchedFields === undefined

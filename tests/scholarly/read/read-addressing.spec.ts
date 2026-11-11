@@ -10,7 +10,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ScholarlyTextStore } from '../../../src/scholarly/fulltext/store.js'
+import { rankPassages } from '../../../src/scholarly/fulltext/evidence-bridge.js'
+import { bm25EvidenceRanker } from '../../../src/local/evidence-ranker.js'
 import { createScholarlyReadTool } from '../../../src/scholarly/tools/index.js'
+import { noPassageMessage } from '../../../src/scholarly/tools/read.js'
 import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../fixtures.js'
 
 describe('scholarly_read section addressing', () => {
@@ -172,7 +175,12 @@ ${'Methods text about optimization. '.repeat(20)}`
       { id: '2301.07050', query: 'zzzz nonexistent token' },
       EXEC_CONTEXT as never,
     )) as { text: string }
-    expect(result.text).toContain('No relevant passage found')
+    expect(result.text).toContain(noPassageMessage('zzzz nonexistent token', ['lexical']))
+    // The message must refuse the stronger claim: an empty match is a fact
+    // about this query, not about the paper.
+    expect(result.text).toContain('not evidence that the paper says nothing')
+    // And it must name a way forward.
+    expect(result.text).toContain('queryVariants')
   })
 
   it('uses the default chunk when the caller sets no size', async () => {
@@ -190,5 +198,23 @@ ${'Methods text about optimization. '.repeat(20)}`
       EXEC_CONTEXT as never,
     )) as { text: string }
     expect(result.text).toContain('Characters 0–')
+  })
+
+  it('ranks passages through the host strategy', async () => {
+    expect(
+      (await rankPassages({ ranker: bm25EvidenceRanker, text: '', query: 'query' })).passages,
+    ).toEqual([])
+    expect(
+      (await rankPassages({ ranker: bm25EvidenceRanker, text: structuredDoc, query: '   ' }))
+        .passages,
+    ).toEqual([])
+    const { passages: ranked } = await rankPassages({
+      ranker: bm25EvidenceRanker,
+      text: structuredDoc,
+      query: 'optimization',
+      limit: 2,
+    })
+    expect(ranked.length).toBeGreaterThan(0)
+    expect(ranked[0]?.text).toBeDefined()
   })
 })

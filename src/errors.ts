@@ -45,15 +45,23 @@ export const ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE = 'ZOTERO_SCHOLARLY_CREDEN
 /** A configured scholarly API key reference does not resolve to a value. */
 export const ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED = 'ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED'
 /** A configured MinerU token reference does not resolve to a value (fail-closed). */
-export const ZOTERO_PARSING_CREDENTIAL_UNRESOLVED = 'ZOTERO_PARSING_CREDENTIAL_UNRESOLVED'
-/** MinerU reported the parsing task as failed, with its own stated reason. */
-export const ZOTERO_PARSING_TASK_FAILED = 'ZOTERO_PARSING_TASK_FAILED'
-/** The parsing output directory failed validation. */
-export const ZOTERO_PARSING_OUTPUT_INVALID = 'ZOTERO_PARSING_OUTPUT_INVALID'
+export const ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED = 'ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED'
+/** MinerU reported the enrichment task as failed, with its own stated reason. */
+export const ZOTERO_ENRICHMENT_TASK_FAILED = 'ZOTERO_ENRICHMENT_TASK_FAILED'
+/** The enrichment output directory failed validation. */
+export const ZOTERO_ENRICHMENT_OUTPUT_INVALID = 'ZOTERO_ENRICHMENT_OUTPUT_INVALID'
 /** The returned MinerU archive failed structural or zip-safety validation. */
-export const ZOTERO_PARSING_ARCHIVE_INVALID = 'ZOTERO_PARSING_ARCHIVE_INVALID'
+export const ZOTERO_ENRICHMENT_ARCHIVE_INVALID = 'ZOTERO_ENRICHMENT_ARCHIVE_INVALID'
 /** The document exceeded the selected API's size limit or is not a PDF. */
-export const ZOTERO_PARSING_UNSUPPORTED_INPUT = 'ZOTERO_PARSING_UNSUPPORTED_INPUT'
+export const ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT = 'ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT'
+/**
+ * Semantic ranking was enabled but could not run: the selected model is not
+ * installed, its bundle fails verification, or the local inference runtime
+ * failed. Fail-closed, never a silent lexical fallback.
+ */
+export const ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE = 'ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE'
+/** A local semantic model download failed after every source was tried. */
+export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED'
 /** The configured provider is not registered. */
 export const ZOTERO_PROVIDER_UNAVAILABLE = 'ZOTERO_PROVIDER_UNAVAILABLE'
 /** The one message every "zotero is not composed" answer spells. */
@@ -107,11 +115,13 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE,
   ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
-  ZOTERO_PARSING_CREDENTIAL_UNRESOLVED,
-  ZOTERO_PARSING_TASK_FAILED,
-  ZOTERO_PARSING_OUTPUT_INVALID,
-  ZOTERO_PARSING_ARCHIVE_INVALID,
-  ZOTERO_PARSING_UNSUPPORTED_INPUT,
+  ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
+  ZOTERO_ENRICHMENT_TASK_FAILED,
+  ZOTERO_ENRICHMENT_OUTPUT_INVALID,
+  ZOTERO_ENRICHMENT_ARCHIVE_INVALID,
+  ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
+  ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_UNEXPECTED,
   ZOTERO_WRITE_UNAUTHORIZED,

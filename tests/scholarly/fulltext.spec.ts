@@ -7,8 +7,9 @@ import { ScholarlyTextStore, type FullTextRead } from '../../src/scholarly/fullt
 import {
   extractOutline,
   findSection,
-  rankPassagesWithBM25,
+  rankPassages,
 } from '../../src/scholarly/fulltext/evidence-bridge.js'
+import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.js'
 import { decodeEntities } from '../../src/scholarly/sources/helpers.js'
 import { arxivHtmlToMarkdown, jatsToMarkdown } from '../../src/scholarly/fulltext/markup.js'
 
@@ -300,9 +301,16 @@ We evaluate on WMT 2014 English-to-German and English-to-French translation benc
     expect(findSection(outline, '')).toBeUndefined()
   })
 
-  it('ranks passages using BM25 query relevance', () => {
+  it('ranks passages by query relevance', async () => {
     const query = 'AdamW optimizer learning rate scheduling'
-    const ranked = rankPassagesWithBM25(sampleDoc, query, 3, 180, 1_200)
+    const { passages: ranked } = await rankPassages({
+      ranker: bm25EvidenceRanker,
+      text: sampleDoc,
+      query,
+      limit: 3,
+      maxWords: 180,
+      maxCharsPerChunk: 1_200,
+    })
     expect(ranked.length).toBeGreaterThan(0)
     expect(ranked[0]?.text).toContain('AdamW')
     expect(ranked[0]?.score).toBeGreaterThan(0)
@@ -314,7 +322,14 @@ We evaluate on WMT 2014 English-to-German and English-to-French translation benc
     // over the same paper landed on different passages.
     const { chunkText } = await import('../../src/evidence.js')
     const hostChunks = chunkText(sampleDoc, 180, 1_200)
-    const ranked = rankPassagesWithBM25(sampleDoc, 'self-attention', 12, 180, 1_200)
+    const { passages: ranked } = await rankPassages({
+      ranker: bm25EvidenceRanker,
+      text: sampleDoc,
+      query: 'self-attention',
+      limit: 12,
+      maxWords: 180,
+      maxCharsPerChunk: 1_200,
+    })
 
     for (const passage of ranked) {
       expect(
@@ -324,8 +339,15 @@ We evaluate on WMT 2014 English-to-German and English-to-French translation benc
     }
   })
 
-  it('reports a character span that matches the passage text', () => {
-    const ranked = rankPassagesWithBM25(sampleDoc, 'attention', 3, 180, 1_200)
+  it('reports a character span that matches the passage text', async () => {
+    const { passages: ranked } = await rankPassages({
+      ranker: bm25EvidenceRanker,
+      text: sampleDoc,
+      query: 'attention',
+      limit: 3,
+      maxWords: 180,
+      maxCharsPerChunk: 1_200,
+    })
     expect(ranked.length).toBeGreaterThan(0)
     for (const passage of ranked) {
       expect(sampleDoc.slice(passage.start, passage.end)).toBe(passage.text)
@@ -427,14 +449,33 @@ More body.`
     expect(sections.map((s) => s.id)).toEqual(['1', '2'])
   })
 
-  it('returns no passages for an empty query or empty text', () => {
-    expect(rankPassagesWithBM25('some text about attention', '', 3)).toEqual([])
-    expect(rankPassagesWithBM25('', 'attention', 3)).toEqual([])
+  it('returns no passages for an empty query or empty text', async () => {
+    expect(
+      (
+        await rankPassages({
+          ranker: bm25EvidenceRanker,
+          text: 'some text about attention',
+          query: '',
+          limit: 3,
+        })
+      ).passages,
+    ).toEqual([])
+    expect(
+      (await rankPassages({ ranker: bm25EvidenceRanker, text: '', query: 'attention', limit: 3 }))
+        .passages,
+    ).toEqual([])
   })
 
-  it('finds a passage span even when the chunk text repeats', () => {
+  it('finds a passage span even when the chunk text repeats', async () => {
     const repeated = 'attention '.repeat(400)
-    const ranked = rankPassagesWithBM25(repeated, 'attention', 2, 50, 200)
+    const { passages: ranked } = await rankPassages({
+      ranker: bm25EvidenceRanker,
+      text: repeated,
+      query: 'attention',
+      limit: 2,
+      maxWords: 50,
+      maxCharsPerChunk: 200,
+    })
     for (const passage of ranked) {
       expect(passage.end).toBeGreaterThanOrEqual(passage.start)
     }

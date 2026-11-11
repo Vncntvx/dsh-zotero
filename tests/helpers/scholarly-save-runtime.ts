@@ -9,6 +9,7 @@ import type { ZoteroCreateItemOutcome } from '../../src/types.js'
 import { createScholarlySaveToZoteroTool } from '../../src/scholarly/tools/save-to-zotero.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { ZoteroJobRunner } from '../../src/job-runner.js'
+import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.js'
 
 export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
   const ctx = new Context()
@@ -45,6 +46,10 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
       foregroundWaitMs: 1_000,
     }),
     jobRunner: () => new ZoteroJobRunner(undefined),
+    // The save tool never ranks passages, so the seam is the core's own ranker
+    // here; it only satisfies the host's every-arm wiring requirement.
+    evidenceRanker: () => bm25EvidenceRanker,
+    evidenceChunkLimits: () => ({ chunkWords: 200, chunkChars: 6_000 }),
     zoteroService: () => ({
       writeEnabled: () => true,
       search: async () => {
@@ -54,6 +59,10 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
         writes++
         return outcome
       },
+      // The declared core face: the save tool never ranks, but the stub is a
+      // ZoteroServiceLike and carries the real defaults.
+      evidenceRanker: () => bm25EvidenceRanker,
+      evidenceChunkLimits: () => ({ chunkWords: 200, chunkChars: 6_000 }),
     }),
   })
   const unregister = ctx.tools.register(tool)

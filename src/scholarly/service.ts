@@ -33,7 +33,11 @@ import {
   type ResolvedScholarlyConfig,
   type ScholarlyConfig,
 } from './config.js'
-import { SCHOLARLY_SAVE_TOOL_NAME } from '../constants.js'
+import {
+  SCHOLARLY_SAVE_TOOL_NAME,
+  ZOTERO_FULLTEXT_CHUNK_WORDS,
+  ZOTERO_MAX_EVIDENCE_CHARS,
+} from '../constants.js'
 import type { ScholarlyToolHost } from './tools/common.js'
 import { installParameterCorrection } from '../parameter-correction.js'
 import { ZoteroJobRunner, jobPolicyOf } from '../job-runner.js'
@@ -49,6 +53,7 @@ import { scholarlyPublicAccess } from '../transport/connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
 import type { FulltextEnhancer } from '../local/fulltext-enhancer.js'
+import { bm25EvidenceRanker, type EvidenceRanker } from '../local/evidence-ranker.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -69,6 +74,8 @@ export function canSaveScholarlyToZotero(host: Pick<ScholarlyToolHost, 'zoteroSe
 }
 
 export class ScholarlyService extends Service {
+  /** The tool host, exposed read-only for specs and diagnostics probes. */
+  readonly host: ScholarlyReadHost
   static readonly Config = ScholarlyConfigSchema
   static readonly inject = ['tools', 'systemPrompt']
 
@@ -125,11 +132,31 @@ export class ScholarlyService extends Service {
       // `undefined` when the local Zotero component is not composed, which is
       // exactly the in-library link's absent behavior.
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
-      // The parsing component is a separate, optional bundle row. Read its
-      // enhancer lazily by context key so scholarly neither imports parsing
+      // The enrichment component is a separate, optional bundle row. Read its
+      // enhancer lazily by context key so scholarly neither imports enrichment
       // nor holds a stale reference when the row mounts or unmounts.
-      parsingEnhancer: (): FulltextEnhancer | undefined =>
-        (ctx.get('parsing') as { enhancer?: FulltextEnhancer } | undefined)?.enhancer,
+      enrichmentEnhancer: (): FulltextEnhancer | undefined =>
+        (ctx.get('enrichment') as { enhancer?: FulltextEnhancer } | undefined)?.enhancer,
+      // The ranking strategy and the chunk boundaries are read through the
+      // local Zotero service, which owns both: its own lexical ranker while no
+      // component is installed, and the live config that keeps
+      // `scholarly_read` on the same passage boundaries as `zotero_retrieve`.
+      // Reading per request keeps both tools on one strategy across a mount or
+      // unmount, and keeps this subsystem from importing the enrichment
+      // component at all. The fallbacks are the same defaults the core's
+      // config schema ships, for the (rare) case where the local component is
+      // not composed.
+      evidenceRanker: (): EvidenceRanker =>
+        ctx.get('zotero')?.evidenceRanker() ?? bm25EvidenceRanker,
+      evidenceChunkLimits: () => {
+        const limits = ctx.get('zotero')?.evidenceChunkLimits()
+        return (
+          limits ?? {
+            chunkWords: ZOTERO_FULLTEXT_CHUNK_WORDS,
+            chunkChars: ZOTERO_MAX_EVIDENCE_CHARS,
+          }
+        )
+      },
       ctx,
     }
 
@@ -137,6 +164,8 @@ export class ScholarlyService extends Service {
     // fiber does, because `ctx.tools.register()` is fiber-scoped. The save tool
     // is conditional: with writes disabled it could only ever answer
     // "write capability is disabled", which invites the model to retry it.
+    this.host = host
+
     const canSave = (): boolean => canSaveScholarlyToZotero(host)
     for (const tool of createAllScholarlyTools(host)) {
       ctx.tools.register(tool, tool.name === SCHOLARLY_SAVE_TOOL_NAME ? { when: canSave } : {})

@@ -3,6 +3,7 @@
  * @module dsh-zotero/scholarly/fusion
  */
 
+import { ZOTERO_RRF_K as RRF_K } from '../constants.js'
 import {
   canonicalKeysOf,
   mergePaperInto,
@@ -29,8 +30,6 @@ interface MergedEntry {
   titleTokens?: ReadonlySet<string>
   titleKey?: string
 }
-
-const RRF_K = 60
 
 /**
  * Merges multiple ranked lists from heterogeneous scholarly indexes into a single deduplicated ranking.

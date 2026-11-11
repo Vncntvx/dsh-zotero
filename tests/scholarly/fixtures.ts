@@ -7,6 +7,7 @@ import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { ZoteroJobRunner } from '../../src/job-runner.js'
+import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.js'
 import { type ScholarlyReadHost } from '../../src/scholarly/tools/index.js'
 import {
   createScholarlyHttp,
@@ -88,6 +89,10 @@ export function createMockHost(http: ScholarlyHttp, zotero?: ZoteroServiceLike):
     jobRunner: () => new ZoteroJobRunner(undefined),
     maxContentChars: () => 10_000,
     cache: new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-tools-'))),
+    // The core's lexical ranker: these fixtures exercise the transport and the
+    // section addressing, not a ranking strategy of their own.
+    evidenceRanker: () => bm25EvidenceRanker,
+    evidenceChunkLimits: () => ({ chunkWords: 200, chunkChars: 6_000 }),
     zoteroService: () => zotero,
   }
 }

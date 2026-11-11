@@ -1,19 +1,16 @@
 /**
- * The core-owned seam an optional document-parsing component can fill.
+ * The core-owned seam an optional document-enrichment component can fill.
  *
  * **Dependency direction.** This module defines only pure types and helpers
- * and must not import anything from `src/parsing/**` (not even type-only). The
- * parsing component imports these types and registers an enhancer into the
+ * and must not import anything from `src/enrichment/**` (not even type-only). The
+ * enrichment component imports these types and registers an enhancer into the
  * core service; the core reads full text through the slot when present and
  * runs its unchanged loopback path when absent. Keeping the type here is what
- * lets the core stay unaware of parsing's transport, host table, credentials,
+ * lets the core stay unaware of enrichment's transport, host table, credentials,
  * and artifact store.
  *
- * **One value states one fact.** An enhancer outcome distinguishes three
- * results, so the caller never has to guess: `ok` carries the parsed text,
- * `fallback` names why the caller should use local extraction instead, and
- * `fatal` is an authorization/configuration failure that must not be swallowed
- * into a silent success or a degraded answer.
+ * **One value states one fact.** `ok` carries parsed text; `fatal` carries any
+ * parsing, authorization, storage, or protocol failure. Callers propagate it.
  *
  * **lookup before enhance.** `lookup` is the cache-only arm: it may stat a
  * local attachment, digest caller-supplied bytes, or issue a HEAD against a
@@ -25,9 +22,8 @@
  */
 
 /**
- * The minimum amount of parsed Markdown trusted as a useful full-text result.
- * Shorter output is reported as a fallback so the caller can still try its
- * local extraction; it is also the scholarly reader's local-PDF threshold.
+ * Minimum useful text size for the scholarly reader's local PDF extractor.
+ * MinerU results are validated by protocol and content, not an arbitrary length.
  */
 export const FULLTEXT_ENHANCER_MIN_TEXT_CHARS = 500
 
@@ -58,7 +54,7 @@ export type FulltextSourceStamp =
 
 /** What the enhancer is asked to produce high-quality text for. */
 export interface FulltextEnhancerInput {
-  /** Stable identity of the document (attachment ref or public URL). The parsing
+  /** Stable identity of the document (attachment ref or public URL). The enrichment
    * component folds this together with its mode and a content fingerprint to
    * form the artifact cache key, so the caller never needs to know either. */
   readonly key: string
@@ -82,12 +78,11 @@ export type FulltextEnhancerOutcome =
        * reader surfaces it. The core reader ignores it and keeps its schema. */
       readonly source?: string
     }
-  | { readonly kind: 'fallback'; readonly reason: string }
   | { readonly kind: 'fatal'; readonly error: Error }
 
 /**
  * The cache-only lookup result. `outcome` is present when the lookup itself
- * produced a final answer (`ok`, `fallback`, or `fatal`); it is absent on a
+ * produced a final answer (`ok` or `fatal`); it is absent on a
  * plain miss. `stamp` is always reported when the source could be probed, so
  * the caller can hand it to `enhance` and avoid a duplicate HEAD/stat.
  */
@@ -100,8 +95,7 @@ export interface FulltextLookupResult {
  * The optional document parser the core and the scholarly reader share.
  *
  * `lookup` never downloads a document or calls MinerU. `enhance` may do both.
- * Neither method throws for a recoverable failure; they report `fallback` or
- * `fatal` instead. A caller abort is the one exception: it propagates.
+ * Failures are reported as `fatal`. Caller cancellation propagates directly.
  */
 export interface FulltextEnhancer {
   lookup(input: FulltextEnhancerInput, signal?: AbortSignal): Promise<FulltextLookupResult>
@@ -118,13 +112,4 @@ export function isPdfContentType(contentType: string | undefined): boolean {
   if (contentType === undefined || contentType.trim() === '') return true
   const base = contentType.split(';')[0]?.trim().toLowerCase() ?? ''
   return base === 'application/pdf'
-}
-
-/**
- * Whether one parsed Markdown body is long enough to trust as full text. The
- * threshold is deliberately shared with the scholarly reader's local PDF arm;
- * a shorter enhancer result is a fallback, never a silent "success".
- */
-export function hasEnoughParsedText(text: string): boolean {
-  return text.trim().length >= FULLTEXT_ENHANCER_MIN_TEXT_CHARS
 }

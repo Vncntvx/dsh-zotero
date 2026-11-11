@@ -1,14 +1,16 @@
 /**
  * The `scholarly_read` tool: reads open-access full text of papers (arXiv, PMC, OA PDF).
- * Provides section outlines, section extraction, and natural-language BM25 passage matching.
+ * Provides section outlines, section extraction, and natural-language passage matching.
  * @module dsh-zotero/scholarly/tools/read
  */
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { ScholarlyTextStore } from '../fulltext/store.js'
-import { extractOutline, findSection, rankPassagesWithBM25 } from '../fulltext/evidence-bridge.js'
+import { extractOutline, findSection, rankPassages } from '../fulltext/evidence-bridge.js'
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
+import { ZOTERO_MAX_QUERY_VARIANTS } from '../../constants.js'
+import { queryVariantsOf } from '../../tools/query-variants.js'
 import { DEFAULT_SPILL_CHAR_THRESHOLD, trySpillToolOutput } from '../../spill.js'
 import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
 import { metaRecordOf } from '../../tools/present.js'
@@ -20,13 +22,39 @@ export interface ScholarlyReadHost extends ScholarlyToolHost {
   maxContentChars?(): number
 }
 
+/**
+ * The message an empty query match returns. It states what the call found and
+ * refuses the stronger claim: a reader told "no relevant passage" reasonably
+ * concludes the paper is silent on the subject, which this call cannot know.
+ * The meaning clause appears only when the semantic route actually ran —
+ * claiming a comparison the call never made would be its own falsehood.
+ * @param query - the query that matched nothing.
+ * @param routes - the routes that ran; `semantic` present means meaning was scored.
+ * @returns the model-facing explanation.
+ */
+export function noPassageMessage(
+  query: string,
+  routes: readonly ('lexical' | 'semantic')[],
+): string {
+  const compared =
+    routes.includes('semantic') === true
+      ? 'neither its terms nor its meaning'
+      : 'its terms (semantic ranking was not part of this call)'
+  return (
+    `No passage in this text matched "${query}" — ${compared}. ` +
+    'That describes this query against this text; it is not evidence that the paper says nothing on the subject. ' +
+    'Rephrase the question, pass queryVariants with your own paraphrases (the field\u2019s terminology, synonyms), ' +
+    'or read the section directly with section="...".'
+  )
+}
+
 export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition {
   return defineTool({
     name: 'scholarly_read',
     description:
       'Read the open-access full text of a paper (arXiv, PubMed Central, or an open-access PDF). ' +
       'Use outline=true to list sections, section="..." to read a specific section, ' +
-      'or query="..." to find the passages answering a specific question with BM25 ranking.',
+      'or query="..." to find the passages answering a specific question.',
     parameters: {
       id: {
         type: 'string',
@@ -44,7 +72,12 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
       },
       query: {
         type: 'string',
-        description: 'Find passages matching a question or concept using BM25 ranking.',
+        description: 'Find passages matching a question or concept by passage ranking.',
+      },
+      queryVariants: {
+        type: 'array',
+        items: { type: 'string' },
+        description: `With query: more phrasings of the same question, at most ${ZOTERO_MAX_QUERY_VARIANTS}; each is a separate scoring pass and the best score per passage wins.`,
       },
       passages: {
         type: 'integer',
@@ -74,6 +107,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
           ZOTERO_INVALID_ARGUMENT,
         )
       }
+      const queryVariants = queryVariantsOf(args.queryVariants)
 
       return await runScholarlyJob({
         host,
@@ -87,7 +121,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             keys: await host.keys(),
             store: host.cache,
             signal,
-            enhancer: host.parsingEnhancer?.(),
+            enhancer: host.enrichmentEnhancer?.(),
           })
           onProgress({
             phase: 'read',
@@ -157,17 +191,27 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             scopeLabel = ` [Section ${sec.id}: ${sec.title}]`
           }
 
-          // 3. BM25 Natural Language Question Matching
+          // 3. Passage matching against a natural-language question
           if (args.query?.trim()) {
             const numPassages = Math.min(12, Math.max(1, args.passages ?? 5))
-            const ranked = rankPassagesWithBM25(activeText, args.query.trim(), numPassages)
+            const limits = host.evidenceChunkLimits()
+            const { passages: ranked, routes } = await rankPassages({
+              ranker: host.evidenceRanker(),
+              text: activeText,
+              query: args.query.trim(),
+              limit: numPassages,
+              maxWords: limits.chunkWords,
+              maxCharsPerChunk: limits.chunkChars,
+              ...(queryVariants === undefined ? {} : { queryVariants }),
+              signal,
+            })
             onProgress({
               phase: 'rank',
               message: `Ranked ${ranked.length} passages for "${args.query.trim()}"`,
             })
             if (ranked.length === 0) {
               return {
-                text: `${header}${scopeLabel}\n\nNo relevant passage found matching "${args.query}". Try alternative phrasing.`,
+                text: `${header}${scopeLabel}\n\n${noPassageMessage(args.query.trim(), routes)}`,
                 document: toCleanJsonRecord({
                   id: raw,
                   source: fullText.source,
@@ -180,7 +224,7 @@ export function createScholarlyReadTool(host: ScholarlyReadHost): ToolDefinition
             const passagesText = ranked
               .map(
                 (p, idx) =>
-                  `--- Passage ${idx + 1} (Score: ${p.score.toFixed(2)}, chars ${p.start}-${p.end}) ---\n${p.text.trim()}`,
+                  `--- Passage ${idx + 1} (${p.matchKind} match, chars ${p.start}-${p.end}) ---\n${p.text.trim()}`,
               )
               .join('\n\n')
 

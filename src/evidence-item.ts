@@ -30,6 +30,28 @@ export function isEvidenceSource(source: string): source is EvidenceSource {
  */
 export type EvidenceField = 'text' | 'comment'
 
+/**
+ * Why a passage was returned. `lexical` means the query's own words occur in
+ * it, `semantic` means only the meaning matched, and `hybrid` means both.
+ *
+ * The vocabulary is load-bearing rather than decorative: a reader who is told
+ * a passage matched semantically must not then quote it as wording the paper
+ * contains, and a reader told it matched lexically may.
+ */
+export type EvidenceMatchKind = 'lexical' | 'semantic' | 'hybrid'
+
+/** The match-kind vocabulary as a runtime whitelist, for decoders on both sides. */
+const EVIDENCE_MATCH_KINDS: ReadonlySet<string> = new Set<EvidenceMatchKind>([
+  'lexical',
+  'semantic',
+  'hybrid',
+])
+
+/** Narrow a decoded match-kind string over the whitelist. */
+export function isEvidenceMatchKind(value: string): value is EvidenceMatchKind {
+  return EVIDENCE_MATCH_KINDS.has(value)
+}
+
 /** One ranked evidence passage with its provenance and source kind. */
 export interface EvidenceItem {
   readonly source: EvidenceSource
@@ -41,10 +63,15 @@ export interface EvidenceItem {
   /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
   readonly attachmentRef?: string
   /**
+   * Why the passage was returned. Absent only when the projection could not
+   * read a value the wire defines, which the decoder rejects before this.
+   */
+  readonly matchKind?: EvidenceMatchKind
+  /**
    * Which of the annotation's two text fields carried the query terms. Absent
-   * means the passage's single field did, which is the ordinary case; a match
-   * found only in the annotator's own comment is a different claim about the
-   * paper and must not be read as one.
+   * means either the passage's single field did (the ordinary case) or no
+   * lexical route hit it at all — a semantic-only match, where naming fields
+   * would claim wording the passage may not share with the query.
    */
   readonly matchedFields?: readonly EvidenceField[]
 }

@@ -68,6 +68,7 @@ describe('note-first-class paths', () => {
         text: 'cascade failure chains\ninfrastructure interdependency',
         chunkIndex: 0,
         chunkCount: 1,
+        matchKind: 'lexical',
       },
     ])
     expect(result.sourcesSkipped).toEqual([])

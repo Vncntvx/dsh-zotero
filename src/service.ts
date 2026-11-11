@@ -75,6 +75,7 @@ import { ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS, ZOTERO_TOOL_NAMES } from './constan
 import { ConcurrencyGate } from './concurrency.js'
 import { raceWithSignal } from './race-signal.js'
 import { LocalApiProvider } from './local/provider.js'
+import { bm25EvidenceRanker, type EvidenceRanker } from './local/evidence-ranker.js'
 import { installParameterCorrection } from './parameter-correction.js'
 import { localProviderLimits } from './service-config.js'
 import { installServiceConfigLifecycle } from './service-lifecycle.js'
@@ -229,13 +230,20 @@ export class ZoteroService extends Service {
   /** Disposer of the currently registered `local` provider, released after a rebuild's new registration lands. */
   private providerDispose: (() => void) | undefined
   /**
-   * Optional higher-quality full-text enhancer installed by the parsing
+   * Optional higher-quality full-text enhancer installed by the enrichment
    * component. The core owns only the slot and the pure type; it never imports
-   * the parsing component, holds no external transport, and runs its unchanged
+   * the enrichment component, holds no external transport, and runs its unchanged
    * loopback path while the slot is empty. The provider reads this live per
-   * request, so mounting or unmounting the parsing row needs no rebuild.
+   * request, so mounting or unmounting the enrichment row needs no rebuild.
    */
   private fulltextEnhancer: FulltextEnhancer | undefined
+  /**
+   * Optional evidence-ranking strategy installed by the enrichment component.
+   * The core owns the slot and the pure type, and ships its own complete
+   * lexical ranker as the value while the slot is empty; installing one
+   * replaces the whole strategy rather than layering on top of it.
+   */
+  private installedEvidenceRanker: EvidenceRanker | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
   /** The live write authorizer; absent while writes are disabled. */
@@ -555,6 +563,7 @@ export class ZoteroService extends Service {
       authorizer,
       this.diagnostics.sink,
       () => this.fulltextEnhancer,
+      () => this.evidenceRanker(),
     )
     // The swap is synchronous: registerProvider installs the new provider
     // under the stable id before this releases the old registration (whose
@@ -723,13 +732,47 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Install or withdraw the optional document-parsing enhancer.
-   * Called by `dsh-zotero/parsing` from a fiber-scoped effect, so unmounting
+   * Install or withdraw the optional document-enrichment enhancer.
+   * Called by `dsh-zotero/enrichment` from a fiber-scoped effect, so unmounting
    * the row clears the slot. Passing `undefined` is the withdrawal.
    * @param enhancer - the enhancer to use, or none.
    */
   setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void {
     this.fulltextEnhancer = enhancer
+  }
+
+  /**
+   * Install or withdraw the optional evidence-ranking strategy. Called by
+   * `dsh-zotero/enrichment` from a fiber-scoped effect, so unmounting the row
+   * restores the core's lexical ranker. Passing `undefined` is the withdrawal.
+   * @param ranker - the strategy to use, or none.
+   */
+  setEvidenceRanker(ranker: EvidenceRanker | undefined): void {
+    this.installedEvidenceRanker = ranker
+  }
+
+  /**
+   * The ranking strategy in force: the installed one, or the core's own
+   * lexical ranker while none is installed. Read per request, so a settings
+   * flip or a component mount applies to the next call without a rebuild.
+   * @returns the strategy `zotero_retrieve` must rank through.
+   */
+  evidenceRanker(): EvidenceRanker {
+    return this.installedEvidenceRanker ?? bm25EvidenceRanker
+  }
+
+  /**
+   * The live full-text chunk boundaries passage ranking cuts on. Both
+   * `zotero_retrieve` and `scholarly_read` read these, so one settings edit
+   * moves every passage boundary in the plugin; a caller without this core
+   * falls back to the same defaults the config schema ships.
+   * @returns the word and character ceilings per passage.
+   */
+  evidenceChunkLimits(): { readonly chunkWords: number; readonly chunkChars: number } {
+    return {
+      chunkWords: this.config.fulltextChunkWords,
+      chunkChars: this.config.maxEvidenceChars,
+    }
   }
 
   /**

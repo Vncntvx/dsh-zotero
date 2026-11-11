@@ -161,6 +161,36 @@ export const ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS = 1
 export const ZOTERO_WRITE_OBJECT_BATCH = 50
 
 /**
+ * How many paraphrases a ranking call may carry alongside its own query.
+ *
+ * The bound belongs to the tools' contract, not to a component's settings: both
+ * `zotero_retrieve` and `scholarly_read` accept paraphrases, and the lexical
+ * ranker scores them too, so a call that supplied more than this would do that
+ * many more full scoring passes over the same passage corpus for a query the
+ * caller has not narrowed. Four covers "one per synonym set" without making a
+ * single retrieve call cost a dozen sweeps.
+ */
+export const ZOTERO_MAX_QUERY_VARIANTS = 4
+
+/**
+ * The reciprocal-rank constant both fusion sites share: scholarly result
+ * fusion and evidence-passage ranking. Equal weights across routes; changing
+ * one site without the other would make two result lists of different
+ * provenance combine by different rules.
+ */
+export const ZOTERO_RRF_K = 60
+
+/**
+ * The default full-text chunk boundaries `zotero_retrieve` ranks over, shared
+ * with `scholarly_read query=` so both tools describe one paper with the same
+ * passage boundaries. The core's config schema defaults to these and the
+ * scholarly component falls back to them when the local Zotero component is
+ * not composed; a settings edit moves both tools together.
+ */
+export const ZOTERO_FULLTEXT_CHUNK_WORDS = 200
+export const ZOTERO_MAX_EVIDENCE_CHARS = 6000
+
+/**
  * The write-response header carrying the library version a write advanced
  * to (`Last-Modified-Version`). Zotero stamps written objects with that same
  * library version, so it doubles as the written object's version.

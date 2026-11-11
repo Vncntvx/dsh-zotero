@@ -15,25 +15,28 @@ import {
   type FulltextEnhancer,
   type FulltextEnhancerInput,
 } from './fulltext-enhancer.js'
+import type { EvidenceRanker } from './evidence-ranker.js'
 
 /**
- * The full-text deps. `enhancer` is the optional document-parsing slot the
- * core holds for `dsh-zotero/parsing`; when it is absent every read below runs
- * exactly the original loopback path. `sink` records an explicit reason when
- * the enhancer declines, so a fallback is never a silent success.
+ * The full-text deps. `enhancer` is the optional document-enrichment slot the
+ * core holds for `dsh-zotero/enrichment`; when it is absent every read below runs
+ * exactly the original loopback path. Enhancer errors propagate. `ranker` is
+ * the ranking strategy the retrieve domain ranks through: the core's lexical
+ * ranker, or the hybrid one the enrichment component installs, read live per
+ * request.
  */
 export interface FulltextDeps {
   readonly client: ZoteroHttpClient
   readonly limits: LocalApiLimits
   readonly enhancer?: FulltextEnhancer
   readonly sink?: DiagnosticSink
+  readonly ranker: EvidenceRanker
 }
 
 /**
  * Try the optional higher-quality parser for one PDF. Returns its text on
- * success, `undefined` when the caller should keep local extraction, and
- * rethrows a fatal (authorization/configuration) failure. A recoverable
- * fallback is reported to the diagnostics ring with its stated reason.
+ * success, `undefined` when no enhancer is installed, and propagates any
+ * enhancer failure.
  */
 export async function tryEnhanceFulltext(
   deps: FulltextDeps,
@@ -43,9 +46,7 @@ export async function tryEnhanceFulltext(
   if (deps.enhancer === undefined) return undefined
   const outcome = await deps.enhancer.enhance(input, signal)
   if (outcome.kind === 'ok') return outcome.text
-  if (outcome.kind === 'fatal') throw outcome.error
-  deps.sink?.warn('parsing.fallback', outcome.reason)
-  return undefined
+  throw outcome.error
 }
 
 /** Only PDF candidates are offered to the parser; known non-PDF types skip it. */
@@ -184,10 +185,9 @@ export async function readFulltextSources(
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
       }
 
-      // Prefer the optional higher-quality parser for PDF candidates. A
-      // `fatal` outcome propagates (fail-closed); `ok` text is chunked under
-      // the same per-source budget as a Zotero index; a `fallback` is reported
-      // and the original loopback read runs unchanged.
+      // Prefer the optional higher-quality parser for PDF candidates. Every
+      // non-`ok` outcome propagates fail-closed; `ok` text is chunked under
+      // the same per-source budget as a Zotero index.
       if (isPdfCandidate(candidate.contentType) && deps.enhancer !== undefined) {
         const attachmentRef = refStringFor(
           ref.library as SupportedLocalLibrary,

@@ -10,6 +10,7 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from './locales.ts'
+import type { EvidenceMatchKind } from '../evidence-item.js'
 import type { SourceAvailabilityEntry, SourceCoverage } from '../sources/model.js'
 
 /** The locale key of one evidence source kind; unknown kinds read as fulltext. */
@@ -25,6 +26,24 @@ export function sourceLabelKeyOf(
       return 'sourceAbstract'
     default:
       return 'sourceFulltext'
+  }
+}
+
+/**
+ * The locale key of one match kind. A `lexical` passage is the only one whose
+ * own text may be quoted as carrying the query's words, so the label spells out
+ * which side of that line each passage sits on.
+ */
+export function matchLabelKeyOf(
+  kind: EvidenceMatchKind,
+): 'matchLexical' | 'matchSemantic' | 'matchHybrid' {
+  switch (kind) {
+    case 'semantic':
+      return 'matchSemantic'
+    case 'hybrid':
+      return 'matchHybrid'
+    default:
+      return 'matchLexical'
   }
 }
 

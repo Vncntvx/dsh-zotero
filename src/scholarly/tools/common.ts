@@ -11,6 +11,7 @@ import type { ScholarlyKeys } from '../types.js'
 import type { JobPolicy, ZoteroJobRunner } from '../../job-runner.js'
 import type { ZoteroServiceLike } from '../zotero-link.js'
 import type { FulltextEnhancer } from '../../local/fulltext-enhancer.js'
+import type { EvidenceRanker } from '../../local/evidence-ranker.js'
 
 export interface ScholarlyToolHost {
   http: ScholarlyHttp
@@ -19,8 +20,20 @@ export interface ScholarlyToolHost {
   jobPolicy(): JobPolicy
   jobRunner(): ZoteroJobRunner
   zoteroService?(): ZoteroServiceLike | undefined
-  /** Optional higher-quality document parser from the parsing component. */
-  parsingEnhancer?(): FulltextEnhancer | undefined
+  /** Optional higher-quality document parser from the enrichment component. */
+  enrichmentEnhancer?(): FulltextEnhancer | undefined
+  /**
+   * The ranking strategy passage matching uses: the core's lexical ranker, or
+   * the hybrid one the enrichment component installs. Required rather than
+   * optional — a host that forgot to supply it would silently rank one way for
+   * `scholarly_read` and another for `zotero_retrieve`.
+   */
+  evidenceRanker(): EvidenceRanker
+  /**
+   * The chunk boundaries passage matching cuts on. Required: without them the
+   * two tools would silently describe one paper with different passages.
+   */
+  evidenceChunkLimits(): { readonly chunkWords: number; readonly chunkChars: number }
   ctx?: Context
 }
 

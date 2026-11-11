@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 import { createVolatile } from '@deepseek-ai/cosmokit'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.js'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import {
   assertNoLegacyCredentialFields,
@@ -133,6 +134,17 @@ describe('scholarly tool host wiring', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('scholarly tool host fallbacks', () => {
+  it('falls back to the core ranker and the config-default chunk limits without a Zotero service', async () => {
+    const ctx = await bootScholarlyContext()
+    const service = new ScholarlyService(ctx, { email: createVolatile('edge@example.edu') })
+    // The host is private; the constructed context never composes `zotero`,
+    // so both reads go through their documented fallbacks.
+    expect(service.host.evidenceRanker()).toBe(bm25EvidenceRanker)
+    expect(service.host.evidenceChunkLimits()).toEqual({ chunkWords: 200, chunkChars: 6_000 })
   })
 })
 

@@ -12,6 +12,12 @@ import {
   ATTACHMENT_UNINDEXED_NOTE,
   attachmentRefsLibraryMessage,
   attachmentRefsOverCapMessage,
+  NO_CONTENT_TERMS_MESSAGE,
+  NO_MATCH_MESSAGE,
+  NO_MATCH_REMEDY,
+  NO_MATCH_TERMS_ONLY_MESSAGE,
+  NO_SOURCES_MESSAGE,
+  NO_SOURCES_REMEDY,
   PASSAGE_COMMENT_ONLY_CLAUSE,
   renderRetrieve,
   RETRIEVE_QUERY_EMPTY_MESSAGE,
@@ -20,8 +26,11 @@ import {
   RETRIEVE_SPECIFIED_ONLY_MESSAGE,
   RETRIEVE_TRUNCATED_MESSAGE,
   RETRIEVE_TRUNCATED_REMEDY,
+  SEMANTIC_ONLY_NOTE,
   silentAttachmentsMessage,
 } from '../../src/tools/retrieve.js'
+import { queryVariantsOverCapMessage } from '../../src/tools/query-variants.js'
+import { ZOTERO_MAX_QUERY_VARIANTS } from '../../src/constants.js'
 import { intRangeArgumentMessage } from '../../src/tools/validate.js'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { serveChildrenContract } from '../helpers/server/children-contract.js'
@@ -255,6 +264,30 @@ describe('zotero_retrieve tool', () => {
     expect(mock.requests).toEqual([])
   })
 
+  it('bounds the paraphrase list and refuses a blank one', async () => {
+    const overCap = await runTool('zotero_retrieve', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      query: 'x',
+      queryVariants: ['a', 'b', 'c', 'd', 'e'],
+    })
+    expect(overCap.isError).toBe(true)
+    if (!overCap.isError) throw new Error('unreachable')
+    expect((overCap.content[0] as { text: string }).text).toContain(
+      queryVariantsOverCapMessage(ZOTERO_MAX_QUERY_VARIANTS),
+    )
+
+    const blank = await runTool('zotero_retrieve', {
+      ref: 'zotero://user/0/item/ABCD1234',
+      query: 'x',
+      queryVariants: ['  '],
+    })
+    expect(blank.isError).toBe(true)
+    if (!blank.isError) throw new Error('unreachable')
+    expect((blank.content[0] as { text: string }).text).toContain('queryVariants entry')
+    // Both rejections happen before any request leaves the host.
+    expect(mock.requests).toEqual([])
+  })
+
   it('rejects malformed refs before any request', async () => {
     const result = await runTool('zotero_retrieve', { ref: 'nope', query: 'x' })
     expect(result.isError).toBe(true)
@@ -273,8 +306,36 @@ describe('zotero_retrieve tool', () => {
 })
 
 describe('zotero_retrieve render', () => {
-  function render(value: never): string {
-    return (renderRetrieve({} as never, value)[0] as { text: string }).text
+  /** One evidence entry as a render test writes it: the match kind defaults. */
+  type RenderEvidence = {
+    source: string
+    sourceRef: string
+    text: string
+    matchKind?: string
+    [key: string]: unknown
+  }
+  /** The render input, with the schema's required arrays and kind defaulted. */
+  type RenderValue = {
+    ref: string
+    evidence: RenderEvidence[]
+    truncated: boolean
+    sourcesSkipped: string[]
+    queryTerms?: string[]
+    [key: string]: unknown
+  }
+
+  /**
+   * Render one result. The wire requires `matchKind` and `queryTerms`; a test
+   * that is not exercising them leaves them out, and this fills the values a
+   * lexical-only ranking produces so each case asserts one thing.
+   */
+  function render(value: RenderValue): string {
+    const filled = {
+      ...value,
+      queryTerms: value.queryTerms ?? [],
+      evidence: value.evidence.map((entry) => ({ matchKind: 'lexical', ...entry })),
+    }
+    return (renderRetrieve({} as never, filled as never)[0] as { text: string }).text
   }
 
   it('renders a minimal single abstract passage', () => {
@@ -285,7 +346,7 @@ describe('zotero_retrieve render', () => {
       ],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(text).toBe(
       [
         'Evidence for zotero://user/0/item/ABCD1234 (1 passage)',
@@ -303,7 +364,7 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(charsOnly).toContain('Indexing coverage: 10/12 chars')
 
     const pagesOnly = render({
@@ -312,7 +373,7 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(pagesOnly).toContain('Indexing coverage: , 2/9 pages')
 
     const unknownTotals = render({
@@ -321,7 +382,7 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(unknownTotals).toContain('Indexing coverage: 5/? chars, 3/? pages')
 
     const complete = render({
@@ -330,7 +391,7 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(complete).toContain('(complete)')
   })
 
@@ -349,7 +410,7 @@ describe('zotero_retrieve render', () => {
       ],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(text).toContain('[annotation (page 7)] zotero://user/0/item/ANNO1111')
     expect(text).toContain('Comment: double-check')
     expect(text).toContain('Matched in: quoted text and the reader\u2019s comment')
@@ -369,7 +430,7 @@ describe('zotero_retrieve render', () => {
       ],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(text).toContain('Matched in: the reader\u2019s comment')
     expect(text).toContain(PASSAGE_COMMENT_ONLY_CLAUSE)
   })
@@ -388,7 +449,7 @@ describe('zotero_retrieve render', () => {
       ],
       truncated: false,
       sourcesSkipped: ['fulltext'],
-    } as never)
+    })
     expect(text).toContain('[note, chunk 3/3] zotero://user/0/item/NOTE1111')
     expect(text).toContain('Skipped unavailable sources: fulltext')
   })
@@ -425,7 +486,7 @@ describe('zotero_retrieve render', () => {
       ],
       truncated: true,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(capped).toContain('Full-text sources read (2 of 4):')
     expect(capped).toContain(
       '  - zotero://user/0/attachment/SECD0001 (application/pdf): 24 passages, 1000/1200 chars indexed, text cut by this call\u2019s character budget',
@@ -450,7 +511,7 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: false,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(partial).toContain('1 passages, 5/? chars indexed')
   })
 
@@ -461,10 +522,99 @@ describe('zotero_retrieve render', () => {
       evidence: [],
       truncated: true,
       sourcesSkipped: [],
-    } as never)
+    })
     expect(text).toContain('Full text: zotero://user/0/attachment/WXYZ6789')
     expect(text).toContain(RETRIEVE_TRUNCATED_MESSAGE)
     expect(text).toContain(RETRIEVE_TRUNCATED_REMEDY)
     expect(text).toContain('(0 passages)')
+  })
+
+  it('states what an empty match does and does not mean', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [],
+      truncated: false,
+      sourcesSkipped: [],
+      queryTerms: ['trust', 'compliance'],
+      rankedRoutes: ['lexical', 'semantic'],
+    })
+    expect(text).toContain(NO_MATCH_MESSAGE)
+    expect(text).toContain(NO_MATCH_REMEDY)
+    expect(text).not.toContain(NO_CONTENT_TERMS_MESSAGE)
+    // An empty answer is not the truncation case: nothing was omitted.
+    expect(text).not.toContain(RETRIEVE_TRUNCATED_MESSAGE)
+  })
+
+  it('never claims a meaning comparison the call did not make', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [],
+      truncated: false,
+      sourcesSkipped: [],
+      queryTerms: ['trust', 'compliance'],
+      rankedRoutes: ['lexical'],
+    })
+    expect(text).toContain(NO_MATCH_TERMS_ONLY_MESSAGE)
+    expect(text).not.toContain(NO_MATCH_MESSAGE)
+  })
+
+  it('reports an empty corpus as no-sources, not as a tested overlap', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [],
+      truncated: false,
+      sourcesSkipped: ['annotation', 'fulltext'],
+      queryTerms: ['trust'],
+      noMatch: 'no-sources',
+    })
+    expect(text).toContain(NO_SOURCES_MESSAGE)
+    expect(text).toContain(NO_SOURCES_REMEDY)
+    expect(text).not.toContain(NO_MATCH_MESSAGE)
+    expect(text).not.toContain(NO_MATCH_TERMS_ONLY_MESSAGE)
+  })
+
+  it('explains an empty match caused by a termless query', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [],
+      truncated: false,
+      sourcesSkipped: [],
+      queryTerms: [],
+    })
+    expect(text).toContain(NO_CONTENT_TERMS_MESSAGE)
+    expect(text).not.toContain(NO_MATCH_REMEDY)
+  })
+
+  it('names a meaning-only hit and refuses to let it be quoted as wording', () => {
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [
+        {
+          source: 'fulltext',
+          sourceRef: 'zotero://user/0/attachment/WXYZ6789',
+          text: 'perceived legitimacy drives regulatory adherence',
+          matchKind: 'semantic',
+        },
+      ],
+      truncated: false,
+      sourcesSkipped: [],
+    })
+    expect(text).toContain('[fulltext, meaning only] zotero://user/0/attachment/WXYZ6789')
+    expect(text).toContain(SEMANTIC_ONLY_NOTE)
+  })
+
+  it('leaves the ordinary lexical hit unlabelled', () => {
+    // The common case — the passage's own words carry the query — is what a
+    // reader assumes, so it spends no ink on a label.
+    const text = render({
+      ref: 'zotero://user/0/item/ABCD1234',
+      evidence: [
+        { source: 'fulltext', sourceRef: 'zotero://user/0/attachment/WXYZ6789', text: 'trust' },
+      ],
+      truncated: false,
+      sourcesSkipped: [],
+    })
+    expect(text).toContain('[fulltext] zotero://user/0/attachment/WXYZ6789')
+    expect(text).not.toContain(SEMANTIC_ONLY_NOTE)
   })
 })

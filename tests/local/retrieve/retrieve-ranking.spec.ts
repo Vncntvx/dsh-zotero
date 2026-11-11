@@ -166,6 +166,65 @@ describe('retrieve ranking', () => {
     expect(result.evidence[0]!.matchedFields).toBeUndefined()
   })
 
+  it('reports the query terms it scored', async () => {
+    routeGraph()
+    const result = await provider.retrieve(retrieveRequest({ query: 'the flash attention' }))
+    // Function words never enter the scoring side, so they never appear here.
+    expect(result.queryTerms).toEqual(['flash', 'attention'])
+    expect(result.noMatch).toBeUndefined()
+  })
+
+  it('states no-overlap with the terms it tried, instead of returning excerpts', async () => {
+    routeGraph()
+    const result = await provider.retrieve(retrieveRequest({ query: 'institutional trust' }))
+    expect(result.evidence).toEqual([])
+    expect(result.noMatch).toBe('no-overlap')
+    expect(result.queryTerms).toEqual(['institutional', 'trust'])
+    // Nothing was omitted: the empty list is a match fact, not a budget cut.
+    expect(result.truncated).toBe(false)
+  })
+
+  it('names the termless query as the reason an answer is empty', async () => {
+    routeGraph()
+    const result = await provider.retrieve(retrieveRequest({ query: 'the of and' }))
+    expect(result.evidence).toEqual([])
+    expect(result.noMatch).toBe('no-overlap')
+    expect(result.queryTerms).toEqual([])
+  })
+
+  it('lets a paraphrase reach a passage the caller wording misses', async () => {
+    serveItemGraph(mock, {
+      parent: RETRIEVE_PARENT,
+      children: [attachment()],
+      annotations: [
+        annotationRow({
+          key: 'ANNO4444',
+          data: {
+            annotationText: 'perceived legitimacy drives regulatory adherence',
+            parentItem: ATTACHMENT_KEY,
+          },
+        }),
+      ],
+      serverId: null,
+    })
+    const base = retrieveRequest({
+      sources: ['annotation'],
+      query: 'institutional trust',
+      passages: 4,
+    })
+    expect((await provider.retrieve(base)).evidence).toEqual([])
+    const withVariant = await provider.retrieve({
+      ...base,
+      queryVariants: ['perceived legitimacy'],
+    })
+    expect(withVariant.evidence).toHaveLength(1)
+    expect(withVariant.evidence[0]!.matchKind).toBe('lexical')
+    // A single-field source names no field: there is only one it could be.
+    expect(withVariant.evidence[0]!.matchedFields).toBeUndefined()
+    // The reported terms are the ones actually scored, paraphrase included.
+    expect(withVariant.queryTerms).toEqual(['institutional', 'trust', 'perceived', 'legitimacy'])
+  })
+
   it('caps evidence by passage count and reports truncation', async () => {
     routeGraph()
     const result = await provider.retrieve(retrieveRequest({ passages: 1 }))

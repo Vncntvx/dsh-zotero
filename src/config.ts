@@ -14,7 +14,12 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
-import { DEFAULT_MAX_RESPONSE_BYTES, LOCAL_PROVIDER_ID } from './constants.js'
+import {
+  DEFAULT_MAX_RESPONSE_BYTES,
+  LOCAL_PROVIDER_ID,
+  ZOTERO_FULLTEXT_CHUNK_WORDS,
+  ZOTERO_MAX_EVIDENCE_CHARS,
+} from './constants.js'
 
 export interface Config {
   maxInlineResultTokens?: Volatile<number>
@@ -143,13 +148,13 @@ export const Config = Schema.object({
   maxSearchResults: Schema.number().default(20).volatile(),
   maxNoteScanRecords: Schema.number().default(200).volatile(),
   searchConcurrency: Schema.number().default(4).volatile(),
-  maxEvidenceChars: Schema.number().default(6000).volatile(),
+  maxEvidenceChars: Schema.number().default(ZOTERO_MAX_EVIDENCE_CHARS).volatile(),
   maxEvidencePassages: Schema.number().default(4).volatile(),
   maxNoteChars: Schema.number().default(2000).volatile(),
   maxNoteRecords: Schema.number().default(50).volatile(),
   maxAnnotationRecords: Schema.number().default(100).volatile(),
   maxAttachmentRecords: Schema.number().default(50).volatile(),
-  fulltextChunkWords: Schema.number().default(200).volatile(),
+  fulltextChunkWords: Schema.number().default(ZOTERO_FULLTEXT_CHUNK_WORDS).volatile(),
   maxFulltextChars: Schema.number().default(250_000).volatile(),
   retrieveAttachmentCap: Schema.number().default(16).volatile(),
   graphConcurrency: Schema.number().default(4).volatile(),

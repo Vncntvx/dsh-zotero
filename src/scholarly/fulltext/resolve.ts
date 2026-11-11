@@ -19,7 +19,6 @@ import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
 import {
   FULLTEXT_ENHANCER_MIN_TEXT_CHARS,
-  hasEnoughParsedText,
   type FulltextEnhancer,
   type FulltextSourceStamp,
 } from '../../local/fulltext-enhancer.js'
@@ -87,10 +86,8 @@ type PdfOutcome =
  *
  * With an enhancer installed, `lookup` is asked first: a cache hit returns its
  * text without downloading the PDF, and a miss still reports the source stamp
- * so the subsequent `enhance` need not probe the URL again. A short enhanced
- * result is not a terminal `too-short`: the bytes are downloaded and the local
- * extractor gets its own chance, because MinerU's short answer may be a parse
- * limitation rather than an empty document.
+ * so the subsequent parse can reuse the probe. Enhancer failures propagate;
+ * valid short documents retain their parsed content.
  * @param url - the PDF address.
  * @param http - the scholarly transport.
  * @param signal - caller cancellation.
@@ -103,9 +100,7 @@ async function fetchPdfText(
   signal?: AbortSignal,
   enhancer?: FulltextEnhancer,
 ): Promise<PdfOutcome> {
-  let fallbackNote: string | undefined
   let sourceStamp: FulltextSourceStamp | undefined
-  let lookupSettled = false
 
   if (enhancer !== undefined) {
     const lookup = await enhancer.lookup(
@@ -113,20 +108,8 @@ async function fetchPdfText(
       signal,
     )
     if (lookup.outcome?.kind === 'fatal') throw lookup.outcome.error
-    if (lookup.outcome?.kind === 'ok') {
-      if (hasEnoughParsedText(lookup.outcome.text)) {
-        return {
-          kind: 'text',
-          text: lookup.outcome.text,
-          source: lookup.outcome.source ?? 'MinerU',
-        }
-      }
-      fallbackNote = `cached MinerU text was under ${FULLTEXT_ENHANCER_MIN_TEXT_CHARS} characters`
-      lookupSettled = true
-    } else if (lookup.outcome?.kind === 'fallback') {
-      fallbackNote = lookup.outcome.reason
-      lookupSettled = true
-    }
+    if (lookup.outcome?.kind === 'ok')
+      return { kind: 'text', text: lookup.outcome.text, source: lookup.outcome.source ?? 'MinerU' }
     sourceStamp = lookup.stamp
   }
 
@@ -149,7 +132,7 @@ async function fetchPdfText(
     return { kind: 'none', reason: 'not-a-pdf', detail: 'response body is not a PDF' }
   }
 
-  if (enhancer !== undefined && !lookupSettled) {
+  if (enhancer !== undefined) {
     const outcome = await enhancer.enhance(
       {
         key: url,
@@ -161,14 +144,7 @@ async function fetchPdfText(
       signal,
     )
     if (outcome.kind === 'fatal') throw outcome.error
-    if (outcome.kind === 'ok') {
-      if (hasEnoughParsedText(outcome.text)) {
-        return { kind: 'text', text: outcome.text, source: outcome.source ?? 'MinerU' }
-      }
-      fallbackNote = `MinerU returned under ${FULLTEXT_ENHANCER_MIN_TEXT_CHARS} characters`
-    } else {
-      fallbackNote = outcome.reason
-    }
+    return { kind: 'text', text: outcome.text, source: outcome.source ?? 'MinerU' }
   }
 
   let extracted: string
@@ -182,16 +158,12 @@ async function fetchPdfText(
     return {
       kind: 'none',
       reason: 'too-short',
-      detail:
-        fallbackNote === undefined ? 'no extractable text' : `no extractable text; ${fallbackNote}`,
+      detail: 'no extractable text',
     }
   }
   return {
     kind: 'text',
     text: extracted,
-    ...(fallbackNote !== undefined
-      ? { source: `local PDF text (MinerU fallback: ${fallbackNote})` }
-      : {}),
   }
 }
 
@@ -290,7 +262,7 @@ interface ScholarlyResolutionContext {
   readonly keys?: ScholarlyKeys
   readonly store?: ScholarlyTextStore
   readonly signal?: AbortSignal
-  /** Optional higher-quality document parser, read lazily from `ctx.parsing`. */
+  /** Optional higher-quality document parser, read lazily from `ctx.enrichment`. */
   readonly enhancer?: FulltextEnhancer
 }
 

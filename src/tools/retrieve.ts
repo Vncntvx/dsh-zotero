@@ -1,10 +1,12 @@
 /**
  * The `zotero_retrieve` tool: gather evidence passages for one item and
  * rank them against a query. Annotations, notes, the abstract, and
- * full-text chunks compete in one BM25-ranked passage corpus; the result
- * is capped by passage count and character budget with a `truncated` flag
- * instead of mid-passage edits. Full-text passages never carry invented
- * page locators; only annotations keep Zotero's own page label.
+ * full-text chunks compete in one ranked passage corpus; each passage reports
+ * why it was returned (`matchKind`) so a meaning-level hit is never presented
+ * as wording the source contains. The result is capped by passage count and
+ * character budget with a `truncated` flag instead of mid-passage edits.
+ * Full-text passages never carry invented page locators; only annotations keep
+ * Zotero's own page label.
  * @module dsh-zotero/tools/retrieve
  */
 
@@ -18,8 +20,10 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
+import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
 import { invalid } from '../errors.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
+import { queryVariantsOf } from './query-variants.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
@@ -31,6 +35,7 @@ import type {
   ZoteroObjectRef,
   ZoteroRetrieveRequest,
 } from '../types.js'
+import type { EvidenceMatchKind } from '../evidence-item.js'
 
 const ALL_SOURCES: ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', 'fulltext']
 
@@ -46,6 +51,11 @@ const RETRIEVE_PARAMETERS = {
     type: 'string',
     required: true,
     description: 'Terms the evidence passages are ranked against.',
+  },
+  queryVariants: {
+    type: 'array',
+    items: { type: 'string' },
+    description: `Extra phrasings of the same question (synonyms, field terminology), at most ${ZOTERO_MAX_QUERY_VARIANTS}; each is a separate scoring pass, and the best score per passage wins.`,
   },
   sources: {
     type: 'array',
@@ -89,6 +99,11 @@ const EVIDENCE_RECORD = {
     comment: { type: 'string' },
     pageLabel: { type: 'string' },
     attachmentRef: { type: 'string' },
+    matchKind: {
+      type: 'string',
+      enum: ['lexical', 'semantic', 'hybrid'],
+      required: true,
+    },
     matchedFields: { type: 'array', items: { type: 'string', enum: ['text', 'comment'] } },
   },
 } as const
@@ -134,6 +149,9 @@ const RETRIEVE_OUTPUT_SCHEMA = {
       required: true,
       items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
     },
+    queryTerms: { type: 'array', required: true, items: { type: 'string' } },
+    noMatch: { type: 'string', enum: ['no-overlap', 'no-sources'] },
+    rankedRoutes: { type: 'array', items: { type: 'string', enum: ['lexical', 'semantic'] } },
   },
 } as const
 
@@ -168,6 +186,7 @@ export function attachmentRefsOverCapMessage(count: number, cap: number): string
 function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
   const query = args.query.trim()
   if (query === '') invalid(RETRIEVE_QUERY_EMPTY_MESSAGE)
+  const queryVariants = queryVariantsOf(args.queryVariants)
   const passages = args.passages ?? DEFAULT_PASSAGES
   assertIntInRange('passages', passages, 1, config.maxEvidencePassages)
   const sources = args.sources ?? ALL_SOURCES
@@ -205,6 +224,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   return {
     ref,
     query,
+    ...(queryVariants === undefined ? {} : { queryVariants }),
     sources: [...sources],
     passages,
     ...(args.attachmentPolicy !== undefined ? { attachmentPolicy: policy } : {}),
@@ -238,6 +258,36 @@ function matchLine(fields: readonly ZoteroEvidenceField[]): string {
       : ''
   return `Matched in: ${where}${onlyComment}`
 }
+
+/** The short label each match kind renders as inside a passage's bracket. */
+const MATCH_KIND_LABELS = {
+  lexical: 'query words',
+  semantic: 'meaning only',
+  hybrid: 'query words and meaning',
+} as const satisfies Record<EvidenceMatchKind, string>
+
+/**
+ * The bracket suffix naming why a passage was returned, or nothing for the
+ * ordinary case. The ordinary case — the passage's own words carry the query —
+ * is what a reader assumes, so it spends no ink; every other kind changes what
+ * may be done with the passage, so it is named where the reader is already
+ * looking.
+ *
+ * An absent kind renders as nothing rather than as a label: a session recorded
+ * before this field existed replays with `matchKind` missing, and a renderer
+ * that indexed the label table with `undefined` would print the word
+ * "undefined" into the evidence.
+ * @param kind - the recorded match kind, possibly absent on a replayed record.
+ * @returns the suffix, empty when there is nothing to say.
+ */
+function matchSuffix(kind: EvidenceMatchKind | undefined): string {
+  if (kind === undefined || kind === 'lexical') return ''
+  return `, ${MATCH_KIND_LABELS[kind]}`
+}
+
+/** The one-line note explaining what a semantic-only hit did and did not do. */
+export const SEMANTIC_ONLY_NOTE =
+  'matched on meaning, not on wording: do not quote this passage as containing the query\u2019s terms'
 
 /** The model-facing note for an attachment Zotero has not indexed. */
 export const ATTACHMENT_UNINDEXED_NOTE = "no full text in Zotero's index"
@@ -282,14 +332,63 @@ export const RETRIEVE_TRUNCATED_MESSAGE =
 export const RETRIEVE_TRUNCATED_REMEDY =
   'zotero_get with include:["notes", "annotations"] reads the item\u2019s notes and annotations outside this budget.'
 
+/**
+ * What an empty evidence list means when the semantic route ran: both the
+ * query's words and its meaning failed to score any passage. It is the one
+ * fact this call established, and it refuses the stronger claim — "no passages
+ * matched" is routinely read as "the item has nothing on this", which the call
+ * cannot know.
+ */
+export const NO_MATCH_MESSAGE =
+  'No passage matched this query \u2014 neither its terms nor its meaning. That describes this query against the sources this call read; it is not evidence that the item has nothing on the subject.'
+
+/**
+ * The same fact when only the lexical route ran: claiming "nor its meaning"
+ * would describe a comparison this call never made, because semantic ranking
+ * was off or its model did not answer.
+ */
+export const NO_MATCH_TERMS_ONLY_MESSAGE =
+  'No passage matched this query\u2019s terms (semantic ranking was not part of this call). That describes this query against the sources this call read; it is not evidence that the item has nothing on the subject.'
+
+/** The remedy half of {@link NO_MATCH_MESSAGE}. */
+export const NO_MATCH_REMEDY =
+  'Rephrase with the subject\u2019s own terms, pass queryVariants with your own paraphrases, or widen sources.'
+
+/**
+ * The message when the item offered no rankable passage at all: the overlap
+ * test never ran, so even the terms claim would overstate what happened.
+ */
+export const NO_SOURCES_MESSAGE =
+  'This item offered no rankable passage \u2014 no annotation, note, abstract, or indexed full text \u2014 so no overlap test ran. It is not evidence about the item\u2019s content.'
+
+/** The remedy half of {@link NO_SOURCES_MESSAGE}. */
+export const NO_SOURCES_REMEDY =
+  'Check that the item has an indexed attachment, or read its files directly with zotero_get.'
+
+/**
+ * The reason an empty answer can be expected rather than surprising: the query
+ * carried nothing the lexical route could score, so no wording existed to
+ * match.
+ */
+export const NO_CONTENT_TERMS_MESSAGE =
+  'The query carried no content words (\u201cthe\u201d, \u201cof\u201d and the like are dropped before scoring), so there was nothing to match; ask with the subject\u2019s own terms.'
+
 export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): ContentBlock[] {
   const lines = [
     `Evidence for ${value.ref} (${value.evidence.length} passage${value.evidence.length === 1 ? '' : 's'})`,
   ]
   if (value.evidence.length === 0) {
-    lines.push(
-      'No passages matched the query; the item may still have content, but none of it ranked against these terms.',
-    )
+    if (value.noMatch === 'no-sources') {
+      lines.push(NO_SOURCES_MESSAGE, NO_SOURCES_REMEDY)
+    } else {
+      // The meaning claim is only made when the semantic route actually ran.
+      lines.push(
+        value.rankedRoutes?.includes('semantic') === true
+          ? NO_MATCH_MESSAGE
+          : NO_MATCH_TERMS_ONLY_MESSAGE,
+        value.queryTerms.length === 0 ? NO_CONTENT_TERMS_MESSAGE : NO_MATCH_REMEDY,
+      )
+    }
   }
   if (value.attachmentRef !== undefined) {
     const type =
@@ -326,8 +425,14 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
       entry.chunkCount === undefined || entry.chunkIndex === undefined
         ? ''
         : `, chunk ${entry.chunkIndex + 1}/${entry.chunkCount}`
+    // The ordinary case — the passage's own words carry the query — needs no
+    // label: it is what a reader assumes. Every other kind does, because it
+    // changes what may be done with the passage, so it is named in the bracket
+    // the reader is already scanning.
+    const kind = matchSuffix(entry.matchKind)
     const comment = entry.comment === undefined ? '' : `\nComment: ${entry.comment}`
-    lines.push(`\n[${page}${chunk}] ${entry.sourceRef}\n${entry.text}${comment}`)
+    lines.push(`\n[${page}${chunk}${kind}] ${entry.sourceRef}\n${entry.text}${comment}`)
+    if (entry.matchKind === 'semantic') lines.push(SEMANTIC_ONLY_NOTE)
     if (entry.matchedFields !== undefined) {
       lines.push(matchLine(entry.matchedFields))
     }
@@ -374,11 +479,14 @@ export function registerRetrieveTool(
         name: 'zotero_retrieve',
         description: [
           'Gather evidence passages for one Zotero item and rank them against a query.',
-          "Sources: annotations (with Zotero's own page labels), notes, the abstract, and BM25-ranked full-text chunks.",
+          "Sources: annotations (with Zotero's own page labels), notes, the abstract, and ranked full-text chunks.",
           "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms; a hit found only in the comment is the annotator's view, not the paper's text.",
+          'matchKind: lexical = the passage\u2019s own text carries the query\u2019s words, semantic = only the meaning matched (never quote it as containing them), hybrid = both.',
+          'queryVariants: extra phrasings of the same question; the best score per passage wins.',
           'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
           "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child, use when a work has several files), or specified via attachmentRefs; a specified attachment must provably be this item's own child.",
           'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
+          'An empty list (noMatch) means this query matched nothing on the routes reported in rankedRoutes; it is never evidence the item is silent on the subject.',
           'Results are capped by passage count and character budget: a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,

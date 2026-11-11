@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { ZoteroItemDetail, ZoteroRetrieveResult } from '../../src/types.js'
+import type { ZoteroEvidence, ZoteroItemDetail, ZoteroRetrieveResult } from '../../src/types.js'
 import type { SearchProjectionInput } from '../../src/presentation-meta.js'
 import {
   MAX_PRESENTATION_EVIDENCE_CHARS,
@@ -54,14 +54,30 @@ function getDetail(overrides: Partial<ZoteroItemDetail> = {}): ZoteroItemDetail 
   }
 }
 
-/** A full retrieve result with every required field; tests spread overrides. */
-function retrieveResult(overrides: Partial<ZoteroRetrieveResult> = {}): ZoteroRetrieveResult {
+/** One evidence passage as a test writes it: the match kind defaults to lexical. */
+type EvidenceOverride = Omit<ZoteroEvidence, 'matchKind'> & {
+  matchKind?: ZoteroEvidence['matchKind']
+}
+
+/** The retrieve-result overrides a test may set; evidence carries its own type. */
+type RetrieveOverrides = Partial<Omit<ZoteroRetrieveResult, 'evidence'>> & {
+  evidence?: EvidenceOverride[]
+}
+
+/**
+ * A full retrieve result with every required field; tests spread overrides.
+ * A passage that names no match kind is lexical — that is what the core's own
+ * ranker produces, and a projection test is not the place to re-assert it.
+ */
+function retrieveResult(overrides: RetrieveOverrides = {}): ZoteroRetrieveResult {
+  const { evidence = [], ...rest } = overrides
   return {
     ref: 'zotero://user/0/item/ABCDEFGH',
-    evidence: [],
     truncated: false,
     sourcesSkipped: [],
-    ...overrides,
+    ...rest,
+    queryTerms: overrides.queryTerms ?? [],
+    evidence: evidence.map((entry) => ({ matchKind: 'lexical' as const, ...entry })),
   }
 }
 
@@ -435,6 +451,7 @@ describe('projectRetrieveMeta', () => {
       sourceRef: 'zotero://user/0/annotation/ANN000001',
       preview: 'highlighted claim',
       previewTruncated: false,
+      matchKind: 'lexical',
       pageLabel: '7',
       attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
     })

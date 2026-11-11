@@ -10,7 +10,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import { retrieveMetaOf } from '../../sources/decoders.js'
 import { PdfReadButton } from '../components/open/PdfReadButton.tsx'
 import { ZoteroLocateActions } from '../components/open/ZoteroLocateActions.tsx'
-import { coverageLineOf, sourceLabelKeyOf } from '../evidence-labels.ts'
+import { coverageLineOf, matchLabelKeyOf, sourceLabelKeyOf } from '../evidence-labels.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { errorSummaryOf, isToolRunning, metaOf, resultTextOf } from '../../sources/presenters.js'
 import { RawTextFallback, RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
@@ -107,6 +107,14 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                           {t(sourceLabelKeyOf(item.source))}
                         </Tag>
                         {item.pageLabel && <Tag tone="neutral">{item.pageLabel}</Tag>}
+                        {/* Why the passage came back. A meaning-only hit says so
+                            here, because the passage text it shows need not
+                            contain any of the words the query used. */}
+                        {item.matchKind && (
+                          <Tag tone={item.matchKind === 'semantic' ? 'warning' : 'neutral'}>
+                            {t(matchLabelKeyOf(item.matchKind))}
+                          </Tag>
+                        )}
                         {/* A match found only in the annotator's own comment is
                             the annotator's view, not the paper's text; the
                             badge says which field carried the query. */}

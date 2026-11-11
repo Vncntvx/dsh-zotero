@@ -138,28 +138,30 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
-Extract query-relevant passages from a single paper's multiple sources and rank them with BM25.
+Extract query-relevant passages from a single paper's multiple sources and rank them: the core uses lexical BM25; with the enrichment component's local semantic ranking on, ranking fuses a lexical and a semantic route by RRF, and each passage is labeled with `matchKind`.
 
 ### Parameters
 
-| Parameter          | Type     | Default  | Description                                                     |
-| ------------------ | -------- | -------- | --------------------------------------------------------------- |
-| `ref`              | string   | none     | Item ref (required)                                             |
-| `query`            | string   | none     | Ranking keywords (required)                                     |
-| `sources`          | string[] | all 4    | Retrieval sources: `annotation`, `note`, `abstract`, `fulltext` |
-| `passages`         | integer  | `4`      | Passage cap (bounded by `maxEvidencePassages`, default 4)       |
-| `attachmentPolicy` | string   | `"best"` | Full-text attachment policy: `best`, `allIndexed`, `specified`  |
-| `attachmentRefs`   | string[] | none     | Attachment refs when `attachmentPolicy="specified"`             |
+| Parameter          | Type     | Default  | Description                                                                                                                                                                                               |
+| ------------------ | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`              | string   | none     | Item ref (required)                                                                                                                                                                                       |
+| `query`            | string   | none     | Ranking keywords (required)                                                                                                                                                                               |
+| `queryVariants`    | string[] | none     | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused because each phrasing is a full scoring pass. Each is ranked separately and a passage keeps its best score |
+| `sources`          | string[] | all 4    | Retrieval sources: `annotation`, `note`, `abstract`, `fulltext`                                                                                                                                           |
+| `passages`         | integer  | `4`      | Passage cap (bounded by `maxEvidencePassages`, default 4)                                                                                                                                                 |
+| `attachmentPolicy` | string   | `"best"` | Full-text attachment policy: `best`, `allIndexed`, `specified`                                                                                                                                            |
+| `attachmentRefs`   | string[] | none     | Attachment refs when `attachmentPolicy="specified"`                                                                                                                                                       |
 
 ### Output
 
-The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`, `coverage` (full-text coverage), `attachments` (retrieval status per attachment), `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, matchedFields), `truncated`, and `sourcesSkipped`.
+The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`, `coverage` (full-text coverage), `attachments` (retrieval status per attachment), `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms` (the folded terms the lexical route actually scored), `rankedRoutes` (the routes that ran: `lexical`, plus `semantic` when enabled), and `noMatch` (why the answer is empty: `no-overlap` — a corpus existed but nothing hit; `no-sources` — no rankable corpus at all).
 
 ### Notes
 
+- `matchKind` says why a passage returned: `lexical` (the passage's own text carries the query's words and may be quoted as such), `semantic` (meaning-only — never quote it as containing the query's terms), `hybrid` (both);
 - Only `annotation` sources carry a page label (`pageLabel`); full-text passages give no page numbers;
-- Unavailable or unindexed sources are recorded in `sourcesSkipped`;
-- Annotation content ranks the highlighted text and the user comment together, and `matchedFields` marks whether the match came from `text` or `comment`;
+- Unavailable or unindexed sources are recorded in `sourcesSkipped`; `noMatch` is never evidence that the item has nothing on the subject;
+- Annotation content ranks the highlighted text and the user comment together, and `matchedFields` marks whether the match came from `text` or `comment`; a semantic hit names no field (the wording does not overlap);
 - Under the multi-attachment policies, unindexed attachments are marked `unindexed` and attachments that were not read are marked `unread`.
 
 ### Example
@@ -773,14 +775,14 @@ The bundle component `dsh-zotero/scholarly` ships with the package and is off by
 
 ### scholarly_search
 
-Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports automatic semantic routing and multi-source RRF fusion with deduplication, and checks the local Zotero library for saved status automatically.
+Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports phrase-based topic routing and multi-source RRF fusion with deduplication, and checks the local Zotero library for saved status automatically.
 
 #### Parameters
 
 | Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                                      |
 | ------------------- | -------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                                         |
-| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by topic semantics                                                                                                   |
+| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by the topic phrase table                                                                                            |
 | `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                                           |
 | `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                                             |
 | `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                                    |
@@ -824,20 +826,21 @@ Trace a paper's citation graph: the list of papers citing this work (citations),
 
 ### scholarly_read
 
-Tiered reading of lawful open-access full text with passage-level BM25 evidence location. Supports outline extraction (`outline`), section-targeted reading (`section`), and BM25 evidence passage matching from a natural-language question (`query`).
+Tiered reading of lawful open-access full text with passage-level evidence location. Supports outline extraction (`outline`), section-targeted reading (`section`), and evidence-passage matching from a natural-language question (`query`).
 
 #### Parameters
 
-| Parameter           | Type    | Default    | Description                                                                                                                                                                                                                                                      |
-| ------------------- | ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | string  | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                                 |
-| `outline`           | boolean | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                                         |
-| `section`           | string  | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                                       |
-| `query`             | string  | none       | Natural-language question; BM25 ranks the most relevant evidence passages across the full text                                                                                                                                                                   |
-| `passages`          | integer | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                                           |
-| `start`             | integer | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                                    |
-| `max_chars`         | integer | config cap | Maximum characters read per call                                                                                                                                                                                                                                 |
-| `run_in_background` | boolean | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
+| Parameter           | Type     | Default    | Description                                                                                                                                                                                                                                                      |
+| ------------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string   | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                                 |
+| `outline`           | boolean  | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                                         |
+| `section`           | string   | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                                       |
+| `query`             | string   | none       | Natural-language question; passages are ranked over the full text with the same strategy and the same chunk boundaries as `zotero_retrieve`                                                                                                                      |
+| `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused. Each is ranked separately and a passage keeps its best score                                                                                                     |
+| `passages`          | integer  | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                                           |
+| `start`             | integer  | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                                    |
+| `max_chars`         | integer  | config cap | Maximum characters read per call                                                                                                                                                                                                                                 |
+| `run_in_background` | boolean  | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
 
 #### Network boundary
 

@@ -1,5 +1,5 @@
 /**
- * Full-text resolution: identifier parsing, PDF extraction, and the ordered
+ * Full-text resolution: identifier enrichment, PDF extraction, and the ordered
  * route chain (arXiv HTML, ar5iv, PMC JATS, open-access PDFs).
  *
  * Fixtures shared with the markup/store specs live in their own files; this one

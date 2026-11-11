@@ -16,9 +16,9 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-jobs'
 import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
-import type { EvidenceField, EvidenceSource } from './evidence-item.js'
+import type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
 
-export type { EvidenceField, EvidenceSource } from './evidence-item.js'
+export type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
 import type {
   PersonalLibrary,
   GroupLibrary,
@@ -468,6 +468,13 @@ export type ZoteroAttachmentPolicy = 'best' | 'allIndexed' | 'specified'
 export interface ZoteroRetrieveRequest {
   ref: ZoteroObjectRef
   query: string
+  /**
+   * Additional phrasings of the same question, ranked alongside `query`: each
+   * is scored on its own and the best score per passage wins, so a paraphrase
+   * can raise a passage the caller's wording missed without letting the two
+   * wordings pool their weights.
+   */
+  queryVariants?: string[]
   sources: ZoteroEvidenceSource[]
   passages: number
   attachmentPolicy?: ZoteroAttachmentPolicy
@@ -496,10 +503,17 @@ export interface ZoteroEvidence {
   /** The annotation passage's parent attachment ref; absent for other sources. */
   attachmentRef?: string
   /**
+   * Why this passage was returned: its own text carries the query's terms
+   * (`lexical`), only the meaning matched (`semantic`), or both (`hybrid`). A
+   * `semantic` hit must never be reported as wording the source contains.
+   */
+  matchKind: EvidenceMatchKind
+  /**
    * The passage's fields that carry matched query terms, so a match found in
    * the annotator's own comment is never read as the paper saying it. Present
-   * only for the two-field source (an annotation carrying a comment); absence
-   * means the passage's single text field carried the match.
+   * only for the two-field source (an annotation carrying a comment) whose
+   * ranking involved the lexical route; a semantic-only hit names no field,
+   * because naming one would claim wording the passage need not share.
    */
   matchedFields?: ZoteroEvidenceField[]
 }
@@ -561,6 +575,30 @@ export interface ZoteroRetrieveResult {
   truncated: boolean
   /** Requested sources the item could not provide; retrieval degrades instead of failing. */
   sourcesSkipped: ZoteroEvidenceSource[]
+  /**
+   * The distinct query terms the lexical route scored, across `query` and
+   * `queryVariants`. An empty list means the query carried nothing but
+   * function words, which is the reason an empty `evidence` can be expected
+   * rather than surprising.
+   */
+  queryTerms: string[]
+  /**
+   * Present exactly when the evidence list is empty, naming the one specific
+   * fact the call established. `no-overlap`: the item offered rankable
+   * passages and no route scored any of them against the query.
+   * `no-sources`: the item offered no rankable passage at all — no annotation,
+   * note, abstract, or full text — so no overlap test ever ran. Neither is
+   * ever evidence that the item has nothing on the subject. Absent when
+   * passages matched but the budgets omitted them (`truncated`).
+   */
+  noMatch?: 'no-overlap' | 'no-sources'
+  /**
+   * The ranking routes this call actually ran, in fixed order. `semantic` is
+   * present only when semantic ranking was enabled and its model answered; a
+   * caller phrasing an empty answer must not claim a comparison a route never
+   * made.
+   */
+  rankedRoutes?: ('lexical' | 'semantic')[]
 }
 
 export type ZoteroAttachmentLocation =

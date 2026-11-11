@@ -101,6 +101,7 @@ describe('retrieve source selection', () => {
         sourceRef: 'zotero://user/0/annotation/ANNO1111?server=S1',
         text: 'parented',
         attachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+        matchKind: 'lexical',
       },
     ])
   })

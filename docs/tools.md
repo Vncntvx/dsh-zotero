@@ -138,28 +138,30 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
-从单篇文献的多数据源中提取与查询相关的原文片段，并基于 BM25 算法排序。
+从单篇文献的多数据源中提取与查询相关的原文片段并排序：核心使用词面 BM25；启用文档解析组件的本地语义检索后，排序经词面+语义双路线 RRF 融合，每段结果标注 `matchKind`。
 
 ### 参数
 
-| 参数               | 类型     | 默认值    | 说明                                                      |
-| ------------------ | -------- | --------- | --------------------------------------------------------- |
-| `ref`              | string   | —         | 文献条目 ref（必填）                                      |
-| `query`            | string   | —         | 排序关键词（必填）                                        |
-| `sources`          | string[] | 全部 4 种 | 检索源：`annotation`、`note`、`abstract`、`fulltext`      |
-| `passages`         | integer  | `4`       | 返回段落数量上限（受 `maxEvidencePassages` 限制，默认 4） |
-| `attachmentPolicy` | string   | `"best"`  | 全文附件选取策略：`best`、`allIndexed`、`specified`       |
-| `attachmentRefs`   | string[] | —         | 当 `attachmentPolicy="specified"` 时指定的附件 ref 列表   |
+| 参数               | 类型     | 默认值    | 说明                                                                                                                              |
+| ------------------ | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`              | string   | —         | 文献条目 ref（必填）                                                                                                              |
+| `query`            | string   | —         | 排序关键词（必填）                                                                                                                |
+| `queryVariants`    | string[] | —         | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错，因为每个措辞都是一次完整评分。逐措辞独立排序，段落取各措辞的最好成绩 |
+| `sources`          | string[] | 全部 4 种 | 检索源：`annotation`、`note`、`abstract`、`fulltext`                                                                              |
+| `passages`         | integer  | `4`       | 返回段落数量上限（受 `maxEvidencePassages` 限制，默认 4）                                                                         |
+| `attachmentPolicy` | string   | `"best"`  | 全文附件选取策略：`best`、`allIndexed`、`specified`                                                                               |
+| `attachmentRefs`   | string[] | —         | 当 `attachmentPolicy="specified"` 时指定的附件 ref 列表                                                                           |
 
 ### 输出
 
-返回结构包含：`ref`、`attachmentRef`、`attachmentContentType`、`coverage`（全文覆盖信息）、`attachments`（各附件检索状态）、`evidence`（段落列表，每项包含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、matchedFields）、`truncated`、`sourcesSkipped`。
+返回结构包含：`ref`、`attachmentRef`、`attachmentContentType`、`coverage`（全文覆盖信息）、`attachments`（各附件检索状态）、`evidence`（段落列表，每项包含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`（本次词面路线实际计分的折叠词项）、`rankedRoutes`（实际运行的路线：`lexical`，启用语义后含 `semantic`）、`noMatch`（空结果的成因：`no-overlap` 有语料但无命中；`no-sources` 无可排序语料）。
 
 ### 说明
 
+- `matchKind` 标注每段为何返回：`lexical`（原文含有查询词，可照原文引用）、`semantic`（仅语义匹配——不得把该段当作含有查询词的原文引用）、`hybrid`（两者）；
 - 仅 `annotation` 来源包含页码标签（`pageLabel`）；全文段落不提供页码；
-- 不可用或未建立索引的来源会记入 `sourcesSkipped`；
-- 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 还是 `comment`；
+- 不可用或未建立索引的来源会记入 `sourcesSkipped`；`noMatch` 永不构成"该条目没有相关内容"的证据；
+- 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 还是 `comment`；语义命中的段落不标注字段（措辞并无重合）；
 - 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`。
 
 ### 示例
@@ -773,14 +775,14 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 ### scholarly_search
 
-跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持语义自动路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
+跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持主题短语路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
 
 #### 参数
 
 | 参数                | 类型     | 默认值        | 说明                                                                                                                                                                              |
 | ------------------- | -------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                      |
-| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题语义自动路由                                             |
+| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题短语表路由                                               |
 | `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                                                                        |
 | `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                      |
 | `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                              |
@@ -824,20 +826,21 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 ### scholarly_read
 
-合法开放获取全文分层读取与段落级 BM25 证据定位。支持目录大纲提取（outline）、章节精准读取（section）与基于自然语言问题的 BM25 证据段落匹配（query）。
+合法开放获取全文分层读取与段落级证据定位。支持目录大纲提取（outline）、章节精准读取（section）与基于自然语言问题的证据段落匹配（query）。
 
 #### 参数
 
-| 参数                | 类型    | 默认值   | 说明                                                                                                                                                                              |
-| ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | string  | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                            |
-| `outline`           | boolean | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                          |
-| `section`           | string  | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                         |
-| `query`             | string  | —        | 自然语言问题，基于 BM25 算法在全文段落中排序检索最相关的证据片段                                                                                                                  |
-| `passages`          | integer | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                          |
-| `start`             | integer | `0`      | 分块阅读起始字符偏移量                                                                                                                                                            |
-| `max_chars`         | integer | 配置上限 | 单次读取的最大字符数                                                                                                                                                              |
-| `run_in_background` | boolean | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                              |
+| ------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string   | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                            |
+| `outline`           | boolean  | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                          |
+| `section`           | string   | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                         |
+| `query`             | string   | —        | 自然语言问题，在全文段落中排序检索最相关的证据片段（与 `zotero_retrieve` 同一排序策略与同一切分边界）                                                                             |
+| `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错。逐措辞独立排序，段落取各措辞的最好成绩                                                                               |
+| `passages`          | integer  | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                          |
+| `start`             | integer  | `0`      | 分块阅读起始字符偏移量                                                                                                                                                            |
+| `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数                                                                                                                                                              |
+| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
 
 #### 网络边界
 

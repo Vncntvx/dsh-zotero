@@ -20,6 +20,7 @@
 
 import { parseRef } from '../refs.js'
 import { mapWithConcurrency } from '../concurrency.js'
+import type { EvidenceRanker } from '../local/evidence-ranker.js'
 import type {
   ZoteroGetRequest,
   ZoteroItemDetail,
@@ -47,6 +48,19 @@ export interface ZoteroServiceLike {
     request: ZoteroCreateItemRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateItemCommittedOutcome | { kind: 'declined' }>
+  /**
+   * The ranking strategy the core holds: its own lexical ranker, or the hybrid
+   * one the enrichment component installed. Declared here so callers stop
+   * casting `ctx.get('zotero')`; optional because a link stub that never ranks
+   * need not carry it, and the reader falls back to the core ranker.
+   */
+  evidenceRanker?(): EvidenceRanker
+  /**
+   * The live chunk boundaries passage ranking cuts on, shared with
+   * `zotero_retrieve`. Optional for the same reason; the reader falls back to
+   * the config schema's defaults.
+   */
+  evidenceChunkLimits?(): { readonly chunkWords: number; readonly chunkChars: number }
 }
 
 /** What one library-status pass managed to determine. */

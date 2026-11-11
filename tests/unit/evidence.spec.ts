@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { chunkText, rankChunks, tokenize } from '../../src/evidence.js'
+import { chunkText, queryTermsOf, rankChunks, tokenize } from '../../src/evidence.js'
 
 describe('tokenize', () => {
   it('lowercases and splits on non-alphanumeric boundaries', () => {
@@ -158,6 +158,62 @@ describe('rankChunks', () => {
     const ranked = rankChunks('', CHUNKS)
     expect(ranked.map((entry) => entry.index)).toEqual([0, 1, 2, 3])
     expect(ranked.every((entry) => entry.score === 0)).toBe(true)
+  })
+
+  it('does not turn function words in a natural-language question into evidence', () => {
+    // The generic table sentence and the concept paraphrase share only
+    // function words with the question; neither is lexical evidence. The one
+    // passage carrying the actual terms must win.
+    const passages = [
+      { text: 'The role of perceived legitimacy in regulatory adherence.', index: 0 },
+      { text: 'Table 2 lists the and of the in the', index: 1 },
+      { text: 'institutional trust and compliance', index: 2 },
+    ]
+    const ranked = rankChunks(
+      'What mechanisms explain the relationship between institutional trust and compliance?',
+      passages,
+    )
+    expect(ranked.map((entry) => entry.index)).toEqual([2, 0, 1])
+    expect(ranked[0]!.score).toBeGreaterThan(0)
+    expect(ranked[1]!.score).toBe(0)
+    expect(ranked[2]!.score).toBe(0)
+  })
+
+  it('counts a repeated query term once instead of multiplying its score', () => {
+    const once = rankChunks('trust', CHUNKS)
+    const thrice = rankChunks('trust trust trust', CHUNKS)
+    expect(thrice.map((entry) => entry.score)).toEqual(once.map((entry) => entry.score))
+    expect(thrice.map((entry) => entry.index)).toEqual(once.map((entry) => entry.index))
+  })
+
+  it('keeps a content word that appears in most but not all passages', () => {
+    // A `df > 0.6N` noise threshold would discard `attention` (df=3, N=4)
+    // and break the ranking contract above. Only function words are dropped.
+    expect(queryTermsOf('attention').includes('attention')).toBe(true)
+    const ranked = rankChunks('attention', CHUNKS)
+    expect(ranked[0]!.score).toBeGreaterThan(0)
+  })
+
+  it('still returns evidence when the only query term appears in every passage', () => {
+    // Zeroing `df >= N` would make a paper entirely about `attention` answer
+    // an `attention` query with an empty evidence array.
+    const homogeneous = Array.from({ length: 6 }, (_, index) => ({
+      text: `attention study number ${index} and attention again`,
+      index,
+    }))
+    const ranked = rankChunks('attention', homogeneous)
+    expect(ranked.every((entry) => entry.score > 0)).toBe(true)
+  })
+
+  it('keeps a single-passage corpus queryable', () => {
+    const ranked = rankChunks('trust', [{ text: 'institutional trust', index: 0 }])
+    expect(ranked[0]!.score).toBeGreaterThan(0)
+  })
+
+  it('reports the deduplicated, folded, non-function query terms', () => {
+    expect(queryTermsOf('Trust the CAFÉ trust and the CAFÉ')).toEqual(['trust', 'cafe'])
+    expect(queryTermsOf('之间的关系是什么')).not.toContain('的')
+    expect(queryTermsOf('the and of')).toEqual([])
   })
 })
 

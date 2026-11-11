@@ -37,6 +37,7 @@ import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
 import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
 import type { DiagnosticSink } from '../diagnostics.js'
 import type { FulltextEnhancer } from './fulltext-enhancer.js'
+import { bm25EvidenceRanker, type EvidenceRanker } from './evidence-ranker.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import { runSearch } from './search-domain.js'
@@ -151,6 +152,7 @@ export class LocalApiProvider implements ZoteroProvider {
   private readonly searchCaches: SearchIndexCaches
   private readonly sink: DiagnosticSink | undefined
   private readonly getFulltextEnhancer: () => FulltextEnhancer | undefined
+  private readonly getEvidenceRanker: () => EvidenceRanker
 
   constructor(
     private readonly client: ZoteroHttpClient,
@@ -159,11 +161,13 @@ export class LocalApiProvider implements ZoteroProvider {
     private readonly authorizer?: WriteAuthorizer,
     sink?: DiagnosticSink,
     getFulltextEnhancer: () => FulltextEnhancer | undefined = () => undefined,
+    getEvidenceRanker: () => EvidenceRanker = () => bm25EvidenceRanker,
   ) {
     this.getLimits = limits
     this.searchCaches = createSearchIndexCaches()
     this.sink = sink
     this.getFulltextEnhancer = getFulltextEnhancer
+    this.getEvidenceRanker = getEvidenceRanker
     // The directory owns the scope-listing and breadcrumb caches. It reads the
     // TTL and the fan-out bound through the live limits, so a settings edit
     // changes how long an existing cache entry is trusted (and how wide a
@@ -199,15 +203,20 @@ export class LocalApiProvider implements ZoteroProvider {
     searchCaches: SearchIndexCaches
     sink: DiagnosticSink | undefined
     enhancer: FulltextEnhancer | undefined
+    ranker: EvidenceRanker
   } {
     return {
       client: this.client,
       limits: this.getLimits(),
       searchCaches: this.searchCaches,
       sink: this.sink,
-      // Read live per call: mounting or unmounting the parsing row changes the
+      // Read live per call: mounting or unmounting the enrichment row changes the
       // enhancer without rebuilding this provider.
       enhancer: this.getFulltextEnhancer(),
+      // Same live read for the ranking strategy: the enrichment row swaps the
+      // hybrid ranker in and out without a rebuild, and the core's own ranker is
+      // the value while the row is absent.
+      ranker: this.getEvidenceRanker(),
     }
   }
 
