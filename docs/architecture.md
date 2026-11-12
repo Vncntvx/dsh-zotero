@@ -173,7 +173,7 @@ graph LR
 
 ### 会话文献轨迹（`conversation.view`，id `zotero`，order 30）
 
-- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`；状态保持完整，投递给浏览器的视图按窗口截断（会话顺序的列表头），并携带在截断前算好的精确聚合——过滤器计数、段落总数、导出去重数与每个列表的精确 total——因此未列出的部分被如实计数，不会丢失。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
+- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。折叠是增量的：服务持有按会话状态链推进的索引，一次视图只冻结本轮改动过的条目，注册卸载时释放全部缓存，模块级 memo 不再存在；状态保持完整，投递给浏览器的视图按窗口截断（会话顺序的列表头），并携带在截断前算好的精确聚合——过滤器计数、段落总数、导出去重数与每个列表的精确 total——因此未列出的部分被如实计数，不会丢失。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
 - 窗口后的翻页：被窗口截断的列表由核心的 `sourcePage` 端点（`src/source-page.ts`，挂在核心 `ZoteroRuntime` 上，不依赖可选的文献面板组件）按页补齐。请求携带会话 id、目标列表、偏移与可选 `currentServerId`；续页必须携带上次返回的 `revision`（会话水位线），轨迹变动时以 `ZOTERO_SOURCE_PAGE_STALE` 拒绝而不是静默续在另一份折叠上。每次调用先在宿主 `ctx.remoteAccess` 校验会话授权、折叠完整账本、再切出有界页并二次校验授权与会话仍打开。浏览器侧 `useSourcePage` 按需追加页：列表未超出窗口时不发请求，列表身份（会话、目标、实例、偏移）变化时弃用已收页并中止在途请求。
 - 实例判定：归约状态保存条目 ref 的 `serverIds`；宿主编译时不知道当前连接的 Server ID，由客户端用状态探针结果调用 `withEvidenceMatch` 物化 `evidenceMatch`。
 - 检索折叠：分页续调用按 identity 折叠为一次检索；首屏的 `total` 与 `noteMatches` 取第一次调用，`returned`/`omitted` 在续页累加。

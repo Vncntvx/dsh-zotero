@@ -38,8 +38,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { blocksOf, type SourceLedgerProjectionState } from './sources/event-ledger.js'
-import { buildSourceWorkspace } from './sources/ledger.js'
+import type { SourceLedgerProjectionState } from './sources/event-ledger.js'
 import type { SourceWorkspace } from './sources/model.js'
 import { readSourcePage } from './source-page.js'
 import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
@@ -50,7 +49,10 @@ import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer } from './write-auth.js'
-import { sourceLedgerProjection } from './session-projection/source-ledger.js'
+import {
+  createSourceLedgerProjection,
+  type SourceLedgerProjection,
+} from './session-projection/source-ledger.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
 import {
   Config as ConfigSchema,
@@ -204,6 +206,13 @@ export class ZoteroService extends Service {
   private sourceProjectionReady: Promise<void> | undefined
   private sourceProjectionHandle: ProjectionHandle<SourceLedgerProjectionState> | undefined
   private sourceProjectionGeneration = 0
+  /**
+   * The trail's incremental fold, owned by this service: one instance per
+   * service (a reload registers the same definition again) and every cached
+   * fold dropped on unload. Created before any registration so a read never
+   * observes it unset.
+   */
+  private readonly sourceLedgerProjection: SourceLedgerProjection = createSourceLedgerProjection()
   static inject = ['tools', 'systemPrompt']
 
   static Config = ConfigSchema
@@ -347,7 +356,9 @@ export class ZoteroService extends Service {
       )
       this.sourceProjectionReady = (async () => {
         try {
-          const handle = await host.sessionProjections.register(sourceLedgerProjection)
+          const handle = await host.sessionProjections.register(
+            this.sourceLedgerProjection.definition,
+          )
           if (this.sourceProjectionGeneration !== generation) {
             await handle.dispose()
             return
@@ -374,6 +385,11 @@ export class ZoteroService extends Service {
         this.sourceProjectionFiber = undefined
         this.sourceProjectionReady = undefined
         this.sourceProjectionHandle = undefined
+        // The trail's fold cache goes with the registration: nothing can read
+        // it after the handle is disposed, and holding a session's frozen
+        // views past the plugin's lifetime is exactly what the ownership rule
+        // forbids.
+        this.sourceLedgerProjection.dispose()
         const fiberDisposal = fiber?.dispose()
         if (fiberDisposal !== undefined) {
           void Promise.resolve(fiberDisposal).catch((error: unknown) => {
@@ -480,10 +496,10 @@ export class ZoteroService extends Service {
     signal.throwIfAborted()
     const state = handle.stateOf(session)
     const revision = session.seq - 1
-    const workspace = buildSourceWorkspace(blocksOf(state.ledger), {
-      windowed: false,
-      currentServerId,
-    })
+    // The complete view is read through the projection instance that produced
+    // the state, so this endpoint and the wire view share one incremental fold
+    // per revision instead of each rebuilding the whole trail.
+    const workspace = this.sourceLedgerProjection.fullWorkspaceOf(state, currentServerId)
     return { revision, workspace }
   }
 

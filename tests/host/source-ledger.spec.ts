@@ -15,7 +15,7 @@ import {
   type SourceLedgerState,
 } from '../../src/sources/event-ledger.js'
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
-import { sourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
+import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
 import { projectRetrieveMeta } from '../../src/presentation-meta.js'
 import type { FulltextArtifactProvenance } from '../../src/local/fulltext-enhancer.js'
 
@@ -454,7 +454,9 @@ describe('the host literature-trail fold', () => {
     ])
     const projectionState = { inheritedEventCount: 0, ledger: state }
     const roundTripped = JSON.parse(JSON.stringify(projectionState))
-    expect(sourceLedgerProjection.stateSchema.safeParse(roundTripped).success).toBe(true)
+    expect(
+      createSourceLedgerProjection().definition.stateSchema.safeParse(roundTripped).success,
+    ).toBe(true)
     expect(sourceWorkspaceSchema.safeParse(workspaceOf(state)).success).toBe(true)
   })
 
@@ -475,19 +477,22 @@ describe('the host literature-trail fold', () => {
       }),
     ])
     const projectionState = { inheritedEventCount: 99, ledger: state }
-    expect(sourceLedgerProjection.wire.view(projectionState).sources).toHaveLength(1)
+    expect(
+      createSourceLedgerProjection().definition.wire.view(projectionState).sources,
+    ).toHaveLength(1)
   })
 })
 
 describe('the projection lifecycle', () => {
   it('initializes, folds, and serves through the registered definition', () => {
-    const initial = sourceLedgerProjection.init({} as never, 0 as never)
+    const { definition } = createSourceLedgerProjection()
+    const initial = definition.init({} as never, 0 as never)
     expect(initial).toEqual({
       inheritedEventCount: 0,
       ledger: { blocks: [], pending: {}, recorded: {} },
     })
 
-    const called = sourceLedgerProjection.apply(
+    const called = definition.apply(
       initial,
       event('tool/call', {
         turn: 1,
@@ -501,9 +506,9 @@ describe('the projection lifecycle', () => {
     expect(Object.keys(called.ledger.pending)).toEqual(['call-lifecycle'])
 
     const unrelated = event('user/message', { text: 'hello' })
-    expect(sourceLedgerProjection.apply(called, unrelated)).toBe(called)
-    expect(sourceLedgerProjection.wire.summary).toBe(false)
-    expect(sourceLedgerProjection.wire.view(called).sources).toEqual([])
+    expect(definition.apply(called, unrelated)).toBe(called)
+    expect(definition.wire.summary).toBe(false)
+    expect(definition.wire.view(called).sources).toEqual([])
   })
 
   it('never records a write tool in the projection state', () => {

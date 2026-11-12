@@ -50,10 +50,12 @@ export interface SourceLedgerState {
   readonly blocks: readonly LedgerBlockFact[]
   readonly pending: Readonly<Record<string, LedgerPendingCall>>
   /**
-   * Every recorded callId. The projection refolds a cell's whole log whenever
-   * it is cold-built, so the dedupe must be O(1) per settled event; a Set
-   * cannot survive the strict zod state schema, so the recorded ids ride the
-   * state as a plain record.
+   * Call ids that need a durable dedupe: the ones a `tool/ptc-dispatch`
+   * settled, because that arm records without a pending entry (a dispatch may
+   * outlive its turn). The tool/result arm needs no record — its pending entry
+   * is the dedupe and is deleted in the same step — so this stays small even on
+   * a long session. A Set cannot survive the strict zod state schema, so the
+   * ids ride the state as a plain record.
    */
   readonly recorded: Readonly<Record<string, true>>
 }
@@ -120,7 +122,7 @@ function asEvent(event: SessionEvent): LedgerEvent {
 }
 
 /** Build the settled block a fact replays as. */
-function blockOf(fact: LedgerBlockFact): SettledToolBlock {
+export function settledBlockOf(fact: LedgerBlockFact): SettledToolBlock {
   return {
     kind: 'tool-result',
     seq: fact.seq,
@@ -144,13 +146,27 @@ function belongsInTrail(block: SettledToolBlock): boolean {
   return block.name === 'job_output' && receiptOf(block) !== null
 }
 
-/** Append one settled fact unless the call is already recorded. */
-function record(state: SourceLedgerState, block: SettledToolBlock): SourceLedgerState {
+/**
+ * Append one settled fact, keeping the durable dedupe only where it is owed.
+ *
+ * The tool/result arm can only reach here with its pending entry intact, and
+ * it deletes that entry in the same step: a repeated result finds no pending
+ * entry and never arrives, so its callId needs no record. The ptc-dispatch arm
+ * records without a pending requirement — a dispatch may outlive its turn — so
+ * the recorded set is what makes a repeated dispatch event a no-op. Writing
+ * every settled result's callId there instead copied the whole record once per
+ * call, which is the fold's quadratic term on a long session.
+ * @param state - the current fold state.
+ * @param block - the settled block to append.
+ * @param tracked - whether this call id needs the durable dedupe (ptc dispatch only).
+ * @returns the next state, or the same reference when nothing changed.
+ */
+function record(
+  state: SourceLedgerState,
+  block: SettledToolBlock,
+  tracked: boolean,
+): SourceLedgerState {
   if (!belongsInTrail(block)) return state
-  // The tool/result arm can only reach record with its pending entry intact,
-  // so a callId arrives here once per fold; the ptc-dispatch arm records
-  // without a pending requirement (a dispatch may outlive its turn), so the
-  // recorded set is what keeps a repeated dispatch event a no-op.
   if (state.recorded[block.callId] === true) return state
   const fact: LedgerBlockFact = {
     callId: block.callId,
@@ -167,7 +183,7 @@ function record(state: SourceLedgerState, block: SettledToolBlock): SourceLedger
   return {
     ...state,
     blocks: [...state.blocks, fact],
-    recorded: { ...state.recorded, [block.callId]: true },
+    ...(tracked ? { recorded: { ...state.recorded, [block.callId]: true } } : {}),
   }
 }
 
@@ -228,7 +244,7 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
       }
       const pendingNext = { ...state.pending }
       delete pendingNext[callId]
-      return record({ ...state, pending: pendingNext }, block)
+      return record({ ...state, pending: pendingNext }, block, false)
     }
     case 'tool/ptc-dispatch-start': {
       const callId = asString(raw.data['subCallId'])
@@ -270,11 +286,28 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
       }
       const pendingNext = { ...state.pending }
       delete pendingNext[callId]
-      return record({ ...state, pending: pendingNext }, block)
+      return record({ ...state, pending: pendingNext }, block, true)
     }
     default:
       return state
   }
+}
+
+/**
+ * The calls still waiting for their result, as the running blocks the
+ * workspace reducer counts as running operations. They always follow every
+ * settled block: a call without a result has no transcript position yet.
+ * @param state - the fold state.
+ * @returns the running blocks, in first-seen order.
+ */
+export function pendingBlocksOf(state: SourceLedgerState): readonly ToolBlockLike[] {
+  return Object.values(state.pending).map((call): ToolBlockLike => ({
+    phase: 'start',
+    callId: call.callId,
+    name: call.name,
+    args: PartialArguments.fromText(call.argsRaw),
+    subCalls: [],
+  }))
 }
 
 /**
@@ -284,18 +317,16 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
  * @returns the ordered blocks.
  */
 export function blocksOf(state: SourceLedgerState): readonly ToolBlockLike[] {
-  const pending = Object.values(state.pending).map((call): ToolBlockLike => ({
-    phase: 'start',
-    callId: call.callId,
-    name: call.name,
-    args: PartialArguments.fromText(call.argsRaw),
-    subCalls: [],
-  }))
-  return [...state.blocks.map(blockOf), ...pending]
+  return [...state.blocks.map(settledBlockOf), ...pendingBlocksOf(state)]
 }
 
 /**
- * Build the rendered workspace from the current fold.
+ * Build the rendered workspace from the current fold in one pass.
+ *
+ * The host projection does not call this: it keeps a
+ * `SourceWorkspaceIndex` per session state chain and folds only the new
+ * blocks, because a per-event full replay is quadratic in the session length.
+ * This one-shot form serves callers that hold the whole block list once.
  * @param state - the fold state.
  * @param currentServerId - connected instance id, when the caller knows it.
  * @returns the aggregated workspace.

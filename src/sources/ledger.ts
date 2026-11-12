@@ -5,8 +5,17 @@
  * one item never shrinks the others, and no search supersedes an earlier
  * one. Facts come only from settled, successful, structurally valid calls;
  * running, failed, and stopped calls count into operations, never into
- * achievements. Pure over the frozen blocks: the same slice builds the same
- * workspace.
+ * achievements.
+ *
+ * The fold is incremental. `SourceWorkspaceIndex.apply` folds one block into a
+ * mutable accumulator, and `workspace` freezes only the items whose draft
+ * changed since the last freeze, reusing every other frozen item. The host
+ * projection reads its view once per committed event on a session of any
+ * length, so a per-view cost proportional to the whole log would make the
+ * trail quadratic in the event count. `buildSourceWorkspace` keeps the
+ * one-shot contract the browser fallback and the specs use: fold every block,
+ * then freeze once. Both paths share the same fold and the same freeze, so the
+ * incremental index cannot drift from the pure builder.
  * @module dsh-zotero/sources/ledger
  */
 
@@ -47,14 +56,16 @@ import type {
   SupportedLocalLibrary,
 } from './model.js'
 import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.js'
-import { filterCountsOf } from './filters.js'
+import { hasIssue, type SourceFilterCounts } from './filters.js'
+import { hasPdf } from './source-capabilities.js'
 import {
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
 } from '../constants.js'
 import type { ZoteroResolvedScope } from '../contract.js'
 
-interface BuildSourceWorkspaceOptions {
+/** How one workspace read shapes its lists. */
+export interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */
   readonly currentServerId?: string
   /** Keep the existing bounded view; internal session paging requests the full fold. */
@@ -62,7 +73,7 @@ interface BuildSourceWorkspaceOptions {
 }
 
 /** One folded logical search: consecutive continuations share one identity. */
-interface SearchEpisode {
+interface SearchDraft {
   readonly identity: string | null
   readonly callId: string
   readonly query?: string
@@ -75,15 +86,15 @@ interface SearchEpisode {
   readonly tagMatch?: 'all' | 'any'
   readonly excludeTags: readonly string[]
   readonly includeTrashed: boolean
-  returned: number
-  omitted: number
   /**
    * The first page's whole-hit count and note-scan matches. Later pages of the
    * same identity never overwrite them: they describe the episode, not a page.
    */
   readonly total?: number
   readonly noteMatches?: number
-  readonly keys: Set<string>
+  returned: number
+  /** The items whose `searches` list carries this occurrence; a page changes them all. */
+  readonly members: Set<ItemDraft>
 }
 
 /** Mutable accumulator shapes; the frozen views come from `model.ts`. */
@@ -103,7 +114,7 @@ interface EvidenceDraft {
 }
 
 /** The mutable accumulator; structurally the frozen SourceItem view. */
-interface Draft {
+interface ItemDraft {
   readonly key: string
   readonly ref: string
   readonly serverIds: Set<string>
@@ -111,9 +122,9 @@ interface Draft {
   creators?: string
   year?: number
   venue?: string
-  facts: DraftFacts
-  operations: DraftOperations
-  evidence: Map<string, EvidenceDraft>
+  readonly facts: DraftFacts
+  readonly operations: DraftOperations
+  readonly evidence: Map<string, EvidenceDraft>
   bestAttachment?: SourceItem['bestAttachment']
   attachment?: SourceAttachment
   retrievalFacts?: SourceRetrievalFacts
@@ -122,16 +133,35 @@ interface Draft {
   readonly successfulRetrieveCallIds: Set<string>
   exports: ExportArtifact[]
   readonly exportedCallIds: Set<string>
-  searches: SearchOccurrence[]
+  /** Occurrences in episode order; the same draft object is shared across items. */
+  readonly searches: SearchDraft[]
   firstSeenAt: number
   lastTouchedAt: number
+  /**
+   * Bumped by every fold step that may change the draft. A frozen view is
+   * reused exactly while this matches the version its cache froze.
+   */
+  version: number
+  /**
+   * The filter membership of the last frozen view (see {@link MASK_PDF}); the
+   * shared aggregate counters are adjusted by the delta on each refreeze.
+   */
+  mask: number
 }
 
-function emptyFacts(): DraftFacts {
-  return {
-    reportedEvidenceCount: 0,
-  }
-}
+const MASK_PDF = 1
+const MASK_RETRIEVED = 2
+const MASK_EVIDENCE = 4
+const MASK_EXPORTED = 8
+
+/** The mask bits and the aggregate counter each one feeds. */
+const MASK_FIELDS: ReadonlyArray<readonly [number, 'pdf' | 'retrieved' | 'evidence' | 'exported']> =
+  [
+    [MASK_PDF, 'pdf'],
+    [MASK_RETRIEVED, 'retrieved'],
+    [MASK_EVIDENCE, 'evidence'],
+    [MASK_EXPORTED, 'exported'],
+  ]
 
 function emptyOperations(): DraftOperations {
   return { running: 0, failed: 0, stopped: 0 }
@@ -296,31 +326,404 @@ function evidenceKeyOf(item: import('../evidence-item.js').EvidenceItem): string
 }
 
 /**
- * Build the source workspace from the session's zotero call blocks.
- * @param blocks - zotero tool call blocks in transcript order.
- * @param options - the connected instance's Server ID, when known.
- * @returns the aggregated workspace.
+ * The event time of a settled block. Guarded by isSettledTool (which
+ * `rowStateOf` also funnels through), so an unsettled block never arrives
+ * here: the early return, not a cast, carries the proof.
  */
-export function buildSourceWorkspace(
-  blocks: readonly ToolBlockLike[],
-  options: BuildSourceWorkspaceOptions = {},
-): SourceWorkspace {
-  const byKey = new Map<string, Draft>()
-  const exports: ExportArtifact[] = []
-  const episodes: SearchEpisode[] = []
-  let lastEpisode: SearchEpisode | null = null
-  const exportOperations: DraftOperations = emptyOperations()
-  let omittedRows = 0
+function eventTimeOf(block: ToolBlockLike): number {
+  if (!isSettledTool(block)) return 0
+  return block.time
+}
 
-  const draftOf = (ref: string, seq: number): Draft => {
+/** The filter membership one frozen item contributes to the aggregate counters. */
+function maskOf(item: SourceItem): number {
+  return (
+    (hasPdf(item) ? MASK_PDF : 0) |
+    (item.retrievalFacts === undefined ? 0 : MASK_RETRIEVED) |
+    (item.evidence.length === 0 ? 0 : MASK_EVIDENCE) |
+    (item.exports.length === 0 ? 0 : MASK_EXPORTED)
+  )
+}
+
+/** Freeze one occurrence; the argument arrays are written once and never mutated. */
+function frozenSearchOf(draft: SearchDraft): SearchOccurrence {
+  return {
+    callId: draft.callId,
+    ...(draft.query === undefined ? {} : { query: draft.query }),
+    mode: draft.mode,
+    scope: draft.scope,
+    ...(draft.library ? { library: draft.library } : {}),
+    itemTypes: draft.itemTypes,
+    tags: draft.tags,
+    ...(draft.tagMatch ? { tagMatch: draft.tagMatch } : {}),
+    excludeTags: draft.excludeTags,
+    includeTrashed: draft.includeTrashed,
+    returned: draft.returned,
+    ...(draft.total === undefined ? {} : { total: draft.total }),
+    ...(draft.noteMatches === undefined ? {} : { noteMatches: draft.noteMatches }),
+  }
+}
+
+/**
+ * Freeze one item. Every nested value the draft still mutates is copied: the
+ * draft outlives the view, so sharing `facts`, `operations`, the row arrays or
+ * their `callIds` would let a later fold rewrite a view already published.
+ */
+function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): SourceItem {
+  const searches = draft.searches.map(frozenSearchOf)
+  // Insertion order is transcript order (the fold is sequential), so the sort
+  // is a stable no-op that keeps the guarantee explicit for a resumed index.
+  const evidence = [...draft.evidence.values()]
+    .sort((a, b) => a.seq - b.seq)
+    .map((entry) => ({ ...entry.passage, callIds: [...entry.passage.callIds] }))
+  return {
+    key: draft.key,
+    ref: draft.ref,
+    serverIds: [...draft.serverIds].sort(),
+    evidenceMatch: evidenceMatchOf(draft.serverIds, currentServerId),
+    ...(draft.title === undefined ? {} : { title: draft.title }),
+    ...(draft.creators === undefined ? {} : { creators: draft.creators }),
+    ...(draft.year === undefined ? {} : { year: draft.year }),
+    ...(draft.venue === undefined ? {} : { venue: draft.venue }),
+    facts: { reportedEvidenceCount: draft.facts.reportedEvidenceCount },
+    operations: {
+      running: draft.operations.running,
+      failed: draft.operations.failed,
+      stopped: draft.operations.stopped,
+    },
+    searches,
+    searchesTotal: searches.length,
+    evidence,
+    evidenceTotal: evidence.length,
+    ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
+    ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
+    ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
+    ...(draft.retrievalSummary === undefined ? {} : { retrievalSummary: draft.retrievalSummary }),
+    exports: [...draft.exports],
+    exportsTotal: draft.exports.length,
+    firstSeenAt: draft.firstSeenAt,
+    lastTouchedAt: draft.lastTouchedAt,
+  }
+}
+
+/**
+ * The pending tail folded on top of the settled items: the calls still in
+ * flight, which the reducer counts as running operations.
+ */
+interface PendingOverlay {
+  /** Every item the pending calls touched, in first-seen order. */
+  readonly items: readonly SourceItem[]
+  readonly exportRunning: number
+}
+
+const EMPTY_OVERLAY: PendingOverlay = { items: [], exportRunning: 0 }
+
+function sameOverlay(left: PendingOverlay | undefined, right: PendingOverlay): boolean {
+  if (left === undefined) return right === EMPTY_OVERLAY
+  if (right === EMPTY_OVERLAY) return left === EMPTY_OVERLAY
+  if (left.exportRunning !== right.exportRunning) return false
+  if (left.items.length !== right.items.length) return false
+  for (let i = 0; i < left.items.length; i += 1) {
+    const a = left.items[i]!
+    const b = right.items[i]!
+    if (a.key !== b.key || a.operations.running !== b.operations.running) return false
+    if (a.firstSeenAt !== b.firstSeenAt || a.lastTouchedAt !== b.lastTouchedAt) return false
+  }
+  return true
+}
+
+/**
+ * Merge one item a pending call touched into its settled view. A pending block
+ * carries no result, so the only facts it adds are the ones `draftOf` records
+ * for every touch — the ref's Server ID, the touch position, and the running
+ * operation — and this merge states exactly those, in the same order the fold
+ * applies them.
+ */
+function mergePending(
+  existing: SourceItem,
+  touched: SourceItem,
+  currentServerId: string | undefined,
+): SourceItem {
+  const serverIds = [...new Set([...existing.serverIds, ...touched.serverIds])].sort()
+  return {
+    ...existing,
+    serverIds,
+    evidenceMatch: evidenceMatchOf(new Set(serverIds), currentServerId),
+    operations: {
+      ...existing.operations,
+      running: existing.operations.running + touched.operations.running,
+    },
+    firstSeenAt: Math.min(existing.firstSeenAt, touched.firstSeenAt),
+    lastTouchedAt: Math.max(existing.lastTouchedAt, touched.lastTouchedAt),
+  }
+}
+
+/** One Server-ID's frozen view of the index. */
+interface ViewCache {
+  /** Frozen items, parallel to the index's drafts (append-only). */
+  readonly items: SourceItem[]
+  /** The draft version each frozen item was built from. */
+  readonly versions: number[]
+  /** Items whose `hasIssue` verdict is true under this cache's Server ID. */
+  issues: number
+  overlay?: PendingOverlay
+  /** The views built from the current fold and overlay; each shape is built at most once. */
+  built?: { windowed?: SourceWorkspace; full?: SourceWorkspace }
+}
+
+/**
+ * The incremental workspace fold: one mutable accumulator plus one frozen view
+ * per Server ID, so a read costs the blocks folded since the last read rather
+ * than the whole session.
+ *
+ * The index owns no lifecycle of its own; whoever creates it owns it. The host
+ * projection creates one per session state chain (see
+ * `createSourceLedgerProjection`) and the one-shot builder creates one per
+ * call.
+ */
+export class SourceWorkspaceIndex {
+  private readonly drafts: ItemDraft[] = []
+  private readonly indexByKey = new Map<string, number>()
+  private readonly artifacts: ExportArtifact[] = []
+  private readonly artifactOperations: DraftOperations = emptyOperations()
+  private readonly artifactRefs = new Set<string>()
+  private readonly viewCaches = new Map<string | undefined, ViewCache>()
+  private readonly filterTotals = { pdf: 0, retrieved: 0, evidence: 0, exported: 0 }
+  private openSearch: SearchDraft | null = null
+  private passages = 0
+  private omitted = 0
+  private folded = 0
+
+  constructor(startSeq = 0) {
+    this.folded = startSeq
+  }
+
+  /** How many blocks this index folded; the transcript index of the next one. */
+  get applied(): number {
+    return this.folded
+  }
+
+  /**
+   * Fold one block. A running block only creates its item and counts a running
+   * operation; every outcome fact needs a settled, successful result.
+   * @param block - the next block in transcript order.
+   */
+  apply(block: ToolBlockLike): void {
+    const seq = this.folded
+    this.folded += 1
+    this.fold(block, seq)
+  }
+
+  /**
+   * The workspace at this point of the fold, with an optional tail of pending
+   * blocks folded on top without mutating the index.
+   *
+   * A read that changes nothing returns the previous workspace object, so the
+   * host projection's `Object.is` comparison suppresses a redundant publish.
+   * @param pending - the calls still in flight, in transcript order, after every folded block.
+   * @param options - the connected Server ID and the list window.
+   * @returns the aggregated workspace.
+   */
+  workspace(
+    pending: readonly ToolBlockLike[] = [],
+    options: BuildSourceWorkspaceOptions = {},
+  ): SourceWorkspace {
+    const currentServerId = options.currentServerId
+    const cache = this.cacheFor(currentServerId)
+    const changed = this.refreeze(cache, currentServerId)
+    const overlay = this.overlayOf(pending, currentServerId)
+    if (changed || cache.built === undefined || !sameOverlay(cache.overlay, overlay)) {
+      cache.overlay = overlay
+      cache.built = {}
+    }
+    const built = cache.built
+    if (options.windowed === false) {
+      built.full ??= this.freezeFull(cache, overlay, currentServerId)
+      return built.full
+    }
+    built.windowed ??= this.freezeWindowed(cache, overlay, currentServerId)
+    return built.windowed
+  }
+
+  private cacheFor(currentServerId: string | undefined): ViewCache {
+    let cache = this.viewCaches.get(currentServerId)
+    if (cache === undefined) {
+      cache = { items: [], versions: [], issues: 0 }
+      this.viewCaches.set(currentServerId, cache)
+    }
+    return cache
+  }
+
+  /**
+   * Freeze every draft this cache has not yet frozen at its current version.
+   * Only the touched items cost anything; the scan itself is one comparison
+   * per source.
+   */
+  private refreeze(cache: ViewCache, currentServerId: string | undefined): boolean {
+    let changed = false
+    for (let index = 0; index < this.drafts.length; index += 1) {
+      const draft = this.drafts[index]!
+      if ((cache.versions[index] ?? 0) === draft.version) continue
+      const previous = cache.items[index]
+      const item = frozenItemOf(draft, currentServerId)
+      if (previous !== undefined && hasIssue(previous)) cache.issues -= 1
+      if (hasIssue(item)) cache.issues += 1
+      cache.items[index] = item
+      cache.versions[index] = draft.version
+      this.retally(draft, item)
+      changed = true
+    }
+    return changed
+  }
+
+  /** Move the shared filter aggregates by one draft's membership change. */
+  private retally(draft: ItemDraft, item: SourceItem): void {
+    const next = maskOf(item)
+    const prior = draft.mask
+    if (next === prior) return
+    draft.mask = next
+    for (const [bit, field] of MASK_FIELDS) {
+      if (((next ^ prior) & bit) === 0) continue
+      this.filterTotals[field] += (next & bit) === 0 ? -1 : 1
+    }
+  }
+
+  /**
+   * Fold the pending tail through the same reducer, into a throwaway index
+   * seeded at this fold's position. A pending block carries no result, so it
+   * can only create an item and count a running operation; folding it here
+   * rather than into the shared accumulator keeps every already-published view
+   * untouched. The spec "pending tail equals the one-shot build" pins that
+   * equivalence for every block kind.
+   */
+  private overlayOf(
+    pending: readonly ToolBlockLike[],
+    currentServerId: string | undefined,
+  ): PendingOverlay {
+    if (pending.length === 0) return EMPTY_OVERLAY
+    const tail = new SourceWorkspaceIndex(this.folded)
+    for (const block of pending) tail.apply(block)
+    const items = tail.workspace([], {
+      ...(currentServerId === undefined ? {} : { currentServerId }),
+      windowed: false,
+    }).sources
+    return { items, exportRunning: tail.artifactOperations.running }
+  }
+
+  /**
+   * Assemble one view: the cached items (bounded to `limit`, or all) plus the
+   * pending tail. The overlay merge runs over the whole overlay either way, so
+   * the aggregates stay exact over every source even when the list is windowed;
+   * only the array writes are limited.
+   */
+  private assemble(
+    cache: ViewCache,
+    overlay: PendingOverlay,
+    currentServerId: string | undefined,
+    limit: number,
+  ): { readonly sources: SourceItem[]; readonly sourceTotal: number; readonly issues: number } {
+    const sources = cache.items.slice(0, limit)
+    let issues = cache.issues
+    let added = 0
+    for (const item of overlay.items) {
+      const at = this.indexByKey.get(item.key)
+      if (at === undefined) {
+        added += 1
+        if (hasIssue(item)) issues += 1
+        if (sources.length < limit) sources.push(item)
+        continue
+      }
+      const existing = cache.items[at]!
+      const merged = mergePending(existing, item, currentServerId)
+      if (hasIssue(existing)) issues -= 1
+      if (hasIssue(merged)) issues += 1
+      if (at < sources.length) sources[at] = merged
+    }
+    return { sources, sourceTotal: this.drafts.length + added, issues }
+  }
+
+  /** The complete view: every source and every row. Internal paging reads this. */
+  private freezeFull(
+    cache: ViewCache,
+    overlay: PendingOverlay,
+    currentServerId: string | undefined,
+  ): SourceWorkspace {
+    const { sources, sourceTotal, issues } = this.assemble(
+      cache,
+      overlay,
+      currentServerId,
+      Infinity,
+    )
+    return this.workspaceOf(sources, sourceTotal, issues, overlay, this.artifacts.slice())
+  }
+
+  /**
+   * The wire view: the source union and each row list keep their transcript
+   * head. The array itself is cut before it is built, so a long session's
+   * per-event read does not walk the whole trail.
+   */
+  private freezeWindowed(
+    cache: ViewCache,
+    overlay: PendingOverlay,
+    currentServerId: string | undefined,
+  ): SourceWorkspace {
+    const { sources, sourceTotal, issues } = this.assemble(
+      cache,
+      overlay,
+      currentServerId,
+      ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
+    )
+    return this.workspaceOf(
+      sources.map(windowedItem),
+      sourceTotal,
+      issues,
+      overlay,
+      this.artifacts.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
+    )
+  }
+
+  private workspaceOf(
+    sources: SourceItem[],
+    sourceTotal: number,
+    issues: number,
+    overlay: PendingOverlay,
+    exports: ExportArtifact[],
+  ): SourceWorkspace {
+    return {
+      sources,
+      sourceTotal,
+      exports,
+      exportTotal: this.artifacts.length,
+      exportOperations: {
+        running: this.artifactOperations.running + overlay.exportRunning,
+        failed: this.artifactOperations.failed,
+        stopped: this.artifactOperations.stopped,
+      },
+      omittedRows: this.omitted,
+      filterCounts: {
+        all: sourceTotal,
+        pdf: this.filterTotals.pdf,
+        retrieved: this.filterTotals.retrieved,
+        evidence: this.filterTotals.evidence,
+        exported: this.filterTotals.exported,
+        issues,
+      } satisfies SourceFilterCounts,
+      evidencePassageTotal: this.passages,
+      exportedRefCount: this.artifactRefs.size,
+    }
+  }
+
+  /** The draft of one ref, created on first sight; marks it for refreeze. */
+  private draftOf(ref: string, seq: number): ItemDraft {
     const key = normalizeRefKey(ref)
-    let draft = byKey.get(key)
-    if (draft === undefined) {
+    const at = this.indexByKey.get(key)
+    let draft: ItemDraft
+    if (at === undefined) {
       draft = {
         key,
         ref,
         serverIds: new Set(),
-        facts: emptyFacts(),
+        facts: { reportedEvidenceCount: 0 },
         operations: emptyOperations(),
         evidence: new Map(),
         exports: [],
@@ -329,39 +732,35 @@ export function buildSourceWorkspace(
         searches: [],
         firstSeenAt: seq,
         lastTouchedAt: seq,
+        version: 1,
+        mask: 0,
       }
-      byKey.set(key, draft)
+      this.indexByKey.set(key, this.drafts.length)
+      this.drafts.push(draft)
+    } else {
+      draft = this.drafts[at]!
+      draft.version += 1
     }
-    draft.firstSeenAt = Math.min(draft.firstSeenAt, seq)
-    draft.lastTouchedAt = Math.max(draft.lastTouchedAt, seq)
+    if (seq < draft.firstSeenAt) draft.firstSeenAt = seq
+    if (seq > draft.lastTouchedAt) draft.lastTouchedAt = seq
     const serverId = serverIdOf(ref)
     if (serverId !== undefined) draft.serverIds.add(serverId)
     return draft
   }
 
   /** Count one attributed call's state on the item's operations. */
-  const countOperation = (draft: Draft, state: ZoteroRowState): void => {
+  private countOperation(draft: ItemDraft, state: ZoteroRowState): void {
     if (state === 'running') draft.operations.running += 1
     else if (state === 'stopped') draft.operations.stopped += 1
     else if (state === 'error') draft.operations.failed += 1
   }
 
-  /**
-   * The event time of a settled block. Guarded by isSettledTool (which
-   * `rowStateOf` also funnels through), so an unsettled block never arrives
-   * here: the early return, not a cast, carries the proof.
-   */
-  const eventTimeOf = (block: ToolBlockLike): number => {
-    if (!isSettledTool(block)) return 0
-    return block.time
-  }
-
-  const pushEvidence = (
-    draft: Draft,
+  private pushEvidence(
+    draft: ItemDraft,
     meta: Record<string, unknown>,
     callId: string,
     seq: number,
-  ): void => {
+  ): void {
     const view = retrieveMetaOf(meta)
     // A recognized projection always carries `count` (the byte budget may
     // drop `items` alone); only a fully unusable meta yields no facts.
@@ -443,6 +842,7 @@ export function buildSourceWorkspace(
             },
             seq,
           })
+          this.passages += 1
         } else {
           existing.passage.callIds.push(callId)
         }
@@ -450,20 +850,15 @@ export function buildSourceWorkspace(
     }
     // Refresh the truncation flag after the merge, so the latest retrieve's
     // facts are reflected even when this call was already counted. The
-    // creation block above guarantees a summary exists by this point; the
-    // reported counter lives on `facts` alone, while kept passages live on `evidence`.
+    // creation block above guarantees a summary exists by this point.
     draft.retrievalSummary = {
       ...draft.retrievalSummary!,
       truncated: draft.retrievalFacts?.truncated === true,
     }
   }
 
-  for (const [index, block] of blocks.entries()) {
-    // Transcript order is the enumeration order: `blocks` arrives in
-    // `ChatSnapshot.order` sequence, so the index is the position. A synthetic
-    // key from `seq`/`time` would sort every in-flight call after all settled
-    // ones regardless of where it actually runs.
-    const seq = index
+  /** Fold one block at its transcript position. */
+  private fold(block: ToolBlockLike, seq: number): void {
     const state = rowStateOf(block)
     const receipt = receiptOf(block)
     const name = typeof receipt?.tool === 'string' ? receipt.tool : callNameOf(block)
@@ -486,7 +881,8 @@ export function buildSourceWorkspace(
           resolvedScope !== null && resolvedLibrary !== null
             ? searchIdentityOf(args, { resolvedScope, resolvedLibrary })
             : searchIdentityOf(args)
-        if (lastEpisode === null || identity === null || lastEpisode.identity !== identity) {
+        let episode = this.openSearch
+        if (episode === null || identity === null || episode.identity !== identity) {
           const scopeForEpisode =
             resolvedScope !== null
               ? resolvedToSourceScope(resolvedScope)
@@ -512,7 +908,7 @@ export function buildSourceWorkspace(
               return undefined
             })()
           const query = textArg(args, 'query')
-          lastEpisode = {
+          episode = {
             identity,
             callId: block.callId,
             ...(query !== undefined && query !== '' ? { query } : {}),
@@ -525,21 +921,20 @@ export function buildSourceWorkspace(
             excludeTags: normalizedListOf(listArg(args, 'excludeTags')),
             includeTrashed: boolArg(args, 'includeTrashed'),
             returned: 0,
-            omitted: 0,
             ...(view.total === null ? {} : { total: view.total }),
             ...(view.noteMatches === null ? {} : { noteMatches: view.noteMatches }),
-            keys: new Set(),
+            members: new Set(),
           }
-          episodes.push(lastEpisode)
+          this.openSearch = episode
         }
         // `returned` is the hits the paged listing returned to the agent. The
         // rows are the byte-budget-bounded presentation projection: they drop
         // hits over the budget and carry note-supplement rows, so they cannot
         // stand in for the hit count when the projection reports one.
-        lastEpisode.returned += view.returned ?? view.rows.length
-        lastEpisode.omitted += view.omitted ?? 0
+        episode.returned += view.returned ?? view.rows.length
+        this.omitted += view.omitted ?? 0
         for (const row of view.rows) {
-          const draft = draftOf(row.ref, seq)
+          const draft = this.draftOf(row.ref, seq)
           draft.title ??= row.title
           draft.creators ??= row.creatorSummary
           draft.year ??= row.year
@@ -551,8 +946,17 @@ export function buildSourceWorkspace(
                 : { contentType: row.bestAttachmentType }),
             }
           }
-          lastEpisode.keys.add(draft.key)
+          // The occurrence is shared by every item its rows surfaced; a
+          // repeated row within one episode must not add it twice.
+          if (draft.searches[draft.searches.length - 1] !== episode) {
+            draft.searches.push(episode)
+            episode.members.add(draft)
+          }
         }
+        // `returned` describes the episode, so a continuation page changes the
+        // occurrence of every item the episode already listed, not only the
+        // rows this page happened to repeat.
+        for (const member of episode.members) member.version += 1
         break
       }
       case 'zotero_get': {
@@ -560,8 +964,8 @@ export function buildSourceWorkspace(
         // own ref still attributes the detail.
         const ref = refArgOf(args) ?? (meta === null ? null : (stringField(meta, 'ref') ?? null))
         if (ref === null) break
-        const draft = draftOf(ref, seq)
-        countOperation(draft, state)
+        const draft = this.draftOf(ref, seq)
+        this.countOperation(draft, state)
         if (state !== 'ok' || meta === null) break
         const view = getMetaOf(meta)
         if (view.title === null) break
@@ -589,9 +993,9 @@ export function buildSourceWorkspace(
           const hasOutcome = view.outcomes.has(ref) || raw !== undefined
           if (state === 'ok' && !hasOutcome) continue
           const outcome = view.outcomes.get(ref) ?? (raw?.status === 'error' ? 'error' : 'ok')
-          const draft = draftOf(ref, seq)
+          const draft = this.draftOf(ref, seq)
           const itemState = state === 'ok' && outcome === 'error' ? 'error' : state
-          countOperation(draft, itemState)
+          this.countOperation(draft, itemState)
           if (state !== 'ok' || itemState !== 'ok' || raw === undefined) continue
           if (raw.title !== null) draft.title = raw.title
           if (raw.creators !== null) draft.creators = raw.creators
@@ -612,7 +1016,7 @@ export function buildSourceWorkspace(
         if (view.items === null) break
         for (const item of view.items) {
           for (const candidate of item.selected.length > 0 ? item.selected : item.candidates) {
-            const draft = draftOf(candidate.ref, seq)
+            const draft = this.draftOf(candidate.ref, seq)
             draft.title = candidate.title
             if (candidate.authors.length > 0) draft.creators = candidate.authors.join(', ')
             if (candidate.venue !== null) draft.venue = candidate.venue
@@ -624,25 +1028,25 @@ export function buildSourceWorkspace(
       case 'zotero_retrieve': {
         const ref = refArgOf(args)
         if (ref === null) break
-        const draft = draftOf(ref, seq)
-        countOperation(draft, state)
+        const draft = this.draftOf(ref, seq)
+        this.countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
-          pushEvidence(draft, meta, block.callId, seq)
+          this.pushEvidence(draft, meta, block.callId, seq)
         }
         break
       }
       case 'zotero_export': {
         if (state !== 'ok') {
-          if (state === 'running') exportOperations.running += 1
-          else if (state === 'stopped') exportOperations.stopped += 1
-          else exportOperations.failed += 1
+          if (state === 'running') this.artifactOperations.running += 1
+          else if (state === 'stopped') this.artifactOperations.stopped += 1
+          else this.artifactOperations.failed += 1
         }
         const metaView = meta === null ? null : exportMetaOf(meta)
         const { refs, refsOmitted } = exportRefsOf(metaView, args)
         if (refs.length === 0) break
         for (const ref of refs) {
-          const draft = draftOf(ref, seq)
-          countOperation(draft, state)
+          const draft = this.draftOf(ref, seq)
+          this.countOperation(draft, state)
         }
         if (state !== 'ok') break
         const text = typeof meta?.text === 'string' ? meta.text : ''
@@ -667,12 +1071,14 @@ export function buildSourceWorkspace(
           settledAt: eventTimeOf(block),
           text,
         }
-        exports.push(artifact)
+        this.artifacts.push(artifact)
+        for (const ref of refs) this.artifactRefs.add(normalizeRefKey(ref))
         for (const ref of refs) {
-          const draft = byKey.get(normalizeRefKey(ref))
+          const draft = this.drafts[this.indexByKey.get(normalizeRefKey(ref))!]
           if (draft !== undefined && !draft.exportedCallIds.has(block.callId)) {
             draft.exportedCallIds.add(block.callId)
             draft.exports.push(artifact)
+            draft.version += 1
           }
         }
         break
@@ -681,109 +1087,54 @@ export function buildSourceWorkspace(
         break
     }
   }
+}
 
-  // Attribute each folded search to the items its rows surfaced, then freeze.
-  for (const episode of episodes) {
-    omittedRows += episode.omitted
-    const searchRecord: SearchOccurrence = {
-      callId: episode.callId,
-      ...(episode.query === undefined ? {} : { query: episode.query }),
-      mode: episode.mode,
-      scope: episode.scope,
-      ...(episode.library ? { library: episode.library } : {}),
-      itemTypes: episode.itemTypes,
-      tags: episode.tags,
-      ...(episode.tagMatch ? { tagMatch: episode.tagMatch } : {}),
-      excludeTags: episode.excludeTags,
-      includeTrashed: episode.includeTrashed,
-      returned: episode.returned,
-      ...(episode.total === undefined ? {} : { total: episode.total }),
-      ...(episode.noteMatches === undefined ? {} : { noteMatches: episode.noteMatches }),
-    }
-    for (const key of episode.keys) {
-      // Every episode key entered through `draftOf`, so the draft exists.
-      byKey.get(key)!.searches.push(searchRecord)
-    }
-  }
-
-  const currentServerId = options.currentServerId
-  const sources: SourceItem[] = [...byKey.values()]
-    .sort((a, b) => a.firstSeenAt - b.firstSeenAt)
-    .map((draft) => {
-      const evidence = [...draft.evidence.values()]
-        .sort((a, b) => a.seq - b.seq)
-        .map((entry) => entry.passage)
-      return {
-        key: draft.key,
-        ref: draft.ref,
-        serverIds: [...draft.serverIds].sort(),
-        evidenceMatch: evidenceMatchOf(draft.serverIds, currentServerId),
-        ...(draft.title === undefined ? {} : { title: draft.title }),
-        ...(draft.creators === undefined ? {} : { creators: draft.creators }),
-        ...(draft.year === undefined ? {} : { year: draft.year }),
-        ...(draft.venue === undefined ? {} : { venue: draft.venue }),
-        facts: draft.facts,
-        operations: draft.operations,
-        searches: draft.searches,
-        searchesTotal: draft.searches.length,
-        evidence,
-        evidenceTotal: evidence.length,
-        ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
-        ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
-        ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
-        ...(draft.retrievalSummary === undefined
-          ? {}
-          : { retrievalSummary: draft.retrievalSummary }),
-        exports: draft.exports,
-        exportsTotal: draft.exports.length,
-        firstSeenAt: draft.firstSeenAt,
-        lastTouchedAt: draft.lastTouchedAt,
-      }
-    })
-
-  // The aggregates are computed over the FULL lists, before any windowing:
-  // they are the honest totals the UI displays while the lists show their
-  // windowed head. The filters' own predicate table judges the sources, so a
-  // pill count and a filtered listing can never disagree.
-  const filterCounts = filterCountsOf(sources)
-  const evidencePassageTotal = sources.reduce((total, item) => total + item.evidence.length, 0)
-  const exportedRefs = new Set<string>()
-  for (const artifact of exports) {
-    for (const ref of artifact.refs) exportedRefs.add(normalizeRefKey(ref))
-  }
-  const exportTotal = exports.length
-  const sourceTotal = sources.length
-
-  // The wire view is windowed: the projection state above stays complete,
-  // while the lists the client renders are bounded so a long session cannot
-  // grow the wire emission or the render without bound. Every list carries
-  // its exact total; the aggregates above carry the session-wide numbers, so
-  // what is not listed is counted, never lost.
+/**
+ * Cut one item's row lists to the wire cap. An item whose lists are already
+ * inside the cap keeps its identity, so a windowed read only allocates for the
+ * items that are actually cut.
+ */
+function windowedItem(item: SourceItem): SourceItem {
   const rowCap = ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS
-  const windowItem = (item: SourceItem): SourceItem => ({
-    ...item,
-    searches: item.searches.slice(0, rowCap),
-    searchesTotal: item.searches.length,
-    evidence: item.evidence.slice(0, rowCap),
-    evidenceTotal: item.evidence.length,
-    exports: item.exports.slice(0, rowCap),
-    exportsTotal: item.exports.length,
-  })
-  const windowedSources =
-    options.windowed === false
-      ? sources
-      : sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowItem)
-  const windowedExports = options.windowed === false ? exports : exports.slice(0, rowCap)
-
-  return {
-    sources: windowedSources,
-    sourceTotal,
-    exports: windowedExports,
-    exportTotal,
-    exportOperations,
-    omittedRows,
-    filterCounts,
-    evidencePassageTotal,
-    exportedRefCount: exportedRefs.size,
+  const searches = item.searches.length > rowCap ? item.searches.slice(0, rowCap) : item.searches
+  const evidence = item.evidence.length > rowCap ? item.evidence.slice(0, rowCap) : item.evidence
+  const exports = item.exports.length > rowCap ? item.exports.slice(0, rowCap) : item.exports
+  if (searches === item.searches && evidence === item.evidence && exports === item.exports) {
+    return item
   }
+  return { ...item, searches, evidence, exports }
+}
+
+/**
+ * The workspace's wire window: the source union and each capped row list keep
+ * their transcript head, while every total and session-wide aggregate stays
+ * exact over the full fold. The index builds this shape directly; this
+ * derivation serves a caller holding a complete workspace.
+ * @param workspace - the complete workspace.
+ * @returns the same workspace with its lists windowed.
+ */
+export function windowSourceWorkspace(workspace: SourceWorkspace): SourceWorkspace {
+  return {
+    ...workspace,
+    sources: workspace.sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowedItem),
+    exports: workspace.exports.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
+  }
+}
+
+/**
+ * Build the source workspace in one pass over the session's zotero call
+ * blocks. The browser fallback and the specs use this; the host projection
+ * keeps a {@link SourceWorkspaceIndex} instead so a long session does not
+ * refold its whole log on every event.
+ * @param blocks - zotero tool call blocks in transcript order.
+ * @param options - the connected instance's Server ID, when known.
+ * @returns the aggregated workspace.
+ */
+export function buildSourceWorkspace(
+  blocks: readonly ToolBlockLike[],
+  options: BuildSourceWorkspaceOptions = {},
+): SourceWorkspace {
+  const index = new SourceWorkspaceIndex()
+  for (const block of blocks) index.apply(block)
+  return index.workspace([], options)
 }
