@@ -10,9 +10,18 @@
  * writes on the click itself. Both bump the epoch and clear the window before
  * they start: a late answer from a superseded click, a moved selection, or an
  * unmounted control is dropped by comparison instead of painting a stale
- * label. `resetKey` is the caller's identity for the copied subject (a ref, a
- * value): when it changes, the lane returns to `idle` and the old answer can
- * no longer land.
+ * label.
+ *
+ * Two keys are ordered by what they describe, because they must be treated
+ * differently. `subjectKey` is the identity of the thing being copied (a ref,
+ * a row's key): when it changes the lane resets and the old answer can no
+ * longer land. `contentKey` is only that subject's current text: when it
+ * changes while a write is in flight the answer still belongs to the click the
+ * user made, so the epoch is left alone and the label may land; a `done` label
+ * that is already showing returns to `idle`, because it no longer describes
+ * what is on screen. Passing a streaming value as `subjectKey` is the mistake
+ * this split exists to prevent: every new chunk would cancel the copy the user
+ * just asked for.
  * @module dsh-zotero/client/components/useCopyFeedback
  */
 
@@ -46,15 +55,21 @@ function idleState(): CopyFeedbackState {
 
 /**
  * Share one clipboard-feedback lane across copy controls of the same subject.
- * @param resetKey - the copied subject's identity; a change resets the lane.
+ * @param subjectKey - the copied subject's identity; a change resets the lane.
+ * @param contentKey - the subject's current text; a change only clears a
+ *   settled `done` label and never invalidates a write already in flight.
  * @returns the current phase, the thrown value (when `error`), and the controls.
  */
-export function useCopyFeedback(resetKey?: unknown): CopyFeedback {
+export function useCopyFeedback(subjectKey?: unknown, contentKey?: unknown): CopyFeedback {
   const [state, setState] = useState<CopyFeedbackState>(idleState)
   // Monotonic click identity: only the newest attempt may settle the lane, and
   // a reset or unmount invalidates every attempt that started before it.
   const epoch = useRef(0)
   const timer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
+  // The latest reported phase, read by the content effect without subscribing
+  // it to every transition of the lane.
+  const phase = useRef<CopyPhase>('idle')
+  phase.current = state.phase
 
   const clearTimer = useCallback((): void => {
     if (timer.current !== undefined) {
@@ -73,7 +88,19 @@ export function useCopyFeedback(resetKey?: unknown): CopyFeedback {
   // what is on screen now.
   useEffect(() => {
     reset()
-  }, [resetKey, reset])
+  }, [subjectKey, reset])
+
+  // The subject's text moved on. A landed label no longer describes the
+  // control, but an attempt still waiting on the clipboard belongs to the
+  // click the user made: leave its epoch alone so its answer may still land.
+  const seenContent = useRef(contentKey)
+  useEffect(() => {
+    if (Object.is(seenContent.current, contentKey)) return
+    seenContent.current = contentKey
+    if (phase.current !== 'done') return
+    clearTimer()
+    setState(idleState())
+  }, [contentKey, clearTimer])
 
   // Unmount invalidates in-flight answers and releases the feedback window.
   useEffect(

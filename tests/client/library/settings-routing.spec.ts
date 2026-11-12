@@ -7,11 +7,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { fakeWorld, applyEntry } from '../helpers/apply-world.ts'
 import { deferred } from '../../helpers/sync.ts'
 import { libraryStorageKey } from '../../../src/client/components/library/library-storage.ts'
-import {
-  clearLibraryViewMemory,
-  libraryViewMemory,
-} from '../../../src/client/library-preferences.tsx'
+import type { LibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
 
+/** One view store per case: the cache used to be module-scoped. */
+let store: LibraryViewStore
 const address = 'dsh-resource://file/absolute/tmp/dsh-zotero-pdf-1-old/document.pdf'
 const ref = 'zotero://user/0/attachment/ATTAC001?server=S1'
 afterEach(() => {
@@ -71,6 +70,9 @@ async function routing() {
   )()
   const body = world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab')!
   const panel = body.register()!
+  // The panel face carries the registration's view store, the same instance
+  // the clear action reaches.
+  store = (panel.options.inject as () => { viewStore: LibraryViewStore })().viewStore
   const panelFace = (
     panel.options.inject as () => {
       releaseUrlPdf(lease: string): Promise<void>
@@ -139,13 +141,13 @@ it('clears an inactive session position without changing another session', async
   localStorage.setItem(libraryStorageKey('S1', 's1'), 'old')
   localStorage.setItem(libraryStorageKey('S1', 's2'), 'keep')
   const signal = new AbortController()
-  const memory = libraryViewMemory(signal.signal, 'S1', 's1')
+  const memory = store.viewMemory(signal.signal, 'S1', 's1')
   memory.scroll.list = 70
   await onClear('s1', 'library')
   expect(localStorage.getItem(libraryStorageKey('S1', 's1'))).toBeNull()
   expect(localStorage.getItem(libraryStorageKey('S1', 's2'))).toBe('keep')
   expect(memory.resetPending).toBe(true)
-  clearLibraryViewMemory('none', 'none')
+  store.clearView('none', 'none')
   signal.abort()
 })
 it('routes active commands to the current binding after an older body is disposed', async () => {

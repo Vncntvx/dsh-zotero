@@ -41,7 +41,7 @@ type T = (key: ZoteroLocaleKey) => string
 /** Fixed mask for a configured token; the stored value never reaches the browser. */
 const MASKED_TOKEN = '************'
 
-type EnrichmentFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'> & {
+export type EnrichmentFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'> & {
   downloadModel?: (force?: boolean) => Promise<void>
   cancelModelDownload?: () => Promise<void>
   deleteModel?: () => Promise<void>
@@ -68,6 +68,93 @@ const SEMANTIC_MODEL_DESCRIPTION_KEYS = {
   academic: 'semanticModelAcademicDesc',
 } as const satisfies Record<SemanticModelKey, ZoteroLocaleKey>
 
+/** One semantic-model action button, derived once from the model state. */
+export interface SemanticModelAction {
+  readonly id: 'cancel' | 'delete' | 'download' | 'redownload' | 'verify'
+  readonly labelKey: ZoteroLocaleKey
+  readonly variant: 'primary' | 'ghost'
+  readonly disabled: boolean
+  readonly onClick: () => void
+}
+
+/** Everything the action set reads, so the branch lives in one place. */
+export interface SemanticModelActionInput {
+  readonly downloading: boolean
+  readonly ready: boolean
+  readonly failed: boolean
+  readonly canDelete: boolean
+  readonly disabled: boolean
+  readonly checking: boolean
+  readonly cancelling: boolean
+  readonly deleting: boolean
+  readonly actions: EnrichmentFormActions
+  readonly confirmDelete: () => void
+}
+
+/**
+ * The actions one model state offers, in bar order.
+ *
+ * The sets differ per state — a download in flight offers only cancel, a ready
+ * bundle offers verify/redownload/delete, a failed one adds download — and the
+ * three branches used to restate every button. A new action or a changed
+ * disabled rule now lives here once.
+ *
+ * Delete is disabled while a verification runs: both operations take the model
+ * lock, and letting the user start a delete under a running verify only to see
+ * it fail is not a choice worth offering.
+ * @param input - the model state and the handlers.
+ * @returns the actions, in the order the bar renders them.
+ */
+export function semanticModelActionsOf(input: SemanticModelActionInput): SemanticModelAction[] {
+  const { actions } = input
+  if (input.downloading) {
+    return [
+      {
+        id: 'cancel',
+        labelKey: 'semanticModelCancelAction',
+        variant: 'ghost',
+        disabled: input.cancelling || input.deleting,
+        onClick: () => actions.cancelModelDownload?.(),
+      },
+    ]
+  }
+  const download: SemanticModelAction = {
+    id: 'download',
+    labelKey: 'semanticModelDownloadAction',
+    variant: 'primary',
+    disabled: input.disabled || input.deleting,
+    onClick: () => actions.downloadModel?.(),
+  }
+  const redownload: SemanticModelAction = {
+    id: 'redownload',
+    labelKey: 'semanticModelRedownloadAction',
+    variant: 'ghost',
+    disabled: input.disabled || input.deleting,
+    onClick: () => actions.downloadModel?.(true),
+  }
+  const verify: SemanticModelAction = {
+    id: 'verify',
+    labelKey: 'semanticModelVerifyAction',
+    variant: 'ghost',
+    disabled: input.disabled || input.checking || input.deleting,
+    onClick: () => actions.verifyModel?.(),
+  }
+  const remove: SemanticModelAction = {
+    id: 'delete',
+    labelKey: 'semanticModelDeleteAction',
+    variant: 'ghost',
+    disabled: input.disabled || input.checking || input.deleting,
+    onClick: input.confirmDelete,
+  }
+  if (input.ready) {
+    return input.canDelete ? [verify, redownload, remove] : [verify, redownload]
+  }
+  if (input.failed) {
+    return input.canDelete ? [download, redownload, verify, remove] : [download, redownload, verify]
+  }
+  return [download]
+}
+
 interface EnrichmentSettingsFormProps {
   t: T
   state: EnrichmentCardState
@@ -91,6 +178,21 @@ export function EnrichmentSettingsForm({
     (state.semanticModelState.ready ||
       state.semanticModelState.error !== undefined ||
       state.semanticModelState.downloadedBytes > 0)
+  // One derivation for the whole action bar: the three state branches used to
+  // restate every button and its disabled rule.
+  const modelActions = semanticModelActionsOf({
+    downloading,
+    ready: state.semanticModelState?.ready === true,
+    failed:
+      state.semanticModelState?.error !== undefined || state.semanticModelFailure !== undefined,
+    canDelete,
+    disabled,
+    checking: state.semanticModelPhase === 'checking',
+    cancelling: state.semanticModelPhase === 'cancelling',
+    deleting,
+    actions,
+    confirmDelete: () => setConfirmDelete(true),
+  })
   // Refresh only while a task is active on an available component. A hidden
   // surface starts no work; visibility is re-checked on every tick and on the
   // visibilitychange event. One in-flight read at a time keeps the cadence from
@@ -403,94 +505,17 @@ export function EnrichmentSettingsForm({
                 ) : (
                   <Tag tone="neutral">{t('semanticModelStatusNotDownloaded')}</Tag>
                 )}
-                {state.semanticModelState?.downloading ? (
+                {modelActions.map((action) => (
                   <Button
-                    variant="ghost"
+                    key={action.id}
+                    variant={action.variant}
                     size="sm"
-                    disabled={state.semanticModelPhase === 'cancelling' || deleting}
-                    onClick={() => actions.cancelModelDownload?.()}
+                    disabled={action.disabled}
+                    onClick={action.onClick}
                   >
-                    {t('semanticModelCancelAction')}
+                    {t(action.labelKey)}
                   </Button>
-                ) : state.semanticModelState?.ready ? (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled || state.semanticModelPhase === 'checking' || deleting}
-                      onClick={() => actions.verifyModel?.()}
-                    >
-                      {t('semanticModelVerifyAction')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled || deleting}
-                      onClick={() => actions.downloadModel?.(true)}
-                    >
-                      {t('semanticModelRedownloadAction')}
-                    </Button>
-                    {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={disabled || deleting}
-                        onClick={() => setConfirmDelete(true)}
-                      >
-                        {t('semanticModelDeleteAction')}
-                      </Button>
-                    )}
-                  </>
-                ) : state.semanticModelState?.error || state.semanticModelFailure ? (
-                  // A missing or corrupt bundle keeps explicit download, repair
-                  // (redownload) and verify actions; semantic search is never
-                  // auto-disabled on the user's behalf.
-                  <>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={disabled || deleting}
-                      onClick={() => actions.downloadModel?.()}
-                    >
-                      {t('semanticModelDownloadAction')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled || deleting}
-                      onClick={() => actions.downloadModel?.(true)}
-                    >
-                      {t('semanticModelRedownloadAction')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled || state.semanticModelPhase === 'checking' || deleting}
-                      onClick={() => actions.verifyModel?.()}
-                    >
-                      {t('semanticModelVerifyAction')}
-                    </Button>
-                    {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={disabled || deleting}
-                        onClick={() => setConfirmDelete(true)}
-                      >
-                        {t('semanticModelDeleteAction')}
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={disabled || deleting}
-                    onClick={() => actions.downloadModel?.()}
-                  >
-                    {t('semanticModelDownloadAction')}
-                  </Button>
-                )}
+                ))}
               </span>
             </div>
 

@@ -2,7 +2,7 @@ import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMen
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { createPdfReaderRegistry, type PdfReaderRegistry } from './url-pdf-readers.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { createLibraryPreferenceSource, clearLibraryViewMemory } from './library-preferences.tsx'
+import { createLibraryPreferenceSource } from './library-preferences.tsx'
 import type { LibraryPreferenceSource } from './library-preferences.tsx'
 import type { LibraryPreferences } from '../library-preferences.js'
 /**
@@ -92,10 +92,8 @@ import {
   type ZoteroLibraryPanelFace,
 } from './components/library/ZoteroLibraryPanel.tsx'
 import { createLibraryDataPlane } from './components/library/library-data-plane.ts'
-import {
-  clearLibrarySessionMemory,
-  clearLibraryState,
-} from './components/library/library-storage.ts'
+import { clearLibraryState } from './components/library/library-storage.ts'
+import { createLibraryViewStore } from './components/library/library-view-store.ts'
 import { LIBRARY_ICON_KEY, LIBRARY_TAB_KIND } from './library-tab.ts'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
 import { gatedMount, registerGatedSurfaces, watchWebEnabled } from './web-enabled.ts'
@@ -202,9 +200,6 @@ interface UiSurfaces {
 function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { client } = surfaces
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-zotero: page dictionaries')
-  // The library panel's session view cache outlives its pane tab on purpose;
-  // the plugin's own teardown is the one point that owns every entry.
-  ctx.effect(() => () => clearLibrarySessionMemory(), 'dsh-zotero: library session views')
   ctx.effect(
     () => ctx.slots.provideRoot({ props: { useZoteroClient: () => client } }),
     'dsh-zotero: client face',
@@ -538,6 +533,12 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
   const preferenceSource = surfaces.preferenceSource
   const panelT = ctx.locale.bind(NS)
 
+  // The panel's in-memory view cache: created with this registration and
+  // released with it, so no entry outlives the plugin and two panels never
+  // share one.
+  const viewStore = createLibraryViewStore()
+  ctx.effect(() => () => viewStore.dispose(), 'dsh-zotero: library view store')
+
   /**
    * Both the reader and the chat actions rely on session-adjacent seams: the
    * harness opens resources into and prefills the draft of the on-screen
@@ -586,6 +587,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     }
   }
   const panelFace = (): ZoteroLibraryPanelFace => ({
+    viewStore,
     parse: surfaces.parse,
     preferenceSource,
     readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
@@ -675,7 +677,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               if (!status.ok) throw status.error
               if (!status.value.serverId) throw new Error(panelT('libraryOffline'))
               clearLibraryState(status.value.serverId, sessionId)
-              clearLibraryViewMemory(status.value.serverId, sessionId)
+              viewStore.clearView(status.value.serverId, sessionId)
             },
             onRefresh: (sessionId: string, tabId: string) => {
               const refresh = refreshBindings.get(refreshKey(sessionId, tabId))

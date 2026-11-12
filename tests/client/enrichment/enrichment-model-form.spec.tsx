@@ -8,6 +8,11 @@
  */
 
 import { fireEvent } from '@testing-library/react'
+import {
+  semanticModelActionsOf,
+  type EnrichmentFormActions,
+  type SemanticModelActionInput,
+} from '../../../src/client/EnrichmentSettingsForm.tsx'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -445,5 +450,47 @@ describe('EnrichmentSettingsSection model panel', () => {
       expect(screen.getByText(zh.semanticModelNotReadyWarningDesc)).toBeDefined()
       expect(screen.getByText(zh.semanticModelNotDownloadedWarningNotice)).toBeDefined()
     })
+  })
+})
+
+describe('the semantic model action table', () => {
+  const input: SemanticModelActionInput = {
+    downloading: false,
+    ready: false,
+    failed: false,
+    canDelete: true,
+    disabled: false,
+    checking: false,
+    cancelling: false,
+    deleting: false,
+    actions: {} as EnrichmentFormActions,
+    confirmDelete: () => {},
+  }
+
+  const idsOf = (overrides: Partial<SemanticModelActionInput>): string[] =>
+    semanticModelActionsOf({ ...input, ...overrides }).map((action) => action.id)
+
+  it('offers cancel alone while a download runs', () => {
+    expect(idsOf({ downloading: true })).toEqual(['cancel'])
+  })
+
+  it('offers verify, redownload and delete for a ready bundle', () => {
+    expect(idsOf({ ready: true })).toEqual(['verify', 'redownload', 'delete'])
+    expect(idsOf({ ready: true, canDelete: false })).toEqual(['verify', 'redownload'])
+  })
+
+  it('adds download for a failed bundle', () => {
+    expect(idsOf({ failed: true })).toEqual(['download', 'redownload', 'verify', 'delete'])
+    expect(idsOf({ failed: true, canDelete: false })).toEqual(['download', 'redownload', 'verify'])
+  })
+
+  it('offers download alone before the first download', () => {
+    expect(idsOf({})).toEqual(['download'])
+  })
+
+  it('disables delete while a verification holds the model', () => {
+    const actions = semanticModelActionsOf({ ...input, ready: true, checking: true })
+    expect(actions.find((action) => action.id === 'delete')?.disabled).toBe(true)
+    expect(actions.find((action) => action.id === 'verify')?.disabled).toBe(true)
   })
 })

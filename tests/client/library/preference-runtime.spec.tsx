@@ -2,10 +2,11 @@
 /** Preferences preserve the owning tab and affect real panel actions. */
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createLibraryPreferenceSource } from '../../../src/client/library-preferences.tsx'
 import {
-  createLibraryPreferenceSource,
-  libraryViewMemory,
-} from '../../../src/client/library-preferences.tsx'
+  createLibraryViewStore,
+  type LibraryViewStore,
+} from '../../../src/client/components/library/library-view-store.ts'
 import { LIBRARY_DEFAULTS } from '../../../src/library-preferences.ts'
 import { useLibraryFeed } from '../../../src/client/components/library/useLibraryFeed.ts'
 import { writeLibraryState } from '../../../src/client/components/library/library-storage.ts'
@@ -24,6 +25,12 @@ import type { LibraryFeedFace } from '../../../src/client/components/library/lib
 
 beforeEach(() => localStorage.clear())
 afterEach(cleanup)
+
+/** One view store per case: the cache used to be module-scoped. */
+let store: LibraryViewStore
+beforeEach(() => {
+  store = createLibraryViewStore()
+})
 function accepted(overrides = {}) {
   const form = fakeScope({ value: { ...LIBRARY_DEFAULTS, ...overrides } })
   const source = createLibraryPreferenceSource(
@@ -69,9 +76,9 @@ it('starts all-items only for a new tab and retains the same occurrence across b
     expanded: [],
     filters: { tags: ['old'] },
   })
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1')
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1')
   const mount = () =>
-    renderHook(() => useLibraryFeed(face, 'S1', true, 'session-1', preferences, memory))
+    renderHook(() => useLibraryFeed(face, 'S1', true, 'session-1', store, preferences, memory))
   const first = mount()
   await waitFor(() => expect(first.result.current.list.phase).toBe('ready'))
   expect(first.result.current.q).toBe('')
@@ -92,8 +99,9 @@ it('starts all-items only for a new tab and retains the same occurrence across b
       'S1',
       true,
       'session-1',
+      store,
       preferences,
-      libraryViewMemory(new AbortController().signal, 'S1', 'session-1'),
+      store.viewMemory(new AbortController().signal, 'S1', 'session-1'),
     ),
   )
   await waitFor(() => expect(third.result.current.list.phase).toBe('ready'))
@@ -104,7 +112,10 @@ it.each(['preserve', 'clear'] as const)(
   async (scopeChangeBehavior) => {
     const face = feedFace()
     const { result } = renderHook(() =>
-      useLibraryFeed(face, 'S1', true, 'session-1', { ...LIBRARY_DEFAULTS, scopeChangeBehavior }),
+      useLibraryFeed(face, 'S1', true, 'session-1', store, {
+        ...LIBRARY_DEFAULTS,
+        scopeChangeBehavior,
+      }),
     )
     await waitFor(() => expect(result.current.list.phase).toBe('ready'))
     act(() => result.current.setFilters({ tags: ['read'] }))

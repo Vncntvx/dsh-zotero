@@ -1,5 +1,5 @@
 import { LIBRARY_DEFAULTS, type LibraryPreferences } from '../../../library-preferences.ts'
-import type { LibraryViewMemory } from '../../library-preferences.tsx'
+import type { LibraryViewMemory, LibraryViewStore } from './library-view-store.ts'
 /**
  * The library panel's data feed: one hook owning the item list, the library
  * selector, the inspector, and persistence, plus the seam through which the
@@ -46,7 +46,6 @@ import { messageOf } from '../../error-text.ts'
 import { useLibraryChildFeed } from './useLibraryChildFeed.ts'
 import { useLibraryNavigation } from './useLibraryNavigation.ts'
 import {
-  readLibrarySessionMemory,
   readLibraryState,
   clearLibraryState,
   writeLibraryState,
@@ -126,13 +125,14 @@ export function useLibraryFeed(
   serverId: string | undefined,
   enabled: boolean,
   sessionId: string,
+  viewStore: LibraryViewStore,
   preferences: LibraryPreferences = LIBRARY_DEFAULTS,
   memory?: LibraryViewMemory,
   visible = true,
 ): LibraryFeed {
   // The session cache carries only the detail payload; every preference and
   // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
-  const initialView = readLibrarySessionMemory(sessionId)
+  const initialView = viewStore.sessionView(undefined, sessionId)
   const [storageError, setStorageError] = useState<string>()
   const visibleRef = useRef(visible)
   visibleRef.current = visible

@@ -98,7 +98,7 @@ const HELPER_SIZE_BASELINE = Object.freeze({
   'tests/client/helpers/primitives-stub.ts': 711,
   'tests/client/helpers/source-fixtures.ts': 133,
   'tests/client/helpers/apply-world.ts': 378,
-  'tests/client/helpers/library-panel-harness.tsx': 354,
+  'tests/client/helpers/library-panel-harness.tsx': 299,
 })
 
 /**

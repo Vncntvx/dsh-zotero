@@ -2,8 +2,6 @@ import {
   LibraryPreferencesContext,
   useLibraryPreferenceSource,
   useLibraryPreferences,
-  libraryViewMemory,
-  clearLibraryConversationViewMemory,
   type LibraryPreferenceSource,
 } from '../../library-preferences.tsx'
 /**
@@ -56,12 +54,8 @@ import { useZoteroProbe } from '../useZoteroProbe.ts'
 import { writeStatusLabel } from '../write-label.ts'
 import { useLibraryFeed } from './useLibraryFeed.ts'
 import type { LibraryFeedFace, LibraryPanelWireFace } from './library-feed-types.ts'
-import {
-  clearLibrarySessionMemory,
-  clearLibraryConversationState,
-  readLibrarySessionMemory,
-  writeLibrarySessionView,
-} from './library-storage.ts'
+import { clearLibraryConversationState } from './library-storage.ts'
+import type { LibraryViewStore } from './library-view-store.ts'
 import { LIBRARY_SORTS, libraryKeyOf, type LibrarySelectorState } from './library-model.ts'
 import { LibraryTree } from './LibraryTree.tsx'
 import { LibraryItemList } from './LibraryItemList.tsx'
@@ -85,6 +79,12 @@ import css from './library.module.css'
  * composer for the chat actions — are always reachable.
  */
 export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
+  /**
+   * The panel's in-memory view cache. The client registration owns it and
+   * disposes it with the registration, so a panel never outlives its cache and
+   * two instances never share one.
+   */
+  readonly viewStore: LibraryViewStore
   readonly parse?: DocumentParseSurfacePort
   readonly readUrlPdf?: (
     request: { ref: string },
@@ -170,7 +170,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const sessionRemoved = props.useSession((snapshot) => snapshot.removed)
   const [cleanupError, setCleanupError] = useState<string>()
   const sessionKey = props.sessionId
-  const initialView = readLibrarySessionMemory(sessionKey)
+  // The cached payload is read before the probe knows the instance, so the key
+  // is the pre-probe spelling; once connected the read is exact.
+  const initialView = props.viewStore.sessionView(undefined, sessionKey)
 
   // The connectivity lamp: the shared probe hook owns the in-flight, unmount,
   // and rejection guards. One probe on open, another on every refresh.
@@ -222,7 +224,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const inputActions: InputActions | undefined = props.inputActions
   // Lanes read the wire only through a confirmed connection: an offline or
   // failed probe gates every request, and the body renders the offline note.
-  const memory = libraryViewMemory(
+  const memory = props.viewStore.viewMemory(
     occurrenceSignal,
     probeState.data?.serverId ?? '',
     props.sessionId,
@@ -232,6 +234,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     confirmed ? probeState.data?.serverId : undefined,
     confirmed && !sessionRemoved,
     props.sessionId,
+    props.viewStore,
     accepted.preferences,
     memory,
     tabInfo?.tab.visible ?? true,
@@ -240,12 +243,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // are one record, so neither can clear the other through a partial merge.
   useEffect(() => {
     const inspector = feed.inspector?.phase === 'ready' ? feed.inspector : undefined
+    const serverKey = probeState.data?.serverId ?? ''
     if (inspector === undefined && probeState.data === undefined) {
-      clearLibrarySessionMemory(props.sessionId)
+      props.viewStore.clearSessionView(serverKey, props.sessionId)
       return
     }
-    writeLibrarySessionView(props.sessionId, { inspector, lastProbeData: probeState.data })
-  }, [feed.inspector, probeState.data, props.sessionId])
+    props.viewStore.writeSessionView(serverKey, props.sessionId, {
+      inspector,
+      lastProbeData: probeState.data,
+    })
+  }, [feed.inspector, probeState.data, props.sessionId, props.viewStore])
   useEffect(() => {
     if (feed.refreshToken > 0) void runProbe()
   }, [feed.refreshToken, runProbe])
@@ -259,7 +266,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   useEffect(() => {
     if (sessionRemoved) {
       try {
-        clearLibraryConversationViewMemory(props.sessionId)
+        // A deleted conversation leaves nothing behind: the occurrence state,
+        // every instance's cached payload for it, and the durable position.
+        props.viewStore.clearConversation(props.sessionId)
+        props.viewStore.clearSessionView('', props.sessionId)
         clearLibraryConversationState(props.sessionId)
       } catch (error) {
         setCleanupError(String(error))

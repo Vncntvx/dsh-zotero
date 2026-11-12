@@ -193,6 +193,7 @@ function DiagnosticsCardBody({ t, probe, diagnostics }: DiagnosticsCardBodyProps
           />
           <CopyButton
             value={data !== undefined ? bundleOf(data, probeState.data, t) : ''}
+            identityKey="diagnostics-bundle"
             label={t('diagnosticsCopyBundle')}
             copiedLabel={t('copied')}
             disabled={data === undefined}

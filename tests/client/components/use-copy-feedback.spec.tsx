@@ -10,7 +10,7 @@
  * @module tests/client/components/use-copy-feedback
  */
 
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
@@ -19,6 +19,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
 })
 
 import { useCopyFeedback } from '../../../src/client/components/useCopyFeedback.ts'
+import { CopyButton } from '../../../src/client/components/CopyButton.tsx'
 import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
 import { deferred } from '../../helpers/sync.ts'
 
@@ -96,5 +97,55 @@ describe('the clipboard feedback lane', () => {
     })
     expect(result.current.phase).toBe('idle')
     expect(result.current.error).toBeUndefined()
+  })
+
+  it('lets an in-flight write settle when only the content moved on', async () => {
+    const pending = deferred<boolean>()
+    writeClipboard.mockReturnValueOnce(pending.promise)
+    const { result, rerender } = renderHook(
+      ({ key, text }: { key: string; text: string }) => useCopyFeedback(key, text),
+      { initialProps: { key: 'ref-1', text: 'first' } },
+    )
+    act(() => {
+      result.current.copyText('first')
+    })
+    // The copied subject is the same ref; its text kept growing while the
+    // write was in flight. The answer still belongs to this control.
+    rerender({ key: 'ref-1', text: 'second' })
+    await act(async () => {
+      pending.resolve(true)
+      await Promise.resolve()
+    })
+    expect(result.current.phase).toBe('done')
+  })
+
+  it('clears a settled done label when the content moves on', async () => {
+    writeClipboard.mockResolvedValueOnce(true)
+    const { result, rerender } = renderHook(
+      ({ key, text }: { key: string; text: string }) => useCopyFeedback(key, text),
+      { initialProps: { key: 'ref-1', text: 'first' } },
+    )
+    await act(async () => {
+      result.current.copyText('first')
+    })
+    expect(result.current.phase).toBe('done')
+    rerender({ key: 'ref-1', text: 'second' })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.current.phase).toBe('idle')
+  })
+
+  it('keeps the copied label on a copy button whose text changes mid-flight', async () => {
+    const pending = deferred<boolean>()
+    writeClipboard.mockReturnValueOnce(pending.promise)
+    const { rerender } = render(<CopyButton value="first" label="Copy ref" copiedLabel="Copied" />)
+    fireEvent.click(screen.getByText('Copy ref'))
+    rerender(<CopyButton value="second" label="Copy ref" copiedLabel="Copied" />)
+    await act(async () => {
+      pending.resolve(true)
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Copied')).toBeTruthy()
   })
 })

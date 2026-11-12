@@ -6,7 +6,9 @@
 
 import { render } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
-import { inputActionsStub, zoteroClientStub } from './zotero-client.ts'
+import { inputActionsStub } from './zotero-client.ts'
+import { panelStubProps, type SessionStub } from './library-panel-stubs.ts'
+export type { SessionStub } from './library-panel-stubs.ts'
 import type {
   ZoteroItemDetailView,
   ZoteroLibraryBrowseRequestView,
@@ -15,10 +17,13 @@ import type {
   ZoteroStatusView,
 } from '../../../src/client/remote.ts'
 import {
+  createLibraryViewStore,
+  type LibraryViewStore,
+} from '../../../src/client/components/library/library-view-store.ts'
+import {
   ZoteroLibraryPanel,
   type ZoteroLibraryPanelProps,
 } from '../../../src/client/components/library/ZoteroLibraryPanel.tsx'
-import { mockT } from './mock-translate.ts'
 import { statusView } from '../../helpers/status-view.ts'
 
 /** A connected probe answer. */
@@ -193,17 +198,11 @@ export interface ScriptedFace {
   openResource: (url: string) => void
 }
 
-/** One session snapshot row for the `useSessions` stub. */
-export interface SessionStub {
-  ids: string[]
-  byId: Record<string, { cwd?: string; running?: boolean; removed?: boolean }>
-  /** The conversation this pane belongs to; defaults to the first id. */
-  paneId?: string
-}
-
 export interface MountedPanel {
   view: ReturnType<typeof render>
   face: Record<keyof ScriptedFace, Mock>
+  /** The panel's in-memory view cache; pass one in `surface` to seed it first. */
+  viewStore: LibraryViewStore
   /** The composer stub the panel receives; the chat-action specs assert on it. */
   inputActions: {
     setDraft: Mock
@@ -283,71 +282,17 @@ export function mountPanel(
       overrides.write ??
       vi.fn(async () => ({ ok: true, value: { kind: 'applied', message: 'done' } })),
   }
-  const occurrence = new AbortController()
-  let lastSelection: unknown
-  let lastStatus: unknown
-  const contextMenuTargets: Array<{ kind: string; value: unknown }> = []
-  const props = {
-    t: mockT,
-    useZoteroClient: zoteroClientStub,
-    useTabInfo: () => ({
-      tab: {
-        id: 'library',
-        signal: occurrence.signal,
-        visible: true,
-        actions: { openResource: face.openResource },
-      },
-    }),
-    ...face,
-    useContextMenu: () => ({
-      getTriggerProps: (target: { kind: string; value: unknown }) => {
-        contextMenuTargets.push(target)
-        return {}
-      },
-    }),
+  const viewStore: LibraryViewStore = surface.viewStore ?? createLibraryViewStore()
+  const { props, contextMenuTargets } = panelStubProps({
+    face: face as unknown as Record<string, unknown>,
+    sessions,
     inputActions,
-    // Session-scope standard props: the pane tab is bound to one session.
-    sessionId: (sessions.paneId ?? sessions.ids[0] ?? 's1') as never,
-    // The access hooks default to the owner's grants; a viewer spec overrides
-    // one through the surface argument.
-    useAccess: (() => true) as never,
-    useRemoteAccess: (() => true) as never,
-    useSession: (select: (snapshot: unknown) => unknown) => {
-      const paneId = sessions.paneId ?? sessions.ids[0] ?? 's1'
-      return select({
-        sessionId: paneId,
-        running: sessions.byId[paneId]?.running === true,
-        removed: sessions.byId[paneId]?.removed === true,
-      })
-    },
-    useSessionStatus: (
-      select: (snapshot: Map<string, { running: boolean }>) => unknown,
-      eq?: (a: unknown, b: unknown) => boolean,
-    ) => {
-      const next = select(
-        new Map(sessions.ids.map((id) => [id, { running: sessions.byId[id]?.running === true }])),
-      )
-      if (lastStatus !== undefined && eq?.(lastStatus, next)) return lastStatus
-      lastStatus = next
-      return next
-    },
-    // Memoize through the eq contract the store's hook honors: an equal
-    // selection keeps object identity across renders, a changed one replaces
-    // it. The stub reads the mutable `sessions` object live, so a test can
-    // move the anchor mid-test.
-    useSessions: (
-      select: (snapshot: SessionStub) => unknown,
-      eq?: (a: unknown, b: unknown) => boolean,
-    ) => {
-      const next = select(sessions)
-      if (lastSelection !== undefined && eq?.(lastSelection, next)) return lastSelection
-      lastSelection = next
-      return next
-    },
-  } as unknown as ZoteroLibraryPanelProps
+    viewStore,
+  })
   return {
     view: render(<ZoteroLibraryPanel {...props} {...surface} />),
     face: face as unknown as MountedPanel['face'],
+    viewStore,
     inputActions,
     contextMenuTargets,
   }

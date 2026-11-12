@@ -1,19 +1,17 @@
 /**
- * The panel's two storage tiers.
+ * The panel's durable browsing position.
  *
- * - `localStorage`, keyed by the confirmed Zotero instance and session, holds the durable
- *   browsing position and the view pins (`selectedRef` / `narrowPane`), so a reload
- *   reopens the same place.
- * - The in-memory session view, keyed by session id, holds only what the
- *   durable record cannot: the last ready detail payload and the probe
- *   snapshot. It survives the pane tab unmounting and dies with the session or
- *   the plugin.
+ * `localStorage`, keyed by the confirmed Zotero instance and session, holds the
+ * durable browsing position and the view pins (`selectedRef` / `narrowPane`),
+ * so a reload reopens the same place. The second tier — the last ready detail
+ * payload and the probe snapshot, which the durable record cannot carry — lives
+ * in `library-view-store.ts`, owned by the client registration rather than by
+ * this module.
  *
  * The filter fields are the wire request's own filters schema, so a value
  * localStorage accepts is a value the wire accepts too.
  */
 import { z } from 'zod'
-import type { ZoteroStatusView } from '../../../contract.ts'
 import {
   zoteroLibraryFiltersSchema,
   zoteroLibrarySchema,
@@ -21,7 +19,7 @@ import {
 } from '../../../wire-schemas.ts'
 import { refFieldsOf, type RefKind } from '../../../ref-grammar.ts'
 import { messageOf } from '../../error-text.ts'
-import type { LibraryItemState, LibraryPane } from './library-model.ts'
+import type { LibraryPane } from './library-model.ts'
 
 const PANES = ['tree', 'list', 'inspector'] as const satisfies readonly LibraryPane[]
 
@@ -69,42 +67,6 @@ export const libraryStoredStateSchema = z
 
 export type LibraryStoredState = z.infer<typeof libraryStoredStateSchema>
 
-/**
- * What a session keeps across a pane remount: the payload the durable record
- * does not carry. A whole-object write, so clearing is explicit (`undefined`)
- * rather than a side effect of a partial merge.
- */
-export interface LibrarySessionView {
-  readonly inspector?: LibraryItemState
-  readonly lastProbeData?: ZoteroStatusView
-}
-
-/** Live sessions per shell; the oldest view is dropped past this bound. */
-const MAX_SESSION_VIEW_ENTRIES = 8
-
-const sessionViews = new Map<string, LibrarySessionView>()
-
-export function readLibrarySessionMemory(sessionId: string): LibrarySessionView | undefined {
-  return sessionViews.get(sessionId)
-}
-
-export function writeLibrarySessionView(sessionId: string, view: LibrarySessionView): void {
-  // Re-insert so the most recent session sits last: Map order is the LRU.
-  sessionViews.delete(sessionId)
-  sessionViews.set(sessionId, view)
-  const overflow = Math.max(0, sessionViews.size - MAX_SESSION_VIEW_ENTRIES)
-  for (const oldest of [...sessionViews.keys()].slice(0, overflow)) {
-    sessionViews.delete(oldest)
-  }
-}
-
-export function clearLibrarySessionMemory(sessionId?: string): void {
-  if (sessionId !== undefined) {
-    sessionViews.delete(sessionId)
-  } else {
-    sessionViews.clear()
-  }
-}
 export const libraryStorageKey = (serverId: string, sessionId: string) =>
   `dsh-zotero:library:3:${encodeURIComponent(serverId)}:${encodeURIComponent(sessionId)}`
 
@@ -196,5 +158,4 @@ export function clearLibraryConversationState(sessionId: string): void {
   for (const key of keys)
     if (key?.startsWith('dsh-zotero:library:3:') && key.endsWith(suffix))
       localStorage.removeItem(key)
-  clearLibrarySessionMemory(sessionId)
 }

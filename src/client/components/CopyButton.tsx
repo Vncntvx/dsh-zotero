@@ -28,6 +28,16 @@ interface CopyButtonProps {
   readonly label: string
   /** The visible text while the copied-feedback window is open. */
   readonly copiedLabel: string
+  /**
+   * The copied subject's identity, when it differs from `value`.
+   *
+   * `value` is the payload, and most callers derive it from a loaded record,
+   * so a changed payload means a different subject and the feedback lane
+   * resets. Pass this for a control whose payload keeps growing under one
+   * subject (a live log bundle): the in-flight copy then survives the next
+   * chunk instead of being cancelled by it.
+   */
+  readonly identityKey?: unknown
   /** Layout-only placement class; the host Button owns all geometry. */
   readonly className?: string
   /** Optional hover tooltip for extra guidance. */
@@ -44,13 +54,14 @@ export function CopyButton({
   value,
   label,
   copiedLabel,
+  identityKey,
   className,
   title,
   disabled,
   variant = 'outline',
   icon,
 }: CopyButtonProps) {
-  const { phase, copyText } = useCopyFeedback(value)
+  const { phase, copyText } = useCopyFeedback(identityKey, value)
   const copied = phase === 'done'
   const text = copied ? copiedLabel : label
 

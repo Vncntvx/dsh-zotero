@@ -9,6 +9,7 @@ import { act, cleanup, screen, waitFor, fireEvent } from '@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ITEM_DETAIL, mountPanel, type SessionStub } from '../helpers/library-panel-harness.tsx'
 import { deferred } from '../../helpers/sync.js'
+import { createLibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
 import { zh } from '../../../src/client/locales.ts'
 
 beforeEach(() => {
@@ -171,7 +172,10 @@ describe('reading an attachment', () => {
       byId: { s1: { cwd: '/tmp/ws', running: true } },
       paneId: 's1',
     }
-    const first = mountPanel({}, sessions)
+    // One store for both mounts: it lives on the registration, not on the
+    // tab body, so a remount reads what the previous body cached.
+    const viewStore = createLibraryViewStore()
+    const first = mountPanel({}, sessions, { viewStore })
     const row = await screen.findByText('FlashAttention-2')
     act(() => {
       row.click()
@@ -183,7 +187,7 @@ describe('reading an attachment', () => {
     // Returning to the tab must show the detail from the session view cache:
     // the refetch is held open, so only the cached payload can paint the row.
     const refetch = deferred<{ ok: true; value: typeof ITEM_DETAIL }>()
-    const { face } = mountPanel({ item: vi.fn(() => refetch.promise) }, sessions)
+    const { face } = mountPanel({ item: vi.fn(() => refetch.promise) }, sessions, { viewStore })
 
     expect(await screen.findByRole('button', { name: zh.readPdf })).toBeTruthy()
     await waitFor(() => expect(face.item).toHaveBeenCalledTimes(1))

@@ -9,6 +9,10 @@ import { renderHook } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { useLibraryFeed } from '../../../src/client/components/library/useLibraryFeed.ts'
+import {
+  createLibraryViewStore,
+  type LibraryViewStore,
+} from '../../../src/client/components/library/library-view-store.ts'
 import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 import type {
   ZoteroChildPageView,
@@ -29,7 +33,11 @@ import {
  * @param serverId - the confirmed Zotero instance the feed hydrates for.
  * @returns the hook result, the face, and the render handles.
  */
-export function setupLibraryFeed(overrides: Partial<LibraryFeedFace> = {}, serverId = 'S1') {
+export function setupLibraryFeed(
+  overrides: Partial<LibraryFeedFace> = {},
+  serverId = 'S1',
+  viewStore: LibraryViewStore = createLibraryViewStore(),
+) {
   const face = {
     collectionPath: vi.fn<LibraryFeedFace['collectionPath']>(async (request) => ({
       ok: true,
@@ -65,8 +73,8 @@ export function setupLibraryFeed(overrides: Partial<LibraryFeedFace> = {}, serve
     ),
     ...overrides,
   }
-  const hook = renderHook(({ id }) => useLibraryFeed(face, id, true, 'session-1'), {
+  const hook = renderHook(({ id }) => useLibraryFeed(face, id, true, 'session-1', viewStore), {
     initialProps: { id: serverId },
   })
-  return { ...hook, face }
+  return { ...hook, face, viewStore }
 }

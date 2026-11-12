@@ -12,10 +12,12 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   LibraryPreferencesContext,
-  libraryViewMemory,
-  clearLibraryViewMemory,
   useLibraryScroll,
 } from '../../../src/client/library-preferences.tsx'
+import {
+  createLibraryViewStore,
+  type LibraryViewStore,
+} from '../../../src/client/components/library/library-view-store.ts'
 import { LIBRARY_DEFAULTS } from '../../../src/library-preferences.ts'
 import { useLibraryFeed } from '../../../src/client/components/library/useLibraryFeed.ts'
 import {
@@ -28,6 +30,12 @@ import { setupLibraryFeed } from '../helpers/library-feed-harness.ts'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 
 beforeEach(() => localStorage.clear())
+
+/** One view store per case: the cache used to be module-scoped. */
+let store: LibraryViewStore
+beforeEach(() => {
+  store = createLibraryViewStore()
+})
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -58,7 +66,7 @@ function controlledScrollScheduler() {
 it('restores each content scroll position and saves user scrolling through the owning memory', () => {
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 's1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 's1', scheduler.schedule)
   memory.scroll = { list: 180, other: 40 }
   memory.saveScroll = vi.fn()
   function Scroller({ id }: { id: string }) {
@@ -90,24 +98,24 @@ it('restores each content scroll position and saves user scrolling through the o
 })
 it('isolates memories by session even when the tab signal is shared', () => {
   const signal = new AbortController()
-  const one = libraryViewMemory(signal.signal, 'S1', 's1')
-  const two = libraryViewMemory(signal.signal, 'S1', 's2')
+  const one = store.viewMemory(signal.signal, 'S1', 's1')
+  const two = store.viewMemory(signal.signal, 'S1', 's2')
   one.scroll.list = 100
   expect(two.scroll).toEqual({})
   one.childPages = { ref: 'ref', offsets: { notes: 20 } }
-  clearLibraryViewMemory('S1', 's1')
+  store.clearView('S1', 's1')
   expect(one.childPages).toBeUndefined()
   expect(one.resetPending).toBe(true)
   expect(two.resetPending).toBeUndefined()
   signal.abort()
 })
 it('clears the active view, selected child page and durable browsing position together', async () => {
-  const memory = libraryViewMemory(new AbortController().signal, 'S1', 'session-1')
+  const memory = store.viewMemory(new AbortController().signal, 'S1', 'session-1')
   const initial = setupLibraryFeed()
   const face = initial.face
   initial.unmount()
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   act(() => result.current.selectItem(ITEM_DETAIL.ref))
@@ -144,9 +152,9 @@ it('restores selected child pagination after a new browser tab occurrence', asyn
     childPages: { notes: 20 },
     scroll: { list: 50 },
   })
-  const memory = libraryViewMemory(new AbortController().signal, 'S1', 'session-1')
+  const memory = store.viewMemory(new AbortController().signal, 'S1', 'session-1')
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
   expect(face.item).toHaveBeenLastCalledWith(
@@ -191,9 +199,9 @@ it('flushes queued scroll persistence when the tab occurrence aborts', async () 
   first.unmount()
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result, unmount } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 145
@@ -212,9 +220,9 @@ it('does not persist a memory under a different feed server/session', async () =
   localStorage.removeItem(libraryStorageKey('S1', 'session-1'))
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S2', true, 'session-2', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S2', true, 'session-2', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 160
@@ -232,9 +240,9 @@ it('flushes queued scroll persistence when the feed unmounts', async () => {
   first.unmount()
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result, unmount } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 170
@@ -251,9 +259,9 @@ it('flushes queued scroll persistence on pagehide', async () => {
   first.unmount()
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 175
@@ -275,9 +283,9 @@ it('cancels queued position writes when the user resets the browsing position', 
   first.unmount()
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 190
@@ -295,9 +303,9 @@ it('writes scrolled positions on the scheduled frame and reports a later quota f
   first.unmount()
   const signal = new AbortController()
   const scheduler = controlledScrollScheduler()
-  const memory = libraryViewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
+  const memory = store.viewMemory(signal.signal, 'S1', 'session-1', scheduler.schedule)
   const { result } = renderHook(() =>
-    useLibraryFeed(face, 'S1', true, 'session-1', LIBRARY_DEFAULTS, memory),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, LIBRARY_DEFAULTS, memory),
   )
   await waitFor(() => expect(result.current.list.phase).toBe('ready'))
   memory.scroll.list = 125
@@ -319,7 +327,7 @@ it('schedules and cancels scroll saves with the default timer scheduler', () => 
   vi.useFakeTimers()
   try {
     const signal = new AbortController()
-    const memory = libraryViewMemory(signal.signal, 'S-default', 'session-default')
+    const memory = store.viewMemory(signal.signal, 'S-default', 'session-default')
     let saved = false
     memory.saveScroll = () => {
       saved = true

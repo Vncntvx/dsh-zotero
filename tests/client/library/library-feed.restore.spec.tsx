@@ -7,10 +7,8 @@
 
 import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  writeLibrarySessionView,
-  writeLibraryState,
-} from '../../../src/client/components/library/library-storage.ts'
+import { writeLibraryState } from '../../../src/client/components/library/library-storage.ts'
+import { createLibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
 import type { LibraryStoredState } from '../../../src/client/components/library/library-storage.ts'
 import { ITEM_DETAIL, LIBRARY_ROWS, SAVED_SEARCHES } from '../helpers/library-panel-harness.tsx'
 import { setupLibraryFeed as setup } from '../helpers/library-feed-harness.ts'
@@ -97,14 +95,15 @@ describe('restored view pins', () => {
   })
 
   it('drops a cached detail that names another row and refetches the restored one', async () => {
-    writeLibrarySessionView('session-1', {
+    const viewStore = createLibraryViewStore()
+    viewStore.writeSessionView('S1', 'session-1', {
       inspector: {
         phase: 'ready',
         detail: { ...ITEM_DETAIL, ref: 'zotero://user/0/item/ITEM0002?server=S1' },
       },
     })
     writeLibraryState('S1', 'session-1', stored({ selectedRef: SELECTED }))
-    const { result, face } = setup()
+    const { result, face } = setup({}, 'S1', viewStore)
 
     await waitFor(() =>
       expect(face.item).toHaveBeenCalledWith(

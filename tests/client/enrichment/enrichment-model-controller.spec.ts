@@ -130,6 +130,53 @@ describe('EnrichmentFormController model operations', () => {
     expect(state.error).toBe('no space')
   })
 
+  it('keeps the deleting phase when a verify that finished later clears its own phase', async () => {
+    // Both operations set the one phase field. A verify resolving after a
+    // delete started must not return the phase to idle: the delete request is
+    // still open, and an idle phase re-enables every button.
+    const verifying = deferred<RemoteResult<ZoteroSemanticModelStatusResultView>>()
+    const deleting = deferred<RemoteResult<never>>()
+    const port = modelPortOf({
+      verifySemanticModel: vi.fn(() => verifying.promise),
+      deleteSemanticModel: vi.fn(() => deleting.promise as never),
+    })
+    const { face } = controllerOf(port)
+    const verify = face.verifyModel()
+    const remove = face.deleteModel()
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModelPhase).toBe('deleting')
+
+    verifying.resolve({
+      ok: true,
+      value: {
+        model: 'balanced',
+        ready: true,
+        downloading: false,
+        path: '/models/balanced',
+        downloadedBytes: 1,
+        totalBytes: 1,
+        percent: 100,
+      },
+    })
+    await verify
+    // The verify finished, the delete did not: the phase still belongs to the
+    // delete.
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModelPhase).toBe('deleting')
+
+    deleting.resolve({
+      ok: true,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '',
+        removed: true,
+        removedFiles: 1,
+        removedBytes: 1,
+      } as never,
+    })
+    await remove
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModelPhase).toBe('idle')
+  })
+
   it('stops every model action once the endpoints answered unavailable', async () => {
     const port = modelPortOf({
       semanticModelStatus: vi.fn(async () => ({

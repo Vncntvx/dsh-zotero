@@ -9,10 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { CONNECTED, ITEM_DETAIL, mountPanel } from '../helpers/library-panel-harness.tsx'
-import {
-  readLibrarySessionMemory,
-  writeLibrarySessionView,
-} from '../../../src/client/components/library/library-storage.ts'
+import { createLibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
 import { deferred } from '../../helpers/sync.js'
 import { zh } from '../../../src/client/locales.ts'
 
@@ -48,9 +45,10 @@ describe('probe-driven chrome', () => {
   })
 
   it('holds every lane until the mount own probe answers, cached snapshot or not', async () => {
-    writeLibrarySessionView('s1', { lastProbeData: CONNECTED })
+    const viewStore = createLibraryViewStore()
+    viewStore.writeSessionView('S1', 's1', { lastProbeData: CONNECTED })
     const probe = deferred<{ ok: true; value: typeof CONNECTED }>()
-    const { face } = mountPanel({ status: vi.fn(() => probe.promise) })
+    const { face } = mountPanel({ status: vi.fn(() => probe.promise) }, undefined, { viewStore })
 
     // The cached snapshot paints the workspace; it never opens the library
     // lanes and never flashes the offline note while the probe is in flight.
@@ -71,7 +69,8 @@ describe('probe-driven chrome', () => {
 
 describe('session view lifecycle', () => {
   it('drops the session view when the session is removed', async () => {
-    writeLibrarySessionView('s1', { inspector: { phase: 'ready', detail: ITEM_DETAIL } })
+    const viewStore = createLibraryViewStore()
+    viewStore.writeSessionView('S1', 's1', { inspector: { phase: 'ready', detail: ITEM_DETAIL } })
     const probe = deferred<{ ok: true; value: typeof CONNECTED }>()
     mountPanel(
       { status: vi.fn(() => probe.promise) },
@@ -80,7 +79,8 @@ describe('session view lifecycle', () => {
         byId: { s1: { cwd: '/tmp/ws', running: false, removed: true } },
         paneId: 's1',
       },
+      { viewStore },
     )
-    await waitFor(() => expect(readLibrarySessionMemory('s1')).toBeUndefined())
+    await waitFor(() => expect(viewStore.sessionView('S1', 's1')).toBeUndefined())
   })
 })

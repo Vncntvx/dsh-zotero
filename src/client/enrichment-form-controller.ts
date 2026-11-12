@@ -584,8 +584,19 @@ export class EnrichmentFormController {
     this.publish()
   }
 
-  private clearPhase(binding: ModelBinding): void {
+  /**
+   * Return the phase to idle, unless another operation owns it now.
+   *
+   * The phase is one field for every model operation, so a verify finishing
+   * after a delete started used to clear `deleting` and re-enable the buttons
+   * while the delete request was still open. Each operation clears only the
+   * phase it set.
+   * @param binding - the binding the finished operation ran against.
+   * @param expected - the phase that operation set.
+   */
+  private clearPhase(binding: ModelBinding, expected: SemanticModelPhase): void {
     if (!this.current(binding)) return
+    if (this.semanticModelPhase !== expected) return
     this.semanticModelPhase = 'idle'
     this.publish()
   }
@@ -642,18 +653,18 @@ export class EnrichmentFormController {
       )
     } catch (error) {
       this.operationFailure(binding, error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'checking')
       return
     } finally {
       this.releaseSignal(controller)
     }
     if (!result.ok) {
       this.operationFailure(binding, result.error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'checking')
       return
     }
     if (this.current(binding)) this.applyStatus(result.value)
-    this.clearPhase(binding)
+    this.clearPhase(binding, 'checking')
   }
 
   async cancelModelDownload(): Promise<void> {
@@ -673,17 +684,17 @@ export class EnrichmentFormController {
       )
     } catch (error) {
       this.operationFailure(binding, error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'cancelling')
       return
     } finally {
       this.releaseSignal(controller)
     }
     if (!result.ok) {
       this.operationFailure(binding, result.error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'cancelling')
       return
     }
-    this.clearPhase(binding)
+    this.clearPhase(binding, 'cancelling')
     if (this.current(binding)) await this.runStatusCheck(this.parseTarget() ?? target)
   }
 
@@ -705,17 +716,17 @@ export class EnrichmentFormController {
       )
     } catch (error) {
       this.operationFailure(binding, error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'deleting')
       return
     } finally {
       this.releaseSignal(controller)
     }
     if (!result.ok) {
       this.operationFailure(binding, result.error)
-      this.clearPhase(binding)
+      this.clearPhase(binding, 'deleting')
       return
     }
-    this.clearPhase(binding)
+    this.clearPhase(binding, 'deleting')
     if (this.current(binding)) await this.runStatusCheck(this.parseTarget() ?? target)
   }
 

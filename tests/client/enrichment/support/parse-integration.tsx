@@ -1,4 +1,5 @@
 /** Real panel/parse surface assembly; substitute only accepted config, access, jobs and Remote. */
+import { createLibraryViewStore } from '../../../../src/client/components/library/library-view-store.ts'
 import { useSyncExternalStore } from 'react'
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import type { ZoteroItemDetailView } from '../../../../src/contract.ts'
@@ -111,8 +112,13 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
       returned: 1,
     }),
   }))
+  // One view store for the whole world: in production it lives on the client
+  // registration, not on the pane tab body, so a remount reads what the
+  // previous body cached.
+  const viewStore = createLibraryViewStore()
   const surface: Partial<ZoteroLibraryPanelProps> = {
     parse: port,
+    viewStore,
     t: makeTranslate(en),
     preferenceSource,
     useAccess: (action) => useSyncExternalStore(access.subscribe, access.getSnapshot).has(action),
