@@ -31,6 +31,7 @@ import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { ConcurrencyGate } from '../../concurrency.js'
 import { DEFAULT_MAX_RESPONSE_BYTES } from '../../constants.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../transport-bounds.js'
+import { errnoCodeOf, errorDetailOf } from '../../errors.js'
 import { assertAllowedScholarlyUrl, ScholarlySecurityError } from './allowlist.js'
 import { CircuitBreaker, ScholarlyCircuitOpenError } from './circuit-breaker.js'
 import { HostPacer, abortableSleep } from './pacing.js'
@@ -71,6 +72,18 @@ const DEFAULT_TIMEOUT_MS = 25_000
 const REDIRECT_STATUSES: readonly number[] = [301, 302, 303, 307, 308]
 
 /**
+ * Codes that mean the local fetch/dispatcher pairing is unusable, not that the
+ * host is unhealthy: undici rejected the handler interface, or an argument had
+ * the wrong type. Retrying cannot repair a composition error, and recording it
+ * as a host failure would open a circuit against a healthy index.
+ */
+const NON_RETRYABLE_TRANSPORT_CODES: ReadonlySet<string> = new Set([
+  'UND_ERR_INVALID_ARG',
+  'UND_ERR_INVALID_RETURN_VALUE',
+  'ERR_INVALID_ARG_TYPE',
+])
+
+/**
  * One non-2xx response from a scholarly host.
  *
  * Carries the **host only**, never the request URL: a scholarly URL can hold a
@@ -93,6 +106,40 @@ export class ScholarlyHttpError extends Error {
     )
     this.name = 'ScholarlyHttpError'
   }
+}
+
+/**
+ * A raw transport rejection with its underlying code preserved.
+ *
+ * `fetch failed` alone cannot distinguish an unreachable host from a dispatcher
+ * built by another undici copy; the code (`UND_ERR_INVALID_ARG`, `ECONNRESET`,
+ * …) can. The original rejection stays reachable as `cause`.
+ */
+export class ScholarlyTransportError extends Error {
+  constructor(
+    public readonly host: string,
+    public readonly code: string,
+    failure: unknown,
+  ) {
+    super(errorDetailOf(failure), { cause: failure })
+    this.name = 'ScholarlyTransportError'
+  }
+}
+
+/**
+ * Restate a raw fetch rejection as a typed transport failure when it carries an
+ * errno-style code. A codeless rejection keeps its original shape, so existing
+ * failure wording is unchanged.
+ * @param error - the rejection from a fetch attempt.
+ * @param host - the host the attempt targeted.
+ * @returns the typed failure, or undefined when there is no code to report.
+ */
+function describeTransportFailure(
+  error: unknown,
+  host: string,
+): ScholarlyTransportError | undefined {
+  const code = errnoCodeOf(error)
+  return code === undefined ? undefined : new ScholarlyTransportError(host, code, error)
 }
 
 /**
@@ -128,7 +175,14 @@ export interface ScholarlyHttp {
 }
 
 interface CreateScholarlyHttpOptions {
-  fetchImpl?: FetchFunction
+  /**
+   * The fetch seam. It must accept the dispatchers `publicAccess` builds, so
+   * the host composition passes `publicFetch` — the fetch from this package's
+   * own undici copy. The runtime's global `fetch` ships a different undici
+   * and rejects those dispatchers at the handler interface before a socket
+   * opens. Required: neither a default nor a fallback may pick a fetch.
+   */
+  fetchImpl: FetchFunction
   circuitBreaker?: CircuitBreaker
   pacer?: HostPacer
   /**
@@ -166,8 +220,8 @@ function isProviderTimeout(signal: AbortSignal): boolean {
   return timeoutOf(signal, SCHOLARLY_TIMEOUT) !== undefined
 }
 
-export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): ScholarlyHttp {
-  const fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init))
+export function createScholarlyHttp(options: CreateScholarlyHttpOptions): ScholarlyHttp {
+  const fetchImpl = options.fetchImpl
   const circuitBreaker = options.circuitBreaker ?? new CircuitBreaker()
   const pacer = options.pacer ?? new HostPacer()
   const gate = new ConcurrencyGate(options.maxInFlight ?? 8)
@@ -362,13 +416,25 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
           throw error
         }
 
+        // A local composition error — for example a dispatcher from another
+        // undici copy — is deterministic and says nothing about host health:
+        // fail once, do not retry, and leave the breaker alone.
+        const transportFailure = describeTransportFailure(error, hostname)
+        if (
+          transportFailure !== undefined &&
+          NON_RETRYABLE_TRANSPORT_CODES.has(transportFailure.code)
+        ) {
+          releaseProbe(hostname)
+          throw transportFailure
+        }
+
         // A half-open admission is one probe, even when the request's normal
         // retry budget is larger. A failed probe must reopen the circuit now;
         // retrying it would collide with the probe fence and leave the host
         // permanently stuck in HALF_OPEN.
         if (halfOpenProbe) {
           recordFailure(hostname)
-          throw error
+          throw transportFailure ?? error
         }
 
         // A provider deadline is one failure of this host; a connection drop is
@@ -378,7 +444,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions = {}): S
           if (isProviderTimeout(d.signal)) {
             throw new ScholarlyHttpError(504, hostname)
           }
-          throw error
+          throw transportFailure ?? error
         }
         retryDelayMs = 1_000 * Math.pow(2, attempt)
       } finally {

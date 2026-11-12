@@ -34,6 +34,19 @@ import {
 } from '../../src/scholarly/tools/index.js'
 import { SCHOLARLY_TOOL_NAMES } from '../helpers/tool-names.js'
 
+const { fetchStub } = vi.hoisted(() => ({
+  fetchStub: vi.fn(
+    async () => new Response('{"results":[]}', { headers: { 'content-type': 'application/json' } }),
+  ),
+}))
+
+// The production composition fetches through the plugin's own undici copy, not
+// the runtime's global `fetch`: stub the seam, not the global.
+vi.mock('../../src/transport/connections.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/transport/connections.js')>()),
+  publicFetch: fetchStub,
+}))
+
 describe('ScholarlyService lifecycle & volatile config', () => {
   it('reads a live section through the volatile references on every call', async () => {
     const ctx = await bootScholarlyContext()
@@ -108,32 +121,23 @@ describe('legacy literal-key config gate', () => {
 
 describe('scholarly tool host wiring', () => {
   it('serves a registered tool through the live host and its shared transport', async () => {
-    const fetchStub = vi.fn(
-      async () =>
-        new Response('{"results":[]}', { headers: { 'content-type': 'application/json' } }),
-    )
-    vi.stubGlobal('fetch', fetchStub)
-    try {
-      const ctx = await bootScholarlyContext()
-      const service = new ScholarlyService(ctx, { email: createVolatile('edge@example.edu') })
-      expect(service).toBeDefined()
-      const batch = await ctx.tools.execute({
-        calls: [
-          {
-            type: 'tool-call',
-            id: ToolCallId('scholarly-search'),
-            name: 'scholarly_search',
-            arguments: JSON.stringify({ query: 'attention' }),
-          },
-        ],
-        signal: new AbortController().signal,
-        agent: {} as never,
-      })
-      expect(batch.results[0]?.result).toBeDefined()
-      expect(fetchStub).toHaveBeenCalled()
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    const ctx = await bootScholarlyContext()
+    const service = new ScholarlyService(ctx, { email: createVolatile('edge@example.edu') })
+    expect(service).toBeDefined()
+    const batch = await ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: ToolCallId('scholarly-search'),
+          name: 'scholarly_search',
+          arguments: JSON.stringify({ query: 'attention' }),
+        },
+      ],
+      signal: new AbortController().signal,
+      agent: {} as never,
+    })
+    expect(batch.results[0]?.result).toBeDefined()
+    expect(fetchStub).toHaveBeenCalled()
   })
 })
 

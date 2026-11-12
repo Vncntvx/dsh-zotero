@@ -225,7 +225,11 @@ describe('ExportDocumentRow', () => {
     // The code surface names the format in its head and keeps the copy
     // action inside, so the row header itself never changes on expand.
     expect(screen.getByText('BibTeX')).toBeDefined()
-    expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
+    // Read the body through the content container: when shiki finishes
+    // highlighting, the entry is split across token spans and no single
+    // element carries the whole string.
+    const code = document.querySelector('[data-code-block-content]')
+    expect(code?.textContent ?? '').toContain('@article{dao2023')
     // The copy action belongs to the host code surface: its banner carries
     // the button, and the row's own header keeps only the cite action.
     const copy = document.querySelector('[data-code-block-banner] button')
@@ -233,7 +237,7 @@ describe('ExportDocumentRow', () => {
     fireEvent.click(copy!)
     expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_DOC.text)
     fireEvent.click(screen.getByRole('button', { expanded: true }))
-    expect(screen.queryAllByText(/@article\{dao2023/)).toHaveLength(0)
+    expect(document.querySelector('[data-code-block-content]')).toBeNull()
   })
 
   it('copies the per-document cite command from the always-visible action', () => {

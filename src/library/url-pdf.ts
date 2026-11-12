@@ -7,6 +7,7 @@ import {
   type ResolvedAddress,
 } from '../transport/network.js'
 import { readBoundedBytes, ResponseTooLargeError } from '../transport-bounds.js'
+import type { PublicFetch } from '../transport/connections.js'
 import { ZoteroError } from '../errors.js'
 import type { ZoteroAttachmentLocationView } from '../contract.js'
 
@@ -16,7 +17,7 @@ export interface UrlPdfDependencies {
   readonly allowed: () => boolean
   readonly resolver: AddressResolver
   readonly dispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
-  readonly fetch: typeof globalThis.fetch
+  readonly fetch: PublicFetch
 }
 const failure = (
   suffix:

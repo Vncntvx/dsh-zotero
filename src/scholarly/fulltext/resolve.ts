@@ -9,7 +9,7 @@
  * @module dsh-zotero/scholarly/fulltext/resolve
  */
 
-import { errorMessageOf } from '../../errors.js'
+import { errorDetailOf } from '../../errors.js'
 import { extractArxivId } from '../sources/arxiv.js'
 import { cleanDoi } from '../sources/helpers.js'
 import { lookupOpenAlex } from '../sources/openalex.js'
@@ -140,7 +140,7 @@ async function extractRemotePdf(
     })
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error
-    return { kind: 'none', reason: 'fetch', detail: errorMessageOf(error) }
+    return { kind: 'none', reason: 'fetch', detail: errorDetailOf(error) }
   }
 
   // PDF magic bytes: %PDF
@@ -152,7 +152,7 @@ async function extractRemotePdf(
   try {
     extracted = await extractPdfText(bytes)
   } catch (error) {
-    return { kind: 'none', reason: 'parse', detail: errorMessageOf(error) }
+    return { kind: 'none', reason: 'parse', detail: errorDetailOf(error) }
   }
 
   if (extracted.replace(/\[page \d+\]/g, '').trim().length < FULLTEXT_ENHANCER_MIN_TEXT_CHARS) {
@@ -203,7 +203,7 @@ async function tryHtmlRoute(
     html = await http.text(url, { signal, timeoutMs: 35_000, retries: 0 })
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error
-    return { kind: 'none', reason: `${label}: ${errorMessageOf(error)}` }
+    return { kind: 'none', reason: `${label}: ${errorDetailOf(error)}` }
   }
   const markdown = arxivHtmlToMarkdown(html)
   if (markdown === undefined) {
@@ -317,7 +317,7 @@ export async function resolveScholarlyFullText(
       try {
         await store.set(cacheKey, record)
       } catch (error) {
-        reasons.push(`cache: write failed (${errorMessageOf(error)})`)
+        reasons.push(`cache: write failed (${errorDetailOf(error)})`)
       }
     }
     return record
@@ -413,7 +413,7 @@ async function resolveDoiLikeRoute(
     signal,
   ).catch((error) => {
     if (signal?.aborted) throw signal.reason ?? error
-    reasons.push(`Europe PMC lookup: ${errorMessageOf(error)}`)
+    reasons.push(`Europe PMC lookup: ${errorDetailOf(error)}`)
     return undefined
   })
 
@@ -424,7 +424,7 @@ async function resolveDoiLikeRoute(
           .then((work) => ({ kind: 'openalex' as const, work }))
           .catch((error) => {
             if (signal?.aborted) throw signal.reason ?? error
-            reasons.push(`OpenAlex lookup: ${errorMessageOf(error)}`)
+            reasons.push(`OpenAlex lookup: ${errorDetailOf(error)}`)
             return undefined
           })
       : Promise.resolve(undefined)
@@ -444,7 +444,7 @@ async function resolveDoiLikeRoute(
           .then((oa) => ({ kind: 'unpaywall' as const, oa }))
           .catch((error) => {
             if (signal?.aborted) throw signal.reason ?? error
-            reasons.push(`Unpaywall lookup: ${errorMessageOf(error)}`)
+            reasons.push(`Unpaywall lookup: ${errorDetailOf(error)}`)
             return undefined
           })
       : Promise.resolve(undefined)
@@ -463,7 +463,7 @@ async function resolveDoiLikeRoute(
       xml = await fetchPmcFullTextXml(pmcid, http, signal)
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error
-      reasons.push(`PMC full text (${pmcid}): ${errorMessageOf(error)}`)
+      reasons.push(`PMC full text (${pmcid}): ${errorDetailOf(error)}`)
     }
     if (xml !== undefined) {
       const markdown = jatsToMarkdown(xml)
@@ -523,7 +523,7 @@ async function resolveDoiLikeRoute(
       } catch (error) {
         if (signal?.aborted) throw signal.reason ?? error
         s2 = undefined
-        reasons.push(`Semantic Scholar lookup: ${errorMessageOf(error)}`)
+        reasons.push(`Semantic Scholar lookup: ${errorDetailOf(error)}`)
       }
       if (s2?.pdfUrl !== undefined && !candidatePdfUrls.some((c) => c.url === s2.pdfUrl)) {
         candidatePdfUrls.push({ url: s2.pdfUrl, from: 'Semantic Scholar' })

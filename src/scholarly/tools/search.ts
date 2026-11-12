@@ -16,6 +16,7 @@ import { SOURCE_SEARCHERS } from '../sources/index.js'
 import { SCHOLARLY_SOURCE_IDS, SCHOLARLY_SOURCE_NAMES, type ScholarlyQuery } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
+import { failureTextOf } from './failure.js'
 import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
 import { metaRecordOf } from '../../tools/present.js'
 import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
@@ -147,8 +148,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
                 } satisfies RankedSourceList
               } catch (error) {
                 if (signal.aborted) throw error
-                const msg = error instanceof Error ? error.message : String(error)
-                failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${msg})`)
+                failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${failureTextOf(error)})`)
                 return {
                   sourceId,
                   weight: 1.0,

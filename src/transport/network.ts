@@ -32,11 +32,16 @@ export type AddressResolver = (
  * One pinned connection: the dispatcher rides in the fetch `init` (undici's
  * own `RequestInit` extension), and `close()` ends the connection pool once
  * the attempt's response body has settled. Declared here — the pure/host
- * split's shared vocabulary — so the factory in `host-connections.ts` and the
+ * split's shared vocabulary — so the factory in `connections.ts` and the
  * transport in `http.ts` cannot drift apart.
  */
 export interface PinnedDispatcher {
-  /** Passed through to fetch as undici's `dispatcher` init extension. */
+  /**
+   * Passed through to fetch as undici's `dispatcher` init extension. Only the
+   * fetch from the same undici copy (`publicFetch` in `connections.ts`) accepts
+   * it: the runtime's global `fetch` ships another copy and rejects the
+   * dispatcher at the handler interface before a connection opens.
+   */
   readonly dispatcher: unknown
   close(): Promise<void>
 }

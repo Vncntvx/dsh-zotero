@@ -1,4 +1,4 @@
-import { Agent } from 'undici'
+import { Agent, fetch as undiciFetch } from 'undici'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }))
@@ -8,6 +8,7 @@ vi.mock('node:dns/promises', () => ({ lookup: lookupMock }))
 import {
   createPinnedDispatcher,
   dnsAddressResolver,
+  publicFetch,
   scholarlyPublicAccess,
 } from '../../src/transport/connections.js'
 
@@ -42,6 +43,16 @@ describe('createPinnedDispatcher', () => {
     expect(pinned.dispatcher).toBeInstanceOf(Agent)
     // undici resolves its pool teardown with null when nothing was in flight.
     await expect(pinned.close()).resolves.toBeNull()
+  })
+})
+
+describe('publicFetch', () => {
+  it("is the dependency's own undici fetch, not a runtime fetch or a test double", () => {
+    // The dispatchers below are undici@8 Agents. Only the fetch from that
+    // same copy accepts them; the runtime's global fetch ships another undici
+    // and rejects the dispatcher before a socket opens.
+    expect(publicFetch).toBe(undiciFetch)
+    expect(publicFetch).not.toBe(vi.fn())
   })
 })
 

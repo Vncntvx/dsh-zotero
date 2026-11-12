@@ -9,7 +9,7 @@
  * @module dsh-zotero/scholarly/tools/failure
  */
 
-import { errorMessageOf } from '../../errors.js'
+import { errorDetailOf } from '../../errors.js'
 import { httpStatusOf } from '../transport/http.js'
 
 /**
@@ -19,12 +19,15 @@ import { httpStatusOf } from '../transport/http.js'
  * status except 429, whose message reads `Rate limited by <host> (retry after
  * Ns)`, because an operator has to recognize a rate limit without knowing the
  * number. The status is prefixed only when the message does not already carry
- * it, so the note never reads as `HTTP 404 — HTTP 404 from host`.
+ * it, so the note never reads as `HTTP 404 — HTTP 404 from host`. The
+ * underlying transport code is appended when the message does not carry it
+ * (`fetch failed (UND_ERR_INVALID_ARG)`), so a local dispatcher mismatch cannot
+ * masquerade as an anonymous network failure.
  * @param error - the rejection from a registry read.
  * @returns a single-line description.
  */
 export function failureTextOf(error: unknown): string {
-  const message = errorMessageOf(error)
+  const message = errorDetailOf(error)
   const status = httpStatusOf(error)
   return status !== undefined && !message.includes(String(status))
     ? `HTTP ${status} — ${message}`

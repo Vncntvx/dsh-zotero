@@ -105,11 +105,11 @@ graph LR
 
 - 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；段落只列出该步骤准入的工具，准入为空时不渲染；web_fetch 路由禁令随任一外部 scholarly 工具保留；父组件的策略段不描述外部检索工具，只在 save 进入本步准入时按其名字归类写面。
 - 主机白名单：`src/scholarly/transport/hosts.ts` 是唯一真源，允许的 host 与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。
-- 地址安全：白名单只判「名字」。端口仅允许 80/443（显式拼写等同默认端口）；开放获取 PDF 臂（`allowPublicPdf`）离开白名单时还须过第二道门——`src/transport/network.ts` 解析主机名并拒绝任何非公网单播地址（含 NAT64/IPv4-mapped 内嵌地址的判定），随后把已验证地址钉进 undici 连接（`connections.ts`），防止检查与建连之间的 DNS rebinding；重定向的每一跳都重新过词法门与解析门。未接入这两道门（`publicAccess` 缺失）时该臂直接报错，不降级为不钉扎连接。
+- 地址安全：白名单只判「名字」。端口仅允许 80/443（显式拼写等同默认端口）；开放获取 PDF 臂（`allowPublicPdf`）离开白名单时还须过第二道门——`src/transport/network.ts` 解析主机名并拒绝任何非公网单播地址（含 NAT64/IPv4-mapped 内嵌地址的判定），随后把已验证地址钉进 undici 连接（`connections.ts`），防止检查与建连之间的 DNS rebinding；重定向的每一跳都重新过词法门与解析门。dispatcher 只交给同一份 undici 副本的 `publicFetch`（`connections.ts`）；运行时全局 `fetch` 自带另一份 undici，会在建连前拒绝该 dispatcher，因此外部出口从不用全局 fetch。未接入这两道门（`publicAccess` 缺失）时该臂直接报错，不降级为不钉扎连接。
 - 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束，重试退避发生在闸门之外，不占用在飞槽位；熔断与限流按裸 hostname（不含端口）计。
 - 凭证：学术检索配置只保存 `role('credential-ref')` 声明的凭据引用名（`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`），密钥值不进入配置；`src/scholarly/credentials.ts` 在每次外部工具调用前经 `ctx.get('credentials')` 解析，引用名非法、凭据服务缺失或引用无值时分别报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` 或 `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`，不静默降级为匿名请求。解析后的 key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。
 - 全文缓存：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引；读结果分 `hit` / `miss` / `corrupt` 三态，损坏条目被驱逐并记录。
-- 失败语义：全文解析的每条路由各自记录失败原因，终态错误逐条列出；`scholarly_verify` 用四值结论区分“注册表说没有”与“注册表联系不上”。
+- 失败语义：全文解析的每条路由各自记录失败原因，终态错误逐条列出；失败原因会带上底层传输 code（如 `UND_ERR_INVALID_ARG`、`ECONNRESET`），本地 dispatcher 错配不重试、不计熔断；`scholarly_verify` 用四值结论区分“注册表说没有”与“注册表联系不上”。
 - 后台任务：`scholarly_read` / `scholarly_search` / `scholarly_verify` 复用核心的 `ZoteroJobRunner`（`src/job-runner.ts`），作业 kind 为 `scholarly`，输出上限 256 KiB；显式后台由 `run_in_background` 请求，前台超时按 `enableRunInBackground` / `promoteOnTimeout` / `foregroundWaitMs` 提升；组件卸载时 `ZoteroJobRunner.killAll` 终止本组件启动的作业。
 - 公开面：`src/scholarly/index.ts` 只导出服务类、配置 schema 与领域类型；传输、主机表、存储与融合内部实现均不导出。
 

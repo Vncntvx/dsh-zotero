@@ -849,7 +849,7 @@ Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, P
 
 #### Failure semantics
 
-When an index cannot answer (rate limited, timed out, service error), the result lists it as `Unanswered sources: <index> (<reason>)`, and successful hits carry `Notice: <index> (<reason>)`. An unavailable index does not mean the paper does not exist: only when every index answered normally and none matched does the tool ask the caller to check the identifier.
+When an index cannot answer (rate limited, timed out, service error), the result lists it as `Unanswered sources: <index> (<reason>)`, and successful hits carry `Notice: <index> (<reason>)`. The reason carries the underlying transport code (such as `fetch failed (UND_ERR_INVALID_ARG)` or `fetch failed (ECONNRESET)`), so a local composition error is distinguishable from a network failure. An unavailable index does not mean the paper does not exist: only when every index answered normally and none matched does the tool ask the caller to check the identifier.
 
 ---
 

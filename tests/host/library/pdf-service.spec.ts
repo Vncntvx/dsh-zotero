@@ -8,10 +8,14 @@ import { ZoteroLibraryService } from '../../../src/library/service.js'
 import type { ZoteroService } from '../../../src/service.js'
 import { deferred } from '../../helpers/sync.js'
 
+const { publicFetchMock } = vi.hoisted(() => ({ publicFetchMock: vi.fn() }))
+
 vi.mock('../../../src/transport/connections.js', () => ({
   dnsAddressResolver: async () => [{ address: '93.184.216.34', family: 4 }],
   createPinnedDispatcher: () => ({ dispatcher: undefined, close: async () => {} }),
+  publicFetch: publicFetchMock,
 }))
+import { publicFetch } from '../../../src/transport/connections.js'
 const ref = 'zotero://user/0/attachment/ATTAC001?server=S1'
 let context: Context | undefined
 async function boot(fs = true, allowed = true) {
@@ -28,12 +32,8 @@ async function boot(fs = true, allowed = true) {
     resolveAttachment,
   } as unknown as ZoteroService)
   if (fs) await context.plugin(LocalFileSystem, { cwd: tmpdir() })
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(
-      async () =>
-        new Response('%PDF-1.7\nbody', { headers: { 'content-type': 'application/pdf' } }),
-    ),
+  publicFetchMock.mockImplementation(
+    async () => new Response('%PDF-1.7\nbody', { headers: { 'content-type': 'application/pdf' } }),
   )
   await context.plugin(ZoteroLibraryService, { allowUrlPdfRead: allowed })
   return { ctx: context, service: context.zoteroLibrary, resolveAttachment }
@@ -42,11 +42,13 @@ afterEach(async () => {
   await context?.fiber.dispose()
   context = undefined
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 it('returns a verified readable file and removes its bytes on release', async () => {
   const { service } = await boot()
   const result = await service.readUrlPdf({ ref }, new AbortController().signal)
+  // The reader fetches through the package's own undici copy, never the
+  // runtime's global fetch: the composition must wire `publicFetch`.
+  expect(vi.mocked(publicFetch)).toHaveBeenCalled()
   expect(await readFile(result.path, 'utf8')).toBe('%PDF-1.7\nbody')
   expect(result).toMatchObject({ ref, title: 'paper.pdf', contentType: 'application/pdf' })
   await expect(
@@ -58,7 +60,7 @@ it('resolves the attachment once before fetching the URL PDF', async () => {
   const { service, resolveAttachment } = await boot()
   await service.readUrlPdf({ ref }, new AbortController().signal)
   expect(resolveAttachment).toHaveBeenCalledExactlyOnceWith(ref, expect.any(AbortSignal))
-  expect(fetch).toHaveBeenCalledOnce()
+  expect(vi.mocked(publicFetch)).toHaveBeenCalledOnce()
 })
 it('refuses disabled permission before any download', async () => {
   const { service, resolveAttachment } = await boot(true, false)
@@ -67,14 +69,14 @@ it('refuses disabled permission before any download', async () => {
     details: { code: 'ZOTERO_URL_PDF_DISABLED' },
   })
   expect(resolveAttachment).not.toHaveBeenCalled()
-  expect(fetch).not.toHaveBeenCalled()
+  expect(vi.mocked(publicFetch)).not.toHaveBeenCalled()
 })
 it('refuses a missing filesystem before any download', async () => {
   const { service } = await boot(false)
   await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toThrow(
     'filesystem',
   )
-  expect(fetch).not.toHaveBeenCalled()
+  expect(vi.mocked(publicFetch)).not.toHaveBeenCalled()
 })
 it('removes a staged file if the filesystem cannot map its host path', async () => {
   const { service, ctx } = await boot()
@@ -111,7 +113,7 @@ it('lets a foreground download settle before plugin disposal removes its file', 
   const { service, ctx } = await boot()
   const started = deferred<void>()
   const response = deferred<Response>()
-  vi.mocked(fetch).mockImplementation(async () => {
+  publicFetchMock.mockImplementation(async () => {
     started.resolve()
     return response.promise
   })

@@ -21,10 +21,14 @@ import { lstat, mkdir, open as openFile, realpath, rename, rm } from 'node:fs/pr
 import { basename, dirname, join, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { fetch as undiciFetch } from 'undici'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { SemanticDownloadSource, SemanticModelSpec } from '../enrichment-model-catalog.js'
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
+import {
+  createPinnedDispatcher,
+  dnsAddressResolver,
+  publicFetch,
+} from '../transport/connections.js'
 import {
   resolvePublicAddresses,
   type AddressResolver,
@@ -270,11 +274,9 @@ export async function downloadPinnedFile(
   // An already-aborted caller must not create a directory or open a socket.
   options.signal?.throwIfAborted()
   const fs = options.deps?.fs ?? hostDownloadFsDeps
-  const fetchFn = options.deps?.fetch ?? (undiciFetch as unknown as FetchLike)
-  const resolver =
-    options.deps?.resolver ?? (await import('../transport/connections.js')).dnsAddressResolver
-  const dispatcher =
-    options.deps?.dispatcher ?? (await import('../transport/connections.js')).createPinnedDispatcher
+  const fetchFn = options.deps?.fetch ?? (publicFetch as unknown as FetchLike)
+  const resolver = options.deps?.resolver ?? dnsAddressResolver
+  const dispatcher = options.deps?.dispatcher ?? createPinnedDispatcher
   const gatedDeps = { fetch: fetchFn, resolver, dispatcher }
 
   const timeoutMs = options.timeoutMs ?? DOWNLOAD_FILE_TIMEOUT_MS

@@ -16,8 +16,37 @@ import { createVolatile } from '@deepseek-ai/cosmokit'
 import { describe, expect, it, vi } from 'vitest'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { composeRealJobs } from '../helpers/real-jobs.ts'
-import { deferred } from '../helpers/sync.js'
 import { bootScholarlyContext } from './fixtures.js'
+
+const { fetchStub, fetchGate } = vi.hoisted(() => {
+  let release: (() => void) | undefined
+  let gate: Promise<void> | undefined
+  return {
+    fetchGate: {
+      hold(): void {
+        gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+      },
+      release(): void {
+        release?.()
+        release = undefined
+        gate = undefined
+      },
+    },
+    fetchStub: vi.fn(async () => {
+      if (gate !== undefined) await gate
+      return new Response('{}')
+    }),
+  }
+})
+
+// The production composition fetches through the plugin's own undici copy, not
+// the runtime's global `fetch`: stub the seam, not the global.
+vi.mock('../../src/transport/connections.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/transport/connections.js')>()),
+  publicFetch: fetchStub,
+}))
 
 function backgroundSearchCall() {
   return {
@@ -36,52 +65,37 @@ function backgroundSearchCall() {
 
 describe('ScholarlyService follows a late-mounted jobs registry', () => {
   it('refuses an explicit background search before the registry exists, then follows one mounted later', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('{}')),
-    )
-    try {
-      const ctx = await bootScholarlyContext()
-      new ScholarlyService(ctx, {
-        email: createVolatile('late-registry@example.edu'),
-        enableRunInBackground: createVolatile(true),
-      })
+    const ctx = await bootScholarlyContext()
+    new ScholarlyService(ctx, {
+      email: createVolatile('late-registry@example.edu'),
+      enableRunInBackground: createVolatile(true),
+    })
 
-      // Before the registry mounts on this context the runner sees no jobs
-      // service and must refuse the explicit background arm.
-      const refused = await ctx.tools.execute(backgroundSearchCall())
-      const refusedResult = refused.results[0]?.result
-      expect(refusedResult?.isError).toBe(true)
-      if (!refusedResult?.isError) throw new Error('background request unexpectedly succeeded')
-      expect(refusedResult.error.message).toContain('Background execution is unavailable')
+    // Before the registry mounts on this context the runner sees no jobs
+    // service and must refuse the explicit background arm.
+    const refused = await ctx.tools.execute(backgroundSearchCall())
+    const refusedResult = refused.results[0]?.result
+    expect(refusedResult?.isError).toBe(true)
+    if (!refusedResult?.isError) throw new Error('background request unexpectedly succeeded')
+    expect(refusedResult.error.message).toContain('Background execution is unavailable')
 
-      // The same call after the real registry mounted as `ctx.jobs` reaches
-      // it: the runner resolved the service per call.
-      const jobs = await composeRealJobs(ctx)
-      const served = await ctx.tools.execute(backgroundSearchCall())
-      const servedResult = served.results[0]?.result
-      expect(servedResult?.isError ?? false).toBe(false)
-      expect(servedResult?.content.at(-1)).toMatchObject({
-        type: 'text',
-        text: expect.stringContaining('started background job'),
-      })
-      // An unowned job is visible to every caller.
-      expect(jobs.registry.list()).toHaveLength(1)
-      await jobs.dispose()
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    // The same call after the real registry mounted as `ctx.jobs` reaches
+    // it: the runner resolved the service per call.
+    const jobs = await composeRealJobs(ctx)
+    const served = await ctx.tools.execute(backgroundSearchCall())
+    const servedResult = served.results[0]?.result
+    expect(servedResult?.isError ?? false).toBe(false)
+    expect(servedResult?.content.at(-1)).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('started background job'),
+    })
+    // An unowned job is visible to every caller.
+    expect(jobs.registry.list()).toHaveLength(1)
+    await jobs.dispose()
   })
 
   it('promotes a slow search to a background job through the late registry', async () => {
-    const release = deferred<void>()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        await release.promise
-        return new Response('{}')
-      }),
-    )
+    fetchGate.hold()
     try {
       const ctx = await bootScholarlyContext()
       new ScholarlyService(ctx, {
@@ -111,13 +125,13 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
         text: expect.stringContaining('operation timed out after 20ms'),
       })
 
-      release.resolve()
+      fetchGate.release()
       const [view] = jobs.registry.list()
       expect(view).toBeDefined()
       expect((await jobs.settled(view!.id)).status).toBe('completed')
       await jobs.dispose()
     } finally {
-      vi.unstubAllGlobals()
+      fetchGate.release()
     }
   })
 })

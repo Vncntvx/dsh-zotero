@@ -328,7 +328,9 @@ describe('scholarly_get tool', () => {
       EXEC_CONTEXT as any,
     )) as { text: string }
     expect(result.text).toContain('No papers found')
-    expect(result.text).toContain('Unanswered sources: Semantic Scholar (Rate limited by')
+    expect(result.text).toContain(
+      'Unanswered sources: Semantic Scholar (HTTP 429 — Rate limited by',
+    )
   })
 
   it('propagates a caller abort instead of recording a failed source', async () => {

@@ -480,6 +480,71 @@ function checkUpstreamSourceImports() {
   }
 }
 
+/**
+ * The package's undici copy has exactly one owner.
+ *
+ * A dispatcher built from one undici major is rejected by the fetch from
+ * another at the handler interface (`UND_ERR_INVALID_ARG: invalid
+ * onRequestStart method`) before a socket opens. `connections.ts` therefore
+ * owns both the `Agent` factories and `publicFetch`; every external transport
+ * injects that fetch. The runtime's global `fetch` stays reserved for loopback
+ * and browser calls. The scholarly specs must stub the seam, never the global,
+ * or they assert the mechanism of the bug they exist to catch.
+ */
+function checkFetchOwnership() {
+  const sourceFile = /\.(?:ts|tsx|mts|cts)$/
+  const undiciOwner = 'src/transport/connections.ts'
+  // The runtime fetch is legitimate only where no dispatcher rides along.
+  const runtimeFetchAllowed = new Set([
+    undiciOwner, // owns the seam, including the `typeof globalThis.fetch` alias
+    'src/http-client.ts', // loopback Local API reads
+    'src/write-http.ts', // loopback Local API writes
+  ])
+  const undiciImport = /from\s+'undici'|import\(\s*'undici'\s*\)/
+  const runtimeFetchUse = /globalThis\.fetch|(?<![\w.])fetch\s*\(/
+  const commentLine = /^\s*(?:\*|\/\/|\/\*)/
+  for (const path of filesUnder(join(root, 'src'))) {
+    if (!sourceFile.test(path)) continue
+    const rel = relative(root, path)
+    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+      if (commentLine.test(line)) continue
+      const lineNo = index + 1
+      if (undiciImport.test(line) && rel !== undiciOwner) {
+        failures.push(
+          [
+            `${rel}:${lineNo} imports undici`,
+            `  fix: import publicFetch from ${undiciOwner}; a second undici copy rejects the pinned dispatchers`,
+          ].join('\n'),
+        )
+      }
+      if (rel === undiciOwner || rel.startsWith('src/client/')) continue
+      if (runtimeFetchAllowed.has(rel)) continue
+      if (runtimeFetchUse.test(line)) {
+        failures.push(
+          [
+            `${rel}:${lineNo} uses the runtime fetch`,
+            `  fix: external transports inject publicFetch from ${undiciOwner}; the global fetch ships another undici copy`,
+          ].join('\n'),
+        )
+      }
+    }
+  }
+  for (const path of filesUnder(join(root, 'tests', 'scholarly'))) {
+    if (!sourceFile.test(path)) continue
+    const rel = relative(root, path)
+    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+      if (/vi\.stubGlobal\(\s*'fetch'|globalThis\.fetch\s*=/.test(line)) {
+        failures.push(
+          [
+            `${rel}:${index + 1} stubs the runtime fetch`,
+            `  fix: mock ${undiciOwner}'s publicFetch export instead; the composition never uses the global`,
+          ].join('\n'),
+        )
+      }
+    }
+  }
+}
+
 const invokedDirectly =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
 
@@ -491,6 +556,7 @@ if (invokedDirectly) {
   checkLanes()
   checkFocus()
   checkUpstreamSourceImports()
+  checkFetchOwnership()
   checkPrimitiveMocks()
 
   if (failures.length > 0) {

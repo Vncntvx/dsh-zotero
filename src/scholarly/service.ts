@@ -49,7 +49,7 @@ import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
 import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
-import { scholarlyPublicAccess } from '../transport/connections.js'
+import { scholarlyPublicAccess, publicFetch } from '../transport/connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
 import type { ZoteroServiceLike } from './zotero-link.js'
 import type { FulltextEnhancer } from '../local/fulltext-enhancer.js'
@@ -94,7 +94,10 @@ export class ScholarlyService extends Service {
     super(ctx, 'scholarly')
     assertNoLegacyCredentialFields(config)
 
-    this.http = createScholarlyHttp({ publicAccess: scholarlyPublicAccess })
+    this.http = createScholarlyHttp({
+      publicAccess: scholarlyPublicAccess,
+      fetchImpl: publicFetch,
+    })
     this.store = new ScholarlyTextStore()
     // Lazy like the core service (`src/service.ts`): a plugin-loaded jobs
     // registry may mount after this row, and an eagerly captured `undefined`

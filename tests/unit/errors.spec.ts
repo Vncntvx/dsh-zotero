@@ -5,6 +5,7 @@ import {
   ZoteroError,
   errnoCodeOf,
   errorCauseOf,
+  errorDetailOf,
   errorMessageOf,
   isNotFoundError,
   isUnreachableCause,
@@ -71,6 +72,33 @@ describe('errnoCodeOf', () => {
     })
     expect(errnoCodeOf(wrapped)).toBe('ETIMEDOUT')
     expect(isUnreachableCause(wrapped)).toBe(true)
+  })
+})
+
+describe('errorDetailOf', () => {
+  it('appends a distinct errno code from the cause chain', () => {
+    expect(
+      errorDetailOf(new TypeError('fetch failed', { cause: { code: 'UND_ERR_INVALID_ARG' } })),
+    ).toBe('fetch failed (UND_ERR_INVALID_ARG)')
+  })
+
+  it('leaves the message alone when it already carries the code', () => {
+    const error = Object.assign(new Error('fetch failed (ECONNRESET)'), {
+      cause: { code: 'ECONNRESET' },
+    })
+    expect(errorDetailOf(error)).toBe('fetch failed (ECONNRESET)')
+  })
+
+  it('leaves a codeless error and a non-Error value unchanged', () => {
+    expect(errorDetailOf(new Error('boom'))).toBe('boom')
+    expect(errorDetailOf('plain')).toBe('plain')
+  })
+
+  it('skips a domain code and appends the underlying errno from the cause', () => {
+    const wrapped = new ZoteroError('timeout', 'ZOTERO_TIMEOUT', {
+      cause: { code: 'ETIMEDOUT' },
+    })
+    expect(errorDetailOf(wrapped)).toBe('timeout (ETIMEDOUT)')
   })
 })
 

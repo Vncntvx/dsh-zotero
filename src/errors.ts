@@ -531,6 +531,23 @@ export function errorCauseOf(error: unknown): unknown {
 }
 
 /**
+ * Render an error's message with its errno-style cause code appended.
+ *
+ * The code is what makes a transport failure actionable: `fetch failed` alone
+ * cannot say whether the network, the TLS path, or a mismatched dispatcher
+ * broke a request. A message that already spells the code is left alone, and a
+ * harness domain code is skipped in favour of the underlying errno (see
+ * `errnoCodeOf`).
+ * @param error - any thrown value.
+ * @returns the message, with ` (CODE)` when a distinct code exists.
+ */
+export function errorDetailOf(error: unknown): string {
+  const message = errorMessageOf(error)
+  const code = errnoCodeOf(error)
+  return code !== undefined && !message.includes(code) ? `${message} (${code})` : message
+}
+
+/**
  * The Errno-style code of an error's cause chain, when one exists.
  *
  * Skips a `HarnessError`/`ZoteroError`'s own domain `code` (e.g.

@@ -2,7 +2,11 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { pathToFileURL } from 'node:url'
 import { PdfReadingFiles } from './pdf-files.js'
 import { UrlPdfReader } from './url-pdf.js'
-import { dnsAddressResolver, createPinnedDispatcher } from '../transport/connections.js'
+import {
+  dnsAddressResolver,
+  createPinnedDispatcher,
+  publicFetch,
+} from '../transport/connections.js'
 import { zoteroReadUrlPdfRequestSchema, zoteroReleaseUrlPdfSchema } from '../wire-schemas.js'
 import type { ZoteroUrlPdfView } from '../contract.js'
 import type { ZoteroAttachmentLocationView } from '../contract.js'
@@ -83,7 +87,7 @@ export class ZoteroLibraryService extends TypertRemoteService {
       allowed: () => resolveLibraryConfig(this.config).allowUrlPdfRead,
       resolver: dnsAddressResolver,
       dispatcher: createPinnedDispatcher,
-      fetch: globalThis.fetch,
+      fetch: publicFetch,
     })
     ctx.on('loader/volatile-update', () => this.urlPdf.revoke())
     ctx.effect(() => async () => {

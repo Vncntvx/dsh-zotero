@@ -74,7 +74,11 @@ import {
   type FulltextLookupResult,
 } from '../local/fulltext-enhancer.js'
 import { EnrichmentConfigSchema, resolveEnrichmentConfig, type EnrichmentConfig } from './config.js'
-import { dnsAddressResolver, createPinnedDispatcher } from '../transport/connections.js'
+import {
+  dnsAddressResolver,
+  createPinnedDispatcher,
+  publicFetch,
+} from '../transport/connections.js'
 import { MineruClient } from './transport.js'
 import { hostSourceBytesDeps, probeSource } from './source-bytes.js'
 import { resolveOutputDir } from './output-dir.js'
@@ -215,7 +219,7 @@ export class EnrichmentService extends TypertRemoteService {
       new MineruClient({
         resolver: dnsAddressResolver,
         dispatcher: createPinnedDispatcher,
-        fetch: globalThis.fetch,
+        fetch: publicFetch,
       })
     this.storeFactory =
       deps.store ?? (async (config, create) => await this.storeFor(config, create))
