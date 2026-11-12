@@ -162,7 +162,6 @@ export async function parseJobsFixture(
   const config = {
     value: {
       ...ENRICHMENT_DEFAULTS,
-      allowDocumentUpload: true,
       outputDir: root,
     } as EnrichmentPreferences,
   }

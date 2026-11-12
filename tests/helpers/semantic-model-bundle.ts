@@ -2,7 +2,10 @@
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { SemanticModelEntry } from '../../src/enrichment-model-catalog.ts'
+import type {
+  SemanticModelEntry,
+  SemanticModelManifest,
+} from '../../src/enrichment-model-catalog.ts'
 import type { DownloadClientDeps, FetchLike } from '../../src/enrichment/model-download-client.ts'
 
 export const modelBytes: Readonly<Record<string, Buffer>> = {
@@ -34,7 +37,7 @@ export const tinyModel: SemanticModelEntry = {
 }
 
 /** Independently specified schema-2 commit marker for the synthetic bundle. */
-export function tinyManifest() {
+export function tinyManifest(): SemanticModelManifest {
   return {
     schema: 2,
     key: tinyModel.key,

@@ -75,10 +75,10 @@ describe('EnrichmentService composition', () => {
 })
 
 describe('EnrichmentService artifact lookup', () => {
-  it('serves parsed Markdown and exact artifact provenance with uploads disabled', async () => {
-    const world = domain({ mode: 'pro', allowDocumentUpload: true })
+  it('serves parsed Markdown and exact artifact provenance without parsing again', async () => {
+    const world = domain({ mode: 'pro' })
     const parsed = await parseDocument(URL_INPUT, world.deps)
-    const { service, parse } = reader(world, { ...world.deps.config, allowDocumentUpload: false })
+    const { service, parse } = reader(world)
     world.fetch.mockClear()
     world.resolveToken.mockClear()
     await expect(service.enhancer.lookup(URL_INPUT)).resolves.toEqual({

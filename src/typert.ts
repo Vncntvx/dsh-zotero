@@ -50,6 +50,7 @@ import {
   ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
   ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
   ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
+  ZOTERO_SEMANTIC_MODEL_DELETE_METHOD,
   ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
@@ -155,6 +156,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
             signature:
               'cancelSemanticModelDownload(request: ZoteroSemanticModelCancelRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelCancelResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_SEMANTIC_MODEL_DELETE_METHOD,
+            signature:
+              'deleteSemanticModel(request: ZoteroSemanticModelDeleteRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelDeleteResultView>',
           },
           {
             kind: 'method',

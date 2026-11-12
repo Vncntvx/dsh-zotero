@@ -335,6 +335,12 @@ export function createBundleInspector(): BundleInspector {
       : presentBytes === 0 && marker.kind === 'missing'
         ? 'missing'
         : 'corrupt'
+    const reason =
+      kind === 'corrupt'
+        ? (corruptReason ??
+          fileResults.find((file) => file.kind !== 'valid')?.reason ??
+          'the model bundle failed validation')
+        : undefined
     if (allValid)
       verifiedSnapshots.set(cacheKey, {
         catalogFingerprint: current.catalogFingerprint,
@@ -348,7 +354,7 @@ export function createBundleInspector(): BundleInspector {
       totalBytes,
       presentBytes,
       verifiedBytes,
-      ...(corruptReason !== undefined ? { reason: corruptReason } : {}),
+      ...(reason !== undefined ? { reason } : {}),
       manifest: marker,
       files: fileResults,
     }

@@ -675,6 +675,43 @@ export function zoteroSemanticModelCancelInvocation(
   }
 }
 
+export interface ZoteroSemanticModelDeleteRequestView {
+  readonly model?: string
+  readonly modelDir?: string
+}
+
+export interface ZoteroSemanticModelDeleteResultView {
+  readonly success: boolean
+  readonly model: string
+  readonly path: string
+  readonly removed: boolean
+  readonly removedFiles: number
+  readonly removedBytes: number
+}
+
+export const ZOTERO_SEMANTIC_MODEL_DELETE_METHOD = 'deleteSemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_DELETE_INVOCATION_ID = 'dsh-zotero#zotero/deleteSemanticModel'
+export const ZOTERO_SEMANTIC_MODEL_DELETE_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelDeleteRequestView'
+export const ZOTERO_SEMANTIC_MODEL_DELETE_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroSemanticModelDeleteResultView'
+
+export function zoteroSemanticModelDeleteInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return {
+    id: ZOTERO_SEMANTIC_MODEL_DELETE_INVOCATION_ID,
+    service: ZOTERO_ENRICHMENT_SERVICE_KEY,
+    namespace: ZOTERO_SETTINGS_NAMESPACE,
+    method: ZOTERO_SEMANTIC_MODEL_DELETE_METHOD,
+    invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
+    cancellation: { parameter: 'signal' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
+    result,
+  }
+}
+
 /** The browse kinds the library panel lists; the tool-facing kinds stay tool-only. */
 export type ZoteroLibraryBrowseKind =
   'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes'

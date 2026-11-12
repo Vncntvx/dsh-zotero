@@ -53,6 +53,17 @@ function modelPortOf(overrides: Partial<EnrichmentModelPort> = {}): EnrichmentMo
       ok: true as const,
       value: { cancelled: false },
     })),
+    deleteSemanticModel: vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '',
+        removed: true,
+        removedFiles: 1,
+        removedBytes: 1,
+      },
+    })),
     verifySemanticModel: vi.fn(async () => ({
       ok: true as const,
       value: { ...status, ready: true, percent: 100 },
@@ -210,6 +221,49 @@ describe('EnrichmentFormController model operations', () => {
     await face.verifyModel()
     const state = face.hooks.enrichmentCard.getSnapshot().semanticModelState
     expect(state.ready).toBe(true)
+  })
+
+  it('deletes with the staged target and re-reads status', async () => {
+    const deleteSemanticModel = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '/custom/models/bundle',
+        removed: true,
+        removedFiles: 3,
+        removedBytes: 12,
+      },
+    }))
+    const port = modelPortOf({ deleteSemanticModel })
+    const { face } = controllerOf(port)
+    face.edit('semanticModelDir', '/custom/models')
+    await face.deleteModel()
+    expect(deleteSemanticModel).toHaveBeenCalledWith(
+      { model: 'balanced', modelDir: '/custom/models' },
+      expect.any(AbortSignal),
+    )
+    expect(port.semanticModelStatus).toHaveBeenLastCalledWith(
+      { model: 'balanced', modelDir: '/custom/models' },
+      expect.any(AbortSignal),
+    )
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModelPhase).toBe('idle')
+  })
+
+  it('surfaces a delete refusal and clears the deleting phase', async () => {
+    const port = modelPortOf({
+      deleteSemanticModel: vi.fn(async () => ({
+        ok: false as const,
+        error: new RemoteError('zotero/domain', 'The model is downloading.', {
+          code: 'ZOTERO_ENRICHMENT_OPERATION_CONFLICT',
+        }),
+      })),
+    })
+    const { face } = controllerOf(port)
+    await face.deleteModel()
+    const state = face.hooks.enrichmentCard.getSnapshot()
+    expect(state.semanticModelFailure?.message).toBe('The model is downloading.')
+    expect(state.semanticModelPhase).toBe('idle')
   })
 
   it('skips status for a staged model the catalog does not know', async () => {

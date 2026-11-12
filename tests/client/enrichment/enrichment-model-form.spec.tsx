@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 /**
  * The enrichment section's model panel: status badge, download/verify/force
- * actions, progress, the component-unavailable note, and the data-egress
- * switch. Rendering-only; controller behavior lives in
+ * actions, progress, the component-unavailable note, and token masking.
+ * Rendering-only; controller behavior lives in
  * enrichment-model-controller.spec.ts.
  * @module tests/client/enrichment/enrichment-model-form
  */
 
 import { fireEvent } from '@testing-library/react'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ZoteroSemanticModelDeleteResultView } from '../../../src/contract.ts'
+import { deferred } from '../../helpers/sync.js'
 import { cleanup, screen } from './support.tsx'
 import { mountHarness, modelPortOf, zh } from './support.tsx'
 
@@ -136,10 +139,188 @@ describe('EnrichmentSettingsSection model panel', () => {
     })
   })
 
-  it('renders the data-egress switch for the MinerU upload authorization', () => {
-    mountHarness({ value: { allowDocumentUpload: true } }, 'page')
-    const toggle = screen.getByLabelText(zh.allowDocumentUpload) as HTMLInputElement
-    expect(toggle.checked).toBe(true)
+  it('masks a configured token, accepts a replacement, and keeps the MinerU link visible', async () => {
+    mountHarness({}, 'page', undefined, {
+      describe: async () => ({
+        ok: true,
+        value: { MINERU_API_TOKEN: { configured: true, writable: true } },
+      }),
+      set: async () => ({ ok: true, value: undefined }),
+    })
+    const input = screen.getByLabelText(zh.enrichmentToken) as HTMLInputElement
+    await vi.waitFor(() => {
+      expect(input.placeholder).toBe('************')
+    })
+    expect(input.value).toBe('')
+    const link = screen.getByRole('link', { name: zh.enrichmentTokenVisitMineru })
+    expect(link.getAttribute('href')).toBe('https://mineru.net')
+    expect(screen.queryByText('向 MinerU 发送文档')).toBeNull()
+    fireEvent.change(input, { target: { value: 'replacement-token' } })
+    expect((screen.getByLabelText(zh.enrichmentToken) as HTMLInputElement).value).toBe(
+      'replacement-token',
+    )
+  })
+
+  it('asks for confirmation before deleting a ready model', async () => {
+    const deleteSemanticModel = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '/mock/path',
+        removed: true,
+        removedFiles: 2,
+        removedBytes: 10,
+      },
+    }))
+    mountHarness(
+      {},
+      'page',
+      modelPortOf({
+        semanticModelStatus: async () => ({
+          ok: true as const,
+          value: {
+            model: 'balanced',
+            ready: true,
+            downloading: false,
+            path: '/mock/path',
+            downloadedBytes: 100,
+            totalBytes: 100,
+            percent: 100,
+          },
+        }),
+        deleteSemanticModel,
+      }),
+    )
+    const trigger = await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('dialog', { name: zh.semanticModelDeleteTitle })).toBeDefined()
+    expect(screen.getByText(zh.semanticModelDeleteDescription)).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteCancel }))
+    expect(deleteSemanticModel).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteConfirm }))
+    await vi.waitFor(() => expect(deleteSemanticModel).toHaveBeenCalled())
+  })
+
+  it('offers delete for a failed bundle and shows the deleting phase', async () => {
+    const deletion = deferred<RemoteResult<ZoteroSemanticModelDeleteResultView>>()
+    const deleteSemanticModel = vi.fn(() => deletion.promise)
+    mountHarness(
+      {},
+      'page',
+      modelPortOf({
+        semanticModelStatus: async () => ({
+          ok: true as const,
+          value: {
+            model: 'balanced',
+            ready: false,
+            downloading: false,
+            path: '/mock/path',
+            downloadedBytes: 3,
+            totalBytes: 100,
+            percent: 3,
+            error: 'the commit marker is missing',
+          },
+        }),
+        deleteSemanticModel,
+      }),
+    )
+    const trigger = await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteConfirm }))
+    expect(await screen.findByText(zh.semanticModelStatusDeleting)).toBeDefined()
+    deletion.resolve({
+      ok: true,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '/mock/path',
+        removed: true,
+        removedFiles: 3,
+        removedBytes: 9,
+      },
+    })
+    await vi.waitFor(() => expect(deleteSemanticModel).toHaveBeenCalled())
+  })
+
+  it('keeps download, redownload, and verify available for a failed bundle', async () => {
+    const downloadSemanticModel = vi.fn(async () => ({
+      ok: true as const,
+      value: { success: true, model: 'balanced', status: 'started' as const, path: '/mock/path' },
+    }))
+    const verifySemanticModel = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        model: 'balanced',
+        ready: false,
+        downloading: false,
+        path: '/mock/path',
+        downloadedBytes: 3,
+        totalBytes: 100,
+        percent: 3,
+        error: 'the commit marker is missing',
+      },
+    }))
+    mountHarness(
+      {},
+      'page',
+      modelPortOf({
+        semanticModelStatus: async () => ({
+          ok: true as const,
+          value: {
+            model: 'balanced',
+            ready: false,
+            downloading: false,
+            path: '/mock/path',
+            downloadedBytes: 3,
+            totalBytes: 100,
+            percent: 3,
+            error: 'the commit marker is missing',
+          },
+        }),
+        downloadSemanticModel,
+        verifySemanticModel,
+      }),
+    )
+    await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDownloadAction }))
+    await vi.waitFor(() => expect(downloadSemanticModel).toHaveBeenCalledTimes(1))
+    fireEvent.click(await screen.findByRole('button', { name: zh.semanticModelRedownloadAction }))
+    await vi.waitFor(() => expect(downloadSemanticModel).toHaveBeenCalledTimes(2))
+    fireEvent.click(await screen.findByRole('button', { name: zh.semanticModelVerifyAction }))
+    await vi.waitFor(() => expect(verifySemanticModel).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows the downloading notice in the semantic warning box', async () => {
+    mountHarness(
+      { value: { enableSemanticSearch: true } },
+      'page',
+      modelPortOf({
+        semanticModelStatus: async () => ({
+          ok: true as const,
+          value: {
+            model: 'balanced',
+            ready: false,
+            downloading: true,
+            path: '/mock/path',
+            downloadedBytes: 10,
+            totalBytes: 100,
+            percent: 10,
+            currentFile: 'onnx/model.onnx',
+          },
+        }),
+      }),
+    )
+    await vi.waitFor(() => {
+      expect(screen.getByText(zh.semanticModelDownloadingNotice)).toBeDefined()
+    })
+  })
+
+  it('offers no delete action for a model that was never downloaded', async () => {
+    mountHarness()
+    expect(screen.queryByRole('button', { name: zh.semanticModelDeleteAction })).toBeNull()
   })
 
   it('renders downloading state with progress bar and cancel button', async () => {

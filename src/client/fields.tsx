@@ -110,6 +110,67 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
   )
 }
 
+/** What the write-only secret row needs: label state, draft, and copy. */
+interface SecretFieldProps {
+  /** Stable DOM id associating the label with its control. */
+  id: string
+  /** Visible label. */
+  label: string
+  /** One-line explanation rendered under the control. */
+  hint: string
+  /** Draft text; always empty after a save because the value never rides a response. */
+  text: string
+  /** Whether the Host reports a configured credential for this reference. */
+  configured: boolean
+  /** Copy describing the configured state. */
+  stateLabel: string
+  /** Masked placeholder shown while a credential is configured and the draft is empty. */
+  placeholder: string
+  /** Disables the control (read-only document, or an unavailable namespace). */
+  disabled: boolean
+  /** Stage draft text. */
+  onEdit: (text: string) => void
+  /** Optional persistent help rendered under the hints. */
+  help?: ReactNode
+}
+
+/**
+ * A write-only credential row with a mask for a configured value. The value
+ * never reaches the browser: the field starts empty, a new draft replaces the
+ * secret on save, and a blank draft keeps it. The harness's `SettingsSecretField`
+ * cannot show a mask, so this row adds one while keeping the same contract.
+ * @param props - the field's copy, its configured state, and the edit action.
+ * @returns the labelled password control.
+ */
+export function SecretField(props: SecretFieldProps): ReactNode {
+  return (
+    <div className={css.field}>
+      <div className={css.fieldHead}>
+        <label className={css.fieldLabel} htmlFor={props.id}>
+          {props.label}
+        </label>
+        <span className={css.badges}>
+          <Tag tone={props.configured ? 'neutral' : 'quiet'}>{props.stateLabel}</Tag>
+        </span>
+      </div>
+      <input
+        id={props.id}
+        className={css.secretInput}
+        type="password"
+        autoComplete="new-password"
+        value={props.text}
+        placeholder={props.configured ? props.placeholder : ''}
+        disabled={props.disabled}
+        onChange={(event) => {
+          props.onEdit(event.target.value)
+        }}
+      />
+      <p className={css.hint}>{props.hint}</p>
+      {props.help}
+    </div>
+  )
+}
+
 /** One selectable option of a choice field: the value plus its label. */
 export interface ChoiceOption {
   readonly value: string

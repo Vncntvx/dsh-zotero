@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
-  ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
   ZOTERO_NOT_FOUND,
 } from '../../src/errors.js'
 import { PARSE_JOB_KIND, PARSE_JOB_LABEL } from '../../src/enrichment/parse-jobs.js'
@@ -56,22 +55,6 @@ describe('explicit parsing admission and receipts', () => {
     expect(registration?.data).not.toHaveProperty('toolCall')
     task.resolve()
     expect((await settled(fixture, result.jobId)).status).toBe('completed')
-  })
-
-  it('rejects a disabled upload gate before attachment resolution, storage, or source execution', async () => {
-    fixture = await parseJobsFixture()
-    fixture.config.value = { ...fixture.config.value, allowDocumentUpload: false }
-    const storage = vi.spyOn(fixture.persistence, 'get')
-    await expect(
-      fixture.helper.startDocumentParse(
-        parseRequest(undefined, { target: fixture.attachment }),
-        parseSignal(),
-      ),
-    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_UPLOAD_DISABLED })
-    expect(fixture.resolveAttachment).not.toHaveBeenCalled()
-    expect(fixture.execute).not.toHaveBeenCalled()
-    expect(storage).not.toHaveBeenCalled()
-    expect(fixture.ctx.jobs.list(SessionId('parse-owner'))).toEqual([])
   })
 
   it('lets the real registry reject a session with no attached job controller before source I/O', async () => {
@@ -184,7 +167,7 @@ describe('explicit parsing admission and receipts', () => {
     )
   })
 
-  it('reads existing artifacts with uploads disabled without starting any parse', async () => {
+  it('reads existing artifacts without starting any parse', async () => {
     fixture = await parseJobsFixture()
     const request = parseRequest()
     fixture.lookup.mockImplementation(async (input, config) => ({
@@ -194,7 +177,6 @@ describe('explicit parsing admission and receipts', () => {
       source: 'MinerU',
       provenance: parsedResult({ input, config, generation: randomUUID() }).provenance,
     }))
-    fixture.config.value = { ...fixture.config.value, allowDocumentUpload: false }
     expect(
       await fixture.helper.documentArtifact(
         { sessionId: request.sessionId, target: request.target },

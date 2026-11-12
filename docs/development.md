@@ -83,7 +83,7 @@ tests/                  # 单元测试与端到端测试用例
 | [功能概览](features.md)        | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
 | [研究 SOP 技能](skills.md)     | 七个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)           | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
-| [配置参考](configuration.md)   | 四个设置命名空间、65 个字段与热更新机制                      |
+| [配置参考](configuration.md)   | 四个设置命名空间、64 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md) | 常见问题、原因与排查步骤                                     |
 | [系统架构](architecture.md)    | 数据流、分层职责与设计边界                                   |
 | [开发指南](development.md)     | 构建、测试、调试与发布流程                                   |
@@ -233,7 +233,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 | 编号 | 主题                                 | 行为测试证据（真实存在的 spec）                                                                                                                                                                                            | 验收结果                                                                                                                                                                       |
 | ---- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| WP0  | 冻结产品、协议与复现标准             | `tests/host/enrichment-api-contract.spec.ts`、`tests/unit/enrichment-preferences.spec.ts`、`tests/unit/enrichment-parse-wire.spec.ts`、`tests/host/doc-examples.spec.ts`                                                   | 已实现（协议闭合、双端类型、`allowDocumentUpload` 默认 `false`、域名错误保留、旧 parsing 别名清除）；此表即编号→测试→验收记录                                                  |
+| WP0  | 冻结产品、协议与复现标准             | `tests/host/enrichment-api-contract.spec.ts`、`tests/unit/enrichment-preferences.spec.ts`、`tests/unit/enrichment-parse-wire.spec.ts`、`tests/host/doc-examples.spec.ts`                                                   | 已实现（协议闭合、双端类型、组件启用授权文档外发、域名错误保留、旧 parsing 别名清除）；此表即编号→测试→验收记录                                                                |
 | WP1  | 普通读取仅复用解析产物               | `tests/local/enrichment-enhancer.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`                                                                             | 已实现（只读 `lookup` 接缝、命中优先/正常未命中、启动/打开 PDF/设置保存不触发 MinerU 的负向断言）                                                                              |
 | WP2  | 两类主动解析入口与任务生命周期       | `tests/host/enrichment-parse-document.spec.ts`、`tests/host/enrichment-parse-jobs-lifetime.spec.ts`、`tests/host/enrichment-parse-jobs-admission.spec.ts`、`tests/client/enrichment/parse-integration-operations.spec.tsx` | 已实现（闭合联合目标、会话所属 `ctx.jobs`、取消/卸载清理、Gateway 错误分类）                                                                                                   |
 | WP3  | 来源身份、解析优先级与 Markdown 结构 | `tests/host/enrichment-artifact-format.spec.ts`、`tests/scholarly/read/read-artifact-format.spec.ts`、`tests/host/enrichment-source-publication.spec.ts`                                                                   | 已实现（统一身份/源戳、Markdown `format`、outline/section、缓存失效、旧普通文本不遮蔽新产物）                                                                                  |
@@ -248,7 +248,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 未运行的实时验收（需单独用户授权）
 
-以下项目本轮未执行，标为未验收。执行前须针对具体文档取得用户上传授权；开启组件或批准实施计划不构成上传许可，模拟组件测试不替代浏览器验收：
+以下项目本轮未执行，标为未验收。执行前须取得用户对被测具体文档的授权；启用组件授权的是能力，不是对任意文档做实时上传，模拟组件测试也不替代浏览器验收：
 
 - **MinerU free / pro 实时上传**：分别用内容已知的专用合成 PDF（附件放隔离库/测试条目）测试；无 pro 凭据或实时服务时列为未验收。
 - **浏览器端到端验收**：打包到临时 Harness profile，实际操作附件解析、顶层附件、URL 解析、重新解析、取消、重连、组件切换与模型切换，验证按钮权限、进度、错误恢复、窄屏/键盘与旧响应隔离。
@@ -256,7 +256,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 已运行门禁（真实结果）
 
-- `npm test`：433 个 spec 文件、5221 个测试，431 个文件通过 / 2 跳过（需实时 Zotero 与写入探针）/ 0 失败；没有任何测试加载模型或访问网络。
+- `npm test`：435 个 spec 文件、5248 个测试，433 个文件通过 / 2 跳过（需实时 Zotero 与写入探针）/ 0 失败；没有任何测试加载模型或访问网络。
 - `npm run release:check`：退出码 0（format、strict harness、lint:test、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
 - `npm run build:client`、`npx vitest run tests/host/doc-examples.spec.ts`：通过。
 

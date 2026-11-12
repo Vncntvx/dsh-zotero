@@ -48,7 +48,6 @@ describe('EnrichmentFormController', () => {
     expect(state.mode.text).toBe('free')
     expect(state.outputDir.text).toBe('')
     expect(state.mineruTokenRef.text).toBe('')
-    expect(state.allowDocumentUpload.text).toBe('')
     expect(state.enableSemanticSearch.text).toBe('')
     expect(state.semanticModel.text).toBe('balanced')
     expect(state.semanticDownloadSource.text).toBe('hf-mirror')

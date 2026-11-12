@@ -19,7 +19,6 @@ describe('resolveEnrichmentConfig', () => {
     expect(resolveEnrichmentConfig()).toEqual({
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: false,
       outputDir: '',
       enableSemanticSearch: false,
       semanticModel: 'balanced',
@@ -33,7 +32,6 @@ describe('resolveEnrichmentConfig', () => {
       resolveEnrichmentConfig({
         mode: volatileOf('pro') as never,
         mineruTokenRef: volatileOf(' MINERU_API_TOKEN ') as never,
-        allowDocumentUpload: volatileOf(true) as never,
         outputDir: volatileOf(' /tmp/parsed ') as never,
         enableSemanticSearch: volatileOf(true) as never,
         semanticModel: volatileOf('lightweight') as never,
@@ -43,13 +41,18 @@ describe('resolveEnrichmentConfig', () => {
     ).toEqual({
       mode: 'pro',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: true,
       outputDir: '/tmp/parsed',
       enableSemanticSearch: true,
       semanticModel: 'lightweight',
       semanticDownloadSource: 'huggingface',
       semanticModelDir: '/models',
     })
+  })
+
+  it('ignores a removed upload-gate field from an old profile', () => {
+    const resolved = resolveEnrichmentConfig({ allowDocumentUpload: false } as never)
+    expect(resolved).toEqual(resolveEnrichmentConfig())
+    expect('allowDocumentUpload' in resolved).toBe(false)
   })
 
   it('refuses an invalid mode through the shared contract', () => {

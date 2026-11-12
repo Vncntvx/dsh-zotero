@@ -66,7 +66,7 @@ export const TOP_PDF_DETAIL: ZoteroItemDetailView = {
 export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = {}) {
   const remote = parseRemote(overrides)
   const boundary = parseJobs()
-  const form = fakeScope({ value: { ...ENRICHMENT_DEFAULTS, allowDocumentUpload: true } })
+  const form = fakeScope({ value: { ...ENRICHMENT_DEFAULTS } })
   const connection = observable<ConnectionState>('connected')
   let serving: ((served: ReadonlySet<string>) => () => void) | undefined
   let unmount: (() => void) | undefined

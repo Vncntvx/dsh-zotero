@@ -42,7 +42,7 @@ function reader(world: ReturnType<typeof parseDomain>) {
   } as unknown as Context['zotero'])
   return new EnrichmentService(
     world.ctx,
-    { ...world.deps.config, allowDocumentUpload: false },
+    { ...world.deps.config },
     {
       client: world.deps.client,
       store: async () => world.store,

@@ -9,7 +9,7 @@
  * Tab 3: Search & Extraction (query/concurrency quotas, passage and fulltext limits)
  * Tab 4: Library (panel preferences and shared CSL defaults)
  * Tab 5: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
- * Tab 6: Document Enrichment (MinerU mode, token, egress switch, output directory,
+ * Tab 6: Document Enrichment (MinerU mode, token, output directory,
  * Tab 7: Advanced (output limits, background job policy, diagnostics)
  *
  * Both the Zotero and Scholarly SettingsForm containers remain mounted in the DOM

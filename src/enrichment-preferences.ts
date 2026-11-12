@@ -33,8 +33,6 @@ export interface EnrichmentPreferences {
   readonly mode: EnrichmentMode
   /** Credential-reference name for the precise-API token (a name, never the value). */
   readonly mineruTokenRef: string
-  /** Deployment gate for explicitly requested document uploads; enabling it starts no work. */
-  readonly allowDocumentUpload: boolean
   /** Absolute output directory; empty means the harness default is resolved at runtime. */
   readonly outputDir: string
   /** Whether to enable local semantic ranking and embedding models. */
@@ -52,7 +50,6 @@ export type EnrichmentPreferenceKey = keyof EnrichmentPreferences
 export const ENRICHMENT_DEFAULTS: EnrichmentPreferences = Object.freeze({
   mode: 'free',
   mineruTokenRef: ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru,
-  allowDocumentUpload: false,
   outputDir: '',
   enableSemanticSearch: false,
   semanticModel: DEFAULT_SEMANTIC_MODEL,
@@ -90,7 +87,6 @@ export function enrichmentPreferencesOf(
   const validators: Record<EnrichmentPreferenceKey, (value: unknown) => boolean> = {
     mode: (value) => (ENRICHMENT_MODE_CHOICES as readonly unknown[]).includes(value),
     mineruTokenRef: (value) => typeof value === 'string',
-    allowDocumentUpload: (value) => typeof value === 'boolean',
     outputDir: (value) => typeof value === 'string',
     enableSemanticSearch: (value) => typeof value === 'boolean',
     semanticModel: (value) => (SEMANTIC_MODEL_KEYS as readonly unknown[]).includes(value),

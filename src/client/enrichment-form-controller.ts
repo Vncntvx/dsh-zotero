@@ -1,7 +1,7 @@
 /**
  * The staged form controller for the `enrichment` settings namespace
  * (`dsh-zotero/enrichment` row): the API mode, the MinerU token credential
- * reference and value, the data-egress authorization, and the output directory.
+ * reference and value, and the output directory.
  *
  * The mode switch is independent of the token: `mode` is its own staged field,
  * and the token reference/secret are separate fields. A user who configured a
@@ -45,6 +45,8 @@ import type {
   ZoteroSemanticModelDownloadResultView,
   ZoteroSemanticModelCancelRequestView,
   ZoteroSemanticModelCancelResultView,
+  ZoteroSemanticModelDeleteRequestView,
+  ZoteroSemanticModelDeleteResultView,
   ZoteroSemanticModelVerifyRequestView,
 } from '../contract.ts'
 import { asFormScope } from './helpers/form-scope.ts'
@@ -103,6 +105,10 @@ export interface EnrichmentModelPort {
     request: ZoteroSemanticModelCancelRequestView,
     signal?: AbortSignal,
   ): Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+  deleteSemanticModel(
+    request: ZoteroSemanticModelDeleteRequestView,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroSemanticModelDeleteResultView>>
   verifySemanticModel(
     request: ZoteroSemanticModelVerifyRequestView,
     signal?: AbortSignal,
@@ -117,7 +123,7 @@ export interface SemanticModelFailure {
 }
 
 /** A transient user-initiated operation; a status refresh must not clear it. */
-export type SemanticModelPhase = 'idle' | 'checking' | 'cancelling'
+export type SemanticModelPhase = 'idle' | 'checking' | 'cancelling' | 'deleting'
 
 /** One valid, trimmed model-operation target parsed from the staged drafts. */
 export interface SemanticModelTarget {
@@ -198,9 +204,10 @@ interface EnrichmentSecretFieldState {
 
 /** Everything the enrichment configuration card renders. */
 export interface EnrichmentCardState extends SettingsFormShell {
+  /** Namespace lifecycle from the shared settings form; `available` is its boolean face. */
+  readonly namespaceStatus: 'loading' | 'ready' | 'unavailable'
   readonly mode: SettingsFieldState
   readonly mineruTokenRef: SettingsFieldState
-  readonly allowDocumentUpload: SettingsFieldState
   readonly outputDir: SettingsFieldState
   readonly mineruToken: EnrichmentSecretFieldState
   readonly enableSemanticSearch: SettingsFieldState
@@ -222,6 +229,7 @@ export interface EnrichmentCardFace extends SettingsFormActions {
   }
   downloadModel(force?: boolean): Promise<void>
   cancelModelDownload(): Promise<void>
+  deleteModel(): Promise<void>
   verifyModel(): Promise<void>
   checkModelStatus(): Promise<void>
 }
@@ -301,7 +309,6 @@ function fieldSpecs(): SettingsFieldSpec[] {
   return [
     modeFieldSpec(),
     credentialRefFieldSpec(ENRICHMENT_REFERENCE_FIELD),
-    booleanFieldSpec('allowDocumentUpload'),
     outputDirFieldSpec(),
     booleanFieldSpec('enableSemanticSearch'),
     semanticModelFieldSpec(),
@@ -445,9 +452,9 @@ export class EnrichmentFormController {
     const referenceState = this.referenceState()
     return {
       ...shell,
+      namespaceStatus: this.form.getSnapshot().status,
       mode: this.model.field('mode'),
       mineruTokenRef: this.model.field(ENRICHMENT_REFERENCE_FIELD),
-      allowDocumentUpload: this.model.field('allowDocumentUpload'),
       outputDir: this.model.field('outputDir'),
       enableSemanticSearch: this.model.field('enableSemanticSearch'),
       semanticModel: this.model.field('semanticModel'),
@@ -500,6 +507,7 @@ export class EnrichmentFormController {
       },
       downloadModel: (force?: boolean) => this.downloadModel(force),
       cancelModelDownload: () => this.cancelModelDownload(),
+      deleteModel: () => this.deleteModel(),
       verifyModel: () => this.verifyModel(),
       checkModelStatus: () => this.checkModelStatus(),
     }
@@ -660,6 +668,38 @@ export class EnrichmentFormController {
     let result: RemoteResult<ZoteroSemanticModelCancelResultView>
     try {
       result = await port.cancelSemanticModelDownload(
+        { model: binding.model, modelDir: binding.normalizedDir },
+        controller.signal,
+      )
+    } catch (error) {
+      this.operationFailure(binding, error)
+      this.clearPhase(binding)
+      return
+    } finally {
+      this.releaseSignal(controller)
+    }
+    if (!result.ok) {
+      this.operationFailure(binding, result.error)
+      this.clearPhase(binding)
+      return
+    }
+    this.clearPhase(binding)
+    if (this.current(binding)) await this.runStatusCheck(this.parseTarget() ?? target)
+  }
+
+  async deleteModel(): Promise<void> {
+    const port = this.modelPort
+    if (port === undefined || this.disposed || this.modelUnavailable) return
+    const target = this.parseTarget()
+    if (target === undefined) return
+    const binding = this.bind(target)
+    this.modelFailure = undefined
+    this.semanticModelPhase = 'deleting'
+    this.publish()
+    const controller = this.acquireSignal()
+    let result: RemoteResult<ZoteroSemanticModelDeleteResultView>
+    try {
+      result = await port.deleteSemanticModel(
         { model: binding.model, modelDir: binding.normalizedDir },
         controller.signal,
       )

@@ -34,17 +34,22 @@ import {
   type ZoteroSemanticModelDownloadResultView,
   type ZoteroSemanticModelCancelRequestView,
   type ZoteroSemanticModelCancelResultView,
+  type ZoteroSemanticModelDeleteRequestView,
+  type ZoteroSemanticModelDeleteResultView,
   ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_STATUS_RESULT_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_DOWNLOAD_RESULT_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_DELETE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_SEMANTIC_MODEL_DELETE_RESULT_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL,
   ZOTERO_SEMANTIC_MODEL_VERIFY_RESULT_TYPE_SYMBOL,
   zoteroSemanticModelStatusInvocation,
   zoteroSemanticModelDownloadInvocation,
   zoteroSemanticModelCancelInvocation,
+  zoteroSemanticModelDeleteInvocation,
   zoteroSemanticModelVerifyInvocation,
   type ZoteroSemanticModelVerifyRequestView,
 } from './contract.js'
@@ -962,6 +967,24 @@ export const zoteroSemanticModelCancelResultSchema = z
   })
   .strict() satisfies z.ZodType<ZoteroSemanticModelCancelResultView>
 
+export const zoteroSemanticModelDeleteRequestSchema = z
+  .object({
+    model: semanticModelEnum.optional(),
+    modelDir: semanticModelDirSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelDeleteRequestView>
+
+export const zoteroSemanticModelDeleteResultSchema = z
+  .object({
+    success: z.boolean(),
+    model: z.string(),
+    path: z.string(),
+    removed: z.boolean(),
+    removedFiles: z.number().int().nonnegative(),
+    removedBytes: z.number().int().nonnegative(),
+  })
+  .strict() satisfies z.ZodType<ZoteroSemanticModelDeleteResultView>
+
 export const zoteroSemanticModelVerifyRequestSchema = z
   .object({
     model: semanticModelEnum.optional(),
@@ -1144,6 +1167,16 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL,
       zoteroSemanticModelCancelResultSchema,
+    ),
+  ),
+  zoteroSemanticModelDeleteInvocation(
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_DELETE_REQUEST_TYPE_SYMBOL,
+      zoteroSemanticModelDeleteRequestSchema,
+    ),
+    strictCodec(
+      ZOTERO_SEMANTIC_MODEL_DELETE_RESULT_TYPE_SYMBOL,
+      zoteroSemanticModelDeleteResultSchema,
     ),
   ),
   zoteroSemanticModelVerifyInvocation(

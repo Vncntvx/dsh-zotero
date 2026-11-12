@@ -7,9 +7,9 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 - 核心 `zotero` 命名空间：`src/config.ts`，37 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
-- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，8 个字段。
+- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，7 个字段。
 
-四组合计 65 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 64 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -22,7 +22,7 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 | 检索提取 | `zotero`            | 13     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars` |
 | 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                           |
 | 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                          |
-| 文档解析 | `enrichment`        | 8      | 解析模式与输出：`mode`、`mineruTokenRef`、`allowDocumentUpload`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`                                                                                                                           |
+| 文档解析 | `enrichment`        | 7      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`                                                                                                                                                  |
 | 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                           |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
@@ -192,9 +192,9 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ## 文档解析组件配置 (`dsh-zotero/enrichment`)
 
-内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。挂载后提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理；不上传文档。组件不注册模型工具、不注入提示词段。普通读取通过核心的只读 `FulltextEnhancer.lookup` 槽复用有效产物，未命中时沿用 Zotero 全文索引或获准的本地 PDF 抽取。组件未挂载时槽为空，两条读取链路沿用原路径。
+内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。组件挂载不发起上传；客户端在启用时显示一次提醒。组件不注册模型工具、不注入提示词段。普通读取通过核心的只读 `FulltextEnhancer.lookup` 槽复用有效产物，未命中时沿用 Zotero 全文索引或获准的本地 PDF 抽取。组件未启用时槽为空，两条读取链路沿用原路径。
 
-一次 MinerU 解析由用户提交一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL，并通过部署开关 `allowDocumentUpload`（默认 `false`）及远程动作、会话访问检查。打开 PDF、保存设置、启动服务不提交、恢复或上传 MinerU 任务。本地语义排序不调用 MinerU，也不需要上传许可；解析不需要语义模型。
+一次 MinerU 解析由用户提交一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL，并通过远程动作、会话访问检查。打开 PDF、保存设置、启动服务不提交、恢复或上传 MinerU 任务。本地语义排序不调用 MinerU；解析不需要语义模型。旧 profile 中的 `allowDocumentUpload` 字段会被忽略。
 
 组件字段有三处入口：
 
@@ -206,7 +206,6 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 | ------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mode`                   | `free`               | `free` 使用免 Token 的 Agent 轻量解析接口（IP 限频、API 侧 ≤10 MB、≤20 页）；`pro` 使用精准解析接口（API 侧 ≤200 MB、≤200 页），需配置 Token（单用户每日可免费解析 5000 份文件，限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。页数与 API 字节上限由 MinerU 侧限制，客户端不预检页数                                                                                         |
 | `mineruTokenRef`         | `'MINERU_API_TOKEN'` | MinerU 精准接口 Token 的凭据引用名（默认插件专属 `MINERU_API_TOKEN`）；在 `pro` 模式下读取凭据存储中该引用名对应的 Token（Token 有效期为 3 个月）。表单默认使用该专属引用名，无需手动输入                                                                                                                                                                                           |
-| `allowDocumentUpload`    | `false`              | 部署级禁止开关：是否允许把文档字节发送给 MinerU；默认 false。打开它也不构成文档级授权，仍需用户针对具体文档明确提交                                                                                                                                                                                                                                                                 |
 | `outputDir`              | `''`                 | 解析产物目录的绝对路径（或以 `~/` 开头）；空串表示运行时解析默认位置 `~/.dsh/zotero-parsed`。相对路径在 Schema/表单保存时被拒绝                                                                                                                                                                                                                                                     |
 | `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型/推理不可用时读取明确失败，不回退 BM25                                                                                                                                                                                                                                                                                         |
 | `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） |
@@ -241,7 +240,8 @@ ONNX 嵌入模型需手动下载后启用。模型通过语义化档位编号（
   脚本校验每个文件的 SHA-256 和字节数；下载完成后在设置中勾选「启用本地语义检索」生效。关闭语义检索时使用完整 BM25 词汇检索；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 失败，不回退到 BM25。
 - **界面交互与状态引导**：
   - **启用语义检索但未下载模型**：所选模型未就绪时（含直接保存设置的情况），设置界面常驻显示警告，说明读取将以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 失败；可选择模型并点击「下载模型」，或关闭语义检索改用 BM25；模型就绪后提示消失。
-  - **选择精准解析但未配置 Token**：选为「精准解析」但未配置 Token 时，凭据区域显示提示与外链，可前往 MinerU 官网（`mineru.net`）注册获取每日 5000 份免费额度的 Token，或切换为免 Token 的「Agent 轻量解析」。
+  - **删除本地模型**：模型已下载或校验失败时，模型状态行显示「删除模型」；确认后移除本地模型文件，重新下载前语义检索不可用。
+  - **选择精准解析但未配置 Token**：选为「精准解析」但未配置 Token 时，凭据区域显示提示，可切换为免 Token 的「Agent 轻量解析」，或填入在 MinerU 官网（`mineru.net`）创建的 Token。官网创建入口常驻显示；已配置的 Token 以 `*` 号占位，不返回明文；输入新值并保存即覆盖原 Token。
 
 解析产物按内容指纹（来源、模式与 PDF 字节的 SHA-256）写入 `<outputDir>/<sha256>/`，包含 `full.md`、`meta.json`（来源、模式、任务 ID、文件清单；`pro` 且 MinerU 返回 `total_pages` 时另含页数），精准模式另含 `content_list.json`；`meta.json` 最后写入，作为目录完整的提交标记。
 
@@ -255,17 +255,17 @@ ONNX 嵌入模型需手动下载后启用。模型通过语义化档位编号（
 
 错误分类：
 
-| 错误码                                    | 分类  | 行为                                                                |
-| ----------------------------------------- | ----- | ------------------------------------------------------------------- |
-| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` | fatal | pro Token 引用无法解析；读取失败                                    |
-| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`        | fatal | 输出目录配置不可用；读取失败，且不发送文档字节                      |
-| `ZOTERO_ENRICHMENT_TASK_FAILED`           | fatal | 提交/任务/轮询失败或超时；读取失败                                  |
-| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`       | fatal | 结果 zip 结构或 zip 安全校验失败；读取失败                          |
-| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`     | fatal | 超出所选接口字节上限或不是 PDF；读取失败并保留错误码                |
-| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`  | fatal | 开启语义检索但模型缺失/损坏/推理失败；读取失败，不降级词面          |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED` | fatal | 模型下载在全部镜像失败后中止；设置页显示原因                        |
-| `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`       | fatal | 部署闸门 `allowDocumentUpload` 关闭；不发送新文档字节，读取明确失败 |
-| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`      | fatal | 会话级任务控制器或活动会话不可用；主动解析无法提交，读取明确失败    |
-| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`    | fatal | 操作 ID 的目标或配置快照被重放且不一致；拒绝该操作，不复用旧结果    |
+| 错误码                                    | 分类  | 行为                                                             |
+| ----------------------------------------- | ----- | ---------------------------------------------------------------- |
+| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` | fatal | pro Token 引用无法解析；读取失败                                 |
+| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`        | fatal | 输出目录配置不可用；读取失败，且不发送文档字节                   |
+| `ZOTERO_ENRICHMENT_TASK_FAILED`           | fatal | 提交/任务/轮询失败或超时；读取失败                               |
+| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`       | fatal | 结果 zip 结构或 zip 安全校验失败；读取失败                       |
+| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`     | fatal | 超出所选接口字节上限或不是 PDF；读取失败并保留错误码             |
+| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`  | fatal | 开启语义检索但模型缺失/损坏/推理失败；读取失败，不降级词面       |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED` | fatal | 模型下载在全部镜像失败后中止；设置页显示原因                     |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`   | fatal | 模型删除失败或路径不安全；本地文件可能保留，错误明确返回         |
+| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`      | fatal | 会话级任务控制器或活动会话不可用；主动解析无法提交，读取明确失败 |
+| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`    | fatal | 操作 ID 的目标或配置快照被重放且不一致；拒绝该操作，不复用旧结果 |
 
-`allowDocumentUpload` 默认即为 `false`：不发送文档字节；缓存未命中时读取以错误失败，已有且校验有效的本地产物仍可读取。解析失败均传递到调用者，不替换为本地抽取或另一 API 模式。
+解析失败均传递到调用者，不替换为本地抽取或另一 API 模式。

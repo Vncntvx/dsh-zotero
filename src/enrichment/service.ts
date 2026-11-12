@@ -38,6 +38,7 @@ import {
   zoteroSemanticModelStatusRequestSchema,
   zoteroSemanticModelDownloadRequestSchema,
   zoteroSemanticModelCancelRequestSchema,
+  zoteroSemanticModelDeleteRequestSchema,
   zoteroSemanticModelVerifyRequestSchema,
 } from '../wire-schemas.js'
 import type {
@@ -47,6 +48,8 @@ import type {
   ZoteroSemanticModelDownloadResultView,
   ZoteroSemanticModelCancelRequestView,
   ZoteroSemanticModelCancelResultView,
+  ZoteroSemanticModelDeleteRequestView,
+  ZoteroSemanticModelDeleteResultView,
   ZoteroSemanticModelVerifyRequestView,
   ZoteroAttachmentLocationView,
   ZoteroStartDocumentParseRequestView,
@@ -437,6 +440,22 @@ export class EnrichmentService extends TypertRemoteService {
     })
   }
 
+  async deleteSemanticModel(
+    request: ZoteroSemanticModelDeleteRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroSemanticModelDeleteResultView> {
+    return await domainCall(async () => {
+      signal.throwIfAborted()
+      const parsed = this.parseWire(zoteroSemanticModelDeleteRequestSchema, request)
+      const cfg = resolveEnrichmentConfig(this.config)
+      return await this.downloads.remove(
+        parsed.model ?? cfg.semanticModel,
+        parsed.modelDir ?? cfg.semanticModelDir,
+        signal,
+      )
+    })
+  }
+
   async verifySemanticModel(
     request: ZoteroSemanticModelVerifyRequestView,
     signal: AbortSignal,
@@ -469,7 +488,7 @@ export class EnrichmentService extends TypertRemoteService {
    * Read a stored artifact when the source has not changed. This arm never
    * obtains document bytes and never contacts MinerU; a local source is
    * `stat`ed and an indexed URL gets one HEAD. Selection is independent of
-   * the currently configured parsing mode and upload gate.
+   * the currently configured parsing mode.
    */
   private async lookup(
     input: FulltextEnhancerInput,

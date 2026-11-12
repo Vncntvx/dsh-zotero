@@ -164,7 +164,7 @@ describe('parseDocument parse failures', () => {
   })
 
   it('reports a corrupt precise result archive without advancing the source index', async () => {
-    const world = domain({ mode: 'pro', allowDocumentUpload: true })
+    const world = domain({ mode: 'pro' })
     const normal = world.fetch.getMockImplementation()!
     world.fetch.mockImplementation(async (url, init) =>
       url.endsWith('result.zip') ? new Response('invalid ZIP') : await normal(url, init),

@@ -212,7 +212,10 @@ async function assertRegularFile(
   return identityOf(info)
 }
 
-async function assertLockPath(filename: string, signal: AbortSignal | undefined): Promise<void> {
+export async function assertModelLockPath(
+  filename: string,
+  signal: AbortSignal | undefined,
+): Promise<void> {
   for (const path of [filename, `${filename}.lock`]) {
     check(signal)
     const info = await lstatOrUndefined(path)
@@ -221,7 +224,7 @@ async function assertLockPath(filename: string, signal: AbortSignal | undefined)
   }
 }
 
-function safeRelativePath(value: string): string {
+export function safeModelRelativePath(value: string): string {
   if (
     typeof value !== 'string' ||
     value === '' ||
@@ -246,7 +249,7 @@ function fileListOf(expected: SemanticModelManifest): Map<string, ModelInstallat
     unsafe('the catalog manifest has no file record')
   const files = new Map<string, ModelInstallationFile>()
   for (const [path, record] of Object.entries(expected.files)) {
-    const relativePath = safeRelativePath(path)
+    const relativePath = safeModelRelativePath(path)
     if (relativePath === MANIFEST_PATH || files.has(relativePath))
       unsafe(`duplicate or reserved catalog path ${relativePath}`)
     if (
@@ -418,7 +421,7 @@ function publicationPathsOf(
   if (snapshot.files.length !== files.size) unsafe('the bundle snapshot has a different file list')
   const paths = new Map<string, string>()
   for (const entry of snapshot.files) {
-    const relativePath = safeRelativePath(entry.relativePath)
+    const relativePath = safeModelRelativePath(entry.relativePath)
     if (!files.has(relativePath) || paths.has(relativePath))
       unsafe(`the bundle snapshot has an unexpected file ${relativePath}`)
     const path = resolve(entry.path)
@@ -455,7 +458,7 @@ async function installUnderLock(context: InstallContext): Promise<MutableResult>
   const signal = options.signal
   check(signal)
   await assertDirectory(canonicalRoot, false, signal)
-  await assertLockPath(lockFilename, signal)
+  await assertModelLockPath(lockFilename, signal)
   if (options.force !== true) {
     const current = await options.inspector.inspect(target, { forceHash: true, signal })
     check(signal)

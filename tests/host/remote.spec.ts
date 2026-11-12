@@ -185,6 +185,7 @@ describe('the zotero typert manifest', () => {
       'semanticModelStatus',
       'downloadSemanticModel',
       'cancelSemanticModelDownload',
+      'deleteSemanticModel',
       'verifySemanticModel',
       'sourcePage',
       'releaseUrlPdf',
@@ -227,6 +228,7 @@ describe('the zotero typert manifest', () => {
           'semanticModelStatus',
           'downloadSemanticModel',
           'cancelSemanticModelDownload',
+          'deleteSemanticModel',
           'verifySemanticModel',
         ].includes(invocation.method)
       ) {
@@ -582,6 +584,7 @@ describe('the enrichment model endpoints', () => {
     expect(face.semanticModelStatus).toBeUndefined()
     expect(face.downloadSemanticModel).toBeUndefined()
     expect(face.cancelSemanticModelDownload).toBeUndefined()
+    expect(face.deleteSemanticModel).toBeUndefined()
     expect(face.verifySemanticModel).toBeUndefined()
     // And the component is not composed, so nothing answers at all.
     expect(lane.ctx.get('enrichment')).toBeUndefined()

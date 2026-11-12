@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The enrichment settings page: the free/pro switch is independent of the token,
- * the egress switch needs an acknowledgement, and the output-directory field
- * stages a path that reset clears back to the default.
+ * a configured token is masked, and the output-directory field stages a path
+ * that reset clears back to the default.
  * @module tests/client/enrichment/enrichment-settings-form
  */
 
@@ -24,6 +24,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
   return {
     ...(await primitivesWithRealForm(importOriginal)),
+    Modal: original.Modal,
     Menu: original.Menu,
     MenuItemButton: original.MenuItemButton,
   }

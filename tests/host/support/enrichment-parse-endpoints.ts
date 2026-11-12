@@ -128,9 +128,7 @@ function scriptedMineru() {
   return { client, calls }
 }
 
-export async function endpointFixture(
-  options: { upload?: boolean; attachment?: 'child' | 'top' } = {},
-) {
+export async function endpointFixture(options: { attachment?: 'child' | 'top' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'zotero-parse-endpoints-'))
   const http = scriptedMineru()
   let bindings: readonly RemoteAccessBinding[] = []
@@ -192,7 +190,6 @@ export async function endpointFixture(
   )
   const outputDir = join(root, 'parsed')
   const config = {
-    allowDocumentUpload: options.upload ?? true,
     outputDir,
   } satisfies EnrichmentConfig
   const enrichmentFiber = ctx.plugin((enrichmentCtx) => {

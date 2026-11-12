@@ -57,6 +57,8 @@ import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { EnrichmentSettingsSection } from './EnrichmentSettingsSection.tsx'
+import { EnrichmentEnableNotice } from './enrichment/EnableNotice.tsx'
+import { EnrichmentEnableNoticeController } from './enrichment/enable-notice.ts'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-face.ts'
@@ -262,6 +264,32 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, probe } = surfaces
+  // Enabling the enrichment component is the deployment's acceptance of
+  // MinerU document egress. The form's namespace status supplies the enable
+  // transition: the first settled status is a baseline, so a component already
+  // on at boot never opens the modal. The overlay lives on the shell rather
+  // than the settings page, so the reminder can appear wherever the switch was
+  // flipped.
+  const enableNotice = new EnrichmentEnableNoticeController(
+    enrichmentCard.inject().hooks.enrichmentCard,
+  )
+  ctx.effect(() => () => enableNotice.dispose(), 'dsh-zotero: enrichment enable notice state')
+  ctx.effect(
+    () =>
+      ctx.slots.inject('shell.overlay', () =>
+        ctx.slots.register(
+          {
+            name: 'shell.overlay',
+            id: 'zotero.enrichment-enable-notice',
+            locale: NS,
+            registrant: REGISTRANT,
+            inject: () => enableNotice.inject(),
+          },
+          EnrichmentEnableNotice,
+        ),
+      ),
+    'dsh-zotero: enrichment enable notice',
+  )
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>
     ctx.slots.register(
@@ -338,7 +366,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
 
   // Dedicated row configuration for the enrichment subsystem (plugins.row.config),
   // opened from the "Configure" button on the dsh-zotero#enrichment row. It covers
-  // the free/pro switch, the MinerU token, the egress gate, and the output dir.
+  // the free/pro switch, the MinerU token, and the output dir.
   // whileServed guards it to the host serving the enrichment namespace (the row is
   // disabled by default), so the row shows no config while the component is off.
   ctx.effect(
@@ -945,6 +973,8 @@ function registerUi(ctx: ClientContext): void {
       await ctx.remote.zotero.downloadSemanticModel(request, signal),
     cancelSemanticModelDownload: async (request, signal) =>
       await ctx.remote.zotero.cancelSemanticModelDownload(request, signal),
+    deleteSemanticModel: async (request, signal) =>
+      await ctx.remote.zotero.deleteSemanticModel(request, signal),
     verifySemanticModel: async (request, signal) =>
       await ctx.remote.zotero.verifySemanticModel(request, signal),
   }

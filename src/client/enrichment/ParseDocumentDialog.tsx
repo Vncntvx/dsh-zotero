@@ -269,7 +269,6 @@ function GateNotice({ state, t }: { state: DocumentParseState; t: ParseTranslate
     'not-available': 'parseUnavailable',
     permission: 'parsePermission',
     offline: 'parseOffline',
-    'upload-disabled': 'parseUploadDisabled',
     invalid: 'parseInvalid',
   }
   const notice = key[state.gate]

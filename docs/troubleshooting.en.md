@@ -172,7 +172,6 @@ Note: diagnostic records stay in the current process memory and are cleared when
 
 - Symptom: an explicit parse or a semantic read returns a `ZOTERO_ENRICHMENT_*` code.
 - Cause and fix:
-  - `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`: the `allowDocumentUpload` deployment gate is at its default `false`. Mounting the component authorizes no upload; turn the gate on in settings, then submit one specific Zotero PDF attachment or one public PDF URL. Ordinary reads, PDF opening, settings saves, and service startup do not trigger parsing or upload.
   - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`: semantic search is on but the selected model is missing, corrupted, or its local inference runtime is unavailable. The read fails with an error, without a BM25 fallback; download, repair, or verify the model, or turn semantic search off to use the complete BM25 ranker.
   - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`: the configured MinerU token credential reference cannot be resolved in `pro` precise mode; the read fails with an error, without a free or anonymous downgrade. Check the reference name and its value in the host credentials store.
   - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`: explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are missing; submit from a usable session and host environment.

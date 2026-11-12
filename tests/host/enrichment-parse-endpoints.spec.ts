@@ -14,9 +14,7 @@ import { sourceKeyOf } from '../../src/enrichment/source-stamp.js'
 import {
   ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-  ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
   ZOTERO_NOT_FOUND,
-  ZoteroError,
 } from '../../src/errors.js'
 import {
   zoteroDocumentArtifactResultSchema,
@@ -119,22 +117,6 @@ describe('explicit document parsing through the pinned Gateway', () => {
       expectNoWork(fixture)
     },
   )
-
-  it('refuses deployment-disabled parsing before resolving its selected source', async () => {
-    const fixture = await setup({ upload: false })
-    const failure = await fixture.failure(
-      'startDocumentParse',
-      startRequest(fixture.attachmentTarget),
-    )
-    expect(failure.wire).toMatchObject({
-      code: 'zotero/domain',
-      details: { code: ZOTERO_ENRICHMENT_UPLOAD_DISABLED },
-    })
-    expect(failure.error).toMatchObject({ cause: expect.any(ZoteroError) })
-    expect(fixture.sessionCalls).toEqual([])
-    expectNoWork(fixture)
-    expect(await readdir(fixture.root)).toEqual(['selected.pdf'])
-  })
 
   it.each(ENDPOINTS)(
     '%s rejects undeclared wire fields before service execution',
@@ -290,8 +272,6 @@ describe('explicit document parsing through the pinned Gateway', () => {
         ).toBe(true)
         expect(parseCalls.some(({ url }) => url === DOCUMENT_URL)).toBe(false)
       }
-      // Disabling future uploads must retain ordinary access to this commit.
-      fixture.config.allowDocumentUpload = false
       const input = {
         key: identity,
         source:

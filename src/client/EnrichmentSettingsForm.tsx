@@ -4,15 +4,18 @@
  *
  * The free/pro switch is a single control over its own staged field; it never
  * reads whether a token is configured, so a configured token does not force
- * pro mode. The token reference, its secret value, the data-egress switch, and
- * the output directory are independent fields.
+ * pro mode. The token reference, its write-only secret value, and the output
+ * directory are independent fields. Enabling the component accepts MinerU
+ * document egress; there is no separate upload toggle, and every parse still
+ * requires an explicit submission of one document.
  * @module dsh-zotero/client/EnrichmentSettingsForm
  */
 
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+  IconInfoOutlineRegular,
+  Modal,
   SegmentedControl,
-  SettingsSecretField,
   SettingsValueField,
   Tag,
   Button,
@@ -27,16 +30,21 @@ import {
   SEMANTIC_MODELS,
   type SemanticModelKey,
 } from '../enrichment-model-catalog.ts'
-import { BooleanField, ChoiceField, type ChoiceOption } from './fields.tsx'
+import { BooleanField, ChoiceField, SecretField, type ChoiceOption } from './fields.tsx'
 import type { EnrichmentCardState } from './enrichment-form-controller.ts'
 import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
 import linkCss from './components/link.module.css'
 
 type T = (key: ZoteroLocaleKey) => string
+
+/** Fixed mask for a configured token; the stored value never reaches the browser. */
+const MASKED_TOKEN = '************'
+
 type EnrichmentFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'> & {
   downloadModel?: (force?: boolean) => Promise<void>
   cancelModelDownload?: () => Promise<void>
+  deleteModel?: () => Promise<void>
   verifyModel?: () => Promise<void>
   checkModelStatus?: () => Promise<void>
 }
@@ -72,9 +80,17 @@ export function EnrichmentSettingsForm({
   actions,
 }: EnrichmentSettingsFormProps): ReactNode {
   const disabled = !state.writable || state.saving
+  const deleting = state.semanticModelPhase === 'deleting'
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const { checkModelStatus } = actions
   const downloading = state.semanticModelState?.downloading === true
   const available = state.semanticModelUnavailable === false && state.available === true
+  const canDelete =
+    state.semanticModelState !== undefined &&
+    !downloading &&
+    (state.semanticModelState.ready ||
+      state.semanticModelState.error !== undefined ||
+      state.semanticModelState.downloadedBytes > 0)
   // Refresh only while a task is active on an available component. A hidden
   // surface starts no work; visibility is re-checked on every tick and on the
   // visibilitychange event. One in-flight read at a time keeps the cadence from
@@ -224,19 +240,9 @@ export function EnrichmentSettingsForm({
                 <span className={fieldCss.warningTitle}>{t('enrichmentTokenMissingTitle')}</span>
               </div>
               <p className={fieldCss.warningText}>{t('enrichmentTokenMissingDesc')}</p>
-              <div className={fieldCss.toggleRow}>
-                <a
-                  className={linkCss.link}
-                  href="https://mineru.net"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t('enrichmentTokenVisitMineru')}
-                </a>
-              </div>
             </div>
           )}
-          <SettingsSecretField
+          <SecretField
             id="enrichment-settings-token"
             label={t('enrichmentToken')}
             hint={
@@ -249,20 +255,25 @@ export function EnrichmentSettingsForm({
             stateLabel={
               state.mineruToken.configured ? t('secretConfigured') : t('secretNotConfigured')
             }
+            placeholder={MASKED_TOKEN}
             disabled={state.mineruToken.disabled}
             onEdit={(text) => actions.edit('mineruToken', text)}
-          />
-
-          <BooleanField
-            label={t('allowDocumentUpload')}
-            hint={t('allowDocumentUploadHint')}
-            text={state.allowDocumentUpload.text}
-            overridden={state.allowDocumentUpload.overridden}
-            overriddenLabel={t('overridden')}
-            resetLabel={t('reset')}
-            disabled={disabled}
-            onEdit={(text) => actions.edit('allowDocumentUpload', text)}
-            onReset={() => actions.resetField('allowDocumentUpload')}
+            help={
+              <p className={fieldCss.tokenHelp}>
+                <span className={fieldCss.tokenHelpIcon} aria-hidden="true">
+                  <IconInfoOutlineRegular size={12} />
+                </span>
+                <span>{t('enrichmentTokenWhereToCreate')}</span>
+                <a
+                  className={linkCss.link}
+                  href="https://mineru.net"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t('enrichmentTokenVisitMineru')}
+                </a>
+              </p>
+            }
           />
         </div>
       </section>
@@ -375,7 +386,9 @@ export function EnrichmentSettingsForm({
                 <span className={fieldCss.hint}>
                   <strong>{t('semanticModelStatus')}</strong>
                 </span>
-                {state.semanticModelPhase === 'cancelling' ? (
+                {state.semanticModelPhase === 'deleting' ? (
+                  <Tag tone="info">{t('semanticModelStatusDeleting')}</Tag>
+                ) : state.semanticModelPhase === 'cancelling' ? (
                   <Tag tone="info">{t('semanticModelStatusCancelling')}</Tag>
                 ) : state.semanticModelPhase === 'checking' ? (
                   <Tag tone="info">{t('semanticModelStatusChecking')}</Tag>
@@ -394,7 +407,7 @@ export function EnrichmentSettingsForm({
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={state.semanticModelPhase === 'cancelling'}
+                    disabled={state.semanticModelPhase === 'cancelling' || deleting}
                     onClick={() => actions.cancelModelDownload?.()}
                   >
                     {t('semanticModelCancelAction')}
@@ -404,7 +417,7 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={disabled || state.semanticModelPhase === 'checking'}
+                      disabled={disabled || state.semanticModelPhase === 'checking' || deleting}
                       onClick={() => actions.verifyModel?.()}
                     >
                       {t('semanticModelVerifyAction')}
@@ -412,11 +425,21 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={disabled}
+                      disabled={disabled || deleting}
                       onClick={() => actions.downloadModel?.(true)}
                     >
                       {t('semanticModelRedownloadAction')}
                     </Button>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={disabled || deleting}
+                        onClick={() => setConfirmDelete(true)}
+                      >
+                        {t('semanticModelDeleteAction')}
+                      </Button>
+                    )}
                   </>
                 ) : state.semanticModelState?.error || state.semanticModelFailure ? (
                   // A missing or corrupt bundle keeps explicit download, repair
@@ -426,7 +449,7 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="primary"
                       size="sm"
-                      disabled={disabled}
+                      disabled={disabled || deleting}
                       onClick={() => actions.downloadModel?.()}
                     >
                       {t('semanticModelDownloadAction')}
@@ -434,7 +457,7 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={disabled}
+                      disabled={disabled || deleting}
                       onClick={() => actions.downloadModel?.(true)}
                     >
                       {t('semanticModelRedownloadAction')}
@@ -442,17 +465,27 @@ export function EnrichmentSettingsForm({
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={disabled || state.semanticModelPhase === 'checking'}
+                      disabled={disabled || state.semanticModelPhase === 'checking' || deleting}
                       onClick={() => actions.verifyModel?.()}
                     >
                       {t('semanticModelVerifyAction')}
                     </Button>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={disabled || deleting}
+                        onClick={() => setConfirmDelete(true)}
+                      >
+                        {t('semanticModelDeleteAction')}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={disabled}
+                    disabled={disabled || deleting}
                     onClick={() => actions.downloadModel?.()}
                   >
                     {t('semanticModelDownloadAction')}
@@ -524,6 +557,30 @@ export function EnrichmentSettingsForm({
               )}
           </div>
         </div>
+        <Modal
+          open={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          title={t('semanticModelDeleteTitle')}
+          description={t('semanticModelDeleteDescription')}
+          closeLabel={t('semanticModelDeleteClose')}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+                {t('semanticModelDeleteCancel')}
+              </Button>
+              <Button
+                variant="primary"
+                disabled={disabled || deleting}
+                onClick={() => {
+                  setConfirmDelete(false)
+                  void actions.deleteModel?.()
+                }}
+              >
+                {t('semanticModelDeleteConfirm')}
+              </Button>
+            </>
+          }
+        />
       </section>
     </>
   )

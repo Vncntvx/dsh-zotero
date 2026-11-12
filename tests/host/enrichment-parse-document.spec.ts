@@ -7,7 +7,6 @@ import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
 import {
   ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
   ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-  ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
   ZOTERO_INVALID_ARGUMENT,
 } from '../../src/errors.ts'
 import {
@@ -31,25 +30,6 @@ afterEach(async () => {
 })
 
 describe('parseDocument authorization and mode', () => {
-  it.each([
-    ['omitted', {}],
-    ['disabled', { allowDocumentUpload: false }],
-  ] as const)(
-    'refuses %s upload permission before resolving/probing/reading a source',
-    async (_label, config) => {
-      const world = domain(config)
-      await expect(parseDocument(LOCAL, world.deps)).rejects.toMatchObject({
-        code: ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
-      })
-      expect(world.storeFactory).not.toHaveBeenCalled()
-      expect(world.resolveAttachment).not.toHaveBeenCalled()
-      expect(world.sourceFiles.stat).not.toHaveBeenCalled()
-      expect(world.sourceFiles.readFile).not.toHaveBeenCalled()
-      expect(world.fetch).not.toHaveBeenCalled()
-      expect(world.resolveToken).not.toHaveBeenCalled()
-    },
-  )
-
   it('refuses a non-PDF content type before source I/O', async () => {
     const world = domain()
     await expect(
@@ -73,7 +53,6 @@ describe('parseDocument authorization and mode', () => {
     const world = domain({
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: true,
     })
     const result = await parseDocument(LOCAL, world.deps)
     expect(result.artifact.markdown).toBe(MARKDOWN)
@@ -112,7 +91,6 @@ describe('parseDocument authorization and mode', () => {
     const world = domain({
       mode: 'pro',
       mineruTokenRef: ' MINERU_API_TOKEN ',
-      allowDocumentUpload: true,
     })
     world.credential.mockResolvedValue({ value: ' token ', source: 'synthetic' })
     const result = await parseDocument(LOCAL, world.deps)
@@ -133,7 +111,7 @@ describe('parseDocument authorization and mode', () => {
   })
 
   it('uses the default pro credential reference when the configured name is blank', async () => {
-    const world = domain({ mode: 'pro', mineruTokenRef: ' ', allowDocumentUpload: true })
+    const world = domain({ mode: 'pro', mineruTokenRef: ' ' })
     await parseDocument(LOCAL, world.deps)
     expect(world.resolveToken).toHaveBeenCalledWith(ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru)
   })
@@ -141,7 +119,7 @@ describe('parseDocument authorization and mode', () => {
   it.each(['missing', 'empty'] as const)(
     'fails closed on %s pro credentials before acquiring bytes',
     async (kind) => {
-      const world = domain({ mode: 'pro', allowDocumentUpload: true })
+      const world = domain({ mode: 'pro' })
       world.credential.mockResolvedValue(
         kind === 'missing' ? undefined : { value: ' ', source: 'synthetic' },
       )
@@ -154,7 +132,7 @@ describe('parseDocument authorization and mode', () => {
   )
 
   it('fails closed when the credentials service is absent', async () => {
-    const world = domain({ mode: 'pro', allowDocumentUpload: true })
+    const world = domain({ mode: 'pro' })
     const ctx = new (await import('@deepseek-ai/cordis')).Context()
     try {
       const { resolveMineruToken } = await import('../../src/enrichment/credentials.ts')
@@ -184,7 +162,7 @@ describe('parseDocument authorization and mode', () => {
 
 describe('parseDocument sources and generations', () => {
   it('reuses the same generation without reading bytes or resolving another token', async () => {
-    const world = domain({ mode: 'pro', allowDocumentUpload: true })
+    const world = domain({ mode: 'pro' })
     const first = await parseDocument(LOCAL, world.deps)
     world.sourceFiles.readFile.mockClear()
     world.fetch.mockClear()

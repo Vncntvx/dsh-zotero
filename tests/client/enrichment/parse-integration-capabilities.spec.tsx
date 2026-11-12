@@ -31,18 +31,14 @@ function confirm() {
 describe('parsing capability integration', () => {
   it('uses committed enrichment values while a settings controller holds a different draft', async () => {
     const runtime = await mount()
-    act(() =>
-      runtime.form.publish({ value: { ...ENRICHMENT_DEFAULTS, allowDocumentUpload: false } }),
-    )
+    act(() => runtime.form.publish({ value: { ...ENRICHMENT_DEFAULTS, mode: 'free' } }))
     const editor = new EnrichmentFormController(runtime.form, emptyCredentialPort)
     try {
       act(() => {
-        editor.inject().edit('allowDocumentUpload', 'true')
         editor.inject().edit('mode', 'pro')
       })
-      expect(screen.getByText(en.parseUploadDisabled)).toBeDefined()
       expect(screen.getByText(en.parseModeFree)).toBeDefined()
-      expect(confirm().disabled).toBe(true)
+      expect(confirm().disabled).toBe(false)
       expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
       await act(async () => {
         await editor.inject().save()

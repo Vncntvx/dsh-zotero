@@ -14,11 +14,10 @@ import {
 } from '../../src/enrichment-preferences.ts'
 
 describe('enrichment preferences', () => {
-  it('defaults to free mode with document uploads disabled and no output override', () => {
+  it('defaults to free mode with no output override', () => {
     expect(enrichmentPreferencesOf({})).toEqual({
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
-      allowDocumentUpload: false,
       outputDir: '',
       enableSemanticSearch: false,
       semanticModel: 'balanced',
@@ -29,7 +28,6 @@ describe('enrichment preferences', () => {
     expect(ENRICHMENT_PREFERENCE_KEYS).toEqual([
       'mode',
       'mineruTokenRef',
-      'allowDocumentUpload',
       'outputDir',
       'enableSemanticSearch',
       'semanticModel',
@@ -56,10 +54,7 @@ describe('enrichment preferences', () => {
     )
   })
 
-  it('refuses non-boolean egress and non-string text fields', () => {
-    expect(() => enrichmentPreferencesOf({ allowDocumentUpload: 'yes' })).toThrow(
-      'Invalid enrichment preference: allowDocumentUpload',
-    )
+  it('refuses non-string text fields', () => {
     expect(() => enrichmentPreferencesOf({ outputDir: 7 })).toThrow(
       'Invalid enrichment preference: outputDir',
     )

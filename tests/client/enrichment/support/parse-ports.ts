@@ -53,7 +53,6 @@ export function parseCapabilities(
     readAllowed: true,
     startAllowed: true,
     cancelAllowed: true,
-    allowDocumentUpload: true,
     mode: 'free',
     revision: 'service-1',
     maxFileBytes: 10 * 1024 * 1024,

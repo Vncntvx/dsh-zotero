@@ -42,7 +42,6 @@ export interface DocumentParseCapabilities {
   readonly readAllowed: boolean
   readonly startAllowed: boolean
   readonly cancelAllowed: boolean
-  readonly allowDocumentUpload: boolean
   readonly mode: 'free' | 'pro'
   /** Changes when the committed configuration/service generation changes. */
   readonly revision: string
@@ -70,8 +69,7 @@ export interface DocumentParseFailure {
   readonly details?: unknown
 }
 
-export type DocumentParseGate =
-  'ready' | 'not-available' | 'permission' | 'offline' | 'upload-disabled' | 'invalid'
+export type DocumentParseGate = 'ready' | 'not-available' | 'permission' | 'offline' | 'invalid'
 
 export interface DocumentParseState {
   readonly open: boolean
@@ -483,9 +481,7 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
                 !this.selection.sessionId ||
                 !(c.maxFileBytes > 0 && c.maxPages > 0)
               ? 'invalid'
-              : !c.allowDocumentUpload
-                ? 'upload-disabled'
-                : 'ready'
+              : 'ready'
     this.patch({ gate })
   }
 

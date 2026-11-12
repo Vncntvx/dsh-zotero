@@ -112,15 +112,17 @@ describe('ParseDocumentDialog confirmation', () => {
     expect(world.remote.documentArtifact).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps deployment denial distinct from component absence and reacts to live capabilities', async () => {
-    const world = mount({ capabilities: { allowDocumentUpload: false } })
+  it('keeps component absence distinct from session denial and reacts to live capabilities', async () => {
+    const world = mount()
     await settle()
-    expect(screen.getByText(parseEn.parseUploadDisabled)).toBeDefined()
+    expect(
+      (screen.getByRole('button', { name: parseEn.parseConfirm }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+    act(() => world.capabilities.publish(parseCapabilities({ mounted: false })))
+    expect(screen.getByText(parseEn.parseUnavailable)).toBeDefined()
     expect(
       (screen.getByRole('button', { name: parseEn.parseConfirm }) as HTMLButtonElement).disabled,
     ).toBe(true)
-    act(() => world.capabilities.publish(parseCapabilities({ mounted: false })))
-    expect(screen.getByText(parseEn.parseUnavailable)).toBeDefined()
     act(() => world.capabilities.publish(parseCapabilities({ startAllowed: false })))
     await settle()
     expect(screen.getByText(parseEn.parsePermission)).toBeDefined()

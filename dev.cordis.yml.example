@@ -16,10 +16,10 @@
       name: '<absolute-path-to-dsh-zotero>/src/scholarly/index.ts'
       config: {}
     # The enrichment component (row id `enrichment`) ships disabled. Mounting
-    # it only makes user-submitted MinerU parsing, read-only reuse of existing
-    # artifacts, and local semantic ranking / model management available; it
-    # authorizes no document upload. `allowDocumentUpload` defaults to `false`
-    # and only permits an explicit user submission of one specific Zotero PDF
+    # it makes user-submitted MinerU parsing, read-only reuse of existing
+    # artifacts, and local semantic ranking / model management available.
+    # Enabling the component accepts document egress to MinerU; every parse
+    # still needs an explicit user submission of one specific Zotero PDF
     # attachment or one public PDF URL, after remote-action and session checks.
     # Keep `disabled: true` for the read-only debug stack; flip it to false to
     # exercise enrichment locally. There is no `dsh-zotero/parsing` alias and
@@ -27,5 +27,3 @@
     - id: enrichment
       name: '<absolute-path-to-dsh-zotero>/src/enrichment/index.ts'
       disabled: true
-      config:
-        allowDocumentUpload: false

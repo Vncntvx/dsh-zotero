@@ -176,7 +176,7 @@ describe('parse job real document pipeline', () => {
     )
     const reader = new EnrichmentService(
       host.ctx,
-      { ...host.config.value, allowDocumentUpload: false },
+      { ...host.config.value },
       { client: host.client, store: async () => host.store },
     )
     host.lookup.mockImplementation(

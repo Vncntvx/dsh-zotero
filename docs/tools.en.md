@@ -759,7 +759,6 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                                         |
 | `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | A configured scholarly credential reference is invalid or has no value (never falls back to anonymous access)                |
 | `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | The configured MinerU precise-API token reference cannot be resolved (fail-closed; no free/anonymous downgrade)              |
-| `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`        | The `allowDocumentUpload` deployment gate is off, so a new explicit document upload is refused                               |
 | `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | Explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are unavailable                         |
 | `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | An operation id was replayed with a different target or settings snapshot                                                    |
 | `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU reported the parsing task as failed, with its own stated reason                                                       |
@@ -768,6 +767,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | The document exceeded the selected API's size limit or is not a PDF                                                          |
 | `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | Semantic search is on but the model is missing/corrupt or the local inference runtime failed (fail-closed; no BM25 fallback) |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | The local semantic model download failed after every source was tried                                                        |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | The local semantic model could not be removed, or its path failed the safety checks                                          |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                                     |
 | `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                                             |
 | `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                                          |

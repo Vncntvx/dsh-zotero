@@ -8,6 +8,8 @@ import type {
   ZoteroSemanticModelDownloadResultView,
   ZoteroSemanticModelCancelRequestView,
   ZoteroSemanticModelCancelResultView,
+  ZoteroSemanticModelDeleteRequestView,
+  ZoteroSemanticModelDeleteResultView,
   ZoteroStartDocumentParseRequestView,
   ZoteroStartDocumentParseResultView,
   ZoteroDocumentArtifactRequestView,
@@ -143,6 +145,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       request: ZoteroSemanticModelCancelRequestView,
       signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+    deleteSemanticModel: (
+      request: ZoteroSemanticModelDeleteRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelDeleteResultView>>
     verifySemanticModel: (
       request: ZoteroSemanticModelVerifyRequestView,
       signal?: AbortSignal,
@@ -173,6 +179,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       request: ZoteroSemanticModelCancelRequestView,
       signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+    'zotero/deleteSemanticModel': (
+      request: ZoteroSemanticModelDeleteRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroSemanticModelDeleteResultView>>
     'zotero/verifySemanticModel': (
       request: ZoteroSemanticModelVerifyRequestView,
       signal?: AbortSignal,

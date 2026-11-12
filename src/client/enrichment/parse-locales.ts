@@ -53,8 +53,6 @@ export const parseEn = {
   parseReadPermission:
     'This session does not have permission to inspect artifacts or parse receipts.',
   parseOffline: 'The host is disconnected. Reconnect to inspect or submit a parse.',
-  parseUploadDisabled:
-    'Document uploads are disabled by the deployment. Existing artifacts can still be inspected.',
 } as const
 
 export const parseZh: Record<keyof typeof parseEn, string> = {
@@ -106,7 +104,6 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parsePermission: '当前会话没有执行此解析操作的权限。',
   parseReadPermission: '当前会话没有查看产物或解析回执的权限。',
   parseOffline: '宿主已断开，重新连接后才能查看或提交解析。',
-  parseUploadDisabled: '部署已禁止文档上传，仍可查询已有产物。',
 }
 
 export const parseLocales = { zh: parseZh, en: parseEn }

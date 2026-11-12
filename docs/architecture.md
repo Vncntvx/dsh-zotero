@@ -30,7 +30,7 @@ graph LR
 | `dsh-zotero/scholarly`  | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取           |
 | `dsh-zotero/enrichment` | `enrichment`                              | `enrichment` | 关闭 | 主动解析、产物查询与本地语义模型管理 |
 
-核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心，显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置。学术检索组件是 Agent 外部检索授权边界，未挂载时服务、传输层与工具都不存在。文档解析组件的挂载只使解析和模型管理能力可用；上传须再通过部署开关和用户针对具体文档的主动提交。其目标接入方式是只读产物查询与独立的主动解析操作，均不注册模型工具或提示词段。
+核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心，显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置。学术检索组件是 Agent 外部检索授权边界，未挂载时服务、传输层与工具都不存在。启用文档解析组件即接受 MinerU 文档外发，并使解析和模型管理能力可用；每次上传仍须用户提交具体文档并通过会话门禁。其接入方式是只读产物查询与独立的主动解析操作，均不注册模型工具或提示词段。
 
 本文将 enrichment 的实施前基线 `a3f4759` 与 WP0 目标契约分开说明，下文的实现状态描述均以该基线为准。WP1 的只读接缝、WP2 的主动解析任务和 WP7 的前台资源排空按设计描述，由各执行包实现与验收。
 
@@ -115,21 +115,21 @@ graph LR
 
 ## 文档解析子系统 (`src/enrichment/`)
 
-`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用，不注册模型工具、提示词段或技能。挂载只使解析与模型管理能力可用。目标契约要求 `allowDocumentUpload` 默认为 `false`，作为部署级禁止开关；上传还须用户主动提交具体文档并通过远程动作与会话门禁。实施前基线保留 `{ lookup, enhance }` 接缝和 `true` 上传默认值，普通读取在未命中产物后可能进入解析；WP1/WP2 负责消除这些差距。
+`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用，不注册模型工具、提示词段或技能。启用组件即接受 MinerU 文档外发，并使解析与模型管理能力可用；每次上传仍须用户提交具体文档并通过远程动作与会话门禁，客户端在启用时显示一次提醒。
 
-### 只读产物接缝（WP1 目标契约）
+### 只读产物接缝
 
 核心 `ZoteroService` 保留两个来自 `src/local/` 的纯接口槽。`FulltextEnhancer`（`fulltext-enhancer.ts`）只暴露 `lookup`，不表达 `enhance`、原始文档字节或上传操作；`EvidenceRanker`（`evidence-ranker.ts`）在空槽时使用核心完整的 BM25 排序器。组件经 `ctx.inject(['zotero'])` 装入并在卸载时撤槽，依赖方向始终是 enrichment → core。MinerU 传输、主机表、凭据、产物存储、源索引、嵌入运行时与模型下载均归 enrichment 所有。
 
-`zotero_retrieve` 的 `best`、`specified`、`allIndexed` PDF 路径与 `scholarly_read` 的 PDF 分支只查询同一来源、仍有效的 Markdown。命中时优先使用，包括有效短文档；正常未命中时，本地读取 Zotero `/fulltext`，学术读取沿已有授权下载 PDF 后执行 `extractPdfText()`。摘要、笔记和批注保持各自来源。上传关闭不妨碍读取已有有效产物。不存在或源戳变化属于正常未命中；权限、I/O、协议损坏等故障须明确报告，不能吞成未命中。
+`zotero_retrieve` 的 `best`、`specified`、`allIndexed` PDF 路径与 `scholarly_read` 的 PDF 分支只查询同一来源、仍有效的 Markdown。命中时优先使用，包括有效短文档；正常未命中时，本地读取 Zotero `/fulltext`，学术读取沿已有授权下载 PDF 后执行 `extractPdfText()`。摘要、笔记和批注保持各自来源。已有且有效的产物始终可读取。不存在或源戳变化属于正常未命中；权限、I/O、协议损坏等故障须明确报告，不能吞成未命中。
 
 `lookup` 先查源索引，没有候选产物就不额外探测源；有候选时可 stat 本地附件，或至多发一次不带 token 的 HEAD 校验 URL。它不下载文档、不联系 MinerU，也不创建或恢复解析任务。无法证实有效时不提供过期 Markdown、不隐式重解析。普通读取、PDF 打开、设置保存和服务启动均受此约束。
 
-### 主动解析与任务生命周期（WP2 设计）
+### 主动解析与任务生命周期
 
 主动解析目标采用闭合联合 `{kind:'attachment',ref}` 或 `{kind:'url',url}`，分别覆盖子附件、顶层 PDF 附件及具体公开 PDF URL；拒绝主机路径、会话文件、原始字节和未知字段。请求携带会话与每次用户操作的幂等标识，解析模式固定为已提交配置快照。宿主校验附件 ref、实例、库和 PDF 类型；公开 URL 逐跳经过公网地址、DNS 固定连接、端口、重定向、字节与 PDF 文件头校验。
 
-界面须先展示目标名称或脱敏 URL、MinerU、所选模式、上传含义与限制，用户明确提交后才调用 enrichment 自有的短端点。上传同时要求组件已挂载、`allowDocumentUpload` 允许、具体目标操作明确，以及远程动作和会话访问获准；不借用 scholarly 或 `library.allowUrlPdfRead` 的阅读许可。解析不需要 query 或语义模型；失败明确失败，不切模式、不以本地抽取文本冒充成功。新接口不增加旧名称、配置或缓存格式的别名与迁移。
+界面须先展示目标名称或脱敏 URL、MinerU、所选模式、上传含义与限制，用户明确提交后才调用 enrichment 自有的短端点。上传要求组件已启用、用户针对具体目标提交，以及远程动作和会话访问获准；不借用 scholarly 或 `library.allowUrlPdfRead` 的阅读许可。解析不需要 query 或语义模型；失败明确失败，不切模式、不以本地抽取文本冒充成功。新接口不增加旧名称、配置或缓存格式的别名与迁移。
 
 设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
 
@@ -153,7 +153,7 @@ graph LR
 
 ### 本地语义排序与模型资产
 
-本地语义排序与 MinerU 解析是独立能力：排序消费已有文本和本地模型，不联系 MinerU、不需要上传开关或解析凭据；主动解析也不依赖模型。关闭 `enableSemanticSearch` 使用完整 BM25；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败，不静默改为词面结果。模型下载失败使用 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
+本地语义排序与 MinerU 解析是独立能力：排序消费已有文本和本地模型，不联系 MinerU、不需要解析凭据；主动解析也不依赖模型。关闭 `enableSemanticSearch` 使用完整 BM25；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败，不静默改为词面结果。模型下载失败使用 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
 
 `src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；`scripts/semantic-model-catalog.mjs` 是构建侧镜像，drift 测试比较两侧与 `manifestOf()`。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。下载、安装和取消的完整性修复归 WP4。
 
@@ -218,8 +218,8 @@ graph LR
 
 ## 远程通信与设置
 
-- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；基线中的 `EnrichmentService`（`enrichment`）只有语义模型的 `semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`verifySemanticModel`。接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答，模型下载能力随挂载存在。主动解析启动/加入、产物状态与有界任务回执端点由 WP2 实现与验收；
-- enrichment 远程边界的目标契约要求统一经 `errors.ts` 的 `domainCall` 保留领域错误码，并区分取消与 Gateway 错误。只有确切的 `gateway/service-unavailable` 表示组件缺席；权限、连接、目录或协议失败须报告实际原因，不能改写成组件不可用。基线模型端点没有统一该错误边界；
+- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；`EnrichmentService`（`enrichment`）负责主动解析、产物回执与语义模型管理：`startDocumentParse`、`documentArtifact`、`documentParseReceipt`、`semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`deleteSemanticModel`、`verifySemanticModel`。接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答；
+- enrichment 远程边界统一经 `errors.ts` 的 `domainCall` 保留领域错误码，并区分取消与 Gateway 错误。只有确切的 `gateway/service-unavailable` 表示组件缺席；权限、连接、目录或协议失败会报告实际原因，不改写成组件不可用；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly`、`enrichment` 四个命名空间的共享设置表单；
 - 文献面板设置同时提供 11 项 `library` 偏好和 2 项核心 CSL 默认值的直接编辑；`CitationFormController` 为后两项持有独立暂存模型，两个入口共用该模型，不会提交连接等其他字段的草稿。`tests/client/settings/citation-defaults.spec.tsx` 验证真实表单组合、保存拒绝与入口一致性；`tests/client/cards/zotero-card-parity.spec.ts` 验证两个核心字段表合并后与宿主 schema 完整对应；打包后浏览器验收由 `smoke:web-composition` 验证保存和刷新持久化。
 - 配置全字段声明为 volatile，支持热重载；

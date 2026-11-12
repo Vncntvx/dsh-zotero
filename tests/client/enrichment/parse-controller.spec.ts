@@ -59,13 +59,13 @@ describe('document parse admission', () => {
     expect(world.jobs.observe).toHaveBeenCalledWith(PARSE_SESSION, PARSE_JOB)
   })
 
-  it('does not admit an upload while deployment upload is disabled but still reads artifacts', async () => {
+  it('still reads artifacts without submitting when the session cannot start a parse', async () => {
     const remote = parseRemote()
-    const world = harness({ remote, capabilities: { allowDocumentUpload: false } })
+    const world = harness({ remote, capabilities: { startAllowed: false } })
     world.controller.open(PARSE_SELECTION)
     await world.settled()
     await world.controller.submit()
-    expect(world.controller.getSnapshot().gate).toBe('upload-disabled')
+    expect(world.controller.getSnapshot().gate).toBe('permission')
     expect(remote.documentArtifact).toHaveBeenCalledTimes(1)
     expect(remote.startDocumentParse).not.toHaveBeenCalled()
   })

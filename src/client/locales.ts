@@ -112,7 +112,7 @@ export const en = {
   scholarlyDisabled:
     'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
   enrichmentDisabled:
-    'Document parsing comes from the dsh-zotero/enrichment component. Enable that component under "Included components" to make parsing available. Sending a document to MinerU also requires the deployment upload gate and your explicit submission of that PDF.',
+    'Document parsing comes from the dsh-zotero/enrichment component. Enable it under "Included components" to make parsing available; each parse needs your explicit submission of the specific document.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCredentialRef:
     'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
@@ -168,26 +168,29 @@ export const en = {
     'Agent Lightweight Parse: token-free, IP rate-limited, up to 20 pages and 10 MB, Markdown output. Precision Extract: requires API token, up to 200 pages and 200 MB, supports complex layouts, formulas, and tables, with 5,000 free files daily.',
   enrichmentModeFree: 'Agent Lightweight Parse',
   enrichmentModePro: 'Precision Extract',
-  allowDocumentUpload: 'Send documents to MinerU',
-  allowDocumentUploadHint:
-    'Lets you send explicitly submitted local PDF attachments and public PDF URLs to MinerU. Existing valid artifacts remain readable when disabled.',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
-    'Access credential for the Precision Extract API. Tokens are valid for 3 months and can be generated at mineru.net.',
+    'Access credential for the Precision Extract API. Tokens are valid for 3 months; the Agent Lightweight Parse mode needs no token.',
   enrichmentTokenRef: 'Token credential reference',
   enrichmentTokenRefHint: 'Credential reference name for this plugin (default: {suggested}).',
   enrichmentToken: 'MinerU API Token',
   enrichmentTokenHint:
     'Precision Extract allows up to 5,000 files/day free (rate limit: 50 files/min submit, 1,000 req/min query). Tokens expire after 3 months.',
+  enrichmentTokenWhereToCreate: 'Create or manage a token on the MinerU website:',
   enrichmentTokenNeedsReference: 'Credential reference not ready. Defaults to MINERU_API_TOKEN.',
   enrichmentTokenMissingTag: 'Token Required',
   enrichmentTokenMissingTitle: 'Precision Extract requires a MinerU API Token',
   enrichmentTokenMissingDesc:
-    'Precision Extract is selected without an API token. Parsing fails until a token is configured. Create a token at mineru.net (5,000 files/day free) and paste it below, or switch to the token-free "Agent Lightweight Parse".',
-  enrichmentTokenVisitMineru: 'Visit MinerU (mineru.net) to get an API token ↗',
+    'Precision Extract is selected without an API token, so parsing fails. Paste a token below or switch to the token-free Agent Lightweight Parse.',
+  enrichmentTokenVisitMineru: 'Open mineru.net ↗',
+  enrichmentEnableNoticeTitle: 'Document parsing is enabled',
+  enrichmentEnableNoticeDescription:
+    'Submitting a specific Zotero PDF attachment or public PDF URL sends that document to MinerU (mineru.net) for parsing; the Markdown artifact is stored locally. Ordinary searches, PDF reading, and settings saves never upload a document, and every parse needs your explicit submission in this conversation.',
+  enrichmentEnableNoticeConfirm: 'Got it',
+  enrichmentEnableNoticeClose: 'Close',
   groupEnrichmentOutput: 'Output & Data Notice',
   groupEnrichmentOutputDesc:
-    'Document enrichment is enabled. Local attachments and URL PDFs are sent to MinerU for parsing, and the Markdown artifacts are saved in the directory below.',
+    'Documents you submit are sent to MinerU for parsing; the Markdown artifacts are saved in the directory below. Ordinary reads only reuse existing artifacts and never upload a document.',
   enrichmentOutputDir: 'Parsed-file directory',
   enrichmentOutputDirHint:
     'Absolute directory for parsed Markdown files. Leave blank to use the default location; Reset to default clears a custom path.',
@@ -217,12 +220,20 @@ export const en = {
   semanticModelStatusFailed: 'Download failed',
   semanticModelStatusChecking: 'Checking the bundle…',
   semanticModelStatusCancelling: 'Cancelling the download…',
+  semanticModelStatusDeleting: 'Deleting…',
   semanticModelBundleRepairHint:
     'The bundle is missing or corrupted. Use Download to fetch it, Redownload to replace it, or Verify to check the files already on disk. Semantic search is not auto-disabled.',
   semanticModelDownloadAction: 'Download model',
   semanticModelRedownloadAction: 'Redownload',
   semanticModelVerifyAction: 'Verify model',
   semanticModelCancelAction: 'Cancel download',
+  semanticModelDeleteAction: 'Delete model',
+  semanticModelDeleteTitle: 'Delete the local model?',
+  semanticModelDeleteDescription:
+    'This removes the model files from disk. Semantic search stays unavailable until you download the model again.',
+  semanticModelDeleteCancel: 'Cancel',
+  semanticModelDeleteConfirm: 'Delete',
+  semanticModelDeleteClose: 'Close',
   semanticModelUnavailable:
     'The enrichment component is not composed, so model status and downloads are unavailable. Enable it under "Included components".',
   semanticModelDownloadingFile: 'Downloading: {file}',
@@ -985,7 +996,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   scholarlyDisabled:
     '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
   enrichmentDisabled:
-    '文档解析由 dsh-zotero/enrichment 组件提供。在插件列表的「包含的组件」中启用后可使用解析功能；向 MinerU 发送 PDF 还需部署允许上传，并由你明确提交该文档。',
+    '文档解析由 dsh-zotero/enrichment 组件提供。在插件列表的「包含的组件」中启用后可使用解析功能；每次解析都需要你明确提交具体文档。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCredentialRef:
     '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
@@ -1034,26 +1045,29 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     'Agent 轻量解析：无需 Token，基于 IP 限频，支持 20 页及 10MB 以内单文件，输出 Markdown；精准解析：需配置 Token，支持 200 页及 200MB 复杂版式、表格与公式，单用户每日可免费解析 5000 份文件。',
   enrichmentModeFree: 'Agent 轻量解析',
   enrichmentModePro: '精准解析',
-  allowDocumentUpload: '向 MinerU 发送文档',
-  allowDocumentUploadHint:
-    '允许把你提交的本地 PDF 附件或公开 PDF URL 发送给 MinerU。关闭后已有有效产物仍可读取。',
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
-    '精准解析 API 的访问凭据。每个 Token 有效期为 3 个月，可在 MinerU 官网（mineru.net）创建。',
+    '精准解析 API 的访问凭据。Token 有效期为 3 个月；Agent 轻量解析不需要 Token。',
   enrichmentTokenRef: 'Token 凭据引用',
   enrichmentTokenRefHint: '插件专用的凭据引用名（默认：{suggested}）。',
   enrichmentToken: 'MinerU API Token',
   enrichmentTokenHint:
     '精准解析支持每日免费解析 5000 份文件（接口限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。Token 有效期为 3 个月，过期请前往官网重新生成。',
+  enrichmentTokenWhereToCreate: 'Token 在 MinerU 官网创建：',
   enrichmentTokenNeedsReference: '凭据引用未就绪。默认使用专属凭据名 MINERU_API_TOKEN。',
   enrichmentTokenMissingTag: '需要 Token',
   enrichmentTokenMissingTitle: '精准解析模式需要 MinerU API Token',
   enrichmentTokenMissingDesc:
-    '已选择「精准解析」但未配置访问凭据，解析将失败直至配置 Token。在 MinerU 官网注册并创建 Token 后填入下方（每日免费 5000 份），或切换为免 Token 的「Agent 轻量解析」。',
-  enrichmentTokenVisitMineru: '前往 MinerU 官网 (mineru.net) 获取 Token ↗',
+    '已选择「精准解析」但未配置 Token，解析会失败。在下方填入 Token，或切换到免 Token 的「Agent 轻量解析」。',
+  enrichmentTokenVisitMineru: '打开 mineru.net ↗',
+  enrichmentEnableNoticeTitle: '文档解析组件已启用',
+  enrichmentEnableNoticeDescription:
+    '提交具体的 Zotero PDF 附件或公开 PDF URL 时，该文档会发送到 MinerU（mineru.net）解析，Markdown 保存在本机。普通检索、打开 PDF 和保存设置不会上传文档；每次解析都需要你提交该文档。',
+  enrichmentEnableNoticeConfirm: '我知道了',
+  enrichmentEnableNoticeClose: '关闭',
   groupEnrichmentOutput: '输出与数据说明',
   groupEnrichmentOutputDesc:
-    '文档解析组件已启用。本地附件与 URL PDF 发送至 MinerU 解析，Markdown 产物保存在下方本地目录。',
+    '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。普通读取只复用已有产物，不上传文档。',
   enrichmentOutputDir: '解析文件目录',
   enrichmentOutputDirHint:
     '解析后 Markdown 文件的绝对目录。留空使用默认位置；「恢复默认」可清除自定义路径。',
@@ -1077,12 +1091,19 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelStatusFailed: '下载失败',
   semanticModelStatusChecking: '正在校验模型包…',
   semanticModelStatusCancelling: '正在取消下载…',
+  semanticModelStatusDeleting: '正在删除…',
   semanticModelBundleRepairHint:
     '模型包缺失或损坏。可用「下载模型」获取、「重新下载」替换，或用「校验模型」检查磁盘上已有的文件；语义检索不会被自动关闭。',
   semanticModelVerifyAction: '校验模型',
   semanticModelDownloadAction: '下载模型',
   semanticModelRedownloadAction: '重新下载',
   semanticModelCancelAction: '取消下载',
+  semanticModelDeleteAction: '删除模型',
+  semanticModelDeleteTitle: '删除本地模型？',
+  semanticModelDeleteDescription: '这会删除磁盘上的模型文件；重新下载前，语义检索不可用。',
+  semanticModelDeleteCancel: '取消',
+  semanticModelDeleteConfirm: '删除',
+  semanticModelDeleteClose: '关闭',
   semanticModelUnavailable:
     '文档解析组件未启用，模型状态与下载不可用。请在「包含的组件」中启用后再试。',
   semanticModelDownloadingFile: '正在下载：{file}',

@@ -60,6 +60,17 @@ function modelPortOf(overrides: Partial<EnrichmentModelPort> = {}): EnrichmentMo
       ok: true as const,
       value: { cancelled: false },
     })),
+    deleteSemanticModel: vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '',
+        removed: true,
+        removedFiles: 1,
+        removedBytes: 1,
+      },
+    })),
     verifySemanticModel: vi.fn(async () => ({
       ok: true as const,
       value: statusResult({ ready: true, percent: 100 }),

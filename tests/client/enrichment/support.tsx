@@ -15,6 +15,7 @@ import {
   EnrichmentFormController,
   type EnrichmentCardFace,
   type EnrichmentCardState,
+  type EnrichmentCredentialPort,
   type EnrichmentModelPort,
 } from '../../../src/client/enrichment-form-controller.ts'
 import { en, zh } from '../../../src/client/locales.ts'
@@ -48,6 +49,17 @@ export function modelPortOf(overrides: Partial<EnrichmentModelPort> = {}): Enric
       ok: true as const,
       value: { cancelled: false },
     })),
+    deleteSemanticModel: vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '',
+        removed: true,
+        removedFiles: 1,
+        removedBytes: 1,
+      },
+    })),
     verifySemanticModel: vi.fn(async () => ({
       ok: true as const,
       value: { ...status, ready: true, percent: 100 },
@@ -61,16 +73,13 @@ export function mountHarness(
   options: Parameters<typeof fakeScope>[0] = {},
   view: 'summary' | 'page' = 'page',
   modelPort?: EnrichmentModelPort,
+  credentials: EnrichmentCredentialPort = {
+    describe: async () => ({ ok: true, value: {} }),
+    set: async () => ({ ok: true, value: undefined }),
+  },
 ): Harness {
   const scope = fakeScope(options)
-  const controller = new EnrichmentFormController(
-    scope,
-    {
-      describe: async () => ({ ok: true, value: {} }),
-      set: async () => ({ ok: true, value: undefined }),
-    },
-    modelPort,
-  )
+  const controller = new EnrichmentFormController(scope, credentials, modelPort)
   const face = controller.inject()
 
   function Section() {
@@ -88,6 +97,7 @@ export function mountHarness(
       discard: face.discard,
       downloadModel: face.downloadModel,
       cancelModelDownload: face.cancelModelDownload,
+      deleteModel: face.deleteModel,
       verifyModel: face.verifyModel,
       checkModelStatus: face.checkModelStatus,
     } as unknown as EnrichmentSettingsSectionProps

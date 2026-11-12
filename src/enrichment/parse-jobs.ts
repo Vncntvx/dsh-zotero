@@ -31,7 +31,6 @@ import {
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
   ZOTERO_ENRICHMENT_TASK_FAILED,
-  ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NOT_FOUND,
   ZOTERO_PROVIDER_UNAVAILABLE,
@@ -350,8 +349,6 @@ export class EnrichmentParseJobs {
     signal.throwIfAborted()
     this.open()
     const config = this.config()
-    if (!config.allowDocumentUpload)
-      throw new ZoteroError('Document upload is disabled.', ZOTERO_ENRICHMENT_UPLOAD_DISABLED)
     const request = parseWire(zoteroStartDocumentParseRequestSchema, input)
     const target = parseTargetOf(request.target)
     const sessionId = SessionId(request.sessionId)

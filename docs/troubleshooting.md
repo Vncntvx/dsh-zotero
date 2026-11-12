@@ -172,7 +172,6 @@
 
 - **现象**：主动解析或语义读取返回 `ZOTERO_ENRICHMENT_*` 错误码。
 - **原因与排查**：
-  - `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`：部署开关 `allowDocumentUpload` 为默认 `false`。挂载组件不授权上传；在设置中打开该开关后，针对一个具体 Zotero PDF 附件或公开 PDF URL 提交。普通读取、PDF 打开、设置保存与服务启动不触发解析或上传。
   - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`：语义检索已开启，但所选模型缺失、损坏或本地推理运行时不可用。读取以错误失败，不回退为 BM25；下载、修复或校验模型后重试，或关闭语义检索改用完整 BM25。
   - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`：`pro` 精准模式下配置的 MinerU Token 凭据引用无法解析，读取以错误失败，不降级为免费或匿名。检查引用名与宿主凭据存储中的值。
   - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`：主动解析需要会话所属 `ctx.jobs` 与实时会话控制器，当前缺失；确认在可用的会话与宿主环境中提交。

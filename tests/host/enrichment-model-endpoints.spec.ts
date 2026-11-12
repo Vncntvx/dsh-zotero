@@ -50,6 +50,14 @@ function managerOf(overrides: Partial<Record<string, unknown>> = {}): ModelDownl
       path: '/models/qwen3-0.6b',
     })),
     cancel: vi.fn(async () => false),
+    remove: vi.fn(async () => ({
+      success: true,
+      model: 'balanced',
+      path: '/models/qwen3-0.6b',
+      removed: true,
+      removedFiles: 3,
+      removedBytes: 12,
+    })),
     verify: vi.fn(async () => statusOf({ ready: true, percent: 100 })),
     dispose: vi.fn(async () => {}),
     ...overrides,
@@ -113,6 +121,20 @@ describe('the enrichment model endpoints', () => {
     })
     expect((await service.verifySemanticModel({}, LIVE)).ready).toBe(true)
     expect(manager.verify).toHaveBeenCalledWith('balanced', '')
+  })
+
+  it('deletes with the request model and directory overriding committed config', async () => {
+    const manager = managerOf()
+    const service = serviceOf(
+      { semanticModel: 'balanced', semanticModelDir: '/committed/models' },
+      manager,
+    )
+    const result = await service.deleteSemanticModel(
+      { model: 'lightweight', modelDir: '/request/models' },
+      LIVE,
+    )
+    expect(result.removed).toBe(true)
+    expect(manager.remove).toHaveBeenCalledWith('lightweight', '/request/models', LIVE)
   })
 
   it('refuses an unknown model at the wire boundary', async () => {

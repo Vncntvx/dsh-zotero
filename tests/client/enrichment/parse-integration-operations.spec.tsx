@@ -132,7 +132,7 @@ describe('parsing operation integration', () => {
     act(() =>
       runtime.form.publish({
         revision: 2,
-        value: { ...ENRICHMENT_DEFAULTS, allowDocumentUpload: true, mode: 'pro' },
+        value: { ...ENRICHMENT_DEFAULTS, mode: 'pro' },
       }),
     )
     panel = runtime.remount(panel)

@@ -79,6 +79,7 @@ describe('the browser-half entry', () => {
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'shell.overlay',
       'tool.call.toolview',
+      'shell.overlay',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',

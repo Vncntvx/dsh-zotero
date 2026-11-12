@@ -1,6 +1,6 @@
 /**
  * The per-service manager for local embedding-model bundles: status, download,
- * cancel, verify, force re-download.
+ * cancel, verify, force re-download, and delete.
  *
  * One canonical `<model>|<directory>` owns a synchronous reservation covering
  * directory validation, the cross-process lock, streaming, publication and
@@ -31,7 +31,9 @@ import {
 } from '../enrichment-model-catalog.js'
 import {
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
   ZoteroError,
 } from '../errors.js'
 import { resolveSafeDirectory, type SafeDirectoryDeps } from './safe-directory.js'
@@ -43,6 +45,7 @@ import {
   type DownloadClientDeps,
 } from './model-download-client.js'
 import { installModelBundle, type ModelInstallationFile } from './model-installation.js'
+import { ModelRemovalError, removeModelBundle } from './model-removal.js'
 
 export interface SemanticModelStatus {
   readonly model: string
@@ -61,6 +64,15 @@ export interface SemanticModelDownloadResult {
   readonly model: string
   readonly status: 'started' | 'already-ready' | 'downloading'
   readonly path: string
+}
+
+export interface SemanticModelDeleteResult {
+  readonly success: boolean
+  readonly model: string
+  readonly path: string
+  readonly removed: boolean
+  readonly removedFiles: number
+  readonly removedBytes: number
 }
 
 interface ActiveDownload {
@@ -185,7 +197,9 @@ export class ModelDownloadManager {
     )
     if (live !== undefined) return { ...live.status }
     const disk = await this.inspect(spec, dir)
-    const stale = this.entries.get(keyOf(spec.key, dir))
+    const stale =
+      this.entries.get(keyOf(spec.key, dir)) ??
+      this.entries.get(reservationKeyOf(spec.key, modelDir))
     if (stale !== undefined && stale.status.error !== undefined) {
       if (disk.kind === 'ready') {
         this.entries.delete(stale.key)
@@ -194,6 +208,62 @@ export class ModelDownloadManager {
       return { ...stale.status }
     }
     return statusOf(spec, dir, disk)
+  }
+
+  /**
+   * Delete the selected model's marker and pinned files. Unknown files stay,
+   * and an active download for the same target is refused.
+   */
+  async remove(
+    model: string,
+    modelDir?: string,
+    signal?: AbortSignal,
+  ): Promise<SemanticModelDeleteResult> {
+    if (this.closed) throw failed('the model download manager is closed')
+    if (!isKnownModel(model)) {
+      throw new ZoteroError(
+        `unknown semantic model "${model}"; expected one of ${knownModelList()}`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    }
+    const spec = semanticModelOf(model)
+    let dir: string
+    try {
+      dir = await readOnlyDir(spec.physicalKey, modelDir, this.fsDeps)
+    } catch (error) {
+      throw new ZoteroError(
+        `Could not resolve the model directory: ${messageOf(error)}`,
+        ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
+        { cause: error },
+      )
+    }
+    const active =
+      this.entries.get(reservationKeyOf(spec.key, modelDir)) ??
+      this.entries.get(keyOf(spec.key, dir))
+    if (active?.status.downloading === true) {
+      throw new ZoteroError(
+        'The model is downloading. Cancel it before deleting.',
+        ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+      )
+    }
+    signal?.throwIfAborted()
+    let removed: { removed: boolean; removedFiles: number; removedBytes: number }
+    try {
+      removed = await removeModelBundle({
+        dir,
+        expected: manifestOf(spec),
+        ...(signal === undefined ? {} : { signal }),
+      })
+    } catch (error) {
+      const reason =
+        error instanceof ModelRemovalError
+          ? error.message
+          : `Could not delete the model: ${messageOf(error)}`
+      throw new ZoteroError(reason, ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED, { cause: error })
+    }
+    this.entries.delete(reservationKeyOf(spec.key, modelDir))
+    this.entries.delete(keyOf(spec.key, dir))
+    return { success: true, model: spec.key, path: dir, ...removed }
   }
 
   /**

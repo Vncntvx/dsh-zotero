@@ -36,7 +36,7 @@ async function reader() {
   const store = new ParsedArtifactStore(dir)
   const service = new EnrichmentService(
     ctx,
-    { allowDocumentUpload: true },
+    {},
     {
       client: { head, get } as unknown as MineruClient,
       parse,
@@ -151,7 +151,7 @@ describe('the ordinary artifact lookup boundary', () => {
     expect(JSON.parse(indexBytes.toString('utf8')).sources[sourceKey].cacheKey).toBe(keyB)
   })
 
-  it('reads a pro artifact after switching to free with uploads disabled', async () => {
+  it('reads a pro artifact after switching to free', async () => {
     const { service, store, head, get, parse } = await reader()
     const url = 'https://example.org/large.pdf'
     const contentLength = 11 * 1024 * 1024
@@ -160,7 +160,7 @@ describe('the ordinary artifact lookup boundary', () => {
       finalUrl: url,
       headers: new Headers({ etag: '"v1"', 'content-length': String(contentLength) }),
     })
-    service.config = { mode: 'free', allowDocumentUpload: false }
+    service.config = { mode: 'free' }
     await expect(lookup(service, url)).resolves.toMatchObject({
       kind: 'hit',
       provenance: { mode: 'pro', generation: GENERATION_A },

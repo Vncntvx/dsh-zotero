@@ -39,7 +39,7 @@ afterEach(async () => {
   tempDir = undefined
 })
 
-async function boot(allowDocumentUpload = true) {
+async function boot() {
   tempDir = mkdtempSync(join(tmpdir(), 'dsh-zotero-enrichment-e2e-'))
   const store = new ParsedArtifactStore(tempDir)
   const parse = vi.fn<typeof parseOnce>(async () => {
@@ -65,7 +65,7 @@ async function boot(allowDocumentUpload = true) {
       compose: async (ctx) => {
         new EnrichmentService(
           ctx,
-          { allowDocumentUpload, outputDir: tempDir },
+          { outputDir: tempDir },
           {
             client,
             parse,
@@ -146,35 +146,32 @@ async function read(host: HostLane): Promise<ZoteroRetrieveResult> {
 }
 
 describe('cached enrichment through a real ZoteroService', () => {
-  it.each([true, false])(
-    'serves a previously generated artifact twice without parsing when upload permission is %s',
-    async (allowDocumentUpload) => {
-      const { lane, store, parse, fetch, get, head, post } = await boot(allowDocumentUpload)
-      await seedArtifact(store)
+  it('serves a previously generated artifact twice without parsing', async () => {
+    const { lane, store, parse, fetch, get, head, post } = await boot()
+    await seedArtifact(store)
 
-      const first = await read(lane)
-      expect(first.evidence.some((entry) => entry.text.includes('Cached MinerU tiling'))).toBe(true)
-      expect(first.coverage).toBeUndefined()
-      expect(head).toHaveBeenCalledTimes(1)
-      expect(get).not.toHaveBeenCalled()
-      expect(parse).not.toHaveBeenCalled()
-      expect(post).not.toHaveBeenCalled()
-      expect(requestLines(lane.mock).some((line) => line.includes('/fulltext'))).toBe(false)
+    const first = await read(lane)
+    expect(first.evidence.some((entry) => entry.text.includes('Cached MinerU tiling'))).toBe(true)
+    expect(first.coverage).toBeUndefined()
+    expect(head).toHaveBeenCalledTimes(1)
+    expect(get).not.toHaveBeenCalled()
+    expect(parse).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+    expect(requestLines(lane.mock).some((line) => line.includes('/fulltext'))).toBe(false)
 
-      const second = await read(lane)
-      expect(second.evidence).toEqual(first.evidence)
-      expect(second.coverage).toBeUndefined()
-      expect(head).toHaveBeenCalledTimes(2)
-      expect(get).not.toHaveBeenCalled()
-      expect(parse).not.toHaveBeenCalled()
-      expect(post).not.toHaveBeenCalled()
-      expect(fetch.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
-        [pdfUrl, 'HEAD'],
-        [pdfUrl, 'HEAD'],
-      ])
-      expect(requestLines(lane.mock).some((line) => line.includes('/fulltext'))).toBe(false)
-    },
-  )
+    const second = await read(lane)
+    expect(second.evidence).toEqual(first.evidence)
+    expect(second.coverage).toBeUndefined()
+    expect(head).toHaveBeenCalledTimes(2)
+    expect(get).not.toHaveBeenCalled()
+    expect(parse).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+    expect(fetch.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      [pdfUrl, 'HEAD'],
+      [pdfUrl, 'HEAD'],
+    ])
+    expect(requestLines(lane.mock).some((line) => line.includes('/fulltext'))).toBe(false)
+  })
 
   it('uses the Zotero index on an absent source record without a HEAD or parse', async () => {
     const { lane, parse, fetch, get, head, post } = await boot()

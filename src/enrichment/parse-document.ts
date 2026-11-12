@@ -12,7 +12,6 @@ import {
   ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
   ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
-  ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
 } from '../errors.js'
@@ -120,12 +119,6 @@ export async function parseDocument(
       throw new ZoteroError('Invalid enrichment configuration.', ZOTERO_INVALID_ARGUMENT, {
         cause: error,
       })
-    }
-    if (!config.allowDocumentUpload) {
-      throw new ZoteroError(
-        'MinerU parsing requires allowDocumentUpload; no bytes were sent',
-        ZOTERO_ENRICHMENT_UPLOAD_DISABLED,
-      )
     }
     if (!isPdfContentType(input.contentType)) {
       throw new ZoteroError(

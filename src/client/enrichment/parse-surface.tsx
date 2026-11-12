@@ -32,13 +32,7 @@ export interface DocumentParseClientContext {
 
 export type DocumentParseDeployment = Pick<
   DocumentParseCapabilities,
-  | 'mounted'
-  | 'connected'
-  | 'allowDocumentUpload'
-  | 'mode'
-  | 'revision'
-  | 'maxFileBytes'
-  | 'maxPages'
+  'mounted' | 'connected' | 'mode' | 'revision' | 'maxFileBytes' | 'maxPages'
 > & { readonly error?: string }
 
 /** Kept separate from the five-member shared Zotero client face. */
@@ -92,7 +86,6 @@ export function createDocumentParseSurface(
       mounted,
       connected: ctx.connection.state.getSnapshot() === 'connected',
       mode: preferences.mode,
-      allowDocumentUpload: accepted.status === 'ready' && !error && preferences.allowDocumentUpload,
       revision: `${generation}:${accepted.revision ?? 'pending'}`,
       maxFileBytes: accepted.status === 'ready' && !error ? limits.maxBytes : 0,
       maxPages: accepted.status === 'ready' && !error ? limits.maxPages : 0,
@@ -212,7 +205,6 @@ export interface DocumentParseSessionAccess extends Pick<
 const ABSENT_DEPLOYMENT: DocumentParseDeployment = {
   mounted: false,
   connected: false,
-  allowDocumentUpload: false,
   mode: 'free',
   revision: 'absent',
   maxFileBytes: 0,

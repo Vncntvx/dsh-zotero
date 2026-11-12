@@ -18,15 +18,40 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnrichmentService } from '../../src/enrichment/index.ts'
 import { ModelDownloadManager } from '../../src/enrichment/model-downloader.ts'
 import type { SafeDirectoryDeps } from '../../src/enrichment/safe-directory.ts'
-import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED, ZoteroError } from '../../src/errors.ts'
+import {
+  ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  ZoteroError,
+} from '../../src/errors.ts'
 import { TYPERT_MANIFEST } from '../../src/typert.ts'
 
 const MODEL_DIR = '/models/enrichment-gateway'
 const MODEL_ENDPOINTS = [
-  { method: 'semanticModelStatus', operation: 'status' },
-  { method: 'downloadSemanticModel', operation: 'start' },
-  { method: 'cancelSemanticModelDownload', operation: 'cancel' },
-  { method: 'verifySemanticModel', operation: 'verify' },
+  {
+    method: 'semanticModelStatus',
+    operation: 'status',
+    failureCode: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  },
+  {
+    method: 'downloadSemanticModel',
+    operation: 'start',
+    failureCode: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  },
+  {
+    method: 'cancelSemanticModelDownload',
+    operation: 'cancel',
+    failureCode: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  },
+  {
+    method: 'deleteSemanticModel',
+    operation: 'remove',
+    failureCode: ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
+  },
+  {
+    method: 'verifySemanticModel',
+    operation: 'verify',
+    failureCode: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  },
 ] as const
 
 const contexts: Context[] = []
@@ -98,7 +123,7 @@ describe('enrichment model errors through the real Typert Gateway', () => {
 
   it.each(MODEL_ENDPOINTS)(
     '$method preserves a manager directory failure as zotero/domain with its stable code',
-    async ({ method, operation }) => {
+    async ({ method, operation, failureCode }) => {
       const { gateway, peer, downloads, fs } = await setupGateway()
       const called = vi.spyOn(downloads, operation)
       const failure = await failureOf(gateway, {
@@ -111,7 +136,7 @@ describe('enrichment model errors through the real Typert Gateway', () => {
       expect(failure.wire).toEqual({
         code: 'zotero/domain',
         message: expect.any(String),
-        details: { code: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED },
+        details: { code: failureCode },
       })
       expect(failure.error).toBeInstanceOf(RemoteError)
       expect(failure.error).toMatchObject({

@@ -24,16 +24,15 @@
     # user-submitted MinerU document parsing, read-only reuse of existing
     # parsed artifacts, and local semantic passage ranking with its pinned
     # embedding models. It ships off. Mounting the row registers no model
-    # tools and injects no prompt section; it only makes the capabilities
-    # available. It does not authorize any document upload.
+    # tools and injects no prompt section. Enabling the component is the
+    # deployment's acceptance of document egress to MinerU; it starts no work.
     # Ordinary reads use the core's read-only FulltextEnhancer.lookup slot to
     # reuse valid Markdown for the same source; a miss continues through the
     # existing Zotero fulltext index or authorized local PDF extraction. Only
     # an explicit user submission of one specific Zotero PDF attachment or one
-    # public PDF URL starts a MinerU parse, and that additionally requires the
-    # deployment gate allowDocumentUpload (default false) plus remote-action
-    # and session access checks. PDF opening, settings saves, and service
-    # startup never submit, resume, or upload a MinerU task.
+    # public PDF URL starts a MinerU parse, with remote-action and session
+    # access checks. PDF opening, settings saves, and service startup never
+    # submit, resume, or upload a MinerU task.
     # Local semantic ranking needs no MinerU call or upload permission. With
     # semantic search enabled but its model missing, corrupt, or its runtime
     # unavailable, a read fails explicitly with
@@ -44,5 +43,3 @@
     - id: enrichment
       name: dsh-zotero/enrichment
       disabled: true
-      config:
-        allowDocumentUpload: false

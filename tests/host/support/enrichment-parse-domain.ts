@@ -82,7 +82,7 @@ export function memoryFiles() {
   return { files, deps }
 }
 
-export function parseDomain(config: EnrichmentConfig = { allowDocumentUpload: true }) {
+export function parseDomain(config: EnrichmentConfig = {}) {
   const fs = memoryFiles()
   const store = new ParsedArtifactStore('/parsed', fs.deps)
   const ctx = new Context()

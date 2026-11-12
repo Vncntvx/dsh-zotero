@@ -759,7 +759,6 @@ zotero_batch_items(
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                      |
 | `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）                                  |
 | `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析（fail-closed，不降级免费/匿名）      |
-| `ZOTERO_ENRICHMENT_UPLOAD_DISABLED`        | 部署开关 `allowDocumentUpload` 关闭，拒绝新的主动文档上传                         |
 | `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | 主动解析需要会话所属 `ctx.jobs` 与会话控制器，但当前不可用                        |
 | `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | 同一操作 id 被以不同目标或配置快照重放                                            |
 | `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU 报告解析任务失败（附带其自身原因）                                         |
@@ -768,6 +767,7 @@ zotero_batch_items(
 | `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | 文档超过所选接口的体积上限或不是 PDF                                              |
 | `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | 语义检索已开启，但模型缺失/损坏或本地推理运行时不可用（fail-closed，不回退 BM25） |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                  |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                  |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                |
 | `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                      |
 | `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                  |

@@ -50,7 +50,11 @@ import { statusView } from '../../helpers/status-view.ts'
 // only needs the pending capsule, so stub it with the shared DOM face.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
+  const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
+  return {
+    ...(await primitivesWithRealForm(importOriginal)),
+    Modal: original.Modal,
+  }
 })
 
 /** The renderer's binding: a snapshot selector hook over the page's store. */
