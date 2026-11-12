@@ -50,7 +50,7 @@ Prefer batch metadata for known local refs: up to 50 unique refs, standard field
 
 `src/skills/` is Host-only. Each SOP declares TypeScript data and Markdown instructions; `definition.ts` renders shared contracts and JSON recipes, while `register.ts` uses optional `ctx.inject(['skills'])` registration. Core owns 4 SOPs and Scholarly owns 4. Fibers remove registrations when components or the registry unload; a late or replaced registry rebinds automatically.
 
-The Harness base composition supplies the `dsh-skill` registry and `dsh-tool-skill` consumer. Custom compositions need both. Versions are generated with `npm run harness:pin -- 0.2.2-rc.1`, and npm updates the lockfile.
+The Harness base composition supplies the `dsh-skill` registry and `dsh-tool-skill` consumer. Custom compositions need both. Versions are generated with `npm run harness:pin -- 0.2.2-rc.2`, and npm updates the lockfile.
 
 Test ownership: `tests/host/skills.spec.ts` covers composition and lifecycle; `tests/scholarly/skills.spec.ts` covers the external authorization catalog; `tests/host/skill-contracts.spec.ts` checks every recipe against recipe arguments, the parameter tables parsed from both language tool references, and real schema properties, with recursive nested-key checks and tool-name scans across model-facing fields; `tests/host/subagent-view.spec.ts` covers the scoped tool view and restriction lifecycle, `tests/host/subagent-guard.spec.ts` covers execution-time denial and refresh failure containment; `tests/unit/client-graph-authority.spec.ts` refuses browser imports. Tests access neither a real library nor external indexes.
 

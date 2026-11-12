@@ -41,6 +41,20 @@ export interface StyleTokenDiff {
 export declare function pinnedHarness(pkg: unknown): string
 
 /**
+ * The theme sheets as of one pin tag, read through git so the snapshot always
+ * describes the pin rather than whatever the sibling working tree holds.
+ * @param run - runs one git command and returns its stdout.
+ * @param harnessRoot - the sibling checkout.
+ * @param pin - the exact harness version.
+ * @returns the sorted sheet file names and a reader for each one.
+ */
+export declare function pinThemeSheets(
+  run: (args: readonly string[]) => string,
+  harnessRoot: string,
+  pin: string,
+): { files: string[]; read: (name: string) => string }
+
+/**
  * Every custom property a stylesheet defines under one prefix.
  * @param css - stylesheet source.
  * @param prefix - the namespace to collect, e.g. `--dsw-` or `--ds-`.

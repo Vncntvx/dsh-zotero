@@ -35,23 +35,46 @@
  * @module dsh-zotero/scripts/style-tokens
  */
 
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const fixture = join(root, 'tests', 'fixtures', 'style-tokens.json')
-const manifest = join(root, 'package.json')
-const defaultThemeDir = join(
-  root,
-  '..',
-  'deepseek-harness',
-  'packages',
-  'client',
-  'ui-theme',
-  'src',
-  'styles',
-)
+
+/** The sibling harness checkout the pin tag is read from. */
+const siblingRoot = join(root, '..', 'deepseek-harness')
+
+/** Where the theme sheets live inside the harness checkout, at every tag. */
+const THEME_DIR = 'packages/client/ui-theme/src/styles'
+
+/**
+ * The theme sheets as of one pin tag, read through `git show` so the snapshot
+ * always describes the pin.
+ *
+ * Reading the sibling's working tree is the failure this replaced: a checkout
+ * ahead of the pin contributed tokens the pinned host never defines, and the
+ * snapshot then claimed to describe a version it had never seen. `style-guard`
+ * would allowlist names the running host does not publish, and the browser
+ * falls back silently.
+ * @param run - runs one git command and returns its stdout.
+ * @param harnessRoot - the sibling checkout.
+ * @param pin - the exact harness version.
+ * @returns the sheet file names, sorted, and a reader for each one.
+ */
+export function pinThemeSheets(run, harnessRoot, pin) {
+  const listing = run(['-C', harnessRoot, 'ls-tree', '--name-only', `dsh-v${pin}:${THEME_DIR}`])
+  const files = listing
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.endsWith('.css'))
+    .sort()
+  if (files.length === 0) throw new Error(`no theme sheets at dsh-v${pin}:${THEME_DIR}`)
+  return {
+    files,
+    read: (name) => run(['-C', harnessRoot, 'show', `dsh-v${pin}:${THEME_DIR}/${name}`]),
+  }
+}
 
 /**
  * The harness version the snapshot describes: the exact pin on the client
@@ -127,18 +150,50 @@ export function snapshotOf(current, { harness, dsw, ds = [] }) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const themeDir = process.env.DSH_THEME_DIR ?? defaultThemeDir
-  let files
-  try {
-    files = readdirSync(themeDir)
-      .filter((name) => name.endsWith('.css'))
-      .sort()
-  } catch {
-    console.error(`style-tokens: no theme sheets at ${themeDir}`)
+  const fixture = join(root, 'tests', 'fixtures', 'style-tokens.json')
+  const manifest = join(root, 'package.json')
+  const harness = pinnedHarness(JSON.parse(readFileSync(manifest, 'utf8')))
+  if (harness === '') {
+    console.error(
+      'style-tokens: package.json declares no pinned client theme or primitives version',
+    )
     process.exit(1)
   }
-  const harness = pinnedHarness(JSON.parse(readFileSync(manifest, 'utf8')))
-  const read = (name) => readFileSync(join(themeDir, name), 'utf8')
+  // `DSH_THEME_DIR` stays the explicit escape hatch for a non-sibling checkout.
+  // The default reads the pin tag: a working tree ahead of the pin would
+  // otherwise contribute tokens the pinned host never defines.
+  const themeDir = process.env.DSH_THEME_DIR
+  let files
+  let read
+  if (themeDir !== undefined) {
+    try {
+      files = readdirSync(themeDir)
+        .filter((name) => name.endsWith('.css'))
+        .sort()
+    } catch {
+      console.error(`style-tokens: no theme sheets at ${themeDir}`)
+      process.exit(1)
+    }
+    read = (name) => readFileSync(join(themeDir, name), 'utf8')
+  } else {
+    try {
+      const sheets = pinThemeSheets(
+        (args) => execFileSync('git', args, { encoding: 'utf8' }),
+        siblingRoot,
+        harness,
+      )
+      files = sheets.files
+      read = sheets.read
+    } catch (error) {
+      console.error(
+        `style-tokens: cannot read dsh-v${harness} from ${siblingRoot}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n` +
+          '  the snapshot describes the pin tag; check out the sibling with that tag, or set DSH_THEME_DIR',
+      )
+      process.exit(1)
+    }
+  }
   const dsw = mergeThemeTokens(read, files)
   const ds = mergeThemeTokens(read, files, '--ds-')
   const current = (() => {

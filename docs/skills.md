@@ -50,7 +50,7 @@ Scholarly 指 `dsh-zotero/scholarly` 组件。该组件未启用时，四个对�
 
 `src/skills/` 为纯 Host 模块。每个 SOP 独立定义 TypeScript 数据和 Markdown 指令，`definition.ts` 统一渲染共享合同及 JSON Recipe，`register.ts` 通过可选 `ctx.inject(['skills'])` 注册。核心服务持有 4 个 SOP，Scholarly 服务持有 4 个；组件或 registry 卸载时由 fiber 清理，registry 后挂载或替换后自动重绑。
 
-Harness 基础组合提供 `dsh-skill` registry 和 `dsh-tool-skill` 消费端；自定义组合也需要两者。依赖版本由 `npm run harness:pin -- 0.2.2-rc.1` 生成，锁文件通过 npm 更新。
+Harness 基础组合提供 `dsh-skill` registry 和 `dsh-tool-skill` 消费端；自定义组合也需要两者。依赖版本由 `npm run harness:pin -- 0.2.2-rc.2` 生成，锁文件通过 npm 更新。
 
 测试归属：`tests/host/skills.spec.ts` 验证组合与生命周期；`tests/scholarly/skills.spec.ts` 验证外部授权目录；`tests/host/skill-contracts.spec.ts` 双向校验全部 Recipe，把 recipe 参数、中英文工具参考的参数表与真实 schema properties 逐项对照，并递归校验嵌套键、扫描模型可见字段中的工具名；`tests/host/subagent-view.spec.ts` 验证 scoped 视图与限制生命周期，`tests/host/subagent-guard.spec.ts` 验证执行期拒绝与刷新失败容纳；`tests/unit/client-graph-authority.spec.ts` 拒绝浏览器导入。测试均不访问真实文库或外部索引。
 

@@ -339,6 +339,11 @@ const options = {
   // runtime keeps JSX out of the bundle and avoids a classic-runtime React
   // global (dsh-at-file's build uses the same mode).
   jsx: 'automatic',
+  // The page loads this file as a classic script on every session start, so
+  // its parse cost is on the critical path. Minification is safe here: the
+  // module table answers `require`, nothing reads function names, and the
+  // sourcemap still names every frame in a stack trace.
+  minify: true,
   sourcemap: true,
   external: EXTERNALS,
   define: {

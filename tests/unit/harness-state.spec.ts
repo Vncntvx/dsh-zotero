@@ -1,6 +1,6 @@
 /**
  * The harness compatibility policy: dev and overrides take the exact pin,
- * peers and engines become >=pin, the lockfile resolves the pin, and vendored
+ * peers become >=pin and engines the bounded tested line, the lockfile resolves the pin, and vendored
  * framework floors match the sibling. Documents are out of scope: they record
  * what each released plugin version required, not the current pin.
  * @module tests/unit/harness-state
@@ -34,7 +34,7 @@ describe('applyPinToManifest', () => {
 
   it('writes the exact pin into dev/overrides and >=pin into peer/engines', () => {
     const next = applyPinToManifest(manifest(), '0.1.7-rc.1')
-    expect(next.engines.dsh).toBe('>=0.1.7-rc.1')
+    expect(next.engines.dsh).toBe('>=0.1.7-rc.1 <0.2.0')
     expect(next.dependencies['@deepseek-ai/dsh-llm']).toBe('0.1.7-rc.1')
     expect(next.devDependencies['@deepseek-ai/dsh-tools']).toBe('0.1.7-rc.1')
     expect(next.peerDependencies['@deepseek-ai/dsh-tools']).toBe('>=0.1.7-rc.1')
@@ -57,7 +57,7 @@ describe('applyPinToManifest', () => {
 
 describe('collectPinFaceProblems', () => {
   const exact = () => ({
-    engines: { dsh: '>=0.1.7-rc.1' },
+    engines: { dsh: '>=0.1.7-rc.1 <0.2.0' },
     peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.1.7-rc.1' },
   })
 
@@ -77,10 +77,10 @@ describe('collectPinFaceProblems', () => {
 
   it('rejects a wrong exact version and a missing engines face', () => {
     const wrong = {
-      engines: { dsh: '>=0.1.7-rc.2' },
+      engines: { dsh: '>=0.1.7-rc.2 <0.2.0' },
     }
     const problems = collectPinFaceProblems(wrong, '0.1.7-rc.1')
-    expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2"/)
+    expect(problems.join('\n')).toMatch(/engines\.dsh is ">=0\.1\.7-rc\.2 <0\.2\.0"/)
     // Zero dsh peers would skip npm peer checks and degrade package manager
     // dependency resolution; that is a policy hole, not a silent pass.
     expect(problems.join('\n')).toMatch(/declares no @deepseek-ai\/dsh-\*/)
@@ -90,7 +90,7 @@ describe('collectPinFaceProblems', () => {
   it('rejects a manifest that dropped every dsh peer', () => {
     const problems = collectPinFaceProblems(
       {
-        engines: { dsh: '>=0.1.7-rc.1' },
+        engines: { dsh: '>=0.1.7-rc.1 <0.2.0' },
         peerDependencies: { zod: '^4.4.3' },
       },
       '0.1.7-rc.1',
@@ -111,11 +111,11 @@ describe('collectPinFaceProblems', () => {
   it('does not confuse a longer prerelease with the pin', () => {
     // `>=0.1.7-rc.1-beta` must not be accepted as the pin `0.1.7-rc.1`.
     const longer = {
-      engines: { dsh: '>=0.1.7-rc.1-beta' },
+      engines: { dsh: '>=0.1.7-rc.1-beta <0.2.0' },
       peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.1.7-rc.1' },
     }
     expect(collectPinFaceProblems(longer, '0.1.7-rc.1').join('\n')).toMatch(
-      /engines\.dsh is ">=0\.1\.7-rc\.1-beta"/,
+      /engines\.dsh is ">=0\.1\.7-rc\.1-beta <0\.2\.0"/,
     )
   })
 

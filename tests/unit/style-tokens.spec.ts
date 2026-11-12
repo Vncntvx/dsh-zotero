@@ -23,6 +23,7 @@ import {
   collectThemeTokens,
   diffTokens,
   mergeThemeTokens,
+  pinThemeSheets,
   pinnedHarness,
   snapshotOf,
 } from '../../scripts/style-tokens.mjs'
@@ -153,5 +154,34 @@ describe('the committed snapshot', () => {
   it('lists the runtime seams this plugin consumes', () => {
     expect(snapshot.dsh).toContain('--dsh-content-font-size')
     expect(snapshot.dsh).toContain('--dsh-composer-height')
+  })
+})
+
+describe('pinThemeSheets', () => {
+  const calls: string[][] = []
+  const run = (args: readonly string[]): string => {
+    calls.push([...args])
+    if (args[2] === 'ls-tree') return 'z-index.css\nreset.css\nREADME.md\n'
+    return `/* ${args[3]} */`
+  }
+
+  it('lists only stylesheets, sorted, and reads each one out of the tag', () => {
+    calls.length = 0
+    const sheets = pinThemeSheets(run, '/sibling', '0.2.2-rc.2')
+    expect(sheets.files).toEqual(['reset.css', 'z-index.css'])
+    expect(calls[0]).toEqual([
+      '-C',
+      '/sibling',
+      'ls-tree',
+      '--name-only',
+      'dsh-v0.2.2-rc.2:packages/client/ui-theme/src/styles',
+    ])
+    expect(sheets.read('reset.css')).toBe(
+      '/* dsh-v0.2.2-rc.2:packages/client/ui-theme/src/styles/reset.css */',
+    )
+  })
+
+  it('refuses a tag that carries no sheets instead of writing an empty allowlist', () => {
+    expect(() => pinThemeSheets(() => '\n', '/sibling', '9.9.9')).toThrow(/no theme sheets/)
   })
 })

@@ -46,10 +46,18 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, satisfies, validRange } from 'semver'
+import { stripCommentsAndStrings } from './shared/source-scan.mjs'
 import { collectHarnessPackages, resolveHarnessRoot } from './shared/harness-packages.mjs'
 import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
 import { GENERATED_REMOTE, INLINE_SAFE, VENDORED_LIBRARY } from './client-graph-authority.mjs'
@@ -268,6 +276,21 @@ function isExactPinFace(value, pin) {
 }
 
 /**
+ * The exclusive upper bound of the tested line: the next minor after the pin's
+ * minor. `engines.dsh` carries it so an install cannot land on a harness
+ * generation this plugin was never built or tested against; the browser bundle
+ * mirrors the pin's client dependencies verbatim, so the next minor is a
+ * different client contract even when the host itself starts fine.
+ * @param pin - the exact pin.
+ * @returns the bound, or undefined when the pin is unreadable.
+ */
+export function harnessUpperBoundOf(pin) {
+  const match = /^(\d+)\.(\d+)\.\d+/.exec(pin)
+  if (match === null) return undefined
+  return `${match[1]}.${Number(match[2]) + 1}.0`
+}
+
+/**
  * Whether a declared compatibility face is >= the exact pin.
  * @param value - the declared string.
  * @param pin - the exact pin.
@@ -275,6 +298,21 @@ function isExactPinFace(value, pin) {
  */
 function isGtePinFace(value, pin) {
   return value === `>=${pin}`
+}
+
+/**
+ * Whether `engines.dsh` states the tested line: >= the pin and below the next
+ * minor, which is the only range this plugin's mirrored client dependencies
+ * were read against. The unbounded `>=pin` form is refused: it accepts a host
+ * whose client contract this bundle was never built against, and the bundle
+ * resolves the host's own copies of those modules.
+ * @param value - the declared string.
+ * @param pin - the exact pin.
+ * @returns true when the value is the bounded tested line.
+ */
+function isEngineFace(value, pin) {
+  const bound = harnessUpperBoundOf(pin)
+  return bound !== undefined && value === `>=${pin} <${bound}`
 }
 
 /** Human-readable reason a harness face is not the exact pin. */
@@ -341,8 +379,18 @@ export function collectPinFaceProblems(manifest, pin) {
       found.push(`peerDependencies is missing "${pkg}" declared in dsh.client.inject`)
     }
   }
-  if (!isGtePinFace(manifest.engines?.dsh, pin)) {
-    found.push(gtePinProblem('engines.dsh', undefined, manifest.engines?.dsh, pin))
+  if (!isEngineFace(manifest.engines?.dsh, pin)) {
+    const bound = harnessUpperBoundOf(pin)
+    const expected = bound === undefined ? `>=${pin}` : `>=${pin} <${bound}`
+    const where = 'engines.dsh'
+    const value = manifest.engines?.dsh
+    if (typeof value !== 'string' || value.length === 0) {
+      found.push(`${where} is missing; expected "${expected}"`)
+    } else if (value.includes('||') || /^[~^]|^<| - /.test(value)) {
+      found.push(`${where} is "${value}"; expected "${expected}" (no caret ranges, no dual arms)`)
+    } else {
+      found.push(`${where} is "${value}", expected "${expected}"`)
+    }
   }
   if (manifest.dsh?.harnessRange !== undefined) {
     // Self-invented face: the runtime never read it and it was removed on
@@ -525,7 +573,14 @@ function checkOverrideNames(manifest, packages) {
 }
 
 /** Collect every `@deepseek-ai/*` specifier this repo imports. */
-function importedSpecifiers() {
+/**
+ * Collect every `@deepseek-ai/*` specifier this repo imports.
+ *
+ * Exported for `tests/unit/harness-state`: the scan's whole job is to ignore
+ * the spec's own counter-examples, and only the real tree can prove that.
+ * @returns the sorted, de-duplicated specifiers.
+ */
+export function importedSpecifiers() {
   const specifiers = new Set()
   const pattern = /(?:from|import)\s*\(?\s*'(@deepseek-ai\/[^']+)'/g
   const walk = (dir) => {
@@ -542,11 +597,37 @@ function importedSpecifiers() {
         continue
       }
       if (!/\.(?:ts|tsx)$/.test(entry.name)) continue
-      for (const match of readFileSync(child, 'utf8').matchAll(pattern)) specifiers.add(match[1])
+      const source = readFileSync(child, 'utf8')
+      // Two readings of the same text, the way `upstreamSourceImportsOf` does
+      // it: the pattern needs the specifier's quotes, and the string-blanked
+      // reading is what tells a real import from a fixture that spells one out.
+      // Without that comparison the focus-gate spec's counter-examples register
+      // as imports and send this check hunting packages nobody depends on.
+      const noComments = stripCommentsAndStrings(source, false)
+      const codeOnly = stripCommentsAndStrings(source)
+      for (const match of noComments.matchAll(pattern)) {
+        if (codeOnly[match.index] === ' ') continue
+        specifiers.add(match[1])
+      }
     }
   }
   for (const scanRoot of SCAN_ROOTS) walk(join(root, scanRoot))
   return [...specifiers].sort()
+}
+
+/** The real path of a directory, or undefined when it does not exist. */
+function realDirOf(path) {
+  try {
+    return realpathSync(path)
+  } catch {
+    return undefined
+  }
+}
+
+/** Whether `child` lies inside `parent` (both already resolved). */
+function isInside(parent, child) {
+  const prefix = parent.endsWith('/') ? parent : `${parent}/`
+  return child === parent || child.startsWith(prefix)
 }
 
 /** Newest modification time under a directory tree, or undefined when absent. */
@@ -581,7 +662,15 @@ function newestMtime(dir) {
  * @returns absolute declaration path, or undefined when the export carries none.
  */
 function declarationOf(pkgDir, specifier) {
-  const manifest = readJson(join(pkgDir, 'package.json'))
+  // A directory without a manifest is an absent or half-installed package, not
+  // a crash: the caller reports it as a missing declaration so the fix names
+  // the install rather than a stack trace.
+  let manifest
+  try {
+    manifest = readJson(join(pkgDir, 'package.json'))
+  } catch {
+    return undefined
+  }
   const sub = specifier.slice(manifest.name.length).replace(/^\//, '')
   const key = sub === '' ? '.' : `./${sub}`
   const wildcard = Object.keys(manifest.exports ?? {}).find(
@@ -630,28 +719,54 @@ function clientRuntimeOf(pkgDir) {
  * @param harnessRoot - the sibling harness checkout root.
  * @param specifiers - upstream specifiers imported by this repository.
  * @param packages - optional pre-collected harness package map.
+ * @param installedRoot - optional `node_modules` the compiler resolves through.
+ *   When a package's installed copy lies outside the sibling checkout, that copy
+ *   is a registry install: its declarations are what typecheck reads, and the
+ *   sibling's source freshness says nothing about them. Those packages are
+ *   reported in `registry` instead of `stale`.
  * @returns categorized findings.
  */
-export function collectArtifactProblems(harnessRoot, specifiers, packages) {
+export function collectArtifactProblems(harnessRoot, specifiers, packages, installedRoot) {
   const resolvedPackages = packages ?? collectHarnessPackages(harnessRoot)
   const stale = []
   const staleRuntime = []
   const missing = []
   const outside = []
+  const registry = []
+  const registryNames = new Set()
   const sourceMtimeCache = new Map()
   const checkedClientPackages = new Set()
+  const harnessReal = realDirOf(harnessRoot)
   for (const specifier of specifiers) {
     const name = specifier.split('/').slice(0, 2).join('/')
-    const pkgDir = resolvedPackages.get(name)
-    if (pkgDir === undefined) {
+    const siblingDir = resolvedPackages.get(name)
+    if (siblingDir === undefined) {
       outside.push(specifier)
       continue
     }
+    // What typecheck actually resolves. A sibling checkout linked into
+    // `node_modules` resolves back inside `harnessRoot`; a registry install
+    // resolves to its own copy and must be judged by its version, not by a
+    // build of a different generation that happens to sit next door.
+    const installedDir =
+      installedRoot === undefined ? undefined : realDirOf(join(installedRoot, name))
+    const fromSibling =
+      installedDir === undefined || harnessReal === undefined || isInside(harnessReal, installedDir)
+    const pkgDir = fromSibling ? siblingDir : installedDir
     // The declaration the compiler resolves for *this* specifier: it decides
     // whether the import the plugin actually writes is backed by fresh types.
     const declaration = declarationOf(pkgDir, specifier)
     if (declaration === undefined || !existsSync(declaration)) {
       missing.push(specifier)
+      continue
+    }
+    if (!fromSibling) {
+      if (!registryNames.has(name)) {
+        registryNames.add(name)
+        // Only the harness packages move with the pin; the vendored libraries
+        // carry their own floors and are checked as vendors.
+        if (isDshPackage(name)) registry.push({ name, dir: installedDir })
+      }
       continue
     }
     const declarationMtime = statSync(declaration).mtimeMs
@@ -680,7 +795,7 @@ export function collectArtifactProblems(harnessRoot, specifiers, packages) {
       }
     }
   }
-  return { stale, staleRuntime, missing, outside }
+  return { stale, staleRuntime, missing, outside, registry }
 }
 
 /**
@@ -693,15 +808,16 @@ export function collectArtifactProblems(harnessRoot, specifiers, packages) {
  * @param strict - treat stale artifacts as a failure.
  * @param packages - optional pre-collected harness package map.
  */
-function checkArtifacts(strict, packages) {
+function checkArtifacts(strict, packages, pin) {
   if (!existsSync(harnessRoot)) {
     notes.push('sibling harness absent: upstream types come from the installed packages as-is')
     return
   }
-  const { stale, staleRuntime, missing, outside } = collectArtifactProblems(
+  const { stale, staleRuntime, missing, outside, registry } = collectArtifactProblems(
     harnessRoot,
     importedSpecifiers(),
     packages,
+    join(root, 'node_modules'),
   )
   if (missing.length > 0) {
     problems.push(
@@ -727,6 +843,33 @@ function checkArtifacts(strict, packages) {
   }
   if (outside.length > 0) {
     notes.push(`${outside.length} specifier(s) resolve outside the sibling: ${outside.join(', ')}`)
+  }
+  if (registry.length > 0) {
+    // A registry install is the tested line the pin names. Its declarations are
+    // what typecheck resolves, so the sibling's build state is not evidence
+    // about them; the version is.
+    notes.push(
+      `${registry.length} imported upstream package(s) are registry installs, not the sibling checkout;` +
+        ' their declarations are checked against the pin instead of the sibling build',
+    )
+    if (pin !== undefined) {
+      const wrong = []
+      for (const entry of registry) {
+        let version
+        try {
+          version = readJson(join(entry.dir, 'package.json')).version
+        } catch {
+          version = undefined
+        }
+        if (version !== pin) wrong.push(`${entry.name}@${version ?? 'unknown'}`)
+      }
+      if (wrong.length > 0) {
+        problems.push(
+          `installed harness packages do not match the pin ${pin}: ${wrong.join(', ')}` +
+            ' — run: npm install, which resolves the tested line from the lockfile',
+        )
+      }
+    }
   }
 }
 
@@ -859,16 +1002,38 @@ export function clientDepsMirrorProblems(mirrorNames, localRanges, siblingDecls)
 }
 
 /**
- * The executable half of the mirrored client-dependency gate. With a sibling
- * checkout present, the local mirrored ranges are diffed against the
- * `packages/client/*` manifests at the pin tag — the same authority the
- * client-graph mirror uses, never the sibling's working tree. `@types/*`
- * names fall back to the sibling root manifest, which is where the monorepo
- * declares them. Without a sibling the gate has no authority to consult and
- * stays silent, like the graph mirror.
+ * The pinned client declarations the mirror is compared against.
+ *
+ * With a sibling checkout the tag itself is the authority. Without one — a
+ * registry-only CI install — the committed fixture carries the same table, so
+ * the gate still has an authority instead of going silent; a fixture whose pin
+ * is not the current pin fails rather than drifting.
+ * @param pin - the exact harness version.
+ * @returns name to the ranges declared at the pin, or undefined when no
+ *   authority is available (already reported).
  */
-function collectClientDepsMirrorProblems(pin, manifest) {
-  if (!existsSync(harnessRoot)) return []
+function pinnedClientDeclarations(pin) {
+  const fromFixture = () => {
+    const fixturePath = join(root, 'tests', 'fixtures', 'harness-mirrored-deps-pin.json')
+    let fixture
+    try {
+      fixture = readJson(fixturePath)
+    } catch {
+      notes.push(
+        `no sibling checkout and no ${relative(root, fixturePath)}: the mirrored client dependencies were not verified`,
+      )
+      return undefined
+    }
+    if (fixture.pin !== `dsh-v${pin}`) {
+      problems.push(
+        `${relative(root, fixturePath)} describes ${fixture.pin}, the pin is dsh-v${pin}` +
+          ' — re-extract with: node scripts/extract-mirrored-deps.mjs',
+      )
+      return undefined
+    }
+    return fixture.declarations
+  }
+  if (!existsSync(harnessRoot)) return fromFixture()
   let clientPackages
   try {
     clientPackages = execFileSync(
@@ -880,20 +1045,19 @@ function collectClientDepsMirrorProblems(pin, manifest) {
       .filter((line) => line.length > 0)
   } catch {
     notes.push(
-      `tag dsh-v${pin} not found in the sibling checkout: the mirrored client dependencies were not verified against the pin`,
+      `tag dsh-v${pin} not found in the sibling checkout: falling back to the committed mirror fixture`,
     )
-    return []
+    return fromFixture()
   }
   const readTagJson = (path) =>
     JSON.parse(
       execFileSync('git', ['-C', harnessRoot, 'show', `dsh-v${pin}:${path}`], { encoding: 'utf8' }),
     )
-  const siblingDecls = new Map()
+  const declarations = {}
   const declare = (name, range) => {
     if (typeof range !== 'string') return
-    const list = siblingDecls.get(name)
-    if (list === undefined) siblingDecls.set(name, [range])
-    else list.push(range)
+    const list = declarations[name] ?? []
+    declarations[name] = [...new Set([...list, range])].sort()
   }
   for (const pkg of clientPackages) {
     const manifest_ = readTagJson(`packages/client/${pkg}/package.json`)
@@ -905,8 +1069,21 @@ function collectClientDepsMirrorProblems(pin, manifest) {
     ...Object.entries(readTagJson('package.json').dependencies ?? {}),
     ...Object.entries(readTagJson('package.json').devDependencies ?? {}),
   ]) {
-    if (name.startsWith('@types/') && !siblingDecls.has(name)) declare(name, range)
+    if (name.startsWith('@types/') && declarations[name] === undefined) declare(name, range)
   }
+  return declarations
+}
+
+/**
+ * The executable half of the mirrored client-dependency gate. The local
+ * mirrored ranges are diffed against the declarations at the pin tag — the
+ * same authority the client-graph mirror uses, never the sibling's working
+ * tree — and against the committed fixture when no sibling checkout exists.
+ */
+function collectClientDepsMirrorProblems(pin, manifest) {
+  const declarations = pinnedClientDeclarations(pin)
+  if (declarations === undefined) return []
+  const siblingDecls = new Map(Object.entries(declarations))
   const localRanges = new Map()
   for (const section of ['dependencies', 'devDependencies']) {
     for (const [name, range] of Object.entries(manifest[section] ?? {})) {
@@ -941,7 +1118,7 @@ export function applyPinToManifest(manifest, version) {
   for (const name of Object.keys(manifest.peerDependencies ?? {})) {
     if (isDshPackage(name)) manifest.peerDependencies[name] = `>=${version}`
   }
-  manifest.engines = { ...manifest.engines, dsh: `>=${version}` }
+  manifest.engines = { ...manifest.engines, dsh: `>=${version} <${harnessUpperBoundOf(version)}` }
   return manifest
 }
 
@@ -985,7 +1162,7 @@ function runCheck(strict) {
   // too; their drift only surfaces as a typecheck/test-vs-runtime mismatch
   // after a harness upgrade, so it fails in both modes like the mirror does.
   problems.push(...collectClientDepsMirrorProblems(pin, manifest))
-  checkArtifacts(strict, packages)
+  checkArtifacts(strict, packages, pin)
   report()
   if (problems.length === 0) console.log(`harness state ok: pin ${pin}`)
   return pin

@@ -19,6 +19,7 @@ import {
   isInlineSafeHarness,
   VENDORED_LIBRARY,
 } from '../../scripts/client-graph-authority.mjs'
+import { pinnedHarness } from '../../scripts/style-tokens.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -235,7 +236,7 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.2-rc.1)', () => {
+describe('harness inline-safe table (dsh-v0.2.2-rc.2)', () => {
   it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
@@ -305,5 +306,16 @@ describe('the mirror matches the pin tag snapshot', () => {
     expect(VENDORED_LIBRARY.source, `VENDORED_LIBRARY vs ${fixture.pin}: ${hint}`).toBe(
       fixture.vendoredLibrary,
     )
+  })
+
+  it('names the pin this repository actually declares', () => {
+    // The fixture is the guard in a registry-only checkout. A pin bump that
+    // forgets to re-extract it would otherwise compare the mirror against a
+    // generation the manifest no longer names, and pass.
+    const fixture = JSON.parse(
+      readFileSync(join(repoRoot, 'tests/fixtures/harness-client-graph-pin.json'), 'utf8'),
+    ) as { pin: string }
+    const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+    expect(fixture.pin).toBe(`dsh-v${pinnedHarness(manifest)}`)
   })
 })

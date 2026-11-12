@@ -78,6 +78,16 @@ export interface ArtifactProblems {
   readonly missing: string[]
   /** Imported specifiers that resolve outside the sibling harness checkout. */
   readonly outside: string[]
+  /** Harness packages the compiler resolves through a registry install. */
+  readonly registry: RegistryInstall[]
+}
+
+/** One `@deepseek-ai/dsh-*` package installed from the registry, not the sibling checkout. */
+export interface RegistryInstall {
+  /** The package name as imported. */
+  readonly name: string
+  /** The resolved installed directory whose declarations typecheck reads. */
+  readonly dir: string
 }
 
 /**
@@ -122,14 +132,26 @@ export declare function clientDepsMirrorProblems(
 ): { problems: string[]; notes: string[] }
 
 /**
- * Classify every imported upstream specifier against the sibling checkout's
- * installed artifacts, on both freshness axes: declarations versus `src`, and
- * the browser runtime versus its own client declarations.
+ * Classify every imported upstream specifier against the artifacts typecheck
+ * actually resolves: sibling freshness when `node_modules` links into the
+ * sibling checkout, installed-version provenance when it is a registry install.
  * @param harnessRoot - the sibling harness checkout root.
  * @param specifiers - every `@deepseek-ai/*` specifier this repository imports.
+ * @param packages - pre-collected harness package map; collected when omitted.
+ * @param installedRoot - the `node_modules` the compiler resolves through.
  * @returns the categorized findings.
  */
 export declare function collectArtifactProblems(
   harnessRoot: string,
   specifiers: string[],
+  packages?: ReadonlyMap<string, string>,
+  installedRoot?: string,
 ): ArtifactProblems
+
+/**
+ * Every `@deepseek-ai/*` specifier this repository's sources and specs import.
+ * Comments and string fixtures are excluded: a documented example is not a
+ * dependency.
+ * @returns the sorted, de-duplicated specifiers.
+ */
+export declare function importedSpecifiers(): string[]
