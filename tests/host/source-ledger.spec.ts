@@ -505,4 +505,33 @@ describe('the projection lifecycle', () => {
     expect(sourceLedgerProjection.wire.summary).toBe(false)
     expect(sourceLedgerProjection.wire.view(called).sources).toEqual([])
   })
+
+  it('never records a write tool in the projection state', () => {
+    const state = emptyLedgerState()
+    const call = foldLedgerEvent(
+      state,
+      event('tool/call', {
+        callId: 'w1',
+        name: 'zotero_create_note',
+        arguments: '{"markdown":"x"}',
+      }),
+    )
+    expect(call).toBe(state)
+    const result = foldLedgerEvent(
+      call,
+      event('tool/result', {
+        message: {
+          toolCallId: 'w1',
+          content: [{ type: 'text', text: 'created' }],
+          isError: false,
+        },
+        meta: { kind: 'applied', ref: 'zotero://user/0/item/ABCD1234' },
+      }),
+    )
+    // No block, no recorded entry: the trail is a read ledger, and folding a
+    // write used to grow the projection state for the session's lifetime.
+    expect(result).toBe(call)
+    expect(result.blocks).toEqual([])
+    expect(result.recorded).toEqual({})
+  })
 })

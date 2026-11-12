@@ -17,6 +17,7 @@ import {
   presentUpdateResultView,
   renderCommittedUnverified,
 } from './write-present.js'
+import { NOTE_MARKDOWN_PARAMETER_DESCRIPTION } from './note-markdown.js'
 import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import { truncateText } from '../normalize-context.js'
@@ -32,7 +33,7 @@ const PARAMETERS = {
   markdown: {
     type: 'string',
     required: true,
-    description: 'The replacement note body in markdown.',
+    description: NOTE_MARKDOWN_PARAMETER_DESCRIPTION,
   },
 } as const
 type Args = InferArgs<typeof PARAMETERS>

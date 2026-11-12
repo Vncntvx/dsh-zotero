@@ -66,7 +66,7 @@ import {
 } from '../enrichment-preferences.js'
 import { ZOTERO_ENRICHMENT_SERVICE_KEY, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.js'
 import {
-  isPdfContentType,
+  isPdfCandidateContentType,
   type FulltextEnhancer,
   type FulltextEnhancerInput,
   type FulltextLookupResult,
@@ -611,7 +611,7 @@ export class EnrichmentService extends TypertRemoteService {
   ): Promise<FulltextLookupResult> {
     try {
       const cfg = snapshot ?? resolveEnrichmentConfig(this.config)
-      if (!isPdfContentType(input.contentType)) return { kind: 'miss', reason: 'absent' }
+      if (!isPdfCandidateContentType(input.contentType)) return { kind: 'miss', reason: 'absent' }
       signal?.throwIfAborted()
       const store = await this.storeFactory(cfg, false)
       signal?.throwIfAborted()

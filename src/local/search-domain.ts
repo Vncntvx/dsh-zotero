@@ -54,9 +54,12 @@ import type {
 import { buildSearchParams } from './search-query.js'
 
 /**
- * The model-facing message for `includeTrashed` outside a library scope. The
- * tool layer states the same rule for its own argument, but renders it without
- * the full stop, so the two are separate constants rather than one shared one.
+ * The model-facing message for `includeTrashed` outside a library scope.
+ *
+ * The tool layer has its own sentence for the same rule: it tells the model to
+ * drop the argument, while this one states the scope condition the domain
+ * enforces. They are separate constants because they are separate statements,
+ * not one sentence with different punctuation.
  */
 export const INCLUDE_TRASHED_SCOPE_MESSAGE = 'includeTrashed is only allowed with library scope.'
 

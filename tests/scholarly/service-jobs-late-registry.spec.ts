@@ -53,7 +53,7 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
       const refusedResult = refused.results[0]?.result
       expect(refusedResult?.isError).toBe(true)
       if (!refusedResult?.isError) throw new Error('background request unexpectedly succeeded')
-      expect(refusedResult.error.message).toContain('background jobs unavailable')
+      expect(refusedResult.error.message).toContain('Background execution is unavailable')
 
       // The same call after `TestJobRegistry` registered itself as `ctx.jobs`
       // reaches the late registry: the runner resolved it per call.

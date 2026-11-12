@@ -24,6 +24,7 @@ import {
   libraryVersionLine,
   presentUpdateResultView,
   renderCommittedUnverified,
+  unverifiedPresentationMeta,
 } from './write-present.js'
 import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { validateItemUpdateFields } from '../write-item-rules.js'
@@ -156,7 +157,9 @@ export function registerUpdateItemTool(ctx: Context, service: ZoteroService): ()
                 ...(value.unchanged ? { unchanged: true } : {}),
                 changedCount: value.changed.length,
               }
-            : { kind: 'declined' },
+            : value.kind === 'committed-unverified'
+              ? unverifiedPresentationMeta(value)
+              : { kind: 'declined' },
       },
       presentCall: (args) => ({
         card: 'generic',

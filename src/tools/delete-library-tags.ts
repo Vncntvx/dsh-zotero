@@ -27,6 +27,7 @@ import {
   libraryVersionLine,
   presentDeleteResultView,
   renderCommittedUnverified,
+  unverifiedPresentationMeta,
 } from './write-present.js'
 import { assertWriteList } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
@@ -212,7 +213,9 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
         presentationMeta: (_args, value): JsonValue =>
           value.kind === 'deleted'
             ? { kind: 'deleted', deletedCount: value.deletedTags.length }
-            : { kind: 'declined' },
+            : value.kind === 'committed-unverified'
+              ? unverifiedPresentationMeta(value)
+              : { kind: 'declined' },
       },
       presentCall: (args) => ({
         card: 'generic',

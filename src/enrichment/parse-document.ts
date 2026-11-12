@@ -15,7 +15,10 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
 } from '../errors.js'
-import { isPdfContentType, type FulltextArtifactProvenance } from '../local/fulltext-enhancer.js'
+import {
+  isPdfCandidateContentType,
+  type FulltextArtifactProvenance,
+} from '../local/fulltext-enhancer.js'
 import type { ParsedArtifactStore } from './artifact-store.js'
 import { resolveEnrichmentConfig } from './config.js'
 import { canonicalSourceIdentityOf } from './identity.js'
@@ -120,7 +123,7 @@ export async function parseDocument(
         cause: error,
       })
     }
-    if (!isPdfContentType(input.contentType)) {
+    if (!isPdfCandidateContentType(input.contentType)) {
       throw new ZoteroError(
         'Only PDF attachments are eligible for MinerU parsing',
         ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,

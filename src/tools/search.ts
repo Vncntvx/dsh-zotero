@@ -316,7 +316,7 @@ const SEARCH_OUTPUT_SCHEMA = {
 
 /** The model-facing messages the search argument rules throw. */
 export const INCLUDE_TRASHED_SCOPE_MESSAGE =
-  'includeTrashed is not available on zotero_search; use the Zotero library panel trash scope.'
+  'includeTrashed is not available on zotero_search; omit it and search the library scope.'
 export const SCOPE_REF_OR_NAME_MESSAGE =
   'scope.refOrName must be a collection/saved-search name or ref'
 export const TAGS_LITERAL_MESSAGE =

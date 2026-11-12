@@ -69,7 +69,7 @@ describe('scholarly background jobs', () => {
     const tool = createScholarlySearchTool(host)
     await expect(
       tool.execute({ query: 'attention', run_in_background: true }, EXEC_CONTEXT as never),
-    ).rejects.toThrow('run_in_background is disabled for this deployment')
+    ).rejects.toThrow('run_in_background is disabled in this deployment')
   })
 
   it('refuses run_in_background when no jobs registry is composed', async () => {
@@ -81,7 +81,7 @@ describe('scholarly background jobs', () => {
     const tool = createScholarlySearchTool(host)
     await expect(
       tool.execute({ query: 'attention', run_in_background: true }, EXEC_CONTEXT as never),
-    ).rejects.toThrow('background jobs unavailable')
+    ).rejects.toThrow('Background execution is unavailable')
   })
 
   it('starts a background search job and returns the job arm', async () => {

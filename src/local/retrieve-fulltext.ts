@@ -11,7 +11,7 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type { DiagnosticSink } from '../diagnostics.js'
 import {
-  isPdfContentType,
+  isPdfCandidateContentType,
   type FulltextEnhancer,
   type FulltextEnhancerInput,
   type FulltextLookupResult,
@@ -51,7 +51,7 @@ export async function lookupParsedFulltext(
 }
 
 /** Only PDF candidates are offered to the parser; known non-PDF types skip it. */
-export const isPdfCandidate = isPdfContentType
+export const isPdfCandidate = isPdfCandidateContentType
 import type {
   SupportedLocalLibrary,
   ZoteroCoverage,

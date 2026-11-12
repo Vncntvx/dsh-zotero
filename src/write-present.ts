@@ -7,6 +7,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { asRecord } from './json.js'
+import type { ZoteroWriteCommittedUnverified } from './types.js'
 
 /**
  * The completed-result metadata as a record: undefined for failed calls
@@ -86,7 +87,7 @@ interface CommittedUnverifiedLike {
 export function renderCommittedUnverified(
   value: CommittedUnverifiedLike,
   objectName: string,
-  pastVerb: 'committed' | 'created',
+  pastVerb: 'committed' | 'created' | 'updated' | 'deleted',
 ): ContentBlock[] {
   const known = [
     ...(value.key === undefined ? [] : [`key ${value.key}`]),
@@ -322,9 +323,40 @@ export function renderUpdateList(
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
+/**
+ * The card meta for a `committed-unverified` outcome.
+ *
+ * The arm is a distinct verdict — the write may have landed and must not be
+ * retried — so every tool projects it through this one function. Projecting it
+ * as `declined` told the user nothing was written while the model's own text
+ * said the opposite, and the two arms are mutually exclusive in the row.
+ * @param value - the outcome the service domain returned.
+ * @returns the meta the client decodes as `committed-unverified`.
+ */
+export function unverifiedPresentationMeta(value: ZoteroWriteCommittedUnverified): JsonValue {
+  return {
+    kind: 'committed-unverified',
+    committed: true,
+    retryable: false,
+    reason: value.reason,
+    serverId: value.serverId,
+    ...(value.ref !== undefined ? { ref: value.ref } : {}),
+    ...(value.key !== undefined ? { key: value.key } : {}),
+    ...(value.version !== undefined ? { version: value.version } : {}),
+    ...(value.libraryVersion !== undefined ? { libraryVersion: value.libraryVersion } : {}),
+    ...(value.parentRef !== undefined ? { parentRef: value.parentRef } : {}),
+    ...(value.completedRefs !== undefined ? { completedRefs: value.completedRefs } : {}),
+  }
+}
+
 /** The declined-arm title every write result card shares. */
 function declinedTitle(noun: string): string {
   return `Zotero ${noun}: declined, nothing written`
+}
+
+/** The unverified-arm title: the write landed, its saved state was not proven. */
+function unverifiedTitle(noun: string): string {
+  return `Zotero ${noun}: may have committed, do not retry`
 }
 
 /** The result-card titles for item updates (tags, membership, or item fields). */
@@ -336,6 +368,9 @@ export function presentUpdateResultView(
   if (record === undefined) return undefined
   if (record.kind === 'declined') {
     return { card: 'generic', title: declinedTitle(noun) }
+  }
+  if (record.kind === 'committed-unverified') {
+    return { card: 'generic', title: unverifiedTitle(noun) }
   }
   const ref = typeof record.ref === 'string' ? record.ref : ''
   if (record.unchanged === true)
@@ -365,6 +400,9 @@ export function presentDeleteResultView(
   if (record === undefined) return undefined
   if (record.kind === 'declined') {
     return { card: 'generic', title: declinedTitle(declinedNoun) }
+  }
+  if (record.kind === 'committed-unverified') {
+    return { card: 'generic', title: unverifiedTitle(deletedNoun) }
   }
   const ref = typeof record.ref === 'string' ? record.ref : ''
   return { card: 'generic', title: `Zotero ${deletedNoun} deleted${ref === '' ? '' : `: ${ref}`}` }

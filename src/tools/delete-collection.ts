@@ -26,6 +26,7 @@ import {
   libraryVersionLine,
   presentDeleteResultView,
   renderCommittedUnverified,
+  unverifiedPresentationMeta,
 } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
@@ -206,7 +207,9 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
         presentationMeta: (_args, value): JsonValue =>
           value.kind === 'deleted'
             ? { kind: 'deleted', ref: value.ref, key: value.key }
-            : { kind: 'declined' },
+            : value.kind === 'committed-unverified'
+              ? unverifiedPresentationMeta(value)
+              : { kind: 'declined' },
       },
       presentCall: (args) => ({
         card: 'generic',

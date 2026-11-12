@@ -92,8 +92,10 @@ describe('ZoteroJobRunner', () => {
     expect(jobWaitFailedMessage('zotero-1', new Error('owner fence'))).toBe(
       'foreground wait failed (owner fence); the work continues as background job zotero-1',
     )
-    expect(RUN_IN_BACKGROUND_DISABLED_MESSAGE).toContain('enableRunInBackground: false')
-    expect(JOBS_UNAVAILABLE_MESSAGE).toContain('background jobs unavailable')
+    // Both sentences name what the model can do, never the host's packages.
+    expect(RUN_IN_BACKGROUND_DISABLED_MESSAGE).toContain('run the call in the foreground')
+    expect(JOBS_UNAVAILABLE_MESSAGE).toContain('run the call in the foreground')
+    expect(JOBS_UNAVAILABLE_MESSAGE).not.toContain('@deepseek-ai/')
   })
 
   describe('start', () => {

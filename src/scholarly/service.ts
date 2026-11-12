@@ -132,11 +132,14 @@ export class ScholarlyService extends Service {
       // `undefined` when the local Zotero component is not composed, which is
       // exactly the in-library link's absent behavior.
       zoteroService: (): ZoteroServiceLike | undefined => ctx.get('zotero'),
-      // The enrichment component is a separate, optional bundle row. Read its
-      // enhancer lazily by context key so scholarly neither imports enrichment
-      // nor holds a stale reference when the row mounts or unmounts.
+      // The enrichment component is a separate, optional bundle row. Its
+      // enhancer is read from the core's slot, the same hand-off
+      // `zotero_retrieve` consumes, so both tools observe one installed
+      // instance and neither imports the component.
       enrichmentEnhancer: (): FulltextEnhancer | undefined =>
-        (ctx.get('enrichment') as { enhancer?: FulltextEnhancer } | undefined)?.enhancer,
+        (
+          ctx.get('zotero') as { fulltextEnhancer?: () => FulltextEnhancer | undefined } | undefined
+        )?.fulltextEnhancer?.(),
       // The ranking strategy and the chunk boundaries are read through the
       // local Zotero service, which owns both: its own lexical ranker while no
       // component is installed, and the live config that keeps

@@ -108,20 +108,27 @@ type UpdateOutput = InferValue<typeof UPDATE_OUTPUT>
 type DeleteOutput = InferValue<typeof DELETE_OUTPUT>
 type AnyOutput = CreatedOutput | UpdateOutput | DeleteOutput
 
-const render = (_args: unknown, value: AnyOutput): ContentBlock[] => {
-  if (value.kind === 'declined') return renderDeclined()
-  if (value.kind === 'committed-unverified')
-    return renderCommittedUnverified(value, 'saved search', 'created')
-  return [
-    {
-      type: 'text',
-      text: [
-        `Zotero saved-search operation ${value.kind === 'deleted' ? 'completed' : 'applied'} for ${value.ref ?? value.key ?? 'the requested search'}.`,
-        ...(value.libraryVersion === undefined ? [] : [libraryVersionLine(value)]),
-      ].join('\n'),
-    },
-  ]
-}
+/**
+ * One renderer per operation, because the unverified receipt names the verb the
+ * caller asked for: a shared renderer that always said "created" told the model
+ * to go looking for a new search after an update or a delete.
+ */
+const renderWith =
+  (pastVerb: 'created' | 'updated' | 'deleted') =>
+  (_args: unknown, value: AnyOutput): ContentBlock[] => {
+    if (value.kind === 'declined') return renderDeclined()
+    if (value.kind === 'committed-unverified')
+      return renderCommittedUnverified(value, 'saved search', pastVerb)
+    return [
+      {
+        type: 'text',
+        text: [
+          `Zotero saved-search operation ${value.kind === 'deleted' ? 'completed' : 'applied'} for ${value.ref ?? value.key ?? 'the requested search'}.`,
+          ...(value.libraryVersion === undefined ? [] : [libraryVersionLine(value)]),
+        ].join('\n'),
+      },
+    ]
+  }
 
 /** Replayable projection for the update arm: the applied identity. */
 function presentUpdateMeta(_args: UpdateArgs, value: UpdateOutput): JsonValue {
@@ -168,7 +175,7 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       parameters: CREATE,
       output: {
         schema: CREATED,
-        render,
+        render: renderWith('created'),
         presentationMeta: (_args, value): JsonValue => createWritePresentationMeta(value),
       },
       presentCall: (args) => ({
@@ -203,7 +210,7 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       parameters: UPDATE,
       output: {
         schema: UPDATE_OUTPUT,
-        render,
+        render: renderWith('updated'),
         presentationMeta: presentUpdateMeta,
       },
       presentCall: (args) => ({
@@ -239,7 +246,7 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       parameters: DELETE,
       output: {
         schema: DELETE_OUTPUT,
-        render,
+        render: renderWith('deleted'),
         presentationMeta: presentDeleteMeta,
       },
       presentCall: (args) => ({

@@ -24,7 +24,12 @@ import type {
   JobView,
 } from '@deepseek-ai/dsh-jobs'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
-import { errorMessageOf, ZoteroError } from './errors.js'
+import {
+  errorMessageOf,
+  ZOTERO_JOBS_UNAVAILABLE,
+  ZOTERO_RUN_IN_BACKGROUND_DISABLED,
+  ZoteroError,
+} from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import type { ZoteroProgressEvent } from './types.js'
 
@@ -35,11 +40,16 @@ function toolAborted(): HarnessError {
   return error
 }
 
+/**
+ * Shown when the host serves no job registry. The model cannot change the
+ * deployment, so the sentence names the one thing it can do — run the call in
+ * the foreground — instead of the packages the host would have to compose.
+ */
 export const JOBS_UNAVAILABLE_MESSAGE =
-  'background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs'
+  'Background execution is unavailable in this session; run the call in the foreground.'
 
 export const RUN_IN_BACKGROUND_DISABLED_MESSAGE =
-  'run_in_background is disabled for this deployment (enableRunInBackground: false)'
+  'run_in_background is disabled in this deployment; run the call in the foreground.'
 
 export function jobStartedMessage(jobId: string): string {
   return `started background job ${jobId}`
@@ -233,10 +243,10 @@ export async function executeWithJobs<T>(options: {
 
   if (options.runInBackground) {
     if (!policy.enableRunInBackground) {
-      throw new Error(RUN_IN_BACKGROUND_DISABLED_MESSAGE)
+      throw new ZoteroError(RUN_IN_BACKGROUND_DISABLED_MESSAGE, ZOTERO_RUN_IN_BACKGROUND_DISABLED)
     }
     if (!runner.isAvailable) {
-      throw new Error(JOBS_UNAVAILABLE_MESSAGE)
+      throw new ZoteroError(JOBS_UNAVAILABLE_MESSAGE, ZOTERO_JOBS_UNAVAILABLE)
     }
     const { id } = runner.start(task)
     return {

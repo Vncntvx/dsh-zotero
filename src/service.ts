@@ -236,7 +236,7 @@ export class ZoteroService extends Service {
    * empty. The provider reads it live per request, so mounting or unmounting the
    * row needs no rebuild.
    */
-  private fulltextEnhancer: FulltextEnhancer | undefined
+  private installedFulltextEnhancer: FulltextEnhancer | undefined
   /**
    * Optional evidence-ranking strategy installed by the enrichment component.
    * The core owns the slot and pure type and supplies its own lexical ranker
@@ -561,7 +561,7 @@ export class ZoteroService extends Service {
       writer,
       authorizer,
       this.diagnostics.sink,
-      () => this.fulltextEnhancer,
+      () => this.installedFulltextEnhancer,
       () => this.evidenceRanker(),
     )
     // The swap is synchronous: registerProvider installs the new provider
@@ -737,7 +737,20 @@ export class ZoteroService extends Service {
    * @param enhancer - the enhancer to use, or none.
    */
   setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void {
-    this.fulltextEnhancer = enhancer
+    this.installedFulltextEnhancer = enhancer
+  }
+
+  /**
+   * The full-text enhancer in force: the installed row's, or none.
+   *
+   * The slot is the core's one hand-off for optional full-text acquisition.
+   * `scholarly_read` reads it here rather than reaching for the enrichment
+   * component's public field, so every consumer sees the same installed
+   * instance and a future constraint on the slot covers both tools.
+   * @returns the installed enhancer, or undefined while the row is absent.
+   */
+  fulltextEnhancer(): FulltextEnhancer | undefined {
+    return this.installedFulltextEnhancer
   }
 
   /**

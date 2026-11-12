@@ -68,6 +68,10 @@ export const ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT = 'ZOTERO_ENRICHMENT_UNSUPPORTE
 export const ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE = 'ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE'
 /** A local semantic model download failed after every source was tried. */
 export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED'
+/** The host does not serve background jobs, so the call must run in the foreground. */
+export const ZOTERO_JOBS_UNAVAILABLE = 'ZOTERO_JOBS_UNAVAILABLE'
+/** The deployment disabled `run_in_background`, so the call must run in the foreground. */
+export const ZOTERO_RUN_IN_BACKGROUND_DISABLED = 'ZOTERO_RUN_IN_BACKGROUND_DISABLED'
 /** One pinned file did not finish inside its per-file budget across every source. */
 export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT'
 /** The configured provider is not registered. */
@@ -133,6 +137,8 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
+  ZOTERO_JOBS_UNAVAILABLE,
+  ZOTERO_RUN_IN_BACKGROUND_DISABLED,
   ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_UNEXPECTED,

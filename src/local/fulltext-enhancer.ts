@@ -47,8 +47,16 @@ export interface FulltextEnhancer {
   lookup(input: FulltextEnhancerInput, signal?: AbortSignal): Promise<FulltextLookupResult>
 }
 
-/** Absent MIME types are candidates; byte validation belongs to active parsing. */
-export function isPdfContentType(contentType: string | undefined): boolean {
+/**
+ * Whether a source is a PDF `candidate`: an absent MIME type counts, because
+ * byte validation belongs to active parsing.
+ *
+ * It is not the same question as `media-types.isPdfContentType`, which asks
+ * whether a *known* MIME type is exactly PDF. The two used to share a name, and
+ * a caller that imported the wrong one silently changed the answer for a missing
+ * or parameterized content type.
+ */
+export function isPdfCandidateContentType(contentType: string | undefined): boolean {
   if (contentType === undefined || contentType.trim() === '') return true
   const base = contentType.split(';')[0]?.trim().toLowerCase() ?? ''
   return base === 'application/pdf'

@@ -30,6 +30,7 @@ import {
   presentCreateResultView,
   renderCommittedUnverified,
 } from './write-present.js'
+import { NOTE_MARKDOWN_PARAMETER_DESCRIPTION } from './note-markdown.js'
 import {
   assertNoteMarkdown,
   assertWriteList,
@@ -68,8 +69,7 @@ const CREATE_NOTE_PARAMETERS = {
   markdown: {
     type: 'string',
     required: true,
-    description:
-      'The note body in markdown. Supported: paragraphs, # to #### headings, **bold**, *italic*, `code`, fenced code, > quotes, - and 1. lists (one nesting level), pipe tables with a |---| separator row (body rows align to the header per GFM: missing cells pad empty, excess cells are dropped), [text](https://… or zotero://…) links. Anything else is escaped and shown as literal text; raw HTML never passes through, so write markdown, not HTML.',
+    description: NOTE_MARKDOWN_PARAMETER_DESCRIPTION,
   },
 } as const
 

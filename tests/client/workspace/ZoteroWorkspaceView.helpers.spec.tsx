@@ -16,7 +16,7 @@ import {
   filterLineOf,
   modeLabelOf,
   scopeLabelOf,
-} from '../../../src/client/components/workspace/SourceOverview.tsx'
+} from '../../../src/client/components/workspace/source-labels.ts'
 import type { ZoteroSourcePageResultView } from '../../../src/contract.ts'
 import type { SourceItem } from '../../../src/sources/model.js'
 import { artifactOf, passageOf, searchOf, sourceOf } from '../helpers/source-fixtures.ts'

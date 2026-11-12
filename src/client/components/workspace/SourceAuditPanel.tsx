@@ -27,7 +27,7 @@ import { messageOf } from '../../error-text.ts'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import { SourcePageControls } from './SourcePageControls.tsx'
 import type { SourcePager } from './useSourcePage.ts'
-import { filterLineOf, modeLabelOf, scopeLabelOf } from './SourceOverview.tsx'
+import { filterLineOf, modeLabelOf, scopeLabelOf } from './source-labels.ts'
 import css from './workspace.module.css'
 
 type CitationTab = 'bibtex' | 'gbt7714'

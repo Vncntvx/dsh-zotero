@@ -15,6 +15,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { ZOTERO_READ_TOOL_NAMES } from '../constants.js'
 import { asRecord, asString } from '../json.js'
 import { buildSourceWorkspace } from './ledger.js'
 import type { SourceWorkspace } from './model.js'
@@ -68,9 +69,20 @@ export function emptyLedgerState(): SourceLedgerState {
   return { blocks: [], pending: {}, recorded: {} }
 }
 
+/**
+ * The tools whose calls the literature trail records.
+ *
+ * A name prefix was the old rule, and it admitted every write tool: their
+ * arguments and results were folded into the projection state and kept for the
+ * session even though no view consumes them, while the surface contract says
+ * the trail holds reads and exports only. The read list is the same constant
+ * the prompt and the client use, so adding a read tool adds it here.
+ */
+const TRAIL_TOOL_NAMES: ReadonlySet<string> = new Set(ZOTERO_READ_TOOL_NAMES)
+
 /** Whether a tool name is one the literature trail records. */
-function isZoteroTool(name: string): boolean {
-  return name.startsWith('zotero_')
+function isTrailTool(name: string): boolean {
+  return TRAIL_TOOL_NAMES.has(name)
 }
 
 /**
@@ -128,7 +140,7 @@ function blockOf(fact: LedgerBlockFact): SettledToolBlock {
 
 /** Whether a settled block belongs in the trail. */
 function belongsInTrail(block: SettledToolBlock): boolean {
-  if (isZoteroTool(block.name)) return true
+  if (isTrailTool(block.name)) return true
   return block.name === 'job_output' && receiptOf(block) !== null
 }
 
@@ -179,7 +191,7 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
       const name = asString(raw.data['name'])
       const argsRaw = asString(raw.data['arguments'])
       if (callId === undefined || name === undefined || argsRaw === undefined) return state
-      if (!isZoteroTool(name) && name !== 'job_output') return state
+      if (!isTrailTool(name) && name !== 'job_output') return state
       return {
         ...state,
         pending: {
@@ -221,7 +233,7 @@ export function foldLedgerEvent(state: SourceLedgerState, event: SessionEvent): 
     case 'tool/ptc-dispatch-start': {
       const callId = asString(raw.data['subCallId'])
       const name = asString(raw.data['name'])
-      if (callId === undefined || name === undefined || !isZoteroTool(name)) return state
+      if (callId === undefined || name === undefined || !isTrailTool(name)) return state
       const args = raw.data['arguments']
       const argsRaw = typeof args === 'string' ? args : JSON.stringify(args ?? {})
       return {

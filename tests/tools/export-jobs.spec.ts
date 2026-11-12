@@ -56,6 +56,7 @@ describe('zotero_export jobs', () => {
       expect((result.content[0] as { text: string }).text).toBe(
         `Error: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
       )
+      expect(result.error?.info).toMatchObject({ code: 'ZOTERO_RUN_IN_BACKGROUND_DISABLED' })
     })
 
     it('refuses run_in_background when ctx.jobs service is unavailable', async () => {
@@ -69,6 +70,7 @@ describe('zotero_export jobs', () => {
       expect((result.content[0] as { text: string }).text).toBe(
         `Error: ${JOBS_UNAVAILABLE_MESSAGE}`,
       )
+      expect(result.error?.info).toMatchObject({ code: 'ZOTERO_JOBS_UNAVAILABLE' })
     })
 
     it('starts a background job and returns immediately when run_in_background is requested', async () => {
