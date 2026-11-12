@@ -32,11 +32,15 @@ afterEach(async () => {
 })
 
 describe('background jobs and promotion', () => {
-  it('declares the run_in_background parameter statically regardless of composition', async () => {
-    const defaultTool = lane.tool('zotero_changes')!
-    const defaultProps = (defaultTool.parameters as { properties?: Record<string, unknown> })
-      .properties
-    expect(defaultProps?.run_in_background).toBeDefined()
+  it('declares the run_in_background parameter only while a job registry is composed', async () => {
+    const propertiesOf = () =>
+      (lane.tool('zotero_changes')!.parameters as { properties?: Record<string, unknown> })
+        .properties
+    // This lane composes no job registry, so the schema must not advertise a
+    // capability the host cannot honour.
+    expect(propertiesOf()?.run_in_background).toBeUndefined()
+    await composeRealJobs(lane.ctx)
+    expect(propertiesOf()?.run_in_background).toBeDefined()
   })
 
   it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {
@@ -52,7 +56,7 @@ describe('background jobs and promotion', () => {
     )
     // A rejection the model must act on carries its code, like every other
     // expected refusal.
-    expect(result.error?.info).toMatchObject({ code: 'ZOTERO_RUN_IN_BACKGROUND_DISABLED' })
+    expect(result.error?.info).toMatchObject({ code: 'JOB_BACKGROUND_DISABLED' })
   })
 
   it('refuses run_in_background when ctx.jobs service is unavailable', async () => {
@@ -60,7 +64,7 @@ describe('background jobs and promotion', () => {
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
     expect((result.content[0] as { text: string }).text).toBe(`Error: ${JOBS_UNAVAILABLE_MESSAGE}`)
-    expect(result.error?.info).toMatchObject({ code: 'ZOTERO_JOBS_UNAVAILABLE' })
+    expect(result.error?.info).toMatchObject({ code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('starts a background job and returns immediately when run_in_background is requested', async () => {

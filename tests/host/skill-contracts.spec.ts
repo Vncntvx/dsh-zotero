@@ -21,6 +21,8 @@ import { SCHOLARLY_SOPS } from '../../src/skills/scholarly.js'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 
 // This is a host-composition spec: use the host lane rather than scholarly support.
+import { isCompositionDependent } from './support/composition-dependent-parameters.js'
+
 const SOPS = [...CORE_SOPS, ...SCHOLARLY_SOPS]
 let lane: HostLane | undefined
 afterEach(async () => {
@@ -243,7 +245,8 @@ describe('research SOP contracts', () => {
         }
         const declared = declaredPropertiesOf(definition.parameters as unknown as ObjectJsonSchema)
         for (const param of params)
-          if (!declared.has(param)) violations.push(`${tool}.${param} not in schema`)
+          if (!declared.has(param) && !isCompositionDependent(tool, param))
+            violations.push(`${tool}.${param} not in schema`)
       }
       expect(violations, file).toEqual([])
     }

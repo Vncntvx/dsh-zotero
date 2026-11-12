@@ -21,7 +21,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { queryVariantsOf } from './query-variants.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
@@ -208,7 +208,7 @@ export function attachmentRefsOverCapMessage(count: number, cap: number): string
 
 function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
   const query = args.query.trim()
-  if (query === '') invalid(RETRIEVE_QUERY_EMPTY_MESSAGE)
+  if (query === '') invalidArgs(RETRIEVE_QUERY_EMPTY_MESSAGE)
   const queryVariants = queryVariantsOf(args.queryVariants)
   const passages = args.passages ?? DEFAULT_PASSAGES
   assertIntInRange('passages', passages, 1, config.maxEvidencePassages)
@@ -220,7 +220,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   if (args.attachmentPolicy === 'specified') {
     const raw = args.attachmentRefs ?? []
     if (raw.length === 0) {
-      invalid(RETRIEVE_SPECIFIED_EMPTY_MESSAGE)
+      invalidArgs(RETRIEVE_SPECIFIED_EMPTY_MESSAGE)
     }
     attachmentRefs = []
     // The list is a set: the same attachment named twice would be read twice
@@ -234,15 +234,15 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
       if (seen.has(identity)) continue
       seen.add(identity)
       if (!sameLibrary(attachmentRef.library, ref.library)) {
-        invalid(attachmentRefsLibraryMessage(`${ref.library.type}/${ref.library.id}`))
+        invalidArgs(attachmentRefsLibraryMessage(`${ref.library.type}/${ref.library.id}`))
       }
       attachmentRefs.push(attachmentRef)
     }
     if (attachmentRefs.length > config.retrieveAttachmentCap) {
-      invalid(attachmentRefsOverCapMessage(attachmentRefs.length, config.retrieveAttachmentCap))
+      invalidArgs(attachmentRefsOverCapMessage(attachmentRefs.length, config.retrieveAttachmentCap))
     }
   } else if (args.attachmentRefs !== undefined) {
-    invalid(RETRIEVE_SPECIFIED_ONLY_MESSAGE)
+    invalidArgs(RETRIEVE_SPECIFIED_ONLY_MESSAGE)
   }
   return {
     ref,

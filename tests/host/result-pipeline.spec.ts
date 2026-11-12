@@ -61,7 +61,7 @@ it('rejects malformed producer values before any file is published', async () =>
   lane.ctx.tools.register(delivery.wrap(definition))
   const result = await lane.runTool('result_probe', {})
   expect(result.isError).toBe(true)
-  expect(JSON.stringify(result.content)).toContain('Invalid result_probe result')
+  expect(JSON.stringify(result.content)).toContain('returned invalid output')
 })
 it('does not publish a file handle that itself exceeds the configured budget', async () => {
   lane = await setupHostLane(

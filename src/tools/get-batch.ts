@@ -7,7 +7,7 @@ import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-to
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { asJsonValue } from '../json.js'
 import { formatRef, parseSupportedRef } from '../refs.js'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import { GET_BATCH_MAX } from '../local/get-batch-domain.js'
 import { projectGetBatchMeta } from '../presentation-meta.js'
 import type { ZoteroGetBatchRequest, ZoteroGetBatchResult } from '../types.js'
@@ -86,14 +86,14 @@ const OUTPUT = {
 } as const
 
 function buildRequest(args: Args): ZoteroGetBatchRequest {
-  if (args.refs.length === 0) invalid('refs must list at least one Zotero ref')
+  if (args.refs.length === 0) invalidArgs('refs must list at least one Zotero ref')
   if (args.refs.length > GET_BATCH_MAX)
-    invalid(`refs accepts at most ${GET_BATCH_MAX} refs per call`)
+    invalidArgs(`refs accepts at most ${GET_BATCH_MAX} refs per call`)
   const seen = new Set<string>()
   const refs = args.refs.map((value) => {
     const ref = parseSupportedRef(value, ['item', 'attachment'])
     const canonical = formatRef(ref)
-    if (seen.has(canonical)) invalid(`refs must be unique; duplicate ref: ${value}`)
+    if (seen.has(canonical)) invalidArgs(`refs must be unique; duplicate ref: ${value}`)
     seen.add(canonical)
     return ref
   })

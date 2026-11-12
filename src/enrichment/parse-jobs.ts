@@ -10,6 +10,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import {
   JobId,
+  JobError,
   type JobHandle,
   type JobHooks,
   type JobOutcome,
@@ -32,6 +33,7 @@ import {
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
   ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_NOT_FOUND,
   ZOTERO_PROVIDER_UNAVAILABLE,
 } from '../errors.js'
@@ -576,6 +578,16 @@ export class EnrichmentParseJobs {
         },
       })
     } catch (error) {
+      // A full job registry is an actionable refusal, not an unavailable
+      // session: the user can cancel an unused job and retry. Every other
+      // start failure keeps the unavailable answer with its cause attached.
+      if (error instanceof JobError && error.code === 'JOB_LIMIT_REACHED') {
+        throw new ZoteroError(
+          'Document parsing is already running at this session’s job limit. Cancel an unused background job and retry.',
+          ZOTERO_JOBS_LIMIT_REACHED,
+          { cause: error },
+        )
+      }
       throw new ZoteroError(
         'Document parsing jobs are unavailable for this session.',
         ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,

@@ -114,7 +114,7 @@ it('repairs a failed saved-search lane from offset zero', async () => {
       return fail
         ? {
             ok: false,
-            error: new RemoteError('zotero/domain', 'saved search read failed', {
+            error: new RemoteError('zotero/unexpected', 'saved search read failed', {
               code: 'ZOTERO_UNEXPECTED',
             }),
           }

@@ -27,7 +27,7 @@ import {
   MATCH_REQUIRES_Q_MESSAGE,
   PARENT_REF_SCOPE_MESSAGE,
   Q_MATCH_SCOPE_MESSAGE,
-  invalid,
+  invalidArgs,
   libraryNotAllowedMessage,
   unsupportedBrowseKindMessage,
 } from '../errors.js'
@@ -227,12 +227,12 @@ export const ITEM_QUERY_MODE_MESSAGE = 'itemQueryMode requires itemQuery'
 
 function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): ZoteroBrowseRequest {
   const kind = args.kind as ZoteroBrowseKind
-  if (!BROWSE_KINDS.includes(kind)) invalid(unsupportedBrowseKindMessage(kind))
+  if (!BROWSE_KINDS.includes(kind)) invalidArgs(unsupportedBrowseKindMessage(kind))
   const offset = args.offset ?? 0
   const limit = args.limit ?? 20
   assertIntInRange('offset', offset, 0, 1_000_000)
   if (!Number.isInteger(limit) || limit < 1 || limit > config.maxBrowseResults) {
-    invalid(
+    invalidArgs(
       `limit must be an integer between 1 and ${config.maxBrowseResults}; got ${limit}. Set limit <= ${config.maxBrowseResults} and use offset for the next page.`,
     )
   }
@@ -242,29 +242,29 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
     (kind === 'libraries' || kind === 'itemTypes' || kind === 'itemFields') &&
     library !== undefined
   ) {
-    invalid(libraryNotAllowedMessage(kind))
+    invalidArgs(libraryNotAllowedMessage(kind))
   }
   const itemType = args.itemType
   if (itemType !== undefined && kind !== 'itemFields') {
-    invalid(ITEM_TYPE_SCOPE_MESSAGE)
+    invalidArgs(ITEM_TYPE_SCOPE_MESSAGE)
   }
   if (kind === 'itemFields') {
     if (itemType === undefined || !isItemTypeIdentifier(itemType)) {
-      invalid(ITEM_FIELDS_ITEM_TYPE_MESSAGE)
+      invalidArgs(ITEM_FIELDS_ITEM_TYPE_MESSAGE)
     }
   }
   const q = args.q
   const match = args.match
   if ((q !== undefined || match !== undefined) && kind !== 'tags') {
-    invalid(Q_MATCH_SCOPE_MESSAGE)
+    invalidArgs(Q_MATCH_SCOPE_MESSAGE)
   }
   if (match !== undefined && q === undefined) {
-    invalid(MATCH_REQUIRES_Q_MESSAGE)
+    invalidArgs(MATCH_REQUIRES_Q_MESSAGE)
   }
   const query = q === undefined ? undefined : assertNonBlank('q', q)
   const parentRef = args.parentRef
   if (parentRef !== undefined && kind !== 'collections') {
-    invalid(PARENT_REF_SCOPE_MESSAGE)
+    invalidArgs(PARENT_REF_SCOPE_MESSAGE)
   }
   const tagScope = args.tagScope
   const tagCollection = args.tagCollection
@@ -278,13 +278,13 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
       itemQueryMode !== undefined) &&
     kind !== 'tags'
   ) {
-    invalid(TAG_FACET_SCOPE_MESSAGE)
+    invalidArgs(TAG_FACET_SCOPE_MESSAGE)
   }
   if (tagCollection !== undefined && tagScope !== 'collection') {
-    invalid(TAG_COLLECTION_SCOPE_MESSAGE)
+    invalidArgs(TAG_COLLECTION_SCOPE_MESSAGE)
   }
   if (tagScope === 'collection' && tagCollection === undefined) {
-    invalid(TAG_SCOPE_COLLECTION_MESSAGE)
+    invalidArgs(TAG_SCOPE_COLLECTION_MESSAGE)
   }
   if (tagScope === 'publications') {
     assertPublicationsSupported(library)
@@ -292,10 +292,10 @@ function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): Z
   const collection =
     tagCollection === undefined ? undefined : assertNonBlank('tagCollection', tagCollection)
   if ((itemLevel !== undefined || itemQuery !== undefined) && tagScope === undefined) {
-    invalid(ITEM_LEVEL_SCOPE_MESSAGE)
+    invalidArgs(ITEM_LEVEL_SCOPE_MESSAGE)
   }
   if (itemQueryMode !== undefined && itemQuery === undefined) {
-    invalid(ITEM_QUERY_MODE_MESSAGE)
+    invalidArgs(ITEM_QUERY_MODE_MESSAGE)
   }
   const facetedQuery = itemQuery === undefined ? undefined : assertNonBlank('itemQuery', itemQuery)
   const scope =

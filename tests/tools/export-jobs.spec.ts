@@ -36,11 +36,15 @@ afterEach(async () => {
 
 describe('zotero_export jobs', () => {
   describe('background jobs and promotion', () => {
-    it('declares the run_in_background parameter statically regardless of composition', async () => {
-      const defaultTool = lane.tool('zotero_export')!
-      const defaultProps = (defaultTool.parameters as { properties?: Record<string, unknown> })
-        .properties
-      expect(defaultProps?.run_in_background).toBeDefined()
+    it('declares the run_in_background parameter only while a job registry is composed', async () => {
+      const propertiesOf = () =>
+        (lane.tool('zotero_export')!.parameters as { properties?: Record<string, unknown> })
+          .properties
+      // This lane composes no job registry, so the schema must not advertise a
+      // capability the host cannot honour.
+      expect(propertiesOf()?.run_in_background).toBeUndefined()
+      await composeRealJobs(lane.ctx)
+      expect(propertiesOf()?.run_in_background).toBeDefined()
     })
 
     it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {
@@ -58,7 +62,7 @@ describe('zotero_export jobs', () => {
       expect((result.content[0] as { text: string }).text).toBe(
         `Error: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
       )
-      expect(result.error?.info).toMatchObject({ code: 'ZOTERO_RUN_IN_BACKGROUND_DISABLED' })
+      expect(result.error?.info).toMatchObject({ code: 'JOB_BACKGROUND_DISABLED' })
     })
 
     it('refuses run_in_background when ctx.jobs service is unavailable', async () => {
@@ -72,7 +76,7 @@ describe('zotero_export jobs', () => {
       expect((result.content[0] as { text: string }).text).toBe(
         `Error: ${JOBS_UNAVAILABLE_MESSAGE}`,
       )
-      expect(result.error?.info).toMatchObject({ code: 'ZOTERO_JOBS_UNAVAILABLE' })
+      expect(result.error?.info).toMatchObject({ code: 'TOOL_CONTEXT_UNAVAILABLE' })
     })
 
     it('starts a background job and returns immediately when run_in_background is requested', async () => {
@@ -167,6 +171,31 @@ describe('zotero_export jobs', () => {
         result as never,
       )
       expect(view?.title).toBe(`Zotero export: promoted to job ${jobId}`)
+    })
+
+    it('keeps a large inline export inside the presentation budget without shipping its body', async () => {
+      const body = 'TY  - JOUR\n' + 'x'.repeat(12_000)
+      lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) => helpers.text(body))
+
+      const result = await Promise.resolve(
+        runTool('zotero_export', {
+          refs: ['zotero://user/0/item/ABCD1234'],
+          format: 'bibliography',
+        }),
+      )
+      const raw = result as {
+        meta?: unknown
+        content?: ReadonlyArray<{ type: string; text?: string }>
+      }
+      const meta = raw.meta
+      expect(meta).toBeDefined()
+      const serialized = JSON.stringify(meta)
+      // The bounded projector is the single budget: the delivered body is not
+      // copied into the card's structured facts.
+      expect(serialized).not.toContain('"text"')
+      expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(8192)
+      // The body itself still reaches the model and the card's code surface.
+      expect(raw.content?.some((part) => part.type === 'text' && part.text === body)).toBe(true)
     })
 
     it('returns the foreground result when execution completes within foregroundWaitMs', async () => {

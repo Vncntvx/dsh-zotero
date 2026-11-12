@@ -301,7 +301,7 @@ describe('EnrichmentFormController model operations', () => {
     const port = modelPortOf({
       deleteSemanticModel: vi.fn(async () => ({
         ok: false as const,
-        error: new RemoteError('zotero/domain', 'The model is downloading.', {
+        error: new RemoteError('zotero/enrichment', 'The model is downloading.', {
           code: 'ZOTERO_ENRICHMENT_OPERATION_CONFLICT',
         }),
       })),

@@ -25,13 +25,46 @@
  */
 
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroErrorCode } from './errors.js'
 import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
 import type { SourceWorkspace } from './sources/model.js'
 import type { SourceFilter } from './sources/filters.js'
 import { ZOTERO_SETTINGS_NAMESPACE, ZOTERO_ENRICHMENT_SERVICE_KEY } from './settings-namespace.js'
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    'zotero/domain': { readonly code: string }
+    /**
+     * One wire reason per actionable failure class, each carrying the stable
+     * domain code it came from. `zotero/domain` is deliberately absent: a
+     * single collapsed code hid every reason behind an untyped field.
+     */
+    'zotero/not-running': { readonly code: ZoteroErrorCode }
+    'zotero/api-disabled': { readonly code: ZoteroErrorCode }
+    'zotero/api-version': { readonly code: ZoteroErrorCode }
+    'zotero/not-implemented': { readonly code: ZoteroErrorCode }
+    'zotero/server-mismatch': { readonly code: ZoteroErrorCode }
+    'zotero/not-found': { readonly code: ZoteroErrorCode }
+    'zotero/range-unsupported': { readonly code: ZoteroErrorCode }
+    'zotero/no-attachment': { readonly code: ZoteroErrorCode }
+    'zotero/no-fulltext': { readonly code: ZoteroErrorCode }
+    'zotero/file-missing': { readonly code: ZoteroErrorCode }
+    'zotero/file-unreadable': { readonly code: ZoteroErrorCode }
+    'zotero/invalid-argument': { readonly code: ZoteroErrorCode }
+    'zotero/invalid-ref': { readonly code: ZoteroErrorCode }
+    'zotero/scope-ambiguous': { readonly code: ZoteroErrorCode }
+    'zotero/timeout': { readonly code: ZoteroErrorCode }
+    'zotero/response-too-large': { readonly code: ZoteroErrorCode }
+    'zotero/output-too-large': { readonly code: ZoteroErrorCode }
+    'zotero/capability-unavailable': { readonly code: ZoteroErrorCode }
+    'zotero/provider-unavailable': { readonly code: ZoteroErrorCode }
+    'zotero/source-page-stale': { readonly code: ZoteroErrorCode }
+    'zotero/url-pdf': { readonly code: ZoteroErrorCode }
+    'zotero/jobs/unavailable': { readonly code: ZoteroErrorCode }
+    'zotero/jobs/background-disabled': { readonly code: ZoteroErrorCode }
+    'zotero/jobs/limit-reached': { readonly code: ZoteroErrorCode }
+    'zotero/enrichment': { readonly code: ZoteroErrorCode }
+    'zotero/scholarly': { readonly code: ZoteroErrorCode }
+    'zotero/write': { readonly code: ZoteroErrorCode }
+    'zotero/unexpected': { readonly code: ZoteroErrorCode }
     'zotero/protocol-failed': { readonly url: string; readonly reason: string }
   }
 }

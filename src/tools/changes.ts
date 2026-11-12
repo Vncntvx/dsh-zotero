@@ -22,7 +22,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import { asRecord } from '../json.js'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import {
   ALL_CHANGES_INCLUDES,
   DEFAULT_CHANGES_INCLUDES as DEFAULT_INCLUDES,
@@ -52,6 +52,7 @@ import {
   isJobArm,
   jobPolicyOf,
   presentJobArm,
+  registerBackgroundAware,
   renderJobArm,
 } from '../job-runner.js'
 import { textOfBlocks } from './present.js'
@@ -329,19 +330,19 @@ function parseCursor(
   if (value === undefined) return undefined
   const serverId = value.serverId.trim()
   if (serverId === '') {
-    invalid('since.serverId must be the instance id the cursor came from')
+    invalidArgs('since.serverId must be the instance id the cursor came from')
   }
   assertIntInRange('since.version', value.version, 0, Number.MAX_SAFE_INTEGER)
   const include = value.include ?? callInclude ?? DEFAULT_INCLUDES
   if (!Array.isArray(include) || include.length === 0 || new Set(include).size !== include.length) {
-    invalid('since.include must list the resource kinds covered by the cursor')
+    invalidArgs('since.include must list the resource kinds covered by the cursor')
   }
   const unserved = value.unserved
   if (
     new Set(unserved).size !== unserved.length ||
     unserved.some((kind) => (include as readonly ZoteroChangesInclude[]).includes(kind))
   ) {
-    invalid(
+    invalidArgs(
       'since.unserved must list resource kinds the cursor could not observe, outside its coverage',
     )
   }
@@ -542,11 +543,11 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
 }
 
 /**
- * Register the `zotero_changes` tool once, statically: the
- * `run_in_background` parameter is always declared, and a background request
- * the composition cannot serve (the flag off, or no jobs service mounted) is
- * refused from execute with a structured error instead of the parameter being
- * hidden from the schema.
+ * Register the `zotero_changes` tool. The `run_in_background` parameter exists
+ * exactly while this composition can serve it (the deployment flag on and a
+ * job registry mounted), so a host that cannot start a job never advertises
+ * the key. Execute still refuses an undeclared background request, because the
+ * registry admits argument keys the schema omits.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
@@ -555,8 +556,7 @@ export function registerChangesTool(
   service: ZoteroService,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
-  const parameters = CHANGES_WITH_BACKGROUND_PARAMETERS
-  return ctx.tools.register(
+  const definition = (background: boolean) =>
     wrap(
       defineTool({
         name: 'zotero_changes',
@@ -566,7 +566,7 @@ export function registerChangesTool(
           'Totals are complete while listings are capped. Only a result with a cursor covers its full range; cursors are instance/library-bound.',
           'Check unobservable before treating a missing list as unchanged. deleted lists observed removals; versionUnavailable means no library version.',
         ].join(' '),
-        parameters,
+        parameters: background ? CHANGES_WITH_BACKGROUND_PARAMETERS : BASE_CHANGES_PARAMETERS,
         output: {
           schema: CHANGES_OUTPUT_SCHEMA,
           render: renderChanges,
@@ -616,6 +616,8 @@ export function registerChangesTool(
           })
         },
       }),
-    ),
+    )
+  return registerBackgroundAware(ctx, service.config.enableRunInBackground, (background) =>
+    ctx.tools.register(definition(background)),
   )
 }

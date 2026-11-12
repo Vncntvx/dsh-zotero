@@ -178,7 +178,9 @@ describe('library filter controls', () => {
       .fn<LibraryFeedFace['browse']>()
       .mockResolvedValueOnce({
         ok: false,
-        error: new RemoteError('zotero/domain', 'listing failed', { code: 'ZOTERO_UNEXPECTED' }),
+        error: new RemoteError('zotero/unexpected', 'listing failed', {
+          code: 'ZOTERO_UNEXPECTED',
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,

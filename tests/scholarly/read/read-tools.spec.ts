@@ -324,7 +324,7 @@ describe('scholarly_verify tool', () => {
 
     const item = itemLineOf(result.text)
     expect(item).toContain('NOT FOUND')
-    expect(item).toContain('No matching publication record found in Crossref.')
+    expect(item).toContain('is not registered in Crossref, and no bibliographic match was found.')
   })
 
   it('reports a bibliographic search failure as unverified', async () => {

@@ -8,6 +8,7 @@
  */
 
 import type { ResultDelivery } from './result-delivery.js'
+import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -23,13 +24,10 @@ import type {
   JobSpec,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
+import { JobError } from '@deepseek-ai/dsh-jobs'
+import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
-import {
-  errorMessageOf,
-  ZOTERO_JOBS_UNAVAILABLE,
-  ZOTERO_RUN_IN_BACKGROUND_DISABLED,
-  ZoteroError,
-} from './errors.js'
+import { errorMessageOf, ZoteroError } from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import type { ZoteroProgressEvent } from './types.js'
 
@@ -53,6 +51,41 @@ export const RUN_IN_BACKGROUND_DISABLED_MESSAGE =
 
 export function jobStartedMessage(jobId: string): string {
   return `started background job ${jobId}`
+}
+
+/**
+ * Register a tool whose `run_in_background` parameter exists only when this
+ * composition can serve it: the deployment enabled the flag and a job registry
+ * is mounted. The foreground-only schema registers first, and the jobs
+ * injection swaps in the background-capable one, so a host that cannot start a
+ * job never advertises the key. Execute still refuses an undeclared background
+ * request, because the registry admits argument keys the schema omits.
+ * @param ctx - the plugin context.
+ * @param backgroundEnabled - the live deployment switch.
+ * @param register - registers one arm and returns its disposer.
+ * @returns the disposer for the registration the composition chose.
+ */
+export function registerBackgroundAware(
+  ctx: Context,
+  backgroundEnabled: boolean,
+  register: (background: boolean) => () => void,
+): () => void {
+  if (!backgroundEnabled) return register(false)
+  if (ctx.get('jobs') !== undefined) return register(true)
+  const foregroundOnly = register(false)
+  let background: (() => void) | undefined
+  ctx.inject(['jobs'], () => {
+    foregroundOnly()
+    background = register(true)
+    return () => {
+      background?.()
+      background = undefined
+    }
+  })
+  return () => {
+    foregroundOnly()
+    background?.()
+  }
 }
 
 /** Grace period for a cancelled job to settle before removing from the registry (ms). */
@@ -243,10 +276,10 @@ export async function executeWithJobs<T>(options: {
 
   if (options.runInBackground) {
     if (!policy.enableRunInBackground) {
-      throw new ZoteroError(RUN_IN_BACKGROUND_DISABLED_MESSAGE, ZOTERO_RUN_IN_BACKGROUND_DISABLED)
+      throw new JobError(RUN_IN_BACKGROUND_DISABLED_MESSAGE, 'JOB_BACKGROUND_DISABLED')
     }
     if (!runner.isAvailable) {
-      throw new ZoteroError(JOBS_UNAVAILABLE_MESSAGE, ZOTERO_JOBS_UNAVAILABLE)
+      throw new ToolContextUnavailableError(JOBS_UNAVAILABLE_MESSAGE)
     }
     const { id } = runner.start(task)
     return {
@@ -319,7 +352,7 @@ export class ZoteroJobRunner {
   ): { id: JobId; done: Promise<ZoteroJobOutcome> } {
     const registry = this.registry()
     if (!registry) {
-      throw new Error(JOBS_UNAVAILABLE_MESSAGE)
+      throw new ToolContextUnavailableError(JOBS_UNAVAILABLE_MESSAGE)
     }
 
     if (task.exec.signal.aborted) {

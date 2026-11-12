@@ -1,5 +1,5 @@
 /** Admission, real registry ownership, idempotence, and durable receipt isolation. */
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import { JobError, JobId } from '@deepseek-ai/dsh-jobs'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { randomUUID } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+  ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_NOT_FOUND,
 } from '../../src/errors.js'
 import { PARSE_JOB_KIND, PARSE_JOB_LABEL } from '../../src/enrichment/parse-jobs.js'
@@ -64,6 +65,17 @@ describe('explicit parsing admission and receipts', () => {
     ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE })
     expect(fixture.execute).not.toHaveBeenCalled()
     expect(fixture.resolveAttachment).not.toHaveBeenCalled()
+  })
+
+  it('keeps a full job registry actionable instead of calling the session unavailable', async () => {
+    fixture = await parseJobsFixture()
+    vi.spyOn(fixture.ctx.jobs, 'start').mockImplementation(() => {
+      throw new JobError('job limit reached', 'JOB_LIMIT_REACHED')
+    })
+    await expect(
+      fixture.helper.startDocumentParse(parseRequest(), parseSignal()),
+    ).rejects.toMatchObject({ code: ZOTERO_JOBS_LIMIT_REACHED })
+    expect(fixture.execute).not.toHaveBeenCalled()
   })
 
   it('rechecks the current invocation after asynchronous Agent resolution', async () => {

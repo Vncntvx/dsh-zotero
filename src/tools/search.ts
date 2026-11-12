@@ -34,7 +34,7 @@ import { boundedPresentationMeta, projectSearchMeta } from '../presentation-meta
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { formatSearchLine, metaRecordOf } from './present.js'
 import { assertIntInRange, LIBRARY_SCHEMA, parseLibrary } from './validate.js'
-import { ZOTERO_UNEXPECTED, ZoteroError, invalid } from '../errors.js'
+import { ZOTERO_UNEXPECTED, ZoteroError, invalidArgs } from '../errors.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroResolvedScope, ZoteroSearchItem, ZoteroSearchRequest } from '../types.js'
 
@@ -344,37 +344,37 @@ export function noteBodyMatchesMessage(count: number, scanned: number, truncated
 function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchRequest {
   const limit = args.limit ?? SEARCH_DEFAULT_LIMIT
   if (!Number.isInteger(limit) || limit < 1 || limit > config.maxSearchResults) {
-    invalid(searchLimitMessage(limit, config.maxSearchResults))
+    invalidArgs(searchLimitMessage(limit, config.maxSearchResults))
   }
   const offset = args.offset ?? SEARCH_DEFAULT_OFFSET
   assertIntInRange('offset', offset, 0, 1_000_000)
   const query = args.query?.trim()
   const scope = args.scope ?? SEARCH_DEFAULT_SCOPE
   if (scope.kind !== 'library' && scope.kind !== 'publications' && scope.refOrName.trim() === '') {
-    invalid(SCOPE_REF_OR_NAME_MESSAGE)
+    invalidArgs(SCOPE_REF_OR_NAME_MESSAGE)
   }
   for (const tag of args.tags ?? []) {
     if (tag.trim() === '' || tag.includes('||')) {
-      invalid(`${TAGS_LITERAL_MESSAGE}: "${tag}"`)
+      invalidArgs(`${TAGS_LITERAL_MESSAGE}: "${tag}"`)
     }
   }
   for (const tag of args.excludeTags ?? []) {
     if (tag.trim() === '' || tag.includes('||')) {
-      invalid(`${EXCLUDE_TAGS_LITERAL_MESSAGE}; got "${tag}"`)
+      invalidArgs(`${EXCLUDE_TAGS_LITERAL_MESSAGE}; got "${tag}"`)
     }
   }
   // tagMatch's all|any enum is enforced by the parameter schema; the
   // cross-field rule below is what the schema cannot express.
   const tagMatch = args.tagMatch
   if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
-    invalid(TAG_MATCH_REQUIRES_TAGS_MESSAGE)
+    invalidArgs(TAG_MATCH_REQUIRES_TAGS_MESSAGE)
   const legacyIncludeTrashed = (args as Record<string, unknown>).includeTrashed
   if (legacyIncludeTrashed !== undefined) {
-    invalid(INCLUDE_TRASHED_SCOPE_MESSAGE)
+    invalidArgs(INCLUDE_TRASHED_SCOPE_MESSAGE)
   }
   for (const itemType of args.itemTypes ?? []) {
     if (!isItemTypeIdentifier(itemType)) {
-      invalid(`${ITEM_TYPES_LITERAL_MESSAGE}; got "${itemType}"`)
+      invalidArgs(`${ITEM_TYPES_LITERAL_MESSAGE}; got "${itemType}"`)
     }
   }
   const library = parseLibrary(args.library)

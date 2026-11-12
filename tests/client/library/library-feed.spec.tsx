@@ -251,7 +251,7 @@ describe('instance preferences', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: false,
-        error: new RemoteError('zotero/domain', 'gone', { code: 'ZOTERO_NOT_FOUND' }),
+        error: new RemoteError('zotero/not-found', 'gone', { code: 'ZOTERO_NOT_FOUND' }),
       })
       .mockResolvedValue({ ok: true, value: searchPage() })
     const { result } = setup({ search })
@@ -349,7 +349,7 @@ describe('targeted recovery and write refresh', () => {
     const item = deferred<Awaited<ReturnType<LibraryFeedFace['item']>>>()
     const search = vi.fn<LibraryFeedFace['search']>().mockResolvedValue({
       ok: false,
-      error: new RemoteError('zotero/domain', 'scope missing', { code: 'ZOTERO_NOT_FOUND' }),
+      error: new RemoteError('zotero/not-found', 'scope missing', { code: 'ZOTERO_NOT_FOUND' }),
     })
     const { result } = setup({ search, item: () => item.promise })
     await waitFor(() =>

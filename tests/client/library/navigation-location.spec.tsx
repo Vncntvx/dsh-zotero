@@ -117,7 +117,7 @@ it('reports a missing path without silently selecting all items', async () => {
   const { result } = setupLibraryFeed({
     collectionPath: async () => ({
       ok: false,
-      error: new RemoteError('zotero/domain', 'Collection no longer exists', {
+      error: new RemoteError('zotero/not-found', 'Collection no longer exists', {
         code: 'ZOTERO_NOT_FOUND',
       }),
     }),

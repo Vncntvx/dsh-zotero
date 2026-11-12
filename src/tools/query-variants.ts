@@ -7,7 +7,7 @@
  */
 
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import { assertNonBlank } from './validate.js'
 
 /**
@@ -28,7 +28,7 @@ export function queryVariantsOverCapMessage(cap: number): string {
 export function queryVariantsOf(variants: readonly string[] | undefined): string[] | undefined {
   if (variants === undefined) return undefined
   if (variants.length > ZOTERO_MAX_QUERY_VARIANTS) {
-    invalid(queryVariantsOverCapMessage(ZOTERO_MAX_QUERY_VARIANTS))
+    invalidArgs(queryVariantsOverCapMessage(ZOTERO_MAX_QUERY_VARIANTS))
   }
   const distinct: string[] = []
   const seen = new Set<string>()

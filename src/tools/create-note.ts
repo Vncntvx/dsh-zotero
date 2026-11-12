@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { invalid, WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
+import { invalidArgs, WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
 import { isRefString, parseSupportedRef } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
 import { renderDeclined } from './present.js'
@@ -170,7 +170,7 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
   const parentItem = args.parentItem
   // Same constant the write domain throws: one wording at both ends.
   if (parentItem !== undefined && collections !== undefined && collections.length > 0) {
-    invalid(WRITE_CHILD_COLLECTIONS_MESSAGE)
+    invalidArgs(WRITE_CHILD_COLLECTIONS_MESSAGE)
   }
   return {
     markdown: args.markdown,

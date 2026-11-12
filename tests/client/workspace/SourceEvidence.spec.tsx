@@ -189,7 +189,7 @@ describe('SourceEvidence component', () => {
   it('shows a remote resolution rejection in the passage card', async () => {
     const resolveAttachment = vi.fn().mockResolvedValue({
       ok: false,
-      error: new RemoteError('zotero/domain', 'attachment resolution refused', {
+      error: new RemoteError('zotero/no-attachment', 'attachment resolution refused', {
         code: 'ZOTERO_NO_ATTACHMENT',
       }),
     })

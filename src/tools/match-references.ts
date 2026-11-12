@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import { MATCH_REFERENCES_MAX } from '../local/match-references-domain.js'
 import { projectMatchReferencesMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
@@ -67,7 +67,7 @@ const OUTPUT = {
 
 function buildRequest(args: Args): ZoteroMatchReferencesRequest {
   if (args.references.length === 0 || args.references.length > MATCH_REFERENCES_MAX)
-    invalid(`references must contain 1-${MATCH_REFERENCES_MAX} entries`)
+    invalidArgs(`references must contain 1-${MATCH_REFERENCES_MAX} entries`)
   return {
     references: args.references,
     ...(args.includeFieldDiff === undefined ? {} : { includeFieldDiff: args.includeFieldDiff }),

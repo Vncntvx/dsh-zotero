@@ -91,16 +91,20 @@ describe('real model error codes', () => {
     const port = modelPortOf({
       semanticModelStatus: vi.fn(async () => ({
         ok: false as const,
-        error: new RemoteError('zotero/domain', 'Permission revoked by the gateway', {
-          code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
-        }),
+        error: new RemoteError(
+          'zotero/capability-unavailable',
+          'Permission revoked by the gateway',
+          {
+            code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
+          },
+        ),
       })),
     })
     const { face } = controllerOf(port)
     await face.checkModelStatus()
     const state = stateOf(face)
     expect(state.semanticModelUnavailable).toBe(false)
-    expect(state.semanticModelFailure?.code).toBe('zotero/domain')
+    expect(state.semanticModelFailure?.code).toBe('zotero/capability-unavailable')
     expect(state.semanticModelFailure?.message).toBe('Permission revoked by the gateway')
     expect(state.semanticModelFailure?.details).toEqual({
       code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
@@ -131,7 +135,7 @@ describe('real model error codes', () => {
       downloadSemanticModel: vi.fn(async () => ({
         ok: false as const,
         error: new RemoteError(
-          'zotero/domain',
+          'zotero/enrichment',
           'the model directory is locked by another process',
           {
             code: 'ZOTERO_ENRICHMENT_OPERATION_CONFLICT',

@@ -7,7 +7,7 @@
 
 import {
   WRITE_LIST_SELECTION_MESSAGE,
-  invalid,
+  invalidArgs,
   requireNonBlank,
   writeListTooLongMessage,
   writeNoteTooLongMessage,
@@ -61,7 +61,7 @@ export const assertNonBlank = requireNonBlank
 /** Validate the original Markdown before either note tool requests approval. */
 export function assertNoteMarkdown(markdown: string, maxChars: number): string {
   assertNonBlank('markdown', markdown)
-  if (markdown.length > maxChars) invalid(writeNoteTooLongMessage(maxChars))
+  if (markdown.length > maxChars) invalidArgs(writeNoteTooLongMessage(maxChars))
   return markdown
 }
 
@@ -74,7 +74,7 @@ export function assertNoteMarkdown(markdown: string, maxChars: number): string {
  */
 export function assertIntInRange(name: string, value: number, min: number, max: number): void {
   if (!Number.isInteger(value) || value < min || value > max) {
-    invalid(intRangeArgumentMessage(name, value, min, max))
+    invalidArgs(intRangeArgumentMessage(name, value, min, max))
   }
 }
 
@@ -87,7 +87,7 @@ export function assertIntInRange(name: string, value: number, min: number, max: 
  * @param message - the model-facing error when the list is empty.
  */
 export function assertNonEmptyList(values: readonly unknown[], message: string): void {
-  if (values.length === 0) invalid(message)
+  if (values.length === 0) invalidArgs(message)
 }
 
 /**
@@ -110,9 +110,9 @@ export function assertAddRemoveSelection(
 ): { add: string[]; remove: string[] } {
   const add = args.add === undefined ? [] : assertWriteList('add', args.add, maxItems)
   const remove = args.remove === undefined ? [] : assertWriteList('remove', args.remove, maxItems)
-  if (add.length + remove.length === 0) invalid(WRITE_LIST_SELECTION_MESSAGE)
+  if (add.length + remove.length === 0) invalidArgs(WRITE_LIST_SELECTION_MESSAGE)
   if (add.length + remove.length > maxItems) {
-    invalid(writeListTooLongMessage('add and remove', maxItems))
+    invalidArgs(writeListTooLongMessage('add and remove', maxItems))
   }
   return { add, remove }
 }
@@ -128,7 +128,7 @@ export function assertWriteList(
   maxItems: number,
 ): string[] {
   if (values.length > maxItems) {
-    invalid(writeListTooLongMessage(name, maxItems))
+    invalidArgs(writeListTooLongMessage(name, maxItems))
   }
   return values.map((value) => assertNonBlank(name, value))
 }
@@ -150,10 +150,10 @@ export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined 
   const rec = value as Record<string, unknown>
   const type = rec.type
   const id = rec.id
-  if (type !== 'user' && type !== 'group') invalid(LIBRARY_TYPE_MESSAGE)
-  if (!Number.isSafeInteger(id)) invalid(LIBRARY_ID_MESSAGE)
-  if (type === 'user' && id !== 0) invalid(PERSONAL_LIBRARY_MESSAGE)
-  if (type === 'group' && (id as number) <= 0) invalid(GROUP_ID_MESSAGE)
+  if (type !== 'user' && type !== 'group') invalidArgs(LIBRARY_TYPE_MESSAGE)
+  if (!Number.isSafeInteger(id)) invalidArgs(LIBRARY_ID_MESSAGE)
+  if (type === 'user' && id !== 0) invalidArgs(PERSONAL_LIBRARY_MESSAGE)
+  if (type === 'group' && (id as number) <= 0) invalidArgs(GROUP_ID_MESSAGE)
   return { type: type as SupportedLocalLibrary['type'], id: id as number } as SupportedLocalLibrary
 }
 
@@ -166,7 +166,7 @@ export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined 
 export function requireLibrary(value: unknown): SupportedLocalLibrary {
   const library = parseLibrary(value)
   if (library === undefined) {
-    invalid(LIBRARY_REQUIRED_MESSAGE)
+    invalidArgs(LIBRARY_REQUIRED_MESSAGE)
   }
   return library
 }

@@ -25,7 +25,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { invalid } from '../errors.js'
+import { invalidArgs } from '../errors.js'
 import { parseSupportedRef } from '../refs.js'
 import { formatCitationKeyConflict } from '../citation-key.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
@@ -47,6 +47,7 @@ import {
   isJobArm,
   jobPolicyOf,
   presentJobArm,
+  registerBackgroundAware,
   renderJobArm,
 } from '../job-runner.js'
 
@@ -199,7 +200,7 @@ export const EXPORT_LOCALE_BLANK_MESSAGE = 'locale must be a non-empty CSL local
 
 function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportRequest {
   assertNonEmptyList(args.refs, EXPORT_REFS_EMPTY_MESSAGE)
-  assertExportRefsWithinCap(args.refs.length, config.maxExportRefs)
+  assertExportRefsWithinCap(args.refs.length, config.maxExportRefs, invalidArgs)
   const refs = args.refs.map((value) => {
     const ref = parseSupportedRef(value, ['item'])
     return ref
@@ -208,11 +209,13 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
     args.outputFile !== undefined &&
     (args.outputFile.trim() === '' || args.format === 'citation')
   )
-    invalid('outputFile requires a non-empty path and a bibliography, translator, or CSV export')
+    invalidArgs(
+      'outputFile requires a non-empty path and a bibliography, translator, or CSV export',
+    )
   const style = args.style?.trim()
-  if (style === '') invalid(EXPORT_STYLE_BLANK_MESSAGE)
+  if (style === '') invalidArgs(EXPORT_STYLE_BLANK_MESSAGE)
   const locale = args.locale?.trim()
-  if (locale === '') invalid(EXPORT_LOCALE_BLANK_MESSAGE)
+  if (locale === '') invalidArgs(EXPORT_LOCALE_BLANK_MESSAGE)
   return {
     refs,
     format: args.format as ZoteroExportFormat,
@@ -269,9 +272,18 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
           return `- ${identity}${unavailable}`
         })
       : []
-  const mapping = mapped.length > 0 ? `Mapped items:\n${mapped.join('\n')}\n\n` : ''
-  const footer = notes.length > 0 ? `\n\n(${notes.join(' ')})` : ''
-  return [{ type: 'text', text: `${mapping}${text}${footer}` }]
+  const mapping = mapped.length > 0 ? `Mapped items:\n${mapped.join('\n')}` : ''
+  const notesText = notes.length > 0 ? `(${notes.join(' ')})` : ''
+  const auxiliary = [mapping, notesText].filter((part) => part !== '').join('\n\n')
+  // The translator body stays its own block: the card reads it as the exact
+  // artifact for copy and download, so the mapping and the notes can never
+  // leak into it. The model still receives both blocks.
+  return auxiliary === ''
+    ? [{ type: 'text', text }]
+    : [
+        { type: 'text', text },
+        { type: 'text', text: auxiliary },
+      ]
 }
 
 /**
@@ -295,12 +307,12 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
 }
 
 /**
- * Register the `zotero_export` tool once, statically: the
- * `run_in_background` parameter is always declared, and a background request
- * the composition cannot serve (the flag off, or no jobs service mounted) is
- * refused from execute with a structured error instead of the parameter being
- * hidden from the schema. The service's live config is read per request so a
- * settings edit takes effect on the next call without re-registration.
+ * Register the `zotero_export` tool. The `run_in_background` parameter exists
+ * exactly while this composition can serve it (the deployment flag on and a
+ * job registry mounted), so a host that cannot start a job never advertises
+ * the key. Execute still refuses an undeclared background request, because the
+ * registry admits argument keys the schema omits. The live config is read per
+ * request, so a settings edit changes the refusal on the next call.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  */
@@ -309,18 +321,17 @@ export function registerExportTool(
   service: ZoteroService,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
-  const parameters = EXPORT_WITH_BACKGROUND_PARAMETERS
-  return ctx.tools.register(
+  const definition = (background: boolean) =>
     wrap(
       defineTool({
         name: 'zotero_export',
         description: [
           'Export Zotero items as citations, a bibliography, or translator formats (bibtex, biblatex, ris, csljson, csv).',
           `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
-          `bibliography returns the joined CSL-sorted text; translator formats return Zotero's raw ordering and are itemized by ref, exportKey, citationKey, and title, never by position. Itemized formats use one export request and one bounded metadata batch, up to ${ZOTERO_ITEMKEY_BATCH} refs.`,
-          'Writing outputFile writes the file only: call the harness present tool with that path when the file should join the session deliverables.',
+          `bibliography returns the joined CSL-sorted text; translator formats return Zotero's raw ordering itemized by ref, exportKey, citationKey, and title, never by position. Itemized formats use one export request and one bounded metadata batch, up to ${ZOTERO_ITEMKEY_BATCH} refs.`,
+          'Declare with present.',
         ].join(' '),
-        parameters,
+        parameters: background ? EXPORT_WITH_BACKGROUND_PARAMETERS : BASE_EXPORT_PARAMETERS,
         output: {
           schema: EXPORT_OUTPUT_SCHEMA,
           render: renderExport,
@@ -396,6 +407,8 @@ export function registerExportTool(
           })
         },
       }),
-    ),
+    )
+  return registerBackgroundAware(ctx, service.config.enableRunInBackground, (background) =>
+    ctx.tools.register(definition(background)),
   )
 }

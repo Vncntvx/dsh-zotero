@@ -66,6 +66,19 @@ export function rowStateOf(block: ToolBlockLike): ZoteroRowState {
  * null (the harness helper only accepts settled nodes); callers normalize with
  * `?? ''`. Re-check it on every pin upgrade (`docs/development.md`).
  */
+/**
+ * The first text block of a settled result: the artifact bytes a card copies
+ * or downloads, kept apart from any block the render appends after it.
+ * Running blocks return null.
+ */
+export function resultFirstTextOf(block: ToolBlockLike): string | null {
+  if (!isSettledTool(block)) return null
+  for (const item of block.content) {
+    if (item.type === 'text') return item.text
+  }
+  return ''
+}
+
 export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null
   const parts: string[] = []

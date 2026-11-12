@@ -84,7 +84,7 @@ describe('zotero_update_note', () => {
       const result = await lane.runTool('zotero_update_note', { ref: NOTE_REF, markdown })
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('expected a validation failure')
-      expect(result.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+      expect(result.error.info?.code).toBe('INVALID_ARGS')
     }
     expect(approvalAsks).toHaveLength(0)
     expect(lane.mock.requests).toHaveLength(0)

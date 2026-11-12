@@ -1,7 +1,9 @@
 /** Stable error classes and codes for the Zotero domain. @module dsh-zotero/errors */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
 import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 
 /** Zotero is not reachable on its local port. */
@@ -72,6 +74,8 @@ export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED = 'ZOTERO_ENRICHMENT_MODEL_
 export const ZOTERO_JOBS_UNAVAILABLE = 'ZOTERO_JOBS_UNAVAILABLE'
 /** The deployment disabled `run_in_background`, so the call must run in the foreground. */
 export const ZOTERO_RUN_IN_BACKGROUND_DISABLED = 'ZOTERO_RUN_IN_BACKGROUND_DISABLED'
+/** The job registry refused a new job because the owner already holds its limit. */
+export const ZOTERO_JOBS_LIMIT_REACHED = 'ZOTERO_JOBS_LIMIT_REACHED'
 /** One pinned file did not finish inside its per-file budget across every source. */
 export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT'
 /** The configured provider is not registered. */
@@ -140,6 +144,7 @@ export const ZOTERO_ERROR_CODES = [
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
   ZOTERO_JOBS_UNAVAILABLE,
   ZOTERO_RUN_IN_BACKGROUND_DISABLED,
+  ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_UNEXPECTED,
@@ -184,9 +189,22 @@ export class ZoteroWriteCommitUnknownError extends HarnessError {
 }
 
 /**
- * Throw an argument error: the message is model-facing and names the offending
- * value. The argument schemas cannot express every domain constraint, so tool
- * and endpoint validation fail through this one typed refusal.
+ * Throw a tool argument error for a constraint the parameter schema cannot
+ * express. Tool bodies reject with the harness's own `ToolArgsError`
+ * (`INVALID_ARGS`): the registry renders it as an argument refusal, which is
+ * what a write tool's hand check is.
+ * @param message - the model-facing argument error text.
+ * @throws {ToolArgsError} `INVALID_ARGS`.
+ */
+export function invalidArgs(message: string): never {
+  throw new ToolArgsError([message])
+}
+
+/**
+ * Throw a domain-level argument error for a layer the tool boundary does not
+ * own: endpoint handlers and the shared domain request builders keep the
+ * stable `ZOTERO_INVALID_ARGUMENT` code so a failure crossing the wire keeps
+ * its domain identity.
  * @param message - the model-facing argument error text.
  * @throws {ZoteroError} `ZOTERO_INVALID_ARGUMENT`.
  */
@@ -514,13 +532,89 @@ export function errorMessageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Preserve domain failure codes across the gateway's typed error carrier. */
+/**
+ * The wire reason each domain code crosses the gateway as. Every code has one
+ * entry, so a new code cannot ship without deciding its reason; the reasons
+ * group only failures a client acts on identically, and each one still carries
+ * the exact domain code in its typed details.
+ */
+export const ZOTERO_REMOTE_REASON: Record<
+  ZoteroErrorCode,
+  Exclude<RemoteErrorCode, 'zotero/protocol-failed'>
+> = {
+  ZOTERO_NOT_RUNNING: 'zotero/not-running',
+  ZOTERO_API_DISABLED: 'zotero/api-disabled',
+  ZOTERO_API_VERSION: 'zotero/api-version',
+  ZOTERO_NOT_IMPLEMENTED: 'zotero/not-implemented',
+  ZOTERO_SERVER_MISMATCH: 'zotero/server-mismatch',
+  ZOTERO_NOT_FOUND: 'zotero/not-found',
+  ZOTERO_RANGE_UNSUPPORTED: 'zotero/range-unsupported',
+  ZOTERO_NO_ATTACHMENT: 'zotero/no-attachment',
+  ZOTERO_NO_FULLTEXT: 'zotero/no-fulltext',
+  ZOTERO_FILE_MISSING: 'zotero/file-missing',
+  ZOTERO_FILE_UNREADABLE: 'zotero/file-unreadable',
+  ZOTERO_INVALID_REF: 'zotero/invalid-ref',
+  ZOTERO_INVALID_ARGUMENT: 'zotero/invalid-argument',
+  ZOTERO_SCOPE_AMBIGUOUS: 'zotero/scope-ambiguous',
+  ZOTERO_TIMEOUT: 'zotero/timeout',
+  ZOTERO_RESPONSE_TOO_LARGE: 'zotero/response-too-large',
+  ZOTERO_OUTPUT_TOO_LARGE: 'zotero/output-too-large',
+  ZOTERO_CAPABILITY_UNAVAILABLE: 'zotero/capability-unavailable',
+  ZOTERO_SOURCE_PAGE_STALE: 'zotero/source-page-stale',
+  ZOTERO_URL_PDF_DISABLED: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_BUSY: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_NOT_URL: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_REDIRECT: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_HTTP: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_NOT_PDF: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_TIMEOUT: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_FORBIDDEN_TARGET: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_TOO_LARGE: 'zotero/url-pdf',
+  ZOTERO_URL_PDF_NETWORK: 'zotero/url-pdf',
+  ZOTERO_JOBS_UNAVAILABLE: 'zotero/jobs/unavailable',
+  ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE: 'zotero/jobs/unavailable',
+  ZOTERO_RUN_IN_BACKGROUND_DISABLED: 'zotero/jobs/background-disabled',
+  ZOTERO_JOBS_LIMIT_REACHED: 'zotero/jobs/limit-reached',
+  ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE: 'zotero/scholarly',
+  ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED: 'zotero/scholarly',
+  ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_OPERATION_CONFLICT: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_TASK_FAILED: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_OUTPUT_INVALID: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_ARCHIVE_INVALID: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT: 'zotero/enrichment',
+  ZOTERO_PROVIDER_UNAVAILABLE: 'zotero/provider-unavailable',
+  ZOTERO_UNEXPECTED: 'zotero/unexpected',
+  ZOTERO_WRITE_UNAUTHORIZED: 'zotero/write',
+  ZOTERO_WRITE_CONFLICT: 'zotero/write',
+  ZOTERO_WRITE_RATE_LIMITED: 'zotero/write',
+  ZOTERO_WRITE_APPROVAL_UNAVAILABLE: 'zotero/write',
+}
+
+const ZOTERO_CODE_SET: ReadonlySet<string> = new Set(ZOTERO_ERROR_CODES)
+
+/** Narrow an arbitrary error code to the domain vocabulary, or `unexpected`. */
+function zoteroCodeOf(code: string): ZoteroErrorCode {
+  return ZOTERO_CODE_SET.has(code) ? (code as ZoteroErrorCode) : ZOTERO_UNEXPECTED
+}
+
+/**
+ * Preserve a domain failure as its own wire reason across the gateway's typed
+ * error carrier. A caller that resolves the service inside `call` also has its
+ * provider-unavailable failure classified instead of escaping raw.
+ */
 export async function domainCall<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call()
   } catch (error) {
-    if (error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError)
-      throw new RemoteError('zotero/domain', error.message, { code: error.code }, { cause: error })
+    if (error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError) {
+      const code = zoteroCodeOf(error.code)
+      throw new RemoteError(ZOTERO_REMOTE_REASON[code], error.message, { code }, { cause: error })
+    }
     throw error
   }
 }

@@ -6,6 +6,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+import { ToolContextUnavailableError, ToolOutputError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -197,7 +198,9 @@ export class ResultDelivery {
     // pinning a handle to a facility that was disposed with its own fiber.
     const facility = this.ctx.get('storageDomain')
     if (!facility) {
-      throw new Error('Complete result delivery requires storageDomain and attachments services.')
+      throw new ToolContextUnavailableError(
+        'Complete result delivery requires storageDomain and attachments services.',
+      )
     }
     if (this.domain === undefined || this.facility !== facility) {
       this.facility = facility
@@ -261,7 +264,9 @@ export class ResultDelivery {
     const attachments = this.ctx.get('attachments')
     const sessionId = exec.agent?.session?.header.id
     if (!attachments || sessionId === undefined)
-      throw new Error('Complete result delivery requires attachments and an owning Session.')
+      throw new ToolContextUnavailableError(
+        'Complete result delivery requires attachments and an owning Session.',
+      )
     const table = await this.receipts()
     const key = await resultReceiptKey(sessionId, exec.callId)
     const existing = table.get(key)
@@ -377,23 +382,9 @@ export class ResultDelivery {
           if (!isDelivered(value)) return output.presentationMeta?.(args, value) ?? {}
           if (value.delivery === 'file') return { ...value.facts, ...value } as JsonValue
           const meta = asRecord(output.presentationMeta?.(args, value.data)) ?? {}
-          const data = asRecord(value.data)
-          return {
-            ...meta,
-            delivery: 'inline',
-            ...(definition.name === 'zotero_export'
-              ? {
-                  text:
-                    typeof data?.text === 'string'
-                      ? data.text
-                      : output
-                          .render(args, value.data)
-                          .filter((block) => block.type === 'text')
-                          .map((block) => block.text)
-                          .join('\n'),
-                }
-              : {}),
-          } as JsonValue
+          // The bounded projector is the single budget: a delivered inline
+          // result adds only its delivery shape, never the rendered body.
+          return { ...meta, delivery: 'inline' } as JsonValue
         },
       },
       execute: (args, exec) =>
@@ -406,8 +397,7 @@ export class ResultDelivery {
             )
               return value
             const violations = validateJsonSchemaValue(output.schema, value)
-            if (violations.length)
-              throw new Error(`Invalid ${definition.name} result: ${violations.join('; ')}`)
+            if (violations.length) throw new ToolOutputError(definition.name, violations)
             const delivered = await this.prepare(
               exec,
               value,

@@ -159,7 +159,7 @@ describe('explicit document parsing through the pinned Gateway', () => {
       startRequest({ kind: 'url', url: 'http://127.0.0.1/document.pdf' }),
     )
     expect(failure.wire).toMatchObject({
-      code: 'zotero/domain',
+      code: 'zotero/enrichment',
       details: { code: ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT },
     })
     expectNoWork(fixture)
@@ -184,7 +184,7 @@ describe('explicit document parsing through the pinned Gateway', () => {
       fixture.guest,
     )
     expect(failure.wire).toMatchObject({
-      code: 'zotero/domain',
+      code: 'zotero/not-found',
       details: { code: ZOTERO_NOT_FOUND },
     })
     expectNoWork(fixture)
@@ -325,7 +325,7 @@ describe('explicit document parsing through the pinned Gateway', () => {
       fixture.guest,
     )
     expect(failure.wire).toMatchObject({
-      code: 'zotero/domain',
+      code: 'zotero/enrichment',
       details: { code: ZOTERO_ENRICHMENT_TASK_FAILED },
     })
     expect(failure.error).toMatchObject({

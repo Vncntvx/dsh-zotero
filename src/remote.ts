@@ -253,9 +253,10 @@ export class ZoteroRuntime extends TypertRemoteService {
     signal.throwIfAborted()
     const service = this.ctx.get('zotero')
     const [status, sourceProjection] = await Promise.all([
-      service?.status(signal),
-      service?.sourceProjectionStatus(signal) ??
-        Promise.resolve({ state: 'not-composed' as const }),
+      service === undefined ? undefined : domainCall(() => service.status(signal)),
+      service === undefined
+        ? Promise.resolve({ state: 'not-composed' as const })
+        : domainCall(() => service.sourceProjectionStatus(signal)),
     ])
     signal.throwIfAborted()
     if (status === undefined) {
@@ -275,8 +276,10 @@ export class ZoteroRuntime extends TypertRemoteService {
    * @returns the resolved location view.
    */
   async resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView> {
-    const service = requireZoteroService(this.ctx, signal)
-    return await domainCall(() => service.resolveAttachment(ref, signal))
+    return await domainCall(() => {
+      const service = requireZoteroService(this.ctx, signal)
+      return service.resolveAttachment(ref, signal)
+    })
   }
 
   /**
@@ -291,8 +294,10 @@ export class ZoteroRuntime extends TypertRemoteService {
     request: ZoteroSourcePageRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSourcePageResultView> {
-    const service = requireZoteroService(this.ctx, signal)
-    return await domainCall(() => service.sourcePage(request, signal))
+    return await domainCall(() => {
+      const service = requireZoteroService(this.ctx, signal)
+      return service.sourcePage(request, signal)
+    })
   }
 
   /**
@@ -336,21 +341,23 @@ export class ZoteroRuntime extends TypertRemoteService {
     report: ZoteroClientErrorReport,
     signal: AbortSignal,
   ): Promise<ZoteroReportResultView> {
-    const service = requireZoteroService(this.ctx, signal)
-    const detail: Record<string, string> = {}
-    if (report.stack !== undefined && report.stack !== '') {
-      detail.stack = clampText(report.stack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
-    }
-    if (report.componentStack !== undefined && report.componentStack !== '') {
-      detail.componentStack = clampText(report.componentStack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
-    }
-    const seq = service.diagnostics.push({
-      level: 'error',
-      event: 'client.render',
-      message: clampText(`${report.surface}: ${report.message}`, DIAGNOSTIC_MESSAGE_MAX_CHARS),
-      ...(Object.keys(detail).length > 0 ? { detail } : {}),
+    return await domainCall(async () => {
+      const service = requireZoteroService(this.ctx, signal)
+      const detail: Record<string, string> = {}
+      if (report.stack !== undefined && report.stack !== '') {
+        detail.stack = clampText(report.stack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
+      }
+      if (report.componentStack !== undefined && report.componentStack !== '') {
+        detail.componentStack = clampText(report.componentStack, DIAGNOSTIC_DETAIL_VALUE_MAX_CHARS)
+      }
+      const seq = service.diagnostics.push({
+        level: 'error',
+        event: 'client.render',
+        message: clampText(`${report.surface}: ${report.message}`, DIAGNOSTIC_MESSAGE_MAX_CHARS),
+        ...(Object.keys(detail).length > 0 ? { detail } : {}),
+      })
+      return { seq }
     })
-    return { seq }
   }
 
   /**
@@ -375,8 +382,7 @@ export class ZoteroRuntime extends TypertRemoteService {
    */
   async revokeWriteGrant(signal: AbortSignal): Promise<ZoteroWriteGrantRevokeView> {
     signal.throwIfAborted()
-    const service = requireZoteroService(this.ctx, signal)
-    return await service.revokeWriteGrant()
+    return await domainCall(() => requireZoteroService(this.ctx, signal).revokeWriteGrant())
   }
 
   /** The live `debug` flag, so the snapshot names the verbosity it was taken at. */

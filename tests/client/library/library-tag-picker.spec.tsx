@@ -121,7 +121,7 @@ describe('tag picker request lifetime', () => {
       .fn<LibraryFeedFace['browse']>()
       .mockResolvedValueOnce({
         ok: false,
-        error: new RemoteError('zotero/domain', 'tag failure', { code: 'ZOTERO_UNEXPECTED' }),
+        error: new RemoteError('zotero/unexpected', 'tag failure', { code: 'ZOTERO_UNEXPECTED' }),
       })
       .mockRejectedValueOnce(new Error('disconnected'))
     const picker = mountPicker(browse)

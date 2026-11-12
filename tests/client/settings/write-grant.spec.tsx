@@ -81,7 +81,9 @@ describe('the write-grant revoke row', () => {
   it('shows the host error and keeps the action when revoke fails', async () => {
     const revoke = vi.fn(async () => ({
       ok: false as const,
-      error: new RemoteError('zotero/domain', 'denied', { code: 'ZOTERO_CAPABILITY_UNAVAILABLE' }),
+      error: new RemoteError('zotero/capability-unavailable', 'denied', {
+        code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
+      }),
     }))
     render(
       <WriteGrantAction

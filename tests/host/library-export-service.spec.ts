@@ -144,7 +144,7 @@ describe('the zoteroLibrary export endpoint', () => {
     })
   })
 
-  it('surfaces a domain failure as the zotero/domain error with its stable code', async () => {
+  it('surfaces a domain failure as its typed wire reason with its stable code', async () => {
     const { lane, service } = await setupExportService()
     vi.spyOn(lane.ctx.zotero, 'exportText').mockRejectedValueOnce(
       new ZoteroError('Zotero did not return an item for the ref.', ZOTERO_NOT_FOUND),
@@ -153,7 +153,7 @@ describe('the zoteroLibrary export endpoint', () => {
     await expect(
       service.export({ refs: [ITEM_REF], format: 'citation' }, LIVE_SIGNAL),
     ).rejects.toMatchObject({
-      code: 'zotero/domain',
+      code: 'zotero/not-found',
       message: 'Zotero did not return an item for the ref.',
       details: { code: ZOTERO_NOT_FOUND },
     })

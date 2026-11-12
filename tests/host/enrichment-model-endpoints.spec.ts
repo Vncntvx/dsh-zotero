@@ -141,10 +141,16 @@ describe('the enrichment model endpoints', () => {
     const service = serviceOf({})
     await expect(
       service.semanticModelStatus({ model: 'nope' as never }, LIVE),
-    ).rejects.toMatchObject({ code: 'zotero/domain', details: { code: ZOTERO_INVALID_ARGUMENT } })
+    ).rejects.toMatchObject({
+      code: 'zotero/invalid-argument',
+      details: { code: ZOTERO_INVALID_ARGUMENT },
+    })
     await expect(
       service.downloadSemanticModel({ source: 'gitee' as never }, LIVE),
-    ).rejects.toMatchObject({ code: 'zotero/domain', details: { code: ZOTERO_INVALID_ARGUMENT } })
+    ).rejects.toMatchObject({
+      code: 'zotero/invalid-argument',
+      details: { code: ZOTERO_INVALID_ARGUMENT },
+    })
   })
 })
 

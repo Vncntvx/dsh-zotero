@@ -165,7 +165,7 @@ describe('child feed selection, failures, and guards', () => {
     )
     vi.mocked(face.childPage).mockResolvedValueOnce({
       ok: false as const,
-      error: new RemoteError('zotero/domain', 'child denied', { code: 'ZOTERO_NOT_FOUND' }),
+      error: new RemoteError('zotero/not-found', 'child denied', { code: 'ZOTERO_NOT_FOUND' }),
     })
     act(() => result.current.pageChild('attachments', 0))
     await waitFor(() =>

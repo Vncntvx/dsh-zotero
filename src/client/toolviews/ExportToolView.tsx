@@ -18,6 +18,7 @@ import {
   isToolRunning,
   listArg,
   metaOf,
+  resultFirstTextOf,
   resultTextOf,
   textArg,
 } from '../../sources/presenters.js'
@@ -88,9 +89,10 @@ export function ExportToolView(props: ExportToolViewProps) {
       errorSummary: errSummary,
       items: exportView?.items ?? [],
       // A job arm's text is only an acknowledgement, never an export
-      // artifact. Keep it out of the code/download surface until job_output
-      // supplies the completed translator text.
-      rawText: job === null && typeof meta?.text === 'string' ? meta.text : '',
+      // artifact. The completed body is the first text block: the render keeps
+      // the mapping and the notes in a second block so neither can reach the
+      // copy/download surface.
+      rawText: job === null ? (resultFirstTextOf(block) ?? '') : '',
       job,
       detailOmitted: exportView?.detailOmitted === true,
     }

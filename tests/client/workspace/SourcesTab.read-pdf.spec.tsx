@@ -103,7 +103,7 @@ describe('SourcesTab readPdf flow', () => {
     const openResource = vi.fn()
     const resolveAttachment = vi.fn().mockResolvedValue({
       ok: false,
-      error: new RemoteError('zotero/domain', 'Attachment lookup failed', {
+      error: new RemoteError('zotero/no-attachment', 'Attachment lookup failed', {
         code: 'ZOTERO_NO_ATTACHMENT',
       }),
     })
@@ -246,8 +246,8 @@ describe('SourcesTab readPdf flow', () => {
     const libraryPreferences = () => ({ ...LIBRARY_DEFAULTS, allowUrlPdfRead: true })
     const readUrlPdf = vi.fn().mockResolvedValue({
       ok: false,
-      error: new RemoteError('zotero/domain', 'PDF fetch timed out', {
-        code: 'ZOTERO_FETCH_TIMEOUT',
+      error: new RemoteError('zotero/url-pdf', 'PDF fetch timed out', {
+        code: 'ZOTERO_URL_PDF_TIMEOUT',
       }),
     })
     const trackPdf = vi.fn()

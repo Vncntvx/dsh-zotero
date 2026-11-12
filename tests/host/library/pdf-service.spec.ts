@@ -65,7 +65,7 @@ it('resolves the attachment once before fetching the URL PDF', async () => {
 it('refuses disabled permission before any download', async () => {
   const { service, resolveAttachment } = await boot(true, false)
   await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
-    code: 'zotero/domain',
+    code: 'zotero/url-pdf',
     details: { code: 'ZOTERO_URL_PDF_DISABLED' },
   })
   expect(resolveAttachment).not.toHaveBeenCalled()
@@ -104,7 +104,7 @@ it('rechecks permission after staging instead of exposing bytes after revocation
     return original(...args)
   })
   await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
-    code: 'zotero/domain',
+    code: 'zotero/url-pdf',
     details: { code: 'ZOTERO_URL_PDF_DISABLED' },
   })
   await expect(stat(mapping.mock.calls[0]![0])).rejects.toMatchObject({ code: 'ENOENT' })

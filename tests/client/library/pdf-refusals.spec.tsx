@@ -106,7 +106,7 @@ it('shows a host download refusal without retaining a file lease', async () => {
       preferenceSource: preferences({ allowUrlPdfRead: true }),
       readUrlPdf: async () => ({
         ok: false,
-        error: new RemoteError('zotero/domain', 'Host download refused', {
+        error: new RemoteError('zotero/url-pdf', 'Host download refused', {
           code: 'ZOTERO_URL_PDF_NETWORK',
         }),
       }),

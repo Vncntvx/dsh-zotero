@@ -122,7 +122,7 @@ describe('enrichment model errors through the real Typert Gateway', () => {
   )
 
   it.each(MODEL_ENDPOINTS)(
-    '$method preserves a manager directory failure as zotero/domain with its stable code',
+    '$method preserves a manager failure as its typed wire reason with its stable code',
     async ({ method, operation, failureCode }) => {
       const { gateway, peer, downloads, fs } = await setupGateway()
       const called = vi.spyOn(downloads, operation)
@@ -134,14 +134,14 @@ describe('enrichment model errors through the real Typert Gateway', () => {
       })
 
       expect(failure.wire).toEqual({
-        code: 'zotero/domain',
+        code: 'zotero/enrichment',
         message: expect.any(String),
         details: { code: failureCode },
       })
       // Structural, not `instanceof`: a remote error crossing a module or
       // realm copy keeps its marker but not this realm's prototype.
       expect(remoteErrorOf(failure.error)).toMatchObject({
-        code: 'zotero/domain',
+        code: 'zotero/enrichment',
         cause: expect.any(ZoteroError),
       })
       expect(called).toHaveBeenCalledOnce()

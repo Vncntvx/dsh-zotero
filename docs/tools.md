@@ -180,14 +180,14 @@ zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism"
 
 ### 参数
 
-| 参数                | 类型     | 默认值     | 说明                                                                                                                                                    |
-| ------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `refs`              | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                                                                             |
-| `format`            | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填）                                                             |
-| `style`             | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                                                                                         |
-| `locale`            | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                                                                                         |
-| `outputFile`        | string   | —          | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）                                                                     |
-| `run_in_background` | boolean  | `false`    | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                                                                                                                                                                                                             | 类型     | 默认值     | 说明                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `refs`                                                                                                                                                                                                           | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
+| `format`                                                                                                                                                                                                         | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
+| `style`                                                                                                                                                                                                          | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
+| `locale`                                                                                                                                                                                                         | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                             |
+| `outputFile`                                                                                                                                                                                                     | string   | —          | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
+| `run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。 |
 
 ### 输出
 
@@ -267,12 +267,12 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ### 参数
 
-| 参数                | 类型     | 默认值                  | 说明                                                                                                                                                    |
-| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library`           | object   | `{type: "user", id: 0}` | 目标库标识                                                                                                                                              |
-| `since`             | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线                                                                          |
-| `include`           | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`                                                                                |
-| `run_in_background` | boolean  | `false`                 | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                                                                                                                                                                                                             | 类型     | 默认值                  | 说明                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------ |
+| `library`                                                                                                                                                                                                        | object   | `{type: "user", id: 0}` | 目标库标识                                                                     |
+| `since`                                                                                                                                                                                                          | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
+| `include`                                                                                                                                                                                                        | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
+| `run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。 |
 
 ### 输出
 
@@ -800,6 +800,7 @@ zotero_batch_items(
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                     |
 | `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                               |
 | `ZOTERO_JOBS_UNAVAILABLE`                  | 需要后台任务能力，但会话未挂载 `ctx.jobs` 或会话控制器不可用                                   |
+| `ZOTERO_JOBS_LIMIT_REACHED`                | 会话的后台任务数已达上限，需要先取回或取消一个未用任务再重试                                   |
 | `ZOTERO_RUN_IN_BACKGROUND_DISABLED`        | 后台执行已禁用，需改为前台执行                                                                 |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
 | `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |

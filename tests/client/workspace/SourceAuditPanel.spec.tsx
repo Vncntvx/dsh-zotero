@@ -95,8 +95,8 @@ describe('SourceAuditPanel component', () => {
   it('shows remote failures as visible errors without fallback content', async () => {
     const exportCitation = vi.fn(async (_request: ZoteroLibraryExportRequestView) => ({
       ok: false as const,
-      error: new RemoteError('zotero/domain', 'Zotero export failed', {
-        code: 'ZOTERO_EXPORT_FAILED',
+      error: new RemoteError('zotero/unexpected', 'Zotero export failed', {
+        code: 'ZOTERO_UNEXPECTED',
       }),
     }))
     const item = sourceOf({ title: 'Failure title' })

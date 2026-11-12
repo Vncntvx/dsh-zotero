@@ -161,7 +161,11 @@ describe('zotero_export tool', () => {
     })
     // The raw translator body and citekey metadata are fetched in bounded batches.
     expect(mock.requests.length - before).toBe(2)
-    const rendered = (result.content[0] as { text: string }).text
+    // The body and its mapping/notes are separate blocks: the card reads the
+    // first as the exact artifact, so assertions that span both join them.
+    const rendered = result.content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('\n')
     expect(rendered).toContain('Mapped items:')
     expect(rendered).toContain(
       'zotero://user/0/item/ABCD1234 · exportKey: ABCD1234 · citationKey: nativeA',
@@ -206,7 +210,11 @@ describe('zotero_export tool', () => {
         },
       ],
     })
-    const rendered = (result.content[0] as { text: string }).text
+    // The body and its mapping/notes are separate blocks: the card reads the
+    // first as the exact artifact, so assertions that span both join them.
+    const rendered = result.content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('\n')
     expect(rendered).toContain('citationKey conflict: native=nativeA; extra=extraA')
   })
 
@@ -223,7 +231,11 @@ describe('zotero_export tool', () => {
       }),
       'zotero_export',
     )
-    const rendered = (result.content[0] as { text: string }).text
+    // The body and its mapping/notes are separate blocks: the card reads the
+    // first as the exact artifact, so assertions that span both join them.
+    const rendered = result.content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('\n')
     expect(rendered).toContain(
       'ref: zotero://user/0/item/ABCD1234 (mapping unavailable; do not pair by raw order)',
     )

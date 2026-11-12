@@ -27,7 +27,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { isOwnConfigFiber } from '../service-lifecycle.js'
-import { domainCall, ZoteroError } from '../errors.js'
+import { domainCall, invalid, ZoteroError } from '../errors.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
 import { executeLibraryWrite } from '../library-write.js'
 import {
@@ -198,47 +198,47 @@ export class ZoteroLibraryService extends TypertRemoteService {
     request: ZoteroLibraryBrowseRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroLibraryBrowseResultView> {
-    const service = requireZoteroService(this.ctx, signal)
-    const domain = browseRequestOf(request)
-    const limit = Math.min(domain.limit, service.config.maxBrowseResults)
-    return await domainCall(async () =>
-      browseViewOf(await service.browse({ ...domain, limit }, signal), limit),
-    )
+    return await domainCall(async () => {
+      const service = requireZoteroService(this.ctx, signal)
+      const domain = browseRequestOf(request)
+      const limit = Math.min(domain.limit, service.config.maxBrowseResults)
+      return browseViewOf(await service.browse({ ...domain, limit }, signal), limit)
+    })
   }
 
   async search(
     request: ZoteroLibrarySearchRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroSearchResultView> {
-    const service = requireZoteroService(this.ctx, signal)
-    const domain = searchRequestOf(request)
-    const limit = Math.min(domain.limit, service.config.maxSearchResults)
-    return await domainCall(async () =>
-      searchViewOf(
+    return await domainCall(async () => {
+      const service = requireZoteroService(this.ctx, signal)
+      const domain = searchRequestOf(request)
+      const limit = Math.min(domain.limit, service.config.maxSearchResults)
+      return searchViewOf(
         await service.search({ ...domain, limit }, signal, searchOptionsOf(request)),
         limit,
-      ),
-    )
+      )
+    })
   }
 
   async item(
     request: ZoteroLibraryItemRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroItemDetailView> {
-    const service = requireZoteroService(this.ctx, signal)
-    return await domainCall(async () =>
-      itemViewOf(await service.get(itemRequestOf(request), signal)),
-    )
+    return await domainCall(async () => {
+      const service = requireZoteroService(this.ctx, signal)
+      return itemViewOf(await service.get(itemRequestOf(request), signal))
+    })
   }
 
   async childPage(
     request: ZoteroLibraryChildPageRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroChildPageView> {
-    const service = requireZoteroService(this.ctx, signal)
-    return await domainCall(async () =>
-      childPageViewOf(await service.childPage(childPageRequestOf(request), signal)),
-    )
+    return await domainCall(async () => {
+      const service = requireZoteroService(this.ctx, signal)
+      return childPageViewOf(await service.childPage(childPageRequestOf(request), signal))
+    })
   }
 
   /**
@@ -255,9 +255,9 @@ export class ZoteroLibraryService extends TypertRemoteService {
     request: ZoteroLibraryExportRequestView,
     signal: AbortSignal,
   ): Promise<ZoteroLibraryExportResultView> {
-    const service = requireZoteroService(this.ctx, signal)
     return await domainCall(async () => {
-      assertExportRefsWithinCap(request.refs.length, service.config.maxExportRefs)
+      const service = requireZoteroService(this.ctx, signal)
+      assertExportRefsWithinCap(request.refs.length, service.config.maxExportRefs, invalid)
       return exportViewOf(await service.exportText(exportRequestOf(request), signal))
     })
   }

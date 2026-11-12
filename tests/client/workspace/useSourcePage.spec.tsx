@@ -130,7 +130,7 @@ describe('useSourcePage', () => {
     const call = vi
       .fn<SourcePageCall>()
       .mockRejectedValueOnce(
-        new RemoteError('zotero/domain', 'The literature trail changed.', {
+        new RemoteError('zotero/source-page-stale', 'The literature trail changed.', {
           code: 'ZOTERO_SOURCE_PAGE_STALE',
         }),
       )
@@ -185,7 +185,7 @@ describe('useSourcePage', () => {
   it('handles RemoteResult failure object', async () => {
     const call = vi.fn<SourcePageCall>().mockResolvedValueOnce({
       ok: false,
-      error: new RemoteError('zotero/domain', 'Failed to retrieve source page.', {
+      error: new RemoteError('zotero/source-page-stale', 'Failed to retrieve source page.', {
         code: 'ZOTERO_SOURCE_PAGE_STALE',
       }),
     })

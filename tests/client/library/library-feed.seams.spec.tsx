@@ -34,7 +34,7 @@ describe('unguarded seams', () => {
         request.kind === 'libraries'
           ? {
               ok: false as const,
-              error: new RemoteError('zotero/domain', 'listing down', {
+              error: new RemoteError('zotero/unexpected', 'listing down', {
                 code: 'ZOTERO_UNEXPECTED',
               }),
             }

@@ -18,7 +18,7 @@ import {
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
-import { invalid, writeListEmptyMessage } from '../errors.js'
+import { invalidArgs, writeListEmptyMessage } from '../errors.js'
 import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
@@ -109,7 +109,7 @@ function buildRequest(
   args: DeleteLibraryTagsArgs,
   config: ResolvedConfig,
 ): ZoteroDeleteLibraryTagsRequest {
-  if (args.tags.length === 0) invalid(writeListEmptyMessage('tags'))
+  if (args.tags.length === 0) invalidArgs(writeListEmptyMessage('tags'))
   const tags = assertWriteList('tags', args.tags, config.writeListMaxItems)
   return { tags }
 }

@@ -184,7 +184,7 @@ it('shows host recovery refusals without opening a replacement', async () => {
   const { reload, readUrlPdf, openResourceIn } = await routing()
   readUrlPdf.mockResolvedValue({
     ok: false,
-    error: new RemoteError('zotero/domain', 'Permission revoked', {
+    error: new RemoteError('zotero/url-pdf', 'Permission revoked', {
       code: 'ZOTERO_URL_PDF_DISABLED',
     }),
   })
@@ -198,14 +198,16 @@ it('reports cleanup refusal when a replacement fails and leaves ownership with t
   })
   releaseUrlPdf.mockResolvedValue({
     ok: false,
-    error: new RemoteError('zotero/domain', 'Cleanup refused', { code: 'ZOTERO_UNEXPECTED' }),
+    error: new RemoteError('zotero/unexpected', 'Cleanup refused', { code: 'ZOTERO_UNEXPECTED' }),
   })
   await expect(reload('s1', 'reader', address)).rejects.toThrow('Cleanup refused')
   expect(releaseUrlPdf).toHaveBeenCalledWith({ lease: 'new-lease' })
 })
 it('propagates a host cleanup refusal through the panel face instead of reporting successful release', async () => {
   const { releasePdf, releaseUrlPdf } = await routing()
-  const error = new RemoteError('zotero/domain', 'Cleanup refused', { code: 'ZOTERO_UNEXPECTED' })
+  const error = new RemoteError('zotero/unexpected', 'Cleanup refused', {
+    code: 'ZOTERO_UNEXPECTED',
+  })
   releaseUrlPdf.mockResolvedValue({ ok: false, error })
   await expect(releasePdf('active-lease')).rejects.toBe(error)
   expect(releaseUrlPdf).toHaveBeenCalledExactlyOnceWith({ lease: 'active-lease' })
@@ -218,7 +220,7 @@ it.each(['offline', 'missing instance'] as const)(
       condition === 'offline'
         ? {
             ok: false,
-            error: new RemoteError('zotero/domain', 'Offline', { code: 'ZOTERO_NOT_RUNNING' }),
+            error: new RemoteError('zotero/not-running', 'Offline', { code: 'ZOTERO_NOT_RUNNING' }),
           }
         : { ok: true, value: { connected: false } }
     localStorage.setItem(libraryStorageKey('S1', 's1'), 'keep')

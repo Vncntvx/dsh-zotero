@@ -44,6 +44,12 @@ import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
  * `process.cwd()` instead would silently depend on where vitest was started,
  * and a run from another directory would pass by scanning the wrong tree.
  */
+import {
+  COMPOSITION_DEPENDENT_MARKERS,
+  COMPOSITION_DEPENDENT_PARAMETERS,
+  isCompositionDependent,
+} from './support/composition-dependent-parameters.js'
+
 const REPO_ROOT = new URL('../../', import.meta.url)
 
 /**
@@ -279,13 +285,23 @@ describe('documented tool calls match the tool schemas', () => {
           violations.push(`${file} ${name}: no parameter table`)
           continue
         }
-        const missing = declared.filter((name) => !documented.includes(name))
-        const extra = documented.filter((name) => !declared.includes(name))
+        const missing = declared.filter(
+          (parameter) =>
+            !documented.includes(parameter) && !isCompositionDependent(name, parameter),
+        )
+        const extra = documented.filter((parameter) => !declared.includes(parameter))
         if (missing.length > 0) {
           violations.push(`${file} ${name}: table omits ${missing.join(', ')}`)
         }
         if (extra.length > 0) {
           violations.push(`${file} ${name}: table names undeclared ${extra.join(', ')}`)
+        }
+        const prose = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
+        if (
+          Object.keys(COMPOSITION_DEPENDENT_PARAMETERS).includes(name) &&
+          !COMPOSITION_DEPENDENT_MARKERS.some((marker) => prose.includes(marker))
+        ) {
+          violations.push(`${file} ${name}: composition-dependent parameters need the prose marker`)
         }
       }
     }
