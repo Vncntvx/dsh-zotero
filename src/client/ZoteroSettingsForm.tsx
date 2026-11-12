@@ -75,7 +75,6 @@ const FIELDS_BY_GROUP: ReadonlyMap<GroupKey, readonly FieldKey[]> = new Map(
 export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
   const { t, state, actions, showTabs = true } = props
   const [internalTab, setInternalTab] = useState<SettingsTabId>('features')
-  const activeTab = props.activeTab ?? internalTab
 
   const handleTabChange = (next: string) => {
     const tabId = next as SettingsTabId
@@ -86,17 +85,28 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
     }
   }
 
+  // The strip offers exactly the tabs that render a panel. A tab without a
+  // group (library, enrichment) lives in its own settings section, so showing
+  // it here would hide every panel on click.
   const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
     useMemo(
       () =>
-        SETTINGS_TABS.filter((tab) => tab.id !== 'scholarly').map((tab) => ({
-          value: tab.id,
-          label: t(tab.labelKey),
-          id: `zotero-tab-${tab.id}`,
-          panelId: `zotero-panel-${tab.id}`,
-        })) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
+        SETTINGS_TABS.filter((tab) => tab.id !== 'scholarly' && tab.groupKeys.length > 0).map(
+          (tab) => ({
+            value: tab.id,
+            label: t(tab.labelKey),
+            id: `zotero-tab-${tab.id}`,
+            panelId: `zotero-panel-${tab.id}`,
+          }),
+        ) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
       [t],
     )
+  // A requested tab that renders no panel is clamped to the first one, so the
+  // strip and the panels can never disagree about what is visible.
+  const requestedTab = props.activeTab ?? internalTab
+  const activeTab = tabItems.some((item) => item.value === requestedTab)
+    ? requestedTab
+    : tabItems[0].value
 
   const groupFieldsOf = (group: GroupKey): readonly FieldKey[] => FIELDS_BY_GROUP.get(group) ?? []
 

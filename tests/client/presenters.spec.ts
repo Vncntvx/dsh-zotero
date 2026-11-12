@@ -23,6 +23,7 @@ import {
   metaOf,
   numberArg,
   recordArg,
+  resultFirstTextOf,
   resultTextOf,
   rowStateOf,
   shortKeyOf,
@@ -121,6 +122,28 @@ describe('resultTextOf', () => {
     ).toBe('E: X')
     expect(resultTextOf(settled({ content: [] }))).toBe('')
     expect(resultTextOf(running())).toBeNull()
+  })
+})
+
+describe('resultFirstTextOf', () => {
+  it('reads the first text block and leaves the appended mapping block alone', () => {
+    expect(
+      resultFirstTextOf(
+        settled({
+          content: [
+            { type: 'text', text: 'body' },
+            { type: 'text', text: 'Mapped items: ...' },
+          ],
+        }),
+      ),
+    ).toBe('body')
+    // A settled result with no text block has no artifact to copy.
+    expect(
+      resultFirstTextOf(
+        settled({ content: [{ type: 'json', data: {} } as unknown as ContentBlock] }),
+      ),
+    ).toBe('')
+    expect(resultFirstTextOf(running())).toBeNull()
   })
 })
 

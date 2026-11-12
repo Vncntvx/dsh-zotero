@@ -96,6 +96,16 @@ describe('the browser-half entry', () => {
     ])
   })
 
+  it('withholds the PDF recovery menu without the readUrlPdf grant', async () => {
+    const world = fakeWorld()
+    world.grantedActions.delete('zotero/readUrlPdf')
+    await applyEntry(world)
+    // The menu acts through readUrlPdf, so a browse-only peer must not see it.
+    expect(
+      world.injected.filter((entry) => entry.name === 'sidebar.right.tab.menu.item'),
+    ).toHaveLength(1)
+  })
+
   it('provides the client face through root props and keeps it off the tab menu slot', async () => {
     const world = fakeWorld()
     await applyEntry(world)
@@ -446,13 +456,13 @@ describe('the browser-half entry', () => {
 
     // The disposer unwinds the UI fiber: the card forms' subscriptions, the
     // gated surfaces subscriptions, and the mount.
-    // Per-namespace counts: the zotero form carries the webEnabled watch, the
-    // card model, and the panel gate's sync; the library form carries its own
-    // sync and card model; the scholarly form its card model plus the
-    // credential-reference subscription that drives remote reads.
+    // Per-namespace counts: the zotero form carries the webEnabled watch and
+    // the card model; the library form carries its own sync and card model;
+    // the scholarly form its card model plus the credential-reference
+    // subscription that drives remote reads.
     await dispose()
     expect(world.eventDisposes).toBe(0)
-    expect(world.scope.unsubscribes).toBe(5)
+    expect(world.scope.unsubscribes).toBe(4)
     expect(world.libraryScope.unsubscribes).toBe(3)
     expect(world.scholarlyScope.unsubscribes).toBe(2)
     expect(world.uiDisposes).toBe(1)

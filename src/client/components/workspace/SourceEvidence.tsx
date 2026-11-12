@@ -97,7 +97,6 @@ function PassageCard({ passage, item, openFile, openPdf, resolveAttachment, t }:
           <Button
             variant="ghost"
             size="sm"
-            className={css.jumpButton}
             onClick={() => {
               void handleJump()
             }}

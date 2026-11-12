@@ -166,15 +166,17 @@ describe('ZoteroClientFace.openProtocol', () => {
     )
   })
 
-  it('files a thrown Remote failure the same way', async () => {
+  it('lets an assembly failure reject instead of inventing a notice', async () => {
+    // A Remote call does not reject; a throw here is an assembly mistake, and
+    // the official contract is to crash rather than file a second failure.
     const { face, reportClientError } = faceWith(async () => {
       throw new Error('remote error')
     })
-    await expect(face.openProtocol('zotero://select/library/items/ITEM1234')).resolves.toBe(false)
-    expect(face.protocolNotice.getSnapshot()).toEqual({ seq: 1 })
-    expect(reportClientError).toHaveBeenCalledWith(
-      expect.objectContaining({ surface: 'action:open-zotero', message: 'remote error' }),
+    await expect(face.openProtocol('zotero://select/library/items/ITEM1234')).rejects.toThrow(
+      'remote error',
     )
+    expect(face.protocolNotice.getSnapshot()).toBeNull()
+    expect(reportClientError).not.toHaveBeenCalled()
   })
 
   it('refuses a non-zotero scheme without touching the Host', async () => {
@@ -186,9 +188,7 @@ describe('ZoteroClientFace.openProtocol', () => {
   })
 
   it('clears the notice on dismissal', async () => {
-    const { face } = faceWith(async () => {
-      throw new Error('remote error')
-    })
+    const { face } = faceWith(async () => ({ ok: false, error: { message: 'launch refused' } }))
     await face.openProtocol('zotero://select/library/items/ITEM1234')
     expect(face.protocolNotice.getSnapshot()).toEqual({ seq: 1 })
     face.dismissProtocolNotice()

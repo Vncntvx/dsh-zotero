@@ -90,7 +90,6 @@ export function LibraryItemList({
             <IconButton
               shape="square"
               icon={<IconWorkspaceTreeOutlineMedium className={css.actionIcon} />}
-              className={css.listLocate}
               aria-label={t('libraryLocate')}
               title={t('libraryLocate')}
               onClick={locate}

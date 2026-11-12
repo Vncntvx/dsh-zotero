@@ -47,11 +47,12 @@ The built-in DSH "Trail" tab shows how tool calls ran. The literature trail show
 
 ## Using the Literature Panel
 
-The literature panel lives in the right sidebar, beside the conversation. It appears only when all three of these are on:
+The literature panel lives in the right sidebar, beside the conversation. It appears only when both of these are on:
 
 - the `dsh-zotero/library` row under "Included components" is enabled;
-- the core `webEnabled` is on;
 - the component's `rightSidebarEnabled` is on.
+
+The core `webEnabled` flag governs the literature trail at the top of the conversation; it does not gate the panel.
 
 The navigation area supports multi-library switching (personal and group libraries), a collection tree expanded on demand, saved searches, "My Publications", and "Trash". Saved searches show Zotero's original conditions.
 

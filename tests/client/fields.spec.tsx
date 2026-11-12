@@ -8,7 +8,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BooleanField } from '../../src/client/fields.tsx'
+import { BooleanField, SecretField } from '../../src/client/fields.tsx'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the
 // fields only need the shared tag capsule, so stub it with its DOM face.
@@ -90,5 +90,35 @@ describe('BooleanField', () => {
     fireEvent.click(screen.getByLabelText(base.label))
     expect(onEdit).toHaveBeenCalledWith('false')
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('SecretField', () => {
+  const secret = {
+    id: 'mineru-token',
+    label: 'MinerU token',
+    hint: 'Resolved through the credentials seam.',
+    configured: true,
+    stateLabel: 'Configured',
+    placeholder: '••••••••',
+    disabled: false,
+  }
+
+  it('renders an empty password control with the configured mask', () => {
+    render(<SecretField {...secret} text="" onEdit={() => {}} />)
+    const input = screen.getByLabelText('MinerU token') as HTMLInputElement
+    // The stored value never reaches the browser: the field is a write-only
+    // draft whose placeholder is the mask.
+    expect(input.type).toBe('password')
+    expect(input.value).toBe('')
+    expect(input.placeholder).toBe('••••••••')
+    expect(screen.getByText('Configured')).toBeDefined()
+  })
+
+  it('stages a typed draft without echoing the stored value', () => {
+    const onEdit = vi.fn()
+    render(<SecretField {...secret} text="draft" onEdit={onEdit} />)
+    fireEvent.change(screen.getByLabelText('MinerU token'), { target: { value: 'new-token' } })
+    expect(onEdit).toHaveBeenCalledWith('new-token')
   })
 })

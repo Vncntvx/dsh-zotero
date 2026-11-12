@@ -504,8 +504,9 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
 }
 
 /**
- * Whether the library sidebar surface is enabled: the root `webEnabled` flag
- * (false only when the snapshot says so) and the surface's own switch.
+ * Whether the library sidebar surface is enabled: the library namespace's own
+ * switch, ready only once its snapshot arrives. `webEnabled` is not part of
+ * this gate — it governs the literature trail, not the panel.
  */
 function sidebarEnabledOf(
   libraryForm: ConfigForm<Record<string, unknown>>,
@@ -529,7 +530,7 @@ function sidebarEnabledOf(
  * @param surfaces - the shared facts every registration group reads.
  */
 function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { form, libraryForm, probe, client, pdfReaders } = surfaces
+  const { libraryForm, probe, client, pdfReaders } = surfaces
   const preferenceSource = surfaces.preferenceSource
   const panelT = ctx.locale.bind(NS)
 
@@ -618,7 +619,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       onOpenLibrary: () => ctx.sidebarRight.openTab(LIBRARY_TAB_KIND),
     })
 
-    const disposeTabDef = ctx.sidebarRightTabs?.register({
+    const disposeTabDef = ctx.sidebarRightTabs.register({
       id: TAB_ID,
       kind: LIBRARY_TAB_KIND,
       title: () => panelT('tabLibrary'),
@@ -690,70 +691,74 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       ),
     )
 
-    const disposePdfRecovery = ctx.slots.inject('sidebar.right.tab.menu.item', () =>
-      ctx.slots.register(
-        {
-          name: 'sidebar.right.tab.menu.item',
-          id: `${REGISTRANT}.pdf.recovery`,
-          order: 210,
-          locale: NS,
-          registrant: REGISTRANT,
-          inject: () => ({
-            source: pdfReaders.source,
-            recoveryError: pdfReaders.recoveryError,
-            reload: async (sessionId: string, tabId: string, address: string) => {
-              const ref = pdfReaders.source(address)
-              if (!ref) throw new Error(panelT('libraryPdfSourceMissing'))
-              if (!preferenceSource.getSnapshot().preferences?.allowUrlPdfRead)
-                throw new Error(panelT('libraryUrlPdfDisabled'))
-              const controller = new AbortController()
-              const present = () =>
-                ctx.sidebarRight.openTabs
-                  .getSnapshot()
-                  .some(
-                    (tab) =>
-                      tab.sessionId === sessionId &&
-                      tab.tabId === tabId &&
-                      tab.contentId === address,
-                  )
-              const unsubscribe = ctx.sidebarRight.openTabs.subscribe(() => {
-                if (!present()) controller.abort(new Error('PDF tab closed.'))
-              })
-              try {
-                if (!present()) throw new Error('PDF tab closed.')
-                const result = await ctx.remote.zotero.readUrlPdf({ ref }, controller.signal)
-                if (!result.ok) throw new Error(result.error.message)
-                try {
-                  controller.signal.throwIfAborted()
-                  const occurrence = ctx.sidebarRight.openTabs
-                    .getSnapshot()
-                    .find(
-                      (tab) =>
-                        tab.sessionId === sessionId &&
-                        tab.tabId === tabId &&
-                        tab.contentId === address,
-                    )
-                  if (!occurrence) throw new Error('PDF tab closed.')
-                  const next = fileAddressFor(sessionId, undefined, result.value.path)
-                  pdfReaders.track(next, result.value.lease, ref)
-                  ctx.sidebarRight.openResourceIn(occurrence.sessionId, next, {
-                    replaceTab: occurrence.tabId,
+    const disposePdfRecovery = ctx.effect(() =>
+      ctx.remoteAccess.whenAccess('zotero/readUrlPdf', () =>
+        ctx.slots.inject('sidebar.right.tab.menu.item', () =>
+          ctx.slots.register(
+            {
+              name: 'sidebar.right.tab.menu.item',
+              id: `${REGISTRANT}.pdf.recovery`,
+              order: 210,
+              locale: NS,
+              registrant: REGISTRANT,
+              inject: () => ({
+                source: pdfReaders.source,
+                recoveryError: pdfReaders.recoveryError,
+                reload: async (sessionId: string, tabId: string, address: string) => {
+                  const ref = pdfReaders.source(address)
+                  if (!ref) throw new Error(panelT('libraryPdfSourceMissing'))
+                  if (!preferenceSource.getSnapshot().preferences?.allowUrlPdfRead)
+                    throw new Error(panelT('libraryUrlPdfDisabled'))
+                  const controller = new AbortController()
+                  const present = () =>
+                    ctx.sidebarRight.openTabs
+                      .getSnapshot()
+                      .some(
+                        (tab) =>
+                          tab.sessionId === sessionId &&
+                          tab.tabId === tabId &&
+                          tab.contentId === address,
+                      )
+                  const unsubscribe = ctx.sidebarRight.openTabs.subscribe(() => {
+                    if (!present()) controller.abort(new Error('PDF tab closed.'))
                   })
-                } catch (error) {
-                  pdfReaders.forget(fileAddressFor(sessionId, undefined, result.value.path))
-                  const released = await ctx.remote.zotero.releaseUrlPdf({
-                    lease: result.value.lease,
-                  })
-                  if (!released.ok) throw new Error(released.error.message)
-                  throw error
-                }
-              } finally {
-                unsubscribe()
-              }
+                  try {
+                    if (!present()) throw new Error('PDF tab closed.')
+                    const result = await ctx.remote.zotero.readUrlPdf({ ref }, controller.signal)
+                    if (!result.ok) throw new Error(result.error.message)
+                    try {
+                      controller.signal.throwIfAborted()
+                      const occurrence = ctx.sidebarRight.openTabs
+                        .getSnapshot()
+                        .find(
+                          (tab) =>
+                            tab.sessionId === sessionId &&
+                            tab.tabId === tabId &&
+                            tab.contentId === address,
+                        )
+                      if (!occurrence) throw new Error('PDF tab closed.')
+                      const next = fileAddressFor(sessionId, undefined, result.value.path)
+                      pdfReaders.track(next, result.value.lease, ref)
+                      ctx.sidebarRight.openResourceIn(occurrence.sessionId, next, {
+                        replaceTab: occurrence.tabId,
+                      })
+                    } catch (error) {
+                      pdfReaders.forget(fileAddressFor(sessionId, undefined, result.value.path))
+                      const released = await ctx.remote.zotero.releaseUrlPdf({
+                        lease: result.value.lease,
+                      })
+                      if (!released.ok) throw new Error(released.error.message)
+                      throw error
+                    }
+                  } finally {
+                    unsubscribe()
+                  }
+                },
+              }),
             },
-          }),
-        },
-        ZoteroPdfRecoveryMenu,
+            ZoteroPdfRecoveryMenu,
+          ),
+        ),
       ),
     )
 
@@ -937,14 +942,15 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       ctx.configForms.whileServed([ZOTERO_LIBRARY_SETTINGS_NAMESPACE], () =>
         ctx.remoteAccess.whenAccess('zotero/browse', () => {
           const right = gatedMount(mountRight)
+          // The surface's own switch is the only gate: `webEnabled` governs the
+          // literature trail, and the panel's component row is checked by the
+          // settings form that owns this namespace.
           const sync = (): void => {
             right.sync(sidebarEnabledOf(libraryForm, 'rightSidebarEnabled'))
           }
-          const unsubscribeForm = form.subscribe(sync)
           const unsubscribeLibrary = libraryForm.subscribe(sync)
           sync()
           return () => {
-            unsubscribeForm()
             unsubscribeLibrary()
             right.dispose()
           }

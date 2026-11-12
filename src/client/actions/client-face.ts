@@ -59,14 +59,9 @@ export function createZoteroClientFace(ctx: Context): ZoteroClientFace {
 
   const openProtocol = async (url: string): Promise<boolean> => {
     if (!url.startsWith('zotero://')) return false
-    let failure: unknown
-    try {
-      const result = await ctx.remote.zotero.openProtocol(url)
-      if (result.ok) return true
-      failure = result.error
-    } catch (error) {
-      failure = error
-    }
+    const result = await ctx.remote.zotero.openProtocol(url)
+    if (result.ok) return true
+    const failure: unknown = result.error
     reportCrashedSurface('action:open-zotero', failure, undefined, reportClientError)
     noticeSeq += 1
     protocolNotice.set({ seq: noticeSeq })

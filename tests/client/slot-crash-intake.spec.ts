@@ -92,6 +92,8 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
       return disposer
     },
     sidebarRight: { openTabs: { getSnapshot: () => [], subscribe: () => () => {} } },
+    // A required injected service: the entry registers the library tab on it.
+    sidebarRightTabs: { register: () => () => {} },
     locale: { register: () => {}, bind: () => (key: string) => key },
     remote: {
       $mount: async () => async () => {},
@@ -264,23 +266,42 @@ describe('the slot crash intake', () => {
     expect(world.reports[0]?.stack).toBeUndefined()
   })
 
-  it('keeps a rejected report from becoming a second failure', async () => {
+  it('does not swallow a rejected report: an assembly failure stays visible', async () => {
     const world = intakeWorld([])
     await mountIntake(world)
     world.respond(() => Promise.reject(new Error('gateway down')))
 
-    expect(() =>
-      world.crash(
-        'tool.call.toolview',
-        storedEntry({ name: 'tool.call.toolview', key: 'zotero_search', locale: 'zotero' }),
-        new Error('boom'),
-        {
-          abdicated: false,
-        },
-      ),
-    ).not.toThrow()
-    // Flush the rejection: an intake that leaked it would surface here.
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    // The intake's wire contract is `ok:false`, never a rejection; a rejecting
+    // reporter is an assembly mistake, so the report surfaces as an unhandled
+    // rejection instead of a second silent catch.
+    // The browser tsconfig carries no node types; the vitest runtime is node.
+    const node = globalThis as unknown as {
+      process: {
+        on: (event: 'unhandledRejection', listener: (reason: unknown) => void) => void
+        off: (event: 'unhandledRejection', listener: (reason: unknown) => void) => void
+      }
+    }
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown) => {
+      rejections.push(reason)
+    }
+    node.process.on('unhandledRejection', onUnhandled)
+    try {
+      expect(() =>
+        world.crash(
+          'tool.call.toolview',
+          storedEntry({ name: 'tool.call.toolview', key: 'zotero_search', locale: 'zotero' }),
+          new Error('boom'),
+          {
+            abdicated: false,
+          },
+        ),
+      ).not.toThrow()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(rejections).toHaveLength(1)
+    } finally {
+      node.process.off('unhandledRejection', onUnhandled)
+    }
     expect(world.reports).toHaveLength(1)
   })
 

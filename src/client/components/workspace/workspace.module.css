@@ -214,22 +214,13 @@
   display: none;
 }
 
-/* The paging arrows are the host IconButton; only the anchored seat and the
- * rail's own surface colour belong here. */
-.filterArrowSeat.filterArrowSeat {
+/* The paging arrows are the host IconButton: this class owns the anchored
+ * seat only. The control's fill, hover and typography stay with the primitive. */
+.filterArrowSeat {
   position: absolute;
   top: 50%;
   z-index: 2;
-  background: var(--dsw-specific-input-major);
-  color: var(--dsw-alias-label-secondary);
-  box-shadow: var(--dsw-elevation-panel);
   transform: translateY(-50%);
-}
-
-@media (hover: hover) {
-  .filterArrowSeat.filterArrowSeat:hover {
-    background: var(--dsw-alias-interactive-bg-hover-solid);
-  }
 }
 
 .filterArrowLeft {
@@ -627,11 +618,6 @@
   corner-shape: round;
   background: var(--dsw-alias-state-business-primary);
   flex: none;
-}
-
-.jumpButton.jumpButton {
-  padding: 0 4px;
-  font: var(--dsw-font-xxs-12);
 }
 
 /* The audit card with coverage and in-place citation preview. */

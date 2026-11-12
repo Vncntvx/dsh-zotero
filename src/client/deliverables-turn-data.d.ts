@@ -3,11 +3,11 @@
  *
  * Upstream `@deepseek-ai/dsh-client-ui-deliverables` declares this
  * `ConversationTurnDataMap` augmentation from
- * `src/client/turn-deliverables.ts`, a path its `exports` map advertises but
- * its published tarball does not contain (`files` lists only `lib/**` and
- * `locale/*.json`). Importing that path therefore works against a sibling
- * checkout and fails typecheck plus runtime resolution in a registry-only
- * install, which is the client lane the CI runs.
+ * `src/client/turn-deliverables.ts`. The rc.2 tarball does publish `src`, but
+ * its public `/client` entry does not re-export the augmentation, and this
+ * repository forbids importing an upstream `src/*` subpath. Restating the
+ * shape against the public `@deepseek-ai/dsh-tool-present/types` entry is
+ * therefore the only registry-only typing path the client lane can use.
  *
  * This declaration restates the value shape against the *public*
  * `@deepseek-ai/dsh-tool-present/types` entry, so

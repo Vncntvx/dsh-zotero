@@ -134,7 +134,7 @@ export function fakeWorld(
   // owner, the only Peer whose access answer is true for everything. A spec
   // narrows the set to model a viewer without a grant.
   const grantedActions = new Set(
-    'zotero/status,zotero/browse,zotero/search,zotero/item,zotero/childPage,zotero/export,zotero/resolveAttachment,zotero/openProtocol,zotero/write,session:test-session:zotero/write'.split(
+    'zotero/status,zotero/browse,zotero/search,zotero/item,zotero/childPage,zotero/export,zotero/resolveAttachment,zotero/openProtocol,zotero/readUrlPdf,zotero/releaseUrlPdf,zotero/write,session:test-session:zotero/write'.split(
       ',',
     ),
   )

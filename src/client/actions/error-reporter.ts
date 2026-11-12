@@ -84,8 +84,7 @@ export function reportCrashedSurface(
     ...(error instanceof Error && error.stack !== undefined ? { stack: error.stack } : {}),
     ...(componentStack === undefined ? {} : { componentStack }),
   }
-  void reporter(report).catch(() => {
-    // Unreachable through the gateway (it folds failures into ok:false), but a
-    // rejected intake must never become a second render failure.
-  })
+  // A Remote call does not reject: the gateway folds a failure into `ok:false`,
+  // and an assembly mistake must crash rather than hide behind a second catch.
+  void reporter(report)
 }

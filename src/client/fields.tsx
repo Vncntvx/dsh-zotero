@@ -137,8 +137,12 @@ interface SecretFieldProps {
 /**
  * A write-only credential row with a mask for a configured value. The value
  * never reaches the browser: the field starts empty, a new draft replaces the
- * secret on save, and a blank draft keeps it. The harness's `SettingsSecretField`
- * cannot show a mask, so this row adds one while keeping the same contract.
+ * secret on save, and a blank draft keeps it.
+ *
+ * This is a deliberate official gap, not a copy: the harness
+ * `SettingsSecretField` supports neither a placeholder mask nor a help slot,
+ * and the mask is the point of this row. If upstream grows either prop, delete
+ * this component and use that control.
  * @param props - the field's copy, its configured state, and the edit action.
  * @returns the labelled password control.
  */

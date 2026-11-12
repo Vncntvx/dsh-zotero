@@ -1,8 +1,9 @@
 /**
- * The live `webEnabled` gate for the browser surfaces the flag governs: the
- * conversation Sources tab and the library panel. Until the first settings
+ * The live `webEnabled` gate for the browser surface the flag governs: the
+ * conversation Sources tab. The library panel has its own switch
+ * (`rightSidebarEnabled`) and is not gated here. Until the first settings
  * snapshot arrives the gate reads enabled; an explicit `webEnabled: false`
- * withdraws a surface without a reload, and a later toggle restores it.
+ * withdraws the surface without a reload, and a later toggle restores it.
  * @module dsh-zotero/client/web-enabled
  */
 
