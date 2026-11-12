@@ -20,11 +20,15 @@ export function useLibraryChildFeed(
   const [childStates, setChildStates] = useState<Partial<Record<ChildKind, ChildLoadState>>>({})
   const childOffsets = useRef<Partial<Record<ChildKind, number>>>({})
   const childSeq = useRef<Partial<Record<ChildKind, number>>>({})
+  /** The in-flight read per kind: a newer page for the same kind supersedes it. */
+  const childAborts = useRef<Partial<Record<ChildKind, AbortController>>>({})
 
   const reset = useCallback((): void => {
     childOffsets.current = {}
     for (const kind of ['notes', 'attachments', 'annotations'] as const) {
       childSeq.current[kind] = (childSeq.current[kind] ?? 0) + 1
+      childAborts.current[kind]?.abort()
+      delete childAborts.current[kind]
     }
     setChildStates({})
   }, [])
@@ -37,11 +41,18 @@ export function useLibraryChildFeed(
       childSeq.current[kind] = ticket
       const offset = pageOffsetOf(nextOffset)
       childOffsets.current[kind] = offset
+      // One read per kind: paging again abandons the previous page on the host.
+      childAborts.current[kind]?.abort()
+      const controller = new AbortController()
+      childAborts.current[kind] = controller
       setChildStates((states) => ({ ...states, [kind]: { phase: 'loading' } }))
       const current = () =>
         parentTicket === inspectorTicketOf() && childSeq.current[kind] === ticket
       void face
-        .childPage({ ref: selectedRef, kind, offset, limit: ZOTERO_CHILD_PAGE_ROWS })
+        .childPage(
+          { ref: selectedRef, kind, offset, limit: ZOTERO_CHILD_PAGE_ROWS },
+          controller.signal,
+        )
         .then((result) => {
           if (!current()) return
           if (!result.ok) {

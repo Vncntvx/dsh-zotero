@@ -301,6 +301,83 @@ describe('the library data plane', () => {
   })
 })
 
+describe('the library data plane cancellation', () => {
+  const request = { ref: 'zotero://user/0/item/ABCD1234', include: [], childPages: {} }
+
+  /** A wire read that never settles on its own, exposing the signal it was given. */
+  function hangingItem() {
+    const seen: { signal?: AbortSignal } = {}
+    const underlying = face()
+    underlying.item.mockImplementation(
+      (_request: unknown, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          seen.signal = signal
+          signal.addEventListener('abort', () => reject(signal.reason))
+        }),
+    )
+    return { underlying, seen }
+  }
+
+  it('aborts the wire read when its only caller goes away', async () => {
+    const { underlying, seen } = hangingItem()
+    const plane = planeOf(underlying)
+    const controller = new AbortController()
+    const call = plane.item(request, controller.signal)
+    expect(seen.signal?.aborted).toBe(false)
+    controller.abort()
+    await expect(call).rejects.toBeDefined()
+    expect(seen.signal?.aborted).toBe(true)
+    expect(underlying.item).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the shared read alive while another caller still waits', async () => {
+    const { underlying, seen } = hangingItem()
+    const plane = planeOf(underlying)
+    const leaving = new AbortController()
+    const abandoned = plane.item(request, leaving.signal)
+    // A second caller keeps the shared read alive.
+    void plane.item(request, new AbortController().signal)
+    leaving.abort()
+    await expect(abandoned).rejects.toBeDefined()
+    // The other caller still needs the answer, so the wire call stays open.
+    expect(seen.signal?.aborted).toBe(false)
+    expect(underlying.item).toHaveBeenCalledTimes(1)
+    // One caller without a signal pins the read too.
+    const pinned = plane.item(request)
+    expect(pinned).toBeInstanceOf(Promise)
+  })
+
+  it('starts no request for a caller that is already aborted', async () => {
+    const underlying = face()
+    const plane = planeOf(underlying)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(plane.item(request, controller.signal)).rejects.toBeDefined()
+    expect(underlying.item).not.toHaveBeenCalled()
+  })
+
+  it('never caches an aborted read, so the next read re-requests', async () => {
+    const underlying = face()
+    let release: ((value: RemoteResult<unknown>) => void) | undefined
+    underlying.item.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    const plane = planeOf(underlying)
+    const controller = new AbortController()
+    const abandoned = plane.item(request, controller.signal)
+    controller.abort()
+    await expect(abandoned).rejects.toBeDefined()
+    // The wire call answers anyway (a host cannot be stopped mid-flight once
+    // it has started); the answer belongs to nobody, so it is not cached.
+    release?.(ok(itemDetail()))
+    await expect(plane.item(request)).resolves.toEqual(ok(itemDetail()))
+    expect(underlying.item).toHaveBeenCalledTimes(2)
+  })
+})
+
 it('deduplicates only in-flight collection paths and rereads after settlement', async () => {
   const response = deferred<Awaited<ReturnType<LibraryPanelWireFace['collectionPath']>>>()
   const underlying = { ...face(), collectionPath: vi.fn(() => response.promise) }

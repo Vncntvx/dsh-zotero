@@ -472,13 +472,16 @@ export function useLibraryFeed(
   // reset a selection it cannot see); walk `nextOffset` until the end.
   useEffect(() => {
     if (!active) return
+    // One controller per activation: the walk may span several pages, and a
+    // toolbar change must abandon the ones still in flight.
+    const controller = new AbortController()
     const ticket = ++seq.current.libraries
     setLibraries({ phase: 'loading' })
     void (async () => {
       const rows: ZoteroLibraryBrowseItemView[] = []
       let cursor = 0
       for (;;) {
-        const result = await face.browse(librariesRequestOf(cursor))
+        const result = await face.browse(librariesRequestOf(cursor), controller.signal)
         if (ticket !== seq.current.libraries) return
         if (!result.ok) {
           setLibraries({ phase: 'error', message: result.error.message })
@@ -498,6 +501,7 @@ export function useLibraryFeed(
       if (ticket !== seq.current.libraries) return
       setLibraries({ phase: 'error', message: messageOf(error) })
     })
+    return () => controller.abort()
   }, [active, face, refreshToken, libraryRetry])
 
   useEffect(
@@ -513,9 +517,11 @@ export function useLibraryFeed(
   // The item list: every toolbar change reloads from the page the offset names.
   useEffect(() => {
     if (!active) return
+    const controller = new AbortController()
     const ticket = ++seq.current.list
     if (q !== debouncedQ) {
       setList({ phase: 'loading' })
+      controller.abort()
       return
     }
     const query: LibraryListQuery = {
@@ -531,7 +537,7 @@ export function useLibraryFeed(
     setListOwner(requestIdentity)
     setList({ phase: 'loading' })
     void face
-      .search(listRequestOf(query))
+      .search(listRequestOf(query), controller.signal)
       .then((result) => {
         if (ticket !== seq.current.list) return
         setList(listStateOf(result))
@@ -540,6 +546,7 @@ export function useLibraryFeed(
         if (ticket !== seq.current.list) return
         setList({ phase: 'error', message: messageOf(error) })
       })
+    return () => controller.abort()
   }, [
     active,
     face,
@@ -568,6 +575,7 @@ export function useLibraryFeed(
       return
     }
     // Each effect activation owns a fresh detail read, including reconnects.
+    const controller = new AbortController()
     resetChildren()
     const ticket = ++seq.current.inspector
     setInspector((previous) =>
@@ -576,22 +584,25 @@ export function useLibraryFeed(
         : { phase: 'loading' },
     )
     void face
-      .item({
-        ref: selectedRef,
-        include: INSPECTOR_INCLUDE,
-        childPages: Object.fromEntries(
-          INSPECTOR_INCLUDE.map((kind) => [
-            kind,
-            {
-              offset:
-                memory?.childPages && memory.childPages.ref === selectedRef
-                  ? (memory.childPages.offsets[kind] ?? 0)
-                  : 0,
-              limit: 20,
-            },
-          ]),
-        ),
-      })
+      .item(
+        {
+          ref: selectedRef,
+          include: INSPECTOR_INCLUDE,
+          childPages: Object.fromEntries(
+            INSPECTOR_INCLUDE.map((kind) => [
+              kind,
+              {
+                offset:
+                  memory?.childPages && memory.childPages.ref === selectedRef
+                    ? (memory.childPages.offsets[kind] ?? 0)
+                    : 0,
+                limit: 20,
+              },
+            ]),
+          ),
+        },
+        controller.signal,
+      )
       .then((result) => {
         if (ticket !== seq.current.inspector) return
         setInspector(itemStateOf(result))
@@ -600,6 +611,7 @@ export function useLibraryFeed(
         if (ticket !== seq.current.inspector) return
         setInspector({ phase: 'error', message: messageOf(error) })
       })
+    return () => controller.abort()
   }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren])
 
   /**

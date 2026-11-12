@@ -162,6 +162,12 @@ export class LocalApiProvider implements ZoteroProvider {
     sink?: DiagnosticSink,
     getFulltextEnhancer: () => FulltextEnhancer | undefined = () => undefined,
     getEvidenceRanker: () => EvidenceRanker = () => bm25EvidenceRanker,
+    /**
+     * The stored-grant fact when no authorizer exists (writes disabled). The
+     * authorizer wins while it exists: it also knows this process's in-memory
+     * key, which a credential read cannot see.
+     */
+    private readonly readGrant: ((serverId: string) => Promise<boolean>) | undefined = undefined,
   ) {
     this.getLimits = limits
     this.searchCaches = createSearchIndexCaches()
@@ -275,15 +281,20 @@ export class LocalApiProvider implements ZoteroProvider {
     try {
       const { headers } = await this.client.get('', undefined, { signal })
       const serverId = serverIdFromHeaders(headers)
-      // The write block rides only when the provider wires the capability at
-      // all; its absence is the statement "this provider serves no writes".
-      const write =
-        this.writer === undefined || this.authorizer === undefined
-          ? undefined
-          : {
-              enabled: this.capabilities.has('write'),
-              authorized: await this.authorizer.hasGrant(serverId ?? ''),
-            }
+      // The write block rides whenever the capability is on or a grant is
+      // stored. The second half is wider than the write capability: with writes
+      // disabled there is no authorizer (and so no write transport), but a
+      // grant the user granted earlier stays stored, and the settings row must
+      // be able to see it in order to revoke it. When neither holds, the block
+      // is absent: no capability and nothing to revoke.
+      const authorizer = this.authorizer
+      const grantReader =
+        authorizer !== undefined
+          ? (id: string): Promise<boolean> => authorizer.hasGrant(id)
+          : this.readGrant
+      const enabled = this.capabilities.has('write')
+      const authorized = grantReader === undefined ? false : await grantReader(serverId ?? '')
+      const write = enabled || authorized ? { enabled, authorized } : undefined
       return {
         providerId: this.id,
         // The authority this provider dialled, reported whether or not the

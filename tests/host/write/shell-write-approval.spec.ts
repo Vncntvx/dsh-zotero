@@ -27,6 +27,9 @@ import { setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
 /** Every command the stub body actually ran. */
 const ran: string[] = []
 
+/** Every line the stub terminal was handed, marked when it was not submitted. */
+const typed: string[] = []
+
 /** The three command shapes, built from the lane's own API address. */
 const writeOf = (lane: HostLane) =>
   `curl -X POST -d '{"items":[]}' ${lane.mock.baseUrl}/users/0/items`
@@ -51,6 +54,27 @@ function stubBash() {
   })
 }
 
+/** The stub persistent terminal: records the text it was handed. */
+function stubTerminal() {
+  return defineTool({
+    name: 'terminal_send',
+    description: 'stub persistent shell for the approval lane',
+    parameters: {
+      sessionId: { type: 'string', required: true },
+      text: { type: 'string', required: true },
+      submit: { type: 'boolean' },
+    },
+    output: {
+      schema: { type: 'array', items: { type: 'json' } },
+      render: (_args, value) => value as any,
+    },
+    async execute(args: { sessionId: string; text: string; submit?: boolean }) {
+      typed.push(args.submit === false ? `pending:${args.text}` : args.text)
+      return [{ type: 'text', text: 'ok' }]
+    },
+  })
+}
+
 const openLanes: HostLane[] = []
 
 async function bootLane(config: Options, withApproval = true): Promise<HostLane> {
@@ -58,6 +82,7 @@ async function bootLane(config: Options, withApproval = true): Promise<HostLane>
     compose: async (ctx) => {
       if (withApproval) await ctx.plugin(StubApproval)
       ctx.tools.register(stubBash())
+      ctx.tools.register(stubTerminal())
     },
   })
   openLanes.push(lane)
@@ -75,6 +100,7 @@ function runTool(lane: HostLane, command: string): ReturnType<HostLane['runTool'
 
 beforeEach(() => {
   ran.length = 0
+  typed.length = 0
   resetApprovalStub()
 })
 
@@ -165,6 +191,24 @@ describe('a shell write against the Zotero API', () => {
     expect(approvalAsks).toHaveLength(1)
     expect(after.isError).toBe(false)
     expect(ran).toHaveLength(2)
+  })
+
+  it('asks about text a persistent terminal submits, not text it holds back', async () => {
+    const lane = await bootLane({ writeEnabled: false })
+    const text = writeOf(lane)
+
+    // A submitted line runs in the shell exactly like `bash -c`.
+    const submitted = await lane.runTool('terminal_send', { sessionId: 't1', text })
+    expect(submitted.isError).toBe(false)
+    expect(approvalAsks).toHaveLength(1)
+    expect(approvalAsks[0]?.toolName).toBe('terminal_send')
+
+    // `submit: false` leaves the text in the input line: nothing runs, so
+    // there is no write to confirm.
+    const held = await lane.runTool('terminal_send', { sessionId: 't1', text, submit: false })
+    expect(held.isError).toBe(false)
+    expect(approvalAsks).toHaveLength(1)
+    expect(typed).toEqual([text, `pending:${text}`])
   })
 
   it('asks the same way while the plugin’s own write tools are enabled', async () => {

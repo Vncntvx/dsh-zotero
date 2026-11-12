@@ -153,6 +153,7 @@ it('restores selected child pagination after a new browser tab occurrence', asyn
     expect.objectContaining({
       childPages: expect.objectContaining({ notes: { offset: 20, limit: 20 } }),
     }),
+    expect.anything(),
   )
   expect(memory.scroll.list).toBe(50)
 })

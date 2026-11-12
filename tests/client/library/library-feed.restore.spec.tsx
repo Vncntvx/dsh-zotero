@@ -49,7 +49,10 @@ describe('restored view pins', () => {
     await waitFor(() => expect(result.current.selectedRef).toBe(SELECTED))
     expect(result.current.narrowPane).toBe('inspector')
     await waitFor(() =>
-      expect(face.item).toHaveBeenCalledWith(expect.objectContaining({ ref: SELECTED })),
+      expect(face.item).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: SELECTED }),
+        expect.anything(),
+      ),
     )
   })
 
@@ -104,7 +107,10 @@ describe('restored view pins', () => {
     const { result, face } = setup()
 
     await waitFor(() =>
-      expect(face.item).toHaveBeenCalledWith(expect.objectContaining({ ref: SELECTED })),
+      expect(face.item).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: SELECTED }),
+        expect.anything(),
+      ),
     )
     await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
     const inspector = result.current.inspector

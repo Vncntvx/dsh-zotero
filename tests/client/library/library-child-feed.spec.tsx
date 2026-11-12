@@ -48,12 +48,15 @@ describe('library child feed', () => {
     act(() => result.current.retryChild('notes'))
 
     await waitFor(() => expect(face.childPage).toHaveBeenCalled())
-    expect(face.childPage).toHaveBeenCalledWith({
-      ref: ITEM_DETAIL.ref,
-      kind: 'notes',
-      offset: 0,
-      limit: 50,
-    })
+    expect(face.childPage).toHaveBeenCalledWith(
+      {
+        ref: ITEM_DETAIL.ref,
+        kind: 'notes',
+        offset: 0,
+        limit: 50,
+      },
+      expect.anything(),
+    )
   })
 
   it('ignores an older page when a newer request for the same child kind wins', async () => {
@@ -151,12 +154,15 @@ describe('child feed selection, failures, and guards', () => {
     expect(result.current.inspector).toEqual({ phase: 'ready', detail: ITEM_DETAIL })
     act(() => result.current.retryChild('notes'))
     await waitFor(() => expect(result.current.childStates.notes).toBeUndefined())
-    expect(face.childPage).toHaveBeenLastCalledWith({
-      ref: ITEM_DETAIL.ref,
-      kind: 'notes',
-      offset: 50,
-      limit: 50,
-    })
+    expect(face.childPage).toHaveBeenLastCalledWith(
+      {
+        ref: ITEM_DETAIL.ref,
+        kind: 'notes',
+        offset: 50,
+        limit: 50,
+      },
+      expect.anything(),
+    )
     vi.mocked(face.childPage).mockResolvedValueOnce({
       ok: false as const,
       error: new RemoteError('zotero/domain', 'child denied', { code: 'ZOTERO_NOT_FOUND' }),

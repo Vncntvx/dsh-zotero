@@ -1,16 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import type {
-  CredentialInfo,
-  CredentialKey,
-  CredentialRecord,
-  CredentialRecordEntry,
-  CredentialRecordInfo,
-  CredentialRef,
-  ResolvedCredential,
-} from '@deepseek-ai/dsh-credentials'
-import { CredentialProvider } from '@deepseek-ai/dsh-credentials'
+import type { CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { WRITE_APP_NAME, WRITE_KEY_RECORD, WriteAuthorizer } from '../../../src/write-auth.js'
+import { MemoryCredentials, writeGrantRecord } from '../../helpers/credential-seam.js'
 import { ZoteroWriteHttpClient } from '../../../src/write-http.js'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { WRITE_AUTH_DENIED_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED } from '../../../src/errors.js'
@@ -23,67 +15,12 @@ const OTHER_SERVER_ID = 'srv-other-00002'
 const ISSUED_KEY = 'K'.repeat(32)
 const AUTHORIZE_PATH = '/api/local/authorize'
 
-/**
- * The smallest real credentials seam: an in-memory record map, so the spec
- * observes exactly what the authorizer persists and deletes.
- */
-class MemoryCredentials extends CredentialProvider {
-  readonly records = new Map<string, CredentialRecord>()
-  readonly deletions: string[] = []
-
-  constructor(ctx: Context) {
-    super(ctx)
-  }
-
-  async resolve(_ref: CredentialRef): Promise<ResolvedCredential | undefined> {
-    return undefined
-  }
-
-  async describe(_ref: CredentialRef): Promise<CredentialInfo> {
-    return { configured: false, writable: true }
-  }
-
-  async set(_ref: CredentialRef, _value: string): Promise<void> {}
-
-  async unset(_ref: CredentialRef): Promise<void> {}
-
-  async readRecord(key: CredentialKey): Promise<CredentialRecord | undefined> {
-    return this.records.get(String(key))
-  }
-
-  async describeRecord(_key: CredentialKey): Promise<CredentialRecordInfo> {
-    return { configured: false, writable: true }
-  }
-
-  async listRecords(): Promise<readonly CredentialRecordEntry[]> {
-    return []
-  }
-
-  async modifyRecord(
-    key: CredentialKey,
-    mutate: (current: CredentialRecord | undefined) => Promise<CredentialRecord | undefined>,
-  ): Promise<CredentialRecord | undefined> {
-    const next = await mutate(this.records.get(String(key)))
-    if (next === undefined) return this.records.get(String(key))
-    this.records.set(String(key), next)
-    return next
-  }
-
-  async deleteRecord(key: CredentialKey): Promise<void> {
-    this.deletions.push(String(key))
-    this.records.delete(String(key))
-  }
-}
-
 function grantBody(key: string, remember: boolean): string {
   return JSON.stringify({ key, remember })
 }
 
 function storedGrant(key: string, serverId = SERVER_ID): CredentialRecord {
-  return {
-    kind: 'grant',
-    payload: { key, serverId, appName: WRITE_APP_NAME, authorizedAt: '2026-09-13T00:00:00.000Z' },
-  }
+  return writeGrantRecord(key, serverId)
 }
 
 /** Register the authorize dialog answer the current test needs. */

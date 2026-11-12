@@ -81,7 +81,10 @@ it('ignores a late successful library selector page after unmount', async () => 
   )
   const { unmount } = setupLibraryFeed({ browse })
   await waitFor(() =>
-    expect(browse).toHaveBeenCalledWith(expect.objectContaining({ kind: 'libraries' })),
+    expect(browse).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'libraries' }),
+      expect.anything(),
+    ),
   )
   unmount()
   await act(async () => pending.resolve({ ok: true, value: { ...LIBRARY_ROWS, nextOffset: 1 } }))

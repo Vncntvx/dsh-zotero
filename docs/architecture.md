@@ -49,7 +49,7 @@ graph LR
 - 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
 - 结构性配置变更会在现有实例上重建 HTTP 客户端、Provider 与写工具集，触发条件是 `TRANSPORT_CONFIG_KEYS` 中的六个键（`baseUrl`、`timeoutMs`、`maxResponseBytes`、`maxInFlightRequests`、`writeAuthorizeDeadlineMs`、`writeEnabled`）；其余限额由 Provider 实时读取，不触发重建；
 - 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
-- 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求；
+- 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求：`bash`/`pwsh` 读 `command`，`terminal_send` 读提交前的 `text`（`submit: false` 不执行即不检测）；`run_code` 的程序可在运行期拼出请求，属文本检测的已知盲区；
 - 策略提示词段（`zotero:policy`，`src/prompt.ts`）随每一步准入的工具集合裁剪：读路由、读上限与写策略只点名该步准入的工具；只要存在任一 Zotero 工具，就保留调用同意、注入防护与连接失败三段；没有本地读工具时保留写路由约束，准入为空时只保留该约束；写能力关闭时完整保留关闭状态说明与越界路由禁令；全量工具时文本保持稳定；
 - 配置重建策略与 config→limits 投影集中于 `src/service-config.ts`；本地工具注册清单由 `src/tool-registration.ts` 管理，工具调用诊断 hook 由 `src/tool-diagnostics.ts` 安装，步骤准入解析由 `src/step-tools.ts` 每步缓存一次，参数纠错由 `src/parameter-correction.ts` 通过 `tools/post-execute` 安装，`ResultDelivery` 只负责投递；子 agent 写策略由 `src/subagent-guard.ts` 承担，按会话血缘收缩子 agent 的写工具可见性，并在执行期拒绝其写调用；service 保留 fiber 生命周期、这些协作者的组合，以及该策略的刷新与释放；
 - 配置提交校验与 volatile-update 监听由 `src/service-lifecycle.ts` 承担；ZoteroService 提供 live config 和重建 transport/tool 的回调；
@@ -115,7 +115,7 @@ graph LR
 
 ## 文档解析子系统 (`src/enrichment/`)
 
-`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用，不注册模型工具、提示词段或技能。启用组件即接受 MinerU 文档外发，并使解析与模型管理能力可用；每次上传仍须用户提交具体文档并通过远程动作与会话门禁，客户端在启用时显示一次提醒。
+`dsh-zotero/enrichment` 是独立 bundle 组件，随包发布但默认禁用，不注册模型工具、提示词段或技能。启用组件即接受 MinerU 文档外发，并使解析与模型管理能力可用；每次上传仍须用户提交具体文档并通过远程动作与会话门禁，客户端在组件处于已启用状态且本机尚未确认时显示外发提醒，确认后按浏览器持久记住（启动时已启用的部署同样会看到）。
 
 ### 只读产物接缝
 

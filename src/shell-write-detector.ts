@@ -18,6 +18,10 @@
  * - a request written into a script file and then executed (`bash build.sh`);
  * - an interpreter whose command text never spells the endpoint
  *   (`python -c '...'`, `node -e '...'` with the URL assembled at runtime);
+ * - a `run_code` program, which reaches the network through `fetch` and can
+ *   assemble any request at runtime, exactly like the interpreters above;
+ * - the `text` of a `terminal_send` the caller does not submit (`submit:
+ *   false`), which writes nothing to the shell's input line;
  * - the URL carried in an environment variable, a heredoc, or an encoding;
  * - a loopback port other than the configured one, except for writes to the
  *   users path and authorize calls (those are caught on any loopback port;
@@ -47,8 +51,13 @@ import { LOOPBACK_HOSTNAMES, type ResolvedConfig } from './config.js'
 import { ZOTERO_AUTHORIZE_PATH, ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 import { asRecord, asString } from './json.js'
 
-/** The shell tools whose command text this detector can read. */
-export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set(['bash', 'pwsh'])
+/**
+ * The tools whose command text this detector can read. `terminal_send` types
+ * into a persistent shell, so its `text` is command text when the call submits
+ * it; `run_code` is deliberately absent — its program can assemble any request
+ * at runtime, exactly like `python -c`, and the module docs own that limit.
+ */
+export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set(['bash', 'pwsh', 'terminal_send'])
 
 /**
  * The endpoint that exists only to hand out a write key. Host-agnostic on
@@ -293,10 +302,26 @@ function authorityAliases(baseUrl: string): readonly string[] {
   return aliases
 }
 
-/** The command text of a shell tool call, when the call carries one. */
+/**
+ * The command text of a shell tool call, when the call carries one.
+ *
+ * `bash` and `pwsh` take a whole command in `command`. `terminal_send` types
+ * `text` into a running shell and submits it with Enter unless the call sets
+ * `submit: false`, so a call that does not submit cannot run anything and is
+ * left alone; the harness defaults `submit` to true
+ * (`packages/experimental/tool-terminal/src/index.ts`).
+ * @param execution - the call about to run.
+ * @returns the text to scan, or undefined when the call runs no command.
+ */
 function commandTextOf(execution: Pick<ToolExecution, 'name' | 'arguments'>): string | undefined {
   if (!SHELL_TOOL_NAMES.has(execution.name)) return undefined
-  const command = asString(asRecord(execution.arguments)?.command)
+  const args = asRecord(execution.arguments)
+  const command =
+    execution.name === 'terminal_send'
+      ? args?.['submit'] === false
+        ? undefined
+        : asString(args?.['text'])
+      : asString(args?.['command'])
   return command !== undefined && command.trim() !== '' ? command : undefined
 }
 

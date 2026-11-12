@@ -24,6 +24,14 @@ function bash(command: string): { name: string; arguments: { command: string } }
   return { name: 'bash', arguments: { command } }
 }
 
+/** One `terminal_send` call typing the given text into a persistent shell. */
+function terminal(
+  text: string,
+  extra: { readonly submit?: boolean } = {},
+): { name: string; arguments: Record<string, unknown> } {
+  return { name: 'terminal_send', arguments: { sessionId: 't1', text, ...extra } }
+}
+
 describe('the shell-write detector', () => {
   it('recognizes the authorize endpoint in any spelling', () => {
     for (const command of [
@@ -191,6 +199,21 @@ describe('the shell-write detector', () => {
     expect(attempt?.displayReason.zh).not.toContain('write request to the local API address')
   })
 
+  it('scans the text a terminal_send submits, and only that text', () => {
+    // A persistent shell runs a submitted line exactly like `bash -c`: the
+    // line is command text. `submit: false` types into the input line and
+    // executes nothing, so there is no write to confirm.
+    const write = `curl -X POST -d '{}' http://127.0.0.1:23119/api/users/0/items`
+    expect(detectShellWrite(config, terminal(write))).toBeDefined()
+    expect(detectShellWrite(config, terminal(write, { submit: true }))).toBeDefined()
+    expect(detectShellWrite(config, terminal(write, { submit: false }))).toBeUndefined()
+    // The `command` field of another tool is not this tool's text, and the
+    // harness defaults `submit` to true, so an omitted flag still runs.
+    expect(
+      detectShellWrite(config, { name: 'terminal_send', arguments: { command: write } }),
+    ).toBeUndefined()
+  })
+
   it('leaves every non-shell call alone', () => {
     expect(
       detectShellWrite(config, { name: 'read', arguments: { file_path: '/tmp/x' } }),
@@ -260,5 +283,16 @@ describe('the shell-write detector', () => {
     ]) {
       expect(detectShellWrite(config, bash(command)), command).toBeUndefined()
     }
+    // A `run_code` program reaches the network through `fetch` and assembles
+    // its request at runtime, so it is out of text detection's reach by the
+    // same reasoning as the interpreters above; the module docs own the limit.
+    expect(
+      detectShellWrite(config, {
+        name: 'run_code',
+        arguments: {
+          code: `await fetch('http://127.0.0.1:23119/api/users/0/items', { method: 'POST' })`,
+        },
+      }),
+    ).toBeUndefined()
   })
 })

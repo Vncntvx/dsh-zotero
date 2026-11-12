@@ -265,10 +265,11 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, probe } = surfaces
   // Enabling the enrichment component is the deployment's acceptance of
-  // MinerU document egress. The form's namespace status supplies the enable
-  // transition: the first settled status is a baseline, so a component already
-  // on at boot never opens the modal. The overlay lives on the shell rather
-  // than the settings page, so the reminder can appear wherever the switch was
+  // MinerU document egress, so the client owes the user a disclosure whenever
+  // the component is served and this browser has not acknowledged it — a
+  // deployment already enabled at boot included. The acknowledgement is
+  // persisted per client. The overlay lives on the shell rather than the
+  // settings page, so the disclosure can appear wherever the switch was
   // flipped.
   const enableNotice = new EnrichmentEnableNoticeController(
     enrichmentCard.inject().hooks.enrichmentCard,
@@ -544,11 +545,29 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
    * always is.
    */
   const plane = createLibraryDataPlane({
-    collectionPath: (request) => ctx.remote.zotero.collectionPath(request),
-    browse: (request) => ctx.remote.zotero.browse(request),
-    search: (request) => ctx.remote.zotero.search(request),
-    item: (request) => ctx.remote.zotero.item(request),
-    childPage: (request) => ctx.remote.zotero.childPage(request),
+    // The cancellation argument is passed only when the caller has one: the
+    // wire treats it as optional, and a plane read started without a signal
+    // stays a one-argument call all the way down.
+    collectionPath: (request, signal) =>
+      signal === undefined
+        ? ctx.remote.zotero.collectionPath(request)
+        : ctx.remote.zotero.collectionPath(request, signal),
+    browse: (request, signal) =>
+      signal === undefined
+        ? ctx.remote.zotero.browse(request)
+        : ctx.remote.zotero.browse(request, signal),
+    search: (request, signal) =>
+      signal === undefined
+        ? ctx.remote.zotero.search(request)
+        : ctx.remote.zotero.search(request, signal),
+    item: (request, signal) =>
+      signal === undefined
+        ? ctx.remote.zotero.item(request)
+        : ctx.remote.zotero.item(request, signal),
+    childPage: (request, signal) =>
+      signal === undefined
+        ? ctx.remote.zotero.childPage(request)
+        : ctx.remote.zotero.childPage(request, signal),
     export: (request) => ctx.remote.zotero.export(request),
   })
   const refreshBindings = new Map<string, { refresh: () => void; clear: () => void }>()
@@ -578,11 +597,11 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     forgetPdf: pdfReaders.forget,
     bindRefresh,
     status: () => probe(),
-    collectionPath: (request) => plane.collectionPath(request),
-    browse: (request) => plane.browse(request),
-    search: (request) => plane.search(request),
-    item: (request) => plane.item(request),
-    childPage: (request) => plane.childPage(request),
+    collectionPath: (request, signal) => plane.collectionPath(request, signal),
+    browse: (request, signal) => plane.browse(request, signal),
+    search: (request, signal) => plane.search(request, signal),
+    item: (request, signal) => plane.item(request, signal),
+    childPage: (request, signal) => plane.childPage(request, signal),
     invalidate: plane.invalidate,
     setInstance: plane.setInstance,
     export: (request) => plane.export(request),

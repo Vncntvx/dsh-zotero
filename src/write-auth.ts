@@ -133,6 +133,41 @@ async function tombstoneGrant(
   })
 }
 
+/**
+ * Remove this plugin's persisted write grant, whatever the write transport's
+ * state. With writes disabled there is no authorizer to own the revocation, so
+ * the settings row's revoke still has to delete the record the user granted
+ * earlier: the grant is a durable secret, and losing the ability to delete it
+ * by turning the write surface off would be a trap.
+ * @param credentials - the host credentials seam, when composed.
+ * @returns whether a credential record was removed.
+ */
+export async function revokePersistedGrant(
+  credentials: CredentialProvider | undefined,
+): Promise<{ removed: boolean }> {
+  if (credentials === undefined) return { removed: false }
+  const current = await credentials.readRecord(WRITE_KEY_RECORD)
+  await credentials.deleteRecord(WRITE_KEY_RECORD)
+  return { removed: current !== undefined }
+}
+
+/**
+ * Whether the credentials seam holds a grant bound to this Zotero instance.
+ * Reads the record only: no transport, no dialog, no memory. This is how the
+ * status probe still reports a revocable grant while writes are disabled.
+ * @param credentials - the host credentials seam, when composed.
+ * @param serverId - the connected instance id.
+ * @returns whether a grant bound to that instance is stored.
+ */
+export async function persistedGrantBoundTo(
+  credentials: CredentialProvider | undefined,
+  serverId: string,
+): Promise<boolean> {
+  if (credentials === undefined) return false
+  const grant = parseGrantRecord(await credentials.readRecord(WRITE_KEY_RECORD))
+  return grant !== undefined && grant.boundTo === serverId
+}
+
 /** The in-process grant and any persistence still owed to the credentials seam. */
 interface MemoryGrant {
   readonly key: string
@@ -179,11 +214,7 @@ export class WriteAuthorizer {
   async revoke(): Promise<{ removed: boolean }> {
     this.revokeEpoch += 1
     this.memory = undefined
-    const credentials = this.getCredentials()
-    if (credentials === undefined) return { removed: false }
-    const current = await credentials.readRecord(WRITE_KEY_RECORD)
-    await credentials.deleteRecord(WRITE_KEY_RECORD)
-    return { removed: current !== undefined }
+    return await revokePersistedGrant(this.getCredentials())
   }
 
   /**

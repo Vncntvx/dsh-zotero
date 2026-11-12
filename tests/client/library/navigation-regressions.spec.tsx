@@ -48,7 +48,10 @@ it('clears user filters in the first query of a different scope', async () => {
   act(() => result.current.setFilters({ tags: ['old'], yearFrom: 2020 }))
   act(() => result.current.selectScope({ kind: 'trash' }))
   expect(result.current.filters).toEqual({})
-  expect(face.search).toHaveBeenLastCalledWith(expect.not.objectContaining({ tags: ['old'] }))
+  expect(face.search).toHaveBeenLastCalledWith(
+    expect.not.objectContaining({ tags: ['old'] }),
+    expect.anything(),
+  )
 })
 it('removes expanded intent after a successful empty child listing', async () => {
   const { result } = setupLibraryFeed({

@@ -119,16 +119,23 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     revokeWriteGrant: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
     collectionPath: (
       request: ZoteroCollectionPathRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
     browse: (
       request: ZoteroLibraryBrowseRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
     search: (
       request: ZoteroLibrarySearchRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroSearchResultView>>
-    item: (request: ZoteroLibraryItemRequestView) => Promise<RemoteResult<ZoteroItemDetailView>>
+    item: (
+      request: ZoteroLibraryItemRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroItemDetailView>>
     childPage: (
       request: ZoteroLibraryChildPageRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroChildPageView>>
     export: (
       request: ZoteroLibraryExportRequestView,
@@ -211,18 +218,23 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'zotero/revokeWriteGrant': () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
     'zotero/collectionPath': (
       request: ZoteroCollectionPathRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
     'zotero/browse': (
       request: ZoteroLibraryBrowseRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
     'zotero/search': (
       request: ZoteroLibrarySearchRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroSearchResultView>>
     'zotero/item': (
       request: ZoteroLibraryItemRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroItemDetailView>>
     'zotero/childPage': (
       request: ZoteroLibraryChildPageRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroChildPageView>>
     'zotero/export': (
       request: ZoteroLibraryExportRequestView,

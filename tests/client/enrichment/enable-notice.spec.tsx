@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The enrichment enable disclosure: the settings form's namespace status is
- * the enable signal, the first settled status is a baseline, and dismissal is
- * scoped to one serving of the component. The rendered modal is checked
- * against the same controller state.
+ * The enrichment egress disclosure: the settings form's namespace status says
+ * whether the component is served, and the notice is owed until this client
+ * acknowledges it — a deployment already enabled at boot included. Dismissal
+ * persists the acknowledgement, so a second controller over the same storage
+ * stays closed. The rendered modal is checked against the same controller
+ * state.
  * @module tests/client/enrichment/enable-notice
  */
 
@@ -43,6 +45,20 @@ function statusSourceOf() {
   }
 }
 
+/** The per-client acknowledgement as a spec keeps it. */
+function acknowledgementOf() {
+  let acknowledged = false
+  return {
+    read: () => acknowledged,
+    remember: () => {
+      acknowledged = true
+    },
+    get acknowledged() {
+      return acknowledged
+    },
+  }
+}
+
 function hookOf(face: EnrichmentEnableNoticeFace) {
   const store = face.hooks.enrichmentEnableNotice
   return function useNotice<T>(selector: (state: EnrichmentEnableNoticeState) => T): T {
@@ -60,9 +76,23 @@ function mountNotice(face: EnrichmentEnableNoticeFace) {
 }
 
 describe('EnrichmentEnableNoticeController', () => {
-  it('treats the first settled status as a baseline, even when the component is already on', () => {
+  it('opens for a deployment already enabled at boot until the client acknowledges it', () => {
     const source = statusSourceOf()
-    const controller = new EnrichmentEnableNoticeController(source)
+    const acknowledgement = acknowledgementOf()
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgement)
+    try {
+      source.publish('ready')
+      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(true)
+    } finally {
+      controller.dispose()
+    }
+  })
+
+  it('stays closed when this client already acknowledged the disclosure', () => {
+    const source = statusSourceOf()
+    const acknowledgement = acknowledgementOf()
+    acknowledgement.remember()
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgement)
     try {
       source.publish('ready')
       expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
@@ -71,47 +101,69 @@ describe('EnrichmentEnableNoticeController', () => {
     }
   })
 
-  it('opens when a boot-enabled component is disabled and re-enabled', () => {
+  it('never opens while the status is still loading', () => {
     const source = statusSourceOf()
-    const controller = new EnrichmentEnableNoticeController(source)
+    const acknowledgement = acknowledgementOf()
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgement)
     try {
-      source.publish('ready')
-      source.publish('unavailable')
-      source.publish('ready')
-      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(true)
+      source.publish('loading')
+      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
+      expect(acknowledgement.acknowledged).toBe(false)
     } finally {
       controller.dispose()
     }
   })
 
-  it('opens on an unavailable to ready transition and closes on dismissal', () => {
+  it('closes again when the component stops being served', () => {
     const source = statusSourceOf()
-    const controller = new EnrichmentEnableNoticeController(source)
+    const acknowledgement = acknowledgementOf()
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgement)
     try {
-      source.publish('unavailable')
-      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
       source.publish('ready')
       expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(true)
+      source.publish('unavailable')
+      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
+    } finally {
+      controller.dispose()
+    }
+  })
+
+  it('persists the acknowledgement so a second controller stays closed', () => {
+    const source = statusSourceOf()
+    const acknowledgement = acknowledgementOf()
+    const first = new EnrichmentEnableNoticeController(source, acknowledgement)
+    try {
+      source.publish('ready')
+      first.dismiss()
+      expect(first.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
+      expect(acknowledgement.acknowledged).toBe(true)
+    } finally {
+      first.dispose()
+    }
+
+    // The same client reloads: the persisted acknowledgement is read, so the
+    // notice is not owed again, and disabling then re-enabling the component
+    // does not reopen it either.
+    const reloaded = new EnrichmentEnableNoticeController(source, acknowledgement)
+    try {
+      source.publish('ready')
+      expect(reloaded.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
+      source.publish('unavailable')
+      source.publish('ready')
+      expect(reloaded.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
+    } finally {
+      reloaded.dispose()
+    }
+  })
+
+  it('does not acknowledge anything when there is nothing to dismiss', () => {
+    const source = statusSourceOf()
+    const acknowledgement = acknowledgementOf()
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgement)
+    try {
+      source.publish('unavailable')
       controller.dismiss()
-      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
-      // A later status refresh that stays ready does not reopen it.
-      source.publish('ready')
-      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(false)
-    } finally {
-      controller.dispose()
-    }
-  })
-
-  it('shows the disclosure again when the component is disabled and re-enabled', () => {
-    const source = statusSourceOf()
-    const controller = new EnrichmentEnableNoticeController(source)
-    try {
-      source.publish('unavailable')
-      source.publish('ready')
-      controller.dismiss()
-      source.publish('unavailable')
-      source.publish('ready')
-      expect(controller.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(true)
+      expect(acknowledgement.acknowledged).toBe(false)
     } finally {
       controller.dispose()
     }
@@ -121,7 +173,7 @@ describe('EnrichmentEnableNoticeController', () => {
 describe('EnrichmentEnableNotice', () => {
   it('renders the disclosure and dismisses it from the primary action', () => {
     const source = statusSourceOf()
-    const controller = new EnrichmentEnableNoticeController(source)
+    const controller = new EnrichmentEnableNoticeController(source, acknowledgementOf())
     try {
       source.publish('unavailable')
       mountNotice(controller.inject())

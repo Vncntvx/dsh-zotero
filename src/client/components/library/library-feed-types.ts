@@ -25,22 +25,36 @@ import type {
   ZoteroSearchResultView,
 } from '../../../contract.ts'
 
-/** The wire face the panel calls; injected so specs can stub it wholesale. */
+/**
+ * The wire face the panel calls; injected so specs can stub it wholesale.
+ *
+ * Every read takes the caller's abort signal. The panel re-issues a read on
+ * each toolbar change, so without one an abandoned listing keeps a request
+ * open on the host for as long as the host needs to answer it — the sequence
+ * ticket only drops the answer after it arrives. The data plane decides when
+ * the shared wire call itself may abort (see `joinFlight`): a request another
+ * caller still waits for is never cancelled by one caller's cleanup.
+ */
 export interface LibraryFeedFace {
   readonly collectionPath: (
     request: ZoteroCollectionPathRequestView,
+    signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
   readonly browse: (
     request: ZoteroLibraryBrowseRequestView,
+    signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
   readonly search: (
     request: ZoteroLibrarySearchRequestView,
+    signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroSearchResultView>>
   readonly item: (
     request: ZoteroLibraryItemRequestView,
+    signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroItemDetailView>>
   readonly childPage: (
     request: ZoteroLibraryChildPageRequestView,
+    signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroChildPageView>>
   /**
    * Drops the shared data plane's cached reads. Present when the face is the

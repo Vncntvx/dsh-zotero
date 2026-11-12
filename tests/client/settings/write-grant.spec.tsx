@@ -67,7 +67,9 @@ describe('the write-grant revoke row', () => {
     })
   })
 
-  it('renders nothing while writes are disabled', async () => {
+  it('still offers revoke while writes are disabled', async () => {
+    // A grant outlives the write surface: disabling writes leaves the stored
+    // key in place, so the row must key on the grant, not on the capability.
     render(
       <WriteGrantAction
         t={mockT}
@@ -75,12 +77,10 @@ describe('the write-grant revoke row', () => {
           ok: true,
           value: { ...CONNECTED, write: { enabled: false, authorized: true } },
         })}
-        revoke={async () => ({ ok: true, value: { removed: false } })}
+        revoke={async () => ({ ok: true, value: { removed: true } })}
       />,
     )
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: zh.writeGrantRevoke })).toBeNull()
-    })
+    expect(await screen.findByRole('button', { name: zh.writeGrantRevoke })).toBeDefined()
   })
 
   it('shows the host error and keeps the action when revoke fails', async () => {

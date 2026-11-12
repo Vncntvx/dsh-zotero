@@ -48,7 +48,7 @@ import { ZoteroRuntime } from './remote.js'
 import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
 import { TYPERT_MANIFEST } from './typert.js'
-import { WriteAuthorizer } from './write-auth.js'
+import { WriteAuthorizer, persistedGrantBoundTo, revokePersistedGrant } from './write-auth.js'
 import {
   createSourceLedgerProjection,
   type SourceLedgerProjection,
@@ -438,12 +438,15 @@ export class ZoteroService extends Service {
   /**
    * Revoke this plugin's persisted Zotero write grant and forget the process's
    * copy. Local credential surgery only: no Zotero request and no approval.
+   *
+   * Revocation is not a write capability: the transport and the authorizer
+   * exist only while writes are enabled, but a grant granted earlier stays
+   * stored, so with writes disabled the credential record is deleted directly
+   * instead of answering that the capability is off.
    * @returns whether a stored grant was removed.
-   * @throws {ZoteroError} `ZOTERO_CAPABILITY_UNAVAILABLE` while writes are disabled.
    */
   async revokeWriteGrant(): Promise<{ removed: boolean }> {
-    if (this.authorizer === undefined)
-      throw new ZoteroError('Zotero writes are disabled.', ZOTERO_CAPABILITY_UNAVAILABLE)
+    if (this.authorizer === undefined) return await revokePersistedGrant(this.credentials())
     return await this.authorizer.revoke()
   }
 
@@ -571,6 +574,12 @@ export class ZoteroService extends Service {
             persistKey: () => this.config.writePersistKey,
           })
     const authorizerInstance = authorizer
+    // The status probe reports the grant through the authorizer when writes are
+    // on (provider preference: it also holds this process's in-memory key), and
+    // reads the credential record directly when they are off — the settings row
+    // must be able to revoke a grant that predates the switch.
+    const readGrant = async (serverId: string): Promise<boolean> =>
+      await persistedGrantBoundTo(this.credentials(), serverId)
     const provider = new LocalApiProvider(
       client,
       () => localProviderLimits(this.config),
@@ -579,6 +588,7 @@ export class ZoteroService extends Service {
       this.diagnostics.sink,
       () => this.installedFulltextEnhancer,
       () => this.evidenceRanker(),
+      readGrant,
     )
     // The swap is synchronous: registerProvider installs the new provider
     // under the stable id before this releases the old registration (whose

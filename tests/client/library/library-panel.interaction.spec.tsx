@@ -42,6 +42,7 @@ describe('scope selection drives the list request', () => {
     await screen.findByText('FlashAttention-2')
     expect(face.search).toHaveBeenLastCalledWith(
       expect.objectContaining({ scope: { kind: 'library' } }),
+      expect.anything(),
     )
     await screen.findByText('LLM Papers')
     act(() => {
@@ -52,6 +53,7 @@ describe('scope selection drives the list request', () => {
         expect.objectContaining({
           scope: { kind: 'collection', refOrName: 'zotero://user/0/collection/COLL0001' },
         }),
+        expect.anything(),
       )
     })
     // The list header carries the name the tree row already knew.
@@ -67,6 +69,7 @@ describe('scope selection drives the list request', () => {
     await waitFor(() => {
       expect(face.search).toHaveBeenLastCalledWith(
         expect.objectContaining({ scope: { kind: 'trash' } }),
+        expect.anything(),
       )
     })
     // The list header carries the trash's own label.
@@ -82,6 +85,7 @@ describe('scope selection drives the list request', () => {
     await waitFor(() => {
       expect(face.search).toHaveBeenLastCalledWith(
         expect.objectContaining({ scope: { kind: 'publications' } }),
+        expect.anything(),
       )
     })
     expect(screen.getByRole('heading', { name: zh.libraryPublications })).toBeTruthy()
@@ -101,13 +105,19 @@ describe('the paginator walks both ways and refresh reruns every lane', () => {
       screen.getByRole('button', { name: zh.libraryPageNext }).click()
     })
     await waitFor(() => {
-      expect(face.search).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 2 }))
+      expect(face.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 2 }),
+        expect.anything(),
+      )
     })
     act(() => {
       screen.getByRole('button', { name: zh.libraryPagePrev }).click()
     })
     await waitFor(() => {
-      expect(face.search).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 }))
+      expect(face.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 0 }),
+        expect.anything(),
+      )
     })
     const browseCalls = face.browse.mock.calls.length
     const searchCalls = face.search.mock.calls.length
@@ -149,11 +159,17 @@ describe('the search box debounces into the request', () => {
     await act(async () => {
       fireEvent.change(input, { target: { value: 'attention' } })
       // Before the debounce elapses the raw keystroke has not left yet.
-      expect(face.search).not.toHaveBeenCalledWith(expect.objectContaining({ q: 'attention' }))
+      expect(face.search).not.toHaveBeenCalledWith(
+        expect.objectContaining({ q: 'attention' }),
+        expect.anything(),
+      )
       await vi.advanceTimersByTimeAsync(350)
     })
     await waitFor(() => {
-      expect(face.search).toHaveBeenCalledWith(expect.objectContaining({ q: 'attention' }))
+      expect(face.search).toHaveBeenCalledWith(
+        expect.objectContaining({ q: 'attention' }),
+        expect.anything(),
+      )
     })
   })
 })
@@ -175,7 +191,10 @@ describe('the toolbar rewinds to the first page on change', () => {
       screen.getByRole('button', { name: zh.libraryPageNext }).click()
     })
     await waitFor(() => {
-      expect(face.search).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 2 }))
+      expect(face.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 2 }),
+        expect.anything(),
+      )
     })
     // A mode toggle rewinds to page zero rather than reloading page two.
     act(() => {
@@ -184,6 +203,7 @@ describe('the toolbar rewinds to the first page on change', () => {
     await waitFor(() => {
       expect(face.search).toHaveBeenLastCalledWith(
         expect.objectContaining({ offset: 0, mode: 'everything' }),
+        expect.anything(),
       )
     })
   })
@@ -202,6 +222,7 @@ describe('the toolbar rewinds to the first page on change', () => {
     await waitFor(() => {
       expect(face.search).toHaveBeenLastCalledWith(
         expect.objectContaining({ sort: 'title', direction: 'asc' }),
+        expect.anything(),
       )
     })
   })
@@ -214,7 +235,10 @@ describe('the toolbar rewinds to the first page on change', () => {
       sortBtn.click()
     })
     expect(screen.queryByText(/bogus/)).toBeNull()
-    expect(face.search).not.toHaveBeenCalledWith(expect.objectContaining({ sort: 'title' }))
+    expect(face.search).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'title' }),
+      expect.anything(),
+    )
     expect(face.browse).not.toHaveBeenCalledWith(
       expect.objectContaining({ library: { type: 'group', id: 999 } }),
     )
@@ -319,6 +343,7 @@ describe('the library selector switches libraries', () => {
           scope: { kind: 'library' },
           library: { type: 'user', id: 0 },
         }),
+        expect.anything(),
       )
     })
   })
@@ -351,15 +376,18 @@ describe('the inspector requests the full child set', () => {
       row.click()
     })
     await waitFor(() => {
-      expect(face.item).toHaveBeenCalledWith({
-        ref: 'zotero://user/0/item/ITEM0001',
-        include: ['notes', 'attachments', 'annotations'],
-        childPages: {
-          notes: { offset: 0, limit: 20 },
-          attachments: { offset: 0, limit: 20 },
-          annotations: { offset: 0, limit: 20 },
+      expect(face.item).toHaveBeenCalledWith(
+        {
+          ref: 'zotero://user/0/item/ITEM0001',
+          include: ['notes', 'attachments', 'annotations'],
+          childPages: {
+            notes: { offset: 0, limit: 20 },
+            attachments: { offset: 0, limit: 20 },
+            annotations: { offset: 0, limit: 20 },
+          },
         },
-      })
+        expect.anything(),
+      )
     })
     expect(ITEM_DETAIL.title).toBe('FlashAttention-2')
   })

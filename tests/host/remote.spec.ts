@@ -17,6 +17,8 @@ import { EnrichmentService } from '../../src/enrichment/index.ts'
 import { executeOpenProtocol, type ProtocolLauncher, ZoteroRuntime } from '../../src/remote.js'
 import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
+import { WRITE_KEY_RECORD } from '../../src/write-auth.js'
+import { MemoryCredentials, writeGrantRecord } from '../helpers/credential-seam.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { rejectionOf } from './support/open-protocol.js'
 import { statusView } from '../helpers/status-view.ts'
@@ -449,23 +451,61 @@ describe('the zotero openProtocol endpoint', () => {
   it.each(['darwin', 'linux'] as const)('awaits the %s launcher', async (platform) => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     expect(
-      await executeOpenProtocol('zotero://select/library/items/ABC12345', { platform, launcher }),
+      await executeOpenProtocol('zotero://select/library/items/ABC12345', {
+        platform,
+        launcher,
+        env: { PATH: '/usr/bin' },
+      }),
     ).toEqual({ success: true })
     expect(launcher).toHaveBeenCalledWith(
       platform === 'darwin' ? 'open' : 'xdg-open',
       ['zotero://select/library/items/ABC12345'],
-      { signal: undefined },
+      { signal: undefined, env: { PATH: '/usr/bin' } },
     )
+  })
+  it('drops the variables that name a credential from every launcher child', async () => {
+    // The launcher needs PATH (and WSLENV under WSL), never the API keys the
+    // host was started with: inheriting `process.env` handed them to a second
+    // process just to open a URL.
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    const env = {
+      PATH: '/usr/bin:/bin',
+      WSLENV: 'USERPROFILE/p',
+      OPENAI_API_KEY: 'sk-live',
+      MINERU_TOKEN: 'token',
+      ZOTERO_PASSWORD: 'hunter2',
+      CLIENT_SECRET: 'shh',
+      DSH_HOME: '/home/u/.dsh',
+    }
+    await executeOpenProtocol('zotero://select/library/items/ABC12345', {
+      platform: 'darwin',
+      launcher,
+      env,
+    })
+    const [, , options] = launcher.mock.calls[0]!
+    expect(options.env).toEqual({
+      PATH: '/usr/bin:/bin',
+      WSLENV: 'USERPROFILE/p',
+      DSH_HOME: '/home/u/.dsh',
+    })
   })
   it('passes the complete Windows URL only through the environment', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const url = 'zotero://open-pdf/groups/123/items/ABC12345?page=12&annotation=ABCD1234'
-    expect(await executeOpenProtocol(url, { platform: 'win32', launcher })).toEqual({
+    expect(
+      await executeOpenProtocol(url, {
+        platform: 'win32',
+        launcher,
+        env: { PATH: '/usr/bin', OPENAI_API_KEY: 'sk-live' },
+      }),
+    ).toEqual({
       success: true,
     })
     const [command, args, options] = launcher.mock.calls[0]!
     expect(command).toBe('powershell.exe')
     expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
+    expect(options.env?.PATH).toBe('/usr/bin')
+    expect(options.env).not.toHaveProperty('OPENAI_API_KEY')
     const script = Buffer.from(args[3]!, 'base64').toString('utf16le')
     expect(script).toContain('UseShellExecute = $true')
     expect(script).not.toContain(url)
@@ -478,13 +518,14 @@ describe('the zotero openProtocol endpoint', () => {
       await executeOpenProtocol(url, {
         platform: 'linux',
         launcher,
-        env: { WSL_DISTRO_NAME: 'Ubuntu' },
+        env: { WSL_DISTRO_NAME: 'Ubuntu', MINERU_TOKEN: 'token' },
       }),
     ).toEqual({ success: true })
     const [command, args, options] = launcher.mock.calls[0]!
     expect(command).toBe('powershell.exe')
     expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
     expect(options.env?.WSLENV).toContain('DSH_ZOTERO_PROTOCOL_URL')
+    expect(options.env).not.toHaveProperty('MINERU_TOKEN')
     const script = Buffer.from(args[3]!, 'base64').toString('utf16le')
     expect(script).toContain('UseShellExecute = $true')
   })
@@ -553,12 +594,29 @@ describe('the zotero openProtocol endpoint', () => {
 })
 
 describe('the zotero revokeWriteGrant endpoint', () => {
-  it('refuses while writes are disabled', async () => {
+  it('deletes a stored grant while writes are disabled', async () => {
+    // Revoking is not a write capability: turning the write surface off leaves
+    // the persisted key in place, so the settings row must still be able to
+    // delete it.
+    let credentials: MemoryCredentials | undefined
+    lane = await setupHostLane(undefined, {
+      typert: true,
+      compose: async (ctx) => {
+        await ctx.plugin(MemoryCredentials)
+        credentials = ctx.get('credentials') as MemoryCredentials
+        credentials.records.set(String(WRITE_KEY_RECORD), writeGrantRecord('stored-key-01', 'S1'))
+      },
+    })
+    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
+    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: true })
+    expect(credentials?.records.size).toBe(0)
+    expect(credentials?.deletions).toEqual([String(WRITE_KEY_RECORD)])
+  })
+
+  it('reports no removed record while writes are disabled and none is stored', async () => {
     lane = await setupHostLane(undefined, { typert: true })
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).rejects.toMatchObject({
-      code: 'ZOTERO_CAPABILITY_UNAVAILABLE',
-    })
+    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: false })
   })
 
   it('reports no removed record when writes are enabled without a credentials seam', async () => {

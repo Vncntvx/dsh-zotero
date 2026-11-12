@@ -91,6 +91,29 @@ const defaultLauncher: ProtocolLauncher = (command, args, options) =>
     })
   })
 
+/**
+ * The variable names that identify a credential. The launcher needs `PATH`
+ * (and `WSLENV` under WSL) and nothing else; the API keys and MinerU token the
+ * host was started with are not its business.
+ */
+const CREDENTIAL_NAME = /(?:KEY|SECRET|TOKEN|PASSWORD)$/i
+
+/**
+ * The environment one launcher child receives: the caller's, minus every
+ * variable whose name identifies a credential. Inheriting `process.env` handed
+ * a second process the host's secrets just to open a URL, on every platform.
+ * @param env - the environment the caller would have passed.
+ * @returns the scrubbed environment.
+ */
+function launcherEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const scrubbed: NodeJS.ProcessEnv = {}
+  for (const [name, value] of Object.entries(env)) {
+    if (CREDENTIAL_NAME.test(name)) continue
+    scrubbed[name] = value
+  }
+  return scrubbed
+}
+
 /** The deep links this host may launch: a selection or a PDF read under a library. */
 const PROTOCOL_URL_PATTERN = new RegExp(
   `^zotero://(select|open-pdf)/(?:library|groups/[1-9][0-9]*)/items/${REF_KEY_SOURCE}(?:\\?([^#]*))?$`,
@@ -170,10 +193,11 @@ export async function executeOpenProtocol(
   try {
     signal?.throwIfAborted()
     const inWsl = platform === 'linux' && isWsl(env)
+    const childEnv = launcherEnvironment(env)
     if (platform === 'win32' || inWsl) {
-      const wslenv = inWsl ? appendWslEnv(env, 'DSH_ZOTERO_PROTOCOL_URL') : env.WSLENV
+      const wslenv = inWsl ? appendWslEnv(childEnv, 'DSH_ZOTERO_PROTOCOL_URL') : childEnv.WSLENV
       const launcherEnv = {
-        ...env,
+        ...childEnv,
         DSH_ZOTERO_PROTOCOL_URL: url,
         ...(wslenv ? { WSLENV: wslenv } : {}),
       }
@@ -186,7 +210,7 @@ export async function executeOpenProtocol(
         },
       )
     } else {
-      await launcher(platform === 'darwin' ? 'open' : 'xdg-open', [url], { signal })
+      await launcher(platform === 'darwin' ? 'open' : 'xdg-open', [url], { signal, env: childEnv })
     }
     return { success: true }
   } catch (error) {

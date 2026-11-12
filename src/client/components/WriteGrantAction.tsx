@@ -24,9 +24,13 @@ interface WriteGrantActionProps {
 }
 
 /**
- * Render the revoke action only while a stored grant exists.
+ * Render the revoke action while a stored grant exists.
+ *
+ * A grant outlives the write surface: turning writes off leaves the credential
+ * record in place, so the row keys on the grant alone. Keying on `enabled` as
+ * well left a stored key with no way to delete it from the plugin.
  * @param props - copy and the probe/revoke calls.
- * @returns the row, or null when writes are off or no grant is stored.
+ * @returns the row, or null when no grant is stored.
  */
 export function WriteGrantAction({ t, probe, revoke }: WriteGrantActionProps): ReactNode {
   const { state, runProbe } = useZoteroProbe(probe, { initialAutoRun: true })
@@ -36,7 +40,7 @@ export function WriteGrantAction({ t, probe, revoke }: WriteGrantActionProps): R
   const [error, setError] = useState<string | undefined>(undefined)
 
   const write = state.data?.write
-  if (write?.enabled !== true || write.authorized !== true) return null
+  if (write?.authorized !== true) return null
 
   const confirm = async (): Promise<void> => {
     setBusy(true)
