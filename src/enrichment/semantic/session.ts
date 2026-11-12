@@ -18,12 +18,13 @@
 
 import { join } from 'node:path'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
+import { EMBED_BATCH_SIZE } from './batching.js'
 import type { EmbeddingSide, EmbeddingTokenizer, TokenizedBatch } from './tokenizer.js'
 import { createEmbeddingTokenizer } from './tokenizer.js'
 import { l2NormalizeInPlace, poolTokenEmbeddings } from './tensor.js'
 
-/** How many texts go through the encoder per run. */
-export const EMBED_BATCH_SIZE = 8
+/** How many texts go through the encoder per run; the cache batches to the same size. */
+export { EMBED_BATCH_SIZE }
 
 /** One ONNX tensor as the session logic sees it. */
 export interface SessionTensor {

@@ -31,6 +31,7 @@ import {
   domainCall,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_ENRICHMENT_TASK_FAILED,
+  ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
 } from '../errors.js'
@@ -92,11 +93,12 @@ import {
   SemanticEmbedderLoader,
   semanticTargetOf,
   type RankingScope,
+  semanticUnavailable,
   type SemanticModelTarget,
 } from './semantic/loader.js'
 import { semanticEvidenceRanker } from './semantic/ranker.js'
 import { admissionProfileOf } from './semantic/model-profiles.js'
-import type { SemanticModelKey } from '../enrichment-model-catalog.js'
+import type { SemanticModelEntry, SemanticModelKey } from '../enrichment-model-catalog.js'
 import { createVectorCache, type VectorCache } from './semantic/vector-cache.js'
 import {
   bm25EvidenceRanker,
@@ -111,11 +113,26 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Core service face enrichment needs: the two slots and the attachment resolver. */
+/**
+ * One vector cache generation: the entries a single model identity owns.
+ *
+ * The cache outlives its admission active period and must outlive every scope
+ * that was admitted against it: a switch or a teardown retires the generation,
+ * and the last scope to release it disposes it. Disposing on the switch instead
+ * handed an in-flight ranking a retired cache, which throws a bare `Error`.
+ */
+interface CacheGeneration {
+  readonly digest: string
+  readonly cache: VectorCache
+  scopes: number
+  retiring: boolean
+}
+
 /** One committed foreground ranking snapshot, fixed before source I/O. */
 interface RankingSnapshot {
   readonly tier: SemanticModelKey
   readonly target: SemanticModelTarget
-  readonly cache: VectorCache
+  readonly generation: CacheGeneration
   readonly loaderScope: RankingScope
 }
 
@@ -134,6 +151,8 @@ export interface EnrichmentServiceDeps {
   readonly parsePersistence?: ParseJobPersistence
   /** The model-asset manager; tests inject a scripted one. */
   readonly downloads?: ModelDownloadManager
+  /** The semantic loader factory; tests inject one with a controlled `open`. */
+  readonly loader?: () => SemanticEmbedderLoader
 }
 
 /** A ZoteroError with its code preserved, so diagnostics and callers can route. */
@@ -162,13 +181,16 @@ export class EnrichmentService extends TypertRemoteService {
   public readonly enhancer: FulltextEnhancer
 
   /** The resident embedder holder: one model at a time, released on disposal. */
-  private readonly rankerLoader: SemanticEmbedderLoader
+  private loader: SemanticEmbedderLoader | undefined
 
   /** The model-asset manager: status, download, cancel, verify, per service. */
   private readonly downloads: ModelDownloadManager
 
-  /** One bounded vector cache per model generation; recreated on identity change. */
-  private vectorCache: { readonly digest: string; readonly cache: VectorCache } | undefined
+  /** One bounded vector cache per model identity, ref-counted by admitted scopes. */
+  private vectorCache: CacheGeneration | undefined
+
+  /** Builds one loader per core-injection generation; tests inject a controlled one. */
+  private readonly loaderFactory: () => SemanticEmbedderLoader
 
   /**
    * The ranker installed into the core. It reads the live config on every
@@ -185,6 +207,7 @@ export class EnrichmentService extends TypertRemoteService {
   ) {
     super(ctx, ZOTERO_ENRICHMENT_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
     this.downloads = deps.downloads ?? new ModelDownloadManager()
+    this.loaderFactory = deps.loader ?? (() => new SemanticEmbedderLoader())
     this.client =
       deps.client ??
       new MineruClient({
@@ -231,12 +254,13 @@ export class EnrichmentService extends TypertRemoteService {
           async (config, create) => (await this.storeFactory(config, create)).root,
         ),
     })
-    this.rankerLoader = new SemanticEmbedderLoader()
     // One admitted snapshot per foreground read. `admit()` runs before any
     // source I/O and fixes config, target, calibration and model generation;
-    // `rank()` consumes the scope's own loader handle so an unmount cannot
-    // release the model while this request is still ranking.
+    // `rank()` consumes the scope's own loader handle and cache generation, so
+    // an unmount or a switch cannot release either while this request is still
+    // ranking.
     const snapshots = new Map<symbol, RankingSnapshot>()
+
     const snapshotOf = (): RankingSnapshot | undefined => {
       const cfg = resolveEnrichmentConfig(this.config)
       if (!cfg.enableSemanticSearch) return undefined
@@ -244,6 +268,18 @@ export class EnrichmentService extends TypertRemoteService {
         resolveSemanticModelDir(physicalKey, configuredDir),
       )
       const spec = target.spec
+      const loader = this.loader
+      if (loader === undefined) {
+        // Semantic ranking on with no core composed: fail closed instead of
+        // degrading to lexical results behind the operator's back.
+        throw new ZoteroError(
+          'Semantic ranking is enabled but no model loader is installed; the enrichment component needs the zotero core.',
+          ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+        )
+      }
+      // Admission fixes the model generation first: a closed loader throws here,
+      // before this call can create a cache generation nobody would release.
+      const loaderScope = loader.scope(target)
       // The vector cache is bound to the physical model identity: a different
       // revision or inference contract must not reuse another tier's vectors.
       const digest = JSON.stringify([
@@ -256,29 +292,11 @@ export class EnrichmentService extends TypertRemoteService {
         spec.documentPrefix,
         spec.files.map((file) => [file.path, file.sha256]),
       ])
-      if (this.vectorCache?.digest !== digest) {
-        this.vectorCache?.cache.dispose()
-        this.vectorCache = {
-          digest,
-          cache: createVectorCache({
-            key: spec.key,
-            physicalKey: spec.physicalKey,
-            revision: spec.revision,
-            dimension: spec.dimension,
-            pooling: spec.pooling,
-            normalize: spec.normalize,
-            queryPrefix: spec.queryPrefix,
-            documentPrefix: spec.documentPrefix,
-            scoringVersion: 'fixed-floor-margin-v1',
-            fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
-          }),
-        }
-      }
       return {
         tier: spec.key,
         target,
-        cache: this.vectorCache.cache,
-        loaderScope: this.rankerLoader.scope(target),
+        generation: this.acquireCacheGeneration(digest, spec),
+        loaderScope,
       }
     }
     this.liveEvidenceRanker = {
@@ -291,7 +309,9 @@ export class EnrichmentService extends TypertRemoteService {
           release: () => {
             const held = snapshots.get(id)
             snapshots.delete(id)
-            held?.loaderScope.release()
+            if (held === undefined) return
+            held.loaderScope.release()
+            this.releaseCacheGeneration(held.generation)
           },
         }
       },
@@ -303,11 +323,21 @@ export class EnrichmentService extends TypertRemoteService {
           return await semanticEvidenceRanker({
             embedder: () => snapshot.loaderScope.embedder(),
             profile: () => admissionProfileOf(snapshot.tier),
-            vectorCache: snapshot.cache,
+            vectorCache: snapshot.generation.cache,
           }).rank(request)
+        } catch (error) {
+          // A cancelled request keeps its own reason; anything else that the
+          // model layer throws is a fail-closed semantic error, never a bare
+          // `Error` escaping into a retrieve.
+          if (request.signal?.aborted === true) throw request.signal.reason ?? error
+          throw semanticUnavailable(error)
         } finally {
-          // A direct rank() without an admitted scope borrowed one; release it.
-          if (admitted === undefined) snapshot.loaderScope.release()
+          // A direct rank() without an admitted scope borrowed both handles;
+          // release them in the same order an admitted scope does.
+          if (admitted === undefined) {
+            snapshot.loaderScope.release()
+            this.releaseCacheGeneration(snapshot.generation)
+          }
         }
       },
     }
@@ -325,28 +355,99 @@ export class EnrichmentService extends TypertRemoteService {
     })
 
     // The component-level teardown: abort every owned download and release
-    // the resident embedder, whether or not the core is composed.
+    // the resident embedder and the vector cache, whether or not the core is
+    // composed. Accepted scopes drain on their own release, exactly as the
+    // loader documents.
     ctx.effect(() => async () => {
       await Promise.all([this.parsing.dispose(), this.downloads.dispose()])
-      this.vectorCache?.cache.dispose()
-      this.vectorCache = undefined
-      await this.rankerLoader.dispose()
+      this.retireActiveCache()
+      const loader = this.loader
+      this.loader = undefined
+      if (loader !== undefined) await loader.dispose()
     })
 
     // Install the enhancer and the ranking strategy into the core, and
     // withdraw both on disposal. The injected effect is fiber-scoped, so
-    // unmounting the row clears the slots; the async teardown also releases
-    // the resident embedder session.
+    // unmounting the row clears the slots. Each injection generation gets its
+    // own loader: the loader closes permanently on disposal, so re-running the
+    // inject callback over the old instance left semantic ranking dead while
+    // the namespace still reported ready.
     ctx.inject(['zotero'], (scoped) => {
       const zotero = scoped.zotero as unknown as EnrichmentCoreLink
+      const previous = this.loader
+      const loader = this.loaderFactory()
+      this.loader = loader
+      if (previous !== undefined && previous !== loader) {
+        void previous.dispose().catch(() => undefined)
+      }
       zotero.setFulltextEnhancer(this.enhancer)
       zotero.setEvidenceRanker(this.liveEvidenceRanker)
       scoped.effect(() => async () => {
         zotero.setFulltextEnhancer(undefined)
         zotero.setEvidenceRanker(undefined)
-        await this.rankerLoader.dispose()
+        if (this.loader === loader) this.loader = undefined
+        await loader.dispose()
       })
     })
+  }
+
+  /**
+   * Retire a cache generation. Disposal waits for its last scope: the generation
+   * is what an admitted `rank()` reads, and disposing it on a switch gave that
+   * call a retired cache and a bare `Error`.
+   */
+  private maybeDisposeCacheGeneration(generation: CacheGeneration): void {
+    if (!generation.retiring || generation.scopes > 0) return
+    generation.cache.dispose()
+  }
+
+  /** One admitted scope finished with this generation. */
+  private releaseCacheGeneration(generation: CacheGeneration): void {
+    generation.scopes -= 1
+    this.maybeDisposeCacheGeneration(generation)
+  }
+
+  /**
+   * The generation a new admission runs against, created on an identity change.
+   * The previous one is retired, not disposed: its admitted scopes still read it.
+   */
+  private acquireCacheGeneration(digest: string, spec: SemanticModelEntry): CacheGeneration {
+    if (this.vectorCache === undefined || this.vectorCache.digest !== digest) {
+      const previous = this.vectorCache
+      this.vectorCache = {
+        digest,
+        cache: createVectorCache({
+          key: spec.key,
+          physicalKey: spec.physicalKey,
+          revision: spec.revision,
+          dimension: spec.dimension,
+          pooling: spec.pooling,
+          normalize: spec.normalize,
+          queryPrefix: spec.queryPrefix,
+          documentPrefix: spec.documentPrefix,
+          scoringVersion: 'fixed-floor-margin-v1',
+          fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
+        }),
+        scopes: 0,
+        retiring: false,
+      }
+      if (previous !== undefined) {
+        previous.retiring = true
+        this.maybeDisposeCacheGeneration(previous)
+      }
+    }
+    const generation = this.vectorCache
+    generation.scopes += 1
+    return generation
+  }
+
+  /** Teardown and model deletion: no new admission may reuse the current cache. */
+  private retireActiveCache(): void {
+    const generation = this.vectorCache
+    this.vectorCache = undefined
+    if (generation === undefined) return
+    generation.retiring = true
+    this.maybeDisposeCacheGeneration(generation)
   }
 
   /** Parsing endpoints retain the current invocation context for action/session checks. */
@@ -448,11 +549,24 @@ export class EnrichmentService extends TypertRemoteService {
       signal.throwIfAborted()
       const parsed = this.parseWire(zoteroSemanticModelDeleteRequestSchema, request)
       const cfg = resolveEnrichmentConfig(this.config)
-      return await this.downloads.remove(
-        parsed.model ?? cfg.semanticModel,
-        parsed.modelDir ?? cfg.semanticModelDir,
-        signal,
-      )
+      const model = parsed.model ?? cfg.semanticModel
+      const modelDir = parsed.modelDir ?? cfg.semanticModelDir
+      const result = await this.downloads.remove(model, modelDir, signal)
+      // The pinned files are gone. A resident embedder would keep serving them
+      // from memory, so the deletion would be invisible to the next read while
+      // the settings page says the model is not installed; retire the instance
+      // and the vectors it validated, and let the next admission re-open from
+      // disk (where it now fails closed).
+      if (result.success) {
+        this.loader?.retire(
+          semanticTargetOf(
+            { semanticModel: model, semanticModelDir: modelDir },
+            (physicalKey, configuredDir) => resolveSemanticModelDir(physicalKey, configuredDir),
+          ),
+        )
+        this.retireActiveCache()
+      }
+      return result
     })
   }
 

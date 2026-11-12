@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
 import {
   createVectorCache,
   vectorCacheKeyOf,
@@ -125,6 +126,82 @@ describe('createVectorCache', () => {
     expect(encoded).toEqual(['trust', 'trust'])
     first.dispose()
     await expect(first.embed(['trust'], 'document', recorder(encoded))).rejects.toThrow(/retired/)
+  })
+
+  it('embeds an eight-text miss in one run', async () => {
+    const runs: number[] = []
+    const cache = createVectorCache(identity())
+    const run = async (texts: readonly string[]) => {
+      runs.push(texts.length)
+      return texts.map((text) => new Float32Array([text.length, 1]))
+    }
+    const texts = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    const vectors = await cache.embed(texts, 'document', run)
+    // One run per EMBED_BATCH_SIZE instead of one per text: the per-run fixed
+    // cost is what made a 150–200 chunk retrieve pay 150–200 times.
+    expect(runs).toEqual([8])
+    expect(vectors).toHaveLength(8)
+    cache.dispose()
+  })
+
+  it('splits a larger miss into batches of eight', async () => {
+    const runs: number[] = []
+    const cache = createVectorCache(identity())
+    const run = async (texts: readonly string[]) => {
+      runs.push(texts.length)
+      return texts.map((text) => new Float32Array([text.length, 1]))
+    }
+    const texts = Array.from({ length: 20 }, (_, index) => `t${index}`)
+    await cache.embed(texts, 'document', run)
+    expect(runs).toEqual([8, 8, 4])
+    cache.dispose()
+  })
+
+  it('keeps an abandoned batch alive while another caller still waits', async () => {
+    const encoded: string[] = []
+    const cache = createVectorCache(identity())
+    const controller = new AbortController()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let runSignal: AbortSignal | undefined
+    const run = async (texts: readonly string[], signal: AbortSignal) => {
+      encoded.push(...texts)
+      runSignal = signal
+      await gate
+      return texts.map((text) => new Float32Array([text.length, 1]))
+    }
+    const cancelled = cache.embed(['trust'], 'document', run, controller.signal)
+    const survivor = cache.embed(['trust'], 'document', run)
+    controller.abort(new Error('caller left'))
+    await expect(cancelled).rejects.toThrow('caller left')
+    expect(runSignal?.aborted).toBe(false)
+    release()
+    await expect(survivor).resolves.toHaveLength(1)
+    expect(encoded).toEqual(['trust'])
+    cache.dispose()
+  })
+
+  it('aborts the encoder on retirement and refuses to repopulate the cache', async () => {
+    const cache = createVectorCache(identity())
+    let runSignal: AbortSignal | undefined
+    let settleRun: (vectors: readonly Float32Array[]) => void = () => undefined
+    const run = async (texts: readonly string[], signal: AbortSignal) => {
+      runSignal = signal
+      return await new Promise<readonly Float32Array[]>((resolve) => {
+        settleRun = resolve
+      })
+    }
+    const pending = cache.embed(['trust'], 'document', run)
+    await Promise.resolve()
+    cache.dispose()
+    expect(runSignal?.aborted).toBe(true)
+    settleRun([new Float32Array([5, 1])])
+    await expect(pending).rejects.toBeDefined()
+    await expect(cache.embed(['trust'], 'document', run)).rejects.toMatchObject({
+      code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+    })
   })
 
   it('declares the bounded capacity', () => {

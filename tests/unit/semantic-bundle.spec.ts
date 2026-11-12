@@ -8,7 +8,11 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { manifestOf, semanticModelOf } from '../../src/enrichment-model-catalog.ts'
-import { openSemanticEmbedder, verifySemanticBundle } from '../../src/enrichment/semantic/bundle.ts'
+import {
+  createBundleVerifier,
+  openSemanticEmbedder,
+  verifySemanticBundle,
+} from '../../src/enrichment/semantic/bundle.ts'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
 
 const spec = semanticModelOf('lightweight')
@@ -122,5 +126,58 @@ describe('openSemanticEmbedder', () => {
     await expect(
       openSemanticEmbedder(spec, spec.physicalKey, fileTable(entries) as never),
     ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE })
+  })
+})
+
+describe('createBundleVerifier', () => {
+  /**
+   * The fixture table plus a counted hash seam and a movable on-disk identity.
+   * `clock.t` is the mtime/ctime every file reports, so a case can simulate an
+   * out-of-band rewrite by advancing it.
+   */
+  function counted(entries: Record<string, Buffer | undefined>, clock: { t: number }) {
+    const base = fileTable(entries)
+    const state = { hashes: 0, wrongDigest: false }
+    const deps = {
+      ...base,
+      identity: async (path: string) => ({
+        dev: 1,
+        ino: 2,
+        size: (entries[path] as Buffer).length,
+        mtimeMs: clock.t,
+        ctimeMs: clock.t,
+      }),
+      hashFile: async (path: string) => {
+        state.hashes += 1
+        if (state.wrongDigest) return 'deadbeef'
+        return await base.hashFile(path)
+      },
+    }
+    return { deps, state }
+  }
+
+  it('hashes once per on-disk identity and reuses it on the next load', async () => {
+    const entries = correctBundle()
+    const clock = { t: 1_000 }
+    const { deps, state } = counted(entries, clock)
+    const verifier = createBundleVerifier(deps)
+    await verifier.verify(spec.physicalKey, spec)
+    const first = state.hashes
+    expect(first).toBe(spec.files.length)
+    await verifier.verify(spec.physicalKey, spec)
+    expect(state.hashes).toBe(first)
+  })
+
+  it('verifies again after the files change and reports the bad digest', async () => {
+    const entries = correctBundle()
+    const clock = { t: 1_000 }
+    const { deps, state } = counted(entries, clock)
+    const verifier = createBundleVerifier(deps)
+    await verifier.verify(spec.physicalKey, spec)
+    clock.t += 1
+    state.wrongDigest = true
+    await expect(verifier.verify(spec.physicalKey, spec)).rejects.toMatchObject({
+      code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+    })
   })
 })

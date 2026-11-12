@@ -24,13 +24,14 @@ import {
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
+import {
+  catalogFilePinsOf,
+  MANIFEST_MAX_BYTES,
+  MANIFEST_PATH,
+  READ_CHUNK_BYTES,
+} from './model-manifest.js'
 
-const MANIFEST_PATH = 'manifest.json'
-const MANIFEST_MAX_BYTES = 64 * 1024
 const LOCK_WAIT_MS = 60_000
-const READ_CHUNK_BYTES = 64 * 1024
-const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
-const SHA256 = /^[0-9a-f]{64}$/
 
 export class ModelInstallationError extends Error {
   readonly code = 'MODEL_INSTALLATION_FAILED'
@@ -119,6 +120,11 @@ export interface ModelInstallationOptions {
     stagingDir: string,
     signal: AbortSignal,
   ) => Promise<void>
+  /**
+   * Remove the private staging directory after publication; injectable so a
+   * spec can exercise the cleanup-failure arm without a hostile filesystem.
+   */
+  readonly cleanup?: (stagingDir: string) => Promise<void>
 }
 
 export interface ModelInstallationResult {
@@ -242,29 +248,8 @@ export function safeModelRelativePath(value: string): string {
 }
 
 function fileListOf(expected: SemanticModelManifest): Map<string, ModelInstallationFile> {
-  if (expected.schema !== 2) unsafe('the catalog manifest is not version 2')
-  if (typeof expected.physicalKey !== 'string' || !SAFE_SEGMENT.test(expected.physicalKey))
-    unsafe('the physical model key is not a single safe directory name')
-  if (typeof expected.files !== 'object' || expected.files === null)
-    unsafe('the catalog manifest has no file record')
-  const files = new Map<string, ModelInstallationFile>()
-  for (const [path, record] of Object.entries(expected.files)) {
-    const relativePath = safeModelRelativePath(path)
-    if (relativePath === MANIFEST_PATH || files.has(relativePath))
-      unsafe(`duplicate or reserved catalog path ${relativePath}`)
-    if (
-      typeof record !== 'object' ||
-      record === null ||
-      !Number.isSafeInteger(record.bytes) ||
-      record.bytes < 0 ||
-      typeof record.sha256 !== 'string' ||
-      !SHA256.test(record.sha256)
-    )
-      unsafe(`invalid pin for ${relativePath}`)
-    files.set(relativePath, { path: relativePath, bytes: record.bytes, sha256: record.sha256 })
-  }
-  if (files.size === 0) unsafe('the catalog manifest has no pinned files')
-  return files
+  // The shared rule; this module only supplies its own error class.
+  return catalogFilePinsOf(expected, unsafe)
 }
 
 function markerOf(expected: SemanticModelManifest): {
@@ -602,20 +587,26 @@ export async function installModelBundle(
   }
   let cleanupError: unknown
   try {
-    if (context.stage.path !== undefined) await cleanupStage(context.stage.path)
+    if (context.stage.path !== undefined)
+      await (options.cleanup ?? cleanupStage)(context.stage.path)
   } catch (error) {
     cleanupError = error
   }
   if (outcome !== undefined && cleanupError !== undefined) outcome.cleanupError = cleanupError
-  if (failed) {
-    if (cleanupError !== undefined && !signal?.aborted) {
-      if (failure instanceof ModelInstallationError)
-        throw new AggregateError([failure, cleanupError], 'Model installation and cleanup failed')
-      throw cleanupError
-    }
-    throw failure
+  if (!failed) {
+    // The bundle is committed. A cleanup failure is reported on the outcome —
+    // the caller surfaces it as a warning — because the installed files are
+    // ready and telling the user the installation failed would be false. This
+    // used to throw here, which made `installModelBundle` reject after a
+    // successful commit and left the success branch that reads
+    // `result.cleanupError` unreachable.
+    if (outcome === undefined) throw new ModelInstallationError('The installation did not settle')
+    return outcome
   }
-  if (cleanupError !== undefined) throw cleanupError
-  if (outcome === undefined) throw new ModelInstallationError('The installation did not settle')
-  return outcome
+  if (cleanupError !== undefined && !signal?.aborted) {
+    if (failure instanceof ModelInstallationError)
+      throw new AggregateError([failure, cleanupError], 'Model installation and cleanup failed')
+    throw cleanupError
+  }
+  throw failure
 }

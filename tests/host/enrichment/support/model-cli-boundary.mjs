@@ -32,7 +32,25 @@ registerHooks({
     if (context.parentURL !== controlUrl && specifier === '@deepseek-ai/dsh-atomic-write') {
       return { url: atomicUrl, shortCircuit: true }
     }
-    return nextResolve(specifier, context)
+    try {
+      return nextResolve(specifier, context)
+    } catch (error) {
+      // The sources name each other with the `.js` extension tsc emits, while
+      // the CLI loads the TypeScript sources directly. Resolve the sibling
+      // `.ts` the way a type-stripping loader would, so a new shared module
+      // needs no hand-written entry here.
+      if (
+        specifier.startsWith('./') &&
+        specifier.endsWith('.js') &&
+        context.parentURL !== undefined
+      ) {
+        return {
+          url: new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL).href,
+          shortCircuit: true,
+        }
+      }
+      throw error
+    }
   },
   load(url, context, nextLoad) {
     if (url === catalogUrl) {

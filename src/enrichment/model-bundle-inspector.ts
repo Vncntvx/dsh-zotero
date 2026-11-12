@@ -19,6 +19,12 @@ import { constants } from 'node:fs'
 import { lstat, open as openFile, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
+import {
+  catalogFilePinsOf,
+  MANIFEST_MAX_BYTES,
+  MANIFEST_PATH,
+  READ_CHUNK_BYTES,
+} from './model-manifest.js'
 import type {
   BundleFileIdentity,
   BundleInspection,
@@ -27,12 +33,6 @@ import type {
   ModelBundleInspectorPort,
   ModelBundleTarget,
 } from './model-installation.js'
-
-const MANIFEST_PATH = 'manifest.json'
-const MANIFEST_MAX_BYTES = 64 * 1024
-const READ_CHUNK_BYTES = 64 * 1024
-const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
-const SHA256 = /^[0-9a-f]{64}$/
 
 interface VerifiedSnapshot {
   readonly catalogFingerprint: string
@@ -59,45 +59,13 @@ function identityOf(info: {
   }
 }
 
-function safeRelativePath(value: string): string {
-  if (
-    typeof value !== 'string' ||
-    value === '' ||
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value.includes('\0')
-  )
-    throw new Error(`invalid catalog path ${String(value)}`)
-  for (const segment of value.split('/')) {
-    if (segment === '' || segment === '.' || segment === '..' || segment.includes(':'))
-      throw new Error(`invalid catalog path ${value}`)
-  }
-  return value
-}
-
 function catalogFiles(
   expected: SemanticModelManifest,
 ): Map<string, { bytes: number; sha256: string }> {
-  if (expected.schema !== 2) throw new Error('the catalog manifest is not version 2')
-  if (typeof expected.physicalKey !== 'string' || !SAFE_SEGMENT.test(expected.physicalKey))
-    throw new Error('the physical model key is not a single safe directory name')
-  const files = new Map<string, { bytes: number; sha256: string }>()
-  for (const [path, record] of Object.entries(expected.files ?? {})) {
-    const relativePath = safeRelativePath(path)
-    if (relativePath === MANIFEST_PATH || files.has(relativePath))
-      throw new Error(`duplicate or reserved catalog path ${relativePath}`)
-    if (
-      record === null ||
-      typeof record !== 'object' ||
-      !Number.isSafeInteger(record.bytes) ||
-      record.bytes < 0 ||
-      typeof record.sha256 !== 'string' ||
-      !SHA256.test(record.sha256)
-    )
-      throw new Error(`invalid pin for ${relativePath}`)
-    files.set(relativePath, { bytes: record.bytes, sha256: record.sha256 })
-  }
-  return files
+  // The shared rule; this module keeps its plain-error mapping.
+  return catalogFilePinsOf(expected, (reason) => {
+    throw new Error(reason)
+  })
 }
 
 function catalogFingerprintOf(expected: SemanticModelManifest): string {

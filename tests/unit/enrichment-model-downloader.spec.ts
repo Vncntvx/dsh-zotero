@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ModelDownloadManager } from '../../src/enrichment/model-downloader.ts'
+import { hostSafePathDeps } from '../../src/enrichment/safe-directory-path.ts'
+import { deferred } from '../helpers/sync.ts'
 import type { FetchLike } from '../../src/enrichment/model-download-client.ts'
 
 vi.mock('../../src/enrichment-model-catalog.js', async (importOriginal) => {
@@ -161,6 +163,70 @@ describe('ModelDownloadManager', () => {
     )
     await awaitReady(manager, root)
   }, 15_000)
+
+  it('starts a real download after a failed one', async () => {
+    const root = await tempRoot()
+    let failing = true
+    let fetches = 0
+    const live = scriptedFetch()
+    const manager = new ModelDownloadManager({
+      client: {
+        fetch: (async (url) => {
+          fetches += 1
+          if (failing) throw new Error('network down')
+          return await live(url)
+        }) as FetchLike,
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+    })
+    expect((await manager.start({ model: 'balanced', modelDir: root })).status).toBe('started')
+    // The failure settles the reservation; the manager keeps it as a status.
+    await vi.waitFor(
+      async () => {
+        const status = await manager.status('balanced', root)
+        if (status.error === undefined) throw new Error('the download has not failed yet')
+        return status
+      },
+      { timeout: 10_000, interval: 20 },
+    )
+    failing = false
+    // A stale reservation used to answer "downloading" here forever, so the
+    // settings page's retry button silently did nothing.
+    expect((await manager.start({ model: 'balanced', modelDir: root })).status).toBe('started')
+    await awaitReady(manager, root)
+    expect(fetches).toBeGreaterThan(1)
+  }, 20_000)
+
+  it('refuses a download while a deletion owns the target', async () => {
+    const root = await tempRoot()
+    const gate = deferred<string>()
+    const manager = new ModelDownloadManager({
+      client: {
+        fetch: scriptedFetch(),
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+      // Hold the deletion inside its first await: the ownership marker is
+      // claimed before it, which is the window the download must lose.
+      fs: {
+        ...hostSafePathDeps,
+        realpath: async (path: string) => {
+          await gate.promise
+          return await hostSafePathDeps.realpath(path)
+        },
+      },
+    })
+    const removing = manager.remove('balanced', root)
+    await expect(manager.start({ model: 'balanced', modelDir: root })).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_OPERATION_CONFLICT',
+    })
+    gate.resolve(root)
+    await expect(removing).resolves.toMatchObject({ success: true })
+    // The marker is released, so the next download is admitted again.
+    expect((await manager.start({ model: 'balanced', modelDir: root })).status).toBe('started')
+    await awaitReady(manager, root)
+  }, 20_000)
 
   it('refuses an unknown model at the boundary', async () => {
     const root = await tempRoot()

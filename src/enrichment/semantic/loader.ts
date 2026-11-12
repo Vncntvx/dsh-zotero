@@ -17,7 +17,11 @@
 
 import { semanticModelOf, type SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
-import { openSemanticEmbedder } from './bundle.js'
+import {
+  createBundleVerifier,
+  openSemanticEmbedder,
+  type SemanticBundleVerifier,
+} from './bundle.js'
 import type { Embedder } from './session.js'
 
 /** What the host resolves per rank call: which model, from which directory. */
@@ -35,7 +39,7 @@ export interface SemanticEmbedderLoaderDeps {
 }
 
 /** Map any loader failure onto the fail-closed semantic-unavailable error. */
-function unavailable(error: unknown): ZoteroError {
+export function semanticUnavailable(error: unknown): ZoteroError {
   if (error instanceof ZoteroError && error.code === ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE) {
     return error
   }
@@ -87,6 +91,8 @@ export class SemanticEmbedderLoader {
   private pending: Managed | undefined
   private readonly retired = new Set<Managed>()
   private readonly open: (target: SemanticModelTarget) => Promise<Embedder>
+  /** This loader's bundle verification memo: one full hash per on-disk identity. */
+  private readonly verifier: SemanticBundleVerifier = createBundleVerifier()
   private closed = false
   private generation = 0
   private nextId = 1
@@ -95,7 +101,10 @@ export class SemanticEmbedderLoader {
   private readonly disposals = new Set<Promise<void>>()
 
   constructor(deps: SemanticEmbedderLoaderDeps = {}) {
-    this.open = deps.open ?? (async (target) => await openSemanticEmbedder(target.spec, target.dir))
+    this.open =
+      deps.open ??
+      (async (target) =>
+        await openSemanticEmbedder(target.spec, target.dir, undefined, this.verifier))
   }
 
   /**
@@ -104,7 +113,7 @@ export class SemanticEmbedderLoader {
    * target and service generation are fixed at admission.
    */
   scope(target: SemanticModelTarget): RankingScope {
-    if (this.closed) throw unavailable(new Error('the semantic loader is closed'))
+    if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
     const key = keyOf(target)
     let managed =
       this.resident?.key === key
@@ -147,14 +156,35 @@ export class SemanticEmbedderLoader {
     }
   }
 
+  /**
+   * Retire the resident instance for one target: the next scope opens a fresh
+   * one from disk, and the scopes already admitted keep this one alive until
+   * they release. Deleting a model's files uses this, so a deleted bundle
+   * cannot keep serving from memory — the settings page and the docs both say
+   * the model is unavailable until it is downloaded again.
+   * @param target - the model target whose instance is no longer wanted.
+   */
+  retire(target: SemanticModelTarget): void {
+    const key = keyOf(target)
+    const candidates: Managed[] = []
+    if (this.resident?.key === key) candidates.push(this.resident)
+    if (this.pending?.key === key) candidates.push(this.pending)
+    for (const managed of candidates) {
+      managed.retiring = true
+      this.retired.add(managed)
+      this.maybeRelease(managed)
+    }
+    if (this.resident?.key === key) this.resident = undefined
+  }
+
   private beginLoad(target: SemanticModelTarget): Managed {
     const id = this.nextId++
     const key = keyOf(target)
     // The open call starts only after any previous switch has settled.
     const load = this.switchQueue.then(() => {
-      if (this.closed) throw unavailable(new Error('the semantic loader is closed'))
+      if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
       return this.open(target).catch((error: unknown) => {
-        throw unavailable(error)
+        throw semanticUnavailable(error)
       })
     })
     const managed: Managed = {
@@ -170,9 +200,17 @@ export class SemanticEmbedderLoader {
     this.pending = managed
     // Commit B as resident only on success; a failure keeps A and reports to B.
     void load
-      .then((embedder) => {
+      .then(() => {
         if (this.closed) {
-          void embedder.dispose().catch(() => undefined)
+          // Teardown closed admission while this load was in flight. An already
+          // accepted scope still awaits `managed.load` and receives this
+          // embedder, so the instance must stay alive until that scope and its
+          // runs finish: mark it retiring and let `maybeRelease` decide. A
+          // direct `embedder.dispose()` here handed accepted callers a released
+          // ONNX session.
+          managed.retiring = true
+          this.retired.add(managed)
+          this.maybeRelease(managed)
           return
         }
         const previous = this.resident

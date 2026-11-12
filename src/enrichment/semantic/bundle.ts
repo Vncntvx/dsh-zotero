@@ -24,6 +24,18 @@ export interface BundleFsDeps {
   readonly readFile: (path: string) => Promise<Uint8Array>
   readonly stat: (path: string) => Promise<{ readonly size: number }>
   readonly hashFile: (path: string) => Promise<string>
+  /**
+   * The cheap on-disk identity that decides whether a remembered hash still
+   * describes the bytes. Size alone misses an in-place rewrite; inode and the
+   * two timestamps are what make the reuse safe.
+   */
+  readonly identity?: (path: string) => Promise<{
+    readonly dev: number
+    readonly ino: number
+    readonly size: number
+    readonly mtimeMs: number
+    readonly ctimeMs: number
+  }>
 }
 
 function refuse(reason: string): never {
@@ -39,6 +51,16 @@ const hostDeps: BundleFsDeps = {
     const info = await stat(path)
     return { size: info.size }
   },
+  identity: async (path) => {
+    const info = await stat(path)
+    return {
+      dev: info.dev,
+      ino: info.ino,
+      size: info.size,
+      mtimeMs: info.mtimeMs,
+      ctimeMs: info.ctimeMs,
+    }
+  },
   hashFile: (path) =>
     new Promise((resolve, reject) => {
       const hash = createHash('sha256')
@@ -47,6 +69,79 @@ const hostDeps: BundleFsDeps = {
       stream.on('error', reject)
       stream.on('end', () => resolve(hash.digest('hex')))
     }),
+}
+
+/** One successful full verification, remembered against the files it hashed. */
+interface VerifiedBundle {
+  readonly identityFingerprint: string
+}
+
+/** The memoized verifier the loader owns; absent deps keep the plain path. */
+export interface SemanticBundleVerifier {
+  verify(dir: string, spec: SemanticModelEntry): Promise<void>
+}
+
+/**
+ * The on-disk identity of every file a verification reads, including the
+ * manifest. A path that cannot be stat'ed contributes its name, so the
+ * verification that follows reports the real reason instead of a stale hit.
+ * @param dir - the bundle directory.
+ * @param spec - the catalog entry the bundle claims to be.
+ * @param deps - filesystem seams.
+ * @returns a digest over the pinned paths and their identities.
+ */
+async function identityFingerprintOf(
+  dir: string,
+  spec: SemanticModelEntry,
+  deps: BundleFsDeps,
+): Promise<string> {
+  const hash = createHash('sha256')
+  hash.update(dir)
+  const paths = ['manifest.json', ...spec.files.map((file) => file.path)]
+  for (const path of paths) {
+    const absolute = join(dir, path)
+    const identity =
+      deps.identity === undefined
+        ? {
+            ...(await deps.stat(absolute).catch(() => undefined)),
+            dev: 0,
+            ino: 0,
+            mtimeMs: 0,
+            ctimeMs: 0,
+          }
+        : await deps.identity(absolute).catch(() => undefined)
+    hash.update(path)
+    hash.update(
+      identity === undefined
+        ? 'missing'
+        : `${identity.dev}:${identity.ino}:${identity.size}:${identity.mtimeMs}:${identity.ctimeMs}`,
+    )
+  }
+  return hash.digest('hex')
+}
+
+/**
+ * One verifier per owner (the semantic loader): the first load of a bundle
+ * hashes every pinned file, and a later load of the same bytes reuses that
+ * answer. Re-reading a 600 MB checkpoint on every model switch cost more than
+ * the load itself; the inode, size and both timestamps are what make the reuse
+ * safe, and an out-of-band rewrite changes them.
+ * @param deps - filesystem seams.
+ * @returns the memoized verifier.
+ */
+export function createBundleVerifier(deps: BundleFsDeps = hostDeps): SemanticBundleVerifier {
+  const verified = new Map<string, VerifiedBundle>()
+  return {
+    async verify(dir, spec) {
+      const fingerprint = await identityFingerprintOf(dir, spec, deps)
+      const cached = verified.get(dir)
+      if (cached !== undefined && cached.identityFingerprint === fingerprint) return
+      await verifySemanticBundle(dir, spec, deps)
+      // Record only after the bytes matched: a failed verification must be
+      // re-run, not remembered as the answer for this identity.
+      verified.set(dir, { identityFingerprint: fingerprint })
+    },
+  }
 }
 
 /** Read and parse one JSON file from the bundle. */
@@ -121,12 +216,16 @@ export async function verifySemanticBundle(
  * `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`.
  * @param spec - the catalog entry to load.
  * @param dir - the bundle directory.
+ * @param deps - filesystem seams.
+ * @param verifier - the owner's memoized verifier; a plain verification when absent.
  */
 export async function openSemanticEmbedder(
   spec: SemanticModelEntry,
   dir: string,
   deps: BundleFsDeps = hostDeps,
+  verifier?: SemanticBundleVerifier,
 ): Promise<Embedder> {
-  await verifySemanticBundle(dir, spec, deps)
+  if (verifier === undefined) await verifySemanticBundle(dir, spec, deps)
+  else await verifier.verify(dir, spec)
   return await openEmbedder(spec, dir)
 }

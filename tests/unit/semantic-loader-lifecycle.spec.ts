@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { SemanticModelTarget } from '../../src/enrichment/semantic/loader.ts'
+import { deferred } from '../helpers/sync.ts'
 
 function target(key: string): SemanticModelTarget {
   return { spec: { key } as never, dir: `/models/${key}` }
@@ -94,9 +95,74 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     expect(disposed).toHaveLength(3)
   })
 
+  it('reopens a retired target and keeps the accepted scope instance alive', async () => {
+    const disposed: string[] = []
+    const opened: string[] = []
+    const loader = new SemanticEmbedderLoader({
+      open: async (requested) => {
+        opened.push(requested.spec.key)
+        return embedderOf(disposed, requested.spec.key)
+      },
+    })
+    const scope = loader.scope(target('a'))
+    await scope.embedder()
+    loader.retire(target('a'))
+    // The accepted scope still holds the instance; nothing is released yet.
+    expect(disposed).toEqual([])
+    // The next caller opens the bundle again rather than reusing the retired
+    // instance: that is how deleting a model's files becomes visible.
+    await loader.get(target('a'))
+    expect(opened).toEqual(['a', 'a'])
+    expect(disposed).toEqual([])
+    scope.release()
+    await Promise.resolve()
+    expect(disposed).toEqual(['a'])
+    await loader.dispose()
+  })
+
   it('rejects new admission after disposal', async () => {
     const loader = new SemanticEmbedderLoader({ open: async () => embedderOf([], 'a') })
     await loader.dispose()
     expect(() => loader.scope(target('a'))).toThrow(/cannot serve/)
+  })
+
+  it('keeps an in-flight load alive for an accepted scope when teardown closes admission', async () => {
+    const disposed: string[] = []
+    const started = deferred<void>()
+    const opened = deferred<Embedder>()
+    const loader = new SemanticEmbedderLoader({
+      open: async () => {
+        started.resolve()
+        return await opened.promise
+      },
+    })
+    const scope = loader.scope(target('a'))
+    // The scope is accepted and the open has genuinely started; teardown then
+    // arrives while the load is still in flight, so `dispose()` waits for it.
+    const pending = scope.embedder()
+    await started.promise
+    const disposing = loader.dispose()
+    opened.resolve(embedderOf(disposed, 'a'))
+    const embedder = await pending
+    await disposing
+    // The accepted scope received a live instance, not a released one.
+    expect(disposed).toEqual([])
+    expect(await embedder.embed(['x'], 'query')).toHaveLength(1)
+    scope.release()
+    await Promise.resolve()
+    expect(disposed).toEqual(['a'])
+  })
+
+  it('reports semantic-unavailable when teardown lands before the open starts', async () => {
+    const disposed: string[] = []
+    const loader = new SemanticEmbedderLoader({ open: async () => embedderOf(disposed, 'a') })
+    const scope = loader.scope(target('a'))
+    await loader.dispose()
+    await expect(scope.embedder()).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE',
+    })
+    scope.release()
+    await Promise.resolve()
+    expect(disposed).toEqual([])
   })
 })

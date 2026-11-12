@@ -85,6 +85,13 @@ interface ActiveDownload {
   dir?: string
   /** Shared by every cancel/dispose caller for this reservation. */
   cancellation: Promise<void> | undefined
+  /**
+   * True once the writer and its cleanup finished, successfully or not. A
+   * settled reservation is stale: joining it would report a download that is
+   * not running, and a failed or cancelled one would block every later retry
+   * until `remove` ran.
+   */
+  settled: boolean
 }
 
 export interface ModelDownloadManagerDeps {
@@ -175,6 +182,8 @@ function statusOf(
 
 export class ModelDownloadManager {
   private readonly entries = new Map<string, ActiveDownload>()
+  /** Targets a deletion owns from its first line, before any await. */
+  private readonly removing = new Set<string>()
   private readonly clientDeps: DownloadClientDeps | undefined
   private readonly fsDeps: SafeDirectoryDeps | undefined
   private closed = false
@@ -213,6 +222,12 @@ export class ModelDownloadManager {
   /**
    * Delete the selected model's marker and pinned files. Unknown files stay,
    * and an active download for the same target is refused.
+   *
+   * A deletion owns its target from the first line, before any await: the
+   * download and the deletion otherwise raced through the install lock, and the
+   * lock only orders the file writes — whoever acquired it last decided the
+   * final state, so a finished download could reappear over a deletion (or the
+   * reverse) with both calls reporting success.
    */
   async remove(
     model: string,
@@ -227,43 +242,64 @@ export class ModelDownloadManager {
       )
     }
     const spec = semanticModelOf(model)
-    let dir: string
-    try {
-      dir = await readOnlyDir(spec.physicalKey, modelDir, this.fsDeps)
-    } catch (error) {
+    const reservationKey = reservationKeyOf(spec.key, modelDir)
+    if (this.removing.has(reservationKey)) {
       throw new ZoteroError(
-        `Could not resolve the model directory: ${messageOf(error)}`,
-        ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
-        { cause: error },
-      )
-    }
-    const active =
-      this.entries.get(reservationKeyOf(spec.key, modelDir)) ??
-      this.entries.get(keyOf(spec.key, dir))
-    if (active?.status.downloading === true) {
-      throw new ZoteroError(
-        'The model is downloading. Cancel it before deleting.',
+        'The model is already being deleted.',
         ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
       )
     }
-    signal?.throwIfAborted()
-    let removed: { removed: boolean; removedFiles: number; removedBytes: number }
+    this.removing.add(reservationKey)
     try {
-      removed = await removeModelBundle({
-        dir,
-        expected: manifestOf(spec),
-        ...(signal === undefined ? {} : { signal }),
-      })
-    } catch (error) {
-      const reason =
-        error instanceof ModelRemovalError
-          ? error.message
-          : `Could not delete the model: ${messageOf(error)}`
-      throw new ZoteroError(reason, ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED, { cause: error })
+      let dir: string
+      try {
+        dir = await readOnlyDir(spec.physicalKey, modelDir, this.fsDeps)
+      } catch (error) {
+        throw new ZoteroError(
+          `Could not resolve the model directory: ${messageOf(error)}`,
+          ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
+          { cause: error },
+        )
+      }
+      const active = this.entries.get(reservationKey) ?? this.entries.get(keyOf(spec.key, dir))
+      if (active?.status.downloading === true) {
+        throw new ZoteroError(
+          'The model is downloading. Cancel it before deleting.',
+          ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+        )
+      }
+      signal?.throwIfAborted()
+      let removed: { removed: boolean; removedFiles: number; removedBytes: number }
+      try {
+        removed = await removeModelBundle({
+          dir,
+          expected: manifestOf(spec),
+          ...(signal === undefined ? {} : { signal }),
+        })
+      } catch (error) {
+        // A caller that cancelled keeps its own reason: the lock wait and the
+        // chained abort checks can reject with the abort reason, and reporting
+        // that as "delete failed" told the caller the deletion broke.
+        if (signal?.aborted === true) throw signal.reason ?? error
+        const reason =
+          error instanceof ModelRemovalError
+            ? error.message
+            : `Could not delete the model: ${messageOf(error)}`
+        throw new ZoteroError(reason, ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED, { cause: error })
+      }
+      // Identity-checked: a reservation registered while this deletion awaited
+      // is a live download now, and removing it from the map would hide it from
+      // cancel and dispose.
+      if (active !== undefined && this.entries.get(reservationKey) === active) {
+        this.entries.delete(reservationKey)
+      }
+      if (active !== undefined && this.entries.get(keyOf(spec.key, dir)) === active) {
+        this.entries.delete(keyOf(spec.key, dir))
+      }
+      return { success: true, model: spec.key, path: dir, ...removed }
+    } finally {
+      this.removing.delete(reservationKey)
     }
-    this.entries.delete(reservationKeyOf(spec.key, modelDir))
-    this.entries.delete(keyOf(spec.key, dir))
-    return { success: true, model: spec.key, path: dir, ...removed }
   }
 
   /**
@@ -298,8 +334,14 @@ export class ModelDownloadManager {
     }
     const spec = semanticModelOf(options.model ?? DEFAULT_SEMANTIC_MODEL)
     const reservationKey = reservationKeyOf(spec.key, options.modelDir)
+    if (this.removing.has(reservationKey)) {
+      throw new ZoteroError(
+        'The model is being deleted. Retry the download after the deletion finishes.',
+        ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+      )
+    }
     const existing = this.entries.get(reservationKey)
-    if (existing !== undefined) {
+    if (existing !== undefined && !existing.settled) {
       return {
         success: true,
         model: spec.key,
@@ -307,6 +349,8 @@ export class ModelDownloadManager {
         path: existing.dir ?? '',
       }
     }
+    // A settled reservation is stale: drop it so this call starts a real one.
+    if (existing !== undefined) this.entries.delete(reservationKey)
     const source: SemanticDownloadSource =
       options.source === 'hf-mirror' || options.source === 'huggingface'
         ? options.source
@@ -335,6 +379,7 @@ export class ModelDownloadManager {
         currentFile: spec.files[0]?.path,
       },
       cancellation: settled,
+      settled: false,
     }
     // Synchronous reservation: the entry exists before any await below.
     this.entries.set(reservationKey, entry)
@@ -422,7 +467,10 @@ export class ModelDownloadManager {
   ): Promise<SemanticModelDownloadResult> {
     // `settle` resolves the reservation's single cancellation promise only
     // after the owned writer and its staging cleanup have actually settled.
-    const finish = () => settle()
+    const finish = (): void => {
+      entry.settled = true
+      settle()
+    }
 
     const root = await writableRoot(modelDir, this.fsDeps).catch((error: unknown) => {
       this.fail(entry, error, controller)

@@ -22,6 +22,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fetch as undiciFetch } from 'undici'
+import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { SemanticDownloadSource, SemanticModelSpec } from '../enrichment-model-catalog.js'
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
 import {
@@ -30,7 +31,11 @@ import {
   type PinnedDispatcher,
   type ResolvedAddress,
 } from '../transport/network.js'
-import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED, ZoteroError } from '../errors.js'
+import {
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
+  ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
+  ZoteroError,
+} from '../errors.js'
 
 /** The fixed model mirrors. URLs pin the revision, not a moving branch. */
 export const MODEL_SOURCES: Record<
@@ -280,120 +285,132 @@ export async function downloadPinnedFile(
   await fs.mkdir(dirname(dest))
   options.signal?.throwIfAborted()
 
+  // One budget for the whole file, not one per mirror: the previous timer was
+  // created inside this loop, so a hanging mirror handed the next one a fresh
+  // `timeoutMs` and the documented per-file bound was really two.
+  const budget = deadline(options.signal, timeoutMs, ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT)
   let lastError: unknown
-  for (const source of options.sources) {
-    const mirror = MODEL_SOURCES[source]
-    if (mirror === undefined) {
-      lastError = downloadFailed(`unknown download source "${source}"`)
-      continue
-    }
-    // A private, unpredictable name inside the owned destination parent.
-    const tmp = join(
-      dirname(dest),
-      `.${source}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`,
-    )
-    const controller = new AbortController()
-    const onAbort = () => controller.abort(options.signal?.reason)
-    options.signal?.addEventListener('abort', onAbort, { once: true })
-    if (options.signal?.aborted) controller.abort(options.signal.reason)
-    const deadline = setTimeout(
-      () => controller.abort(new Error('model download deadline')),
-      timeoutMs,
-    )
-    let stall: NodeJS.Timeout | undefined
-    let current: GatedResponse | undefined
-    let released = false
-    const releaseCurrent = async () => {
-      if (released || current === undefined) return
-      released = true
-      await cancelBody(current.body, controller.signal).catch(() => undefined)
-      await current.release().catch(() => undefined)
-    }
-    try {
-      // Walk redirects manually; every hop re-runs both gates. Each hop owns
-      // one dispatcher until its unused body has been cancelled.
-      let url = mirror.url(options.model, options.file.path)
-      for (let hop = 0; ; hop += 1) {
-        controller.signal.throwIfAborted()
-        const response = await gatedFetch(url, gatedDeps, controller.signal)
-        if (response.location === null) {
-          current = response
-          break
-        }
-        await response.discardBody()
-        await response.release()
-        if (hop >= MAX_REDIRECTS) {
-          throw downloadFailed(`more than ${MAX_REDIRECTS} redirect hops from ${mirror.label}`)
-        }
-        url = response.location
+  try {
+    for (const source of options.sources) {
+      const mirror = MODEL_SOURCES[source]
+      if (mirror === undefined) {
+        lastError = downloadFailed(`unknown download source "${source}"`)
+        continue
       }
-      options.signal?.throwIfAborted()
-      const response = current!
-      const endBody = releaseCurrent
-      if (response.status < 200 || response.status >= 300 || response.body === null) {
-        await endBody()
-        throw downloadFailed(`HTTP ${response.status} from ${mirror.label}`)
+      // A private, unpredictable name inside the owned destination parent.
+      const tmp = join(
+        dirname(dest),
+        `.${source}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`,
+      )
+      // The attempt's own controller still owns the stall timer and the body
+      // teardown; the budget and the caller's signal arrive through the fused
+      // signal, so an elapsed deadline reaches the transfer itself.
+      const controller = new AbortController()
+      const attempt = AbortSignal.any([budget.signal, controller.signal])
+      let stall: NodeJS.Timeout | undefined
+      let current: GatedResponse | undefined
+      let released = false
+      const releaseCurrent = async () => {
+        if (released || current === undefined) return
+        released = true
+        await cancelBody(current.body, attempt).catch(() => undefined)
+        await current.release().catch(() => undefined)
       }
-      const contentLength = response.headers.get('content-length')
-      if (contentLength !== null && Number(contentLength) !== options.file.bytes) {
-        await endBody()
-        throw downloadFailed(
-          `${mirror.label} serves ${contentLength} bytes for ${options.file.path}, expected ${options.file.bytes}`,
-        )
-      }
-
-      const hash = createHash('sha256')
-      let received = 0
-      const counting = new Transform({
-        transform(chunk: Buffer, _enc, cb) {
-          received += chunk.length
-          if (received > options.file.bytes) {
-            cb(downloadFailed(`${options.file.path} exceeded its pinned size`))
-            return
-          }
-          hash.update(chunk)
-          // The watchdog resets on every chunk: a mirror that stops sending
-          // mid-body must release the socket, not hang the download forever.
-          clearTimeout(stall)
-          stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
-          cb(null, chunk)
-        },
-      })
-      stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
-      let writeFailure: unknown
-      const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
       try {
-        await pipeline(body, counting, await fs.openExclusive(tmp))
+        // Walk redirects manually; every hop re-runs both gates. Each hop owns
+        // one dispatcher until its unused body has been cancelled.
+        let url = mirror.url(options.model, options.file.path)
+        for (let hop = 0; ; hop += 1) {
+          attempt.throwIfAborted()
+          const response = await gatedFetch(url, gatedDeps, attempt)
+          if (response.location === null) {
+            current = response
+            break
+          }
+          await response.discardBody()
+          await response.release()
+          if (hop >= MAX_REDIRECTS) {
+            throw downloadFailed(`more than ${MAX_REDIRECTS} redirect hops from ${mirror.label}`)
+          }
+          url = response.location
+        }
+        options.signal?.throwIfAborted()
+        const response = current!
+        const endBody = releaseCurrent
+        if (response.status < 200 || response.status >= 300 || response.body === null) {
+          await endBody()
+          throw downloadFailed(`HTTP ${response.status} from ${mirror.label}`)
+        }
+        const contentLength = response.headers.get('content-length')
+        if (contentLength !== null && Number(contentLength) !== options.file.bytes) {
+          await endBody()
+          throw downloadFailed(
+            `${mirror.label} serves ${contentLength} bytes for ${options.file.path}, expected ${options.file.bytes}`,
+          )
+        }
+
+        const hash = createHash('sha256')
+        let received = 0
+        const counting = new Transform({
+          transform(chunk: Buffer, _enc, cb) {
+            received += chunk.length
+            if (received > options.file.bytes) {
+              cb(downloadFailed(`${options.file.path} exceeded its pinned size`))
+              return
+            }
+            hash.update(chunk)
+            // The watchdog resets on every chunk: a mirror that stops sending
+            // mid-body must release the socket, not hang the download forever.
+            clearTimeout(stall)
+            stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
+            cb(null, chunk)
+          },
+        })
+        stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
+        let writeFailure: unknown
+        const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
+        try {
+          await pipeline(body, counting, await fs.openExclusive(tmp))
+        } catch (error) {
+          writeFailure = error
+        }
+        clearTimeout(stall)
+        // The body and the pinned connection are released only after the full
+        // response has been consumed (or the pipeline has torn it down).
+        await endBody()
+        attempt.throwIfAborted()
+        if (writeFailure !== undefined) throw writeFailure
+        const digest = hash.digest('hex')
+        if (received !== options.file.bytes || digest !== options.file.sha256) {
+          throw downloadFailed(
+            `checksum failure for ${options.file.path}: expected ${options.file.bytes}B/${options.file.sha256}, got ${received}B/${digest}`,
+          )
+        }
+        options.signal?.throwIfAborted()
+        await fs.rename(tmp, dest)
+        return { source, bytes: received, sha256: digest }
       } catch (error) {
-        writeFailure = error
+        await releaseCurrent()
+        await fs.rm(tmp).catch(() => {})
+        if (options.signal?.aborted) throw options.signal.reason
+        lastError = error instanceof Error ? error : new Error(String(error))
+      } finally {
+        clearTimeout(stall)
       }
-      clearTimeout(stall)
-      // The body and the pinned connection are released only after the full
-      // response has been consumed (or the pipeline has torn it down).
-      await endBody()
-      controller.signal.throwIfAborted()
-      if (writeFailure !== undefined) throw writeFailure
-      const digest = hash.digest('hex')
-      if (received !== options.file.bytes || digest !== options.file.sha256) {
-        throw downloadFailed(
-          `checksum failure for ${options.file.path}: expected ${options.file.bytes}B/${options.file.sha256}, got ${received}B/${digest}`,
-        )
-      }
-      options.signal?.throwIfAborted()
-      await fs.rename(tmp, dest)
-      return { source, bytes: received, sha256: digest }
-    } catch (error) {
-      await releaseCurrent()
-      await fs.rm(tmp).catch(() => {})
       if (options.signal?.aborted) throw options.signal.reason
-      lastError = error instanceof Error ? error : new Error(String(error))
-    } finally {
-      clearTimeout(deadline)
-      clearTimeout(stall)
-      options.signal?.removeEventListener('abort', onAbort)
+      if (budget.signal.aborted) break
     }
-    if (options.signal?.aborted) throw options.signal.reason
+  } finally {
+    budget[Symbol.dispose]()
   }
   if (options.signal?.aborted) throw options.signal.reason
+  // A deadline aborted the transfer: report it as this layer's timeout rather
+  // than folding it into the generic download failure.
+  if (timeoutOf(budget.signal, ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT) !== undefined) {
+    throw new ZoteroError(
+      `The model download did not finish within ${timeoutMs} ms.`,
+      ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
+    )
+  }
   throw lastError ?? downloadFailed(`every mirror failed for ${options.file.path}`)
 }

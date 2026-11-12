@@ -5,21 +5,29 @@
  * its revision and per-file digests, the inference contract, the `query` or
  * `document` side, and the exact SHA-256 of the text — so a query prefix and a
  * document prefix can never share a value, and a model switch misses every
- * entry. Concurrent misses for one key coalesce through `sharedRead`: one
- * caller's cancellation does not abort the others, and a failed or cancelled
- * load is never cached.
+ * entry. Concurrent misses for one key coalesce: the key is claimed
+ * synchronously, so a second caller waits on the same run instead of starting
+ * another one, and a failed or cancelled run is never cached.
+ *
+ * Misses are embedded in batches rather than one text per run. Each run carries
+ * the per-text fixed cost of the encoder, so a full-text retrieve (150–200
+ * distinct chunks) otherwise paid that cost 150–200 times instead of ~20. A
+ * batch is aborted only when every caller waiting on it has gone away: one
+ * caller's cancellation never aborts the others, and a batch abandoned by all
+ * of them is dropped rather than cached.
  *
  * Capacity is bounded both by item count (16,384) and by a 64 MiB byte budget
  * over vectors and keys. Oversized single vectors are not cached. Values stay
  * private: a stored buffer is copied on write and on read, so a caller can
- * never mutate a cached vector. Retiring a generation drops its cache and its
- * pending work together.
+ * never mutate a cached vector. Retiring a generation aborts the runs still in
+ * flight and refuses to let a straggler repopulate the cache.
  * @module dsh-zotero/enrichment/semantic/vector-cache
  */
 
 import { createHash } from 'node:crypto'
 import { LRUCache } from 'lru-cache'
-import { sharedRead, type SharedOperation } from '../../concurrency.js'
+import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
+import { EMBED_BATCH_SIZE } from './batching.js'
 
 export const VECTOR_CACHE_MAX_ITEMS = 16_384
 export const VECTOR_CACHE_MAX_BYTES = 64 * 1024 * 1024
@@ -72,9 +80,12 @@ function byteSizeOf(key: string, vector: Float32Array): number {
   return vector.byteLength + key.length * 2
 }
 
-/** A Map-shaped view over the real LRU so `sharedRead` can drive it. */
+/** A Map-shaped view over the real LRU; writes stop once the generation retires. */
 class LruMapView {
-  constructor(private readonly lru: LRUCache<string, Float32Array>) {}
+  constructor(
+    private readonly lru: LRUCache<string, Float32Array>,
+    private readonly retired: () => boolean,
+  ) {}
 
   get(key: string): Float32Array | undefined {
     const hit = this.lru.get(key)
@@ -82,6 +93,10 @@ class LruMapView {
   }
 
   set(key: string, value: Float32Array): this {
+    // A run that was already in flight when `dispose` cleared the entries must
+    // not put them back: the generation is gone, and the caller that reads
+    // through it has already been refused.
+    if (this.retired()) return this
     const size = byteSizeOf(key, value)
     if (size > VECTOR_CACHE_MAX_BYTES) return this
     this.lru.set(key, new Float32Array(value), { size })
@@ -101,6 +116,41 @@ export interface VectorCache {
   dispose(): void
 }
 
+/** One batch's abort handle: a waiter leaving tells its batch it has gone. */
+interface BatchHandle {
+  leave(): void
+}
+
+/** One distinct text being embedded, shared by every caller that asked for it. */
+interface Flight {
+  readonly done: Promise<Float32Array>
+  readonly resolve: (vector: Float32Array) => void
+  readonly reject: (error: unknown) => void
+  waiters: number
+  batch?: BatchHandle
+}
+
+/** One claimed key in a batch, with the text the batch will send. */
+interface FlightEntry {
+  readonly key: string
+  readonly text: string
+  readonly flight: Flight
+}
+
+function createFlight(): Flight {
+  let resolve: (vector: Float32Array) => void = () => undefined
+  let reject: (error: unknown) => void = () => undefined
+  const done = new Promise<Float32Array>((accept, refuse) => {
+    resolve = accept
+    reject = refuse
+  })
+  // The rejection is observed by every awaiting caller; a flight whose callers
+  // all walked away must not surface as an unhandled rejection.
+  done.catch(() => undefined)
+  const flight: Flight = { done, resolve, reject, waiters: 1 }
+  return flight
+}
+
 /**
  * Create one bounded cache for one model generation. `identity` is frozen: a
  * model switch constructs a new cache rather than mutating this one.
@@ -111,14 +161,91 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
     maxSize: VECTOR_CACHE_MAX_BYTES,
     sizeCalculation: (value, key) => byteSizeOf(key, value),
   })
-  const view = new LruMapView(lru)
-  const inFlight = new Map<string, SharedOperation<Float32Array>>()
-  const controllers = new Set<AbortController>()
   let disposed = false
+  const view = new LruMapView(lru, () => disposed)
+  const retire = new AbortController()
+  /** One flight per distinct key; its `batch` is what a leaving waiter asks. */
+  const flights = new Map<string, Flight>()
+
+  const retired = (): ZoteroError =>
+    new ZoteroError(
+      'The semantic vector cache generation is retired; the selected model changed.',
+      ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+    )
+
+  /** Resolve a flight, caching the value first so the next reader hits it. */
+  const settleFlight = (key: string, flight: Flight, vector: Float32Array): void => {
+    view.set(key, vector)
+    flight.resolve(new Float32Array(vector))
+  }
+
+  /**
+   * Run one batch of claimed keys. The signal merges the batch's own controller
+   * with the generation's retire signal, so a teardown cancels the encoder
+   * instead of leaving it to finish against a cache nobody will read.
+   */
+  const startBatch = (
+    entries: readonly FlightEntry[],
+    run: (missing: readonly string[], signal: AbortSignal) => Promise<readonly Float32Array[]>,
+  ): void => {
+    const controller = new AbortController()
+    const signal = AbortSignal.any([controller.signal, retire.signal])
+    const batch: BatchHandle = {
+      leave: () => {
+        // Only a batch every waiter abandoned is dropped: one caller going away
+        // must not cancel the work another caller is still waiting for.
+        if (entries.every((entry) => entry.flight.waiters === 0)) {
+          controller.abort(new Error('every caller of this embedding batch left'))
+        }
+      },
+    }
+    for (const entry of entries) entry.flight.batch = batch
+    void (async () => {
+      try {
+        const vectors = await run(
+          entries.map((entry) => entry.text),
+          signal,
+        )
+        if (vectors.length !== entries.length) {
+          throw new Error('the embedder returned the wrong number of vectors')
+        }
+        for (const [index, entry] of entries.entries()) {
+          const vector = vectors[index]
+          if (vector === undefined || vector.length !== identity.dimension) {
+            throw new Error('the embedder returned no vector for a cached text')
+          }
+          settleFlight(entry.key, entry.flight, vector)
+        }
+      } catch (error) {
+        for (const entry of entries) entry.flight.reject(error)
+      } finally {
+        for (const entry of entries) {
+          if (flights.get(entry.key) === entry.flight) flights.delete(entry.key)
+        }
+      }
+    })()
+  }
+
+  /** Await one flight under the caller's own cancellation. */
+  const awaitFlight = async (flight: Flight, signal?: AbortSignal): Promise<Float32Array> => {
+    if (signal === undefined) return await flight.done
+    signal.throwIfAborted()
+    return await new Promise<Float32Array>((resolve, reject) => {
+      const onAbort = (): void => {
+        flight.waiters -= 1
+        flight.batch?.leave()
+        reject(signal.reason)
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      void flight.done.then(resolve, reject).finally(() => {
+        signal.removeEventListener('abort', onAbort)
+      })
+    })
+  }
 
   return {
     async embed(texts, side, run, signal) {
-      if (disposed) throw new Error('the vector cache generation is retired')
+      if (disposed) throw retired()
       signal?.throwIfAborted()
       const keys = texts.map((text) => vectorCacheKeyOf(identity, side, text))
       const results = new Array<Float32Array>(texts.length)
@@ -130,49 +257,43 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
       }
       if (missing.size === 0) return results
 
-      // Each distinct key owns one cooperative flight. `sharedRead` keeps a
-      // single cancelled waiter from aborting the others and never caches a
-      // failed load; the last waiter leaving stops the shared work.
-      const settle = await Promise.all(
-        [...missing.entries()].map(async ([key, positions]) => {
-          const text = texts[positions[0]!]!
-          const controller = new AbortController()
-          controllers.add(controller)
-          try {
-            const vector = await sharedRead({
-              cache: view as unknown as Map<string, Float32Array>,
-              inFlight,
-              keys: {
-                flightKey: key,
-                find: () => view.get(key),
-                // `sharedRead` stores the value under every returned alias via
-                // the Map-shaped view, which copies the buffer on write.
-                store: () => [key],
-              },
-              load: async (sharedSignal) => {
-                const vectors = await run([text], sharedSignal)
-                const vector = vectors[0]
-                if (vector === undefined || vector.length !== identity.dimension) {
-                  throw new Error('the embedder returned no vector for a cached text')
-                }
-                return new Float32Array(vector)
-              },
-              signal,
-            })
-            for (const position of positions) results[position] = new Float32Array(vector)
-          } finally {
-            controllers.delete(controller)
-          }
+      // Claim every absent key synchronously, before the first await: a
+      // concurrent embed of the same text then joins this flight instead of
+      // starting a second run for it.
+      const claimed: FlightEntry[] = []
+      const joined: { readonly key: string; readonly flight: Flight }[] = []
+      for (const [key, positions] of missing) {
+        const existing = flights.get(key)
+        if (existing !== undefined) {
+          existing.waiters += 1
+          joined.push({ key, flight: existing })
+          continue
+        }
+        const flight = createFlight()
+        flights.set(key, flight)
+        claimed.push({ key, text: texts[positions[0]!]!, flight })
+      }
+      for (let start = 0; start < claimed.length; start += EMBED_BATCH_SIZE) {
+        startBatch(claimed.slice(start, start + EMBED_BATCH_SIZE), run)
+      }
+
+      await Promise.all(
+        [...claimed, ...joined].map(async ({ key, flight }) => {
+          const vector = await awaitFlight(flight, signal)
+          for (const position of missing.get(key)!) results[position] = new Float32Array(vector)
         }),
       )
-      void settle
       return results
     },
     dispose() {
       disposed = true
-      for (const controller of controllers) controller.abort(new Error('cache retired'))
-      controllers.clear()
-      inFlight.clear()
+      // The retire signal is what reaches the encoder: every batch merged it
+      // into its run signal, so this cancels real inference rather than a
+      // controller nothing observes. Pending flights are refused here too, so a
+      // caller never depends on the encoder noticing the abort.
+      retire.abort(retired())
+      for (const flight of flights.values()) flight.reject(retired())
+      flights.clear()
       lru.clear()
     },
   }

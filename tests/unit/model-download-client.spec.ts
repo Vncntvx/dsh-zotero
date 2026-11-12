@@ -17,6 +17,7 @@ import {
   downloadPinnedFile,
   type FetchLike,
 } from '../../src/enrichment/model-download-client.ts'
+import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT } from '../../src/errors.ts'
 import type { SemanticModelSpec } from '../../src/enrichment-model-catalog.ts'
 
 function specOf(overrides: Partial<SemanticModelSpec> = {}): SemanticModelSpec {
@@ -239,6 +240,60 @@ describe('downloadPinnedFile', () => {
     expect(served.some((url) => url.startsWith('https://huggingface.co/'))).toBe(true)
     await rm(dir, { recursive: true, force: true })
   })
+
+  it('reports the layer timeout instead of a generic download failure', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-dl-'))
+    const bytes = Buffer.from('model!')
+    // A transport that honours the abort signal: the deadline is what rejects.
+    const fetch: FetchLike = async (_url, init) =>
+      await new Promise((_resolve, reject) => {
+        const signal = (init as { signal?: AbortSignal }).signal
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    await expect(
+      downloadPinnedFile({
+        model: specOf(),
+        file: pinned(bytes),
+        dir,
+        sources: ['hf-mirror', 'huggingface'],
+        timeoutMs: 5,
+        deps: { fetch, ...gateDeps },
+      }),
+    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT })
+    await rm(dir, { recursive: true, force: true })
+  }, 10_000)
+
+  it('keeps the caller reason when the caller cancels', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-dl-'))
+    const bytes = Buffer.from('model!')
+    const controller = new AbortController()
+    const fetch: FetchLike = async (_url, init) =>
+      await new Promise((_resolve, reject) => {
+        const signal = (init as { signal?: AbortSignal }).signal
+        signal?.addEventListener(
+          'abort',
+          () => {
+            reject(signal.reason)
+            controller.abort(new Error('caller gave up'))
+          },
+          { once: true },
+        )
+      })
+    void (async () => {
+      controller.abort(new Error('caller gave up'))
+    })()
+    await expect(
+      downloadPinnedFile({
+        model: specOf(),
+        file: pinned(bytes),
+        dir,
+        sources: ['hf-mirror'],
+        signal: controller.signal,
+        deps: { fetch, ...gateDeps },
+      }),
+    ).rejects.toThrow(/caller gave up/)
+    await rm(dir, { recursive: true, force: true })
+  }, 10_000)
 
   it('names both mirrors in the source table', () => {
     expect(Object.keys(MODEL_SOURCES).sort()).toEqual(['hf-mirror', 'huggingface'])
