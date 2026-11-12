@@ -17,8 +17,8 @@
  * Both numbers are measured on real model output over a bilingual paraphrase
  * set whose questions share no content word with their answers, so BM25 scores
  * those answers zero and every admitted passage is a semantic hit. The floors
- * are model-specific because the cosine scale differs per tier (0.42 for
- * Qwen3-0.6B, 0.73 for Granite-97M): a single absolute number cannot serve
+ * are model-specific because the cosine scale differs per tier (0.427 for
+ * Qwen3-0.6B, 0.797 for Granite-97M): a single absolute number cannot serve
  * them all.
  *
  * Nothing here depends on a stored calibration artifact, so a tier works as

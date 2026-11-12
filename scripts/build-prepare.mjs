@@ -76,11 +76,30 @@ if (!process.argv.includes('--force') && FULL_BUILD_OUTPUTS.every((output) => ex
 }
 
 /**
- * The plugin's declared entry points, relative to the package root: what a
- * consumer (the harness loader) resolves. Kept beside the build so a change to
- * `package.json` exports and the check that proves them cannot drift apart.
+ * The plugin's declared entry files, relative to the package root: what a
+ * consumer (the harness loader) resolves. Derived from `package.json` exports
+ * so a new component entry cannot ship unchecked, with the browser bundle the
+ * loader fetches by name appended when the map does not already list it.
  */
-const REQUIRED_OUTPUTS = ['lib/index.js', 'lib/client.js', 'lib/scholarly/index.js']
+function requiredOutputsFrom(exportsMap) {
+  const outputs = new Set()
+  const visit = (value) => {
+    if (typeof value === 'string') {
+      if (value.startsWith('./lib/') && value.endsWith('.js')) outputs.add(value.slice(2))
+      return
+    }
+    if (value !== null && typeof value === 'object') {
+      for (const nested of Object.values(value)) visit(nested)
+    }
+  }
+  visit(exportsMap)
+  outputs.add('lib/client.js')
+  return [...outputs].sort()
+}
+
+const REQUIRED_OUTPUTS = requiredOutputsFrom(
+  JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).exports,
+)
 
 const entryPoints = nodeSources()
 if (entryPoints.length === 0) throw new Error('no Node-half sources found under src/')

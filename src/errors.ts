@@ -70,6 +70,8 @@ export const ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT = 'ZOTERO_ENRICHMENT_UNSUPPORTE
 export const ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE = 'ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE'
 /** A local semantic model download failed after every source was tried. */
 export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED'
+/** Scholarly full-text resolution reached no readable copy for this identifier. */
+export const ZOTERO_SCHOLARLY_NO_FULLTEXT = 'ZOTERO_SCHOLARLY_NO_FULLTEXT'
 /** The host does not serve background jobs, so the call must run in the foreground. */
 export const ZOTERO_JOBS_UNAVAILABLE = 'ZOTERO_JOBS_UNAVAILABLE'
 /** The deployment disabled `run_in_background`, so the call must run in the foreground. */
@@ -130,6 +132,7 @@ export const ZOTERO_ERROR_CODES = [
   ZOTERO_RESPONSE_TOO_LARGE,
   ZOTERO_OUTPUT_TOO_LARGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_SCHOLARLY_NO_FULLTEXT,
   ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE,
   ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
   ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
@@ -575,6 +578,7 @@ export const ZOTERO_REMOTE_REASON: Record<
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE: 'zotero/jobs/unavailable',
   ZOTERO_RUN_IN_BACKGROUND_DISABLED: 'zotero/jobs/background-disabled',
   ZOTERO_JOBS_LIMIT_REACHED: 'zotero/jobs/limit-reached',
+  ZOTERO_SCHOLARLY_NO_FULLTEXT: 'zotero/scholarly',
   ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE: 'zotero/scholarly',
   ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED: 'zotero/scholarly',
   ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED: 'zotero/enrichment',

@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { assertReleaseSource } from '../../scripts/release-branch-guard.mjs'
+import { assertReleaseSource } from '../../../scripts/release-branch-guard.mjs'
 
 it('rejects a source SHA drift before a release ref can move', () => {
   expect(() =>
@@ -22,7 +22,7 @@ it('rejects tracked worktree changes before a release ref can move', () => {
 
 it('keeps publishing behind both mandatory release jobs', () => {
   const workflow = readFileSync(
-    new URL('../../.github/workflows/release-branch.yml', import.meta.url),
+    new URL('../../../.github/workflows/release-branch.yml', import.meta.url),
     'utf8',
   )
   expect(workflow).toContain('quality-gate:')

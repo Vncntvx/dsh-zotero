@@ -5,8 +5,8 @@
  * The projection's wire view is windowed (a long session must not grow the
  * emission), so the browser reaches the rows behind that window through this
  * module: the fold is read at one synchronous Session cut, the requested list
- * is cut into a bounded page, and the continuation is an opaque cursor bound
- * to that session, list, instance and revision.
+ * is cut into a bounded page, and the continuation is the next offset bound to
+ * that session, list, instance and the revision the page was read at.
  * @module dsh-zotero/source-page
  */
 

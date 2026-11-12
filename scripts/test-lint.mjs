@@ -16,7 +16,7 @@
  * tightens is a comment; one that tightens by itself would fail on the next
  * unrelated commit, so the numbers are reviewed here.
  *
- * The pure predicates below are exported and driven by `tests/unit/test-lint`
+ * The pure predicates below are exported and driven by `tests/unit/tooling/test-lint`
  * so the guards themselves cannot decay: a regex that stopped matching the
  * form its docstring names would otherwise fail the suite green.
  * @module scripts/test-lint
@@ -27,7 +27,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { stripCommentsAndStrings } from './shared/source-scan.mjs'
 
-// Re-exported so `tests/unit/test-lint` keeps driving the one shared stripper.
+// Re-exported so `tests/unit/tooling/test-lint` keeps driving the one shared stripper.
 export { stripCommentsAndStrings }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -371,7 +371,7 @@ function checkFocus() {
  * resolution in the registry-only client lane CI runs. `src/**` and
  * `tests/**` must depend on public entries only.
  *
- * Only import syntax counts: `tests/unit/harness-state.spec.ts` legitimately
+ * Only import syntax counts: `tests/unit/tooling/harness-state.spec.ts` legitimately
  * carries `/src/` specifiers inside string fixtures for its own artifact
  * audit. A commented-out example is not a dependency either. Comparing a
  * comment-only stripping with the full comment-and-string blanking at the

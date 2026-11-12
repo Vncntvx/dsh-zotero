@@ -1,5 +1,5 @@
 /**
- * Types for `scripts/style-guard.mjs`, driven by `tests/unit/style-guard`.
+ * Types for `scripts/style-guard.mjs`, driven by `tests/unit/tooling/style-guard`.
  * @module dsh-zotero/scripts/style-guard
  */
 

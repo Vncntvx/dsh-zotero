@@ -14,11 +14,11 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { HARNESS_MIRRORED } from '../../scripts/shared/harness-mirrored-deps.mjs'
-import { clientDepsMirrorProblems } from '../../scripts/harness-state.mjs'
-import { pinnedHarness } from '../../scripts/style-tokens.mjs'
+import { HARNESS_MIRRORED } from '../../../scripts/shared/harness-mirrored-deps.mjs'
+import { clientDepsMirrorProblems } from '../../../scripts/harness-state.mjs'
+import { pinnedHarness } from '../../../scripts/style-tokens.mjs'
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const fixturePath = join(repoRoot, 'tests/fixtures/harness-mirrored-deps-pin.json')
 
 const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as {

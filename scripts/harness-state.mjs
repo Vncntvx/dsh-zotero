@@ -576,7 +576,7 @@ function checkOverrideNames(manifest, packages) {
 /**
  * Collect every `@deepseek-ai/*` specifier this repo imports.
  *
- * Exported for `tests/unit/harness-state`: the scan's whole job is to ignore
+ * Exported for `tests/unit/tooling/harness-state`: the scan's whole job is to ignore
  * the spec's own counter-examples, and only the real tree can prove that.
  * @returns the sorted, de-duplicated specifiers.
  */

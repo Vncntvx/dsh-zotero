@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
-import { clientBuildPlugins, verifyBundle } from '../../scripts/build-client.mjs'
+import { clientBuildPlugins, verifyBundle } from '../../../scripts/build-client.mjs'
 
 /** A valid loader-handoff bundle: platform-module requires, the plugin face. */
 const GOOD_BUNDLE = `window.__ModuleLoader__.load({ id: 'dsh-zotero', factory: (require) => {

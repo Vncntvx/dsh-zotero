@@ -37,6 +37,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { resolveSafeDirectory, type SafeDirectoryDeps } from './safe-directory.js'
+import { resolveSemanticModelDirSafe } from './model-dir.js'
 import { createBundleInspector } from './model-bundle-inspector.js'
 import type { BundleInspection } from './model-installation.js'
 import {
@@ -132,17 +133,7 @@ async function readOnlyDir(
   modelDir: string | undefined,
   fs: SafeDirectoryDeps | undefined,
 ): Promise<string> {
-  const root = await resolveSafeDirectory({
-    configured: modelDir ?? '',
-    defaultRoot: dshHomePath('models'),
-    create: false,
-    readOnly: true,
-    allowMissing: true,
-    errorCode: ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
-    label: 'semantic model directory',
-    deps: fs,
-  })
-  return join(root, physicalKey)
+  return await resolveSemanticModelDirSafe(physicalKey, modelDir, fs)
 }
 
 /** A writer path validates the complete candidate, then creates it. */

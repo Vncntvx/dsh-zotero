@@ -16,12 +16,12 @@
  * The numbers come from a 12-family bilingual paraphrase set whose questions
  * share **no content word** with their answers, so BM25 scores those answers
  * zero and every admitted passage is a semantic hit. Floors differ per tier
- * because the cosine scale does (0.43 for Qwen3-0.6B, 0.80 for Granite-97M);
+ * because the cosine scale does (0.427 for Qwen3-0.6B, 0.797 for Granite-97M);
  * one absolute number cannot serve them all. With these floors no unrelated
  * query in that set produced a semantic hit, and the measured recall@4 of the
  * answering passage was: balanced 92%, lightweight 58%, bilingual 96%,
  * english 92% (English only), hybrid 92%, academic 92% — against 0% for BM25
- * on the same questions. Re-measure with `npm run eval:semantic` after a model
+ * on the same questions. Re-measure with the scripts under `scripts/semantic-calibration/` after a model
  * revision changes; a tier absent from this table fails closed rather than
  * admitting passages on a guess.
  * @module dsh-zotero/enrichment/semantic/model-profiles

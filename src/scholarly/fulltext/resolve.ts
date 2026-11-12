@@ -9,7 +9,7 @@
  * @module dsh-zotero/scholarly/fulltext/resolve
  */
 
-import { errorDetailOf } from '../../errors.js'
+import { ZOTERO_SCHOLARLY_NO_FULLTEXT, ZoteroError, errorDetailOf } from '../../errors.js'
 import { extractArxivId } from '../sources/arxiv.js'
 import { cleanDoi } from '../sources/helpers.js'
 import { lookupOpenAlex } from '../sources/openalex.js'
@@ -342,8 +342,9 @@ export async function resolveScholarlyFullText(
       signal,
     )
     if (pdf.kind === 'record') return await remember(pdf.record)
-    throw new Error(
+    throw new ZoteroError(
       `The cached PDF source did not yield readable text (${pdf.reason}${pdf.detail ? `: ${pdf.detail}` : ''}).`,
+      ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
 
@@ -351,8 +352,9 @@ export async function resolveScholarlyFullText(
   if (target.kind === 'arxiv') {
     const resolved = await resolveArxivFullText(target.id, http, signal, enhancer)
     if ('record' in resolved) return await remember(resolved.record)
-    throw new Error(
+    throw new ZoteroError(
       `arXiv has no readable copy of ${target.id} right now. Tried: ${resolved.reasons.join('; ')}.`,
+      ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
 
@@ -360,10 +362,11 @@ export async function resolveScholarlyFullText(
   if (target.kind === 'url') {
     const pdf = await fetchPdfText(target.id, http, signal, enhancer)
     if (pdf.kind === 'record') return await remember(pdf.record)
-    throw new Error(
+    throw new ZoteroError(
       `That URL did not yield readable PDF text (${pdf.reason}${
         pdf.detail === undefined ? '' : `: ${pdf.detail}`
       }).`,
+      ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
 
@@ -373,12 +376,13 @@ export async function resolveScholarlyFullText(
 
   const tried =
     reasons.length === 0 ? 'no route was available for this identifier' : reasons.join('; ')
-  throw new Error(
+  throw new ZoteroError(
     `No open-access full text found for ${target.id}. Tried: ${tried}. ` +
       `If a route above reports a transport failure, the copy may exist but be unreachable right now — ` +
       `retry before concluding it is paywalled. ` +
       `If the user has it in their local Zotero library, read it with zotero_retrieve; ` +
       `otherwise work from the abstract (scholarly_get) and say plainly that no open copy was reachable.`,
+    ZOTERO_SCHOLARLY_NO_FULLTEXT,
   )
 }
 

@@ -307,8 +307,9 @@ export class DiagnosticsRecorder {
   }
 
   /**
-   * Record an entry directly, bypassing the threshold (used by the exporter
-   * tap and the client-error endpoint, which decide their own admission).
+   * Record an entry directly for a caller that already decided its admission:
+   * the exporter tap after `admits`, and the client-error endpoint, which
+   * files at error level.
    * @param input - the emission, unbounded.
    * @returns the entry's sequence number.
    */

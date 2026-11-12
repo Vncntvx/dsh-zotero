@@ -3,10 +3,11 @@
  * route over a locally embedded corpus, fused with the same reciprocal-rank
  * rule the scholarly subsystem uses.
  *
- * Admission is a calibrated per-(phrasing, passage) decision against fixed
- * background banks with a frozen ridge-logistic classifier; pairs above the
- * frozen threshold are admitted. A new phrasing adds hits without removing
- * another phrasing's admitted members.
+ * Admission is the tier's measured absolute floor plus a margin over the
+ * corpus's own best cosine (`admittedIndexes`). A new phrasing adds hits
+ * without removing another phrasing's admitted members. The offline
+ * ridge-logistic probes in this module are calibration evidence for the
+ * measured floors and are never part of the runtime decision.
  *
  * The semantic route orders by best admitted confidence; raw cosine stays in
  * `semanticScore`. RRF orders results and does not express confidence.

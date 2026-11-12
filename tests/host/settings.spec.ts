@@ -48,10 +48,11 @@ describe('live configuration', () => {
   it('vetoes a commit that violates the config constraints', async () => {
     lane = await setupHostLane({ baseUrl: 'http://127.0.0.1:1/api' })
     const { zoteroFiber } = lane
-    // The waterfall runs on the owning fiber's context (the same object the
-    // service registered its veto on), so the candidate reaches the hook.
+    // `ctx.plugin()` returns a prototype-linked face; the waterfall itself is
+    // dispatched with the real fiber (`vendor/cordis/src/fiber.ts:676-679`),
+    // which is the identity the service's veto registered on.
     expect(() =>
-      zoteroFiber.ctx.waterfall('internal/config', zoteroFiber, () => ({
+      zoteroFiber.ctx.waterfall('internal/config', zoteroFiber.ctx.fiber, () => ({
         baseUrl: 'http://example.com/api',
       })),
     ).toThrow(/loopback/)
@@ -64,7 +65,7 @@ describe('live configuration', () => {
     const raw = { baseUrl: 'http://127.0.0.1:1/api', timeoutMs: 7000 }
     // The waterfall returns the resolved config with volatile references;
     // the veto must preserve the submitted values in those references.
-    const resolved = zoteroFiber.ctx.waterfall('internal/config', zoteroFiber, () => raw)
+    const resolved = zoteroFiber.ctx.waterfall('internal/config', zoteroFiber.ctx.fiber, () => raw)
     const refs = new Map(volatileEntries(resolved).map(({ path, ref }) => [path.join('.'), ref]))
     expect(refs.get('baseUrl')?.get()).toBe(raw.baseUrl)
     expect(refs.get('timeoutMs')?.get()).toBe(raw.timeoutMs)

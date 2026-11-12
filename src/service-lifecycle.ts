@@ -11,20 +11,16 @@ import { sameTransportConfig, touchesTransport } from './service-config.js'
 
 /**
  * Whether the fiber carried by an `internal/config` waterfall is this plugin's
- * fiber. The Loader passes the resolving fiber as the event's first argument;
- * `ctx.plugin()` returns `Object.create(fiber)`, so a prototype-linked face
- * counts as the same fiber. Anything else is another plugin's config
- * resolution. Exported for the unit lane: the false arms need a foreign fiber
- * no in-lane commit can carry.
+ * fiber. The Loader hands the resolving fiber itself as the event's first
+ * argument, so identity is the whole test — the same strict comparison the
+ * official mcp-manager and llm-pi-ai listeners use. A prototype-linked face is
+ * never the waterfall's subject.
  * @param fiberArg - the fiber the waterfall emitted.
  * @param own - the fiber that owns this service.
  * @returns true when the candidate config belongs to this plugin.
  */
 export function isOwnConfigFiber(fiberArg: unknown, own: Fiber): boolean {
-  if (fiberArg === own) return true
-  return (
-    typeof fiberArg === 'object' && fiberArg !== null && Object.getPrototypeOf(fiberArg) === own
-  )
+  return fiberArg === own
 }
 
 export function installServiceConfigLifecycle(

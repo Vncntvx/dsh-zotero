@@ -17,7 +17,7 @@ import {
   stripCommentsAndStrings,
   unscannedExtensionsOf,
   upstreamSourceImportsOf,
-} from '../../scripts/test-lint.mjs'
+} from '../../../scripts/test-lint.mjs'
 
 describe('focus guard', () => {
   it('flags the plain focused and disabled call forms', () => {

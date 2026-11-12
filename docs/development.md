@@ -81,7 +81,7 @@ tests/                  # 单元测试与端到端测试用例
 | [快速入门](getting-started.md) | 安装、前置条件与连接验证                                     |
 | [产品模型](product-model.md)   | 两个入口、两大视图、组件分工与系统边界：命名与边界的唯一来源 |
 | [功能概览](features.md)        | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
-| [研究 SOP 技能](skills.md)     | 七个按需研究流程、批处理预算与证据边界                       |
+| [研究 SOP 技能](skills.md)     | 八个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)           | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
 | [配置参考](configuration.md)   | 四个设置命名空间、64 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md) | 常见问题、原因与排查步骤                                     |
@@ -256,7 +256,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 | WP7  | 读取作用域、模型事务切换与排空       | `tests/unit/semantic-loader-lifecycle.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/fulltext.spec.ts`                                                                                        | 已实现（前台作用域在来源 I/O 前接纳并 `try/finally` 释放、loader 事务化 resident/pending/retired、失败 B 不丢 A、卸载排空）                                                    |
 | WP8  | 推理取消、验证和有界向量缓存         | `tests/unit/semantic-session.spec.ts`、`tests/unit/semantic-tensor.spec.ts`、`tests/unit/semantic-vector-cache.spec.ts`                                                                                                    | 已实现（单 `TokenizedBatch`、signal 贯穿、输出张量校验、所有权转移释放、`lru-cache@11.5.3` 有界跨请求缓存）；六档在真实模型上实测通过（见「语义准入档位」）                    |
 | WP9  | 端到端模型设置状态机                 | `tests/client/enrichment/enrichment-model-controller.spec.ts`、`tests/client/enrichment/enrichment-model-form.spec.tsx`                                                                                                    | 已实现（完整 `RemoteResult` 码/详情保留、仅 `gateway/service-unavailable` 判缺席、目标世代绑定、草稿不发 RPC、串行刷新与 signal 清理、zh/en 文案锁步）                         |
-| WP10 | 清理文档、旧语义与包契约             | `tests/host/doc-examples.spec.ts`、`tests/unit/client-graph-authority.spec.ts`                                                                                                                                             | 已实现（9 对 zh/en 文档 + README/cordis 模板锁步、旧语义清除、错误码表、语义准入档位与本对照表）；源码/预构建双安装核对未运行                                                  |
+| WP10 | 清理文档、旧语义与包契约             | `tests/host/doc-examples.spec.ts`、`tests/unit/tooling/client-graph-authority.spec.ts`                                                                                                                                     | 已实现（9 对 zh/en 文档 + README/cordis 模板锁步、旧语义清除、错误码表、语义准入档位与本对照表）；源码/预构建双安装核对未运行                                                  |
 | WP11 | 分层与真实验收，逐问题闭环           | `npm run test:integration`、`npm run smoke:web-composition`                                                                                                                                                                | 未验收（整体验收门禁；不替代下列实时检查）                                                                                                                                     |
 
 ### 未运行的实时验收（需单独用户授权）

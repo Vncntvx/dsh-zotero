@@ -17,6 +17,7 @@
 
 import { semanticModelOf, type SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
+import { resolveSemanticModelDirSafe } from '../model-dir.js'
 import {
   createBundleVerifier,
   openSemanticEmbedder,
@@ -28,6 +29,12 @@ import type { Embedder } from './session.js'
 export interface SemanticModelTarget {
   readonly spec: SemanticModelEntry
   readonly dir: string
+  /**
+   * The root exactly as the user configured it. A read validates this value
+   * with the downloader's safe-directory policy before opening anything; an
+   * absent value means the harness default root, which no user input reached.
+   */
+  readonly configuredDir?: string
 }
 
 export interface SemanticEmbedderLoaderDeps {
@@ -65,7 +72,25 @@ export function semanticTargetOf(
   resolveDir: (physicalKey: string, configuredDir: string) => string,
 ): SemanticModelTarget {
   const spec = semanticModelOf(config.semanticModel)
-  return { spec, dir: resolveDir(spec.physicalKey, config.semanticModelDir) }
+  const configured = config.semanticModelDir.trim()
+  return {
+    spec,
+    dir: resolveDir(spec.physicalKey, config.semanticModelDir),
+    ...(configured === '' ? {} : { configuredDir: config.semanticModelDir }),
+  }
+}
+
+/**
+ * Canonicalize a target whose root the user configured. The default root is
+ * the harness home path, which no user input reached, so it passes through.
+ * @param target - the resolved target from live config.
+ * @returns the target with its validated canonical directory.
+ */
+async function safeTargetOf(target: SemanticModelTarget): Promise<SemanticModelTarget> {
+  const configured = target.configuredDir?.trim() ?? ''
+  if (configured === '') return target
+  const dir = await resolveSemanticModelDirSafe(target.spec.physicalKey, configured)
+  return dir === target.dir ? target : { ...target, dir }
 }
 
 interface Managed {
@@ -181,9 +206,14 @@ export class SemanticEmbedderLoader {
     const id = this.nextId++
     const key = keyOf(target)
     // The open call starts only after any previous switch has settled.
-    const load = this.switchQueue.then(() => {
+    const load = this.switchQueue.then(async () => {
       if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
-      return this.open(target).catch((error: unknown) => {
+      // A user-configured root is validated with the same policy the downloader
+      // applies, so an unvalidated alias or `..` never reaches the reader.
+      const resolved = await safeTargetOf(target).catch((error: unknown) => {
+        throw semanticUnavailable(error)
+      })
+      return this.open(resolved).catch((error: unknown) => {
         throw semanticUnavailable(error)
       })
     })

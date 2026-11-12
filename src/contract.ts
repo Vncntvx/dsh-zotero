@@ -472,7 +472,6 @@ export interface ZoteroSourcePageResultView {
   readonly offset: number
   readonly limit: number
   readonly total: number
-  readonly nextCursor?: string
   /** Bounded rows only, with exact session-wide and per-source totals. */
   readonly workspace: SourceWorkspace
 }

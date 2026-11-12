@@ -180,14 +180,15 @@ Generate formatted citations or export data files.
 
 ### Parameters
 
-| Parameter                                                                                                                                                                                                                                              | Type     | Default      | Description                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
-| `refs`                                                                                                                                                                                                                                                 | string[] | none         | Item ref list (required; one call is bounded by `maxExportRefs`, default 50)                                    |
-| `format`                                                                                                                                                                                                                                               | string   | none         | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
-| `style`                                                                                                                                                                                                                                                | string   | config value | CSL style identifier (citation and bibliography only)                                                           |
-| `locale`                                                                                                                                                                                                                                               | string   | `"en-US"`    | CSL locale (citation and bibliography only)                                                                     |
-| `outputFile`                                                                                                                                                                                                                                           | string   | none         | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
-| `run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`). |
+| Parameter    | Type     | Default      | Description                                                                                                     |
+| ------------ | -------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `refs`       | string[] | none         | Item ref list (required; one call is bounded by `maxExportRefs`, default 50)                                    |
+| `format`     | string   | none         | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
+| `style`      | string   | config value | CSL style identifier (citation and bibliography only)                                                           |
+| `locale`     | string   | `"en-US"`    | CSL locale (citation and bibliography only)                                                                     |
+| `outputFile` | string   | none         | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
+
+`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`).
 
 ### Output
 
@@ -267,12 +268,13 @@ Read incremental update and deletion records of the library based on local trans
 
 ### Parameters
 
-| Parameter                                                                                                                                                                                                                                              | Type     | Default                 | Description                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `library`                                                                                                                                                                                                                                              | object   | `{type: "user", id: 0}` | Target library identifier                                                                              |
-| `since`                                                                                                                                                                                                                                                | object   | none                    | Starting cursor `{serverId, library, version, include, unserved}`; omit it to get the initial baseline |
-| `include`                                                                                                                                                                                                                                              | string[] | all except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                        |
-| `run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`). |
+| Parameter | Type     | Default                 | Description                                                                                            |
+| --------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `library` | object   | `{type: "user", id: 0}` | Target library identifier                                                                              |
+| `since`   | object   | none                    | Starting cursor `{serverId, library, version, include, unserved}`; omit it to get the initial baseline |
+| `include` | string[] | all except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                        |
+
+`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`).
 
 ### Output
 
@@ -766,7 +768,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_RANGE_UNSUPPORTED`                 | The server does not keep change history back to the requested version (409)                                                            |
 | `ZOTERO_NO_ATTACHMENT`                     | No attachment of the requested type exists under the item                                                                              |
 | `ZOTERO_NO_FULLTEXT`                       | The attachment has no full-text index                                                                                                  |
-| `ZOTERO_SOURCE_PAGE_STALE`                 | The literature trail changed while paging; the cursor is stale (refresh and page again)                                                |
+| `ZOTERO_SOURCE_PAGE_STALE`                 | The literature trail changed while paging; the page coordinates (offset + revision) are stale (refresh and page again)                 |
 | `ZOTERO_URL_PDF_DISABLED`                  | URL PDF reading is not authorized in the literature panel settings                                                                     |
 | `ZOTERO_URL_PDF_BUSY`                      | Two URL PDF downloads are already running (literature panel endpoint)                                                                  |
 | `ZOTERO_URL_PDF_NOT_URL`                   | The attachment is not a URL PDF (literature panel endpoint)                                                                            |
@@ -786,6 +788,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_RESPONSE_TOO_LARGE`                | API response stream exceeds the read cap                                                                                               |
 | `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds the character cap                                                                                               |
 | `ZOTERO_CAPABILITY_UNAVAILABLE`            | The current provider does not declare the required capability                                                                          |
+| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | Scholarly full-text resolution reached no readable copy (the message names each route; it never mimics a missing local full text)      |
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                                                   |
 | `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | A configured scholarly credential reference is invalid or has no value (never falls back to anonymous access)                          |
 | `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | The configured MinerU precise-API token reference cannot be resolved (fail-closed; no free/anonymous downgrade)                        |

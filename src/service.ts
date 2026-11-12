@@ -285,7 +285,9 @@ export class ZoteroService extends Service {
       levels: { default: LOGGER_LEVEL.DEBUG },
       export: (message) => {
         if (!loggerNameMatches(message.name)) return
-        this.diagnostics.push(logMessageToPush(message))
+        const entry = logMessageToPush(message)
+        if (!this.diagnostics.admits(entry.level)) return
+        this.diagnostics.push(entry)
       },
     })
     // Fail the load loud on a violating entry; the same gate vetoes

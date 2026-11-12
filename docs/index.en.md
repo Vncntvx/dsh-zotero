@@ -9,7 +9,7 @@ Read these in order to get from installation to daily use:
 1. [Getting started](getting-started.en.md): install, verify the connection, and run the first task
 2. [Product model](product-model.en.md): two entry points, two UI surfaces, component division, and system boundaries
 3. [Features](features.en.md): conversation capabilities, the literature trail, the literature panel, writes, scholarly retrieval, and document parsing
-4. [Research SOP skills](skills.en.md): seven on-demand research workflows, batch budgets, and evidence boundaries
+4. [Research SOP skills](skills.en.md): eight on-demand research workflows, batch budgets, and evidence boundaries
 5. [Troubleshooting](troubleshooting.en.md): common issues, diagnostic steps, and remedies
 
 ## Maintenance

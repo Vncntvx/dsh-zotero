@@ -38,7 +38,7 @@ graph LR
 
 ### 按需研究 SOP 技能
 
-`src/skills/` 向 Harness 可选 `ctx.skills` 注册 7 个研究 SOP 技能：核心服务持有证据比较、写作对账和文库治理，Scholarly 组件持有主题版图、引文脉络、真伪审查和文献入库。每个 SOP 的 Markdown 正文仅按需加载；短目录常驻，完整正文不写入 system prompt。组件 fiber 管理注册/注销，registry 后挂载或替换时自动重绑。详见[研究 SOP 技能参考](skills.md)。
+`src/skills/` 向 Harness 可选 `ctx.skills` 注册 8 个研究 SOP 技能：核心服务持有单篇速读、证据比较、写作对账和文库治理，Scholarly 组件持有主题版图、引文脉络、真伪审查和文献入库。每个 SOP 的 Markdown 正文仅按需加载；短目录常驻，完整正文不写入 system prompt。组件 fiber 管理注册/注销，registry 后挂载或替换时自动重绑。详见[研究 SOP 技能参考](skills.md)。
 
 子 Agent 写面同时包含 15 个核心工具和 `scholarly_save_to_zotero`。`tools/change` 刷新只覆盖已注册名称的 scoped restriction，适配 Scholarly 后挂载/卸载；基于会话血缘的执行 guard 在展示限制失败时仍拒绝子 Agent 按名称调用写工具。
 
@@ -149,7 +149,7 @@ graph LR
 
 `mode`（`free` / `pro`）独立选择接口；`free` 不解析 token。`pro` 引用无法解析时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 明确失败，不降级免费或匿名；已有缓存产物无需 token 即可读取。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
 
-当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/<sha256>.json` 按 `identity + mode` 记录产物与源戳，本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。源索引查询顺序及普通读取不受当前模式切换影响的产物选择仍需后续实现。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，图片跳过不落盘。
+当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳（`mode` 在 artifact meta 与内容缓存键中），本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，图片跳过不落盘。
 
 ### 本地语义排序与模型资产
 

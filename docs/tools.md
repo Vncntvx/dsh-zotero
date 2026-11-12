@@ -180,14 +180,15 @@ zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism"
 
 ### 参数
 
-| 参数                                                                                                                                                                                                             | 类型     | 默认值     | 说明                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------- |
-| `refs`                                                                                                                                                                                                           | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
-| `format`                                                                                                                                                                                                         | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
-| `style`                                                                                                                                                                                                          | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
-| `locale`                                                                                                                                                                                                         | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                             |
-| `outputFile`                                                                                                                                                                                                     | string   | —          | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
-| `run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。 |
+| 参数         | 类型     | 默认值     | 说明                                                                                        |
+| ------------ | -------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `refs`       | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
+| `format`     | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
+| `style`      | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
+| `locale`     | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                             |
+| `outputFile` | string   | —          | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
+
+`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。
 
 ### 输出
 
@@ -267,12 +268,13 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ### 参数
 
-| 参数                                                                                                                                                                                                             | 类型     | 默认值                  | 说明                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------ |
-| `library`                                                                                                                                                                                                        | object   | `{type: "user", id: 0}` | 目标库标识                                                                     |
-| `since`                                                                                                                                                                                                          | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
-| `include`                                                                                                                                                                                                        | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
-| `run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。 |
+| 参数      | 类型     | 默认值                  | 说明                                                                           |
+| --------- | -------- | ----------------------- | ------------------------------------------------------------------------------ |
+| `library` | object   | `{type: "user", id: 0}` | 目标库标识                                                                     |
+| `since`   | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
+| `include` | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
+
+`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。
 
 ### 输出
 
@@ -766,7 +768,7 @@ zotero_batch_items(
 | `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）                                                    |
 | `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                                                                     |
 | `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                                                             |
-| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，游标失效（刷新后重试）                                             |
+| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，分页参数（offset + revision）失效（刷新后重试）                    |
 | `ZOTERO_URL_PDF_DISABLED`                  | 文献面板未开启 URL PDF 阅读授权                                                                |
 | `ZOTERO_URL_PDF_BUSY`                      | 已有两个 URL PDF 下载在运行（文献面板端点）                                                    |
 | `ZOTERO_URL_PDF_NOT_URL`                   | 该附件不是 URL PDF（文献面板端点）                                                             |
@@ -786,6 +788,7 @@ zotero_batch_items(
 | `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                     |
 | `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                         |
 | `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                   |
+| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析没有找到可读副本（细分原因在消息里；不会冒充本地全文缺失）                         |
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                   |
 | `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）                                               |
 | `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析（fail-closed，不降级免费/匿名）                   |

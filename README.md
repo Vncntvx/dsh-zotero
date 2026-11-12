@@ -136,7 +136,7 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 | [快速入门](docs/getting-started.md) | 安装、连接验证与第一个任务                             |
 | [产品模型](docs/product-model.md)   | 两个入口、两大视图、组件分工与系统边界                 |
 | [功能概览](docs/features.md)        | 对话能力、文献轨迹、文献面板、写入、学术检索与文档解析 |
-| [研究 SOP 技能](docs/skills.md)     | 七个按需研究流程、批处理预算与证据边界                 |
+| [研究 SOP 技能](docs/skills.md)     | 八个按需研究流程、批处理预算与证据边界                 |
 | [故障排查](docs/troubleshooting.md) | 常见问题、诊断步骤与处理方法                           |
 
 ### 维护

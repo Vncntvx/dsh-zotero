@@ -425,12 +425,11 @@ Documentation-only rule changes need focused formatting and test-lint checks.
 They do not require running the behavioural suite when no executable files
 change.
 
-When changing CI, run the complete deterministic quality gate on PRs and make
-release publishing depend on a successful gate for the same source commit.
-Affected-module selection is a development shortcut, not the sole merge gate.
-Keep scheduled dependency-health checks and explicit live integration as
-separate checks; neither substitutes for PR validation. These are requirements
-for CI changes, not a claim that the current workflows already enforce them.
+The gate that exists today fires on push to `main`, on `v*` tags, and on the
+weekly dependency-health cron; pull requests run only the security scanner. When
+changing CI, keep aiming for the complete deterministic quality gate on every
+source commit: affected-module selection is a development shortcut, not the
+sole merge gate, and scheduled or live checks never substitute for it.
 
 ## Not here, on purpose
 

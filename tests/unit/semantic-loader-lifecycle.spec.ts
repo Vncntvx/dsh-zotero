@@ -5,6 +5,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { SemanticModelTarget } from '../../src/enrichment/semantic/loader.ts'
@@ -164,5 +168,45 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     scope.release()
     await Promise.resolve()
     expect(disposed).toEqual([])
+  })
+})
+
+describe('configured model directory validation', () => {
+  it('opens the canonical directory for a configured root with .. segments', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'loader-model-dir-'))
+    try {
+      await mkdir(join(base, 'nested'))
+      const opened: string[] = []
+      const loader = new SemanticEmbedderLoader({
+        open: async (requested) => {
+          opened.push(requested.dir)
+          return embedderOf([], requested.spec.key)
+        },
+      })
+      // The configured root is the same directory spelled with a traversing
+      // segment; the reader must open the canonical path.
+      const configuredDir = join(base, 'nested', '..')
+      await loader.get({
+        spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
+        dir: join(configuredDir, 'qwen3-0.6b'),
+        configuredDir,
+      })
+      expect(opened).toEqual([join(await realpath(base), 'qwen3-0.6b')])
+      await loader.dispose()
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  it('fails closed when the configured root is a credential directory', async () => {
+    const loader = new SemanticEmbedderLoader({ open: async () => embedderOf([], 'x') })
+    const configuredDir = join(homedir(), '.ssh', 'models')
+    await expect(
+      loader.get({
+        spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
+        dir: join(configuredDir, 'qwen3-0.6b'),
+        configuredDir,
+      }),
+    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE })
   })
 })

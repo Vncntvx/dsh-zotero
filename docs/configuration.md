@@ -245,7 +245,7 @@ ONNX 嵌入模型需手动下载后启用。模型通过语义化档位编号（
 
 解析产物按内容指纹（来源、模式与 PDF 字节的 SHA-256）写入 `<outputDir>/<sha256>/`，包含 `full.md`、`meta.json`（来源、模式、任务 ID、文件清单；`pro` 且 MinerU 返回 `total_pages` 时另含页数），精准模式另含 `content_list.json`；`meta.json` 最后写入，作为目录完整的提交标记。
 
-缓存分两层：内容产物按指纹命中；源索引 `<outputDir>/sources/<sha256>.json` 记录 `identity + mode` 对应的产物与源戳。本地附件比较大小与修改时间；URL 源发一次不带凭据的 HEAD。URL 源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length，且所有共有校验信息不得冲突。无有效校验信息时重新获取文档并按字节指纹查找内容缓存；探测失败明确报错。有效命中只读本地产物，不下载 PDF、不请求 MinerU。来源元数据中的 URL 只保留 origin + path。
+缓存分两层：内容产物按指纹命中；源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳；`mode` 记在 artifact meta 与内容缓存键中。本地附件比较大小与修改时间；URL 源发一次不带凭据的 HEAD。URL 源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length，且所有共有校验信息不得冲突。无有效校验信息时重新获取文档并按字节指纹查找内容缓存；探测失败明确报错。有效命中只读本地产物，不下载 PDF、不请求 MinerU。来源元数据中的 URL 只保留 origin。
 
 任务回执保存在 `<outputDir>/tasks/<sha256>.json`，文件权限为 `0600`。上传完成即删除回执中的签名 URL；轮询、下载失败或调用中断后，下次读取恢复同一任务，不重新提交。未上传的签名地址超过 24 小时有效期时失败并清除回执；任务终态失败同样清除，下一次显式读取可创建新任务；成功落盘后清除回执。POST 提交不重试；GET/HEAD/PUT 对瞬时错误最多重试两次，遵守 `Retry-After` 和阶段/总时限。
 

@@ -1,5 +1,5 @@
 /**
- * Types for `scripts/style-tokens.mjs`, driven by `tests/unit/style-tokens`.
+ * Types for `scripts/style-tokens.mjs`, driven by `tests/unit/tooling/style-tokens`.
  * @module dsh-zotero/scripts/style-tokens
  */
 

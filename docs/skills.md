@@ -52,6 +52,6 @@ Scholarly 指 `dsh-zotero/scholarly` 组件。该组件未启用时，四个对�
 
 Harness 基础组合提供 `dsh-skill` registry 和 `dsh-tool-skill` 消费端；自定义组合也需要两者。依赖版本由 `npm run harness:pin -- 0.2.2-rc.2` 生成，锁文件通过 npm 更新。
 
-测试归属：`tests/host/skills.spec.ts` 验证组合与生命周期；`tests/scholarly/skills.spec.ts` 验证外部授权目录；`tests/host/skill-contracts.spec.ts` 双向校验全部 Recipe，把 recipe 参数、中英文工具参考的参数表与真实 schema properties 逐项对照，并递归校验嵌套键、扫描模型可见字段中的工具名；`tests/host/subagent-view.spec.ts` 验证 scoped 视图与限制生命周期，`tests/host/subagent-guard.spec.ts` 验证执行期拒绝与刷新失败容纳；`tests/unit/client-graph-authority.spec.ts` 拒绝浏览器导入。测试均不访问真实文库或外部索引。
+测试归属：`tests/host/skills.spec.ts` 验证组合与生命周期；`tests/scholarly/skills.spec.ts` 验证外部授权目录；`tests/host/skill-contracts.spec.ts` 双向校验全部 Recipe，把 recipe 参数、中英文工具参考的参数表与真实 schema properties 逐项对照，并递归校验嵌套键、扫描模型可见字段中的工具名；`tests/host/subagent-view.spec.ts` 验证 scoped 视图与限制生命周期，`tests/host/subagent-guard.spec.ts` 验证执行期拒绝与刷新失败容纳；`tests/unit/tooling/client-graph-authority.spec.ts` 拒绝浏览器导入。测试均不访问真实文库或外部索引。
 
 发布前运行 focused specs、`npm run typecheck`、`npm test` 和 `npm run release:check`。构建直接编译 TS 正文，无需复制 Markdown 资源。发布门禁继续验证客户端边界、覆盖率、构建和打包；工具字段合同见 [工具参考](tools.md)。

@@ -34,9 +34,9 @@ import {
   tokenReferencesOf,
   unknownTokenViolations,
   unreducedMotionViolations,
-} from '../../scripts/style-guard.mjs'
+} from '../../../scripts/style-guard.mjs'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const palette = JSON.parse(
   readFileSync(join(root, 'tests', 'fixtures', 'style-tokens.json'), 'utf8'),
 )

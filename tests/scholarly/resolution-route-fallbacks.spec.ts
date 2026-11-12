@@ -214,7 +214,10 @@ it('names only the failure reason when a refetched cached PDF has an empty trans
 
   await expect(
     resolveScholarlyFullText({ kind: 'url', id: url }, { http, store, enhancer: { lookup } }),
-  ).rejects.toThrowError(new Error('The cached PDF source did not yield readable text (fetch).'))
+  ).rejects.toMatchObject({
+    message: 'The cached PDF source did not yield readable text (fetch).',
+    code: 'ZOTERO_SCHOLARLY_NO_FULLTEXT',
+  })
   expect(lookup).toHaveBeenCalledExactlyOnceWith(
     { key: url, source: { kind: 'url', url }, contentType: 'application/pdf' },
     undefined,

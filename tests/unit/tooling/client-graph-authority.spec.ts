@@ -18,10 +18,10 @@ import {
   INLINE_SAFE,
   isInlineSafeHarness,
   VENDORED_LIBRARY,
-} from '../../scripts/client-graph-authority.mjs'
-import { pinnedHarness } from '../../scripts/style-tokens.mjs'
+} from '../../../scripts/client-graph-authority.mjs'
+import { pinnedHarness } from '../../../scripts/style-tokens.mjs'
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 function metafileOf(paths: readonly string[]) {
   const inputs: Record<string, { bytes: number }> = {}

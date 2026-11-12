@@ -42,7 +42,7 @@
  *    that produced this guard found eight entries naming rules that no longer
  *    animate, and thirteen classes animating with no entry at all.
  *
- * The predicates below are exported and driven by `tests/unit/style-guard` so
+ * The predicates below are exported and driven by `tests/unit/tooling/style-guard` so
  * the guards cannot decay: a parser that stopped matching the form its
  * docstring names would otherwise fail the suite green.
  * @module scripts/style-guard

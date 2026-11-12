@@ -79,12 +79,14 @@ export const ScholarlyConfig = Schema.object({
   maxResults: Schema.number()
     .default(20)
     .min(1)
+    .step(1)
     .max(100)
     .description('Maximum number of papers returned in a single search')
     .volatile(),
   maxContentChars: Schema.number()
     .default(12_000)
     .min(1_000)
+    .step(1)
     .max(50_000)
     .description('Character ceiling for chunked full-text reading')
     .volatile(),
@@ -99,6 +101,7 @@ export const ScholarlyConfig = Schema.object({
   foregroundWaitMs: Schema.number()
     .default(30_000)
     .min(1)
+    .step(1)
     .max(240_000)
     .description('Foreground wait before a long scholarly call is promoted')
     .volatile(),

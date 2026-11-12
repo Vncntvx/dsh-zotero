@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { collectArtifactProblems, importedSpecifiers } from '../../scripts/harness-state.mjs'
+import { collectArtifactProblems, importedSpecifiers } from '../../../scripts/harness-state.mjs'
 
 describe('artifact resolution provenance', () => {
   let checkout: string

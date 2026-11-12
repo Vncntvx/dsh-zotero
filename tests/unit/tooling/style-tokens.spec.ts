@@ -26,9 +26,9 @@ import {
   pinThemeSheets,
   pinnedHarness,
   snapshotOf,
-} from '../../scripts/style-tokens.mjs'
+} from '../../../scripts/style-tokens.mjs'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const snapshot = JSON.parse(
   readFileSync(join(root, 'tests', 'fixtures', 'style-tokens.json'), 'utf8'),
 )

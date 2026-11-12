@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { expectedPaths, packReportOf } from '../../scripts/verify-pack.mjs'
+import { expectedPaths, packReportOf } from '../../../scripts/verify-pack.mjs'
 
 const REPORT = '[\n  {\n    "name": "dsh-zotero"\n  }\n]'
 
