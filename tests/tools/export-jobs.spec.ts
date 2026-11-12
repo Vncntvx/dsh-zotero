@@ -206,7 +206,7 @@ describe('zotero_export jobs', () => {
       expect(storage.receipts.size).toBe(0)
     })
 
-    it('writes export to outputFile and emits deliverables/presented event', async () => {
+    it('writes export to outputFile without publishing a deliverable', async () => {
       lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
         helpers.text('@article{A2023,\n  title={Paper A}\n}'),
       )
@@ -218,7 +218,6 @@ describe('zotero_export jobs', () => {
         },
       }
       lane.ctx.provide('workingDirectory', { ensure: async () => '/workspace' } as never)
-      lane.ctx.provide('agents', { turnBoundaryOf: () => ({ lastTurn: 3 }) } as never)
       const writtenFiles: Record<string, string> = {}
       lane.ctx.provide('fs', {
         resolve: async (path: string, opts?: { cwd?: string }) => ({
@@ -253,15 +252,10 @@ describe('zotero_export jobs', () => {
       expect(result.value).toMatchObject({
         format: 'bibtex',
         outputFile: '/workspace/references.bib',
-        delivered: true,
       })
-      expect(appendedEvents).toHaveLength(1)
-      expect(appendedEvents[0].type).toBe('deliverables/presented')
-      expect(appendedEvents[0].data).toMatchObject({
-        turn: 3,
-        callId: 'tool-deliv',
-        files: [{ path: '/workspace/references.bib', description: 'Exported bibtex' }],
-      })
+      expect(result.value).not.toHaveProperty('delivered')
+      // The harness present tool owns deliverables/presented; this tool writes only.
+      expect(appendedEvents).toHaveLength(0)
     })
 
     it('exports references in CSV format', async () => {

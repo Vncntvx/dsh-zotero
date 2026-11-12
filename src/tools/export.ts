@@ -128,7 +128,6 @@ const EXPORT_OUTPUT_SCHEMA = {
         locale: { type: 'string' },
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
-        delivered: { type: 'boolean' },
       },
     },
     {
@@ -138,7 +137,6 @@ const EXPORT_OUTPUT_SCHEMA = {
         format: { type: 'string', const: 'csv', required: true },
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
-        delivered: { type: 'boolean' },
       },
     },
     {
@@ -154,7 +152,6 @@ const EXPORT_OUTPUT_SCHEMA = {
         locale: { type: 'string' },
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
-        delivered: { type: 'boolean' },
         metadataIncomplete: { type: 'boolean' },
         items: {
           type: 'array',
@@ -241,7 +238,6 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   // Preserve translator bytes, including whitespace and BOM.
   const text = value.text
   const outputFile = (value as { outputFile?: string }).outputFile
-  const delivered = (value as { delivered?: boolean }).delivered
   const notes: string[] = []
   if ((value as { metadataIncomplete?: boolean }).metadataIncomplete === true) {
     notes.push(
@@ -249,11 +245,7 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
     )
   }
   if (outputFile !== undefined) {
-    notes.push(
-      delivered
-        ? `Export written to ${outputFile} and declared as a deliverable.`
-        : `Export written to ${outputFile}.`,
-    )
+    notes.push(`Export written to ${outputFile}.`)
   }
   const mapped =
     'items' in value && Array.isArray(value.items)
@@ -326,6 +318,7 @@ export function registerExportTool(
           'Export Zotero items as citations, a bibliography, or translator formats (bibtex, biblatex, ris, csljson, csv).',
           `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
           `bibliography returns the joined CSL-sorted text; translator formats return Zotero's raw ordering and are itemized by ref, exportKey, citationKey, and title, never by position. Itemized formats use one export request and one bounded metadata batch, up to ${ZOTERO_ITEMKEY_BATCH} refs.`,
+          'Writing outputFile writes the file only: call the harness present tool with that path when the file should join the session deliverables.',
         ].join(' '),
         parameters,
         output: {
@@ -357,16 +350,9 @@ export function registerExportTool(
           const session = exec.agent?.session
           const fs = ctx.get('fs')
           const workingDirectory = ctx.get('workingDirectory')
-          const turn =
-            session && exportArgs.outputFile !== undefined
-              ? ctx.get('agents')?.turnBoundaryOf(session).lastTurn
-              : undefined
-          if (
-            exportArgs.outputFile !== undefined &&
-            (!session || !fs || !workingDirectory || !Number.isSafeInteger(turn) || turn! < 1)
-          ) {
+          if (exportArgs.outputFile !== undefined && (!session || !fs || !workingDirectory)) {
             throw new Error(
-              'Export file delivery requires filesystem, working directory, session and owning turn',
+              'Export file delivery requires filesystem, working directory and session',
             )
           }
           if (
@@ -386,7 +372,6 @@ export function registerExportTool(
             run: async (signal, onProgress) => {
               let result: Awaited<ReturnType<typeof service.export>> & {
                 outputFile?: string
-                delivered?: boolean
               } = await service.export(request, signal, onProgress)
               if (result.format === 'citation') return result
               signal.throwIfAborted()
@@ -400,18 +385,7 @@ export function registerExportTool(
                 await fs!.writeText(target, result.text, undefined, signal, policy)
                 const path = fs!.processPath(target)
                 signal.throwIfAborted()
-                try {
-                  session!.append('deliverables/presented', {
-                    turn: turn!,
-                    callId: exec.callId,
-                    files: [{ path, description: `Exported ${exportArgs.format}` }],
-                  })
-                } catch (error) {
-                  throw new Error(`Export written to ${path}; deliverable publication failed`, {
-                    cause: error,
-                  })
-                }
-                result = { ...result, outputFile: path, delivered: true }
+                result = { ...result, outputFile: path }
               }
               signal.throwIfAborted()
               return result

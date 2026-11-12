@@ -174,7 +174,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism"
 
 ## zotero_export
 
-Pass a non-empty `outputFile` to deliver bibliography, translator, or `csv` text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing, publishing the delivery to the original turn, and required internal persistence when oversized or background. Write failures fail the tool or job. If delivery publication fails after writing, the error includes the actual path; no automatic retry occurs.
+Pass a non-empty `outputFile` to write bibliography, translator, or `csv` text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing and required internal persistence when oversized or background. Write failures fail the tool or job. Writing the file is not a session delivery: when the file should join the session’s declared deliverables, the model calls the Harness `present` tool with that path.
 
 Generate formatted citations or export data files.
 

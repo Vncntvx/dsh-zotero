@@ -16,12 +16,7 @@ import {
   setApprovalOutcome,
   ApprovingQuestions,
 } from '../../helpers/approval-stub.js'
-import {
-  harnessRefusal,
-  nonTextContent,
-  textContent,
-  toolBatchResult,
-} from '../support/tool-batch.js'
+import { nonTextContent, textContent, toolBatchResult } from '../support/tool-batch.js'
 
 let lane: HostLane | undefined
 const agent = { status: 'running' }
@@ -164,7 +159,7 @@ describe('panel write gateway', () => {
     })
   })
 
-  it('maps a tool-level user rejection to declined via the harness refusal message', async () => {
+  it('maps a structured user rejection to declined', async () => {
     const host = await boot()
     const execute = vi.spyOn(host.ctx.tools, 'execute').mockResolvedValue(
       toolBatchResult({
@@ -175,13 +170,16 @@ describe('panel write gateway', () => {
           nonTextContent(),
           textContent('no retry will happen'),
         ],
-        error: { message: harnessRefusal('rejected', TOOL) },
+        error: {
+          message: 'the user rejected tool "zotero_create_note"',
+          info: { name: 'ApprovalError', code: 'APPROVAL_REJECTED' },
+        },
       }),
     )
     const outcome = await executeLibraryWrite(host.ctx, request, signal())
     expect(outcome.kind).toBe('declined')
     expect(outcome.message).toBe('the plan was not approved\nno retry will happen')
-    expect(outcome.code).toBeUndefined()
+    expect(outcome.code).toBe('APPROVAL_REJECTED')
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
@@ -193,7 +191,7 @@ describe('panel write gateway', () => {
         meta: null,
         content: [textContent('gateway failed')],
         error: {
-          message: `gateway failed after ${harnessRefusal('rejected', TOOL)}`,
+          message: 'gateway failed after the user rejected tool "zotero_create_note"',
         },
       }),
     )

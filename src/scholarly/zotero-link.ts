@@ -184,8 +184,10 @@ export async function attachLibraryStatus(
           }
         } catch (error) {
           if (signal?.aborted) throw signal.reason ?? error
-          // A failed detail read leaves the compact record's own match intact;
-          // the collection list stays empty rather than invented.
+          // A failed detail read leaves the compact record's own match intact,
+          // but when the compact record did not match this read was the only
+          // discovery path: a failure is not evidence of absence.
+          if (!isMatch) report.failed += 1
         }
       }
 

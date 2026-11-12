@@ -97,7 +97,7 @@ export async function executeLibraryWrite(
   const kind = asString(asRecord(result.meta)?.kind) as
     ZoteroLibraryWriteResultView['kind'] | undefined
   const code = result.isError ? result.error.info?.code : undefined
-  const declined = result.isError && classifyDenial(result, name) === 'declined'
+  const declined = result.isError && classifyDenial(result) === 'declined'
   return {
     kind: declined
       ? 'declined'

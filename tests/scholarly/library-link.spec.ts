@@ -168,6 +168,21 @@ describe('attachLibraryStatus', () => {
     expect(papers[0]?.inLibrary?.collections).toEqual([])
   })
 
+  it('counts a failed detail read that was the only discovery path', async () => {
+    // The compact record differs and the paper has a DOI, so the detail read is
+    // the only way this paper could match. Its failure is not evidence that the
+    // paper is absent.
+    const papers = [paperOf({ title: 'A Completely Different Study', doi: '10.9999/missing.1' })]
+    const report = await attachLibraryStatus(papers, {
+      ...libraryOf([recordOf({ title: 'Unrelated Library Record' })]),
+      get: async () => {
+        throw new Error('detail unavailable')
+      },
+    })
+    expect(report.matched).toBe(0)
+    expect(report.failed).toBe(1)
+  })
+
   it('reports nothing to do when no library service is composed', async () => {
     const report = await attachLibraryStatus([paperOf()], undefined)
     expect(report).toEqual({ matched: 0, failed: 0, unparseable: 0 })

@@ -17,10 +17,6 @@ import type {
   ToolFailure,
 } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import {
-  HARNESS_REFUSAL_TEMPLATES,
-  type HarnessRefusalKind,
-} from '../../../src/library-write-denial.js'
 
 interface ToolBatchCommon {
   readonly callId?: string
@@ -61,9 +57,4 @@ export function toolBatchResult(init: ToolBatchResultInit): ToolBatchResult {
     result: toolExecutionResult(init),
   }
   return { results: [one], additionalContexts: [], concluded: false }
-}
-
-/** Interpolate one documented harness refusal sentence for a given tool. */
-export function harnessRefusal(kind: HarnessRefusalKind, toolName: string): string {
-  return HARNESS_REFUSAL_TEMPLATES[kind].replace('$TOOL', toolName)
 }

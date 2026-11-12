@@ -89,6 +89,58 @@ describe('scholarly_cite failure paths', () => {
 })
 
 describe('scholarly_verify verdict details', () => {
+  it('never verifies a DOI the registry does not know', async () => {
+    const host = createMockHost(
+      createMockHttp((url) => {
+        if (!url.includes('query.bibliographic')) return new Response('{}', { status: 404 })
+        return new Response(
+          JSON.stringify({
+            status: 'ok',
+            message: {
+              items: [
+                {
+                  DOI: '10.1234/real.9',
+                  title: ['A Real Study'],
+                  author: [{ family: 'Doe', given: 'J' }],
+                  'published-print': { 'date-parts': [[2015]] },
+                  issued: { 'date-parts': [[2015]] },
+                  type: 'journal-article',
+                },
+              ],
+            },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        )
+      }),
+    )
+    const tool = createScholarlyVerifyTool(host)
+    const result = (await tool.execute(
+      { references: ['Doe, J. (2015). A Real Study. doi:10.1234/fake.1'] },
+      EXEC_CONTEXT as never,
+    )) as { text: string }
+    expect(result.text).toContain('[1] CHECK')
+    expect(result.text).not.toContain('[1] VERIFIED')
+    expect(result.text).toContain('10.1234/fake.1 is not registered in Crossref')
+  })
+
+  it('reports an unregistered DOI as not found when no record matches', async () => {
+    const host = createMockHost(
+      createMockHttp((url) => {
+        if (!url.includes('query.bibliographic')) return new Response('{}', { status: 404 })
+        return new Response(JSON.stringify({ status: 'ok', message: { items: [] } }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }),
+    )
+    const tool = createScholarlyVerifyTool(host)
+    const result = (await tool.execute(
+      { references: ['Nobody, N. (2019). A Missing Study. doi:10.1234/fake.2'] },
+      EXEC_CONTEXT as never,
+    )) as { text: string }
+    expect(result.text).toContain('NOT FOUND')
+    expect(result.text).toContain('10.1234/fake.2 is not registered in Crossref')
+  })
+
   it('flags a retracted paper as CHECK with the retraction noted', async () => {
     const host = createMockHost(
       createMockHttp(

@@ -165,6 +165,9 @@ async function verifySingleReference(
   const notes: string[] = []
 
   let record: CrossrefWork | undefined
+  // A DOI the registry does not know. Recorded so the bibliographic fallback
+  // can never certify a fabricated identifier as verified.
+  let unregisteredDoi: string | undefined
 
   if (parsed.doi) {
     try {
@@ -179,6 +182,7 @@ async function verifySingleReference(
           notes,
         }
       }
+      unregisteredDoi = parsed.doi
     } catch (error) {
       // `lookupCrossref` normalizes a 404 to `undefined` and rethrows everything
       // else, so a throw here is a transport or registry failure, never proof
@@ -198,12 +202,30 @@ async function verifySingleReference(
   }
 
   if (!record || !record.title?.[0]) {
-    notes.push('No matching publication record found in Crossref.')
+    notes.push(
+      unregisteredDoi === undefined
+        ? 'No matching publication record found in Crossref.'
+        : `DOI ${unregisteredDoi} is not registered in Crossref, and no bibliographic match was found.`,
+    )
     return { raw: rawReference, verdict: 'not_found', notes }
   }
 
   const paper = paperFromCrossref(record)
   const ok = checkDiscrepancies(parsed, paper, rawReference, notes, 'search')
+  if (unregisteredDoi !== undefined) {
+    // The metadata can match a real record while the supplied identifier stays
+    // fictional; report the closest record, but never certify the missing DOI.
+    notes.push(
+      `DOI ${unregisteredDoi} is not registered in Crossref; the closest bibliographic match is ${paper.doi ?? 'a record without a DOI'}.`,
+    )
+    return {
+      raw: rawReference,
+      verdict: 'check',
+      doi: paper.doi,
+      foundPaper: paper,
+      notes,
+    }
+  }
   if (ok && paper.doi && !parsed.doi) {
     notes.push(`Found with DOI: ${paper.doi}.`)
   }

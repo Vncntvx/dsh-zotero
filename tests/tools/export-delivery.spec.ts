@@ -1,6 +1,6 @@
 import { sandboxFixture } from '../helpers/sandbox-paths.ts'
 import { tmpdir } from 'node:os'
-/** Export completion includes file publication, original-turn delivery and spill. */
+/** Export completion includes file publication and spill. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
@@ -40,15 +40,6 @@ function prepare(
   lane.ctx.provide('sandboxPolicy', { defaultMode: 'workspace-write', resolve: policy } as never)
   new SandboxedFileSystem(lane.ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
   lane.ctx.provide('workingDirectory', { ensure: async () => directory } as never)
-  // The delivery reads one member from the agent seam. When the real registry
-  // composed it (`composeRealJobs`), add the member to that seam; otherwise
-  // the minimal stub is enough for a foreground call.
-  const agents = lane.ctx.get('agents')
-  if (agents === undefined) {
-    lane.ctx.provide('agents', { turnBoundaryOf: () => ({ lastTurn: 4 }) } as never)
-  } else {
-    Object.assign(agents as object, { turnBoundaryOf: () => ({ lastTurn: 4 }) })
-  }
   lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
     helpers.text('TY  - JOUR\n' + 'x'.repeat(17_000)),
   )
@@ -93,7 +84,7 @@ function jobIdOf(batch: { readonly results: ReadonlyArray<{ readonly result: unk
 const caller = SessionId('test-session')
 
 it.each([false, true])(
-  'writes and delivers exactly once with original turn (background=%s)',
+  'writes exactly once and leaves delivery to the present tool (background=%s)',
   async (background) => {
     const storage = resultStorage(lane.ctx)
     const jobs: RealJobs = await composeRealJobs(lane.ctx)
@@ -113,22 +104,17 @@ it.each([false, true])(
     }
     expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
     expect(policy).toHaveBeenCalledWith({ session })
-    expect(append).toHaveBeenCalledExactlyOnceWith('deliverables/presented', {
-      turn: 4,
-      callId: 'delivery-call',
-      files: [{ path: join(directory, 'references.ris'), description: 'Exported ris' }],
-    })
+    // The harness present tool is the only producer of deliverables/presented.
+    expect(append).not.toHaveBeenCalled()
     expect(saveText).not.toHaveBeenCalled()
-    // Delivery runs after the deliverable is published, so the persisted body
-    // carries the final outputFile/delivered facts rather than a pre-write snapshot.
     expect(storage.save).toHaveBeenCalledTimes(1)
     const persisted = JSON.parse(new TextDecoder().decode([...storage.files.values()][0])) as {
       data: { outputFile?: string; delivered?: boolean }
     }
     expect(persisted.data).toMatchObject({
       outputFile: join(directory, 'references.ris'),
-      delivered: true,
     })
+    expect(persisted.data).not.toHaveProperty('delivered')
   },
 )
 
@@ -145,7 +131,7 @@ it('keeps a published export completed when result persistence fails', async () 
   const outcome = await jobs.settled(JobId(jobId), caller)
   expect(outcome.status).toBe('completed')
   expect(jobs.registry.read(JobId(jobId), caller).result).toContain('TY  - JOUR')
-  expect(append).toHaveBeenCalledTimes(1)
+  expect(append).not.toHaveBeenCalled()
   expect(
     lane.ctx.zotero.diagnostics
       .snapshot(50)
@@ -190,23 +176,9 @@ it.each([true, false])(
     expect(append).not.toHaveBeenCalled()
     release.resolve()
     expect((await jobs.settled(JobId(jobId), caller)).status).toBe('completed')
-    expect(append).toHaveBeenCalledOnce()
+    expect(append).not.toHaveBeenCalled()
   },
 )
-
-it('reports delivery failure after writing with the actual path', async () => {
-  const jobs: RealJobs = await composeRealJobs(lane.ctx)
-  jobs.agentOf('test-session')
-  const { append, invoke } = prepare()
-  append.mockImplementation(() => {
-    throw new Error('publication failed')
-  })
-  const batch = await invoke(true)
-  const outcome = await jobs.settled(JobId(jobIdOf(batch)), caller)
-  expect(outcome.status).toBe('failed')
-  expect(outcome.detail).toContain(join(directory, 'references.ris'))
-  expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
-})
 
 it.each(['absolute', 'relative', 'symlink'])(
   'refuses %s escape from the session root',
