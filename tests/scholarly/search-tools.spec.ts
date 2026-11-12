@@ -66,6 +66,16 @@ describe('scholarly_search tool', () => {
     )
   })
 
+  it('reports an all-sources outage as unknown instead of no results', async () => {
+    const host = createMockHost(createMockHttp(() => new Response('boom', { status: 500 })))
+    const tool = createScholarlySearchTool(host)
+    const result = (await tool.execute({ query: 'attention mechanism' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('Every scholarly index was unavailable')
+    expect(result.text).not.toContain('No papers found for')
+  })
+
   it('searches and returns deduplicated results with library tags', async () => {
     const mockHttp = createMockHttp((url) => {
       if (url.includes('api.openalex.org/works')) {
@@ -235,11 +245,23 @@ describe('scholarly_get tool', () => {
     const result = (await tool.execute({ id: '10.9999/unknown.paper' }, EXEC_CONTEXT as any)) as {
       text: string
     }
-    expect(result.text).toContain('No scholarly index found a paper matching')
+    // Three sources answered and one failed: the headline names the split.
+    expect(result.text).toContain('No matching work among the 3 scholarly source(s) that answered')
     expect(result.text).toContain('Unanswered sources:')
     expect(result.text).toContain('Europe PMC (HTTP 404 from www.ebi.ac.uk)')
     expect(result.text).toContain('scholarly_search')
     expect(result.text).not.toContain('Please verify the identifier')
+  })
+
+  it('reports an all-sources outage for a DOI as unknown, not as absence', async () => {
+    const host = createMockHost(createMockHttp(() => new Response('boom', { status: 500 })))
+    const tool = createScholarlyGetTool(host)
+    const result = (await tool.execute({ id: '10.9999/outage.paper' }, EXEC_CONTEXT as any)) as {
+      text: string
+    }
+    expect(result.text).toContain('Every scholarly index was unavailable')
+    expect(result.text).toContain('Nothing is known about this identifier')
+    expect(result.text).not.toContain('No scholarly index found a paper matching')
   })
 
   it('keeps answering sources in the result when others fail', async () => {

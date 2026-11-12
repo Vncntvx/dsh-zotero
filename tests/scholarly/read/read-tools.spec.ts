@@ -649,8 +649,9 @@ describe('scholarly_get identifier branches', () => {
       { id: 'a title that no index holds at all' },
       EXEC_CONTEXT as any,
     )) as { text: string }
-    expect(result.text).toContain('No scholarly index found a paper matching')
-    expect(result.text).toContain('Unanswered sources: OpenAlex (HTTP 404 from api.openalex.org)')
+    // The title branch reads one source, so its failure means nothing is known.
+    expect(result.text).toContain('Every scholarly index was unavailable')
+    expect(result.text).toContain('Nothing is known about this identifier')
     expect(result.text).not.toContain('Please verify the identifier')
   })
 

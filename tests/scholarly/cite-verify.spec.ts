@@ -153,7 +153,7 @@ describe('scholarly_verify verdict details', () => {
                 title: ['A Retracted Study'],
                 author: [{ family: 'Doe', given: 'J' }],
                 'published-print': { 'date-parts': [[2015]] },
-                'update-to': [{ type: 'retraction' }],
+                'updated-by': [{ type: 'retraction' }],
               },
             }),
             { headers: { 'content-type': 'application/json' } },
@@ -327,7 +327,7 @@ describe('scholarly_verify bibliographic-match branches', () => {
       title: ['A Retracted Paper About Things'],
       author: [{ family: 'Doe', given: 'J' }],
       'published-print': { 'date-parts': [[2016]] },
-      'update-to': [{ type: 'retraction' }],
+      'updated-by': [{ type: 'retraction' }],
     })
     const tool = createScholarlyVerifyTool(host)
     const result = (await tool.execute(

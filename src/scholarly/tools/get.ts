@@ -57,6 +57,8 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
        * simply holds no record is not a failure and stays out of this list.
        */
       const failedSources: string[] = []
+      /** Every index read this call started, answered or failed. */
+      let attemptedSources = 0
 
       /**
        * Await one index read, folding its rejection into `failedSources`.
@@ -72,6 +74,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         sourceId: ScholarlySourceId,
         read: () => Promise<T>,
       ): Promise<T | undefined> => {
+        attemptedSources += 1
         try {
           return await read()
         } catch (error) {
@@ -177,14 +180,23 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         // Three distinct facts stay distinct. Every index was reached and none
         // holds the work; every index failed, so nothing is known; or a mix.
         // Only the first may say "verify the identifier".
-        const unanswered =
-          failedSources.length > 0 ? ` Unanswered sources: ${failedSources.join('; ')}.` : ''
-        const remedy =
-          failedSources.length > 0
-            ? ' Use scholarly_search for broader candidates after the unavailable sources recover.'
-            : ' Verify the identifier or use scholarly_search for broader candidates.'
+        const answeredSources = attemptedSources - failedSources.length
+        if (attemptedSources > 0 && failedSources.length === attemptedSources) {
+          return {
+            text: `Every scholarly index was unavailable for "${raw}": ${failedSources.join('; ')}. Nothing is known about this identifier; retry after the sources recover.`,
+            papers: [],
+            issues: failedSources,
+          }
+        }
+        if (failedSources.length > 0) {
+          return {
+            text: `No matching work among the ${answeredSources} scholarly source(s) that answered for "${raw}". Unanswered sources: ${failedSources.join('; ')}. Verify the identifier after they recover, or use scholarly_search for broader candidates.`,
+            papers: [],
+            issues: failedSources,
+          }
+        }
         return {
-          text: `No scholarly index found a paper matching "${raw}".${unanswered}${remedy}`,
+          text: `No scholarly index found a paper matching "${raw}". Verify the identifier or use scholarly_search for broader candidates.`,
           papers: [],
           issues: failedSources,
         }

@@ -162,6 +162,24 @@ describe('scholarly transport failure classification', () => {
     expect(breaker.getState(host)).toBe('OPEN')
   })
 
+  it('does not count a 404 toward the breaker', async () => {
+    const breaker = new CircuitBreaker({
+      failureThreshold: 3,
+      cooldownMs: 60_000,
+      windowMs: 60_000,
+    })
+    const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
+      circuitBreaker: breaker,
+      fetchImpl: async () => new Response('{}', { status: 404 }),
+    })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(http.text('https://api.crossref.org/works/missing')).rejects.toThrow()
+    }
+    // A 404 answers one identifier; three of them are not a host outage.
+    expect(breaker.getState('api.crossref.org')).toBe('CLOSED')
+  })
+
   it('does not reset the breaker on a redirect hop', async () => {
     const breaker = new CircuitBreaker({
       failureThreshold: 3,

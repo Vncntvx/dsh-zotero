@@ -136,9 +136,18 @@ describe('crossref adapter', () => {
       DOI: '10.1038/bad1234',
       title: ['Retracted Paper'],
       author: [{ name: 'Fake Author' }],
-      'update-to': [{ type: 'retraction', DOI: '10.1038/notice' }],
+      'updated-by': [{ type: 'retraction', DOI: '10.1038/notice' }],
     })
     expect(retracted.retracted).toBe(true)
+
+    // A retraction notice names the retracted work through update-to; the
+    // notice itself is not retracted.
+    const notice = paperFromCrossref({
+      DOI: '10.1038/notice',
+      title: ['Retraction Notice'],
+      'update-to': [{ type: 'retraction', DOI: '10.1038/bad1234' }],
+    })
+    expect(notice.retracted).toBeUndefined()
   })
 })
 

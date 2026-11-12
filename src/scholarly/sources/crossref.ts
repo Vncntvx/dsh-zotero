@@ -32,7 +32,14 @@ export interface CrossrefWork {
   type?: string
   'is-referenced-by-count'?: number
   URL?: string
+  /**
+   * Works this record updates. A retraction notice carries `update-to` and
+   * points at the retracted paper, so this field never marks the record itself
+   * as retracted.
+   */
   'update-to'?: Array<{ type?: string; DOI?: string }>
+  /** Works that update this record: the field a retracted paper carries. */
+  'updated-by'?: Array<{ type?: string; DOI?: string }>
 }
 
 export function paperFromCrossref(work: CrossrefWork): ScholarlyPaper {
@@ -44,7 +51,10 @@ export function paperFromCrossref(work: CrossrefWork): ScholarlyPaper {
     datePartsObj?.filter((p: number | null): p is number => typeof p === 'number') ?? []
   const doi = cleanDoi(work.DOI)
 
-  const isRetracted = (work['update-to'] ?? []).some((update) =>
+  // Crossref records the relation on the affected work: `updated-by` names the
+  // retraction or withdrawal notice. `update-to` is the other direction (this
+  // record is the notice), so checking it missed every retracted paper.
+  const isRetracted = (work['updated-by'] ?? []).some((update) =>
     /retract|withdraw/i.test(update.type ?? ''),
   )
 
@@ -92,7 +102,7 @@ export async function searchCrossref(
     rows: query.limit,
     filter: filters.length > 0 ? filters.join(',') : undefined,
     select:
-      'DOI,title,author,issued,container-title,abstract,type,is-referenced-by-count,update-to',
+      'DOI,title,author,issued,container-title,abstract,type,is-referenced-by-count,updated-by',
     mailto: keys?.email,
   }
 
@@ -140,7 +150,7 @@ export async function crossrefMatchReference(
   const url = `https://api.crossref.org/works?${encodeQueryParams({
     'query.bibliographic': referenceText.slice(0, 600),
     rows,
-    select: 'DOI,title,author,issued,container-title,type,update-to',
+    select: 'DOI,title,author,issued,container-title,type,updated-by',
     mailto: keys?.email,
   })}`
 

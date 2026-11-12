@@ -175,8 +175,17 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
 
           if (papers.length === 0) {
             const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
+            if (failedSources.length === selectedSources.length && selectedSources.length > 0) {
+              return {
+                text: `Every scholarly index was unavailable for "${text}": ${failedSources.join('; ')}. Nothing is known about these keywords; retry after the sources recover.`,
+                papers: [],
+                issues: failedSources,
+              }
+            }
             const failureNotice =
-              failedSources.length > 0 ? `\nUnanswered sources: ${failedSources.join('; ')}.` : ''
+              failedSources.length > 0
+                ? `\nUnanswered sources: ${failedSources.join('; ')}. No match came from the ${selectedSources.length - failedSources.length} source(s) that answered; retry after they recover.`
+                : ''
             return {
               text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,
               papers: [],

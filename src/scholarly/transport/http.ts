@@ -374,7 +374,12 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           return await reader(response, maxBytes)
         } else {
           const status = response.status
-          recordFailure(hostname)
+          // A 4xx answers one resource, not the host's health: a 404 means the
+          // registry does not hold that identifier, which the adapters
+          // normalize to "not found". Only 5xx and the throttling statuses
+          // penalize the circuit; otherwise a few bad DOIs would open it and
+          // hide every later answer behind a circuit error.
+          if (status >= 500 || status === 429 || status === 408) recordFailure(hostname)
           await response.body?.cancel()
 
           const retryAfterHeader = Number(response.headers.get('retry-after'))
