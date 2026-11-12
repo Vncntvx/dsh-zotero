@@ -70,7 +70,7 @@
   flex-direction: column;
   gap: var(--dsw-font-xs-13-font-size);
   padding-block: var(--dsw-font-xs-13-font-size);
-  border-block: 1px solid var(--dsw-alias-border-l2);
+  border-block: 0.5px solid var(--dsw-alias-border-l2);
   overflow-wrap: anywhere;
 }
 
@@ -88,7 +88,7 @@
 
 .footer {
   justify-content: flex-end;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 @media (pointer: coarse) {

@@ -82,6 +82,9 @@ describe('ParseDocumentDialog confirmation', () => {
     expect(screen.getByText(PARSE_SELECTION.label!)).toBeDefined()
     expect(screen.getByText(parseEn.parseModeFree)).toBeDefined()
     expect(screen.getByText(parseEn.parseUploadMeaning)).toBeDefined()
+    // The provider's product name comes from the dictionary, so a copy review
+    // sees it with the rest of the dialog.
+    expect(screen.getByText(parseEn.parseProviderValue)).toBeDefined()
     expect(screen.getByText(/10485760 bytes.*20 pages/)).toBeDefined()
     expect(world.remote.startDocumentParse).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))

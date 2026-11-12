@@ -13,8 +13,10 @@
  *
  * **Cache before bytes.** `lookup` checks the source index before probing a
  * local attachment with stat or an indexed URL with HEAD. A hit only reads
- * local artifacts. Upload authorization is checked by the active-parse domain
- * before any source probe or document acquisition.
+ * local artifacts. The active-parse domain re-checks remote access, the
+ * session, and the user's explicit submission of the one target before any
+ * source probe or document acquisition; mounting the component is what
+ * authorizes egress at all.
  *
  * **Failures propagate.** Configuration, authorization, source, protocol,
  * task, archive, and storage failures are explicit errors. The output path

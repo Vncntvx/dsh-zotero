@@ -14,6 +14,9 @@ describe('locale bundles', () => {
   })
 
   it('drops the retired lens/funnel/toolcard keys', () => {
+    // Keys removed with the surfaces that read them. `src/client/locales.ts`
+    // derives the key union from `en`, so a still-referenced key would fail
+    // typecheck; this list keeps them from creeping back as copy-only edits.
     const retired: readonly string[] = [
       // The config lives in `plugins.bundle.config`
       // on the plugin detail page, not a collapsed card. A page renders its whole form,
@@ -157,6 +160,57 @@ describe('locale bundles', () => {
       'enrichmentUploadRiskDescription',
       'enrichmentUploadRiskAcknowledge',
       'enrichmentUploadRiskConfirm',
+      // Superseded surfaces: the lens/funnel overview replacement, the saved
+      // searches tree, the panel's own copy menu, and the old per-file model
+      // progress labels. The tier labels in `EnrichmentSettingsForm` are the
+      // current model copy; the physical model names below belonged to an
+      // earlier catalogue.
+      'allPassagesCountBadge',
+      'allPassagesEmptyNote',
+      'viewAllPassages',
+      'panelOverview',
+      'panelEvidence',
+      'sessionLiterature',
+      'sessionExports',
+      'sessionPassages',
+      'sessionPassagesSummary',
+      'searchesOmittedNote',
+      'auditTrailTitle',
+      'inspectorTabsLabel',
+      'copyCitationSuccess',
+      'groupLibrarySidebar',
+      'libraryAddToChat',
+      'libraryAnnotationPage',
+      'libraryAskTemplate',
+      'libraryCiteLine',
+      'libraryCopyMoreFormats',
+      'libraryFilterAny',
+      'libraryMetaType',
+      'libraryMoreActions',
+      'libraryNoSavedSearches',
+      'librarySavedSearches',
+      'librarySearchLabel',
+      'libraryStatusLabel',
+      'libraryTagMatch',
+      'statusLocalApiAddress',
+      'statusServerIdUnreported',
+      'enrichmentTokenRef',
+      'enrichmentTokenNeedsReference',
+      'semanticModelProgress',
+      'semanticModelDownloadingFile',
+      'semanticModelDownloadFailedNotice',
+      'semanticModelQwen3_06B',
+      'semanticModelGranite_97M',
+      'semanticModelKalm_05B',
+      'semanticModelNomic_137M',
+      'semanticModelBgeM3',
+      'semanticModelGteBase',
+      'toolTitleAttachment',
+      'toolTitleChildren',
+      'toolSummaryAttachment',
+      'toolSummaryChildren',
+      'toolParentItem',
+      'toolChildrenNone',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

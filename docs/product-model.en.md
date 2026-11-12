@@ -82,7 +82,7 @@ graph LR
     PA -.->|component authorization and explicit submission| M[MinerU external parsing service]
 ```
 
-Both primary paths reach the local library through `ctx.zotero`. Agent external scholarly retrieval requires the scholarly component. Explicit user reading of URL attachments is authorized independently by the literature panel and does not mount scholarly. The enrichment paths in the diagram show the target contract: ordinary reads only query existing artifacts, and only a specific target explicitly submitted by the user enters a parsing job and generates external requests.
+Both primary paths reach the local library through `ctx.zotero`. Agent external scholarly retrieval requires the scholarly component. Explicit user reading of URL attachments is authorized independently by the literature panel and does not mount scholarly. The enrichment paths in the diagram are the current implementation: ordinary reads only query existing artifacts, and only a specific target explicitly submitted by the user enters a parsing job and generates external requests.
 
 ## Four Boundaries
 

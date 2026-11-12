@@ -11,6 +11,9 @@ export const parseEn = {
   parseModeFree: 'Free',
   parseModePro: 'Precise',
   parseProvider: 'External service',
+  // The provider's product name is not translated; it names who receives the
+  // document.
+  parseProviderValue: 'MinerU (mineru.net)',
   parseUploadMeaning:
     'Submission lets the host read this PDF and send its bytes to MinerU (mineru.net) for parsing. The host downloads a public URL first.',
   parseLimits:
@@ -66,6 +69,7 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseModeFree: '免费',
   parseModePro: '精准',
   parseProvider: '外部服务',
+  parseProviderValue: 'MinerU (mineru.net)',
   parseUploadMeaning:
     '提交后宿主读取此 PDF，并把文档字节发送给 MinerU（mineru.net）解析。公开 URL 由宿主先下载。',
   parseLimits:

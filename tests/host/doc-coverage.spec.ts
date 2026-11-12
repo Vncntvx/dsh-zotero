@@ -7,9 +7,10 @@
  * @module tests/host/doc-coverage
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Config as CoreConfig } from '../../src/config.js'
+import { ZOTERO_ERROR_CODES } from '../../src/errors.js'
 import {
   ENRICHMENT_CREDENTIAL_REFERENCE_NAMES,
   SCHOLARLY_CREDENTIAL_REFERENCE_NAMES,
@@ -39,6 +40,35 @@ function fieldsOf(schema: unknown): string[] {
     throw new Error('schema defaults failed: ' + JSON.stringify(result.issues))
   }
   return Object.keys(result.value as object)
+}
+
+/** The defaulted field values one component schema declares. */
+function defaultsOf(schema: unknown): Record<string, unknown> {
+  const dict = (schema as { dict?: Record<string, { meta?: { default?: unknown } }> }).dict ?? {}
+  const defaults: Record<string, unknown> = {}
+  for (const [field, entry] of Object.entries(dict)) {
+    if (entry?.meta !== undefined && 'default' in entry.meta) defaults[field] = entry.meta.default
+  }
+  return defaults
+}
+
+/**
+ * The schema one configuration section documents, keyed by the section's own
+ * heading. The same field name can mean different things per component
+ * (`foregroundWaitMs` is 4000 in the core and 30000 in the scholarly schema),
+ * so a whole-document scan would compare the wrong default.
+ */
+function schemaOf(coreFieldsCount: number) {
+  return (heading: string): Record<string, unknown> | undefined => {
+    if (heading.includes('核心字段') || heading.includes('Core fields')) {
+      void coreFieldsCount
+      return defaultsOf(CoreConfig)
+    }
+    if (heading.includes('`dsh-zotero/scholarly`')) return defaultsOf(ScholarlyConfig)
+    if (heading.includes('`dsh-zotero/library`')) return defaultsOf(LibraryConfigSchema)
+    if (heading.includes('`dsh-zotero/enrichment`')) return defaultsOf(EnrichmentConfigSchema)
+    return undefined
+  }
 }
 
 const coreFields = fieldsOf(CoreConfig)
@@ -80,6 +110,82 @@ describe('configuration docs agree with the schemas', () => {
     }
   })
 
+  it("states each group's field count, not only their total", () => {
+    // The total alone lets one group borrow another's fields: 36 + 12 + 9 + 7
+    // is still 64. Each count is derived from its own schema.
+    for (const [path, coreText, libraryText] of [
+      [
+        'docs/configuration.md',
+        `\`src/config.ts\`，${coreFields.length} 个字段`,
+        `\`src/library/config.ts\`，${libraryFields.length} 个字段`,
+      ],
+      [
+        'docs/configuration.en.md',
+        `\`src/config.ts\`, ${coreFields.length} fields`,
+        `\`src/library/config.ts\`, ${libraryFields.length} fields`,
+      ],
+    ] as const) {
+      const text = docOf(path)
+      expect(text, `${path} is missing the core field count`).toContain(coreText)
+      expect(text, `${path} is missing the library field count`).toContain(libraryText)
+    }
+  })
+
+  it('prints the schema default for every numeric and boolean field', () => {
+    // A table row that says 9 where the schema says 8 is a wrong instruction;
+    // prose cells (`configured default`, `—`) are skipped, and quoted strings
+    // are compared as JSON so an enum default is checked too.
+    for (const path of ['docs/configuration.md', 'docs/configuration.en.md']) {
+      const text = docOf(path)
+      const schemaFor = schemaOf(coreFields.length)
+      const violations: string[] = []
+      let compared = 0
+      for (const section of text.split(/^## /m)) {
+        const heading = section.split('\n', 1)[0] ?? ''
+        const defaults = schemaFor(heading)
+        if (defaults === undefined) continue
+        const rows = section.matchAll(/^\|\s*`([A-Za-z][\w]*)`\s*\|\s*([^|]*?)\s*\|/gm)
+        for (const [, field, cell] of rows) {
+          if (field === undefined || cell === undefined || !(field in defaults)) continue
+          const expected = defaults[field]
+          const literal = /^`([^`]*)`$/.exec(cell)
+          if (literal === null) continue
+          const raw = literal[1]!
+          if (typeof expected === 'boolean') {
+            if (raw !== 'true' && raw !== 'false') continue
+            compared += 1
+            if ((raw === 'true') !== expected) {
+              violations.push(
+                `${path} ${field}: table says ${raw}, schema default is ${String(expected)}`,
+              )
+            }
+            continue
+          }
+          if (typeof expected === 'number') {
+            if (!/^-?\d+(\.\d+)?$/.test(raw)) continue
+            compared += 1
+            if (Number(raw) !== expected) {
+              violations.push(
+                `${path} ${field}: table says ${raw}, schema default is ${String(expected)}`,
+              )
+            }
+            continue
+          }
+          if (typeof expected === 'string' && raw.startsWith('"') && raw.endsWith('"')) {
+            compared += 1
+            if (JSON.parse(raw) !== expected) {
+              violations.push(`${path} ${field}: table says ${raw}, schema default is ${expected}`)
+            }
+          }
+        }
+      }
+      // The guard that the scan still compares something: a parser that
+      // matched no row would pass every case above.
+      expect(compared, `${path} matched no default rows`).toBeGreaterThan(30)
+      expect(violations).toEqual([])
+    }
+  })
+
   it('names the suggested credential references from the shared module', () => {
     for (const path of ['docs/configuration.md', 'docs/configuration.en.md']) {
       const text = docOf(path)
@@ -89,6 +195,44 @@ describe('configuration docs agree with the schemas', () => {
       ]) {
         expect(text, `${path} is missing ${name}`).toContain(name)
       }
+    }
+  })
+})
+
+describe('the documentation set stays complete', () => {
+  it('pairs every document with its English half and its section count', () => {
+    // A missing translation or a section added to one side only is invisible
+    // to every other check: they all read the files they are given.
+    const names = readdirSync(new URL('docs/', REPO_ROOT)).filter(
+      (name) => name.endsWith('.md') && !name.endsWith('.en.md'),
+    )
+    const count = (text: string): number => text.match(/^## /gm)?.length ?? 0
+    const violations: string[] = []
+    for (const name of names) {
+      const english = `docs/${name.slice(0, -'.md'.length)}.en.md`
+      let paired: string
+      try {
+        paired = docOf(english)
+      } catch {
+        violations.push(`${english} is missing`)
+        continue
+      }
+      const zh = count(docOf(`docs/${name}`))
+      const en = count(paired)
+      if (zh !== en) violations.push(`${name}: ${zh} sections, ${english}: ${en}`)
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('documents every stable error code in the tool reference', () => {
+    const codes: readonly string[] = ZOTERO_ERROR_CODES
+    for (const path of ['docs/tools.md', 'docs/tools.en.md']) {
+      const text = docOf(path)
+      const start = Math.max(text.indexOf('## 错误码'), text.indexOf('## Error codes'))
+      expect(start, `${path} has no error-code table`).toBeGreaterThanOrEqual(0)
+      const table = text.slice(start)
+      const missing = codes.filter((code) => !table.includes(code))
+      expect(missing, `${path} is missing error codes`).toEqual([])
     }
   })
 })

@@ -84,7 +84,7 @@ Returns a detailed item or attachment object:
 ### Example
 
 ```text
-zotero_get(ref="zotero://user/0/item/ABC123", include=["notes", "annotations", "attachments"])
+zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations", "attachments"])
 ```
 
 ---
@@ -108,7 +108,7 @@ Read known item or attachment refs in input order. Each result reports success o
 ### Example
 
 ```text
-zotero_get_batch(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], fields="standard")
+zotero_get_batch(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5678"], fields="standard")
 ```
 
 ---
@@ -167,7 +167,7 @@ The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`,
 ### Example
 
 ```text
-zotero_retrieve(ref="zotero://user/0/item/ABC123", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
+zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
 ```
 
 ---
@@ -186,6 +186,7 @@ Generate formatted citations or export data files.
 | `format`            | string   | none         | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)                                                                                                                               |
 | `style`             | string   | config value | CSL style identifier (citation and bibliography only)                                                                                                                                                                             |
 | `locale`            | string   | `"en-US"`    | CSL locale (citation and bibliography only)                                                                                                                                                                                       |
+| `outputFile`        | string   | none         | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it)                                                                                                                   |
 | `run_in_background` | boolean  | `false`      | Whether to start as a background job (managed by the Harness `ctx.jobs`; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
 
 ### Output
@@ -210,8 +211,8 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 ### Example
 
 ```text
-zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex")
-zotero_export(refs=["zotero://user/0/item/ABC123", "zotero://user/0/item/DEF456"], format="bibtex", run_in_background=true)
+zotero_export(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5678"], format="bibtex")
+zotero_export(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5678"], format="bibtex", run_in_background=true)
 ```
 
 ---
@@ -484,6 +485,12 @@ Standalone notes and child notes are both supported, and reading a version does 
 
 Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`; a declined plan card returns `{kind: "declined"}`, and a version conflict returns `ZOTERO_WRITE_CONFLICT`.
 
+### Example
+
+```text
+zotero_update_note(ref="zotero://user/0/item/NOTE1234", markdown="## Summary\n- first point")
+```
+
 ---
 
 ## zotero_update_collection
@@ -500,6 +507,12 @@ Update a collection's name or parent collection. The write is refused when neith
 
 Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`; a declined plan card returns `{kind: "declined"}`.
 
+### Example
+
+```text
+zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name="Field notes (2026)")
+```
+
 ---
 
 ## zotero_restore_items
@@ -515,6 +528,12 @@ Restore selected items from the personal library Trash. Each item's version is r
 Output is `{kind: "restored", restored, unverified, failed, serverId?}`; version conflicts go to `failed`, unknown receipts go to `unverified`, and neither arm is retried automatically.
 
 Child notes, child attachments, and annotations are supported. The result body lists every restored object's ref, version, and library version, plus every failed or unverified object's ref and error details; the card reports restored, unverified, and failed counts. An unverified receipt must be reconciled by ref/key before any further action and is never retried.
+
+### Example
+
+```text
+zotero_restore_items(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5678"])
+```
 
 ---
 
@@ -551,7 +570,7 @@ Update the name or search conditions of an existing saved search in the personal
 
 | Parameter    | Type     | Required | Description                                                                                 |
 | ------------ | -------- | -------- | ------------------------------------------------------------------------------------------- |
-| `search`     | string   | ✓        | Target saved search ref (`zotero://user/0/saved-search/<KEY>`)                              |
+| `search`     | string   | ✓        | Target saved search ref (`zotero://user/0/search/<KEY>`)                                    |
 | `name`       | string   | —        | New name (optional; non-blank text when provided)                                           |
 | `conditions` | object[] | —        | New condition objects list (optional; each containing `condition`, `operator`, and `value`) |
 
@@ -566,7 +585,7 @@ At least one of `name` or `conditions` must be provided.
 ### Example
 
 ```text
-zotero_update_saved_search(search="zotero://user/0/saved-search/SRCH1234", name="Updated ML Papers")
+zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updated ML Papers")
 ```
 
 ---
@@ -577,9 +596,9 @@ Delete a saved search from the personal library. **Irreversible**: removes the s
 
 ### Parameters
 
-| Parameter | Type   | Required | Description                                                    |
-| --------- | ------ | -------- | -------------------------------------------------------------- |
-| `search`  | string | ✓        | Target saved search ref (`zotero://user/0/saved-search/<KEY>`) |
+| Parameter | Type   | Required | Description                                              |
+| --------- | ------ | -------- | -------------------------------------------------------- |
+| `search`  | string | ✓        | Target saved search ref (`zotero://user/0/search/<KEY>`) |
 
 ### Output
 
@@ -590,7 +609,7 @@ Delete a saved search from the personal library. **Irreversible**: removes the s
 ### Example
 
 ```text
-zotero_delete_saved_search(search="zotero://user/0/saved-search/SRCH1234")
+zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 ```
 
 ## scholarly_save_to_zotero
@@ -697,7 +716,6 @@ At least one of `create`, `update`, or `delete` must be given, and the total cou
 
 ```text
 zotero_batch_items(
-  reason="Batch organizing machine learning papers and trashing obsolete drafts",
   create=[
     {"itemType": "journalArticle", "title": "Attention Is All You Need", "tags": ["Transformer"]}
   ],
@@ -737,43 +755,58 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 ## Error codes
 
-| Error code                                 | Description                                                                                                                  |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `ZOTERO_NOT_RUNNING`                       | Zotero is not running or the local port is unreachable                                                                       |
-| `ZOTERO_API_DISABLED`                      | Zotero is running but the local API is not enabled in advanced settings (403)                                                |
-| `ZOTERO_API_VERSION`                       | Unsupported local API version                                                                                                |
-| `ZOTERO_NOT_IMPLEMENTED`                   | The local API explicitly returns 501; endpoint or format unimplemented in this version                                       |
-| `ZOTERO_SERVER_MISMATCH`                   | Referenced Server ID does not match the running Zotero instance                                                              |
-| `ZOTERO_NOT_FOUND`                         | Referenced item, collection, or saved search does not exist                                                                  |
-| `ZOTERO_RANGE_UNSUPPORTED`                 | The server does not keep change history back to the requested version (409)                                                  |
-| `ZOTERO_NO_ATTACHMENT`                     | No attachment of the requested type exists under the item                                                                    |
-| `ZOTERO_NO_FULLTEXT`                       | The attachment has no full-text index                                                                                        |
-| `ZOTERO_FILE_MISSING`                      | The recorded local attachment file does not exist on disk                                                                    |
-| `ZOTERO_INVALID_REF`                       | Ref format violates the `zotero://` grammar or targets an unsupported library                                                |
-| `ZOTERO_INVALID_ARGUMENT`                  | Argument violates domain constraints                                                                                         |
-| `ZOTERO_SCOPE_AMBIGUOUS`                   | A collection or saved-search name matches several same-name objects                                                          |
-| `ZOTERO_TIMEOUT`                           | Provider request timed out                                                                                                   |
-| `ZOTERO_RESPONSE_TOO_LARGE`                | API response stream exceeds the read cap                                                                                     |
-| `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds the character cap                                                                                     |
-| `ZOTERO_CAPABILITY_UNAVAILABLE`            | The current provider does not declare the required capability                                                                |
-| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                                         |
-| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | A configured scholarly credential reference is invalid or has no value (never falls back to anonymous access)                |
-| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | The configured MinerU precise-API token reference cannot be resolved (fail-closed; no free/anonymous downgrade)              |
-| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | Explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are unavailable                         |
-| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | An operation id was replayed with a different target or settings snapshot                                                    |
-| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU reported the parsing task as failed, with its own stated reason                                                       |
-| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | The parsed-artifact output directory failed validation                                                                       |
-| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | The MinerU archive failed structural or zip-safety validation                                                                |
-| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | The document exceeded the selected API's size limit or is not a PDF                                                          |
-| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | Semantic search is on but the model is missing/corrupt or the local inference runtime failed (fail-closed; no BM25 fallback) |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | The local semantic model download failed after every source was tried                                                        |
-| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | The local semantic model could not be removed, or its path failed the safety checks                                          |
-| `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                                     |
-| `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                                             |
-| `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                                          |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | The plan review card cannot start interaction (no interactive channel or a system-level failure)                             |
-| `ZOTERO_WRITE_CONFLICT`                    | Write version precondition conflict (412); the object was modified externally                                                |
-| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero authorization endpoint rate limited (429)                                                                             |
+| Error code                                 | Description                                                                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `ZOTERO_NOT_RUNNING`                       | Zotero is not running or the local port is unreachable                                                                                 |
+| `ZOTERO_API_DISABLED`                      | Zotero is running but the local API is not enabled in advanced settings (403)                                                          |
+| `ZOTERO_API_VERSION`                       | Unsupported local API version                                                                                                          |
+| `ZOTERO_NOT_IMPLEMENTED`                   | The local API explicitly returns 501; endpoint or format unimplemented in this version                                                 |
+| `ZOTERO_SERVER_MISMATCH`                   | Referenced Server ID does not match the running Zotero instance                                                                        |
+| `ZOTERO_NOT_FOUND`                         | Referenced item, collection, or saved search does not exist                                                                            |
+| `ZOTERO_RANGE_UNSUPPORTED`                 | The server does not keep change history back to the requested version (409)                                                            |
+| `ZOTERO_NO_ATTACHMENT`                     | No attachment of the requested type exists under the item                                                                              |
+| `ZOTERO_NO_FULLTEXT`                       | The attachment has no full-text index                                                                                                  |
+| `ZOTERO_SOURCE_PAGE_STALE`                 | The literature trail changed while paging; the cursor is stale (refresh and page again)                                                |
+| `ZOTERO_URL_PDF_DISABLED`                  | URL PDF reading is not authorized in the literature panel settings                                                                     |
+| `ZOTERO_URL_PDF_BUSY`                      | Two URL PDF downloads are already running (literature panel endpoint)                                                                  |
+| `ZOTERO_URL_PDF_NOT_URL`                   | The attachment is not a URL PDF (literature panel endpoint)                                                                            |
+| `ZOTERO_URL_PDF_REDIRECT`                  | PDF redirect limit exceeded, Location missing, or an HTTPS downgrade (literature panel endpoint)                                       |
+| `ZOTERO_URL_PDF_HTTP`                      | The PDF source returned a non-success status (literature panel endpoint)                                                               |
+| `ZOTERO_URL_PDF_NOT_PDF`                   | The response is not a PDF: media type or file signature mismatch (literature panel endpoint)                                           |
+| `ZOTERO_URL_PDF_TIMEOUT`                   | The PDF download exceeded 60 seconds (literature panel endpoint)                                                                       |
+| `ZOTERO_URL_PDF_FORBIDDEN_TARGET`          | The PDF address failed the public-address check (loopback, private, or reserved) (literature panel endpoint)                           |
+| `ZOTERO_URL_PDF_TOO_LARGE`                 | The PDF exceeds the 32 MiB reading limit (literature panel endpoint)                                                                   |
+| `ZOTERO_URL_PDF_NETWORK`                   | The PDF download failed at the transport layer; the raw URL is never surfaced (literature panel endpoint)                              |
+| `ZOTERO_FILE_MISSING`                      | The recorded local attachment file does not exist on disk                                                                              |
+| `ZOTERO_FILE_UNREADABLE`                   | The local attachment path cannot be resolved or the file is unreadable (`zotero_get` with `locations` reports it as `location.reason`) |
+| `ZOTERO_INVALID_REF`                       | Ref format violates the `zotero://` grammar or targets an unsupported library                                                          |
+| `ZOTERO_INVALID_ARGUMENT`                  | Argument violates domain constraints                                                                                                   |
+| `ZOTERO_SCOPE_AMBIGUOUS`                   | A collection or saved-search name matches several same-name objects                                                                    |
+| `ZOTERO_TIMEOUT`                           | Provider request timed out                                                                                                             |
+| `ZOTERO_RESPONSE_TOO_LARGE`                | API response stream exceeds the read cap                                                                                               |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds the character cap                                                                                               |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`            | The current provider does not declare the required capability                                                                          |
+| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                                                   |
+| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | A configured scholarly credential reference is invalid or has no value (never falls back to anonymous access)                          |
+| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | The configured MinerU precise-API token reference cannot be resolved (fail-closed; no free/anonymous downgrade)                        |
+| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | Explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are unavailable                                   |
+| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | An operation id was replayed with a different target or settings snapshot                                                              |
+| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU reported the parsing task as failed, with its own stated reason                                                                 |
+| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | The parsed-artifact output directory failed validation                                                                                 |
+| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | The MinerU archive failed structural or zip-safety validation                                                                          |
+| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | The document exceeded the selected API's size limit or is not a PDF                                                                    |
+| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | Semantic search is on but the model is missing/corrupt or the local inference runtime failed (fail-closed; no BM25 fallback)           |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | The local semantic model download failed after every source was tried                                                                  |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | The local semantic model download exceeded its overall deadline                                                                        |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | The local semantic model could not be removed, or its path failed the safety checks                                                    |
+| `ZOTERO_JOBS_UNAVAILABLE`                  | Background work needs the session's `ctx.jobs` and controller, which are unavailable                                                   |
+| `ZOTERO_RUN_IN_BACKGROUND_DISABLED`        | Running in the background is disabled; run the call in the foreground                                                                  |
+| `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                                               |
+| `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                                                       |
+| `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                                                    |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | The plan review card cannot start interaction (no interactive channel or a system-level failure)                                       |
+| `ZOTERO_WRITE_CONFLICT`                    | Write version precondition conflict (412); the object was modified externally                                                          |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero authorization endpoint rate limited (429)                                                                                       |
 
 ---
 

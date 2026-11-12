@@ -20,10 +20,12 @@ import { describe, expect, it } from 'vitest'
 import {
   bareFontScaleViolations,
   declarationsOf,
+  NEUTRAL_BORDER_ACCENTS,
   formatViolation,
   fullRoundRadiusViolations,
   hoverMediaViolations,
   literalColorViolations,
+  neutralBorderViolations,
   rulesOf,
   stateBorderViolations,
   stripComments,
@@ -266,6 +268,51 @@ describe('stateBorderViolations', () => {
     expect(stateBorderViolations(sheet(css), KNOWN)).toHaveLength(1)
     const fixed = css.replace(/0\.5px 0\.5px 0\.5px 0\.5px/, '0.5px 1px 0.5px 1px')
     expect(stateBorderViolations(sheet(fixed), KNOWN)).toHaveLength(1)
+  })
+})
+
+describe('neutralBorderViolations', () => {
+  it('fires on a neutral separator drawn at full pixel weight', () => {
+    const violations = neutralBorderViolations(
+      sheet('.panel { border: 1px solid var(--dsw-alias-border-l2); }'),
+      KNOWN,
+    )
+    expect(violations).toHaveLength(1)
+    expect(violations[0]?.detail).toContain('hairline')
+  })
+
+  it('accepts the host hairline and a state accent on a wider side', () => {
+    expect(
+      neutralBorderViolations(
+        sheet('.panel { border: 0.5px solid var(--dsw-alias-border-l2); }'),
+        KNOWN,
+      ),
+    ).toEqual([])
+    // A state-coloured longhand after the neutral shorthand owns that side.
+    expect(
+      neutralBorderViolations(
+        sheet(
+          '.card { border: 0.5px solid var(--dsw-alias-border-l2); border-left: 2px solid var(--dsw-alias-state-business-primary); }',
+        ),
+        KNOWN,
+      ),
+    ).toEqual([])
+  })
+
+  it('fires when a variant inherits a full-pixel neutral width from its base', () => {
+    const css = [
+      '.panel { border: 1px solid var(--dsw-alias-border-l2); }',
+      '.panel[data-tone="quiet"] { border-color: var(--dsw-alias-border-l1); }',
+    ].join('\n')
+    expect(neutralBorderViolations(sheet(css), KNOWN)).toHaveLength(1)
+  })
+
+  it('accepts a declared decorative rail', () => {
+    const accent = NEUTRAL_BORDER_ACCENTS[0]!
+    const css = `${accent.selector} { border-left: 3px solid var(--dsw-alias-border-l1); }`
+    expect(neutralBorderViolations({ file: accent.file, css }, KNOWN)).toEqual([])
+    // The same rule in another stylesheet is not covered by the declaration.
+    expect(neutralBorderViolations(sheet(css), KNOWN)).toHaveLength(1)
   })
 })
 

@@ -247,8 +247,13 @@ export async function probeSource(
 
 /**
  * Obtain document bytes. Bytes passed in by the caller win; otherwise the
- * source is resolved. `allowUpload` is enforced by the service before this
- * call — this module is only reached once egress is authorized.
+ * source is resolved.
+ *
+ * MinerU parsing is authorized by mounting the enrichment component, which is
+ * the deployment's acceptance of document egress; the caller has already
+ * required the user's explicit submission of this one target and passed the
+ * remote-action and session checks before this module runs. Nothing here asks
+ * again, and nothing here can authorize a second target.
  */
 export async function obtainSourceBytes(
   input: ParseSourceInput,

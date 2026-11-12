@@ -161,9 +161,9 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
           )}
           <dl className={css.facts}>
             <dt>{t('parseTarget')}</dt>
-            <dd data-parse-target-label>{state.targetLabel || '—'}</dd>
+            <dd data-parse-target-label>{state.targetLabel}</dd>
             <dt>{t('parseProvider')}</dt>
-            <dd>MinerU (mineru.net)</dd>
+            <dd>{t('parseProviderValue')}</dd>
             <dt>{t('parseMode')}</dt>
             <dd>{t(state.capabilities.mode === 'pro' ? 'parseModePro' : 'parseModeFree')}</dd>
           </dl>

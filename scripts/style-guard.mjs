@@ -26,9 +26,14 @@
  *    profile, so a `50%`/pill radius without a paired `corner-shape: round`
  *    renders as a squircle. The theme's own stylesheet guard enforces the
  *    pairing; feature CSS has to hold the same line.
- * 5. **State borders are one pixel.** A hairline (0.5px) border in a state
- *    colour reads as a tint rather than a mark: it was invisible at 1× and
- *    mushy at 2×. State borders carry the full pixel.
+ * 5. **State borders are one pixel, neutral borders are half.** A hairline
+ *    (0.5px) border in a state colour reads as a tint rather than a mark: it
+ *    was invisible at 1× and mushy at 2×, so a state border carries the full
+ *    pixel. A neutral border token is the opposite: a separator drawn at 1px
+ *    sits heavier than every other divider in the host (1 or 2 device pixels at
+ *    1×, 2 or 4 at 2×), so a neutral solid border is 0.5px. A decorative rail
+ *    drawn in a neutral colour is declared in
+ *    {@link NEUTRAL_BORDER_ACCENTS} rather than quietly widening the rule.
  * 6. **Hover is capability-gated.** An ungated `:hover` sticks after a tap on
  *    touch hardware, leaving the last-tapped control in its hover dress.
  * 7. **Motion is reducible.** A reader who asked for less motion gets no
@@ -68,8 +73,31 @@ export const MASK_PROPERTIES = ['mask', 'mask-image', '-webkit-mask-image']
 /** Border sides, in the order a shorthand writes them. */
 const SIDES = ['top', 'right', 'bottom', 'left']
 
+/** The physical sides each logical border shorthand paints. */
+const LOGICAL_SIDES = {
+  'border-block': ['top', 'bottom'],
+  'border-inline': ['right', 'left'],
+}
+
 /** A border thinner than this reads as a tint instead of a mark. */
 const STATE_BORDER_FLOOR = 1
+
+/** A neutral separator wider than this sits heavier than the host's dividers. */
+const NEUTRAL_BORDER_CEILING = 0.5
+
+/**
+ * Declared exceptions to the neutral hairline rule: a decorative bar drawn in a
+ * neutral colour, where the width is the mark rather than a separator. Each is
+ * matched by the stylesheet's repo-relative path and one of the rule's
+ * selectors.
+ */
+export const NEUTRAL_BORDER_ACCENTS = [
+  {
+    file: 'src/client/components/workspace/workspace.module.css',
+    selector: '.quoteBody',
+    reason: 'a quote rail: the bar is the mark, not a divider',
+  },
+]
 
 /**
  * Blank out comment bodies while preserving every offset, so a match position
@@ -228,6 +256,11 @@ function sideWidthsOf(declarations) {
     if (property === 'border-width') {
       const stated = expandBox(value.split(/\s+/).map((part) => borderWidthOf(part)))
       for (const side of SIDES) if (stated[side] !== undefined) widths[side] = stated[side]
+      continue
+    }
+    if (LOGICAL_SIDES[property] !== undefined) {
+      const width = borderWidthOf(value)
+      if (width !== undefined) for (const side of LOGICAL_SIDES[property]) widths[side] = width
       continue
     }
     const side = SIDES.find(
@@ -494,6 +527,92 @@ export function stateBorderViolations(source) {
 }
 
 /**
+ * The sides a rule leaves painted with a neutral border colour and a solid
+ * style, resolving declarations in source order the way the cascade does: a
+ * state-coloured longhand after a neutral shorthand takes that side out of the
+ * rule, and a colour-only variant keeps the style its base rule stated.
+ * @param declarations - the rule's declarations.
+ * @returns the sides whose effective colour is a neutral border token and whose effective style is solid.
+ */
+function neutralSidesOf(declarations) {
+  const colour = {}
+  const solid = {}
+  for (const { property, value } of declarations) {
+    const sides =
+      property === 'border'
+        ? SIDES
+        : (LOGICAL_SIDES[property] ??
+          SIDES.filter(
+            (name) => property === `border-${name}` || property === `border-${name}-color`,
+          ))
+    if (sides.length === 0) continue
+    const statesStyle =
+      property === 'border' || LOGICAL_SIDES[property] !== undefined || property === 'border-style'
+    const isSolid = /(?:^|\s)solid(?:\s|$)/.test(value)
+    for (const side of sides) {
+      colour[side] = value
+      if (isSolid) solid[side] = true
+      else if (statesStyle || property === `border-${side}`) solid[side] = false
+    }
+  }
+  return SIDES.filter(
+    (side) => solid[side] === true && (colour[side] ?? '').includes('--dsw-alias-border-'),
+  )
+}
+
+/**
+ * Violations of the neutral hairline rule: a neutral border token is the
+ * host's separator, and every divider in the host is drawn at 0.5px. A thicker
+ * neutral border reads heavier than the surface it divides, and the difference
+ * doubles on a 2x screen.
+ *
+ * A declared accent (see {@link NEUTRAL_BORDER_ACCENTS}) is skipped: a rail is
+ * a mark, not a separator.
+ * @param source - one stylesheet.
+ * @returns the violations, empty when every neutral border is a hairline.
+ */
+export function neutralBorderViolations(source) {
+  const css = stripComments(source.css)
+  const rules = rulesOf(css)
+  const baseWidths = new Map()
+  for (const rule of rules) {
+    if (rule.selector.includes('[') || rule.selector.includes(':')) continue
+    const key = baseClassOf(rule.selector)
+    if (key === undefined || baseWidths.has(key)) continue
+    const widths = sideWidthsOf(declarationsOf(rule.body))
+    if (Object.keys(widths).length > 0) baseWidths.set(key, widths)
+  }
+  const violations = []
+  for (const rule of rules) {
+    const declarations = declarationsOf(rule.body)
+    const sides = neutralSidesOf(declarations)
+    if (sides.length === 0) continue
+    const stated = sideWidthsOf(declarations)
+    const inherited = resolveBaseWidths(baseWidths, baseClassOf(rule.selector) ?? '')
+    const thick = sides.filter((side) => {
+      const width = stated[side] ?? inherited[side]
+      return width !== undefined && width > NEUTRAL_BORDER_CEILING
+    })
+    if (thick.length === 0) continue
+    if (
+      NEUTRAL_BORDER_ACCENTS.some(
+        (accent) => accent.file === source.file && rule.selector.includes(accent.selector),
+      )
+    ) {
+      continue
+    }
+    violations.push({
+      file: source.file,
+      line: lineOf(css, rule.at),
+      selector: rule.selector,
+      detail: `neutral border on ${thick.join('/')} is thicker than a hairline`,
+      fix: 'draw a separator at 0.5px; declare a decorative rail in NEUTRAL_BORDER_ACCENTS',
+    })
+  }
+  return violations
+}
+
+/**
  * Violations of the hover gate: an ungated `:hover` sticks after a tap on touch
  * hardware.
  * @param source - one stylesheet.
@@ -567,6 +686,7 @@ export const STYLE_GUARDS = [
   literalColorViolations,
   fullRoundRadiusViolations,
   stateBorderViolations,
+  neutralBorderViolations,
   hoverMediaViolations,
   unreducedMotionViolations,
 ]

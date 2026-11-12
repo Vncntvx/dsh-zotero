@@ -32,7 +32,7 @@ graph LR
 
 The core holds the data plane and agent capabilities. The literature panel component has no tools or prompt section; local-library endpoints delegate to core, while explicit URL PDF reading uses independent permission and shared public-network checks. It is split out so it can be disabled as a whole and keep its own settings. The scholarly retrieval component is the agent's external retrieval authorization boundary: while it is not mounted, its service, transport, and tools do not exist. Enabling the document parsing component accepts MinerU document egress and makes parsing and model management available; every upload still requires the user to submit a specific document and pass session access checks. Its integration separates read-only artifact lookup from explicit parsing, with no model tools or prompt section.
 
-This document separates the pre-implementation enrichment baseline `a3f4759` from the WP0 target contract; implementation-status descriptions below refer to that baseline. The WP1 read-only seam, WP2 explicit parsing jobs, and WP7 foreground resource draining are described as designs, with implementation and acceptance owned by those work packages.
+This document keeps the pre-implementation enrichment baseline `a3f4759` only as history; the enrichment behavior described in this chapter is the current implementation. The WP1 read-only seam, WP2 explicit parsing jobs, and WP7 foreground resource draining are implemented, and the chapter describes them as they are.
 
 ## Core Layers
 
@@ -240,7 +240,7 @@ The plugin maintains an in-process diagnostic ring buffer of 500 entries (`src/d
 ## Design Boundaries
 
 - Library permissions: read-only by default; with `writeEnabled` on, writes are allowed to the personal library only (`zotero://user/0/`);
-- Network boundary: local requests are strictly limited to loopback addresses (`127.0.0.1`, `localhost`, `::1`), and redirects are refused. Scholarly authorizes external retrieval, and the literature panel independently authorizes user-initiated URL PDF reading. Under the target contract, only enrichment parsing jobs explicitly submitted for a specific target issue MinerU requests; local semantic ranking contacts no MinerU endpoint, and model downloads are separate operations;
+- Network boundary: local requests are strictly limited to loopback addresses (`127.0.0.1`, `localhost`, `::1`), and redirects are refused. Scholarly authorizes external retrieval, and the literature panel independently authorizes user-initiated URL PDF reading. Only enrichment parsing jobs explicitly submitted for a specific target issue MinerU requests; local semantic ranking contacts no MinerU endpoint, and model downloads are separate operations;
 - Process management: no resident polling daemon or telemetry collection. Core and scholarly long tasks already use `ctx.jobs`; WP2 will integrate explicit enrichment parsing. Background parsing and downloads must abort and finish cleanup on unmount, while foreground read scopes still need WP7 draining;
 - Passage ranking: the `EvidenceRanker` seam — the core's lexical BM25 over the item's own passage corpus, plus the hybrid lexical+semantic ranker the enrichment component installs when its model is enabled;
 - Trail boundary: the literature trail shows only facts produced by read tools and exports in this session, never writes, and never literature from outside the library;

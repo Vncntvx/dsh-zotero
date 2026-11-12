@@ -94,7 +94,8 @@ export const ZOTERO_WRITE_RATE_LIMITED = 'ZOTERO_WRITE_RATE_LIMITED'
  */
 export const ZOTERO_WRITE_APPROVAL_UNAVAILABLE = 'ZOTERO_WRITE_APPROVAL_UNAVAILABLE'
 
-const ZOTERO_ERROR_CODES = [
+/** Every stable error code a `ZoteroError` may carry, in documentation order. */
+export const ZOTERO_ERROR_CODES = [
   'ZOTERO_SOURCE_PAGE_STALE',
   'ZOTERO_URL_PDF_DISABLED',
   'ZOTERO_URL_PDF_BUSY',
@@ -148,7 +149,6 @@ const ZOTERO_ERROR_CODES = [
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 ] as const
 
-/** Every stable error code a `ZoteroError` may carry. */
 export type ZoteroErrorCode = (typeof ZOTERO_ERROR_CODES)[number]
 
 /**

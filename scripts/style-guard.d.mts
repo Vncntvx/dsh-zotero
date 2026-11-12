@@ -111,6 +111,16 @@ export declare const fullRoundRadiusViolations: StyleGuard
 /** State-coloured borders thinner than one pixel. */
 export declare const stateBorderViolations: StyleGuard
 
+/** Neutral borders thicker than the 0.5px hairline. */
+export declare const neutralBorderViolations: StyleGuard
+
+/** Decorative rails declared as exceptions to the neutral hairline rule. */
+export declare const NEUTRAL_BORDER_ACCENTS: readonly {
+  readonly file: string
+  readonly selector: string
+  readonly reason: string
+}[]
+
 /** `:hover` rules outside `@media (hover: hover)`. */
 export declare const hoverMediaViolations: StyleGuard
 
