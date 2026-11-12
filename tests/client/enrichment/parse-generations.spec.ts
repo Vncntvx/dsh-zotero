@@ -7,6 +7,7 @@ import type {
   ZoteroStartDocumentParseResultView,
 } from '../../../src/contract.ts'
 import { deferred } from '../../helpers/sync.ts'
+import { attachmentRef, GROUP_LIBRARY, itemRef, refOf } from '../../helpers/server/keys.ts'
 import {
   documentParseLabel,
   validDocumentParseTarget,
@@ -84,6 +85,52 @@ describe('document parse draft validation', () => {
     await world.controller.submit()
     expect(remote.documentArtifact).not.toHaveBeenCalled()
     expect(remote.startDocumentParse).not.toHaveBeenCalled()
+  })
+})
+
+describe('document parse draft validation: library and address classes', () => {
+  const attachmentTarget = (ref: string) => ({ kind: 'attachment' as const, ref })
+
+  it.each([
+    ['a personal-library attachment', attachmentTarget(attachmentRef()), true],
+    ['a group attachment', attachmentTarget(refOf('attachment', 'GRP00001', GROUP_LIBRARY)), true],
+    [
+      'a group id of zero',
+      attachmentTarget(refOf('attachment', 'GRP00001', { type: 'group', id: 0 })),
+      false,
+    ],
+    [
+      'a personal-library id other than zero',
+      attachmentTarget(refOf('attachment', 'ABCD1234', { type: 'user', id: 1 })),
+      false,
+    ],
+    ['an item rather than an attachment', attachmentTarget(itemRef()), false],
+    ['a ref outside the grammar', attachmentTarget('zotero://user/0'), false],
+  ])('%s', (_name, target, expected) => {
+    expect(validDocumentParseTarget(target)).toBe(expected)
+  })
+
+  it.each([
+    ['a multicast address', 'https://224.0.0.1/a.pdf', false],
+    ['a link-local address', 'https://169.254.1.1/a.pdf', false],
+    ['a 172.16/12 private address', 'https://172.16.0.1/a.pdf', false],
+    ['the 172.32 boundary', 'https://172.32.0.1/a.pdf', true],
+    ['a 192.168/16 private address', 'https://192.168.1.1/a.pdf', false],
+    ['a carrier-grade NAT address', 'https://100.64.0.1/a.pdf', false],
+    ['the 100.128 boundary', 'https://100.128.0.1/a.pdf', true],
+  ])('%s', (_name, url, expected) => {
+    expect(validDocumentParseTarget({ kind: 'url', url })).toBe(expected)
+  })
+
+  it('labels an attachment from its key when no label survives sanitizing', () => {
+    const withLabel = attachmentTarget(attachmentRef())
+    expect(documentParseLabel(withLabel, 'Selected PDF')).toBe('Selected PDF')
+    // The label is sanitized first; an all-control-character label leaves
+    // nothing, so the key-bearing fallback names the document.
+    expect(documentParseLabel(withLabel, '\u0000\u0001')).toBe('Zotero PDF WXYZ6789')
+    expect(documentParseLabel(withLabel)).toBe('Zotero PDF WXYZ6789')
+    // A ref the grammar cannot split has no key to name.
+    expect(documentParseLabel(attachmentTarget('zotero://user/0'))).toBe('Zotero PDF')
   })
 })
 

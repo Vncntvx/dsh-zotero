@@ -1,9 +1,9 @@
 /** WP4/D1: real undici streaming, with the network boundary confined to loopback. */
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
 import { Agent, fetch as undiciFetch } from 'undici'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,17 +14,16 @@ import {
 } from '../../../src/enrichment/model-download-client.ts'
 import { modelClient, modelResponse, tinyModel } from '../../helpers/semantic-model-bundle.ts'
 import { deferred } from '../../helpers/sync.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
-const roots: string[] = []
+const sandbox = createModelSandbox('dsh-model-stream-')
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
-async function tempRoot() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-stream-'))
-  roots.push(root)
-  return root
+async function tempRoot(): Promise<string> {
+  return await sandbox.root()
 }
 
 async function loopbackBody(status: number, headers: Record<string, string> = {}) {

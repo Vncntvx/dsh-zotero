@@ -17,11 +17,6 @@ import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosu
 import { running, settled } from '../helpers/blocks.ts'
 import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()

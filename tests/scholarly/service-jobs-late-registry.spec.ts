@@ -15,7 +15,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createVolatile } from '@deepseek-ai/cosmokit'
 import { describe, expect, it, vi } from 'vitest'
 import { ScholarlyService } from '../../src/scholarly/service.js'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { composeRealJobs } from '../helpers/real-jobs.ts'
 import { deferred } from '../helpers/sync.js'
 import { bootScholarlyContext } from './fixtures.js'
 
@@ -55,9 +55,9 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
       if (!refusedResult?.isError) throw new Error('background request unexpectedly succeeded')
       expect(refusedResult.error.message).toContain('Background execution is unavailable')
 
-      // The same call after `TestJobRegistry` registered itself as `ctx.jobs`
-      // reaches the late registry: the runner resolved it per call.
-      const registry = new TestJobRegistry(ctx)
+      // The same call after the real registry mounted as `ctx.jobs` reaches
+      // it: the runner resolved the service per call.
+      const jobs = await composeRealJobs(ctx)
       const served = await ctx.tools.execute(backgroundSearchCall())
       const servedResult = served.results[0]?.result
       expect(servedResult?.isError ?? false).toBe(false)
@@ -65,7 +65,9 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
         type: 'text',
         text: expect.stringContaining('started background job'),
       })
-      expect(registry.jobs.size).toBe(1)
+      // An unowned job is visible to every caller.
+      expect(jobs.registry.list()).toHaveLength(1)
+      await jobs.dispose()
     } finally {
       vi.unstubAllGlobals()
     }
@@ -88,7 +90,7 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
         promoteOnTimeout: createVolatile(true),
         foregroundWaitMs: createVolatile(20),
       })
-      const registry = new TestJobRegistry(ctx)
+      const jobs = await composeRealJobs(ctx)
 
       const batch = await ctx.tools.execute({
         calls: [
@@ -110,9 +112,10 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
       })
 
       release.resolve()
-      const job = [...registry.jobs.values()][0]
-      const outcome = await job.hooks.done
-      expect(outcome.status).toBe('completed')
+      const [view] = jobs.registry.list()
+      expect(view).toBeDefined()
+      expect((await jobs.settled(view!.id)).status).toBe('completed')
+      await jobs.dispose()
     } finally {
       vi.unstubAllGlobals()
     }

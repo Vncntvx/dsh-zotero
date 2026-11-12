@@ -4,7 +4,7 @@
 // A preparation-only synthetic vector file is accepted iff generatedBy explicitly
 // starts with "synthetic-self-check"; its output is always marked ineligible.
 import { readFile } from 'node:fs/promises'
-import { SEMANTIC_MODELS } from '../semantic-model-catalog.mjs'
+import { SEMANTIC_MODELS } from '../../src/enrichment-model-catalog.ts'
 import {
   backgroundEntries,
   codepoints,

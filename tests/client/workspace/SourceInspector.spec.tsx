@@ -18,11 +18,6 @@ import {
   workspaceOf,
 } from '../helpers/source-fixtures.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 import { mockT } from '../helpers/mock-translate.ts'
 
 const t = mockT

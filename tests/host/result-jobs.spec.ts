@@ -1,12 +1,24 @@
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { resultReceiptKey } from '../../src/result-delivery.ts'
 /** Owned job_output retains its canonical value and repeats only a bounded file reference. */
 import { afterEach, expect, it } from 'vitest'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
-import { TestJobRegistry } from '../helpers/fake-jobs.ts'
 import { resultStorage } from '../helpers/result-storage.ts'
+import { composeRealJobs } from '../helpers/real-jobs.ts'
+/** The job id a background tool answered with. */
+function jobIdOf(result: Awaited<ReturnType<HostLane['runTool']>>): string {
+  if (result.isError) throw new Error('the tool refused the background call')
+  const value = result.value as { readonly kind?: string; readonly jobId?: string }
+  if (value.kind !== 'background' || value.jobId === undefined) {
+    throw new Error('the tool did not start a background job')
+  }
+  return value.jobId
+}
+
 let lane: HostLane | undefined
 afterEach(async () => {
   await lane?.ctx.fiber.dispose()
@@ -22,7 +34,8 @@ it('reuses one body across repeated owned job_output calls', async () => {
       },
     },
   )
-  const jobs = new TestJobRegistry(lane.ctx)
+  const jobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
   lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
     helpers.text('x'.repeat(20_000)),
   )
@@ -32,9 +45,11 @@ it('reuses one body across repeated owned job_output calls', async () => {
     run_in_background: true,
   })
   expect(start.isError).toBe(false)
-  const job = [...jobs.jobs.values()][0]!
-  expect((await job.hooks.done).status).toBe('completed')
-  expect(job.result).not.toContain('x'.repeat(100))
+  const jobId = jobIdOf(start)
+  expect((await jobs.settled(JobId(jobId), 'test-session')).status).toBe('completed')
+  expect(jobs.registry.read(JobId(jobId), SessionId('test-session')).result ?? '').not.toContain(
+    'x'.repeat(100),
+  )
   lane.ctx.tools.register(
     defineTool({
       name: 'job_output',
@@ -56,13 +71,13 @@ it('reuses one body across repeated owned job_output calls', async () => {
     const parent = await pipeline.prepare({
       name: 'job_output',
       callId: ToolCallId('parent'),
-      arguments: { job_id: 'zotero-1' },
+      arguments: { job_id: jobId },
       signal: new AbortController().signal,
     })
     const prepared = await pipeline.prepare({
       name: 'job_output',
       callId: ToolCallId(`output-${index}`),
-      arguments: { job_id: 'zotero-1' },
+      arguments: { job_id: jobId },
       signal: new AbortController().signal,
       agent: { id: 'test-session', session: { header: { id: 'test-session' } } } as never,
       ...(index === 1 ? { parent: parent.exec.token } : {}),
@@ -78,19 +93,20 @@ it('reuses one body across repeated owned job_output calls', async () => {
   }
   expect(storage!.save).toHaveBeenCalledOnce()
   expect([...storage!.receipts.keys()]).toContain(
-    await resultReceiptKey('job', 'test-session', 'zotero-1'),
+    await resultReceiptKey('job', 'test-session', jobId),
   )
 })
 it('does not rewrite another plugin’s job output', async () => {
   lane = await setupHostLane()
-  const jobs = new TestJobRegistry(lane.ctx)
-  const id = jobs.start({
+  const jobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
+  const id = jobs.registry.start({
     kind: 'bash',
-    owner: 'test-session' as never,
+    owner: SessionId('test-session'),
     label: 'other',
     run: () => ({ done: Promise.resolve({ status: 'completed' }), cancel: () => {} }),
   })
-  await jobs.jobs.get(id)!.hooks.done
+  await jobs.settled(id, 'test-session')
   lane.ctx.tools.register(
     defineTool({
       name: 'job_output',
@@ -113,7 +129,8 @@ it('still re-attaches job output through the per-call receipt when the job-key r
       },
     },
   )
-  const jobs = new TestJobRegistry(lane.ctx)
+  const jobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
   lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
     helpers.text('x'.repeat(20_000)),
   )
@@ -123,12 +140,12 @@ it('still re-attaches job output through the per-call receipt when the job-key r
     run_in_background: true,
   })
   expect(start.isError).toBe(false)
-  const job = [...jobs.jobs.values()][0]!
-  expect((await job.hooks.done).status).toBe('completed')
+  const jobId = jobIdOf(start)
+  expect((await jobs.settled(JobId(jobId), 'test-session')).status).toBe('completed')
   // Simulate the non-atomic receipt pair: the per-call receipt landed, the
   // job-key twin did not. The delivery reconciles by the job id the receipt
   // carries instead of dropping the re-attach.
-  storage!.receipts.delete(await resultReceiptKey('job', 'test-session', 'zotero-1'))
+  storage!.receipts.delete(await resultReceiptKey('job', 'test-session', jobId))
   expect(storage!.receipts.size).toBeGreaterThan(0)
   lane.ctx.tools.register(
     defineTool({
@@ -150,7 +167,7 @@ it('still re-attaches job output through the per-call receipt when the job-key r
   const prepared = await pipeline.prepare({
     name: 'job_output',
     callId: ToolCallId('output-reconciled'),
-    arguments: { job_id: 'zotero-1' },
+    arguments: { job_id: jobId },
     signal: new AbortController().signal,
     agent: { id: 'test-session', session: { header: { id: 'test-session' } } } as never,
   })

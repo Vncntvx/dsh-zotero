@@ -14,11 +14,6 @@ import { artifactOf, passageOf, sourceOf, workspaceOf } from '../helpers/source-
 import { CONNECTED } from '../helpers/workspace-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 const t = mockT
 
 afterEach(() => {

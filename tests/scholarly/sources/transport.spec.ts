@@ -8,6 +8,7 @@ import {
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
 import { stubPublicAccess } from '../fixtures.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
+import { deferred } from '../../helpers/sync.js'
 
 describe('scholarly transport safety: allowlist', () => {
   it('identifies allowed scholarly hosts and permitted subdomains', () => {
@@ -414,23 +415,49 @@ describe('scholarly transport deadline and gate behavior', () => {
   it('bounds in-flight requests to the configured ceiling', async () => {
     let inFlight = 0
     let peak = 0
+    // A barrier, not a sleep: every request parks until all twelve have been
+    // admitted or the ceiling is reached, so the peak is a fact about the gate
+    // rather than about how fast a timer fired.
+    const waiters: Array<() => void> = []
+    let open = false
+    const arrived = deferred<void>()
+    // Opening the barrier is sticky: the queued three and every later arrival
+    // pass without parking, so the test cannot stall behind its own release.
+    const release = (): void => {
+      open = true
+      for (const wake of waiters.splice(0)) wake()
+    }
     const http = createScholarlyHttp({
       publicAccess: stubPublicAccess,
       maxInFlight: 3,
       fetchImpl: async () => {
         inFlight += 1
         peak = Math.max(peak, inFlight)
-        await new Promise((resolve) => setTimeout(resolve, 5))
+        if (inFlight === 3) arrived.resolve()
+        if (!open) {
+          await new Promise<void>((wake) => {
+            // The first three never resolve until the test releases them; the
+            // rest cannot even start, which is the property under test.
+            waiters.push(wake)
+          })
+        }
         inFlight -= 1
         return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
       },
       pacer: new HostPacer({}),
     })
 
-    await Promise.all(
-      Array.from({ length: 12 }, (_, i) => http.json(`https://api.openalex.org/works/${i}`)),
+    const requests = Array.from({ length: 12 }, (_, i) =>
+      http.json(`https://api.openalex.org/works/${i}`),
     )
-    expect(peak).toBeLessThanOrEqual(3)
+    await arrived.promise
+    // Nothing beyond the ceiling may be in flight even though nine callers are
+    // queued behind the gate.
+    expect(peak).toBe(3)
+    expect(inFlight).toBe(3)
+    release()
+    await Promise.all(requests)
+    expect(inFlight).toBe(0)
   })
 
   it('reports an open circuit as its own failure', async () => {

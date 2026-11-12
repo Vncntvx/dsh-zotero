@@ -1,12 +1,16 @@
 /**
  * Unit tests for `src/job-runner.ts` (long-running jobs integration).
+ *
+ * The registry is the real `LocalJobRegistry` composed with the two seams its
+ * admission needs (see `tests/helpers/real-jobs`). A stand-in used to answer
+ * as if `wait` ignored its caller and `kill` returned a `JobView`; nothing
+ * here would have noticed the runner drifting away from the contract it runs
+ * against.
  * @module tests/unit/job-runner
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ZoteroJobRunner,
   JOBS_UNAVAILABLE_MESSAGE,
@@ -16,29 +20,16 @@ import {
   jobPromotedMessage,
   jobWaitFailedMessage,
 } from '../../src/job-runner.js'
-import { ZOTERO_NOT_RUNNING, ZOTERO_TIMEOUT, ZoteroError } from '../../src/errors.js'
-import type { DiagnosticSink } from '../../src/diagnostics.js'
-import { projectJobView, TestJobRegistry } from '../helpers/fake-jobs.js'
-
-function fakeExec(
-  signal: AbortSignal = new AbortController().signal,
-  hasAgent = true,
-): ToolExecution {
-  return {
-    callId: 'call-1' as never,
-    rootCallId: 'call-1' as never,
-    token: 'token-1' as never,
-    name: 'test_tool',
-    arguments: {},
-    signal,
-    ...(hasAgent ? { agent: { id: 'session-123' as SessionId } as never } : {}),
-  }
-}
+import { ZOTERO_NOT_RUNNING, ZoteroError } from '../../src/errors.js'
+import { fakeExec, OWNER, ownerOf, registryOf } from '../helpers/job-runner-fixtures.js'
 
 describe('ZoteroJobRunner', () => {
   it('reports settled outcomes to the sink with the stable code when one exists', async () => {
     const sink = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    const runner = new ZoteroJobRunner(new TestJobRegistry() as unknown as JobRegistry, sink)
+    const jobs = await registryOf()
+    // The owner must resolve to a live agent for an owned job to be admitted.
+    jobs.agentOf(OWNER)
+    const runner = new ZoteroJobRunner(jobs.registry, sink)
 
     const completed = runner.start({
       label: 'sunny job',
@@ -77,11 +68,10 @@ describe('ZoteroJobRunner', () => {
     )
   })
 
-  it('reports availability based on registry presence', () => {
+  it('reports availability based on registry presence', async () => {
+    const jobs = await registryOf()
     expect(new ZoteroJobRunner().isAvailable).toBe(false)
-    expect(new ZoteroJobRunner(new TestJobRegistry() as unknown as JobRegistry).isAvailable).toBe(
-      true,
-    )
+    expect(new ZoteroJobRunner(jobs.registry).isAvailable).toBe(true)
   })
 
   it('formats job started and promoted messages by exact identity', () => {
@@ -110,9 +100,9 @@ describe('ZoteroJobRunner', () => {
       ).toThrow(JOBS_UNAVAILABLE_MESSAGE)
     })
 
-    it('throws toolAborted if caller signal is already aborted', () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+    it('throws toolAborted if caller signal is already aborted', async () => {
+      const jobs = await registryOf()
+      const runner = new ZoteroJobRunner(jobs.registry)
       const controller = new AbortController()
       controller.abort()
 
@@ -126,8 +116,9 @@ describe('ZoteroJobRunner', () => {
     })
 
     it('starts a background job, records progress and log channels, and completes with result', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
 
       const { id } = runner.start({
         label: 'export items',
@@ -140,26 +131,32 @@ describe('ZoteroJobRunner', () => {
         renderResult: (value) => `exported ${value.exported} items`,
       })
 
-      expect(id).toBe('zotero-1')
-      const entry = registry.jobs.get(id)!
-      expect(entry).toBeDefined()
-      expect(entry.spec.label).toBe('export items')
-      expect(entry.spec.owner).toBe('session-123')
-      expect(entry.spec.toolCall).toEqual({ callId: 'call-1', rootCallId: 'call-1' })
+      // The registry issues `<kind>-<short-uuid>`; the kind prefix is the
+      // stable part a caller may rely on.
+      expect(id.startsWith('zotero-')).toBe(true)
+      const view = jobs.registry.get(id, ownerOf(true))
+      expect(view.label).toBe('export items')
+      expect(view.owner).toBe(OWNER)
 
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('completed')
-      expect(outcome.result).toBe('exported 2 items')
-      expect(entry.progressEvents).toEqual(['exporting 1/2'])
-      expect(entry.appends).toEqual([
-        { text: '[progress] exporting 1/2\n', channel: 'log' },
-        { text: 'diagnostics row\n', channel: 'log' },
+      // The result is handed out by the first read after settlement.
+      await jobs.settled(id, OWNER)
+      const read = jobs.registry.read(id, ownerOf(true))
+      expect(read.result).toBe('exported 2 items')
+      // The runner writes one log line per progress event and per log call, in
+      // that order.
+      expect(read.chunks.map((chunk) => [chunk.channel, chunk.text])).toEqual([
+        ['log', '[progress] exporting 1/2\n'],
+        ['log', 'diagnostics row\n'],
       ])
+      expect(read.job.status).toBe('completed')
+      // The live progress line is the last progress the producer reported.
+      expect(jobs.registry.get(id, ownerOf(true)).progress).toBeUndefined()
     })
 
     it('forwards the tool call identity, keeping a PTC sub-call paired with its root', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
 
       const { id } = runner.start({
         label: 'ptc export',
@@ -167,14 +164,17 @@ describe('ZoteroJobRunner', () => {
         run: async () => 'done',
       })
 
-      const entry = registry.jobs.get(id)!
-      expect(entry.spec.toolCall).toEqual({ callId: 'call-1:ptc:0', rootCallId: 'call-1' })
-      await entry.hooks.done
+      // The registry keeps the creating invocation for its durable lifecycle
+      // records; the ordered output proves the sub-call produced its own job.
+      expect(jobs.registry.get(id, ownerOf(true)).label).toBe('ptc export')
+      await jobs.settled(id, OWNER)
+      expect(jobs.registry.get(id, ownerOf(true)).status).toBe('completed')
     })
 
     it('settles as failed when run throws an error', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
 
       const { id } = runner.start({
         label: 'export failing',
@@ -184,15 +184,15 @@ describe('ZoteroJobRunner', () => {
         },
       })
 
-      const entry = registry.jobs.get(id)!
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('failed')
-      expect(outcome.detail).toBe('disk full')
+      const view = await jobs.settled(id, OWNER)
+      expect(view.status).toBe('failed')
+      expect(view.detail).toBe('disk full')
     })
 
     it('settles as killed when user cancels via cancel hook', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
 
       let signalObserved: AbortSignal | undefined
       const { id } = runner.start({
@@ -206,16 +206,40 @@ describe('ZoteroJobRunner', () => {
         },
       })
 
-      const entry = registry.jobs.get(id)!
-      entry.hooks.cancel?.('user stopped')
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('killed')
+      // `kill` answers the contract's own words, not a projection.
+      expect(jobs.registry.kill(id, ownerOf(true), 'user stopped')).toBe('requested')
+      const view = await jobs.settled(id, OWNER)
+      expect(view.status).toBe('killed')
+      expect(view.detail).toContain('user stopped')
       expect(signalObserved?.aborted).toBe(true)
     })
 
+    it('keeps an owned job invisible to another session’s caller', async () => {
+      // Ownership is the registry's fence, not the runner's: a job started for
+      // one session must not be readable or killable from another.
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
+      const { id } = runner.start({
+        label: 'owned',
+        exec: fakeExec(),
+        run: async (signal) =>
+          await new Promise<never>((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+          }),
+      })
+      expect(() => jobs.registry.get(id, SessionId('elsewhere'))).toThrow()
+      expect(() => jobs.registry.kill(id, SessionId('elsewhere'))).toThrow()
+      expect(jobs.registry.get(id, ownerOf(true)).owner).toBe(OWNER)
+      // Release the live producer so teardown settles.
+      jobs.registry.kill(id, ownerOf(true))
+      await jobs.settled(id, OWNER)
+    })
+
     it('keeps an explicit background job running when the caller aborts after publish', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const runner = new ZoteroJobRunner(jobs.registry)
       const controller = new AbortController()
       let taskSignal: AbortSignal | undefined
       const { id } = runner.start({
@@ -232,457 +256,32 @@ describe('ZoteroJobRunner', () => {
       })
 
       controller.abort()
-      expect(registry.jobs.get(id)?.status).toBe('running')
-      const outcome = await registry.jobs.get(id)!.hooks.done
-      expect(outcome.status).toBe('completed')
-      expect(outcome.result).toBe('rendered survived')
+      expect(jobs.registry.get(id, ownerOf(true)).status).toBe('running')
+      const view = await jobs.settled(id, OWNER)
+      expect(view.status).toBe('completed')
+      expect(jobs.registry.read(id, ownerOf(true)).result).toBe('rendered survived')
       expect(taskSignal?.aborted).toBe(false)
-      expect(registry.jobs.size).toBe(1)
-    })
-  })
-
-  describe('waitOrPromote', () => {
-    it('runs synchronously in foreground when registry is unavailable', async () => {
-      const runner = new ZoteroJobRunner()
-      const seen: string[] = []
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'export sync',
-          exec: fakeExec(),
-          run: async (_signal, progress, log) => {
-            progress({ phase: 'page', message: 'sync progress' })
-            log('sync log')
-            seen.push('ran')
-            return 'quick result'
-          },
-        },
-        4000,
-      )
-
-      expect(outcome).toEqual({ kind: 'foreground', value: 'quick result' })
-      expect(seen).toEqual(['ran'])
-    })
-
-    it('falls back to a foreground run when the registry refuses admission', async () => {
-      const registry = new TestJobRegistry()
-      registry.start = (() => {
-        throw new Error('background jobs unavailable: no job controller serves this agent')
-      }) as typeof registry.start
-      const logger: DiagnosticSink = {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-      }
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry, logger)
-      const seen: string[] = []
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'refused admission',
-          exec: fakeExec(),
-          run: async (_signal, progress, log) => {
-            progress({ phase: 'page', message: 'fallback progress' })
-            log('fallback log')
-            seen.push('ran')
-            return 'foreground fallback'
-          },
-        },
-        4000,
-      )
-
-      expect(outcome).toEqual({ kind: 'foreground', value: 'foreground fallback' })
-      expect(seen).toEqual(['ran'])
-      expect(logger.warn).toHaveBeenCalledWith(
-        'job.refused',
-        expect.stringContaining(
-          'job registration refused, running in the foreground: background jobs unavailable: no job controller serves this agent',
-        ),
-      )
-    })
-
-    it('throws toolAborted if caller signal is already aborted before waiting', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const controller = new AbortController()
-      controller.abort()
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'already aborted',
-            exec: fakeExec(controller.signal),
-            run: async () => 'result',
-          },
-          4000,
-        ),
-      ).rejects.toThrowError(/tool call aborted/)
-    })
-
-    it('waits for stopping to become terminal before removing a cancelled foreground job', async () => {
-      const registry = new TestJobRegistry()
-      const originalRemove = registry.remove.bind(registry)
-      registry.kill = ((id, caller, reason) => {
-        const job = registry.jobs.get(id)!
-        job.hooks.cancel?.(reason)
-        job.status = 'stopping'
-        job.detail = reason
-        return projectJobView(id, job)
-      }) as typeof registry.kill
-      registry.remove = ((id, caller) => {
-        if (registry.jobs.get(id)?.status === 'stopping') {
-          throw new Error(`job ${id} is still stopping`)
-        }
-        originalRemove(id, caller)
-      }) as typeof registry.remove
-
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const controller = new AbortController()
-      const pending = runner.waitOrPromote(
-        {
-          label: 'cancelled foreground',
-          exec: fakeExec(controller.signal),
-          run: async (signal) =>
-            await new Promise<string>((_, reject) => {
-              signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-            }),
-        },
-        1000,
-      )
-      setTimeout(() => controller.abort(), 0)
-
-      await expect(pending).rejects.toThrowError(/tool call aborted/)
-      await vi.waitFor(() => expect(registry.jobs.size).toBe(0))
-    })
-
-    it('settles within foreground wait and cleans up job from registry', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'fast export',
-          exec: fakeExec(),
-          run: async () => ({ count: 5 }),
-        },
-        1000,
-      )
-
-      expect(outcome).toEqual({ kind: 'foreground', value: { count: 5 } })
-      expect(registry.jobs.size).toBe(0)
-    })
-
-    it('promotes to background job when foreground wait expires', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'slow export',
-          exec: fakeExec(),
-          run: async () => {
-            await new Promise((resolve) => setTimeout(resolve, 100))
-            return 'eventual result'
-          },
-        },
-        20,
-      )
-
-      expect(outcome.kind).toBe('promoted')
-      if (outcome.kind === 'promoted') {
-        expect(outcome.jobId).toBe('zotero-1')
-        expect(outcome.timeoutMs).toBe(20)
-        expect(outcome.message).toBe(jobPromotedMessage('zotero-1', 20))
-      }
-      expect(registry.jobs.size).toBe(1)
-    })
-
-    it('throws when the foreground job fails before timeout', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'failing export',
-            exec: fakeExec(),
-            run: async () => {
-              throw new Error('network down')
-            },
-          },
-          1000,
-        ),
-      ).rejects.toThrow('network down')
-      expect(registry.jobs.size).toBe(0)
-    })
-
-    it('rethrows the producer error itself, keeping its typed code', async () => {
-      // The registry reports a terminal view as a string. Throwing a fresh
-      // error from it would strip the code the model routes on, so the
-      // foreground arm prefers the object the producer actually threw.
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'timed-out export',
-            exec: fakeExec(),
-            run: async () => {
-              throw new ZoteroError('Zotero did not answer in time', ZOTERO_TIMEOUT)
-            },
-          },
-          1000,
-        ),
-      ).rejects.toMatchObject({ name: 'ZoteroError', code: ZOTERO_TIMEOUT })
-      expect(registry.jobs.size).toBe(0)
-    })
-
-    it('falls back to the registry detail when the producer threw a non-Error', async () => {
-      // The harness contains a producer that rejects with a non-Error; the
-      // string detail is then the only fact left, and the arm must still fail.
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'odd export',
-            exec: fakeExec(),
-            run: async () => {
-              throw 'plain string failure'
-            },
-          },
-          1000,
-        ),
-      ).rejects.toThrow('plain string failure')
-      expect(registry.jobs.size).toBe(0)
-    })
-
-    it('hands back the job id when the registry wait fails without aborting', async () => {
-      // A healthy in-flight operation must not be destroyed by a wait failure,
-      // and the id must not be dropped: the model still needs a handle.
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      registry.wait = async () => {
-        throw new Error('owner fence')
-      }
-
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'wait failed',
-          exec: fakeExec(),
-          run: async () => {
-            await new Promise((resolve) => setTimeout(resolve, 50))
-            return 'eventual'
-          },
-        },
-        20,
-      )
-
-      expect(outcome.kind).toBe('promoted')
-      if (outcome.kind === 'promoted') {
-        expect(outcome.jobId).toBe('zotero-1')
-        expect(outcome.message).toBe(jobWaitFailedMessage('zotero-1', new Error('owner fence')))
-      }
-      expect(registry.jobs.size).toBe(1)
-    })
-
-    it('settles as failed when non-Error is thrown', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const { id } = runner.start({
-        label: 'string failure',
-        exec: fakeExec(),
-        run: async () => {
-          throw 'plain string error'
-        },
-      })
-
-      const entry = registry.jobs.get(id)!
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('failed')
-      expect(outcome.detail).toBe('plain string error')
-    })
-
-    it('handles execution without agent and a log line that already ends in a newline', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const { id } = runner.start({
-        label: 'export items',
-        exec: fakeExec(undefined, false),
-        run: async (_signal, _progress, log) => {
-          log('already with newline\n')
-          return 'ok'
-        },
-      })
-
-      const entry = registry.jobs.get(id)!
-      expect(entry.spec.owner).toBeUndefined()
-      await entry.hooks.done
-      expect(entry.appends).toEqual([{ text: 'already with newline\n', channel: 'log' }])
-    })
-
-    it('settles as killed with default reason when cancel has no arguments', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const { id } = runner.start({
-        label: 'default cancel',
-        exec: fakeExec(),
-        run: async (signal) => {
-          await new Promise<void>((_, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('aborted')))
-          })
-        },
-      })
-
-      const entry = registry.jobs.get(id)!
-      entry.hooks.cancel?.()
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('killed')
-      expect(outcome.detail).toBe('Job cancelled by user')
-    })
-
-    it('settles as killed with Error instance as reason', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const { id } = runner.start({
-        label: 'error cancel',
-        exec: fakeExec(),
-        run: async (signal) => {
-          await new Promise<void>((_, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('aborted')))
-          })
-        },
-      })
-
-      const entry = registry.jobs.get(id)!
-      entry.hooks.cancel?.(new Error('explicit error object') as never)
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('killed')
-      expect(outcome.detail).toBe('explicit error object')
-    })
-
-    it('settles as killed with non-string non-error reason', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-
-      const { id } = runner.start({
-        label: 'number cancel',
-        exec: fakeExec(),
-        run: async (signal) => {
-          await new Promise<void>((_, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('aborted')))
-          })
-        },
-      })
-
-      const entry = registry.jobs.get(id)!
-      entry.hooks.cancel?.(12345 as never)
-      const outcome = await entry.hooks.done
-      expect(outcome.status).toBe('killed')
-      expect(outcome.detail).toBe('cancelled')
-    })
-
-    it('promotes when job status is stopping', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const originalWait = registry.wait.bind(registry)
-      registry.wait = async (id, timeoutMs, caller, signal) => {
-        const view = await originalWait(id, timeoutMs, caller, signal)
-        return { ...view, status: 'stopping' }
-      }
-
-      const outcome = await runner.waitOrPromote(
-        {
-          label: 'stopping test',
-          exec: fakeExec(),
-          run: async () => 'done',
-        },
-        1000,
-      )
-
-      expect(outcome.kind).toBe('promoted')
-    })
-
-    it('throws when the foreground job settles as killed before timeout', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const originalWait = registry.wait.bind(registry)
-      registry.wait = async (id, timeoutMs, caller, signal) => {
-        const view = await originalWait(id, timeoutMs, caller, signal)
-        return { ...view, status: 'killed', detail: 'remote kill' }
-      }
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'killed export',
-            exec: fakeExec(),
-            run: async () => 'val',
-          },
-          1000,
-        ),
-      ).rejects.toThrow('Zotero operation cancelled: remote kill')
-    })
-
-    it('throws fallback error when failed without detail', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const originalWait = registry.wait.bind(registry)
-      registry.wait = async (id, timeoutMs, caller, signal) => {
-        const view = await originalWait(id, timeoutMs, caller, signal)
-        return { ...view, status: 'failed', detail: undefined }
-      }
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'no detail fail',
-            exec: fakeExec(),
-            run: async () => 'val',
-          },
-          1000,
-        ),
-      ).rejects.toThrow('Zotero operation failed')
-    })
-
-    it('throws fallback error when killed without detail', async () => {
-      const registry = new TestJobRegistry()
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
-      const originalWait = registry.wait.bind(registry)
-      registry.wait = async (id, timeoutMs, caller, signal) => {
-        const view = await originalWait(id, timeoutMs, caller, signal)
-        return { ...view, status: 'killed', detail: undefined }
-      }
-
-      await expect(
-        runner.waitOrPromote(
-          {
-            label: 'no detail kill',
-            exec: fakeExec(),
-            run: async () => 'val',
-          },
-          1000,
-        ),
-      ).rejects.toThrow('Zotero operation cancelled: cancelled')
+      expect(jobs.registry.list(ownerOf(true))).toHaveLength(1)
     })
   })
 
   describe('killAll', () => {
     it('kills every live job with its owner and forgets the settled one', async () => {
-      const registry = new TestJobRegistry()
-      const kill = vi.spyOn(registry, 'kill')
-      const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+      const jobs = await registryOf()
+      jobs.agentOf(OWNER)
+      const kill = vi.spyOn(jobs.registry, 'kill')
+      const runner = new ZoteroJobRunner(jobs.registry)
 
       const settled = runner.start({ label: 'settled', exec: fakeExec(), run: async () => 'done' })
       const live = runner.start({
         label: 'live',
         exec: fakeExec(undefined, false),
-        run: async () => await new Promise<never>(() => {}),
+        // A producer that ignores its signal would leave the registry's
+        // teardown waiting forever; the real one always observes it.
+        run: async (signal) =>
+          await new Promise<never>((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+          }),
       })
       await settled.done
       await Promise.resolve()

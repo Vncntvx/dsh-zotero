@@ -52,7 +52,11 @@ vi.mock('../../src/enrichment-model-catalog.js', async (importOriginal) => {
 
 import { manifestOf, semanticModelOf } from '../../src/enrichment-model-catalog.ts'
 import { createBundleInspector } from '../../src/enrichment/model-bundle-inspector.ts'
-import { installModelBundle } from '../../src/enrichment/model-installation.ts'
+import {
+  installModelBundle,
+  safeModelRelativePath,
+} from '../../src/enrichment/model-installation.ts'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 const spec = semanticModelOf('balanced')
 const bytesOf: Record<string, Buffer> = { 'config.json': Buffer.from('alpha') }
@@ -119,5 +123,23 @@ describe('installModelBundle cleanup settlement', () => {
       expected: manifestOf(spec),
     })
     expect(inspection.kind).not.toBe('ready')
+  })
+
+  it('refuses an unsafe path with a routable harness error', () => {
+    // The installer's own refusals are what a CLI sees when it loads this
+    // module directly: `HarnessError` gives them a routeable name and code,
+    // where a bare `Error` subclass left the code as decoration.
+    let thrown: unknown
+    try {
+      safeModelRelativePath('../escape')
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(HarnessError)
+    expect(thrown).toMatchObject({
+      name: 'ModelInstallationError',
+      code: 'MODEL_INSTALLATION_FAILED',
+    })
+    expect((thrown as Error).message).toContain('invalid relative path')
   })
 })

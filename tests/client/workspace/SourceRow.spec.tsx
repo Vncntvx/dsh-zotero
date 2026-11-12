@@ -16,16 +16,12 @@ import { artifactOf, passageOf, sourceOf } from '../helpers/source-fixtures.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the row only needs the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 import { mockT } from '../helpers/mock-translate.ts'
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
+import { clipboardWrites } from '../setup.ts'
 
 const t = mockT
-const writeClipboard = await writeClipboardSpy()
+const writeClipboard = clipboardWrites
 
 afterEach(() => {
   cleanup()
@@ -148,7 +144,7 @@ describe('CopyButton', () => {
   })
 
   it('stays on the action label when the clipboard write is denied', async () => {
-    vi.mocked(writeClipboard).mockResolvedValueOnce(false)
+    vi.mocked(writeClipboard).mockRejectedValueOnce(new Error('clipboard denied'))
     render(<CopyButton value="x" label={zh.copyRef} copiedLabel={zh.copied} />)
     fireEvent.click(screen.getByRole('button'))
     await act(async () => {})
@@ -158,21 +154,25 @@ describe('CopyButton', () => {
   })
 
   it('ignores a stale clipboard resolution after a newer click', async () => {
-    let resolveFirst!: (ok: boolean) => void
-    let resolveSecond!: (ok: boolean) => void
+    let resolveFirst!: () => void
+    let resolveSecond!: () => void
     vi.mocked(writeClipboard)
-      .mockImplementationOnce(() => new Promise<boolean>((resolve) => (resolveFirst = resolve)))
-      .mockImplementationOnce(() => new Promise<boolean>((resolve) => (resolveSecond = resolve)))
+      .mockImplementationOnce(
+        async () => await new Promise<void>((resolve) => (resolveFirst = resolve)),
+      )
+      .mockImplementationOnce(
+        async () => await new Promise<void>((resolve) => (resolveSecond = resolve)),
+      )
     render(<CopyButton value="x" label={zh.copyRef} copiedLabel={zh.copied} />)
     fireEvent.click(screen.getByRole('button'))
     fireEvent.click(screen.getByRole('button'))
     // The first click resolves late with success, but its epoch is stale:
     // the flag must not flip for it.
-    resolveFirst(true)
+    resolveFirst()
     await act(async () => {})
     expect(screen.queryByText(zh.copied)).toBeNull()
     // The second click's own resolution still earns the feedback.
-    resolveSecond(true)
+    resolveSecond()
     await act(async () => {})
     expect(screen.getByText(zh.copied)).toBeDefined()
   })

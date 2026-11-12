@@ -6,14 +6,10 @@ import { FileResultView } from '../../../src/client/toolviews/FileResultView.tsx
 import { createToolViewProps } from '../helpers/mock-disclosure.ts'
 import { settled } from '../helpers/blocks.ts'
 import { mockT } from '../helpers/mock-translate.ts'
-import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { clipboardWrites as writeClipboard } from '../setup.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { downloadBlob } from '../../../src/client/download.ts'
 vi.mock('../../../src/client/download.ts', () => ({ downloadBlob: vi.fn() }))
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()

@@ -14,10 +14,13 @@ import { REF_IN_TEXT_PATTERN } from '../ref-grammar.js'
 export type ZoteroRowState = 'running' | 'ok' | 'error' | 'stopped'
 
 /**
- * True when a call block carries its settled result. Mirrors the harness's
- * `isSettledTool` (`packages/client/ui-chat/src/client/contract/chat-nodes.ts`)
- * locally, keeping harness imports type-only because that helper's client entry
- * requires the loader environment.
+ * True when a call block carries its settled result.
+ *
+ * The harness does export its own `isSettledTool` from
+ * `@deepseek-ai/dsh-client-ui-chat/client`, but this module is also loaded by
+ * the host half, which must not load a client entry; the local mirror keeps the
+ * check type-only. It is still a mirror: re-check the upstream predicate on
+ * every pin upgrade (`docs/development.md`, the pin checklist).
  */
 export function isSettledTool(
   block: ToolBlockLike,
@@ -54,14 +57,14 @@ export function rowStateOf(block: ToolBlockLike): ZoteroRowState {
 }
 
 /**
- * Flatten settled content blocks to display text. Settled semantics match the
- * harness `resultText`
- * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`)
- * exactly: text blocks verbatim, other block shapes as pretty JSON, empty
- * content on a failed call falling back to the structured error's
- * `name: code` line, otherwise the empty string. Running blocks return null
- * (the harness helper only accepts settled nodes); callers normalize with
- * `?? ''`.
+ * Flatten settled content blocks to display text. The harness's `resultText`
+ * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`) is not
+ * exported from its package's `./client` entry, so a mirror is the only option;
+ * the semantics are copied exactly: text blocks verbatim, other block shapes as
+ * pretty JSON, empty content on a failed call falling back to the structured
+ * error's `name: code` line, otherwise the empty string. Running blocks return
+ * null (the harness helper only accepts settled nodes); callers normalize with
+ * `?? ''`. Re-check it on every pin upgrade (`docs/development.md`).
  */
 export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null

@@ -27,30 +27,23 @@ import {
   semanticModelOf,
 } from '../../src/enrichment-model-catalog.js'
 import { optionsOf } from '../../scripts/fetch-semantic-model.mjs'
-import {
-  DEFAULT_SEMANTIC_DOWNLOAD_SOURCE as SCRIPT_DEFAULT_SOURCE,
-  DEFAULT_SEMANTIC_MODEL as SCRIPT_DEFAULT,
-  DEFAULT_SEMANTIC_MODEL_ROOT as SCRIPT_DEFAULT_ROOT,
-  SEMANTIC_DOWNLOAD_SOURCES as SCRIPT_SOURCES,
-  SEMANTIC_MODELS as SCRIPT_MODELS,
-} from '../../scripts/semantic-model-catalog.mjs'
 
 // The default install root honors `DSH_HOME`, so an opt-in local bundle is
 // inspected wherever the runtime would actually look for it.
 const modelDir = (key: string) => join(dshHomePath('models'), key)
 
 describe('semantic model catalog', () => {
-  it('is byte-identical to the build-script mirror', () => {
-    // The script cannot import TypeScript and the runtime cannot import
-    // scripts/, so the two definitions are duplicated here.
-    expect(JSON.parse(JSON.stringify(SEMANTIC_MODELS))).toEqual(
-      JSON.parse(JSON.stringify(SCRIPT_MODELS)),
-    )
-    expect(DEFAULT_SEMANTIC_MODEL).toBe(SCRIPT_DEFAULT)
-    expect(DEFAULT_SEMANTIC_MODEL_ROOT).toBe(SCRIPT_DEFAULT_ROOT)
+  it('leaves the installer nothing of its own to pin', () => {
+    // The fetcher used to keep a 375-line mirror of this module, kept in step
+    // by a deep-equality case. Node 24 strips types, so the script imports
+    // this module directly and the second definition is gone; these are the
+    // facts the installer reads.
     expect(DEFAULT_SEMANTIC_MODEL_ROOT).toBe('~/.dsh/models')
-    expect(SEMANTIC_DOWNLOAD_SOURCES).toEqual(SCRIPT_SOURCES)
-    expect(DEFAULT_SEMANTIC_DOWNLOAD_SOURCE).toBe(SCRIPT_DEFAULT_SOURCE)
+    expect(SEMANTIC_MODELS).toHaveLength(SEMANTIC_MODEL_KEYS.length)
+    for (const model of SEMANTIC_MODELS) {
+      expect(model.files.length).toBeGreaterThan(0)
+      expect(model.revision).toMatch(/^[0-9a-f]{40}$/)
+    }
   })
 
   it('defines download sources including hf-mirror and huggingface', () => {

@@ -8,7 +8,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { CitationFormController } from '../../../src/client/citation-form-controller.ts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   LibrarySettingsSection,
   type LibrarySettingsSectionProps,
@@ -21,11 +21,6 @@ import {
 import { en, zh } from '../../../src/client/locales.ts'
 import { fakeScope } from '../helpers/fake-scope.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
-
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
-})
 
 afterEach(() => {
   cleanup()

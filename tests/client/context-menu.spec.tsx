@@ -10,13 +10,12 @@ import { failOpenProtocol } from './helpers/remote-stubs.ts'
 
 const { writeClipboard } = vi.hoisted(() => ({ writeClipboard: vi.fn(async () => true) }))
 
-// Stub the primitive visuals but keep the real form model: `applyEntry` builds
-// the plugin's settings-card controllers, which construct `SettingsFormModel`.
-// The clipboard spy is owned here so the copy action's acceptance/refusal arms
-// are both observable.
+// The real primitives bundle, with one seam replaced: `applyEntry` builds the
+// plugin's settings-card controllers on the real `SettingsFormModel`, and the
+// copy action's acceptance and refusal arms both need an observable writer.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal, { writeClipboard })
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
+  return { ...actual, writeClipboard }
 })
 
 describe('unified context menus', () => {

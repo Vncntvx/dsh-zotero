@@ -10,18 +10,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PdfReadButton } from '../../../src/client/components/open/PdfReadButton.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(cleanup)
 
 describe('PdfReadButton emphasis', () => {
   it('renders outline by default', () => {
     render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={vi.fn()} t={mockT} />)
     const button = screen.getByRole('button', { name: mockT('readPdf') })
-    expect(button.getAttribute('data-variant')).toBe('outline')
+    // The variant is a CSS-module class on the real button; the module hash
+    // moves with the build, the variant token does not.
+    expect(button.className).toMatch(/_outline_/)
   })
 
   it('passes the caller emphasis through to the button', () => {
@@ -34,6 +31,6 @@ describe('PdfReadButton emphasis', () => {
       />,
     )
     const button = screen.getByRole('button', { name: mockT('readPdf') })
-    expect(button.getAttribute('data-variant')).toBe('primary')
+    expect(button.className).toMatch(/_primary_/)
   })
 })

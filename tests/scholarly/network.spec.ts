@@ -140,10 +140,25 @@ describe('isPublicIpAddress: IPv6 spellings', () => {
     expect(isPublicIpAddress(ip), ip).toBe(expected)
   })
 
-  it('refuses malformed IPv6 spellings instead of guessing', () => {
-    for (const ip of ['1::2::3', '12345::', 'zz::1', '1:2:3:4:5:6:7:8:9']) {
-      expect(isPublicIpAddress(ip), ip).toBe(false)
-    }
+  it.each([
+    ['a repeated compression', '1::2::3', false],
+    ['an oversized hex group', '12345::', false],
+    ['a non-hex group', 'zz::1', false],
+    ['nine groups', '1:2:3:4:5:6:7:8:9', false],
+    ['a dotted tail with three octets', '::ffff:1.2.3', false],
+    ['an out-of-range dotted octet', '::ffff:1.2.3.999', false],
+    ['a leading single colon', ':1:2', false],
+    ['an empty group before the compression', '1:::2', false],
+    ['a non-hex group after the compression', '::zz', false],
+    ['a compression that stands for no group', '1:2:3:4:5:6:7:8::', false],
+  ])('refuses %s instead of guessing', (_name, ip, expected) => {
+    expect(isPublicIpAddress(ip), ip).toBe(expected)
+  })
+
+  it('expands a fully spelled-out eight-group literal', () => {
+    // No `::`, so the expander takes its uncompressed arm; this is a public
+    // address and must not be refused for lacking a compression.
+    expect(isPublicIpAddress('2606:4700:4700:0:0:0:0:1111')).toBe(true)
   })
 })
 
@@ -408,6 +423,20 @@ describe('validatingLookup', () => {
     lookup('example.com', { all: true }, (error) => {
       expect(error).toBeInstanceOf(ScholarlySecurityError)
       expect((error as Error).message).toContain('"example.com" did not resolve')
+    })
+  })
+
+  it('wraps a non-Error rejection into the connector’s Error contract', () => {
+    // A resolver seam may reject with anything; node:http's lookup callback
+    // promises an Error, so the raw value must be wrapped, not forwarded.
+    const lookup = validatingLookup(
+      vi.fn(async () => {
+        throw 'resolver exploded'
+      }) as unknown as AddressResolver,
+    )
+    lookup('example.com', {}, (error) => {
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toContain('resolver exploded')
     })
   })
 

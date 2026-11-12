@@ -3,9 +3,10 @@
  *
  * Host and CLI installers supply their own transport. This module owns the
  * cross-process writer lock, private staging, exact byte/hash validation, the
- * catalog-only publication whitelist, and the manifest commit marker. It has no
- * plugin-relative runtime imports so the CLI can load its TypeScript source
- * directly with Node's native type stripping.
+ * catalog-only publication whitelist, and the manifest commit marker. Its only
+ * non-relative runtime imports are bare packages (the atomic-write seam and the
+ * `HarnessError` base), so the CLI can load its TypeScript source directly with
+ * Node's native type stripping.
  * @module dsh-zotero/enrichment/model-installation
  */
 import { createHash } from 'node:crypto'
@@ -23,6 +24,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import {
   catalogFilePinsOf,
@@ -33,12 +35,17 @@ import {
 
 const LOCK_WAIT_MS = 60_000
 
-export class ModelInstallationError extends Error {
-  readonly code = 'MODEL_INSTALLATION_FAILED'
+/**
+ * The machine code every installation failure carries. `runInstall` hands the
+ * failure to its caller inside a `ZoteroError`, so the code stays out of the
+ * Zotero vocabulary; `HarnessError` is what lets a direct caller route on
+ * `name`/`code` instead of parsing the message.
+ */
+export const MODEL_INSTALLATION_FAILED = 'MODEL_INSTALLATION_FAILED'
 
+export class ModelInstallationError extends HarnessError {
   constructor(message: string, options?: { readonly cause?: unknown }) {
-    super(message, options)
-    this.name = 'ModelInstallationError'
+    super(message, MODEL_INSTALLATION_FAILED, options)
   }
 }
 

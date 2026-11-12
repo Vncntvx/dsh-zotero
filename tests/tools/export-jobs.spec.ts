@@ -6,6 +6,8 @@
  */
 
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   JOBS_UNAVAILABLE_MESSAGE,
@@ -13,7 +15,7 @@ import {
   jobPromotedMessage,
   jobStartedMessage,
 } from '../../src/job-runner.js'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.js'
 import { resultStorage } from '../helpers/result-storage.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { citationRow } from '../helpers/server/objects.js'
@@ -74,13 +76,15 @@ describe('zotero_export jobs', () => {
     })
 
     it('starts a background job and returns immediately when run_in_background is requested', async () => {
-      let jobRegistry!: TestJobRegistry
+      let jobRegistry!: RealJobs
       await lane.teardown()
       lane = await setupHostLane(
         {},
         {
           compose: async (ctx) => {
-            jobRegistry = new TestJobRegistry(ctx)
+            resultStorage(ctx)
+            jobRegistry = await composeRealJobs(ctx)
+            jobRegistry.agentOf('test-session')
           },
         },
       )
@@ -98,24 +102,26 @@ describe('zotero_export jobs', () => {
         'zotero_export',
       )
 
+      const jobId = (result.value as { readonly jobId: string }).jobId
       expect(result.value).toEqual({
         kind: 'background',
         resultSessionId: 'test-session',
-        jobId: 'zotero-1',
+        jobId,
       })
-      expect((result.content[0] as { text: string }).text).toBe(jobStartedMessage('zotero-1'))
+      expect((result.content[0] as { text: string }).text).toBe(jobStartedMessage(jobId))
 
-      const job = jobRegistry.jobs.get('zotero-1' as never)!
-      const outcome = await job.hooks.done
-      expect(outcome.status).toBe('completed')
-      expect(outcome.result).toContain('full result persisted')
+      const settled = await jobRegistry.settled(JobId(jobId), 'test-session')
+      expect(settled.status).toBe('completed')
+      expect(jobRegistry.registry.read(JobId(jobId), SessionId('test-session')).result).toContain(
+        'full result persisted',
+      )
 
       const toolDef = lane.tool('zotero_export')!
       const view = toolDef.presentResult?.(
         { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
         result as never,
       )
-      expect(view?.title).toBe('Zotero export: background job zotero-1')
+      expect(view?.title).toBe(`Zotero export: background job ${jobId}`)
     })
 
     it('promotes to a background job when execution exceeds foregroundWaitMs', async () => {
@@ -124,7 +130,8 @@ describe('zotero_export jobs', () => {
         { foregroundWaitMs: 20 },
         {
           compose: async (ctx) => {
-            await ctx.plugin(TestJobRegistry)
+            const jobs = await composeRealJobs(ctx)
+            jobs.agentOf('test-session')
           },
         },
       )
@@ -142,21 +149,24 @@ describe('zotero_export jobs', () => {
         'zotero_export',
       )
 
+      const jobId = (result.value as { readonly jobId: string }).jobId
       expect(result.value).toEqual({
         kind: 'promoted',
         resultSessionId: 'test-session',
-        jobId: 'zotero-1',
+        jobId,
         timeoutMs: 20,
-        message: jobPromotedMessage('zotero-1', 20),
+        message: jobPromotedMessage(jobId, 20),
       })
-      expect((result.content[0] as { text: string }).text).toBe(jobPromotedMessage('zotero-1', 20))
+      expect((result.content[0] as { text: string }).text).toBe(jobPromotedMessage(jobId, 20))
+      // Let the promoted job finish before the lane tears down.
+      await lane.ctx.jobs.wait(JobId(jobId), 5_000, SessionId('test-session'))
 
       const toolDef = lane.tool('zotero_export')!
       const view = toolDef.presentResult?.(
         { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
         result as never,
       )
-      expect(view?.title).toBe('Zotero export: promoted to job zotero-1')
+      expect(view?.title).toBe(`Zotero export: promoted to job ${jobId}`)
     })
 
     it('returns the foreground result when execution completes within foregroundWaitMs', async () => {
@@ -167,7 +177,8 @@ describe('zotero_export jobs', () => {
         {
           compose: async (ctx) => {
             storage = resultStorage(ctx)
-            await ctx.plugin(TestJobRegistry)
+            const jobs = await composeRealJobs(ctx)
+            jobs.agentOf('test-session')
           },
         },
       )

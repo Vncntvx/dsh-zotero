@@ -33,16 +33,12 @@ import { artifactOf, workspaceOf } from '../helpers/source-fixtures.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the export rows only need the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 import { mockT } from '../helpers/mock-translate.ts'
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
+import { clipboardWrites } from '../setup.ts'
 
 const t = mockT
-const writeClipboard = await writeClipboardSpy()
+const writeClipboard = clipboardWrites
 
 const REF_A = 'zotero://user/0/item/AAAAAAA1'
 const REF_B = 'zotero://user/0/item/BBBBBBBB'
@@ -230,7 +226,11 @@ describe('ExportDocumentRow', () => {
     // action inside, so the row header itself never changes on expand.
     expect(screen.getByText('BibTeX')).toBeDefined()
     expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
-    fireEvent.click(screen.getByLabelText(zh.copyExport))
+    // The copy action belongs to the host code surface: its banner carries
+    // the button, and the row's own header keeps only the cite action.
+    const copy = document.querySelector('[data-code-block-banner] button')
+    expect(copy).not.toBeNull()
+    fireEvent.click(copy!)
     expect(writeClipboard).toHaveBeenCalledWith(BIBTEX_DOC.text)
     fireEvent.click(screen.getByRole('button', { expanded: true }))
     expect(screen.queryAllByText(/@article\{dao2023/)).toHaveLength(0)

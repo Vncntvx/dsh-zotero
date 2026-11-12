@@ -26,11 +26,6 @@ import { emptyCredentialPort } from '../helpers/credential-port.ts'
 import { fakeScope } from '../helpers/fake-scope.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
-})
-
 afterEach(() => {
   cleanup()
 })
@@ -444,13 +439,9 @@ describe('ScholarlySettingsSection', () => {
     render(<ScholarlyHarness face={controller.inject()} view="page" dictionary={zh} />)
 
     await vi.waitFor(() => {
-      const s2SecretField = document.querySelector('[data-secret-field="scholarly-settings-s2Key"]')
-      expect(
-        s2SecretField?.querySelector('[data-configured]')?.getAttribute('data-configured'),
-      ).toBe('true')
-      expect(s2SecretField?.querySelector('[data-configured]')?.textContent).toBe(
-        zh.secretConfigured,
-      )
+      // The configured state is what the field says, not an attribute: the real
+      // secret field renders the localized label beside its input.
+      expect(screen.getAllByText(zh.secretConfigured).length).toBeGreaterThan(0)
     })
     controller.dispose()
   })

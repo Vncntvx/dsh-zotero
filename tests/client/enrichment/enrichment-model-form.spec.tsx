@@ -21,15 +21,6 @@ import { deferred } from '../../helpers/sync.js'
 import { cleanup, screen } from './support.tsx'
 import { mountHarness, modelPortOf, zh } from './support.tsx'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
-  return {
-    ...original,
-    ...(await primitivesWithRealForm(importOriginal)),
-  }
-})
-
 afterEach(() => {
   cleanup()
 })

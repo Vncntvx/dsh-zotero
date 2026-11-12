@@ -1,13 +1,13 @@
 /** WP4/D2: manager reservations must outlive validation, cancellation and cleanup. */
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { realpath } from 'node:fs/promises'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ModelDownloadManager } from '../../../src/enrichment/model-downloader.ts'
 import { hostSafeDirectoryDeps } from '../../../src/enrichment/safe-directory.ts'
 import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED } from '../../../src/errors.ts'
 import { modelClient, tinyModel } from '../../helpers/semantic-model-bundle.ts'
 import { deferred, progress } from '../../helpers/sync.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
 vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/enrichment-model-catalog.js')>()
@@ -20,18 +20,15 @@ vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   }
 })
 
-const roots: string[] = []
-const managers: ModelDownloadManager[] = []
-const releases: Array<() => void> = []
+const sandbox = createModelSandbox('dsh-model-ownership-')
 
 async function heldTransfer() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-ownership-'))
-  roots.push(root)
+  const root = await sandbox.root()
   const cleanup = deferred()
   const changed = progress()
   const requests: AbortSignal[] = []
   let aborted = 0
-  releases.push(() => cleanup.resolve())
+  sandbox.release(() => cleanup.resolve())
   const client = modelClient(async (_url, init) => {
     const signal = init!.signal!
     requests.push(signal)
@@ -49,22 +46,19 @@ async function heldTransfer() {
     await cleanup.promise
     throw signal.reason
   })
-  const manager = new ModelDownloadManager({ client })
-  managers.push(manager)
+  const manager = sandbox.manager(new ModelDownloadManager({ client }))
   return { root, manager, client, cleanup, changed, requests, aborted: () => aborted }
 }
 
 afterEach(async () => {
-  for (const release of releases.splice(0)) release()
-  await Promise.all(managers.splice(0).map((manager) => manager.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('model download task ownership', () => {
   it('concurrent starts reserve one writer before the asynchronous disk probe', async () => {
     const world = await heldTransfer()
     const admission = deferred()
-    releases.push(() => admission.resolve())
+    sandbox.release(() => admission.resolve())
     let arrivals = 0
     const manager = new ModelDownloadManager({
       client: world.client,
@@ -78,7 +72,7 @@ describe('model download task ownership', () => {
         },
       },
     })
-    managers.push(manager)
+    sandbox.manager(manager)
     // Both calls leave the injected directory boundary in the same microtask
     // turn, before either real disk probe can finish its first asynchronous stat.
     const starts = [
@@ -207,7 +201,7 @@ describe('model download task ownership', () => {
     const world = await heldTransfer()
     const entered = deferred()
     const resume = deferred()
-    releases.push(() => resume.resolve())
+    sandbox.release(() => resume.resolve())
     const canonical = await realpath(world.root)
     const manager = new ModelDownloadManager({
       client: world.client,
@@ -226,7 +220,7 @@ describe('model download task ownership', () => {
         },
       },
     })
-    managers.push(manager)
+    sandbox.manager(manager)
     const starting = manager.start({ model: tinyModel.key, modelDir: world.root }).then(
       (value) => value,
       (error: unknown) => error,

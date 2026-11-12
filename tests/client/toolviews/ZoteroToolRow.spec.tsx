@@ -12,11 +12,6 @@ import { ZoteroToolRow } from '../../../src/client/toolviews/ZoteroToolRow.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { preparing, running, settled } from '../helpers/blocks.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -68,8 +63,11 @@ describe('ZoteroToolRow', () => {
     expect(root).toBeTruthy()
     expect(root?.getAttribute('data-state')).toBe('preparing')
 
-    const disclosure = container.querySelector('[data-disclosure]')
-    expect(disclosure?.getAttribute('data-expandable')).toBe('false')
+    // The real disclosure marks only the expandable case; a preparing row has
+    // no toggle at all.
+    const disclosure = container.querySelector('[data-disclosure-row]')
+    expect(disclosure?.getAttribute('data-expandable')).toBeNull()
+    expect(disclosure?.getAttribute('role')).toBeNull()
     expect(screen.queryByText('Should not render')).toBeNull()
   })
 
@@ -90,9 +88,11 @@ describe('ZoteroToolRow', () => {
     const root = container.querySelector('[data-tool="zotero_retrieve"]')
     expect(root?.getAttribute('data-state')).toBe('running')
 
-    const shimmer = container.querySelector('[data-shimmer="true"]')
+    // The running shimmer wraps the whole header, title included; the summary
+    // is the collapsed-content half of it.
+    const shimmer = container.querySelector('[data-shimmer]')
     expect(shimmer).toBeTruthy()
-    expect(shimmer?.textContent).toBe('正在搜索全文...')
+    expect(shimmer?.textContent).toContain('正在搜索全文...')
   })
 
   it('renders settled ok state with summary and optional summarySuffix', () => {
@@ -265,8 +265,10 @@ describe('ZoteroToolRow', () => {
     expect(screen.getByText(mockT('toolUnverified'))).toBeTruthy()
     expect(screen.queryByText('已创建笔记 "Reading"')).toBeNull()
     // The caution colour is the visible difference from an ordinary row.
-    const caution = screen.getByText(mockT('toolUnverified')).closest('span[class]')
-    expect(caution?.getAttribute('class')).toContain('cautionSummary')
+    // The caution colour is this module's own class on the summary wrapper,
+    // one level above the shimmer text.
+    const caution = screen.getByText(mockT('toolUnverified')).closest('[class*="_cautionSummary_"]')
+    expect(caution).not.toBeNull()
   })
 
   it('toggles expansion when clicking disclosure trigger', () => {

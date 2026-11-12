@@ -14,11 +14,6 @@ import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -259,7 +254,9 @@ describe('ExportToolView', () => {
     ).toBeTruthy()
     expect(container.querySelector('pre')?.textContent).toBe(bibtexSnippet)
     expect(screen.getByText(mockT('exportRefCount', { count: 1 }))).toBeTruthy()
-    expect(screen.getByText('Quantum Test')).toBeTruthy()
+    // The body already carries the entry verbatim (asserted above); the item
+    // row names the title beside its locate actions.
+    expect(screen.getByText('Quantum Test', { selector: 'span[class]' })).toBeTruthy()
 
     expect(container.querySelectorAll('a[href^="zotero://"]')).toHaveLength(0)
     expect(screen.getByText(zh.copyTitle)).toBeTruthy()

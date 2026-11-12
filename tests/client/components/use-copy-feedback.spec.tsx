@@ -13,17 +13,21 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 import { useCopyFeedback } from '../../../src/client/components/useCopyFeedback.ts'
 import { CopyButton } from '../../../src/client/components/CopyButton.tsx'
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
 import { deferred } from '../../helpers/sync.ts'
 
-const writeClipboard = await writeClipboardSpy()
+// The real primitives bundle, with the one seam this lane exists to answer: a
+// clipboard writer that refuses, or that rejects outright. The host helper maps
+// a rejection to `false`, so a throwing writer is only reachable by replacing
+// the export itself.
+const { writeClipboard } = vi.hoisted(() => ({
+  writeClipboard: vi.fn<(text: string) => Promise<boolean>>(async () => true),
+}))
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
+  return { ...actual, writeClipboard }
+})
 
 afterEach(() => {
   cleanup()

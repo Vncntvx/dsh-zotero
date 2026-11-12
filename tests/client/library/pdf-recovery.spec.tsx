@@ -9,10 +9,6 @@ import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { deferred } from '../../helpers/sync.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 afterEach(() => {
   cleanup()
   localStorage.clear()

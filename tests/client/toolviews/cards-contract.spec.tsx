@@ -10,7 +10,7 @@
  */
 
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { REGISTRATIONS } from '../../../src/client/toolviews/index.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { preparing, settled } from '../helpers/blocks.ts'
@@ -20,11 +20,6 @@ import {
   canonicalToolArgs,
 } from '../helpers/toolview-fixtures.ts'
 import { CANONICAL_SEARCH_META, GET_META } from '../sources/reducer-fixtures.ts'
-
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 afterEach(cleanup)
 

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { SEMANTIC_MODELS } from '../semantic-model-catalog.mjs'
+import { SEMANTIC_MODELS } from '../../src/enrichment-model-catalog.ts'
 import {
   backgroundEntries,
   canonical,

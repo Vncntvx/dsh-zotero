@@ -17,16 +17,11 @@ import type {
 import { searchOf, sourceOf } from '../helpers/source-fixtures.ts'
 import { deferred } from '../../helpers/sync.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 import { mockT } from '../helpers/mock-translate.ts'
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
+import { clipboardWrites } from '../setup.ts'
 
 const t = mockT
-const writeClipboard = await writeClipboardSpy()
+const writeClipboard = clipboardWrites
 
 const BIBTEX_RESULT: ZoteroLibraryExportResultView = {
   format: 'bibtex',

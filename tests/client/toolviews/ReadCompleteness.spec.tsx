@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 /** Source completeness and card preview counts convey separate facts. */
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { ItemToolView } from '../../../src/client/toolviews/ItemToolView.tsx'
 import { WriteToolView } from '../../../src/client/toolviews/WriteToolView.tsx'
 import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { getMetaOf } from '../../../src/sources/decoders.js'
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 afterEach(cleanup)
 it('retains independent page windows and labels a complete collection with fewer displayed previews', () => {
   const meta = {

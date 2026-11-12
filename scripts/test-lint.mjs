@@ -95,7 +95,6 @@ const MAX_HELPER_LINES = 300
  * is never allowed.
  */
 const HELPER_SIZE_BASELINE = Object.freeze({
-  'tests/client/helpers/primitives-stub.ts': 711,
   'tests/client/helpers/source-fixtures.ts': 133,
   'tests/client/helpers/apply-world.ts': 378,
   'tests/client/helpers/library-panel-harness.tsx': 299,
@@ -401,6 +400,67 @@ export function upstreamSourceImportsOf(source) {
   return found
 }
 
+/**
+ * The primitives a client spec may not replace wholesale.
+ *
+ * The harness UI bundle is what the plugin ships against, and a local visual
+ * stub once grew to 711 lines standing in for it: its `Button`/`Tag`/`Menu`
+ * answered props the real components do not, so a spec could pass on a DOM the
+ * product never renders. A spec may replace one export through
+ * `importOriginal` (a clipboard spy, a counting wrapper), but the module itself
+ * stays real.
+ */
+const PRIMITIVE_MODULES = ['@deepseek-ai/dsh-client-ui-primitives']
+const WHOLESALE_PRIMITIVE_MOCK = new RegExp(
+  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s*)?\((?!\s*(?:importOriginal|importAct))`,
+  'g',
+)
+// A factory that takes no argument at all (`async () => ...`) is wholesale too.
+const NO_ARG_PRIMITIVE_MOCK = new RegExp(
+  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s*)?\(\s*\)`,
+  'g',
+)
+
+/**
+ * Each offending primitive mock with its 1-based line.
+ * @param source - the spec's content.
+ * @returns the violations.
+ */
+export function wholesalePrimitiveMocksOf(source) {
+  // Comments are blanked, strings are kept: the module name is a string. A
+  // match inside a comment is dropped by the fully stripped copy, the same way
+  // {@link upstreamSourceImportsOf} separates the two readings.
+  const noComments = stripCommentsAndStrings(source, false)
+  const codeOnly = stripCommentsAndStrings(source)
+  const found = []
+  for (const pattern of [WHOLESALE_PRIMITIVE_MOCK, NO_ARG_PRIMITIVE_MOCK]) {
+    for (const match of noComments.matchAll(pattern)) {
+      if (codeOnly[match.index] === ' ') continue
+      const line = noComments.slice(0, match.index).split('\n').length
+      // The two patterns can both match one call; report the line once.
+      if (found.some((entry) => entry.line === line)) continue
+      found.push({ line, module: match[1] })
+    }
+  }
+  return found
+}
+
+/** No client spec may replace the host primitives bundle wholesale. */
+function checkPrimitiveMocks() {
+  for (const path of filesUnder(join(root, 'tests', 'client'))) {
+    if (!/\.spec\.tsx?$/.test(path)) continue
+    const source = readFileSync(path, 'utf8')
+    for (const violation of wholesalePrimitiveMocksOf(source)) {
+      failures.push(
+        [
+          `${relative(root, path)}:${violation.line} replaces ${violation.module} wholesale`,
+          `  fix: use the real bundle; replace a single export through importOriginal when a platform seam must be observed`,
+        ].join('\n'),
+      )
+    }
+  }
+}
+
 /** No source or spec may import an upstream package's unpublished source tree. */
 function checkUpstreamSourceImports() {
   const sourceFile = /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/
@@ -431,6 +491,7 @@ if (invokedDirectly) {
   checkLanes()
   checkFocus()
   checkUpstreamSourceImports()
+  checkPrimitiveMocks()
 
   if (failures.length > 0) {
     process.stderr.write(`test-lint: ${failures.length} problem(s)\n\n`)

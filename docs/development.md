@@ -139,6 +139,19 @@ pnpm --dir ../deepseek-harness run build:lib:client   # 第 2 项：只重建浏
 
 同一脚本还校验 vendored 框架包：`dependencies` / `devDependencies` / `peerDependencies` 中 `cordis`、`cosmokit`、`schemastery`、`cordis-plugin-*` 的区间下界，必须等于 sibling `vendor/<pkg>/package.json` 的 version，不符时两种模式都直接失败。这类包不跟随 Harness 版本钉，下界写成 `^X.Y.Z-alpha.N` 会在同一个 profile 里留下两份 `cordis`。
 
+### pin 升级复核清单
+
+`npm run harness:pin -- <ver>` 之后，除了上面的产物一致性门禁，还要复核本仓库刻意镜像的上游语义——镜像不会因为 pin 升了就自动跟上：
+
+```sh
+# 工具块谓词：src/sources/presenters.ts 的 isSettledTool 镜像它
+rg -n "export declare function isSettledTool" -A 4 ../deepseek-harness/packages/client/ui-chat/src/client/contract/chat-nodes.ts
+# 结果文本：同文件的 resultTextOf 镜像它（上游未从 ./client 入口导出）
+rg -n "function resultText" -A 30 ../deepseek-harness/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+```
+
+`isSettledTool` 由上游 `@deepseek-ai/dsh-client-ui-chat/client` 公开导出，`resultText` 没有公开入口，两个镜像都在 host 半被复用，因此不能改成值导入。上游实现若有变化（尤其是"空内容 + 错误"的回退、"preparing" 的判定），同步 `tests/client/presenters.spec.ts` 的退化矩阵。
+
 ## 集成测试
 
 ```sh
@@ -295,6 +308,10 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 - 浏览器配置页测试基于 JSDOM 与 `@testing-library/react`；
 - 覆盖率阈值定义在 `vitest.config.ts` 中，对各核心分层分别设置门禁指标；
 - 集成测试针对真实运行的 Zotero 实例验证网络协议与真实数据。
+
+### 客户端测试替身
+
+`tests/client/helpers/` 里的 locale 与 Remote/access 替身是本地实现，不从上游 `@deepseek-ai/dsh-client-test-runtime` 引入。该包在当前 pin 上**确实**已发布，但装进来会让 dev 依赖图多出 28 个包：它的 peer 集合要求本插件并不携带的六个 harness 包（`dsh-client-web`、`dsh-client-hmr`、`dsh-client-modules`、`dsh-remote-mock`、`dsh-api-workspace-controller`、`dsh-host-directory-picker`），而它把 `vitest ^4.1.11` 作为硬依赖，会在 v5 旁边嵌套第二套测试运行器；它的根入口还会加载整个 jsdom slot runtime，一个纯函数也要每个导入它的 spec 付这份装载成本。复核命令：`npm install --dry-run @deepseek-ai/dsh-client-test-runtime@<pin>`，看输出里新增的包。上游实现若变，按模块注释点名的文件同步本地替身。
 
 ## CI 工作流
 

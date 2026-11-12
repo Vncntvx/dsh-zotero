@@ -15,11 +15,6 @@ import { deferred } from '../../helpers/sync.ts'
 // The visual primitives are stubbed; the CSS-anchor styling and dismiss hook
 // stay real, because this spec is what proves the popover's placement and
 // closing.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>()
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return { ...actual, ...primitivesStub() }
-})
 
 afterEach(() => {
   cleanup()

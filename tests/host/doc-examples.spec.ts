@@ -37,7 +37,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
 import { ZOTERO_TOOL_NAMES } from '../../src/constants.js'
 import { isRefString } from '../../src/refs.js'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 
 /**
  * The repo root, resolved from this spec's own location. Resolving from
@@ -202,7 +202,9 @@ describe('documented tool calls match the tool schemas', () => {
     ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime, {})
-    await ctx.plugin(TestJobRegistry)
+    // The real registry, with one controller so an owned job is admissible.
+    await ctx.plugin(LocalJobRegistry, {})
+    ctx.jobs.attachController('doc examples')
     await ctx.plugin(ZoteroService, {
       baseUrl: 'http://127.0.0.1:23119/api',
       // The write tools document real examples; the gate validates them

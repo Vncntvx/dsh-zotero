@@ -5,8 +5,8 @@
  */
 
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, symlink, writeFile } from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -15,16 +15,18 @@ import {
   type DownloadClientDeps,
   type FetchLike,
 } from '../../../src/enrichment/model-download-client.ts'
-import type { SemanticModelEntry } from '../../../src/enrichment-model-catalog.ts'
+import type {
+  SemanticDownloadSource,
+  SemanticModelEntry,
+} from '../../../src/enrichment-model-catalog.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
-const roots: string[] = []
+const sandbox = createModelSandbox('dsh-transport-arms-')
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-transport-arms-'))
-  roots.push(root)
-  return root
+  return await sandbox.root()
 }
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 function spec(): SemanticModelEntry {
@@ -188,5 +190,114 @@ describe('downloadPinnedFile abort and discard arms', () => {
         deps: { ...gateDeps(), fetch },
       }),
     ).rejects.toThrow(/insecure HTTP/)
+  })
+})
+
+const pinnedFile = { path: 'config.json', bytes: 5, sha256: 'x'.repeat(64) }
+
+describe('downloadPinnedFile source and redirect arms', () => {
+  it('refuses a redirect target outside the public address gate', async () => {
+    const root = await tempRoot()
+    const served: string[] = []
+    const fetch: FetchLike = async (url) => {
+      served.push(String(url))
+      return {
+        ok: false,
+        status: 302,
+        headers: { get: (name) => (name === 'location' ? 'https://127.0.0.1/model' : null) },
+        body: null,
+      }
+    }
+
+    await expect(
+      downloadPinnedFile({
+        model: spec(),
+        file: pinnedFile,
+        dir: root,
+        sources: ['hf-mirror'],
+        deps: { ...gateDeps(), fetch },
+      }),
+    ).rejects.toThrow(/non-public address/)
+    expect(served).toHaveLength(1)
+  })
+
+  it('reports an unknown mirror entry without issuing a request', async () => {
+    const root = await tempRoot()
+    const served: string[] = []
+    const fetch: FetchLike = async (url) => {
+      served.push(String(url))
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: null,
+      }
+    }
+
+    await expect(
+      downloadPinnedFile({
+        model: spec(),
+        file: pinnedFile,
+        dir: root,
+        sources: ['unknown' as unknown as SemanticDownloadSource],
+        deps: { ...gateDeps(), fetch },
+      }),
+    ).rejects.toThrow(/unknown download source/)
+    expect(served).toEqual([])
+  })
+
+  it('refuses more than five redirect hops', async () => {
+    const root = await tempRoot()
+    const served: string[] = []
+    const fetch: FetchLike = async (url) => {
+      served.push(String(url))
+      return {
+        ok: false,
+        status: 302,
+        headers: { get: (name) => (name === 'location' ? 'https://cdn.example.com/loop' : null) },
+        body: null,
+      }
+    }
+
+    await expect(
+      downloadPinnedFile({
+        model: spec(),
+        file: pinnedFile,
+        dir: root,
+        sources: ['hf-mirror'],
+        deps: { ...gateDeps(), fetch },
+      }),
+    ).rejects.toThrow(/more than 5 redirect hops/)
+    expect(served).toHaveLength(6)
+  })
+
+  it('normalizes a non-Error rejection from the transport', async () => {
+    const root = await tempRoot()
+    const fetch: FetchLike = async () => {
+      throw 'socket torn'
+    }
+
+    await expect(
+      downloadPinnedFile({
+        model: spec(),
+        file: pinnedFile,
+        dir: root,
+        sources: ['hf-mirror'],
+        deps: { ...gateDeps(), fetch },
+      }),
+    ).rejects.toThrow(/socket torn/)
+  })
+
+  it('reports every mirror failed when no source is listed', async () => {
+    const root = await tempRoot()
+
+    await expect(
+      downloadPinnedFile({
+        model: spec(),
+        file: pinnedFile,
+        dir: root,
+        sources: [],
+      }),
+    ).rejects.toThrow(/every mirror failed for config.json/)
   })
 })

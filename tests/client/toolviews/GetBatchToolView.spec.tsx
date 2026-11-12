@@ -1,15 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { GetBatchToolView } from '../../../src/client/toolviews/GetBatchToolView.tsx'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
 import { mockT } from '../helpers/mock-translate.ts'
-
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 afterEach(cleanup)
 

@@ -141,3 +141,70 @@ describe('scholarly transport resilience: circuit breaker', () => {
     expect(breaker.getState(host)).toBe('CLOSED')
   })
 })
+
+describe('dynamic circuit pruning at the tracked-capacity ceiling', () => {
+  /** The otherwise-private circuit map, read to observe pruning. */
+  function circuitMap(breaker: CircuitBreaker): Map<string, unknown> {
+    return (breaker as unknown as { circuits: Map<string, unknown> }).circuits
+  }
+
+  it('drops a healthy dynamic circuit but keeps a failing one inside its window', () => {
+    const breaker = new CircuitBreaker({ maxTrackedCircuits: 2 })
+    breaker.beforeRequest('api.openalex.org')
+    breaker.beforeRequest('adhoc-healthy.org')
+    breaker.beforeRequest('adhoc-failing.org')
+    breaker.recordFailure('adhoc-failing.org')
+
+    // The fourth host pushes the map over its ceiling and triggers the sweep.
+    breaker.beforeRequest('adhoc-new.org')
+
+    const circuits = circuitMap(breaker)
+    expect(circuits.has('api.openalex.org')).toBe(true)
+    expect(circuits.has('adhoc-healthy.org')).toBe(false)
+    expect(circuits.has('adhoc-failing.org')).toBe(true)
+    expect(circuits.has('adhoc-new.org')).toBe(true)
+  })
+
+  it('evicts the oldest dynamic circuit first when the sweep frees too little room', () => {
+    vi.useFakeTimers()
+    try {
+      const breaker = new CircuitBreaker({ maxTrackedCircuits: 3 })
+      breaker.beforeRequest('api.openalex.org')
+      breaker.beforeRequest('api.crossref.org')
+      breaker.beforeRequest('adhoc-old.org')
+      breaker.recordFailure('adhoc-old.org')
+      vi.advanceTimersByTime(1_000)
+      breaker.beforeRequest('adhoc-newer.org')
+      breaker.recordFailure('adhoc-newer.org')
+
+      breaker.beforeRequest('adhoc-trigger.org')
+
+      const circuits = circuitMap(breaker)
+      expect(circuits.has('adhoc-old.org')).toBe(false)
+      expect(circuits.has('adhoc-newer.org')).toBe(true)
+      expect(circuits.has('api.openalex.org')).toBe(true)
+      expect(circuits.has('api.crossref.org')).toBe(true)
+      expect(circuits.has('adhoc-trigger.org')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops evicting once no dynamic circuit remains', () => {
+    const breaker = new CircuitBreaker({ maxTrackedCircuits: 1 })
+    breaker.beforeRequest('api.openalex.org')
+    breaker.beforeRequest('api.crossref.org')
+    breaker.beforeRequest('adhoc-one.org')
+    breaker.recordFailure('adhoc-one.org')
+
+    // Two scholarly circuits keep the map over capacity after the only dynamic
+    // entry is evicted, so the second iteration has nothing left to delete.
+    breaker.beforeRequest('adhoc-trigger.org')
+
+    const circuits = circuitMap(breaker)
+    expect(circuits.has('adhoc-one.org')).toBe(false)
+    expect(circuits.has('api.openalex.org')).toBe(true)
+    expect(circuits.has('api.crossref.org')).toBe(true)
+    expect(circuits.has('adhoc-trigger.org')).toBe(true)
+  })
+})

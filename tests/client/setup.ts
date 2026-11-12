@@ -12,7 +12,24 @@
  * @module tests/client/setup
  */
 
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
+
+/**
+ * jsdom has no clipboard at all. The real `writeClipboard` primitive prefers
+ * `navigator.clipboard.writeText` and only falls back to `execCommand` (which
+ * jsdom also omits), so the platform seam is what a spec stubs — not the
+ * primitive.
+ */
+export const clipboardWrites = vi.fn(async (_text: string): Promise<void> => {})
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: (text: string) => clipboardWrites(text) },
+})
+
+beforeEach(() => {
+  clipboardWrites.mockClear()
+  clipboardWrites.mockImplementation(async () => {})
+})
 
 /**
  * jsdom has no layout and therefore no ResizeObserver; the filter bar's

@@ -12,10 +12,6 @@ import { BooleanField } from '../../src/client/fields.tsx'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the
 // fields only need the shared tag capsule, so stub it with its DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('./helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 import { mockT } from './helpers/mock-translate.ts'
 const t = mockT

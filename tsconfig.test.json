@@ -13,7 +13,6 @@
     "scripts/client-graph-authority.d.mts",
     "scripts/harness-state.d.mts",
     "scripts/verify-pack.d.mts",
-    "scripts/semantic-model-catalog.d.mts",
     "scripts/fetch-semantic-model.d.mts",
     "vitest.config.ts"
   ],

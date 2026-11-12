@@ -13,11 +13,6 @@ import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()

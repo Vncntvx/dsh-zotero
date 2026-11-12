@@ -20,8 +20,9 @@ globalThis[ports] = { fsPort, atomicPort, fetchPort, TestProxyAgent }
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (
-      specifier.endsWith('/semantic-model-catalog.mjs') ||
-      specifier === './semantic-model-catalog.mjs'
+      specifier.endsWith('/enrichment-model-catalog.ts') ||
+      specifier.endsWith('/enrichment-model-catalog.js') ||
+      specifier === './enrichment-model-catalog.ts'
     ) {
       return { url: catalogUrl, shortCircuit: true }
     }

@@ -13,11 +13,6 @@ import { connectedProbe, mountTab, sessionOf, sessionsOf } from '../helpers/sour
 import { mockT } from '../helpers/mock-translate.ts'
 import { statusView } from '../../helpers/status-view.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(cleanup)
 
 describe('the Sources panel projection path', () => {

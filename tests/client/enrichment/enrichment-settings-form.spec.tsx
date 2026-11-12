@@ -10,7 +10,7 @@ import { fireEvent, render, screen as rtlScreen, within } from '@testing-library
 import { useSyncExternalStore } from 'react'
 import { EnrichmentSettingsSection } from '../../../src/client/EnrichmentSettingsSection.tsx'
 import type { EnrichmentSettingsSectionProps } from '../../../src/client/EnrichmentSettingsSection.tsx'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   EnrichmentFormController,
   type EnrichmentCardState,
@@ -18,17 +18,6 @@ import {
 import { cleanup, en, mountHarness, screen, zh } from './support.tsx'
 import { fakeScope } from '../helpers/fake-scope.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
-
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
-  return {
-    ...(await primitivesWithRealForm(importOriginal)),
-    Modal: original.Modal,
-    Menu: original.Menu,
-    MenuItemButton: original.MenuItemButton,
-  }
-})
 
 afterEach(() => {
   cleanup()

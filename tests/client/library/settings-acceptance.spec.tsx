@@ -14,15 +14,6 @@ import { fakeScope } from '../helpers/fake-scope.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
-  return {
-    ...(await primitivesWithRealForm(importOriginal)),
-    Menu: original.Menu,
-    MenuItemButton: original.MenuItemButton,
-  }
-})
 afterEach(cleanup)
 function settingsHarness() {
   const form = fakeScope({ value: { ...LIBRARY_DEFAULTS } })

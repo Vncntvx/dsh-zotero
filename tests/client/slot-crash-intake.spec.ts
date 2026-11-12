@@ -17,7 +17,7 @@
  * @module tests/client/slot-crash-intake
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { apply } from '../../src/client/index.ts'
 import { RETIRED_ENTRY } from '../../src/client/actions/error-reporter.ts'
@@ -29,10 +29,6 @@ import { fakeEntryErrorSeam } from './helpers/slot-crash-seam.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so this
 // wiring-level spec does not load the real bundle (katex css, shiki, …).
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
-})
 
 /** The registrant this plugin stamps on its own slot entries. */
 const REGISTRANT = 'dsh-zotero'

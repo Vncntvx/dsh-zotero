@@ -7,7 +7,8 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { afterEach, describe, expect, it } from 'vitest'
 import { ZoteroJobRunner, jobPromotedMessage } from '../../src/job-runner.js'
 import { createScholarlyReadTool } from '../../src/scholarly/tools/read.js'
 import { createScholarlySearchTool } from '../../src/scholarly/tools/search.js'
@@ -17,9 +18,22 @@ import {
   SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES,
 } from '../../src/scholarly/tools/jobs.js'
 import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.ts'
 import { deferred } from '../helpers/sync.js'
 import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+
+/** The registries this spec composed; teardown stops their live jobs. */
+const registries: RealJobs[] = []
+afterEach(async () => {
+  for (const jobs of registries.splice(0)) await jobs.dispose()
+})
+
+/** The real registry on a context of its own, disposed with the case. */
+async function registryOn(ctx: Context): Promise<RealJobs> {
+  const jobs = await composeRealJobs(ctx)
+  registries.push(jobs)
+  return jobs
+}
 
 /** A host whose job policy and runner the spec controls. */
 function hostWith(
@@ -28,11 +42,11 @@ function hostWith(
     promoteOnTimeout: boolean
     foregroundWaitMs: number
   },
-  registry?: TestJobRegistry,
+  registry?: JobRegistry,
   handler?: (url: string, init?: RequestInit) => Response | Promise<Response>,
 ) {
   const host = createMockHost(createMockHttp(handler ?? (() => new Response('{}'))))
-  const runner = new ZoteroJobRunner(registry as unknown as JobRegistry)
+  const runner = new ZoteroJobRunner(registry)
   return {
     host: {
       ...host,
@@ -86,10 +100,10 @@ describe('scholarly background jobs', () => {
 
   it('starts a background search job and returns the job arm', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const { host } = hostWith(
       { enableRunInBackground: true, promoteOnTimeout: true, foregroundWaitMs: 1_000 },
-      registry,
+      jobs.registry,
       () => new Response('{}'),
     )
     const tool = createScholarlySearchTool(host)
@@ -101,20 +115,20 @@ describe('scholarly background jobs', () => {
 
     expect(result.kind).toBe('background')
     expect(result.jobId).toBeDefined()
-    const job = registry.jobs.get(result.jobId as never)!
-    expect(job.spec.kind).toBe('scholarly')
-    expect(job.spec.outputLimitBytes).toBe(SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES)
-    const outcome = await job.hooks.done
-    expect(outcome.status).toBe('completed')
-    expect(outcome.result).toContain('attention')
+    const view = jobs.registry.get(JobId(result.jobId))
+    expect(view.kind).toBe('scholarly')
+    expect(view.outputLimitBytes).toBe(SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES)
+    const settled = await jobs.settled(JobId(result.jobId))
+    expect(settled.status).toBe('completed')
+    expect(jobs.registry.read(JobId(result.jobId)).result).toContain('attention')
   })
 
   it('records progress for every source a search queries', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const { host } = hostWith(
       { enableRunInBackground: true, promoteOnTimeout: true, foregroundWaitMs: 1_000 },
-      registry,
+      jobs.registry,
       () => new Response('{}'),
     )
     const tool = createScholarlySearchTool(host)
@@ -122,9 +136,14 @@ describe('scholarly background jobs', () => {
       { query: 'attention', run_in_background: true, sources: ['arxiv'] },
       EXEC_CONTEXT as never,
     )) as { jobId: string }
-    const job = registry.jobs.get(result.jobId as never)!
-    await job.hooks.done
-    expect(job.progressEvents.length).toBeGreaterThan(0)
+    await jobs.settled(JobId(result.jobId))
+    // The live progress slot keeps the latest line; every event also lands in
+    // the log channel.
+    expect(jobs.registry.get(JobId(result.jobId)).progress ?? '').toBeDefined()
+    const progressed = jobs.registry
+      .read(JobId(result.jobId))
+      .chunks.filter((chunk) => chunk.text.startsWith('[progress] '))
+    expect(progressed.length).toBeGreaterThan(0)
   })
 
   it('projects the job arm as card metadata and the body as an empty card', () => {
@@ -153,11 +172,11 @@ describe('scholarly background jobs', () => {
 
   it('promotes a slow search to a background job and reports the promotion', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const release = deferred<void>()
     const { host } = hostWith(
       { enableRunInBackground: false, promoteOnTimeout: true, foregroundWaitMs: 20 },
-      registry,
+      jobs.registry,
       async () => {
         await release.promise
         return new Response('{}')
@@ -180,16 +199,15 @@ describe('scholarly background jobs', () => {
       { kind: 'promoted', jobId: result.jobId, timeoutMs: 20, message: result.message },
     )
     expect((rendered[0] as { text: string }).text).toContain('operation timed out after 20ms')
-    const job = registry.jobs.get(result.jobId as never)!
-    await job.hooks.done
+    await jobs.settled(JobId(result.jobId))
   })
 
   it('returns the foreground result when the call settles inside the wait window', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const { host } = hostWith(
       { enableRunInBackground: false, promoteOnTimeout: true, foregroundWaitMs: 5_000 },
-      registry,
+      jobs.registry,
       () => new Response('{}'),
     )
     const tool = createScholarlySearchTool(host)
@@ -201,10 +219,10 @@ describe('scholarly background jobs', () => {
 
   it('aborts a background job when it is killed', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const { host } = hostWith(
       { enableRunInBackground: true, promoteOnTimeout: true, foregroundWaitMs: 1_000 },
-      registry,
+      jobs.registry,
       async (_url, init) => {
         await new Promise((resolve) =>
           init?.signal?.addEventListener('abort', resolve, { once: true }),
@@ -217,18 +235,16 @@ describe('scholarly background jobs', () => {
       { query: 'attention', run_in_background: true },
       EXEC_CONTEXT as never,
     )) as { jobId: string }
-    const job = registry.jobs.get(result.jobId as never)!
-    registry.kill(result.jobId as never, undefined, 'stopped by user')
-    const outcome = await job.hooks.done
-    expect(outcome.status).toBe('killed')
+    expect(jobs.registry.kill(JobId(result.jobId), undefined, 'stopped by user')).toBe('requested')
+    expect((await jobs.settled(JobId(result.jobId))).status).toBe('killed')
   })
 
   it('kills the component-owned jobs when the runner is torn down', async () => {
     const ctx = new Context()
-    const registry = new TestJobRegistry(ctx)
+    const jobs = await registryOn(ctx)
     const { host, runner } = hostWith(
       { enableRunInBackground: true, promoteOnTimeout: true, foregroundWaitMs: 1_000 },
-      registry,
+      jobs.registry,
       async (_url, init) => {
         await new Promise((resolve) =>
           init?.signal?.addEventListener('abort', resolve, { once: true }),
@@ -241,10 +257,8 @@ describe('scholarly background jobs', () => {
       { query: 'attention', run_in_background: true },
       EXEC_CONTEXT as never,
     )) as { jobId: string }
-    const job = registry.jobs.get(result.jobId as never)!
     runner.killAll('scholarly service disposed')
-    const outcome = await job.hooks.done
-    expect(outcome.status).toBe('killed')
+    expect((await jobs.settled(JobId(result.jobId))).status).toBe('killed')
   })
 
   it('renders and projects both job arms and plain text', () => {

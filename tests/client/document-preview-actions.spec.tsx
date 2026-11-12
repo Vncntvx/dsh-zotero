@@ -16,10 +16,6 @@ import { BibliographyAction } from '../../src/client/components/document/Bibliog
 import { mockT } from './helpers/mock-translate.ts'
 
 // Stub primitives so icon and button imports do not load the full bundle.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('./helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 describe('Document preview actions', () => {
   afterEach(() => {

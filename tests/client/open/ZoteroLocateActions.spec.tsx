@@ -8,11 +8,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroLocateActions } from '../../../src/client/components/open/ZoteroLocateActions.tsx'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 import { mockT } from '../helpers/mock-translate.ts'
 
 const t = mockT

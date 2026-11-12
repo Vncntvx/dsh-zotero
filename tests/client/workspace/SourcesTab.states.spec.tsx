@@ -34,10 +34,6 @@ import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the tab only needs the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT

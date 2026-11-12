@@ -10,7 +10,7 @@
  */
 
 import { cleanup, fireEvent, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
 import { artifactOf, passageOf, searchOf, workspaceOf } from '../helpers/source-fixtures.ts'
 import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
@@ -25,10 +25,6 @@ import { statusView } from '../../helpers/status-view.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the view needs the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 afterEach(cleanup)
 

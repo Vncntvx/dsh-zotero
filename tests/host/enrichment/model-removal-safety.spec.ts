@@ -1,8 +1,9 @@
 /** Model removal safety: catalog-only deletion, symlink refusal, and clean status after removal. */
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { lstat, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+
 import { join } from 'node:path'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ModelDownloadManager } from '../../../src/enrichment/model-downloader.ts'
 import { removeModelBundle } from '../../../src/enrichment/model-removal.ts'
@@ -17,6 +18,7 @@ import {
   tinyModel,
   writeTinyBundle,
 } from '../../helpers/semantic-model-bundle.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
 vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/enrichment-model-catalog.js')>()
@@ -29,24 +31,18 @@ vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   }
 })
 
-const roots: string[] = []
-const managers: ModelDownloadManager[] = []
+const sandbox = createModelSandbox('dsh-model-removal-')
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-removal-'))
-  roots.push(root)
-  return root
+  return await sandbox.root()
 }
 
 function managerOf(): ModelDownloadManager {
-  const manager = new ModelDownloadManager({ client: modelClient() })
-  managers.push(manager)
-  return manager
+  return sandbox.manager(new ModelDownloadManager({ client: modelClient() }))
 }
 
 afterEach(async () => {
-  await Promise.all(managers.splice(0).map((manager) => manager.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('model bundle removal', () => {
@@ -196,6 +192,19 @@ describe('model bundle removal', () => {
     await expect(
       removeModelBundle({ dir: join(root, tinyModel.physicalKey), expected: tinyManifest() }),
     ).rejects.toMatchObject({ code: 'MODEL_REMOVAL_FAILED' })
+  })
+
+  it('raises a routable harness error with a stable name and code', async () => {
+    const root = await tempRoot()
+    // A direct caller (a CLI or a future endpoint) routes on `name`/`code`;
+    // a bare `Error` subclass would leave its declared code reachable only by
+    // parsing the message.
+    const error = await removeModelBundle({
+      dir: join(root, 'other'),
+      expected: tinyManifest(),
+    }).catch((thrown: unknown) => thrown)
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'ModelRemovalError', code: 'MODEL_REMOVAL_FAILED' })
   })
 
   it('refuses a root path that is a regular file', async () => {

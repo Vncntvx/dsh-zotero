@@ -12,11 +12,6 @@ import type { SourceItem } from '../../../src/sources/model.js'
 import { passageOf, sourceOf } from '../helpers/source-fixtures.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 const t = mockT
 
 afterEach(() => {

@@ -89,11 +89,13 @@ export default defineConfig({
         // layer grew the download/verify surface whose host-absent arms are
         // covered at the controller level (enrichment-model-controller.spec).
         // Before: 97 / 95.2 / 96.9 / 97. After (measured): 97.13 / 94.81 / 96.72 / 97.13.
-        // Recalibrated for WP9's generation-bound model state machine (full
-        // RemoteResult surface, serialized visibility-gated refresh, checking/
-        // cancelling phases). Before: 97 / 94.7 / 96.6 / 97. After (measured):
-        // 96.78 / 93.65 / 96.5 / 97.13.
-        'src/client/**': { statements: 96.7, branches: 93.6, functions: 96.4, lines: 97 },
+        // WP9 later re-sited the branches floor to 93.6 on the strength of the
+        // WP9 model surface having no behaviour specs; that was a gap, not a
+        // ceiling. The document-parse surface now carries its own specs
+        // (parse-controller guards, dialog receipts, surface degradation,
+        // region matrix), so the branches floor returns to 94.7. Measured
+        // after the restore: 97.03 / 94.79 / 96.58 / 98.21.
+        'src/client/**': { statements: 96.7, branches: 94.7, functions: 96.4, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
         // The enrichment component is an optional subsystem with a live-network
         // transport and a filesystem store; its floors sit just under the
@@ -102,14 +104,13 @@ export default defineConfig({
         // Recalibrated after WP4–WP9 expanded the production surface with the
         // transactional installer, the shared bundle inspector, the calibrated
         // admission runtime, the bounded vector cache and the transactional
-        // loader. These arms carry real behaviour specs (the full suite grew
-        // from 5119 to 5187 passing tests), but the newly added live-network /
-        // WASM arms have the same carve-out as before. Before:
-        // 90.9 / 85.7 / 90.1 / 90.9. After (measured):
-        // 89.36 / 83.79 / 93.2 / 91.03 — floors sit just under measurement
-        // (branches 83.7, never on the 83.79 measured value: a floor equal to
-        // its own measurement fails its own gate on the next rounding).
-        'src/enrichment/**': { statements: 89.3, branches: 83.7, functions: 90.1, lines: 90.9 },
+        // loader. That recalibration also re-sited the branches floor to 83.7
+        // because the parse-jobs persistence and model-manager races had no
+        // specs; both now do (enrichment-parse-jobs-persistence/supervision,
+        // model-manager-races, model-transport-races, model-removal-arms), so
+        // the branches floor returns to 85.7. Measured after the restore:
+        // 92.12 / 88.53 / 90.60 / 94.05.
+        'src/enrichment/**': { statements: 89.3, branches: 85.7, functions: 90.1, lines: 90.9 },
         // The semantic runtime's WASM/tokenizer arms (`openEmbedder`,
         // `createEmbeddingTokenizer`) only execute against a real model, so
         // the opt-in `eval:semantic` run is their coverage evidence; the pure
@@ -136,12 +137,12 @@ export default defineConfig({
           functions: 59,
           lines: 89.4,
         },
-        // Recalibrated together with the layers above (same expansion, evidence
-        // recorded there). Before: 96.9 / 93.6 / 97.4 / 96.9 and client
-        // 97 / 94.7 / 96.6 / 97. After (measured): global 96.24 / 92.77 /
-        // 96.98 / 97.41; client 96.78 / 93.65 / 96.5 / 97.13.
+        // Recalibrated together with the layers above. That pass also re-sited
+        // the global branches floor to 92.7 for the same reason those layers
+        // did; with their specs restored it returns to 93.6. Measured after the
+        // restore: 97.16 / 94.55 / 97.03 / 98.06.
         statements: 96.2,
-        branches: 92.7,
+        branches: 93.6,
         functions: 96.9,
         lines: 96.9,
       },

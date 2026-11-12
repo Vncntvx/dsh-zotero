@@ -13,6 +13,7 @@ import {
   ZOTERO_YEAR_MAX,
   ZOTERO_YEAR_MIN,
 } from '../constants.js'
+import { sharedRead } from '../concurrency.js'
 import { tokenize } from '../evidence.js'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import {
@@ -264,24 +265,40 @@ async function exactFilteredSearch(
   const includeTrashed = request.includeTrashed === true || scope.resolved.kind === 'trash'
   const indexKey = searchIndexKeyOf(scope, request, options.cacheGeneration)
 
-  let index = deps.searchCaches.filtered.get(indexKey)
   let rescanned = false
   let scanRows: ReadonlyMap<string, ZoteroSearchItem> | undefined
-  if (index === undefined) {
-    const scan = await scanFilteredIndex(
-      deps,
-      scope,
-      request,
-      library,
-      includeTrashed,
-      signal,
-      options,
-    )
-    index = scan.index
-    scanRows = scan.rows
-    deps.searchCaches.filtered.put(indexKey, index)
-    rescanned = true
-  }
+  const cachedIndex = deps.searchCaches.filtered.get(indexKey)
+  // The scan reads the whole candidate stream; two identical listings in
+  // flight (the panel's refresh racing a paging read) share one scan. Only the
+  // caller that ran it keeps the downloaded rows for the fresh-scan fast path;
+  // a sharing caller serves its page through the batched read-back, exactly
+  // like a cache hit.
+  let index =
+    cachedIndex ??
+    (await sharedRead({
+      cache: deps.searchCaches.filtered,
+      inFlight: deps.searchCaches.filteredInFlight,
+      keys: {
+        flightKey: indexKey,
+        find: () => deps.searchCaches.filtered.get(indexKey),
+        store: () => [indexKey],
+      },
+      ...(signal === undefined ? {} : { signal }),
+      load: async (loadSignal) => {
+        const scan = await scanFilteredIndex(
+          deps,
+          scope,
+          request,
+          library,
+          includeTrashed,
+          loadSignal,
+          options,
+        )
+        scanRows ??= scan.rows
+        return scan.index
+      },
+    }))
+  if (cachedIndex === undefined) rescanned = true
 
   /** Serve one page from an index; `undefined` means the index drifted. */
   const servePage = async (

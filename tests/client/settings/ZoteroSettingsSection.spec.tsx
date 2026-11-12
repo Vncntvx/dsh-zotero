@@ -48,14 +48,6 @@ import { statusView } from '../../helpers/status-view.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the page
 // only needs the pending capsule, so stub it with the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  const original = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
-  return {
-    ...(await primitivesWithRealForm(importOriginal)),
-    Modal: original.Modal,
-  }
-})
 
 /** The renderer's binding: a snapshot selector hook over the page's store. */
 function Harness({

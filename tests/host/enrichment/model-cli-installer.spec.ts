@@ -1,7 +1,7 @@
 /** WP4/X2: exercise the shipped installer command in a child process. */
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -11,15 +11,15 @@ import {
   tinyModel,
   writeTinyBundle,
 } from '../../helpers/semantic-model-bundle.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
 const script = fileURLToPath(new URL('../../../scripts/fetch-semantic-model.mjs', import.meta.url))
 const boundary = fileURLToPath(new URL('./support/model-cli-boundary.mjs', import.meta.url))
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
-const roots: string[] = []
+const sandbox = createModelSandbox('dsh-cli-installer-')
 
 async function world() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-cli-'))
-  roots.push(root)
+  const root = await sandbox.root()
   return { root, closed: join(root, 'dispatcher-closed') }
 }
 
@@ -65,7 +65,7 @@ async function runCli(root: string, args: string[], fail = false) {
 }
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('semantic model CLI installation', () => {

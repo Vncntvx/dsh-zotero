@@ -342,32 +342,30 @@ describe('the incremental literature-trail fold', () => {
     expect(afterFull).toEqual(fullView)
   })
 
-  it('keeps the reducer cost near linear in the event count', () => {
-    // A regression guard, not a benchmark: the reducer path (fold plus view,
-    // without the harness's own wire-schema parse) must not return to a
-    // per-view refold, which grows with the square of the event count. The
-    // minimum of three runs absorbs scheduler noise; the bound leaves room for
-    // the window itself growing up to its 200-source cap.
-    const measure = (count: number): number => {
-      const run = (): number => {
-        const session = trail()
-        const started = performance.now()
-        for (let index = 0; index < count; index += 1) {
-          for (const entry of searchEvents(`c${index}`, [
-            REF(`K${String(index).padStart(4, '0')}`),
-          ])) {
-            session.apply(entry)
-            session.view()
-          }
+  it('folds one block per event however long the session runs', () => {
+    // The guard is the fold count, not wall time: a view that replayed the log
+    // would fold ~N²/2 blocks, while a wall-clock ratio also moves with the
+    // coverage instrumentation the gate runs under. Spying on the reducer
+    // counts the work itself, so the assertion says what the fix guarantees.
+    const applySpy = vi.spyOn(SourceWorkspaceIndex.prototype, 'apply')
+    const counts: Record<number, number> = {}
+    for (const count of [50, 100, 200, 400]) {
+      applySpy.mockClear()
+      const session = trail()
+      for (let index = 0; index < count; index += 1) {
+        for (const entry of searchEvents(`c${index}`, [
+          REF(`K${String(index).padStart(4, '0')}`),
+        ])) {
+          session.apply(entry)
+          session.view()
         }
-        return performance.now() - started
       }
-      run() // warmup
-      return Math.min(run(), run(), run())
+      counts[count] = applySpy.mock.calls.length
     }
-    const small = measure(100)
-    const large = measure(400)
-    expect(large).toBeLessThanOrEqual(small * 6)
+    // Exactly two folds per call/result pair at every size — the settled block
+    // and the in-flight call the view folds into its own throwaway index —
+    // never the whole log: a replaying view would fold ~N²/2.
+    expect(counts).toEqual({ 50: 100, 100: 200, 200: 400, 400: 800 })
   })
 
   it('keeps the fork-inherited prefix length on the state it initialized', () => {

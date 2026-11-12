@@ -1,28 +1,18 @@
 /** WP4/D2/D4/X2: real CLI processes, real public file locks, and controlled I/O windows. */
 import { createHash } from 'node:crypto'
-import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  symlink,
-  writeFile,
-} from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { lstat, mkdir, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises'
+
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { modelBytes, tinyManifest, tinyModel } from '../../helpers/semantic-model-bundle.ts'
 import { startModelCli, type ModelCli } from './support/model-cli-process.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
-const roots: string[] = []
+const sandbox = createModelSandbox('dsh-cli-coordinate-')
 const processes: ModelCli[] = []
 
 async function world() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-cli-coordination-'))
-  roots.push(root)
+  const root = await sandbox.root()
   return { root, dir: join(root, tinyModel.physicalKey) }
 }
 
@@ -68,7 +58,7 @@ async function expectCommitted(dir: string) {
 
 afterEach(async () => {
   await Promise.all(processes.splice(0).map((cli) => cli.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('CLI installation writer coordination', () => {

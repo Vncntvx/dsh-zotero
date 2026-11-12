@@ -23,15 +23,10 @@ import { statusView } from '../../helpers/status-view.ts'
 // portal machinery); the view needs the shared DOM face. Its toolbar menu is
 // the one surface this spec drives through the primitive's own callbacks, so
 // it swaps in the interactive variant instead of the display-only default.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  const { interactiveMenu } = await import('../helpers/menu-stub.tsx')
-  return primitivesStub({ Menu: interactiveMenu })
-})
 
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
+import { clipboardWrites } from '../setup.ts'
 
-const writeClipboard = await writeClipboardSpy()
+const writeClipboard = clipboardWrites
 
 /** The rendered view; the helpers below read only its container. */
 type View = ReturnType<typeof render>
@@ -100,15 +95,21 @@ describe('selection', () => {
 })
 
 describe('toolbar', () => {
-  it('closes the diagnostic menu on selection and on Escape', () => {
+  it('closes the diagnostic menu on Escape and on a second trigger press', () => {
     const { view } = mountView(singleFixture())
-    fireEvent.click(screen.getByLabelText(zh.detailsLabel))
-    expect(view.container.querySelector('[data-menu="open"]')).not.toBeNull()
-    fireEvent.click(view.container.querySelector('[data-menu-item="build"]')!)
-    expect(view.container.querySelector('[data-menu="open"]')).toBeNull()
-    fireEvent.click(screen.getByLabelText(zh.detailsLabel))
-    fireEvent.keyDown(view.container.querySelector('[data-menu]')!, { key: 'Escape' })
-    expect(view.container.querySelector('[data-menu="open"]')).toBeNull()
+    const trigger = screen.getByLabelText(zh.detailsLabel)
+    fireEvent.click(trigger)
+    // The real menu states its role; the anchor stays in the toolbar while the
+    // panel renders beside it.
+    const menu = document.querySelector('[role="menu"]')
+    expect(menu).not.toBeNull()
+    fireEvent.keyDown(menu!, { key: 'Escape' })
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+
+    fireEvent.click(trigger)
+    expect(document.querySelector('[role="menu"]')).not.toBeNull()
+    fireEvent.click(trigger)
+    expect(document.querySelector('[role="menu"]')).toBeNull()
     view.unmount()
   })
 

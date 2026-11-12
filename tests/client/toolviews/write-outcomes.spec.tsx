@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Persisted write receipts must retain the operation and its actual outcome. */
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { en, zh } from '../../../src/client/locales.ts'
 import { WriteToolView, type WriteToolName } from '../../../src/client/toolviews/WriteToolView.tsx'
 import { makeTranslate } from '../helpers/mock-translate.ts'
@@ -9,10 +9,6 @@ import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosu
 import { settled } from '../helpers/blocks.ts'
 import { scholarlySaveReceipt } from '../../helpers/scholarly-save-runtime.js'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 afterEach(cleanup)
 
 const REF = 'zotero://user/0/item/NOTE0001?server=srv-save'

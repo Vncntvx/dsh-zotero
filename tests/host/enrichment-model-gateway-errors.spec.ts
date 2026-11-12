@@ -12,7 +12,7 @@ import TypertGatewayService, {
 } from '@deepseek-ai/dsh-api-gateway'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import { Peer } from '@deepseek-ai/dsh-client-connection'
-import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnrichmentService } from '../../src/enrichment/index.ts'
@@ -138,8 +138,10 @@ describe('enrichment model errors through the real Typert Gateway', () => {
         message: expect.any(String),
         details: { code: failureCode },
       })
-      expect(failure.error).toBeInstanceOf(RemoteError)
-      expect(failure.error).toMatchObject({
+      // Structural, not `instanceof`: a remote error crossing a module or
+      // realm copy keeps its marker but not this realm's prototype.
+      expect(remoteErrorOf(failure.error)).toMatchObject({
+        code: 'zotero/domain',
         cause: expect.any(ZoteroError),
       })
       expect(called).toHaveBeenCalledOnce()

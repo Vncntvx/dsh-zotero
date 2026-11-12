@@ -17,11 +17,6 @@ import { settled } from '../helpers/blocks.ts'
 import { createToolViewProps } from '../helpers/mock-disclosure.ts'
 import { zh } from '../../../src/client/locales.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 afterEach(() => {
   report.mockClear()
   cleanup()

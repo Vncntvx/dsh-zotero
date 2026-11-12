@@ -147,6 +147,28 @@ function setup(total = 250) {
 }
 
 describe('exact panel filters', () => {
+  it('shares one scan and one attachment walk between two identical listings in flight', async () => {
+    // Top-level filter fields, the shape `runSearch` reads: an exact year
+    // filter with an attachment dimension takes the indexed scan *and* the
+    // attachment walk, so both shared reads are measured.
+    const filter = { yearFrom: 2023, hasAttachment: false }
+    // The single-search cost is the measure: the concurrent pair must match its
+    // page reads and its one attachment walk, not double them.
+    const one = setup(250)
+    const solo = await one.search(filter)
+    const soloListingReads = one.listingStarts().length
+    const soloWalks = one.attachmentWalks()
+
+    const world = setup(250)
+    const [first, second] = await Promise.all([world.search(filter), world.search(filter)])
+
+    expect(first.total).toBe(solo.total)
+    expect(second.total).toBe(solo.total)
+    expect(second.items.map((item) => item.ref)).toEqual(first.items.map((item) => item.ref))
+    expect(world.listingStarts().length).toBe(soloListingReads)
+    expect(world.attachmentWalks()).toBe(soloWalks)
+  })
+
   it.each(['refresh', 'version drift'] as const)(
     'refreshes attachment presence after %s',
     async (trigger) => {

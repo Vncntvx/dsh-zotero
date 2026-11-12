@@ -14,11 +14,6 @@ import { zh } from '../../../src/client/locales.ts'
 import { CONNECTED } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('../helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
-})
-
 afterEach(cleanup)
 
 describe('the write-grant revoke row', () => {

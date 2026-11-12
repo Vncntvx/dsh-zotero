@@ -11,11 +11,6 @@ import { ExportDocumentRow } from '../../../src/client/components/ExportDocument
 import type { ExportedDocument } from '../../../src/client/sources/selectors.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 const t = mockT
 
 const BASE_DOC: ExportedDocument = {

@@ -119,9 +119,13 @@ async function idleAgent(ctx: Context, rawId: string) {
     whenIdle: async () => {},
     runMaintenance: async (task) => await task(parseSignal()),
   }
-  await ctx.agents.register(agent)
+  const detach = await ctx.agents.register(agent)
   return {
     agent,
+    /** Remove this Agent from the live registry without disposing its scope. */
+    unregister: async () => {
+      await detach()
+    },
     dispose: async () => {
       await fiber.dispose()
     },

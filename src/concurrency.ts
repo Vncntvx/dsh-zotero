@@ -161,8 +161,14 @@ export interface SharedReadKeys<T> {
  * @param input - the caches, key family, loader, and caller cancellation.
  * @returns the cached or freshly loaded value.
  */
+/** The cache surface {@link sharedRead} needs; `Map` and the bounded caches both satisfy it. */
+export interface SharedReadCache<T> {
+  get(key: string): T | undefined
+  set(key: string, value: T): void
+}
+
 export async function sharedRead<T>(input: {
-  readonly cache: Map<string, T>
+  readonly cache: SharedReadCache<T>
   readonly inFlight: Map<string, SharedOperation<T>>
   readonly keys: SharedReadKeys<T>
   readonly load: (signal: AbortSignal) => Promise<T>

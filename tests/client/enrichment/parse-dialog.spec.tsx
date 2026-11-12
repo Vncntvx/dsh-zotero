@@ -4,7 +4,11 @@ import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ParseDocumentDialog } from '../../../src/client/enrichment/ParseDocumentDialog.tsx'
-import { parseEn } from '../../../src/client/enrichment/parse-locales.ts'
+import {
+  parseEn,
+  parseTranslate,
+  type ParseTranslate,
+} from '../../../src/client/enrichment/parse-locales.ts'
 import {
   observable,
   PARSE_JOB,
@@ -13,6 +17,7 @@ import {
   parseCapabilities,
   parseJob,
   parseJobs,
+  parseReceipt,
   parseRemote,
 } from './support/parse-ports.ts'
 
@@ -26,10 +31,12 @@ function mount(
   options: {
     target?: typeof PARSE_SELECTION.target
     capabilities?: Parameters<typeof parseCapabilities>[0]
+    remote?: Parameters<typeof parseRemote>[0]
+    t?: ParseTranslate
     strict?: boolean
   } = {},
 ) {
-  const remote = parseRemote()
+  const remote = parseRemote(options.remote)
   const boundary = parseJobs()
   const capabilities = observable(parseCapabilities(options.capabilities))
   sources.push(capabilities)
@@ -42,6 +49,7 @@ function mount(
     capabilities,
     selection,
     locale: 'en' as const,
+    ...(options.t === undefined ? {} : { t: options.t }),
     onClose: () => {
       open = false
       rerender()
@@ -178,5 +186,136 @@ describe('ParseDocumentDialog job controls', () => {
     expect(world.capabilities.listenerCount()).toBe(0)
     expect(world.state.listenerCount()).toBe(0)
     expect(world.jobs.kill).not.toHaveBeenCalled()
+  })
+})
+
+describe('ParseDocumentDialog receipts and artifacts', () => {
+  it('renders a cached completed receipt with its facts and a reparse action', async () => {
+    mount({
+      remote: {
+        documentParseReceipt: async () => ({
+          ok: true,
+          value: { kind: 'completed', receipt: parseReceipt({ cached: true }) },
+        }),
+      },
+    })
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    expect(screen.getByText(parseEn.parseCompleted)).toBeDefined()
+    expect(screen.getByText(parseEn.parseCached)).toBeDefined()
+    // The receipt's own facts, and the explicit unknown when MinerU reported no
+    // page count, instead of a fabricated zero.
+    expect(screen.getByText('generation-1')).toBeDefined()
+    expect(screen.getByText('artifact-1')).toBeDefined()
+    expect(screen.getByText('sha256-1')).toBeDefined()
+    expect(screen.getByText('9')).toBeDefined()
+    expect(screen.getByText(parseEn.parsePagesUnknown)).toBeDefined()
+    expect(screen.getByText('# Preview')).toBeDefined()
+    expect(screen.getByRole('button', { name: parseEn.parseReparse })).toBeDefined()
+  })
+
+  it('renders a failed receipt with its code and offers retry', async () => {
+    mount({
+      remote: {
+        documentParseReceipt: async () => ({
+          ok: true,
+          value: {
+            kind: 'failed',
+            code: 'ZOTERO_ENRICHMENT_TASK_FAILED',
+            message: 'MinerU refused the document',
+          },
+        }),
+      },
+    })
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    expect(screen.getAllByText(parseEn.parseFailed).length).toBeGreaterThan(0)
+    expect(screen.getByText('ZOTERO_ENRICHMENT_TASK_FAILED')).toBeDefined()
+    expect(screen.getByText(/MinerU refused the document/)).toBeDefined()
+    expect(screen.getByRole('button', { name: parseEn.parseRetry })).toBeDefined()
+  })
+
+  it('renders a cancelled receipt as killed work', async () => {
+    mount({
+      remote: {
+        documentParseReceipt: async () => ({
+          ok: true,
+          value: { kind: 'cancelled', code: 'job/killed', message: 'stopped by the user' },
+        }),
+      },
+    })
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    expect(screen.getByText(parseEn.parseKilled)).toBeDefined()
+    expect(screen.getByText('job/killed')).toBeDefined()
+    expect(screen.getByRole('button', { name: parseEn.parseRetry })).toBeDefined()
+  })
+
+  it('renders a ready artifact without a page count and offers reparse', async () => {
+    mount({
+      remote: {
+        documentArtifact: async () => ({
+          ok: true,
+          value: {
+            kind: 'ready',
+            sourceId: 'source-1',
+            targetLabel: 'Selected PDF',
+            mode: 'free',
+            artifactId: 'artifact-9',
+            fingerprint: 'sha256-9',
+            characterCount: 12,
+          },
+        }),
+      },
+    })
+    await settle()
+    expect(screen.getByText(parseEn.parseArtifactReady)).toBeDefined()
+    expect(screen.getByText('artifact-9')).toBeDefined()
+    expect(screen.getByText('12')).toBeDefined()
+    expect(screen.getByText(parseEn.parsePagesUnknown)).toBeDefined()
+    expect(screen.getByRole('button', { name: parseEn.parseReparse })).toBeDefined()
+  })
+
+  it('distinguishes an expired artifact from a missing one', async () => {
+    const expired = mount({
+      remote: { documentArtifact: async () => ({ ok: true, value: { kind: 'expired' } }) },
+    })
+    await settle()
+    expect(screen.getByText(parseEn.parseArtifactExpired)).toBeDefined()
+    expired.unmount()
+    mount()
+    await settle()
+    expect(screen.getByText(parseEn.parseArtifactMissing)).toBeDefined()
+  })
+
+  it('surfaces an observation failure as the reconnect hint', async () => {
+    const world = mount()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    act(() =>
+      world.state.publish({
+        rows: { [PARSE_SESSION]: [parseJob()] },
+        observed: {
+          [PARSE_JOB]: {
+            jobId: PARSE_JOB,
+            text: '',
+            gapBefore: false,
+            streaming: false,
+            error: 'observation lost',
+          },
+        },
+      }),
+    )
+    expect(screen.getByText(parseEn.parseReconnectHint)).toBeDefined()
+  })
+
+  it('uses a host-provided translator instead of the locale default', async () => {
+    mount({ t: parseTranslate('en') })
+    await settle()
+    expect(screen.getByRole('dialog', { name: parseEn.parseTitle })).toBeDefined()
   })
 })

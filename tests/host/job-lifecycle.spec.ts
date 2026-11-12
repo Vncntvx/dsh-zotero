@@ -3,7 +3,18 @@
 import { afterEach, expect, it } from 'vitest'
 import { deferred } from '../helpers/sync.ts'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
-import { TestJobRegistry } from '../helpers/fake-jobs.ts'
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.ts'
+
+/** The job id a background tool answered with. */
+function jobIdOf(result: Awaited<ReturnType<HostLane['runTool']>>): string {
+  if (result.isError) throw new Error('the tool refused the background call')
+  const value = result.value as { readonly kind?: string; readonly jobId?: string }
+  if (value.kind !== 'background' || value.jobId === undefined) {
+    throw new Error('the tool did not start a background job')
+  }
+  return value.jobId
+}
 
 let lane: HostLane | undefined
 
@@ -14,12 +25,15 @@ afterEach(async () => {
 })
 
 it('kills a pending export job when the core service is disposed', async () => {
-  let jobs!: TestJobRegistry
+  let jobs!: RealJobs
   lane = await setupHostLane(
     {},
     {
       compose: async (ctx) => {
-        jobs = new TestJobRegistry(ctx)
+        jobs = await composeRealJobs(ctx)
+        // The tool call carries the lane's default agent; its session must be
+        // live for an owned job to be admitted.
+        jobs.agentOf('test-session')
       },
     },
   )
@@ -39,21 +53,24 @@ it('kills a pending export job when the core service is disposed', async () => {
   expect(result.isError).toBe(false)
   await started.promise
 
-  const job = jobs.jobs.get('zotero-1' as never)
-  expect(job).toBeDefined()
+  const jobId = jobIdOf(result)
   await lane.zoteroFiber.dispose()
-  expect((await job!.hooks.done).status).toBe('killed')
-  expect(job!.detail).toBe('zotero service disposed')
+  const view = await jobs.settled(JobId(jobId), 'test-session')
+  expect(view.status).toBe('killed')
+  // The registry merges the kill reason it recorded with the producer's own
+  // terminal detail; here both name the same cause.
+  expect(view.detail).toContain('zotero service disposed')
   release.resolve()
 })
 
 it('kills a pending changes job when the core service is disposed', async () => {
-  let jobs!: TestJobRegistry
+  let jobs!: RealJobs
   lane = await setupHostLane(
     {},
     {
       compose: async (ctx) => {
-        jobs = new TestJobRegistry(ctx)
+        jobs = await composeRealJobs(ctx)
+        jobs.agentOf('test-session')
       },
     },
   )
@@ -77,10 +94,12 @@ it('kills a pending changes job when the core service is disposed', async () => 
   expect(result.isError).toBe(false)
   await started.promise
 
-  const job = jobs.jobs.get('zotero-1' as never)
-  expect(job).toBeDefined()
+  const jobId = jobIdOf(result)
   await lane.zoteroFiber.dispose()
-  expect((await job!.hooks.done).status).toBe('killed')
-  expect(job!.detail).toBe('zotero service disposed')
+  const view = await jobs.settled(JobId(jobId), 'test-session')
+  expect(view.status).toBe('killed')
+  // The registry merges the kill reason it recorded with the producer's own
+  // terminal detail; here both name the same cause.
+  expect(view.detail).toContain('zotero service disposed')
   release.resolve()
 })

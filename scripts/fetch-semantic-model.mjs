@@ -41,7 +41,7 @@ import {
   manifestOf,
   semanticModelBytes,
   semanticModelOf,
-} from './semantic-model-catalog.mjs'
+} from '../src/enrichment-model-catalog.ts'
 import { installModelBundle } from '../src/enrichment/model-installation.ts'
 import { createBundleInspector } from '../src/enrichment/model-bundle-inspector.ts'
 

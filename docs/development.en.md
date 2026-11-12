@@ -139,6 +139,19 @@ Without `--strict`, both checks print a note. With `--strict` (the mode `release
 
 The same script also validates the vendored framework packages: the lower bound of every `cordis`, `cosmokit`, `schemastery`, and `cordis-plugin-*` range in `dependencies` / `devDependencies` / `peerDependencies` must equal the version in the sibling's `vendor/<pkg>/package.json`, and a mismatch fails outright in both modes. These packages do not follow the Harness version pin, and a `^X.Y.Z-alpha.N` lower bound leaves two copies of `cordis` in one profile.
 
+### Pin upgrade checklist
+
+After `npm run harness:pin -- <ver>`, the artifact-freshness gate above is not enough: the upstream semantics this repository mirrors on purpose do not follow the pin by themselves.
+
+```sh
+# Tool-block predicate: isSettledTool in src/sources/presenters.ts mirrors it
+rg -n "export declare function isSettledTool" -A 4 ../deepseek-harness/packages/client/ui-chat/src/client/contract/chat-nodes.ts
+# Result text: resultTextOf in the same file mirrors it (upstream does not export it from ./client)
+rg -n "function resultText" -A 30 ../deepseek-harness/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+```
+
+`isSettledTool` is publicly exported from `@deepseek-ai/dsh-client-ui-chat/client`; `resultText` has no public entry. Both mirrors are reused by the host half, so neither can become a value import. If an upstream implementation changes (especially the empty-content-with-error fallback and the `preparing` decision), update the degradation matrix in `tests/client/presenters.spec.ts` with it.
+
 ## Integration Tests
 
 ```sh
@@ -295,6 +308,10 @@ The following were not run this round and are marked "Not accepted". Before runn
 - Browser configuration page tests use JSDOM and `@testing-library/react`;
 - Coverage thresholds live in `vitest.config.ts`, with a gate metric for each core layer;
 - Integration tests validate wire protocols and real data against a running Zotero instance.
+
+### Client test doubles
+
+The locale and Remote/access doubles under `tests/client/helpers/` are local implementations, not imports from the upstream `@deepseek-ai/dsh-client-test-runtime`. That package **is** published at the current pin, but installing it grows the dev graph by 28 packages: its peer set requires six harness packages this plugin does not carry (`dsh-client-web`, `dsh-client-hmr`, `dsh-client-modules`, `dsh-remote-mock`, `dsh-api-workspace-controller`, `dsh-host-directory-picker`), and its hard `vitest ^4.1.11` dependency nests a second test runner beside this repo's v5. Its root entry also loads the whole jsdom slot runtime, so even one pure function costs every importing spec that load. To re-check: `npm install --dry-run @deepseek-ai/dsh-client-test-runtime@<pin>` and read the added packages. If an upstream implementation changes, sync the local double named in that module's comment.
 
 ## CI Workflows
 

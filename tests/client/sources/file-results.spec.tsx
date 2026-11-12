@@ -10,10 +10,6 @@ import { settled, running } from '../helpers/blocks.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 import type { ExportArtifact } from '../../../src/sources/model.js'
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -118,7 +114,7 @@ it('keeps failed file reads retryable without offering summary downloads', async
 })
 
 it('labels a long preview while copying the entire native body', async () => {
-  const { writeClipboard } = await import('@deepseek-ai/dsh-client-ui-primitives')
+  const { clipboardWrites: writeClipboard } = await import('../setup.ts')
   const text = 'x'.repeat(2500) + 'END'
   render(<ExportCard artifact={{ ...artifact, resultFile: undefined, text }} t={mockT} />)
   fireEvent.click(screen.getByRole('button', { name: /CSV/ }))

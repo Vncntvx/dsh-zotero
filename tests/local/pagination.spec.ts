@@ -93,6 +93,29 @@ describe('readPagesConcurrentlyFolded', () => {
     expect(result.pages.flatMap((page) => page.value)).toHaveLength(120)
   })
 
+  it('repairs two short windows in offset order', async () => {
+    const rows = rowsOf(320)
+    const result = await readPagesConcurrentlyFolded(
+      clientOf(rows, {
+        // Two concurrent windows come back short; the repairs run in offset
+        // order even when the windows settle in another order.
+        shortAt: new Map([
+          [100, 60],
+          [200, 90],
+        ]),
+      }),
+      '/items',
+      new URLSearchParams(),
+      undefined,
+      undefined,
+      what,
+      4,
+      (page) => page,
+    )
+    expect(result.pages.map((page) => page.offset)).toEqual([0, 100, 160, 200, 290, 300])
+    expect(result.pages.flatMap((page) => page.value)).toHaveLength(320)
+  })
+
   it('refuses an overlong page', async () => {
     const rows = rowsOf(120)
     await expect(

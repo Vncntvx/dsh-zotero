@@ -12,14 +12,9 @@ import { BrowseToolView } from '../../../src/client/toolviews/BrowseToolView.tsx
 import { mockT } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { running, settled } from '../helpers/blocks.ts'
-import { writeClipboardSpy } from '../helpers/primitives-stub.ts'
+import { clipboardWrites } from '../setup.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
-const writeClipboard = await writeClipboardSpy()
+const writeClipboard = clipboardWrites
 
 afterEach(() => {
   cleanup()

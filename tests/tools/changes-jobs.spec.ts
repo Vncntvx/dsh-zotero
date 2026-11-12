@@ -1,3 +1,5 @@
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { deferred } from '../helpers/sync.ts'
 /**
  * The `zotero_changes` tool surface: baseline readings and minted cursors,
@@ -13,7 +15,8 @@ import {
   jobStartedMessage,
   RUN_IN_BACKGROUND_DISABLED_MESSAGE,
 } from '../../src/job-runner.js'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.js'
+import { resultStorage } from '../helpers/result-storage.ts'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 
 let lane: HostLane
@@ -61,13 +64,17 @@ describe('background jobs and promotion', () => {
   })
 
   it('starts a background job and returns immediately when run_in_background is requested', async () => {
-    let jobRegistry!: TestJobRegistry
+    let jobRegistry!: RealJobs
     await lane.teardown()
     lane = await setupHostLane(
       {},
       {
         compose: async (ctx) => {
-          jobRegistry = new TestJobRegistry(ctx)
+          // The durable-delivery arm needs the host's result storage; without
+          // it the job result is the rendered text, not the persisted summary.
+          resultStorage(ctx)
+          jobRegistry = await composeRealJobs(ctx)
+          jobRegistry.agentOf('test-session')
         },
       },
     )
@@ -81,21 +88,23 @@ describe('background jobs and promotion', () => {
       'zotero_changes',
     )
 
+    const jobId = (result.value as { readonly jobId: string }).jobId
     expect(result.value).toEqual({
       kind: 'background',
       resultSessionId: 'test-session',
-      jobId: 'zotero-1',
+      jobId,
     })
-    expect((result.content[0] as { text: string }).text).toBe(jobStartedMessage('zotero-1'))
+    expect((result.content[0] as { text: string }).text).toBe(jobStartedMessage(jobId))
 
-    const job = jobRegistry.jobs.get('zotero-1' as never)!
-    const outcome = await job.hooks.done
-    expect(outcome.status).toBe('completed')
-    expect(outcome.result).toContain('full result persisted')
+    const view = await jobRegistry.settled(JobId(jobId), 'test-session')
+    expect(view.status).toBe('completed')
+    expect(jobRegistry.registry.read(JobId(jobId), SessionId('test-session')).result).toContain(
+      'full result persisted',
+    )
 
     const toolDef = lane.tool('zotero_changes')!
-    const view = toolDef.presentResult?.({}, result as never)
-    expect(view?.title).toBe('Zotero changes: background job zotero-1')
+    const card = toolDef.presentResult?.({}, result as never)
+    expect(card?.title).toBe(`Zotero changes: background job ${jobId}`)
   })
 
   it('promotes to a background job when execution exceeds foregroundWaitMs', async () => {
@@ -104,7 +113,8 @@ describe('background jobs and promotion', () => {
       { foregroundWaitMs: 20 },
       {
         compose: async (ctx) => {
-          await ctx.plugin(TestJobRegistry)
+          const jobs = await composeRealJobs(ctx)
+          jobs.agentOf('test-session')
         },
       },
     )
@@ -116,21 +126,22 @@ describe('background jobs and promotion', () => {
     })
 
     const result = expectValue(await runTool('zotero_changes', {}), 'zotero_changes')
+    const jobId = (result.value as { readonly jobId: string }).jobId
     release.resolve()
-    await (lane.ctx.jobs as unknown as TestJobRegistry).jobs.get('zotero-1' as never)!.hooks.done
+    await lane.ctx.jobs.wait(JobId(jobId), 5_000, SessionId('test-session'))
 
     expect(result.value).toEqual({
       kind: 'promoted',
       resultSessionId: 'test-session',
-      jobId: 'zotero-1',
+      jobId,
       timeoutMs: 20,
-      message: jobPromotedMessage('zotero-1', 20),
+      message: jobPromotedMessage(jobId, 20),
     })
-    expect((result.content[0] as { text: string }).text).toBe(jobPromotedMessage('zotero-1', 20))
+    expect((result.content[0] as { text: string }).text).toBe(jobPromotedMessage(jobId, 20))
 
     const toolDef = lane.tool('zotero_changes')!
-    const view = toolDef.presentResult?.({}, result as never)
-    expect(view?.title).toBe('Zotero changes: promoted to job zotero-1')
+    const card = toolDef.presentResult?.({}, result as never)
+    expect(card?.title).toBe(`Zotero changes: promoted to job ${jobId}`)
   })
 
   it('returns the foreground result when execution completes within foregroundWaitMs', async () => {
@@ -139,7 +150,8 @@ describe('background jobs and promotion', () => {
       { foregroundWaitMs: 1000 },
       {
         compose: async (ctx) => {
-          await ctx.plugin(TestJobRegistry)
+          const jobs = await composeRealJobs(ctx)
+          jobs.agentOf('test-session')
         },
       },
     )

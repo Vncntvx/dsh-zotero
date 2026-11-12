@@ -1,11 +1,18 @@
 /**
  * Shared locale stub for client specs: exact local mirror of the harness
  * `makeTranslate` (`packages/test-support/client-runtime/src/translate.ts`).
- * Kept local (rather than depending on `@deepseek-ai/dsh-client-test-runtime`)
- * because that package's harness line is not always published on the registry
- * and would break `npm install`, and pulling the full jsdom slot runtime for
- * one pure function is disproportionate. Resolution order and `{name}`
- * interpolation
+ *
+ * Kept local rather than imported from `@deepseek-ai/dsh-client-test-runtime`.
+ * The package *is* published at the current pin, but installing it grows the
+ * dev graph by 28 packages: its peer set requires six harness packages this
+ * plugin does not carry (`dsh-client-web`, `dsh-client-hmr`,
+ * `dsh-client-modules`, `dsh-remote-mock`, `dsh-api-workspace-controller`,
+ * `dsh-host-directory-picker`), and its hard `vitest ^4.1.11` dependency nests
+ * a second test runner beside this repo's v5. Its root entry loads the whole
+ * jsdom slot runtime, so even a pure function costs every importing spec that
+ * load (the constraint and the measurement are in `docs/development.md`).
+ *
+ * Resolution order and `{name}` interpolation
  * match `LocaleRuntime` exactly: first dictionary owning the key wins, then
  * the key itself stays visible; unknown placeholders stay verbatim.
  * @module tests/client/helpers/mock-translate

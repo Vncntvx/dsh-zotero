@@ -12,6 +12,7 @@
 import { lstat, realpath, rmdir, unlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import { assertModelLockPath, safeModelRelativePath } from './model-installation.js'
 
@@ -19,12 +20,17 @@ const LOCK_WAIT_MS = 60_000
 const MANIFEST_PATH = 'manifest.json'
 const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
 
-export class ModelRemovalError extends Error {
-  readonly code = 'MODEL_REMOVAL_FAILED'
+/**
+ * The machine code every removal failure carries. A removal reaches a caller
+ * as the `cause` of a `ZoteroError`, so this code never enters the Zotero
+ * vocabulary; it is a `HarnessError` code so a direct caller can still route on
+ * `name`/`code` instead of parsing the message.
+ */
+export const MODEL_REMOVAL_FAILED = 'MODEL_REMOVAL_FAILED'
 
+export class ModelRemovalError extends HarnessError {
   constructor(message: string, options?: { readonly cause?: unknown }) {
-    super(message, options)
-    this.name = 'ModelRemovalError'
+    super(message, MODEL_REMOVAL_FAILED, options)
   }
 }
 

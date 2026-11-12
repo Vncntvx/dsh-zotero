@@ -157,6 +157,28 @@ describe('ConcurrencyGate', () => {
     next()
   })
 
+  it('gives up a waiter whose signal aborts while its listener is attached', async () => {
+    // An aborted signal never replays its event, so a signal that flips
+    // between the entry check and the listener registration would otherwise
+    // wait for a slot it no longer wants. This fake flips exactly there.
+    const gate = new ConcurrencyGate(1)
+    const release = await gate.acquire()
+    const state = { aborted: false }
+    const signal = {
+      get aborted() {
+        return state.aborted
+      },
+      addEventListener: () => {
+        state.aborted = true
+      },
+      removeEventListener: () => {},
+    } as unknown as AbortSignal
+    await expect(gate.acquire(signal)).rejects.toBeInstanceOf(GateAbortedError)
+    release()
+    const next = await gate.acquire()
+    next()
+  })
+
   it('rejects a non-integer or non-positive limit', () => {
     expect(() => new ConcurrencyGate(0)).toThrow(/positive integer/)
     expect(() => new ConcurrencyGate(1.5)).toThrow(/positive integer/)

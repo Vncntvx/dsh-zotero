@@ -1,12 +1,13 @@
 /** WP4/D4: real filesystem sentinels around force and streamed file publication. */
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ModelDownloadManager } from '../../../src/enrichment/model-downloader.ts'
 import { downloadPinnedFile } from '../../../src/enrichment/model-download-client.ts'
 import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED } from '../../../src/errors.ts'
 import { modelClient, tinyModel, writeTinyBundle } from '../../helpers/semantic-model-bundle.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
 vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/enrichment-model-catalog.js')>()
@@ -19,24 +20,18 @@ vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   }
 })
 
-const roots: string[] = []
-const managers: ModelDownloadManager[] = []
+const sandbox = createModelSandbox('dsh-model-safety-')
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-safety-'))
-  roots.push(root)
-  return root
+  return await sandbox.root()
 }
 
-function managerOf() {
-  const manager = new ModelDownloadManager({ client: modelClient() })
-  managers.push(manager)
-  return manager
+function managerOf(): ModelDownloadManager {
+  return sandbox.manager(new ModelDownloadManager({ client: modelClient() }))
 }
 
 afterEach(async () => {
-  await Promise.all(managers.splice(0).map((manager) => manager.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('model installation filesystem ownership', () => {

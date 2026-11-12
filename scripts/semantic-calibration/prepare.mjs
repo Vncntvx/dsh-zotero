@@ -1,6 +1,6 @@
 // Export encoding inputs or deterministic corpus stress requests to stdout.
 // No output path is opened; callers choose where to redirect stdout.
-import { SEMANTIC_MODELS } from '../semantic-model-catalog.mjs'
+import { SEMANTIC_MODELS } from '../../src/enrichment-model-catalog.ts'
 import {
   backgroundEntries,
   cli,

@@ -26,10 +26,6 @@ import { searchResult } from '../helpers/library-fixtures.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
 // this wiring-level spec does not load the real bundle (katex css, shiki, …).
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
-  const { primitivesWithRealForm } = await import('./helpers/primitives-stub.ts')
-  return primitivesWithRealForm(importOriginal)
-})
 
 describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {

@@ -25,11 +25,20 @@ import { settled } from '../helpers/blocks.ts'
 // factory assigns: the same shape `writeClipboardSpy` uses in reverse.
 var counterRef: { renders: () => number } | undefined
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub, countingDisclosure } = await import('../helpers/primitives-stub.ts')
-  const counter = countingDisclosure()
-  counterRef = counter
-  return primitivesStub({ DisclosureRow: counter.DisclosureRow })
+// The real primitives bundle, with `DisclosureRow` wrapped in a counter *inside*
+// its own memo boundary: the wrapper bails out exactly when the real component
+// would, so the count measures the memo bails this spec is about while every
+// rendered row is the real one.
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
+  const { memo, createElement } = await import('react')
+  let renders = 0
+  const Counted = memo(function Counted(props: Record<string, unknown>) {
+    renders += 1
+    return createElement(actual.DisclosureRow as never, props as never)
+  })
+  counterRef = { renders: () => renders }
+  return { ...actual, DisclosureRow: Counted }
 })
 
 /** How many times the memo'd `DisclosureRow` body has actually run. */

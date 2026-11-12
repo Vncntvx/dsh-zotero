@@ -34,10 +34,6 @@ import { zoteroClientStub } from '../helpers/zotero-client.ts'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki, the
 // portal machinery); the tab only needs the shared DOM face.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
 
 import { mockT } from '../helpers/mock-translate.ts'
 const t = mockT
@@ -56,7 +52,7 @@ function pillOf(label: string): HTMLElement {
  */
 function expectPillActivated(label: string): void {
   fireEvent.click(pillOf(label))
-  expect(pillOf(label).getAttribute('data-pill')).toBe('active')
+  expect(pillOf(label).getAttribute('aria-pressed')).toBe('true')
 }
 
 /**
@@ -188,7 +184,7 @@ describe('filters', () => {
     await act(async () => {})
     expect(screen.getByText(zh.filterEmptyNote)).toBeDefined()
     fireEvent.click(screen.getByText(zh.filterClear))
-    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('data-pill')).toBe('active')
+    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('aria-pressed')).toBe('true')
     view.unmount()
   })
 
@@ -219,7 +215,7 @@ describe('filters', () => {
     // The passages filter has nothing to show in the new session, so its
     // pill is gone and "all" is active again.
     expect(screen.queryByText(`${zh.filterEvidence} 0`)).toBeNull()
-    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('data-pill')).toBe('active')
+    expect(screen.getByText(`${zh.filterAll} 1`).getAttribute('aria-pressed')).toBe('true')
     view.unmount()
   })
 })

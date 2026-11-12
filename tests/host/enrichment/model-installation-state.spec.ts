@@ -1,6 +1,6 @@
 /** WP4/D3: the real manager's read-only bundle inspection and repair admission. */
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, rm, stat, writeFile } from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ModelDownloadManager } from '../../../src/enrichment/model-downloader.ts'
@@ -10,6 +10,7 @@ import {
   tinyModel,
   writeTinyBundle,
 } from '../../helpers/semantic-model-bundle.ts'
+import { createModelSandbox } from './support/model-sandbox.ts'
 
 vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/enrichment-model-catalog.js')>()
@@ -22,20 +23,16 @@ vi.mock('../../../src/enrichment-model-catalog.js', async (importOriginal) => {
   }
 })
 
-const roots: string[] = []
-const managers: ModelDownloadManager[] = []
+const sandbox = createModelSandbox('dsh-model-inspection-')
 
 async function world() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-model-inspection-'))
-  roots.push(root)
-  const manager = new ModelDownloadManager({ client: modelClient() })
-  managers.push(manager)
+  const root = await sandbox.root()
+  const manager = sandbox.manager(new ModelDownloadManager({ client: modelClient() }))
   return { root, manager }
 }
 
 afterEach(async () => {
-  await Promise.all(managers.splice(0).map((manager) => manager.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await sandbox.settle()
 })
 
 describe('model installation inspection', () => {

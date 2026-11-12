@@ -11,11 +11,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SourcePageControls } from '../../../src/client/components/workspace/SourcePageControls.tsx'
 import type { SourcePager } from '../../../src/client/components/workspace/useSourcePage.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 import { mockT } from '../helpers/mock-translate.ts'
 
 const t = mockT

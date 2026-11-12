@@ -24,6 +24,7 @@ import { libraryPrefix } from '../refs.js'
 import { normalizeSearchItem } from '../normalize-search.js'
 import type { ResolvedScopeResult } from './scope-directory.js'
 import type { LocalApiLimits } from './limits.js'
+import { sharedRead, type SharedOperation } from '../concurrency.js'
 import type { SupportedLocalLibrary, ZoteroSearchItem, ZoteroSearchRequest } from '../types.js'
 
 /** How many distinct filtered listings stay cached; the oldest insertion evicts. */
@@ -80,6 +81,11 @@ export class LruTtlCache<V extends { fetchedAt: number }> {
     return value
   }
 
+  /** The `Map`-compatible spelling, so a bounded cache can back a shared read. */
+  set(key: string, value: V): void {
+    this.put(key, value)
+  }
+
   put(key: string, value: V): void {
     if (this.entries.size >= this.limit) {
       const oldest = this.entries.keys().next().value
@@ -97,6 +103,13 @@ export class LruTtlCache<V extends { fetchedAt: number }> {
 export interface SearchIndexCaches {
   readonly filtered: LruTtlCache<FilteredIndex>
   readonly attachmentParents: LruTtlCache<AttachmentParents>
+  /**
+   * One in-flight scan per filter definition. Two identical concurrent
+   * searches share it instead of scanning the whole candidate stream twice.
+   */
+  readonly filteredInFlight: Map<string, SharedOperation<FilteredIndex>>
+  /** One in-flight attachment walk per library, for the same reason. */
+  readonly attachmentParentsInFlight: Map<string, SharedOperation<AttachmentParents>>
 }
 
 export function createSearchIndexCaches(): SearchIndexCaches {
@@ -106,6 +119,8 @@ export function createSearchIndexCaches(): SearchIndexCaches {
       ATTACHMENT_PARENTS_LIMIT,
       SEARCH_INDEX_TTL_MS,
     ),
+    filteredInFlight: new Map(),
+    attachmentParentsInFlight: new Map(),
   }
 }
 
@@ -180,29 +195,39 @@ export async function attachmentParentKeys(
       fromCache: true,
     }
   }
-  const initial = new URLSearchParams({ itemType: 'attachment' })
-  if (includeTrashed) initial.set('includeTrashed', '1')
-  const parents = new Set<string>()
-  const { libraryVersion } = await readPagesConcurrentlyFolded(
-    deps.client,
-    `${libraryPrefix(library)}/items`,
-    initial,
-    serverId,
-    options.signal,
-    { body: 'attachment index', page: 'attachment index' },
-    deps.limits.searchConcurrency,
-    (rows) => {
-      for (const row of rows) {
-        const parent = asString(asRecord(asRecord(row)?.data)?.parentItem)
-        if (parent !== undefined && parent !== '') parents.add(parent)
-      }
-      return null
+  // Two listings in flight over the same library share one walk: the walk
+  // reads every attachment page, and a panel refresh must not double it.
+  const walked = await sharedRead({
+    cache: caches.attachmentParents,
+    inFlight: caches.attachmentParentsInFlight,
+    keys: { flightKey: key, find: () => caches.attachmentParents.get(key), store: () => [key] },
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    load: async (loadSignal) => {
+      const initial = new URLSearchParams({ itemType: 'attachment' })
+      if (includeTrashed) initial.set('includeTrashed', '1')
+      const parents = new Set<string>()
+      const { libraryVersion } = await readPagesConcurrentlyFolded(
+        deps.client,
+        `${libraryPrefix(library)}/items`,
+        initial,
+        serverId,
+        loadSignal,
+        { body: 'attachment index', page: 'attachment index' },
+        deps.limits.searchConcurrency,
+        (rows) => {
+          for (const row of rows) {
+            const parent = asString(asRecord(asRecord(row)?.data)?.parentItem)
+            if (parent !== undefined && parent !== '') parents.add(parent)
+          }
+          return null
+        },
+      )
+      return { parents, libraryVersion, fetchedAt: Date.now() }
     },
-  )
-  caches.attachmentParents.put(key, { parents, libraryVersion, fetchedAt: Date.now() })
+  })
   return {
-    parents,
-    ...(libraryVersion !== undefined ? { libraryVersion } : {}),
+    parents: walked.parents,
+    ...(walked.libraryVersion !== undefined ? { libraryVersion: walked.libraryVersion } : {}),
     fromCache: false,
   }
 }

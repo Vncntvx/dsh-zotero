@@ -17,11 +17,6 @@ import { zoteroClientStub } from '../helpers/zotero-client.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
-  const { primitivesStub } = await import('../helpers/primitives-stub.ts')
-  return primitivesStub()
-})
-
 const t = mockT
 
 afterEach(() => {

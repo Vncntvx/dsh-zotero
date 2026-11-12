@@ -7,7 +7,9 @@ import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setupHostLane, expectValue, type HostLane } from '../helpers/lanes/host-lane.ts'
-import { TestJobRegistry } from '../helpers/fake-jobs.ts'
+import { JobId } from '@deepseek-ai/dsh-jobs'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.ts'
 import { resultStorage } from '../helpers/result-storage.ts'
 import { deferred } from '../helpers/sync.ts'
 
@@ -38,7 +40,15 @@ function prepare(
   lane.ctx.provide('sandboxPolicy', { defaultMode: 'workspace-write', resolve: policy } as never)
   new SandboxedFileSystem(lane.ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
   lane.ctx.provide('workingDirectory', { ensure: async () => directory } as never)
-  lane.ctx.provide('agents', { turnBoundaryOf: () => ({ lastTurn: 4 }) } as never)
+  // The delivery reads one member from the agent seam. When the real registry
+  // composed it (`composeRealJobs`), add the member to that seam; otherwise
+  // the minimal stub is enough for a foreground call.
+  const agents = lane.ctx.get('agents')
+  if (agents === undefined) {
+    lane.ctx.provide('agents', { turnBoundaryOf: () => ({ lastTurn: 4 }) } as never)
+  } else {
+    Object.assign(agents as object, { turnBoundaryOf: () => ({ lastTurn: 4 }) })
+  }
   lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
     helpers.text('TY  - JOUR\n' + 'x'.repeat(17_000)),
   )
@@ -70,19 +80,32 @@ function prepare(
   return { append, policy, saveText, session, invoke }
 }
 
+/** The job id one background (or promoted) call answered with. */
+function jobIdOf(batch: { readonly results: ReadonlyArray<{ readonly result: unknown }> }): string {
+  const outcome = batch.results[0]?.result as
+    { readonly isError?: boolean; readonly value?: { readonly jobId?: string } } | undefined
+  const jobId = outcome?.isError === false ? outcome.value?.jobId : undefined
+  if (jobId === undefined) throw new Error('the call did not start a job')
+  return jobId
+}
+
+/** The owner session every lane call carries. */
+const caller = SessionId('test-session')
+
 it.each([false, true])(
   'writes and delivers exactly once with original turn (background=%s)',
   async (background) => {
     const storage = resultStorage(lane.ctx)
-    const jobs = new TestJobRegistry(lane.ctx)
+    const jobs: RealJobs = await composeRealJobs(lane.ctx)
+    jobs.agentOf('test-session')
     const { append, policy, saveText, session, invoke } = prepare()
     const batch = await invoke(background)
     const result = expectValue(batch.results[0]!.result, 'zotero_export')
     if (background) {
-      const job = [...jobs.jobs.values()][0]!
-      const outcome = await job.hooks.done
+      const jobId = jobIdOf(batch)
+      const outcome = await jobs.settled(JobId(jobId), caller)
       expect(outcome.status).toBe('completed')
-      expect(outcome.result).toContain('full result persisted')
+      expect(jobs.registry.read(JobId(jobId), caller).result).toContain('full result persisted')
     } else {
       expect(result.value).toMatchObject({
         delivery: 'file',
@@ -112,15 +135,16 @@ it.each([false, true])(
 it('keeps a published export completed when result persistence fails', async () => {
   const storage = resultStorage(lane.ctx)
   storage.save.mockRejectedValueOnce(new Error('store unavailable'))
-  const jobs = new TestJobRegistry(lane.ctx)
+  const jobs: RealJobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
   const { append, invoke } = prepare()
   const batch = await invoke(true)
   expectValue(batch.results[0]!.result, 'zotero_export')
 
-  const job = [...jobs.jobs.values()][0]!
-  const outcome = await job.hooks.done
+  const jobId = jobIdOf(batch)
+  const outcome = await jobs.settled(JobId(jobId), caller)
   expect(outcome.status).toBe('completed')
-  expect(outcome.result).toContain('TY  - JOUR')
+  expect(jobs.registry.read(JobId(jobId), caller).result).toContain('TY  - JOUR')
   expect(append).toHaveBeenCalledTimes(1)
   expect(
     lane.ctx.zotero.diagnostics
@@ -145,7 +169,8 @@ it.each([true, false])(
   async (background) => {
     await lane.teardown()
     lane = await setupHostLane({ foregroundWaitMs: 1 })
-    const jobs = new TestJobRegistry(lane.ctx)
+    const jobs: RealJobs = await composeRealJobs(lane.ctx)
+    jobs.agentOf('test-session')
     const { append, invoke } = prepare()
     const writing = deferred<void>()
     const release = deferred<void>()
@@ -156,27 +181,28 @@ it.each([true, false])(
       await release.promise
       return write(...args)
     })
-    const caller = new AbortController()
-    await invoke(background, caller.signal)
+    const cancellation = new AbortController()
+    const batch = await invoke(background, cancellation.signal)
     await writing.promise
-    caller.abort()
-    const job = [...jobs.jobs.values()][0]!
-    expect(job.status).toBe('running')
+    cancellation.abort()
+    const jobId = jobIdOf(batch)
+    expect(jobs.registry.get(JobId(jobId), caller).status).toBe('running')
     expect(append).not.toHaveBeenCalled()
     release.resolve()
-    expect((await job.hooks.done).status).toBe('completed')
+    expect((await jobs.settled(JobId(jobId), caller)).status).toBe('completed')
     expect(append).toHaveBeenCalledOnce()
   },
 )
 
 it('reports delivery failure after writing with the actual path', async () => {
-  const jobs = new TestJobRegistry(lane.ctx)
+  const jobs: RealJobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
   const { append, invoke } = prepare()
   append.mockImplementation(() => {
     throw new Error('publication failed')
   })
-  await invoke(true)
-  const outcome = await [...jobs.jobs.values()][0]!.hooks.done
+  const batch = await invoke(true)
+  const outcome = await jobs.settled(JobId(jobIdOf(batch)), caller)
   expect(outcome.status).toBe('failed')
   expect(outcome.detail).toContain(join(directory, 'references.ris'))
   expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
@@ -202,7 +228,8 @@ it.each(['absolute', 'relative', 'symlink'])(
 )
 
 it('job cancellation before export settles prevents writing and delivery', async () => {
-  const jobs = new TestJobRegistry(lane.ctx)
+  const jobs: RealJobs = await composeRealJobs(lane.ctx)
+  jobs.agentOf('test-session')
   const { append, invoke } = prepare()
   const exporting = deferred<void>()
   const release = deferred<void>()
@@ -213,12 +240,12 @@ it('job cancellation before export settles prevents writing and delivery', async
     return { format: 'bibliography', text: 'cancelled export' }
   })
   const write = vi.spyOn(lane.ctx.fs, 'writeText')
-  await invoke(true)
+  const batch = await invoke(true)
   await exporting.promise
-  const job = [...jobs.jobs.values()][0]!
-  job.hooks.cancel?.('test cancellation')
+  const jobId = JobId(jobIdOf(batch))
+  expect(jobs.registry.kill(jobId, caller, 'test cancellation')).toBe('requested')
   release.resolve()
-  expect((await job.hooks.done).status).toBe('killed')
+  expect((await jobs.settled(jobId, caller)).status).toBe('killed')
   expect(write).not.toHaveBeenCalled()
   expect(append).not.toHaveBeenCalled()
 })

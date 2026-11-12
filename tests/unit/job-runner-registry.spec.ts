@@ -1,16 +1,16 @@
-/** Registry ownership for a core-owned job runner. */
+/** Registry ownership for a core-owned job runner, against the real registry. */
 
 import { expect, it } from 'vitest'
 import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
 import { ZoteroJobRunner } from '../../src/job-runner.js'
-import { TestJobRegistry } from '../helpers/fake-jobs.js'
+import { mountRealJobs } from '../helpers/real-jobs.js'
 
 it('follows a jobs registry that becomes available after construction', async () => {
-  let registry: TestJobRegistry | undefined
-  const runner = new ZoteroJobRunner(() => registry as unknown as JobRegistry | undefined)
+  let registry: JobRegistry | undefined
+  const runner = new ZoteroJobRunner(() => registry)
   expect(runner.isAvailable).toBe(false)
 
-  registry = new TestJobRegistry()
+  registry = (await mountRealJobs()).registry
   expect(runner.isAvailable).toBe(true)
   const { id } = runner.start({
     label: 'late registry job',
@@ -22,8 +22,13 @@ it('follows a jobs registry that becomes available after construction', async ()
       arguments: {},
       signal: new AbortController().signal,
     },
-    run: async () => await new Promise<never>(() => {}),
+    // The producer observes its signal, as every real one does; a cancel then
+    // settles instead of leaving the registry waiting.
+    run: async (signal) =>
+      await new Promise<never>((_, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      }),
   })
   runner.killAll('late registry disposed')
-  expect(registry.jobs.get(id)?.detail).toBe('late registry disposed')
+  expect((await registry.wait(id, 5_000)).detail).toContain('late registry disposed')
 })
