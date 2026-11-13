@@ -124,6 +124,70 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     await loader.dispose()
   })
 
+  it('does not revive a pending load retired before it resolves', async () => {
+    const disposed: string[] = []
+    const opened: string[] = []
+    const started = deferred<void>()
+    const first = deferred<Embedder>()
+    let calls = 0
+    const loader = new SemanticEmbedderLoader({
+      open: async (requested) => {
+        opened.push(requested.spec.key)
+        calls += 1
+        if (calls === 1) {
+          started.resolve()
+          return await first.promise
+        }
+        return embedderOf(disposed, requested.spec.key)
+      },
+    })
+    const scope = loader.scope(target('a'))
+    const pending = scope.embedder()
+    await started.promise
+    loader.retire(target('a'))
+    first.resolve(embedderOf(disposed, 'a'))
+    const accepted = await pending
+    // The retired instance serves its accepted scope, but never becomes
+    // resident: the next caller opens the bundle from disk again.
+    const fresh = await loader.get(target('a'))
+    expect(opened).toEqual(['a', 'a'])
+    expect(accepted).not.toBe(fresh)
+    scope.release()
+    await Promise.resolve()
+    expect(disposed).toEqual(['a'])
+    await loader.dispose()
+    expect(disposed).toEqual(['a', 'a'])
+  })
+
+  it('releases a pending load retired with no scopes and opens a fresh one', async () => {
+    const disposed: string[] = []
+    const opened: string[] = []
+    const started = deferred<void>()
+    const first = deferred<Embedder>()
+    let calls = 0
+    const loader = new SemanticEmbedderLoader({
+      open: async (requested) => {
+        opened.push(requested.spec.key)
+        calls += 1
+        if (calls === 1) {
+          started.resolve()
+          return await first.promise
+        }
+        return embedderOf(disposed, requested.spec.key)
+      },
+    })
+    const scope = loader.scope(target('a'))
+    scope.release()
+    await started.promise
+    loader.retire(target('a'))
+    first.resolve(embedderOf(disposed, 'a'))
+    // The fresh read queues behind the retired load; the release ran before it.
+    await loader.get(target('a'))
+    expect(disposed).toEqual(['a'])
+    expect(opened).toEqual(['a', 'a'])
+    await loader.dispose()
+  })
+
   it('rejects new admission after disposal', async () => {
     const loader = new SemanticEmbedderLoader({ open: async () => embedderOf([], 'a') })
     await loader.dispose()

@@ -13,8 +13,13 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { manifestOf, type SemanticModelEntry } from '../../enrichment-model-catalog.js'
+import {
+  catalogFilePinsOf,
+  catalogFingerprintOf,
+  MANIFEST_PATH,
+} from '../../enrichment/model-manifest.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import type { Embedder } from './session.js'
 import { openEmbedder } from './session.js'
@@ -97,7 +102,7 @@ async function identityFingerprintOf(
 ): Promise<string> {
   const hash = createHash('sha256')
   hash.update(dir)
-  const paths = ['manifest.json', ...spec.files.map((file) => file.path)]
+  const paths = [MANIFEST_PATH, ...spec.files.map((file) => file.path)]
   for (const path of paths) {
     const absolute = join(dir, path)
     const identity =
@@ -134,12 +139,16 @@ export function createBundleVerifier(deps: BundleFsDeps = hostDeps): SemanticBun
   return {
     async verify(dir, spec) {
       const fingerprint = await identityFingerprintOf(dir, spec, deps)
-      const cached = verified.get(dir)
+      // The catalog record is part of the key: a revision, dimension, or
+      // prefix change invalidates the remembered verification even when the
+      // files on disk are byte-for-byte the same.
+      const key = `${resolve(dir)}|${catalogFingerprintOf(manifestOf(spec))}`
+      const cached = verified.get(key)
       if (cached !== undefined && cached.identityFingerprint === fingerprint) return
       await verifySemanticBundle(dir, spec, deps)
       // Record only after the bytes matched: a failed verification must be
       // re-run, not remembered as the answer for this identity.
-      verified.set(dir, { identityFingerprint: fingerprint })
+      verified.set(key, { identityFingerprint: fingerprint })
     },
   }
 }
@@ -165,12 +174,15 @@ export async function verifySemanticBundle(
   let manifest: unknown
   try {
     manifest = JSON.parse(
-      new TextDecoder('utf-8').decode(await deps.readFile(join(dir, 'manifest.json'))),
+      new TextDecoder('utf-8').decode(await deps.readFile(join(dir, MANIFEST_PATH))),
     )
   } catch (error) {
     refuse(`manifest.json is missing or unreadable (${(error as Error).message})`)
   }
   const expected = manifestOf(spec)
+  // The shared catalog rule: schema, physical key, path safety, duplicates,
+  // byte and digest shapes, and at least one pinned file.
+  const pins = catalogFilePinsOf(expected, refuse)
   if (
     typeof manifest !== 'object' ||
     manifest === null ||
@@ -190,22 +202,22 @@ export async function verifySemanticBundle(
   }
   const files = (manifest as { files?: unknown }).files
   if (typeof files !== 'object' || files === null) refuse('manifest.json has no file record')
-  for (const file of spec.files) {
-    const entry = (files as Record<string, { bytes?: unknown; sha256?: unknown }>)[file.path]
-    if (entry === undefined || entry.bytes !== file.bytes || entry.sha256 !== file.sha256) {
-      refuse(`manifest.json disagrees about ${file.path}`)
+  for (const [path, pin] of pins) {
+    const entry = (files as Record<string, { bytes?: unknown; sha256?: unknown }>)[path]
+    if (entry === undefined || entry.bytes !== pin.bytes || entry.sha256 !== pin.sha256) {
+      refuse(`manifest.json disagrees about ${path}`)
     }
-    const onDisk = await deps.stat(join(dir, file.path)).catch((error: Error) => {
-      refuse(`${file.path} is missing (${error.message})`)
+    const onDisk = await deps.stat(join(dir, path)).catch((error: Error) => {
+      refuse(`${path} is missing (${error.message})`)
     })
-    if (onDisk.size !== file.bytes) {
-      refuse(`${file.path} is ${onDisk.size} bytes, expected ${file.bytes}`)
+    if (onDisk.size !== pin.bytes) {
+      refuse(`${path} is ${onDisk.size} bytes, expected ${pin.bytes}`)
     }
-    const digest = await deps.hashFile(join(dir, file.path)).catch((error: Error) => {
-      refuse(`${file.path} could not be hashed (${error.message})`)
+    const digest = await deps.hashFile(join(dir, path)).catch((error: Error) => {
+      refuse(`${path} could not be hashed (${error.message})`)
     })
-    if (digest !== file.sha256) {
-      refuse(`${file.path} failed its SHA-256 check`)
+    if (digest !== pin.sha256) {
+      refuse(`${path} failed its SHA-256 check`)
     }
   }
 }

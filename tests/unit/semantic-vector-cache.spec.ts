@@ -183,6 +183,42 @@ describe('createVectorCache', () => {
     cache.dispose()
   })
 
+  it('starts a fresh flight for a caller that arrives after the last waiter left', async () => {
+    const cache = createVectorCache(identity())
+    const controller = new AbortController()
+    let calls = 0
+    let firstSignal: AbortSignal | undefined
+    let settleAbandoned: (vectors: readonly Float32Array[]) => void = () => undefined
+    const run = async (texts: readonly string[], signal: AbortSignal) => {
+      calls += 1
+      if (calls === 1) {
+        firstSignal = signal
+        return await new Promise<readonly Float32Array[]>((resolve) => {
+          settleAbandoned = resolve
+        })
+      }
+      return texts.map((text) => new Float32Array([text.length, 1]))
+    }
+    const abandoned = cache.embed(['trust'], 'document', run, controller.signal)
+    await Promise.resolve()
+    controller.abort(new Error('caller left'))
+    await expect(abandoned).rejects.toThrow('caller left')
+    expect(firstSignal?.aborted).toBe(true)
+
+    // The fresh caller must not inherit another request's cancellation.
+    const fresh = await cache.embed(['trust'], 'document', run)
+    expect(calls).toBe(2)
+    // The abandoned run resolving late must not overwrite the fresh vector.
+    settleAbandoned([new Float32Array([99, 99])])
+    await Promise.resolve()
+    await Promise.resolve()
+    const again = await cache.embed(['trust'], 'document', run)
+    expect(again[0]?.[0]).toBe(5)
+    expect(fresh[0]?.[0]).toBe(5)
+    expect(calls).toBe(2)
+    cache.dispose()
+  })
+
   it('aborts the encoder on retirement and refuses to repopulate the cache', async () => {
     const cache = createVectorCache(identity())
     let runSignal: AbortSignal | undefined

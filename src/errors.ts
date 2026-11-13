@@ -72,10 +72,6 @@ export const ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE = 'ZOTERO_ENRICHMENT_SEMANTI
 export const ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED = 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED'
 /** Scholarly full-text resolution reached no readable copy for this identifier. */
 export const ZOTERO_SCHOLARLY_NO_FULLTEXT = 'ZOTERO_SCHOLARLY_NO_FULLTEXT'
-/** The host does not serve background jobs, so the call must run in the foreground. */
-export const ZOTERO_JOBS_UNAVAILABLE = 'ZOTERO_JOBS_UNAVAILABLE'
-/** The deployment disabled `run_in_background`, so the call must run in the foreground. */
-export const ZOTERO_RUN_IN_BACKGROUND_DISABLED = 'ZOTERO_RUN_IN_BACKGROUND_DISABLED'
 /** The job registry refused a new job because the owner already holds its limit. */
 export const ZOTERO_JOBS_LIMIT_REACHED = 'ZOTERO_JOBS_LIMIT_REACHED'
 /** One pinned file did not finish inside its per-file budget across every source. */
@@ -145,8 +141,6 @@ export const ZOTERO_ERROR_CODES = [
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
-  ZOTERO_JOBS_UNAVAILABLE,
-  ZOTERO_RUN_IN_BACKGROUND_DISABLED,
   ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
   ZOTERO_PROVIDER_UNAVAILABLE,
@@ -574,9 +568,7 @@ export const ZOTERO_REMOTE_REASON: Record<
   ZOTERO_URL_PDF_FORBIDDEN_TARGET: 'zotero/url-pdf',
   ZOTERO_URL_PDF_TOO_LARGE: 'zotero/url-pdf',
   ZOTERO_URL_PDF_NETWORK: 'zotero/url-pdf',
-  ZOTERO_JOBS_UNAVAILABLE: 'zotero/jobs/unavailable',
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE: 'zotero/jobs/unavailable',
-  ZOTERO_RUN_IN_BACKGROUND_DISABLED: 'zotero/jobs/background-disabled',
   ZOTERO_JOBS_LIMIT_REACHED: 'zotero/jobs/limit-reached',
   ZOTERO_SCHOLARLY_NO_FULLTEXT: 'zotero/scholarly',
   ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE: 'zotero/scholarly',

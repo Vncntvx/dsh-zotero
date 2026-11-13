@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import {
   catalogFilePinsOf,
+  catalogFingerprintOf,
   MANIFEST_MAX_BYTES,
   MANIFEST_PATH,
   READ_CHUNK_BYTES,
@@ -66,10 +67,6 @@ function catalogFiles(
   return catalogFilePinsOf(expected, (reason) => {
     throw new Error(reason)
   })
-}
-
-function catalogFingerprintOf(expected: SemanticModelManifest): string {
-  return createHash('sha256').update(JSON.stringify(expected)).digest('hex')
 }
 
 async function lstatOrUndefined(path: string) {
@@ -339,5 +336,3 @@ export async function inspectInstalledBundle(
 ): Promise<BundleInspection> {
   return await createBundleInspector().inspect({ dir, expected }, options)
 }
-
-export { MANIFEST_PATH, MANIFEST_MAX_BYTES }

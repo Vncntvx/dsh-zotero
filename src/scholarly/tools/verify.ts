@@ -261,7 +261,11 @@ function formatVerificationResult(result: ReferenceCheckResult, index: number): 
   return lines.join('\n')
 }
 
-export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefinition {
+export function createScholarlyVerifyTool(
+  host: ScholarlyToolHost,
+  options: { readonly background?: boolean } = {},
+): ToolDefinition {
+  const background = options.background ?? true
   return defineTool({
     name: 'scholarly_verify',
     description: [
@@ -269,7 +273,10 @@ export function createScholarlyVerifyTool(host: ScholarlyToolHost): ToolDefiniti
       'Checks for phantom/hallucinated DOIs, title discrepancies, author/year mismatches, and retracted papers.',
       `Accepts raw bibliographic citation strings (APA, MLA, IEEE, etc.) or DOIs. Verifies up to ${SCHOLARLY_VERIFY_MAX_REFERENCES} references.`,
     ].join(' '),
-    parameters: { ...VERIFY_PARAMETERS, ...RUN_IN_BACKGROUND_PARAMETER },
+    parameters: {
+      ...VERIFY_PARAMETERS,
+      ...(background ? RUN_IN_BACKGROUND_PARAMETER : {}),
+    },
     output: SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,
     timeoutMs: 240_000,

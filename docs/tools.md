@@ -802,9 +802,7 @@ zotero_batch_items(
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                               |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                     |
 | `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                               |
-| `ZOTERO_JOBS_UNAVAILABLE`                  | 需要后台任务能力，但会话未挂载 `ctx.jobs` 或会话控制器不可用                                   |
-| `ZOTERO_JOBS_LIMIT_REACHED`                | 会话的后台任务数已达上限，需要先取回或取消一个未用任务再重试                                   |
-| `ZOTERO_RUN_IN_BACKGROUND_DISABLED`        | 后台执行已禁用，需改为前台执行                                                                 |
+| `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                     |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
 | `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |
 | `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                               |

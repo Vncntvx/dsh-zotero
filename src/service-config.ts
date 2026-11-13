@@ -14,7 +14,9 @@ import type { LocalApiLimits } from './local/limits.js'
  * authorizer, and tool set). `provider` and `writePersistKey` are live reads
  * (`resolveProvider()` and the authorizer's `persistKey` callback) and never
  * rebuild; every remaining bound, the scope-listing TTL included, is read
- * through the provider's live limits getter on the next call.
+ * through the provider's live limits getter on the next call. The background
+ * switch is not here: the read-tool registration follows it through its own
+ * `loader/volatile-update` listener without rebuilding the transport.
  */
 export const TRANSPORT_CONFIG_KEYS: ReadonlySet<keyof ResolvedConfig> = new Set([
   'baseUrl',

@@ -25,18 +25,14 @@ export function block(
   args: Record<string, unknown>,
   extra: Partial<ToolResultNode> = {},
 ): ToolResultNode {
-  if (name === 'zotero_export' && extra.meta && typeof extra.meta === 'object')
-    extra = {
-      ...extra,
-      meta: {
-        ...extra.meta,
-        text:
-          extra.content
-            ?.filter((block) => block.type === 'text')
-            .map((block) => block.text)
-            .join('') ?? '',
-      },
-    }
+  if (name === 'zotero_export' && extra.meta && typeof extra.meta === 'object') {
+    const meta = extra.meta as Record<string, unknown>
+    // The real delivery wrapper always states the shape; a fixture that only
+    // names the projection is an inline delivery, whose body is the first text
+    // block. Never synthesize `meta.text`: production stopped sending it.
+    if (meta['delivery'] === undefined && meta['text'] === undefined)
+      extra = { ...extra, meta: { ...meta, delivery: 'inline' } }
+  }
   return settled({ callId, seq, call: { name, argsRaw: JSON.stringify(args) }, ...extra })
 }
 

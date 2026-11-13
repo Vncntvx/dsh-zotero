@@ -83,7 +83,11 @@ import { localProviderLimits } from './service-config.js'
 import { installServiceConfigLifecycle } from './service-lifecycle.js'
 import { registerPromptSection } from './prompt.js'
 import { installShellWriteApproval } from './shell-write-approval.js'
-import { registerReadTools, registerWriteTools } from './tool-registration.js'
+import {
+  registerReadTools,
+  registerWriteTools,
+  type ReadToolRegistration,
+} from './tool-registration.js'
 import { ResultDelivery } from './result-delivery.js'
 import { registerResultRoute } from './result-route.js'
 import { ZoteroJobRunner } from './job-runner.js'
@@ -254,6 +258,8 @@ export class ZoteroService extends Service {
   private installedEvidenceRanker: EvidenceRanker | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
+  /** The read-tool registrations whose background schema follows the live switch. */
+  private readTools: ReadToolRegistration | undefined
   /** The live write authorizer; absent while writes are disabled. */
   private authorizer: WriteAuthorizer | undefined
   /** Child-scope restrictions that follow the live write-tool registration set. */
@@ -324,15 +330,16 @@ export class ZoteroService extends Service {
         this.subagentGuard.dispose()
         for (const dispose of this.writeToolDisposes) dispose()
         this.writeToolDisposes = []
+        this.readTools?.dispose()
       },
       'zotero: dynamic tools and subagent guard teardown',
     )
     installShellWriteApproval(ctx, () => this.config, this.diagnostics)
     installToolDiagnostics(ctx, this.diagnostics)
     installParameterCorrection(ctx, ZOTERO_TOOL_NAMES)
-    // Background-capable tools keep their parameters static; execution refuses
-    // requests the current composition cannot serve.
-    registerReadTools(ctx, this, this.resultDelivery)
+    // Background-capable read tools register their schema for the current
+    // switch; the config lifecycle above reconciles them on a live change.
+    this.readTools = registerReadTools(ctx, this, this.resultDelivery)
     registerResultRoute(ctx, this.resultDelivery)
     ctx.effect(
       () => () => {

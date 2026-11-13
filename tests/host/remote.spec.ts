@@ -463,19 +463,25 @@ describe('the zotero openProtocol endpoint', () => {
       { signal: undefined, env: { PATH: '/usr/bin' } },
     )
   })
-  it('drops the variables that name a credential from every launcher child', async () => {
+  it('drops credential-shaped and harness-owned variables from every launcher child', async () => {
     // The launcher needs PATH (and WSLENV under WSL), never the API keys the
     // host was started with: inheriting `process.env` handed them to a second
-    // process just to open a URL.
+    // process just to open a URL. The rule matches the harness canonical
+    // scrub: substring credential names and every DSH_* name.
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const env = {
       PATH: '/usr/bin:/bin',
       WSLENV: 'USERPROFILE/p',
+      HOME: '/home/u',
       OPENAI_API_KEY: 'sk-live',
       MINERU_TOKEN: 'token',
       ZOTERO_PASSWORD: 'hunter2',
       CLIENT_SECRET: 'shh',
+      SECRET_STORE: '/run/secrets',
+      TOKEN_FILE: '/tmp/token',
+      KEY_ID: 'kid',
       DSH_HOME: '/home/u/.dsh',
+      dsh_lowercase: 'still-harness',
     }
     await executeOpenProtocol('zotero://select/library/items/ABC12345', {
       platform: 'darwin',
@@ -486,7 +492,7 @@ describe('the zotero openProtocol endpoint', () => {
     expect(options.env).toEqual({
       PATH: '/usr/bin:/bin',
       WSLENV: 'USERPROFILE/p',
-      DSH_HOME: '/home/u/.dsh',
+      HOME: '/home/u',
     })
   })
   it('passes the complete Windows URL only through the environment', async () => {

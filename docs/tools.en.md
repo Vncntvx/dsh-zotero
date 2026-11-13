@@ -802,9 +802,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | The local semantic model download failed after every source was tried                                                                  |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | The local semantic model download exceeded its overall deadline                                                                        |
 | `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | The local semantic model could not be removed, or its path failed the safety checks                                                    |
-| `ZOTERO_JOBS_UNAVAILABLE`                  | Background work needs the session's `ctx.jobs` and controller, which are unavailable                                                   |
-| `ZOTERO_JOBS_LIMIT_REACHED`                | The session already holds its maximum background jobs; collect or cancel one before retrying                                           |
-| `ZOTERO_RUN_IN_BACKGROUND_DISABLED`        | Running in the background is disabled; run the call in the foreground                                                                  |
+| `ZOTERO_JOBS_LIMIT_REACHED`                | Parse endpoint: the session already holds its maximum background parse jobs; collect or cancel one before retrying                     |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                                               |
 | `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                                                       |
 | `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                                                    |

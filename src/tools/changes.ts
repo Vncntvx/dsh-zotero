@@ -550,6 +550,7 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
  * registry admits argument keys the schema omits.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
+ * @param wrap - the delivery envelope.
  */
 export function registerChangesTool(
   ctx: Context,
@@ -617,7 +618,9 @@ export function registerChangesTool(
         },
       }),
     )
-  return registerBackgroundAware(ctx, service.config.enableRunInBackground, (background) =>
-    ctx.tools.register(definition(background)),
+  return registerBackgroundAware(
+    ctx,
+    () => service.config.enableRunInBackground,
+    (background) => ctx.tools.register(definition(background)),
   )
 }

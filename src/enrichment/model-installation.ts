@@ -31,6 +31,7 @@ import {
   MANIFEST_MAX_BYTES,
   MANIFEST_PATH,
   READ_CHUNK_BYTES,
+  unsafeRelativePathReason,
 } from './model-manifest.js'
 
 const LOCK_WAIT_MS = 60_000
@@ -242,14 +243,9 @@ export function safeModelRelativePath(value: string): string {
     typeof value !== 'string' ||
     value === '' ||
     value.startsWith('/') ||
-    value.includes('\\') ||
-    value.includes('\0')
-  )
+    unsafeRelativePathReason(value) !== undefined
+  ) {
     unsafe(`invalid relative path ${String(value)}`)
-  const segments = value.split('/')
-  for (const segment of segments) {
-    if (segment === '' || segment === '.' || segment === '..' || segment.includes(':'))
-      unsafe(`invalid relative path ${value}`)
   }
   return value
 }

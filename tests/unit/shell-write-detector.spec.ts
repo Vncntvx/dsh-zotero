@@ -199,14 +199,16 @@ describe('the shell-write detector', () => {
     expect(attempt?.displayReason.zh).not.toContain('write request to the local API address')
   })
 
-  it('scans the text a terminal_send submits, and only that text', () => {
-    // A persistent shell runs a submitted line exactly like `bash -c`: the
-    // line is command text. `submit: false` types into the input line and
-    // executes nothing, so there is no write to confirm.
+  it('scans every terminal_send text, submitted or buffered', () => {
+    // A persistent shell runs a submitted line exactly like `bash -c`, and
+    // writes the held-back text verbatim: an embedded newline executes, and a
+    // later empty Enter submits the buffered line. Both are command text.
     const write = `curl -X POST -d '{}' http://127.0.0.1:23119/api/users/0/items`
     expect(detectShellWrite(config, terminal(write))).toBeDefined()
     expect(detectShellWrite(config, terminal(write, { submit: true }))).toBeDefined()
-    expect(detectShellWrite(config, terminal(write, { submit: false }))).toBeUndefined()
+    expect(detectShellWrite(config, terminal(write, { submit: false }))).toBeDefined()
+    expect(detectShellWrite(config, terminal(`${write}\r`, { submit: false }))).toBeDefined()
+    expect(detectShellWrite(config, terminal('  ', { submit: false }))).toBeUndefined()
     // The `command` field of another tool is not this tool's text, and the
     // harness defaults `submit` to true, so an omitted flag still runs.
     expect(

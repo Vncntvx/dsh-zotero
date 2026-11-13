@@ -610,6 +610,8 @@ export interface ZoteroSemanticModelStatusResultView {
   readonly percent: number
   readonly currentFile?: string
   readonly error?: string
+  /** A committed install whose staging cleanup failed; the model still works. */
+  readonly warning?: string
 }
 
 export const ZOTERO_SEMANTIC_MODEL_STATUS_METHOD = 'semanticModelStatus'

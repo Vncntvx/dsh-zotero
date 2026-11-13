@@ -99,6 +99,23 @@ describe('SourceExports component', () => {
     expect(screen.getByText(t('sourceExportsUnavailable'))).toBeTruthy()
   })
 
+  it('renders a file-delivered export through its result coordinates', () => {
+    const item = sourceOf({
+      ref: 'zotero://user/0/item/QRST3456',
+      exports: [
+        artifactOf({
+          text: '',
+          items: undefined,
+          resultFile: { seq: 2, index: 0 },
+        }),
+      ],
+    })
+    render(<SourceExports item={item} t={t} />)
+    expect(screen.getByText(t('sourceExportsFileBacked'))).toBeTruthy()
+    expect(screen.getByText('BibTeX')).toBeTruthy()
+    expect(screen.queryByText(t('sourceExportsUnavailable'))).toBeNull()
+  })
+
   it('renders page controls when a pager is provided', () => {
     const pager = {
       pages: [],

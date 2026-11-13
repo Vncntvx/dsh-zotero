@@ -196,6 +196,14 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
         // must not cancel the work another caller is still waiting for.
         if (entries.every((entry) => entry.flight.waiters === 0)) {
           controller.abort(new Error('every caller of this embedding batch left'))
+          // A fresh caller must not join a flight whose last waiter cancelled:
+          // its own request would fail with a cancellation it never caused.
+          // Removing the flights here (identity-checked) lets `embed` claim new
+          // ones before the aborted run settles; the run's finally will not
+          // delete those newer flights.
+          for (const entry of entries) {
+            if (flights.get(entry.key) === entry.flight) flights.delete(entry.key)
+          }
         }
       },
     }
@@ -206,6 +214,9 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
           entries.map((entry) => entry.text),
           signal,
         )
+        // Every caller walked away (or the generation retired): the run's
+        // result belongs to nobody and must never repopulate the cache.
+        if (signal.aborted) return
         if (vectors.length !== entries.length) {
           throw new Error('the embedder returned the wrong number of vectors')
         }

@@ -27,7 +27,11 @@ const CITE_HINT = 'Tip: Cite a paper from these results using its title link or 
 /** Sources whose ranked lists get the boosted RRF weight (1.2 instead of 1.0). */
 const BOOSTED_RRF_SOURCES: ReadonlySet<string> = new Set(['arxiv', 'dblp', 'pubmed', 'europepmc'])
 
-export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefinition {
+export function createScholarlySearchTool(
+  host: ScholarlyToolHost,
+  options: { readonly background?: boolean } = {},
+): ToolDefinition {
+  const background = options.background ?? true
   return defineTool({
     name: 'scholarly_search',
     description:
@@ -72,7 +76,7 @@ export function createScholarlySearchTool(host: ScholarlyToolHost): ToolDefiniti
         default: 'snippet',
         description: 'How much abstract to display in the text summary.',
       },
-      ...RUN_IN_BACKGROUND_PARAMETER,
+      ...(background ? RUN_IN_BACKGROUND_PARAMETER : {}),
     },
     output: SCHOLARLY_JOB_OUTPUT_DESCRIPTOR,
     isConcurrencySafe: () => true,

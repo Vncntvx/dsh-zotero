@@ -133,6 +133,11 @@ export interface RankPassagesOptions {
   readonly queryVariants?: readonly string[]
   /** Caller cancellation, forwarded to the ranker. */
   readonly signal?: AbortSignal
+  /**
+   * A ranking scope the caller admitted before source I/O. When present this
+   * function forwards it and does not release it; the caller owns the lifetime.
+   */
+  readonly scope?: symbol
 }
 
 /**
@@ -154,9 +159,10 @@ export async function rankPassages(options: RankPassagesOptions): Promise<{
   const maxWords = options.maxWords ?? 180
   const maxCharsPerChunk = options.maxCharsPerChunk ?? 1_200
   if (options.query.trim() === '') return { passages: [], routes: [] }
-  // Admit before chunking: the accepted request keeps its committed ranking
-  // generation for the whole read, even if the component unmounts mid-passage.
-  const scope = options.ranker.admit?.()
+  // A caller that admitted before source I/O owns the scope; otherwise admit
+  // here so a standalone call still keeps its committed generation.
+  const admitted = options.scope === undefined ? options.ranker.admit?.() : undefined
+  const scope = options.scope ?? admitted?.handle
   try {
     const chunks = chunkText(options.text, maxWords, maxCharsPerChunk)
     if (chunks.length === 0) return { passages: [], routes: [] }
@@ -165,7 +171,7 @@ export async function rankPassages(options: RankPassagesOptions): Promise<{
       ...(options.queryVariants === undefined ? {} : { queryVariants: options.queryVariants }),
       chunks,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ...(scope === undefined ? {} : { scope: scope.handle }),
+      ...(scope === undefined ? {} : { scope }),
     })
 
     const passages: RankedPassage[] = []
@@ -187,6 +193,6 @@ export async function rankPassages(options: RankPassagesOptions): Promise<{
     }
     return { passages, routes: result.routes }
   } finally {
-    scope?.release()
+    admitted?.release()
   }
 }

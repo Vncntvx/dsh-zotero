@@ -23,11 +23,18 @@ afterEach(async () => {
 })
 
 /** A scripted embedder: every text lands on the first axis, so every chunk passes the floor. */
-function scriptedEmbedder(dimension: number, disposed: string[], key: string): Embedder {
+function scriptedEmbedder(
+  dimension: number,
+  disposed: string[],
+  key: string,
+  embedded: string[] = [],
+): Embedder {
   return {
     dimension,
-    embed: async (texts) =>
-      texts.map(() => Float32Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0))),
+    embed: async (texts) => {
+      embedded.push(...texts)
+      return texts.map(() => Float32Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0)))
+    },
     dispose: async () => {
       disposed.push(key)
     },
@@ -35,17 +42,18 @@ function scriptedEmbedder(dimension: number, disposed: string[], key: string): E
 }
 
 /** One enrichment service over a counting loader factory. */
-function world(options: { readonly core?: boolean } = {}) {
+function world(options: { readonly core?: boolean; readonly downloads?: unknown } = {}) {
   const ctx = new Context()
   owned.push(ctx)
   const disposed: string[] = []
   const opened: string[] = []
+  const embedded: string[] = []
   const factories = vi.fn(
     () =>
       new SemanticEmbedderLoader({
         open: async (target) => {
           opened.push(target.spec.key)
-          return scriptedEmbedder(target.spec.dimension, disposed, target.spec.key)
+          return scriptedEmbedder(target.spec.dimension, disposed, target.spec.key, embedded)
         },
       }),
   )
@@ -56,7 +64,10 @@ function world(options: { readonly core?: boolean } = {}) {
       semanticModel: 'lightweight',
       semanticModelDir: '/models',
     },
-    { loader: factories },
+    {
+      loader: factories,
+      ...(options.downloads === undefined ? {} : { downloads: options.downloads as never }),
+    },
   )
   const ready = deferred<void>()
   if (options.core !== false) {
@@ -68,7 +79,7 @@ function world(options: { readonly core?: boolean } = {}) {
       },
     } as unknown as Context['zotero'])
   }
-  return { ctx, service, factories, opened, disposed, ready: ready.promise }
+  return { ctx, service, factories, opened, disposed, embedded, ready: ready.promise }
 }
 
 /** The core contract makes `admit` optional; these cases exercise the semantic ranker. */
@@ -167,6 +178,36 @@ describe('the admitted ranking scope owns its model generation', () => {
       code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
     })
     after.release()
+  })
+
+  it('deletes a non-active tier without flushing the active vector cache', async () => {
+    const downloads = {
+      remove: async () => ({
+        success: true,
+        model: 'balanced',
+        path: '/models/balanced',
+        removed: true,
+        removedFiles: 1,
+        removedBytes: 1,
+      }),
+      dispose: async () => undefined,
+    }
+    const { service, ready, embedded } = world({ downloads })
+    await ready
+    const ranker = service.liveEvidenceRanker
+    await ranker.rank(request)
+    const first = embedded.length
+    expect(first).toBeGreaterThan(0)
+    // A second read is a pure cache hit.
+    await ranker.rank(request)
+    expect(embedded.length).toBe(first)
+
+    await service.deleteSemanticModel({ model: 'balanced' }, new AbortController().signal)
+
+    // The configured tier's vectors survived: no re-embed after deleting an
+    // unused tier.
+    await ranker.rank(request)
+    expect(embedded.length).toBe(first)
   })
 
   it('releases a borrowed generation when rank runs without an admitted scope', async () => {

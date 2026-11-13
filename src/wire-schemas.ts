@@ -933,6 +933,7 @@ export const zoteroSemanticModelStatusResultSchema = z
     percent: z.number().int().min(0).max(100),
     currentFile: z.string().optional(),
     error: z.string().optional(),
+    warning: z.string().optional(),
   })
   .strict() satisfies z.ZodType<ZoteroSemanticModelStatusResultView>
 

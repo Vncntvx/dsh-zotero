@@ -29,7 +29,10 @@ import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { errorMessageOf, ZoteroError } from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
+import { FIBER_STATE } from './fiber-state.js'
 import type { ZoteroProgressEvent } from './types.js'
+// Type-only: brings the loader `loader/volatile-update` Events merge here.
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 /** Structured abort thrown when a tool call or job wait is cancelled by the caller. */
 function toolAborted(): HarnessError {
@@ -56,35 +59,55 @@ export function jobStartedMessage(jobId: string): string {
 /**
  * Register a tool whose `run_in_background` parameter exists only when this
  * composition can serve it: the deployment enabled the flag and a job registry
- * is mounted. The foreground-only schema registers first, and the jobs
- * injection swaps in the background-capable one, so a host that cannot start a
- * job never advertises the key. Execute still refuses an undeclared background
+ * is mounted. One long-lived registration follows both facts: it starts with
+ * the arm the current composition can serve, swaps when the jobs service
+ * mounts or unloads, and swaps again when the live switch flips through
+ * `loader/volatile-update`. Execute still refuses an undeclared background
  * request, because the registry admits argument keys the schema omits.
  * @param ctx - the plugin context.
  * @param backgroundEnabled - the live deployment switch.
  * @param register - registers one arm and returns its disposer.
- * @returns the disposer for the registration the composition chose.
+ * @returns the disposer for the whole registration.
  */
 export function registerBackgroundAware(
   ctx: Context,
-  backgroundEnabled: boolean,
+  backgroundEnabled: () => boolean,
   register: (background: boolean) => () => void,
 ): () => void {
-  if (!backgroundEnabled) return register(false)
-  if (ctx.get('jobs') !== undefined) return register(true)
-  const foregroundOnly = register(false)
-  let background: (() => void) | undefined
-  ctx.inject(['jobs'], () => {
-    foregroundOnly()
-    background = register(true)
+  let jobsPresent = ctx.get('jobs') !== undefined
+  let current: (() => void) | undefined
+  let currentBackground: boolean | undefined
+  let closed = false
+  const install = (): void => {
+    if (closed) return
+    const desired = backgroundEnabled() && jobsPresent
+    if (currentBackground === desired) return
+    current?.()
+    current = register(desired)
+    currentBackground = desired
+  }
+  install()
+  const injection = ctx.inject(['jobs'], () => {
+    jobsPresent = true
+    install()
     return () => {
-      background?.()
-      background = undefined
+      jobsPresent = false
+      // The registry unloaded while this plugin stayed active: degrade to the
+      // foreground schema instead of disappearing from the registry.
+      if (ctx.fiber.state === FIBER_STATE.ACTIVE) install()
     }
   })
+  const offConfig = ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
+    if (!paths.some((path) => path.length === 0 || path[0] === 'enableRunInBackground')) return
+    install()
+  })
   return () => {
-    foregroundOnly()
-    background?.()
+    closed = true
+    offConfig()
+    current?.()
+    current = undefined
+    currentBackground = undefined
+    void injection.dispose()
   }
 }
 
@@ -559,11 +582,12 @@ export class ZoteroJobRunner {
           // The owner may have been disposed, or the registry may have
           // observed terminal settlement between wait rejection and here.
         }
-        // `kill` moves a live job to `stopping`; remove is legal only after the
-        // registry observes terminal settlement. Wait for the producer first,
-        // then let the registry publish its terminal view before removing the
-        // private foreground record. Cancellation itself must stay immediate.
-        void this.removeAfterCancellation(registry, id, owner, done)
+        // `kill` moves a live job to `stopping`; stay on its settlement for
+        // the bounded cancellation window so the completion is `awaited` and
+        // no follow-up notice announces a job id this call never returned.
+        // Cancellation still ends within the settle window even if the
+        // producer refuses to stop.
+        await this.removeAfterCancellation(registry, id, owner)
         throw toolAborted()
       }
       // The job is still live and the id is the only handle. Hand it back as a
@@ -626,10 +650,8 @@ export class ZoteroJobRunner {
     registry: JobRegistry,
     id: JobId,
     owner: SessionId | undefined,
-    done: Promise<ZoteroJobOutcome>,
   ): Promise<void> {
     try {
-      await done
       // LocalJobRegistry settles from the producer promise in a following
       // microtask; wait through its public view rather than racing remove.
       const view = await registry.wait(id, JOB_CANCELLATION_SETTLE_MS, owner)
@@ -638,8 +660,9 @@ export class ZoteroJobRunner {
       }
     } catch {
       // A cancelled foreground call has no model-visible job id. If the
-      // producer refuses to settle, the registry retains it for normal owner
-      // disposal rather than turning cancellation into a second error.
+      // producer refuses to settle within the window, the registry retains it
+      // for normal owner disposal rather than turning cancellation into a
+      // second error.
     }
   }
 }

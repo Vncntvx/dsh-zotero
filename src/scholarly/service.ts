@@ -33,21 +33,26 @@ import {
   type ResolvedScholarlyConfig,
   type ScholarlyConfig,
 } from './config.js'
-import {
-  SCHOLARLY_SAVE_TOOL_NAME,
-  ZOTERO_FULLTEXT_CHUNK_WORDS,
-  ZOTERO_MAX_EVIDENCE_CHARS,
-} from '../constants.js'
+import { ZOTERO_FULLTEXT_CHUNK_WORDS, ZOTERO_MAX_EVIDENCE_CHARS } from '../constants.js'
 import type { ScholarlyToolHost } from './tools/common.js'
 import { installParameterCorrection } from '../parameter-correction.js'
-import { ZoteroJobRunner, jobPolicyOf } from '../job-runner.js'
+import { ZoteroJobRunner, jobPolicyOf, registerBackgroundAware } from '../job-runner.js'
 import { registerResearchSkills } from '../skills/register.js'
 import { SCHOLARLY_SOPS } from '../skills/scholarly.js'
 import { resolveScholarlyKeys } from './credentials.js'
 import { scholarlyJobSink } from './diagnostics.js'
 import { ScholarlyTextStore } from './fulltext/store.js'
 import { registerScholarlyPromptSection } from './prompt.js'
-import { createAllScholarlyTools, type ScholarlyReadHost } from './tools/index.js'
+import {
+  createScholarlyCitationsTool,
+  createScholarlyCiteTool,
+  createScholarlyGetTool,
+  createScholarlyReadTool,
+  createScholarlySaveToZoteroTool,
+  createScholarlySearchTool,
+  createScholarlyVerifyTool,
+  type ScholarlyReadHost,
+} from './tools/index.js'
 import { createScholarlyHttp, type ScholarlyHttp } from './transport/http.js'
 import { scholarlyPublicAccess, publicFetch } from '../transport/connections.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyKeys } from './types.js'
@@ -173,9 +178,39 @@ export class ScholarlyService extends Service {
     this.host = host
 
     const canSave = (): boolean => canSaveScholarlyToZotero(host)
-    for (const tool of createAllScholarlyTools(host)) {
-      ctx.tools.register(tool, tool.name === SCHOLARLY_SAVE_TOOL_NAME ? { when: canSave } : {})
+    // The four tools whose schema never carries `run_in_background`.
+    for (const tool of [
+      createScholarlyGetTool(host),
+      createScholarlyCitationsTool(host),
+      createScholarlyCiteTool(host),
+    ]) {
+      ctx.tools.register(tool)
     }
+    ctx.tools.register(createScholarlySaveToZoteroTool(host), { when: canSave })
+
+    // The three heavy tools advertise the parameter only while the deployment
+    // can serve it; the registration follows both the jobs service and the
+    // live switch by itself.
+    const disposeBackgroundTools = registerBackgroundAware(
+      ctx,
+      () => this.currentConfig.enableRunInBackground,
+      (background) => {
+        const disposers = [
+          createScholarlySearchTool(host, { background }),
+          createScholarlyReadTool(host, { background }),
+          createScholarlyVerifyTool(host, { background }),
+        ].map((tool) => ctx.tools.register(tool))
+        return () => {
+          for (const dispose of disposers) dispose()
+        }
+      },
+    )
+    ctx.effect(
+      () => () => {
+        disposeBackgroundTools()
+      },
+      'scholarly: background tool teardown',
+    )
     registerResearchSkills(ctx, SCHOLARLY_SOPS)
     installParameterCorrection(ctx, SCHOLARLY_TOOL_NAMES)
 

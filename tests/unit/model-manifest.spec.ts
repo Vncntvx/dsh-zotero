@@ -99,4 +99,14 @@ describe('safeRelativePath', () => {
       }),
     ).toBe('onnx/model_quantized.onnx')
   })
+
+  it('refuses Windows-style traversal and NUL bytes', () => {
+    for (const value of ['..\\evil', 'a\\b', 'a\0b']) {
+      expect(() =>
+        safeRelativePath(value, (reason) => {
+          throw new Error(reason)
+        }),
+      ).toThrow(/invalid catalog path/)
+    }
+  })
 })

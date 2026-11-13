@@ -20,6 +20,7 @@
  */
 
 import { receiptOf } from './receipt.js'
+import { exportBodyOf } from './export-body.js'
 
 import type { ArgsView, ToolBlockLike } from './block-types.js'
 import {
@@ -1049,7 +1050,7 @@ export class SourceWorkspaceIndex {
           this.countOperation(draft, state)
         }
         if (state !== 'ok') break
-        const text = typeof meta?.text === 'string' ? meta.text : ''
+        const text = exportBodyOf(block, meta)
         const resultFile =
           receipt !== null && 'seq' in block ? { seq: block.seq, index: 0 } : undefined
         if (text === '' && resultFile === undefined) break

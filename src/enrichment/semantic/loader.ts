@@ -141,9 +141,9 @@ export class SemanticEmbedderLoader {
     if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
     const key = keyOf(target)
     let managed =
-      this.resident?.key === key
+      this.resident?.key === key && !this.resident.retiring && !this.resident.released
         ? this.resident
-        : this.pending?.key === key
+        : this.pending?.key === key && !this.pending.retiring && !this.pending.released
           ? this.pending
           : undefined
     if (managed === undefined) {
@@ -199,6 +199,7 @@ export class SemanticEmbedderLoader {
       this.retired.add(managed)
       this.maybeRelease(managed)
     }
+    if (this.pending?.key === key) this.pending = undefined
     if (this.resident?.key === key) this.resident = undefined
   }
 
@@ -231,13 +232,14 @@ export class SemanticEmbedderLoader {
     // Commit B as resident only on success; a failure keeps A and reports to B.
     void load
       .then(() => {
-        if (this.closed) {
-          // Teardown closed admission while this load was in flight. An already
-          // accepted scope still awaits `managed.load` and receives this
-          // embedder, so the instance must stay alive until that scope and its
-          // runs finish: mark it retiring and let `maybeRelease` decide. A
-          // direct `embedder.dispose()` here handed accepted callers a released
-          // ONNX session.
+        if (this.closed || managed.retiring || managed.released) {
+          // Teardown closed admission or a deletion retired this instance while
+          // the load was in flight. An already accepted scope still awaits
+          // `managed.load` and receives this embedder, so the instance must stay
+          // alive until that scope and its runs finish: mark it retiring and
+          // let `maybeRelease` decide. A direct `embedder.dispose()` here handed
+          // accepted callers a released ONNX session; promoting it to resident
+          // would hand it to scopes admitted after the deletion instead.
           managed.retiring = true
           this.retired.add(managed)
           this.maybeRelease(managed)

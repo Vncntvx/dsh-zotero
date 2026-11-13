@@ -20,14 +20,17 @@ export * from './search.js'
 export * from './verify.js'
 export * from './save-to-zotero.js'
 
-export function createAllScholarlyTools(host: ScholarlyReadHost): ToolDefinition[] {
+export function createAllScholarlyTools(
+  host: ScholarlyReadHost,
+  options: { readonly background?: boolean } = {},
+): ToolDefinition[] {
   return [
-    createScholarlySearchTool(host),
+    createScholarlySearchTool(host, options),
     createScholarlyGetTool(host),
     createScholarlyCitationsTool(host),
-    createScholarlyReadTool(host),
+    createScholarlyReadTool(host, options),
     createScholarlyCiteTool(host),
-    createScholarlyVerifyTool(host),
+    createScholarlyVerifyTool(host, options),
     createScholarlySaveToZoteroTool(host),
   ]
 }

@@ -13,6 +13,7 @@
  * @module dsh-zotero/enrichment/model-manifest
  */
 
+import { createHash } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 
@@ -30,20 +31,41 @@ export interface CatalogFilePin {
 }
 
 /**
- * One catalog-relative path: no absolute prefix, no empty, `.`, `..` or
- * colon-bearing segment.
+ * The catalog-relative path rule: no absolute prefix, no empty, `.`, `..`,
+ * colon-bearing segment, backslash or NUL. The backslash and NUL checks are
+ * what keep a Windows-style traversal out of `join(dir, path)` even though the
+ * catalog itself is trusted code. Callers keep their own error class and
+ * message; only the rule lives here.
+ * @param value - the declared path.
+ * @returns the refusal reason, or undefined when the path is safe.
+ */
+export function unsafeRelativePathReason(value: string): string | undefined {
+  if (value === '' || isAbsolute(value) || value.includes('\\') || value.includes('\0')) {
+    return `invalid catalog path ${value}`
+  }
+  for (const segment of value.split('/')) {
+    if (segment === '' || segment === '.' || segment === '..' || segment.includes(':')) {
+      return `invalid catalog path ${value}`
+    }
+  }
+  return undefined
+}
+
+/**
+ * Validate one catalog-relative path.
  * @param value - the declared path.
  * @param refuse - the caller's error mapping.
  * @returns the path unchanged when it is safe.
  */
 export function safeRelativePath(value: string, refuse: (reason: string) => never): string {
-  if (value === '' || isAbsolute(value)) refuse(`invalid catalog path ${value}`)
-  for (const segment of value.split('/')) {
-    if (segment === '' || segment === '.' || segment === '..' || segment.includes(':')) {
-      refuse(`invalid catalog path ${value}`)
-    }
-  }
+  const reason = unsafeRelativePathReason(value)
+  if (reason !== undefined) refuse(reason)
   return value
+}
+
+/** The catalog record's fingerprint: every field a verification depends on. */
+export function catalogFingerprintOf(expected: SemanticModelManifest): string {
+  return createHash('sha256').update(JSON.stringify(expected)).digest('hex')
 }
 
 /**

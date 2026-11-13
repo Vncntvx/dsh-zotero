@@ -193,7 +193,7 @@ describe('a shell write against the Zotero API', () => {
     expect(ran).toHaveLength(2)
   })
 
-  it('asks about text a persistent terminal submits, not text it holds back', async () => {
+  it('asks about every persistent-terminal text, submitted or buffered', async () => {
     const lane = await bootLane({ writeEnabled: false })
     const text = writeOf(lane)
 
@@ -203,11 +203,12 @@ describe('a shell write against the Zotero API', () => {
     expect(approvalAsks).toHaveLength(1)
     expect(approvalAsks[0]?.toolName).toBe('terminal_send')
 
-    // `submit: false` leaves the text in the input line: nothing runs, so
-    // there is no write to confirm.
+    // The held-back text is written verbatim: it can execute through an
+    // embedded newline or a later empty Enter, so it asks too.
     const held = await lane.runTool('terminal_send', { sessionId: 't1', text, submit: false })
     expect(held.isError).toBe(false)
-    expect(approvalAsks).toHaveLength(1)
+    expect(approvalAsks).toHaveLength(2)
+    expect(approvalAsks[1]?.toolName).toBe('terminal_send')
     expect(typed).toEqual([text, `pending:${text}`])
   })
 

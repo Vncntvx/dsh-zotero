@@ -315,6 +315,7 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
  * request, so a settings edit changes the refusal on the next call.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
+ * @param wrap - the delivery envelope.
  */
 export function registerExportTool(
   ctx: Context,
@@ -408,7 +409,9 @@ export function registerExportTool(
         },
       }),
     )
-  return registerBackgroundAware(ctx, service.config.enableRunInBackground, (background) =>
-    ctx.tools.register(definition(background)),
+  return registerBackgroundAware(
+    ctx,
+    () => service.config.enableRunInBackground,
+    (background) => ctx.tools.register(definition(background)),
   )
 }

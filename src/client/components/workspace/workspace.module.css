@@ -398,6 +398,12 @@
   max-width: 900px;
 }
 
+.fileBacked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .section {
   display: flex;
   flex-direction: column;

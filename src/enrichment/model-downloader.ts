@@ -58,6 +58,8 @@ export interface SemanticModelStatus {
   readonly percent: number
   readonly currentFile?: string
   readonly error?: string
+  /** The install committed but its staging cleanup failed; the model is usable. */
+  readonly warning?: string
 }
 
 export interface SemanticModelDownloadResult {
@@ -100,6 +102,10 @@ export interface ModelDownloadManagerDeps {
   readonly client?: DownloadClientDeps
   /** Filesystem seams for the safe-directory resolver; tests inject theirs. */
   readonly fs?: SafeDirectoryDeps
+  /** The model-directory lstat seam; defaults to the host filesystem. */
+  readonly lstat?: (path: string) => ReturnType<typeof lstat>
+  /** The bundle installation seam; defaults to the real installer. */
+  readonly install?: typeof installModelBundle
 }
 
 /** A reservation key needs no async work: the configured target and model. */
@@ -177,11 +183,15 @@ export class ModelDownloadManager {
   private readonly removing = new Set<string>()
   private readonly clientDeps: DownloadClientDeps | undefined
   private readonly fsDeps: SafeDirectoryDeps | undefined
+  private readonly lstatOf: (path: string) => ReturnType<typeof lstat>
+  private readonly installOf: typeof installModelBundle
   private closed = false
 
   constructor(deps: ModelDownloadManagerDeps = {}) {
     this.clientDeps = deps.client
     this.fsDeps = deps.fs
+    this.lstatOf = deps.lstat ?? lstat
+    this.installOf = deps.install ?? installModelBundle
   }
 
   /**
@@ -197,6 +207,17 @@ export class ModelDownloadManager {
     )
     if (live !== undefined) return { ...live.status }
     const disk = await this.inspect(spec, dir)
+    // A committed install whose staging cleanup failed keeps its entry until
+    // the warning is superseded or the model is removed; the model itself is
+    // ready, so the status must say ready plus the warning.
+    const notice = [...this.entries.values()].find(
+      (entry) =>
+        entry.key === reservationKeyOf(spec.key, modelDir) && entry.status.warning !== undefined,
+    )
+    if (notice !== undefined) {
+      if (disk.kind === 'ready') return { ...notice.status }
+      this.entries.delete(notice.key)
+    }
     const stale =
       this.entries.get(keyOf(spec.key, dir)) ??
       this.entries.get(reservationKeyOf(spec.key, modelDir))
@@ -458,61 +479,56 @@ export class ModelDownloadManager {
   ): Promise<SemanticModelDownloadResult> {
     // `settle` resolves the reservation's single cancellation promise only
     // after the owned writer and its staging cleanup have actually settled.
+    // Every escape after the reservation settles it too: a directory or
+    // inspection failure must not leave `cancel`/`dispose` awaiting forever.
     const finish = (): void => {
+      if (entry.settled) return
       entry.settled = true
       settle()
     }
-
-    const root = await writableRoot(modelDir, this.fsDeps).catch((error: unknown) => {
-      this.fail(entry, error, controller)
-      finish()
-      throw error
-    })
-    const dir = join(root, spec.physicalKey)
-    entry.dir = dir
-    entry.status = { ...entry.status, path: dir }
-    if (controller.signal.aborted) {
-      const error = failed('the model download was cancelled before admission')
-      this.fail(entry, error, controller)
-      finish()
-      throw error
-    }
-    // A physical model directory that is a symlink is refused before a writer
-    // is admitted; the sentinel on the other side must remain untouched.
-    const physical = await lstat(dir).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return undefined
-      throw error
-    })
-    if (physical !== undefined && (physical.isSymbolicLink() || !physical.isDirectory())) {
-      const error = failed(`the model directory is not a regular directory: ${dir}`)
-      this.fail(entry, error, controller)
-      finish()
-      throw error
-    }
-    const current = await this.inspect(spec, dir, true)
-    if (current.kind === 'ready' && force !== true && !controller.signal.aborted) {
-      entry.status = {
-        ...entry.status,
-        ready: true,
-        downloading: false,
-        downloadedBytes: entry.status.totalBytes,
-        percent: 100,
+    try {
+      const root = await writableRoot(modelDir, this.fsDeps)
+      const dir = join(root, spec.physicalKey)
+      entry.dir = dir
+      entry.status = { ...entry.status, path: dir }
+      if (controller.signal.aborted) {
+        throw failed('the model download was cancelled before admission')
       }
-      this.entries.delete(entry.key)
-      finish()
-      return { success: true, model: spec.key, status: 'already-ready', path: dir }
-    }
-    if (controller.signal.aborted) {
-      const error = failed('the model download was cancelled before admission')
+      // A physical model directory that is a symlink is refused before a writer
+      // is admitted; the sentinel on the other side must remain untouched.
+      const physical = await this.lstatOf(dir).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined
+        throw error
+      })
+      if (physical !== undefined && (physical.isSymbolicLink() || !physical.isDirectory())) {
+        throw failed(`the model directory is not a regular directory: ${dir}`)
+      }
+      const current = await this.inspect(spec, dir, true)
+      if (current.kind === 'ready' && force !== true && !controller.signal.aborted) {
+        entry.status = {
+          ...entry.status,
+          ready: true,
+          downloading: false,
+          downloadedBytes: entry.status.totalBytes,
+          percent: 100,
+        }
+        this.entries.delete(entry.key)
+        finish()
+        return { success: true, model: spec.key, status: 'already-ready', path: dir }
+      }
+      if (controller.signal.aborted) {
+        throw failed('the model download was cancelled before admission')
+      }
+
+      // Launch the owned writer. Its settlement resolves the shared cancellation
+      // promise, so cancel/dispose can never return before real cleanup.
+      void this.runInstall(entry, spec, dir, sources, force, controller).finally(finish)
+      return { success: true, model: spec.key, status: 'started', path: dir }
+    } catch (error) {
       this.fail(entry, error, controller)
       finish()
       throw error
     }
-
-    // Launch the owned writer. Its settlement resolves the shared cancellation
-    // promise, so cancel/dispose can never return before real cleanup.
-    void this.runInstall(entry, spec, dir, sources, force, controller).finally(finish)
-    return { success: true, model: spec.key, status: 'started', path: dir }
   }
 
   private fail(entry: ActiveDownload, error: unknown, controller: AbortController): void {
@@ -534,7 +550,7 @@ export class ModelDownloadManager {
     controller: AbortController,
   ): Promise<void> {
     try {
-      const result = await installModelBundle({
+      const result = await this.installOf({
         dir,
         expected: manifestOf(spec),
         inspector: createBundleInspector(),
@@ -556,16 +572,20 @@ export class ModelDownloadManager {
           })
         },
       })
-      if (this.entries.get(entry.key) === entry) this.entries.delete(entry.key)
+      const warning = result.cleanupError === undefined ? undefined : messageOf(result.cleanupError)
       entry.status = {
         ...entry.status,
         ready: true,
         downloading: false,
         downloadedBytes: entry.status.totalBytes,
         percent: 100,
-        ...(result.cleanupError !== undefined
-          ? { error: `staging cleanup: ${messageOf(result.cleanupError)}` }
-          : {}),
+        ...(warning === undefined ? {} : { warning }),
+      }
+      // A clean install needs no retained entry: the disk is the status. A
+      // cleanup warning is kept so the settings page can report the model as
+      // ready with a warning instead of losing it with the reservation.
+      if (warning === undefined && this.entries.get(entry.key) === entry) {
+        this.entries.delete(entry.key)
       }
     } catch (error) {
       this.fail(entry, error, controller)

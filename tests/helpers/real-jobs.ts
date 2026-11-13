@@ -16,7 +16,7 @@
  * @module tests/helpers/real-jobs
  */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import type { JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
@@ -28,6 +28,8 @@ export interface RealJobs {
   readonly ctx: Context
   /** The real registry, typed as the plugin sees it. */
   readonly registry: JobRegistry
+  /** The fiber that provides `ctx.jobs`, when this call mounted it. */
+  readonly fiber?: Fiber
   /** The live agent the given owner session resolves to, created on first use. */
   agentOf(sessionId: string): Agent
   /** Wait for one job to settle, through the registry's own contract. */
@@ -45,9 +47,10 @@ export interface RealJobs {
 export async function composeRealJobs(ctx: Context): Promise<RealJobs> {
   // One composition per context: a spec may call this from several cases over
   // the same lane.
+  let fiber: Fiber | undefined
   if (ctx.get('jobs') === undefined) {
     await ctx.plugin(StubAgents)
-    await ctx.plugin(LocalJobRegistry, {})
+    fiber = await ctx.plugin(LocalJobRegistry, {})
     // A controller attached from the root context lands in the global layer
     // and serves every owner, which is what a host composition's own controls
     // do.
@@ -58,6 +61,7 @@ export async function composeRealJobs(ctx: Context): Promise<RealJobs> {
   return {
     ctx,
     registry: ctx.jobs,
+    ...(fiber === undefined ? {} : { fiber }),
     agentOf: (sessionId) => agents.get(SessionId(sessionId))!,
     settled: async (id, sessionId) =>
       await ctx.jobs.wait(id, 5_000, sessionId === undefined ? undefined : SessionId(sessionId)),

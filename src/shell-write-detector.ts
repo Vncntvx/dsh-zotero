@@ -20,13 +20,16 @@
  *   (`python -c '...'`, `node -e '...'` with the URL assembled at runtime);
  * - a `run_code` program, which reaches the network through `fetch` and can
  *   assemble any request at runtime, exactly like the interpreters above;
- * - the `text` of a `terminal_send` the caller does not submit (`submit:
- *   false`), which writes nothing to the shell's input line;
  * - the URL carried in an environment variable, a heredoc, or an encoding;
  * - a loopback port other than the configured one, except for writes to the
  *   users path and authorize calls (those are caught on any loopback port;
  *   see {@link USERS_WRITE} and {@link AUTHORIZE_PATH});
  * - any binary of the user's own.
+ *
+ * Every `terminal_send` text is scanned, with or without `submit`: the harness
+ * writes the text to the PTY verbatim and only appends Enter when submitting,
+ * so an embedded control character or a later empty-Enter call can execute a
+ * buffered command either way.
  *
  * The rule is a read-only allow: `GET` probes of the local API, debugging
  * curls, and requests to any other host are not writing, so they are left
@@ -305,11 +308,10 @@ function authorityAliases(baseUrl: string): readonly string[] {
 /**
  * The command text of a shell tool call, when the call carries one.
  *
- * `bash` and `pwsh` take a whole command in `command`. `terminal_send` types
- * `text` into a running shell and submits it with Enter unless the call sets
- * `submit: false`, so a call that does not submit cannot run anything and is
- * left alone; the harness defaults `submit` to true
- * (`packages/experimental/tool-terminal/src/index.ts`).
+ * `bash` and `pwsh` take a whole command in `command`. `terminal_send` writes
+ * `text` into a running shell verbatim and appends Enter only when submitting,
+ * so its text is scanned whether or not `submit` is set: an embedded control
+ * character or a later empty-Enter call can execute it either way.
  * @param execution - the call about to run.
  * @returns the text to scan, or undefined when the call runs no command.
  */
@@ -317,11 +319,7 @@ function commandTextOf(execution: Pick<ToolExecution, 'name' | 'arguments'>): st
   if (!SHELL_TOOL_NAMES.has(execution.name)) return undefined
   const args = asRecord(execution.arguments)
   const command =
-    execution.name === 'terminal_send'
-      ? args?.['submit'] === false
-        ? undefined
-        : asString(args?.['text'])
-      : asString(args?.['command'])
+    execution.name === 'terminal_send' ? asString(args?.['text']) : asString(args?.['command'])
   return command !== undefined && command.trim() !== '' ? command : undefined
 }
 

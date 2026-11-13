@@ -27,11 +27,17 @@ import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
 import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerUpdateNoteTool } from './tools/update-note.js'
 
+/** The live registrations of the two background-capable read tools. */
+export interface ReadToolRegistration {
+  /** Dispose their background-aware registrations (the fiber also owns them). */
+  dispose(): void
+}
+
 export function registerReadTools(
   ctx: Context,
   service: ZoteroService,
   delivery: ResultDelivery,
-): void {
+): ReadToolRegistration {
   delivery.installJobs()
   // Every read tool registers through the same delivery envelope, explicitly:
   // the tool module still owns its schema and execute, and this is the one
@@ -43,8 +49,15 @@ export function registerReadTools(
   registerMatchReferencesTool(ctx, service, wrap)
   registerRetrieveTool(ctx, service, wrap)
   registerBrowseTool(ctx, service, wrap)
-  registerExportTool(ctx, service, wrap)
-  registerChangesTool(ctx, service, wrap)
+  // Both follow `enableRunInBackground` and the jobs service by themselves.
+  const exportDispose = registerExportTool(ctx, service, wrap)
+  const changesDispose = registerChangesTool(ctx, service, wrap)
+  return {
+    dispose: () => {
+      exportDispose()
+      changesDispose()
+    },
+  }
 }
 
 export function registerWriteTools(ctx: Context, service: ZoteroService): Array<() => void> {

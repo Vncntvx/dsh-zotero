@@ -72,6 +72,44 @@ export interface ExportSection {
   readonly unresolvedItems: readonly UnresolvedItemGroup[]
 }
 
+function isolatedExportOf(
+  artifact: ExportArtifact,
+  key: string,
+  ref: string,
+): ExportArtifact | undefined {
+  const uniqueRefs = new Set(artifact.refs.map(normalizeRefKey))
+  if (uniqueRefs.size === 1) {
+    return artifact.text.trim() !== '' ? artifact : undefined
+  }
+  if (artifact.items === undefined || artifact.items.length === 0) return undefined
+  const matches = artifact.items.filter((item) => normalizeRefKey(item.ref) === key)
+  if (matches.length !== 1) return undefined
+  const item = matches[0]!
+  let text: string
+  let isolatedItem: ExportDocumentItem
+  if (artifact.format === 'csljson') {
+    const records = parseCslRecords(artifact)
+    const record = item.entryIndex === undefined ? undefined : records?.[item.entryIndex]
+    if (typeof record !== 'object' || record === null) return undefined
+    text = JSON.stringify([record])
+    isolatedItem = { ...item, entryIndex: 0 }
+  } else {
+    if (
+      item.start === undefined ||
+      item.end === undefined ||
+      item.start < 0 ||
+      item.end <= item.start ||
+      item.end > artifact.text.length
+    ) {
+      return undefined
+    }
+    text = artifact.text.slice(item.start, item.end).trim()
+    if (text === '') return undefined
+    isolatedItem = { ...item, start: 0, end: text.length }
+  }
+  return { ...artifact, refs: [ref], refsOmitted: 0, items: [isolatedItem], text }
+}
+
 /**
  * Keep only export content that can be attributed to one source. Batch bodies
  * are narrowed with Zotero's recorded item boundaries; if a boundary is
@@ -85,46 +123,32 @@ export function sourceExportsOf(
   const sourceExports: ExportArtifact[] = []
   for (const artifact of exports) {
     if (!artifact.refs.some((candidate) => normalizeRefKey(candidate) === key)) continue
-    const uniqueRefs = new Set(artifact.refs.map(normalizeRefKey))
-    if (uniqueRefs.size === 1) {
-      if (artifact.text.trim() !== '') sourceExports.push(artifact)
-      continue
-    }
-    if (artifact.items === undefined || artifact.items.length === 0) continue
-    const matches = artifact.items.filter((item) => normalizeRefKey(item.ref) === key)
-    if (matches.length !== 1) continue
-    const item = matches[0]!
-    let text: string
-    let isolatedItem: ExportDocumentItem
-    if (artifact.format === 'csljson') {
-      const records = parseCslRecords(artifact)
-      const record = item.entryIndex === undefined ? undefined : records?.[item.entryIndex]
-      if (typeof record !== 'object' || record === null) continue
-      text = JSON.stringify([record])
-      isolatedItem = { ...item, entryIndex: 0 }
-    } else {
-      if (
-        item.start === undefined ||
-        item.end === undefined ||
-        item.start < 0 ||
-        item.end <= item.start ||
-        item.end > artifact.text.length
-      ) {
-        continue
-      }
-      text = artifact.text.slice(item.start, item.end).trim()
-      if (text === '') continue
-      isolatedItem = { ...item, start: 0, end: text.length }
-    }
-    sourceExports.push({
-      ...artifact,
-      refs: [ref],
-      refsOmitted: 0,
-      items: [isolatedItem],
-      text,
-    })
+    const isolated = isolatedExportOf(artifact, key, ref)
+    if (isolated !== undefined) sourceExports.push(isolated)
   }
   return sourceExports
+}
+
+/**
+ * File-delivered exports whose whole body belongs to this source. The body
+ * lives in the session attachment, so the card loads it through the recorded
+ * result coordinates; only a single-ref artifact is safe to show here because
+ * a batch file also carries the other sources' entries.
+ * @param exports - the workspace's successful artifacts.
+ * @param ref - the selected source's ref.
+ * @returns the artifacts the source panel can render as file-backed rows.
+ */
+export function sourceFileBackedArtifactsOf(
+  exports: readonly ExportArtifact[],
+  ref: string,
+): readonly ExportArtifact[] {
+  const key = normalizeRefKey(ref)
+  return exports.filter((artifact) => {
+    if (artifact.resultFile === undefined) return false
+    if (artifact.text.trim() !== '') return false
+    if (new Set(artifact.refs.map(normalizeRefKey)).size !== 1) return false
+    return artifact.refs.some((candidate) => normalizeRefKey(candidate) === key)
+  })
 }
 
 /** The mutable build shape of one export section. */

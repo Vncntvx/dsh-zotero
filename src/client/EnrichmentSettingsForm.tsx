@@ -36,7 +36,7 @@ import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
 import linkCss from './components/link.module.css'
 
-type T = (key: ZoteroLocaleKey) => string
+type T = (key: ZoteroLocaleKey, params?: Record<string, unknown>) => string
 
 /** Fixed mask for a configured token; the stored value never reaches the browser. */
 const MASKED_TOKEN = '************'
@@ -556,6 +556,12 @@ export function EnrichmentSettingsForm({
 
             {state.semanticModelState?.ready && (
               <p className={fieldCss.hint}>{t('semanticModelDownloadedNotice')}</p>
+            )}
+
+            {state.semanticModelState?.warning && (
+              <p className={fieldCss.hint}>
+                {t('semanticModelCleanupWarning', { detail: state.semanticModelState.warning })}
+              </p>
             )}
 
             {state.semanticModelUnavailable && (

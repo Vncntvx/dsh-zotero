@@ -180,4 +180,29 @@ describe('createBundleVerifier', () => {
       code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
     })
   })
+
+  it('verifies again when the catalog record changes under the same on-disk identity', async () => {
+    const entries = correctBundle()
+    const clock = { t: 1_000 }
+    const { deps } = counted(entries, clock)
+    const verifier = createBundleVerifier(deps)
+    await verifier.verify(spec.physicalKey, spec)
+    // The files are untouched; only the catalog revision changed, so the
+    // remembered verification no longer describes this record.
+    const changed = { ...spec, revision: '0'.repeat(40) }
+    await expect(verifier.verify(spec.physicalKey, changed)).rejects.toThrow(
+      /disagrees with the catalog/,
+    )
+  })
+
+  it('refuses a catalog record whose paths the shared rule rejects', async () => {
+    const entries = correctBundle()
+    const unsafe = {
+      ...spec,
+      files: [...spec.files, { path: '..\\evil', bytes: 1, sha256: 'a'.repeat(64) }],
+    }
+    await expect(
+      verifySemanticBundle(spec.physicalKey, unsafe, fileTable(entries)),
+    ).rejects.toThrow(/invalid catalog path/)
+  })
 })

@@ -234,6 +234,8 @@ export const en = {
   semanticModelUnavailable:
     'The enrichment component is not composed, so model status and downloads are unavailable. Enable it under "Included components".',
   semanticModelDownloadedNotice: 'Model is downloaded and ready for local semantic search.',
+  semanticModelCleanupWarning:
+    'The model is ready, but cleaning its staging directory failed: {detail}',
   semanticModelNotReadyWarningTag: 'Model Required',
   semanticModelNotReadyWarningTitle: 'Local semantic search is enabled, but the model is not ready',
   semanticModelNotReadyWarningDesc:
@@ -604,6 +606,8 @@ export const en = {
   exportsEmptyNote: 'No successful exports in this session yet.',
   sourceExportsUnavailable: 'This export cannot be isolated to this source.',
   sourceExportsIsolatedNote: '{count} exports cannot be isolated to this source.',
+  sourceExportsFileBacked:
+    'This export is stored in a session file; expand it to load the full body.',
   sourcePageMore: 'Show more',
   sourcePageRetry: 'Retry',
   sourceCitationLoading: 'Loading Zotero citation…',
@@ -1056,6 +1060,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelUnavailable:
     '文档解析组件未启用，模型状态与下载不可用。请在「包含的组件」中启用后再试。',
   semanticModelDownloadedNotice: '模型已保存在本地，可供本地语义检索使用。',
+  semanticModelCleanupWarning: '模型已可用，但清理临时目录失败：{detail}',
   semanticModelNotReadyWarningTag: '需要下载模型',
   semanticModelNotReadyWarningTitle: '已开启本地语义检索，但所选模型尚未下载',
   semanticModelNotReadyWarningDesc:
@@ -1402,6 +1407,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   exportsEmptyNote: '本会话还没有成功导出。',
   sourceExportsUnavailable: '无法将此导出内容单独归属于当前文献。',
   sourceExportsIsolatedNote: '另有 {count} 次导出无法单独归属于当前文献。',
+  sourceExportsFileBacked: '此导出保存在会话文件中；展开可加载完整内容。',
   sourcePageMore: '显示更多',
   sourcePageRetry: '重试',
   sourceCitationLoading: '正在从 Zotero 获取引用…',

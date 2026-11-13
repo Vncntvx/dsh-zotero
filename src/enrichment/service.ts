@@ -105,7 +105,11 @@ import {
 import { semanticEvidenceRanker } from './semantic/ranker.js'
 import { admissionProfileOf } from './semantic/model-profiles.js'
 import type { SemanticModelEntry, SemanticModelKey } from '../enrichment-model-catalog.js'
-import { createVectorCache, type VectorCache } from './semantic/vector-cache.js'
+import {
+  createVectorCache,
+  type VectorCache,
+  type VectorCacheIdentity,
+} from './semantic/vector-cache.js'
 import {
   bm25EvidenceRanker,
   type EvidenceRankRequest,
@@ -140,6 +144,43 @@ interface RankingSnapshot {
   readonly target: SemanticModelTarget
   readonly generation: CacheGeneration
   readonly loaderScope: RankingScope
+}
+
+/**
+ * The one vector-cache identity for a model. The generation digest and the
+ * cache's own key both derive from it, so a new identity field cannot change
+ * one and miss the other.
+ */
+const VECTOR_SCORING_VERSION = 'fixed-floor-margin-v1'
+
+function vectorCacheIdentityOf(spec: SemanticModelEntry): VectorCacheIdentity {
+  return {
+    key: spec.key,
+    physicalKey: spec.physicalKey,
+    revision: spec.revision,
+    dimension: spec.dimension,
+    pooling: spec.pooling,
+    normalize: spec.normalize,
+    queryPrefix: spec.queryPrefix,
+    documentPrefix: spec.documentPrefix,
+    scoringVersion: VECTOR_SCORING_VERSION,
+    fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
+  }
+}
+
+/** The generation identity: every field that changes the cached vectors. */
+function vectorCacheDigestOf(identity: VectorCacheIdentity): string {
+  return JSON.stringify([
+    identity.physicalKey,
+    identity.revision,
+    identity.dimension,
+    identity.pooling,
+    identity.normalize,
+    identity.queryPrefix,
+    identity.documentPrefix,
+    identity.scoringVersion,
+    Object.entries(identity.fileDigests),
+  ])
 }
 
 interface EnrichmentCoreLink {
@@ -288,20 +329,12 @@ export class EnrichmentService extends TypertRemoteService {
       const loaderScope = loader.scope(target)
       // The vector cache is bound to the physical model identity: a different
       // revision or inference contract must not reuse another tier's vectors.
-      const digest = JSON.stringify([
-        spec.physicalKey,
-        spec.revision,
-        spec.dimension,
-        spec.pooling,
-        spec.normalize,
-        spec.queryPrefix,
-        spec.documentPrefix,
-        spec.files.map((file) => [file.path, file.sha256]),
-      ])
+      const identity = vectorCacheIdentityOf(spec)
+      const digest = vectorCacheDigestOf(identity)
       return {
         tier: spec.key,
         target,
-        generation: this.acquireCacheGeneration(digest, spec),
+        generation: this.acquireCacheGeneration(digest, identity),
         loaderScope,
       }
     }
@@ -417,23 +450,12 @@ export class EnrichmentService extends TypertRemoteService {
    * The generation a new admission runs against, created on an identity change.
    * The previous one is retired, not disposed: its admitted scopes still read it.
    */
-  private acquireCacheGeneration(digest: string, spec: SemanticModelEntry): CacheGeneration {
+  private acquireCacheGeneration(digest: string, identity: VectorCacheIdentity): CacheGeneration {
     if (this.vectorCache === undefined || this.vectorCache.digest !== digest) {
       const previous = this.vectorCache
       this.vectorCache = {
         digest,
-        cache: createVectorCache({
-          key: spec.key,
-          physicalKey: spec.physicalKey,
-          revision: spec.revision,
-          dimension: spec.dimension,
-          pooling: spec.pooling,
-          normalize: spec.normalize,
-          queryPrefix: spec.queryPrefix,
-          documentPrefix: spec.documentPrefix,
-          scoringVersion: 'fixed-floor-margin-v1',
-          fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
-        }),
+        cache: createVectorCache(identity),
         scopes: 0,
         retiring: false,
       }
@@ -564,13 +586,15 @@ export class EnrichmentService extends TypertRemoteService {
       // and the vectors it validated, and let the next admission re-open from
       // disk (where it now fails closed).
       if (result.success) {
-        this.loader?.retire(
-          semanticTargetOf(
-            { semanticModel: model, semanticModelDir: modelDir },
-            (physicalKey, configuredDir) => resolveSemanticModelDir(physicalKey, configuredDir),
-          ),
+        const target = semanticTargetOf(
+          { semanticModel: model, semanticModelDir: modelDir },
+          (physicalKey, configuredDir) => resolveSemanticModelDir(physicalKey, configuredDir),
         )
-        this.retireActiveCache()
+        this.loader?.retire(target)
+        // Only the deleted tier's vectors are invalidated: deleting an unused
+        // tier must not flush the warm cache of the configured model.
+        const deletedDigest = vectorCacheDigestOf(vectorCacheIdentityOf(target.spec))
+        if (this.vectorCache?.digest === deletedDigest) this.retireActiveCache()
       }
       return result
     })

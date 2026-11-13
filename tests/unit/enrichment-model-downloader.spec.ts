@@ -8,7 +8,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { lstat, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -196,6 +196,89 @@ describe('ModelDownloadManager', () => {
     expect((await manager.start({ model: 'balanced', modelDir: root })).status).toBe('started')
     await awaitReady(manager, root)
     expect(fetches).toBeGreaterThan(1)
+  }, 20_000)
+
+  it('settles the reservation when admission fails before the writer', async () => {
+    const root = await tempRoot()
+    let failLstat = true
+    const manager = new ModelDownloadManager({
+      client: {
+        fetch: scriptedFetch(),
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+      lstat: async (path) => {
+        if (failLstat) throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        return await lstat(path)
+      },
+    })
+    await expect(manager.start({ model: 'balanced', modelDir: root })).rejects.toThrow(
+      /permission denied/,
+    )
+    // The reservation settled even though the writer never started: status is
+    // not stuck downloading and both cancel and dispose finish.
+    const failed = await manager.status('balanced', root)
+    expect(failed.downloading).toBe(false)
+    expect(failed.error).toMatch(/permission denied/)
+    await expect(manager.cancel('balanced', root)).resolves.toBe(true)
+    await expect(manager.dispose()).resolves.toBeUndefined()
+
+    // A new manager over the same directory admits the retry once the
+    // directory is readable again.
+    failLstat = false
+    const retried = managerOf()
+    expect((await retried.start({ model: 'balanced', modelDir: root })).status).toBe('started')
+    await awaitReady(retried, root)
+    await retried.dispose()
+  }, 15_000)
+
+  it('reports a cleanup warning on a committed install and clears it on the next start', async () => {
+    const root = await tempRoot()
+    // A real install makes the disk ready; the fake installer then commits a
+    // replacement whose staging cleanup failed.
+    const seed = managerOf()
+    await seed.start({ model: 'balanced', modelDir: root })
+    await awaitReady(seed, root)
+    await seed.dispose()
+
+    let cleanup: Error | undefined = new Error('rm failed')
+    const manager = new ModelDownloadManager({
+      client: {
+        fetch: scriptedFetch(),
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+      install: async (options) => ({
+        status: 'installed',
+        dir: options.dir,
+        ...(cleanup === undefined ? {} : { cleanupError: cleanup }),
+      }),
+    })
+    await manager.start({ model: 'balanced', modelDir: root, force: true })
+    await vi.waitFor(
+      async () => {
+        const status = await manager.status('balanced', root)
+        if (status.warning === undefined) throw new Error('no cleanup warning yet')
+        return status
+      },
+      { timeout: 5_000, interval: 20 },
+    )
+    const warned = await manager.status('balanced', root)
+    expect(warned.ready).toBe(true)
+    expect(warned.warning).toMatch(/rm failed/)
+
+    // The next start replaces the reservation; a clean install clears it.
+    cleanup = undefined
+    await manager.start({ model: 'balanced', modelDir: root, force: true })
+    await vi.waitFor(
+      async () => {
+        const status = await manager.status('balanced', root)
+        if (status.warning !== undefined) throw new Error('warning is still reported')
+        return status
+      },
+      { timeout: 5_000, interval: 20 },
+    )
+    await manager.dispose()
   }, 20_000)
 
   it('refuses a download while a deletion owns the target', async () => {

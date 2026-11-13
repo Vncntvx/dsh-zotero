@@ -20,6 +20,7 @@ import {
   metaOf,
   resultFirstTextOf,
   resultTextOf,
+  rowStateOf,
   textArg,
 } from '../../sources/presenters.js'
 import { RunningNotice, ZoteroToolRow } from './ZoteroToolRow.tsx'
@@ -88,11 +89,12 @@ export function ExportToolView(props: ExportToolViewProps) {
       summary: sum,
       errorSummary: errSummary,
       items: exportView?.items ?? [],
-      // A job arm's text is only an acknowledgement, never an export
-      // artifact. The completed body is the first text block: the render keeps
-      // the mapping and the notes in a second block so neither can reach the
-      // copy/download surface.
-      rawText: job === null ? (resultFirstTextOf(block) ?? '') : '',
+      // A job arm's text is only an acknowledgement, and a failed call's text
+      // is the error the row already shows; neither is an export artifact. The
+      // completed body is the first text block: the render keeps the mapping
+      // and the notes in a second block so neither can reach the copy/download
+      // surface.
+      rawText: job === null && rowStateOf(block) === 'ok' ? (resultFirstTextOf(block) ?? '') : '',
       job,
       detailOmitted: exportView?.detailOmitted === true,
     }
