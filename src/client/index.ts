@@ -923,7 +923,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeTabTitle()
       disposeTabBody()
       refreshBindings.clear()
-      disposeTabDef?.()
+      disposeTabDef()
     }
   }
 

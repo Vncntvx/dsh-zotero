@@ -741,8 +741,6 @@
   gap: 4px;
 }
 
-/* The shared tool button, shrunk from the toolbar's 28px to the header line. */
-
 /* The shared error line, inset to the header's text edge. */
 .listLocateError {
   padding: 0 12px 6px;

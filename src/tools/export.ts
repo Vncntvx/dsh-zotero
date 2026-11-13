@@ -18,6 +18,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
+  ToolContextUnavailableError,
   defineTool,
   type InferArgs,
   type InferValue,
@@ -363,7 +364,7 @@ export function registerExportTool(
           const fs = ctx.get('fs')
           const workingDirectory = ctx.get('workingDirectory')
           if (exportArgs.outputFile !== undefined && (!session || !fs || !workingDirectory)) {
-            throw new Error(
+            throw new ToolContextUnavailableError(
               'Export file delivery requires filesystem, working directory and session',
             )
           }
@@ -372,7 +373,7 @@ export function registerExportTool(
             fs!.sandboxMode !== undefined &&
             !ctx.get('sandboxPolicy')
           )
-            throw new Error('Sandbox filesystem requires sandboxPolicy')
+            throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
           const cwd =
             exportArgs.outputFile !== undefined
               ? await workingDirectory!.ensure(exec.agent!, exec.signal)
@@ -390,7 +391,7 @@ export function registerExportTool(
               if (exportArgs.outputFile !== undefined) {
                 const policyService = ctx.get('sandboxPolicy')
                 if (fs!.sandboxMode !== undefined && !policyService)
-                  throw new Error('Sandbox filesystem requires sandboxPolicy')
+                  throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
                 const target = await fs!.resolve(exportArgs.outputFile.trim(), { cwd, signal })
                 signal.throwIfAborted()
                 const policy = policyService?.resolve({ session: session! })

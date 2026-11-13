@@ -9,7 +9,6 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ZOTERO_ERROR_CODES,
   ZOTERO_REMOTE_REASON,
-  ZOTERO_UNEXPECTED,
   ZoteroError,
   ZoteroWriteCommitUnknownError,
   domainCall,
@@ -47,12 +46,13 @@ describe('domainCall wire reasons', () => {
     expect(failure.details).toEqual({ code: 'ZOTERO_WRITE_CONFLICT' })
   })
 
-  it('classifies an unknown commit code as unexpected instead of inventing a reason', async () => {
-    const failure = await remoteFailureOf(async () => {
-      throw new ZoteroWriteCommitUnknownError('commit state unknown', 'TOOL_ABORTED')
-    })
-    expect(failure.code).toBe(ZOTERO_REMOTE_REASON[ZOTERO_UNEXPECTED])
-    expect(failure.details).toEqual({ code: ZOTERO_UNEXPECTED })
+  it('preserves a non-domain commit identity instead of relabeling it', async () => {
+    const original = new ZoteroWriteCommitUnknownError('commit state unknown', 'TOOL_ABORTED')
+    const failure = await domainCall(async () => {
+      throw original
+    }).catch((error: unknown) => error)
+    expect(failure).toBe(original)
+    expect((failure as Error & { code: string }).code).toBe('TOOL_ABORTED')
   })
 
   it('lets a non-domain failure through unchanged', async () => {

@@ -593,22 +593,27 @@ export const ZOTERO_REMOTE_REASON: Record<
 
 const ZOTERO_CODE_SET: ReadonlySet<string> = new Set(ZOTERO_ERROR_CODES)
 
-/** Narrow an arbitrary error code to the domain vocabulary, or `unexpected`. */
-function zoteroCodeOf(code: string): ZoteroErrorCode {
-  return ZOTERO_CODE_SET.has(code) ? (code as ZoteroErrorCode) : ZOTERO_UNEXPECTED
-}
-
 /**
  * Preserve a domain failure as its own wire reason across the gateway's typed
  * error carrier. A caller that resolves the service inside `call` also has its
  * provider-unavailable failure classified instead of escaping raw.
+ *
+ * This is a deliberate boundary conversion rather than the Remote cookbook's
+ * "throw RemoteError at the failure point": the same pipelines serve model
+ * tools and the wire, so one conversion here keeps the two vocabularies from
+ * drifting. A harness identity the domain vocabulary does not own (for
+ * example `TOOL_ABORTED` carried by a commit-unknown) is rethrown unchanged
+ * instead of being relabeled `ZOTERO_UNEXPECTED`.
  */
 export async function domainCall<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call()
   } catch (error) {
-    if (error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError) {
-      const code = zoteroCodeOf(error.code)
+    if (
+      (error instanceof ZoteroError || error instanceof ZoteroWriteCommitUnknownError) &&
+      ZOTERO_CODE_SET.has(error.code)
+    ) {
+      const code = error.code as ZoteroErrorCode
       throw new RemoteError(ZOTERO_REMOTE_REASON[code], error.message, { code }, { cause: error })
     }
     throw error

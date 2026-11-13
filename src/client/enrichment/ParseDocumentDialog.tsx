@@ -161,7 +161,7 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
           )}
           <dl className={css.facts}>
             <dt>{t('parseTarget')}</dt>
-            <dd data-parse-target-label>{state.targetLabel}</dd>
+            <dd data-parse-target-label>{state.targetLabel || '—'}</dd>
             <dt>{t('parseProvider')}</dt>
             <dd>{t('parseProviderValue')}</dd>
             <dt>{t('parseMode')}</dt>

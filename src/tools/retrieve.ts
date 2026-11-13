@@ -71,6 +71,7 @@ const RETRIEVE_PARAMETERS = {
   attachmentPolicy: {
     type: 'string',
     enum: ['best', 'allIndexed', 'specified'],
+    default: 'best',
     description: 'Full-text source: best (default), allIndexed PDFs, or specified attachmentRefs.',
   },
   attachmentRefs: {

@@ -164,11 +164,14 @@ describe('ZoteroJobRunner', () => {
         run: async () => 'done',
       })
 
-      // The registry keeps the creating invocation for its durable lifecycle
-      // records; the ordered output proves the sub-call produced its own job.
-      expect(jobs.registry.get(id, ownerOf(true)).label).toBe('ptc export')
       await jobs.settled(id, OWNER)
-      expect(jobs.registry.get(id, ownerOf(true)).status).toBe('completed')
+      // The registry's own durable lifecycle record carries the paired identity:
+      // a PTC sub-call must not look like a root call in the session log.
+      const registered = jobs.eventsOf(OWNER).find((event) => event.type === 'job/registered')
+      expect(registered?.data['toolCall']).toEqual({
+        callId: 'call-1:ptc:0',
+        rootCallId: 'call-1',
+      })
     })
 
     it('settles as failed when run throws an error', async () => {

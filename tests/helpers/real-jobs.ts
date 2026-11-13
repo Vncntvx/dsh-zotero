@@ -23,6 +23,12 @@ import type { JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
+/** One lifecycle event the registry appended to a stub owner's session. */
+export interface SessionEventRecord {
+  readonly type: string
+  readonly data: Record<string, unknown>
+}
+
 /** One composed registry plus the seams a spec reaches through. */
 export interface RealJobs {
   readonly ctx: Context
@@ -32,6 +38,8 @@ export interface RealJobs {
   readonly fiber?: Fiber
   /** The live agent the given owner session resolves to, created on first use. */
   agentOf(sessionId: string): Agent
+  /** The lifecycle events the registry appended to one owner's session. */
+  eventsOf(sessionId: string): readonly SessionEventRecord[]
   /** Wait for one job to settle, through the registry's own contract. */
   settled(id: JobId, sessionId?: string): Promise<JobView>
   dispose(): Promise<void>
@@ -63,6 +71,7 @@ export async function composeRealJobs(ctx: Context): Promise<RealJobs> {
     registry: ctx.jobs,
     ...(fiber === undefined ? {} : { fiber }),
     agentOf: (sessionId) => agents.get(SessionId(sessionId))!,
+    eventsOf: (sessionId) => agents.eventsOf(SessionId(sessionId)),
     settled: async (id, sessionId) =>
       await ctx.jobs.wait(id, 5_000, sessionId === undefined ? undefined : SessionId(sessionId)),
     // Teardown awaits every job's settlement, so a producer that never finishes
@@ -86,6 +95,7 @@ export async function composeRealJobs(ctx: Context): Promise<RealJobs> {
  */
 class StubAgents extends Service {
   private readonly byId = new Map<SessionId, Agent>()
+  private readonly events = new Map<SessionId, SessionEventRecord[]>()
 
   constructor(private readonly host: Context) {
     super(host, 'agents')
@@ -97,9 +107,23 @@ class StubAgents extends Service {
     // One fiber per agent: the registry records its owner cleanup as an effect
     // of that scope and disposes the agent's jobs with it.
     const fiber = this.host.plugin(() => {})
-    const agent = { id, session: { id }, ctx: fiber.ctx } as unknown as Agent
+    // The registry appends `job/registered` and `job/settled` to this session;
+    // a real Session does the same, so the stub records them for assertions.
+    const session = {
+      id,
+      append: (type: string, data: Record<string, unknown>) => {
+        const list = this.events.get(id) ?? []
+        list.push({ type, data })
+        this.events.set(id, list)
+      },
+    }
+    const agent = { id, session, ctx: fiber.ctx } as unknown as Agent
     this.byId.set(id, agent)
     return agent
+  }
+
+  eventsOf(id: SessionId): readonly SessionEventRecord[] {
+    return this.events.get(id) ?? []
   }
 
   list(): Agent[] {

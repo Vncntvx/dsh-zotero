@@ -412,12 +412,12 @@ export function upstreamSourceImportsOf(source) {
  */
 const PRIMITIVE_MODULES = ['@deepseek-ai/dsh-client-ui-primitives']
 const WHOLESALE_PRIMITIVE_MOCK = new RegExp(
-  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s*)?\((?!\s*(?:importOriginal|importAct))`,
+  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s+)?(?:function\s*)?\((?!\s*(?:importOriginal|importAct))`,
   'g',
 )
 // A factory that takes no argument at all (`async () => ...`) is wholesale too.
 const NO_ARG_PRIMITIVE_MOCK = new RegExp(
-  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s*)?\(\s*\)`,
+  String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s+)?(?:function\s*)?\(\s*\)`,
   'g',
 )
 
@@ -491,8 +491,14 @@ function checkUpstreamSourceImports() {
  * and browser calls. The scholarly specs must stub the seam, never the global,
  * or they assert the mechanism of the bug they exist to catch.
  */
-function checkFetchOwnership() {
-  const sourceFile = /\.(?:ts|tsx|mts|cts)$/
+/**
+ * The fetch-ownership violations in one source file, as formatted findings.
+ * Exported so the guard's own spec exercises the rule instead of trusting it.
+ * @param rel - the repo-relative path.
+ * @param source - the file's content.
+ * @returns one formatted violation per offending line.
+ */
+export function fetchOwnershipIssuesOf(rel, source) {
   const undiciOwner = 'src/transport/connections.ts'
   // The runtime fetch is legitimate only where no dispatcher rides along.
   const runtimeFetchAllowed = new Set([
@@ -503,14 +509,13 @@ function checkFetchOwnership() {
   const undiciImport = /from\s+'undici'|import\(\s*'undici'\s*\)/
   const runtimeFetchUse = /globalThis\.fetch|(?<![\w.])fetch\s*\(/
   const commentLine = /^\s*(?:\*|\/\/|\/\*)/
-  for (const path of filesUnder(join(root, 'src'))) {
-    if (!sourceFile.test(path)) continue
-    const rel = relative(root, path)
-    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+  const issues = []
+  for (const [index, line] of source.split('\n').entries()) {
+    const lineNo = index + 1
+    if (rel.startsWith('src/')) {
       if (commentLine.test(line)) continue
-      const lineNo = index + 1
       if (undiciImport.test(line) && rel !== undiciOwner) {
-        failures.push(
+        issues.push(
           [
             `${rel}:${lineNo} imports undici`,
             `  fix: import publicFetch from ${undiciOwner}; a second undici copy rejects the pinned dispatchers`,
@@ -520,28 +525,33 @@ function checkFetchOwnership() {
       if (rel === undiciOwner || rel.startsWith('src/client/')) continue
       if (runtimeFetchAllowed.has(rel)) continue
       if (runtimeFetchUse.test(line)) {
-        failures.push(
+        issues.push(
           [
             `${rel}:${lineNo} uses the runtime fetch`,
             `  fix: external transports inject publicFetch from ${undiciOwner}; the global fetch ships another undici copy`,
           ].join('\n'),
         )
       }
-    }
-  }
-  for (const path of filesUnder(join(root, 'tests', 'scholarly'))) {
-    if (!sourceFile.test(path)) continue
-    const rel = relative(root, path)
-    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+    } else if (rel.startsWith('tests/scholarly/')) {
       if (/vi\.stubGlobal\(\s*'fetch'|globalThis\.fetch\s*=/.test(line)) {
-        failures.push(
+        issues.push(
           [
-            `${rel}:${index + 1} stubs the runtime fetch`,
+            `${rel}:${lineNo} stubs the runtime fetch`,
             `  fix: mock ${undiciOwner}'s publicFetch export instead; the composition never uses the global`,
           ].join('\n'),
         )
       }
     }
+  }
+  return issues
+}
+
+function checkFetchOwnership() {
+  const sourceFile = /\.(?:ts|tsx|mts|cts)$/
+  const roots = [join(root, 'src'), join(root, 'tests', 'scholarly')]
+  for (const path of roots.flatMap((dir) => filesUnder(dir))) {
+    if (!sourceFile.test(path)) continue
+    failures.push(...fetchOwnershipIssuesOf(relative(root, path), readFileSync(path, 'utf8')))
   }
 }
 

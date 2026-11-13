@@ -23,6 +23,7 @@ const PARAMETERS = {
   fields: {
     type: 'string',
     enum: ['standard', 'all'],
+    default: 'standard',
     description: 'Metadata projection; all preserves unconsumed Zotero data fields.',
   },
   include: {

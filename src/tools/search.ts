@@ -130,6 +130,7 @@ const SEARCH_PARAMETERS = {
   tagMatch: {
     type: 'string',
     enum: ['all', 'any'],
+    default: 'all',
     description: 'Tag combination: all=AND (default), any=OR.',
   },
   excludeTags: {

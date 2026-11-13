@@ -93,7 +93,7 @@ export default defineConfig({
         // WP9 model surface having no behaviour specs; that was a gap, not a
         // ceiling. The document-parse surface now carries its own specs
         // (parse-controller guards, dialog receipts, surface degradation,
-        // region matrix), so the branches floor returns to 94.7. Measured
+        // parse-surface states), so the branches floor returns to 94.7. Measured
         // after the restore: 97.03 / 94.79 / 96.58 / 98.21.
         'src/client/**': { statements: 96.7, branches: 94.7, functions: 96.4, lines: 97 },
         'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },

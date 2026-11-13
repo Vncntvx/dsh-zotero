@@ -18,13 +18,16 @@ import { beforeEach, vi } from 'vitest'
  * jsdom has no clipboard at all. The real `writeClipboard` primitive prefers
  * `navigator.clipboard.writeText` and only falls back to `execCommand` (which
  * jsdom also omits), so the platform seam is what a spec stubs — not the
- * primitive.
+ * primitive. Only the jsdom lane has `window`; Node lane specs keep the bare
+ * runtime, which has a global `navigator` but no clipboard.
  */
 export const clipboardWrites = vi.fn(async (_text: string): Promise<void> => {})
-Object.defineProperty(navigator, 'clipboard', {
-  configurable: true,
-  value: { writeText: (text: string) => clipboardWrites(text) },
-})
+if (typeof window !== 'undefined') {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: (text: string) => clipboardWrites(text) },
+  })
+}
 
 beforeEach(() => {
   clipboardWrites.mockClear()

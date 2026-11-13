@@ -10,6 +10,7 @@ import { setupHostLane, expectValue, type HostLane } from '../helpers/lanes/host
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.ts'
+import { batchJobIdOf as jobIdOf } from '../helpers/job-results.ts'
 import { resultStorage } from '../helpers/result-storage.ts'
 import { deferred } from '../helpers/sync.ts'
 
@@ -69,15 +70,6 @@ function prepare(
       agent: { session } as never,
     })
   return { append, policy, saveText, session, invoke }
-}
-
-/** The job id one background (or promoted) call answered with. */
-function jobIdOf(batch: { readonly results: ReadonlyArray<{ readonly result: unknown }> }): string {
-  const outcome = batch.results[0]?.result as
-    { readonly isError?: boolean; readonly value?: { readonly jobId?: string } } | undefined
-  const jobId = outcome?.isError === false ? outcome.value?.jobId : undefined
-  if (jobId === undefined) throw new Error('the call did not start a job')
-  return jobId
 }
 
 /** The owner session every lane call carries. */

@@ -74,3 +74,16 @@ export declare function helperSizeViolations(
 export declare function upstreamSourceImportsOf(
   source: string,
 ): Array<{ readonly line: number; readonly specifier: string }>
+
+/** One wholesale client-primitives mock, with its 1-based line and module. */
+export declare function wholesalePrimitiveMocksOf(
+  source: string,
+): Array<{ readonly line: number; readonly module: string }>
+
+/**
+ * The fetch-ownership violations in one source file, as formatted findings.
+ * @param rel - the repo-relative path.
+ * @param source - the file's content.
+ * @returns one formatted violation per offending line.
+ */
+export declare function fetchOwnershipIssuesOf(rel: string, source: string): string[]

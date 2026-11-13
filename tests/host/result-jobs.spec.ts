@@ -9,15 +9,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
 import { resultStorage } from '../helpers/result-storage.ts'
 import { composeRealJobs } from '../helpers/real-jobs.ts'
-/** The job id a background tool answered with. */
-function jobIdOf(result: Awaited<ReturnType<HostLane['runTool']>>): string {
-  if (result.isError) throw new Error('the tool refused the background call')
-  const value = result.value as { readonly kind?: string; readonly jobId?: string }
-  if (value.kind !== 'background' || value.jobId === undefined) {
-    throw new Error('the tool did not start a background job')
-  }
-  return value.jobId
-}
+import { backgroundJobIdOf as jobIdOf } from '../helpers/job-results.ts'
 
 let lane: HostLane | undefined
 afterEach(async () => {

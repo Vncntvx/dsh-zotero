@@ -12,6 +12,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type { ResolvedConfig } from './config.js'
 import { RESULT_RECEIPT_PREFIX } from './constants.js'
+import { ZOTERO_OUTPUT_TOO_LARGE, ZoteroError } from './errors.js'
 import { asRecord } from './json.js'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -323,7 +324,12 @@ export class ResultDelivery {
         receipt.facts.detailOmitted = true
       }
     }
-    if (!fits()) throw new Error('Result reference exceeds the configured inline budget.')
+    if (!fits()) {
+      throw new ZoteroError(
+        'Result reference exceeds the configured inline budget.',
+        ZOTERO_OUTPUT_TOO_LARGE,
+      )
+    }
     await table.put(key, receipt)
     if (jobId) await table.put(await resultReceiptKey('job', sessionId, jobId), receipt)
     return receipt

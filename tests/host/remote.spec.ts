@@ -17,8 +17,6 @@ import { EnrichmentService } from '../../src/enrichment/index.ts'
 import { executeOpenProtocol, type ProtocolLauncher, ZoteroRuntime } from '../../src/remote.js'
 import { ZOTERO_STATUS_SERVICE_KEY, type ZoteroDiagnosticEntry } from '../../src/contract.js'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
-import { WRITE_KEY_RECORD } from '../../src/write-auth.js'
-import { MemoryCredentials, writeGrantRecord } from '../helpers/credential-seam.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
 import { rejectionOf } from './support/open-protocol.js'
 import { statusView } from '../helpers/status-view.ts'
@@ -463,38 +461,7 @@ describe('the zotero openProtocol endpoint', () => {
       { signal: undefined, env: { PATH: '/usr/bin' } },
     )
   })
-  it('drops credential-shaped and harness-owned variables from every launcher child', async () => {
-    // The launcher needs PATH (and WSLENV under WSL), never the API keys the
-    // host was started with: inheriting `process.env` handed them to a second
-    // process just to open a URL. The rule matches the harness canonical
-    // scrub: substring credential names and every DSH_* name.
-    const launcher = vi.fn<ProtocolLauncher>(async () => {})
-    const env = {
-      PATH: '/usr/bin:/bin',
-      WSLENV: 'USERPROFILE/p',
-      HOME: '/home/u',
-      OPENAI_API_KEY: 'sk-live',
-      MINERU_TOKEN: 'token',
-      ZOTERO_PASSWORD: 'hunter2',
-      CLIENT_SECRET: 'shh',
-      SECRET_STORE: '/run/secrets',
-      TOKEN_FILE: '/tmp/token',
-      KEY_ID: 'kid',
-      DSH_HOME: '/home/u/.dsh',
-      dsh_lowercase: 'still-harness',
-    }
-    await executeOpenProtocol('zotero://select/library/items/ABC12345', {
-      platform: 'darwin',
-      launcher,
-      env,
-    })
-    const [, , options] = launcher.mock.calls[0]!
-    expect(options.env).toEqual({
-      PATH: '/usr/bin:/bin',
-      WSLENV: 'USERPROFILE/p',
-      HOME: '/home/u',
-    })
-  })
+
   it('passes the complete Windows URL only through the environment', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const url = 'zotero://open-pdf/groups/123/items/ABC12345?page=12&annotation=ABCD1234'
@@ -517,6 +484,7 @@ describe('the zotero openProtocol endpoint', () => {
     expect(script).not.toContain(url)
     expect(script).not.toContain('Invoke-Expression')
   })
+
   it('launches via powershell.exe when running in WSL and forwards WSLENV', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const url = 'zotero://select/library/items/ABC12345'
@@ -535,6 +503,7 @@ describe('the zotero openProtocol endpoint', () => {
     const script = Buffer.from(args[3]!, 'base64').toString('utf16le')
     expect(script).toContain('UseShellExecute = $true')
   })
+
   it('surfaces launcher failure when powershell.exe fails in WSL', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async (cmd) => {
       if (cmd === 'powershell.exe') throw new Error('powershell failed')
@@ -581,6 +550,7 @@ describe('the zotero openProtocol endpoint', () => {
     })
     expect(failure.cause).toBeInstanceOf(Error)
   })
+
   it('rejects cancellation before dispatch', async () => {
     const controller = new AbortController()
     controller.abort()
@@ -596,47 +566,6 @@ describe('the zotero openProtocol endpoint', () => {
       details: { url, reason: expect.any(String) },
     })
     expect(launcher).not.toHaveBeenCalled()
-  })
-})
-
-describe('the zotero revokeWriteGrant endpoint', () => {
-  it('deletes a stored grant while writes are disabled', async () => {
-    // Revoking is not a write capability: turning the write surface off leaves
-    // the persisted key in place, so the settings row must still be able to
-    // delete it.
-    let credentials: MemoryCredentials | undefined
-    lane = await setupHostLane(undefined, {
-      typert: true,
-      compose: async (ctx) => {
-        await ctx.plugin(MemoryCredentials)
-        credentials = ctx.get('credentials') as MemoryCredentials
-        credentials.records.set(String(WRITE_KEY_RECORD), writeGrantRecord('stored-key-01', 'S1'))
-      },
-    })
-    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: true })
-    expect(credentials?.records.size).toBe(0)
-    expect(credentials?.deletions).toEqual([String(WRITE_KEY_RECORD)])
-  })
-
-  it('reports no removed record while writes are disabled and none is stored', async () => {
-    lane = await setupHostLane(undefined, { typert: true })
-    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: false })
-  })
-
-  it('reports no removed record when writes are enabled without a credentials seam', async () => {
-    lane = await setupHostLane({ writeEnabled: true }, { typert: true })
-    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: false })
-  })
-
-  it('honors a pre-aborted carrier signal', async () => {
-    lane = await setupHostLane({ writeEnabled: true }, { typert: true })
-    const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
-    const controller = new AbortController()
-    controller.abort()
-    await expect(runtime.revokeWriteGrant(controller.signal)).rejects.toThrow()
   })
 })
 

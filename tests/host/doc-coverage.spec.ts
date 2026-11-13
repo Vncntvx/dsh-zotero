@@ -10,13 +10,21 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Config as CoreConfig } from '../../src/config.js'
+import {
+  ZOTERO_READ_TOOL_NAMES,
+  ZOTERO_TOOL_NAMES,
+  ZOTERO_WRITE_TOOL_NAMES,
+} from '../../src/constants.js'
 import { ZOTERO_ERROR_CODES } from '../../src/errors.js'
+import { ZOTERO_SOURCE_PROJECTION_FAILED } from '../../src/contract.js'
 import {
   ENRICHMENT_CREDENTIAL_REFERENCE_NAMES,
   SCHOLARLY_CREDENTIAL_REFERENCE_NAMES,
 } from '../../src/credential-names.js'
 import { LibraryConfigSchema } from '../../src/library/config.js'
 import { ScholarlyConfig } from '../../src/scholarly/config.js'
+import { CORE_SOPS } from '../../src/skills/core.js'
+import { SCHOLARLY_SOPS } from '../../src/skills/scholarly.js'
 import { EnrichmentConfigSchema } from '../../src/enrichment/config.js'
 
 const REPO_ROOT = new URL('../../', import.meta.url)
@@ -58,10 +66,9 @@ function defaultsOf(schema: unknown): Record<string, unknown> {
  * (`foregroundWaitMs` is 4000 in the core and 30000 in the scholarly schema),
  * so a whole-document scan would compare the wrong default.
  */
-function schemaOf(coreFieldsCount: number) {
+function schemaOf() {
   return (heading: string): Record<string, unknown> | undefined => {
     if (heading.includes('核心字段') || heading.includes('Core fields')) {
-      void coreFieldsCount
       return defaultsOf(CoreConfig)
     }
     if (heading.includes('`dsh-zotero/scholarly`')) return defaultsOf(ScholarlyConfig)
@@ -137,7 +144,7 @@ describe('configuration docs agree with the schemas', () => {
     // are compared as JSON so an enum default is checked too.
     for (const path of ['docs/configuration.md', 'docs/configuration.en.md']) {
       const text = docOf(path)
-      const schemaFor = schemaOf(coreFields.length)
+      const schemaFor = schemaOf()
       const violations: string[] = []
       let compared = 0
       for (const section of text.split(/^## /m)) {
@@ -222,18 +229,90 @@ describe('the documentation set stays complete', () => {
       if (zh !== en) violations.push(`${name}: ${zh} sections, ${english}: ${en}`)
     }
     expect(violations).toEqual([])
+    // The status tables state the pair count; derive it instead of trusting it.
+    expect(docOf('docs/development.md')).toContain(`${names.length} 对 zh/en 文档`)
+    expect(docOf('docs/development.en.md')).toContain(`${names.length} zh/en doc pairs`)
   })
 
-  it('documents every stable error code in the tool reference', () => {
+  it('documents every stable error code exactly once in the tool reference', () => {
     const codes: readonly string[] = ZOTERO_ERROR_CODES
     for (const path of ['docs/tools.md', 'docs/tools.en.md']) {
       const text = docOf(path)
       const start = Math.max(text.indexOf('## 错误码'), text.indexOf('## Error codes'))
       expect(start, `${path} has no error-code table`).toBeGreaterThanOrEqual(0)
-      const table = text.slice(start)
-      const missing = codes.filter((code) => !table.includes(code))
-      expect(missing, `${path} is missing error codes`).toEqual([])
+      const documented: string[] = []
+      let inTable = false
+      for (const line of text.slice(start).split('\n')) {
+        const match = /^\|\s*`([A-Z0-9_]+)`/.exec(line)
+        if (match !== null) {
+          documented.push(match[1]!)
+          inTable = true
+          continue
+        }
+        if (inTable) break
+      }
+      expect(new Set(documented), `${path} error-code table drifted`).toEqual(new Set(codes))
+      expect(documented.length, `${path} repeats an error code`).toBe(new Set(documented).size)
     }
+  })
+
+  it('produces every documented error code somewhere in src', () => {
+    // A row the codebase never throws is dead vocabulary: the model can never
+    // see it, and a client branching on it waits forever.
+    const sources = readdirSync(new URL('src/', REPO_ROOT), { recursive: true })
+      .filter((name): name is string => typeof name === 'string' && /\.tsx?$/.test(name))
+      .filter((name) => name !== 'errors.ts' && name !== 'contract.ts')
+      .map((name) => readFileSync(new URL(`src/${name}`, REPO_ROOT), 'utf8'))
+      .join('\n')
+    // A code built through a template is still produced: the URL PDF arm
+    // composes its family as `ZOTERO_URL_PDF_${suffix}` from the transport
+    // failure, so the family prefix is the production evidence.
+    const templatedFamilies = ['ZOTERO_URL_PDF_'] as const
+    const missing = ZOTERO_ERROR_CODES.filter(
+      (code) =>
+        !new RegExp(`\\b${code}\\b`).test(sources) &&
+        !templatedFamilies.some((prefix) => code.startsWith(prefix) && sources.includes(prefix)),
+    )
+    expect(missing).toEqual([])
+  })
+
+  it('documents the literature-trail status code separately', () => {
+    for (const [path, heading] of [
+      ['docs/tools.md', '## 状态码'],
+      ['docs/tools.en.md', '## Status codes'],
+    ] as const) {
+      const text = docOf(path)
+      const start = text.indexOf(heading)
+      expect(start, `${path} has no status-code section`).toBeGreaterThanOrEqual(0)
+      expect(text.slice(start), `${path} is missing the projection status code`).toContain(
+        ZOTERO_SOURCE_PROJECTION_FAILED,
+      )
+    }
+  })
+
+  it('states the derived tool and SOP totals', () => {
+    expect(ZOTERO_TOOL_NAMES).toHaveLength(
+      ZOTERO_READ_TOOL_NAMES.length + ZOTERO_WRITE_TOOL_NAMES.length,
+    )
+    const zhTools = docOf('docs/tools.md')
+    expect(zhTools).toContain(`${ZOTERO_TOOL_NAMES.length} 个本地工具`)
+    expect(zhTools).toContain(`${ZOTERO_READ_TOOL_NAMES.length} 个读工具`)
+    expect(zhTools).toContain(`${ZOTERO_WRITE_TOOL_NAMES.length} 个写工具`)
+    const enTools = docOf('docs/tools.en.md')
+    expect(enTools).toContain(`${ZOTERO_TOOL_NAMES.length} local tools`)
+    expect(enTools).toContain(`${ZOTERO_READ_TOOL_NAMES.length} read tools`)
+    expect(enTools).toContain(`${ZOTERO_WRITE_TOOL_NAMES.length} write tools`)
+
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five']
+    expect(docOf('docs/product-model.md')).toContain(
+      `核心组件持有 ${CORE_SOPS.length} 个，学术检索组件持有 ${SCHOLARLY_SOPS.length} 个`,
+    )
+    expect(docOf('docs/product-model.en.md')).toContain(
+      `core component owning ${words[CORE_SOPS.length]}`,
+    )
+    expect(docOf('docs/product-model.en.md')).toContain(
+      `scholarly retrieval component owning ${words[SCHOLARLY_SOPS.length]}`,
+    )
   })
 })
 

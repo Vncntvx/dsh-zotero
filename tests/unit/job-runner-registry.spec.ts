@@ -1,16 +1,24 @@
 /** Registry ownership for a core-owned job runner, against the real registry. */
 
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
 import { ZoteroJobRunner } from '../../src/job-runner.js'
-import { mountRealJobs } from '../helpers/real-jobs.js'
+import { mountRealJobs, type RealJobs } from '../helpers/real-jobs.js'
+
+let mounted: RealJobs | undefined
+
+afterEach(async () => {
+  await mounted?.dispose()
+  mounted = undefined
+})
 
 it('follows a jobs registry that becomes available after construction', async () => {
   let registry: JobRegistry | undefined
   const runner = new ZoteroJobRunner(() => registry)
   expect(runner.isAvailable).toBe(false)
 
-  registry = (await mountRealJobs()).registry
+  mounted = await mountRealJobs()
+  registry = mounted.registry
   expect(runner.isAvailable).toBe(true)
   const { id } = runner.start({
     label: 'late registry job',

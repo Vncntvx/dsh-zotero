@@ -180,13 +180,13 @@ Generate formatted citations or export data files.
 
 ### Parameters
 
-| Parameter    | Type     | Default      | Description                                                                                                     |
-| ------------ | -------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | none         | Item ref list (required; one call is bounded by `maxExportRefs`, default 50)                                    |
-| `format`     | string   | none         | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
-| `style`      | string   | config value | CSL style identifier (citation and bibliography only)                                                           |
-| `locale`     | string   | `"en-US"`    | CSL locale (citation and bibliography only)                                                                     |
-| `outputFile` | string   | none         | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
+| Parameter    | Type     | Default                          | Description                                                                                                     |
+| ------------ | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `refs`       | string[] | none                             | Item ref list (required; one call is bounded by `maxExportRefs`, default 50)                                    |
+| `format`     | string   | none                             | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
+| `style`      | string   | config value                     | CSL style identifier (citation and bibliography only)                                                           |
+| `locale`     | string   | config value (default `"en-US"`) | CSL locale (citation and bibliography only; defaults to the configured `defaultLocale`)                         |
+| `outputFile` | string   | none                             | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
 
 `run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`).
 
@@ -635,6 +635,12 @@ The tool enters the model's tool set only while the local Zotero component is mo
 
 Save scholarly search results into the personal library through the local write approval flow. The output is a union of `declined`, `applied`, and `committed-unverified`. Only `applied` carries the successfully saved `papers`, with the created items' ref, key, version, tags, collections, and library version; unverified results keep their original identity and reason and must not be retried. The card and conversation replay tell the three outcomes apart from the persisted content and state metadata.
 
+#### Example
+
+```text
+scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You Need", doi="10.48550/arXiv.1706.03762")
+```
+
 ---
 
 ## zotero_update_item
@@ -812,6 +818,14 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 ---
 
+## Status codes
+
+These values are warnings in status views, not tool errors:
+
+| Status code                       | Meaning                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `ZOTERO_SOURCE_PROJECTION_FAILED` | The full literature-trail projection failed to register; the panel degrades and local reads remain available. |
+
 ## Scholarly literature retrieval component tools (`dsh-zotero/scholarly`)
 
 The bundle component `dsh-zotero/scholarly` ships with the package and is off by default. Enabling it under "Included components" in the plugin manager mounts it and provides the following 7 model tools:
@@ -824,18 +838,24 @@ Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Sch
 
 #### Parameters
 
-| Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                                      |
-| ------------------- | -------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                                         |
-| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by the topic phrase table                                                                                            |
-| `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                                           |
-| `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                                             |
-| `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                                    |
-| `sort`              | string   | `"relevance"` | Sort order: `relevance`, `date` (newest first; only the previous year when `year_from` is omitted), `citations` (most cited first)                                                                                                                               |
-| `categories`        | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                                                                                                                               |
-| `limit`             | integer  | `8`           | Paper cap                                                                                                                                                                                                                                                        |
-| `abstract`          | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                                                                                                                    |
-| `run_in_background` | boolean  | `false`       | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
+| Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                     |
+| ------------------- | -------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                        |
+| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by the topic phrase table                                                                           |
+| `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                          |
+| `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                            |
+| `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                   |
+| `sort`              | string   | `"relevance"` | Sort order: `relevance`, `date` (newest first; only the previous year when `year_from` is omitted), `citations` (most cited first)                                                                                                              |
+| `categories`        | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                                                                                                              |
+| `limit`             | integer  | `8`           | Paper cap                                                                                                                                                                                                                                       |
+| `abstract`          | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                                                                                                   |
+| `run_in_background` | boolean  | `false`       | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
+
+#### Example
+
+```text
+scholarly_search(query="transformer attention", limit=5)
+```
 
 ---
 
@@ -848,6 +868,12 @@ Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, P
 | Parameter | Type   | Default  | Description                                                                                           |
 | --------- | ------ | -------- | ----------------------------------------------------------------------------------------------------- |
 | `id`      | string | required | DOI (such as `10.1038/nature1234`), arXiv ID (such as `2301.07041`), PMID, PMCID, URL, or exact title |
+
+#### Example
+
+```text
+scholarly_get(id="10.1038/nature1234")
+```
 
 #### Failure semantics
 
@@ -867,6 +893,12 @@ Trace a paper's citation graph: the list of papers citing this work (citations),
 | `direction` | string  | required | Trace direction: `citations` (papers citing this paper), `references` (papers this paper cites), `related` (semantically related papers) |
 | `limit`     | integer | `10`     | Paper cap                                                                                                                                |
 
+#### Example
+
+```text
+scholarly_citations(id="2301.07041", direction="citations", limit=5)
+```
+
 ---
 
 ### scholarly_read
@@ -875,17 +907,23 @@ Tiered reading of lawful open-access full text with passage-level evidence locat
 
 #### Parameters
 
-| Parameter           | Type     | Default    | Description                                                                                                                                                                                                                                                      |
-| ------------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | string   | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                                 |
-| `outline`           | boolean  | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                                         |
-| `section`           | string   | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                                       |
-| `query`             | string   | none       | Natural-language question; passages are ranked over the full text with the same strategy and the same chunk boundaries as `zotero_retrieve`                                                                                                                      |
-| `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused. Each is ranked separately and a passage keeps its best score                                                                                                     |
-| `passages`          | integer  | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                                           |
-| `start`             | integer  | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                                    |
-| `max_chars`         | integer  | config cap | Maximum characters read per call                                                                                                                                                                                                                                 |
-| `run_in_background` | boolean  | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
+| Parameter           | Type     | Default    | Description                                                                                                                                                                                                                                     |
+| ------------------- | -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string   | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                |
+| `outline`           | boolean  | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                        |
+| `section`           | string   | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                      |
+| `query`             | string   | none       | Natural-language question; passages are ranked over the full text with the same strategy and the same chunk boundaries as `zotero_retrieve`                                                                                                     |
+| `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused. Each is ranked separately and a passage keeps its best score                                                                                    |
+| `passages`          | integer  | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                          |
+| `start`             | integer  | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                   |
+| `max_chars`         | integer  | config cap | Maximum characters read per call                                                                                                                                                                                                                |
+| `run_in_background` | boolean  | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
+
+#### Example
+
+```text
+scholarly_read(id="2301.07041", query="attention mechanism")
+```
 
 #### Network boundary
 
@@ -906,6 +944,12 @@ Fetch standard citation formats directly from the official DOI registration agen
 | `style`   | string   | `"apa"`  | CSL style ID when `format="text"` (such as `apa`, `ieee`, `nature`, `china-national-standard-gb-t-7714-2015-numeric`) |
 | `locale`  | string   | none     | Language code (such as `zh-CN`, `en-US`)                                                                              |
 
+#### Example
+
+```text
+scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
+```
+
 ---
 
 ### scholarly_verify
@@ -914,11 +958,17 @@ Reference truthfulness and accuracy verification. Parses the authors, year, titl
 
 #### Parameters
 
-| Parameter           | Type     | Default  | Description                                                                                                                                                                                                                                                      |
-| ------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references`        | string[] | required | Reference text list to verify (at most 40 papers per call; going over is an error, with no silent truncation)                                                                                                                                                    |
-| `run_in_background` | boolean  | `false`  | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; the parameter is always declared, and passing `true` while `enableRunInBackground=false` or with no `jobs` service mounted returns a structured refusal) |
+| Parameter           | Type     | Default  | Description                                                                                                                                                                                                                                     |
+| ------------------- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `references`        | string[] | required | Reference text list to verify (at most 40 papers per call; going over is an error, with no silent truncation)                                                                                                                                   |
+| `run_in_background` | boolean  | `false`  | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
 
 #### Verdicts
 
 Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). An unreachable registry is never reported as `NOT FOUND`.
+
+#### Example
+
+```text
+scholarly_verify(references=["Vaswani et al. 2017, Attention Is All You Need"])
+```

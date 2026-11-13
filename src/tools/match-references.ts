@@ -31,6 +31,7 @@ const PARAMETERS = {
   },
   includeFieldDiff: {
     type: 'boolean',
+    default: false,
     description: 'Include input/Zotero field differences where available.',
   },
 } as const

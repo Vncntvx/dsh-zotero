@@ -27,6 +27,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
+import { createVolatile } from '@deepseek-ai/cosmokit'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
   validateJsonSchemaValue,
@@ -35,9 +36,18 @@ import ToolRuntime, {
 } from '@deepseek-ai/dsh-tools'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
-import { ZOTERO_TOOL_NAMES } from '../../src/constants.js'
+import { ScholarlyService } from '../../src/scholarly/service.js'
+import { SCHOLARLY_TOOL_NAMES } from '../../src/scholarly/types.js'
+import { SCHOLARLY_SAVE_TOOL_NAME, ZOTERO_TOOL_NAMES } from '../../src/constants.js'
 import { isRefString } from '../../src/refs.js'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+
+/** Every model tool both components can register. */
+const ALL_TOOL_NAMES: readonly string[] = [
+  ...ZOTERO_TOOL_NAMES,
+  ...SCHOLARLY_TOOL_NAMES,
+  SCHOLARLY_SAVE_TOOL_NAME,
+]
 
 /**
  * The repo root, resolved from this spec's own location. Resolving from
@@ -152,7 +162,7 @@ function lineAt(text: string, offset: number): number {
 function examplesIn(file: string): DocExample[] {
   const found: DocExample[] = []
   const text = readFileSync(new URL(file, REPO_ROOT), 'utf8')
-  const pattern = /\b(zotero_[a-z_]+)\(/g
+  const pattern = /\b((?:zotero|scholarly)_[a-z_]+)\(/g
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     const body = callBody(text, match.index + match[0].length - 1)
     if (body === undefined) continue
@@ -179,24 +189,76 @@ function examplesIn(file: string): DocExample[] {
 }
 
 /** The parameters one tool's documentation table names, in table order. */
-function documentedParameters(file: string, call: string): string[] {
+function documentedRows(
+  file: string,
+  call: string,
+): Array<{ readonly name: string; readonly defaultCell?: string }> {
   const text = readFileSync(new URL(file, REPO_ROOT), 'utf8')
-  const heading = new RegExp(`^## ${call}$`, 'm').exec(text)
+  // Core tools use `##`, the scholarly chapter nests its tools under it.
+  const heading = new RegExp(`^#{2,3} ${call}$`, 'm').exec(text)
   if (heading === null) return []
+  const level = /^#+/.exec(heading[0])![0].length
   const rest = text.slice(heading.index + heading[0].length)
-  const nextSection = /^## /m.exec(rest)
+  // Cut at the next heading of the tool's own level or higher; its parameter
+  // table is a deeper heading.
+  const nextSection = new RegExp(`^#{1,${level}} `, 'm').exec(rest)
   const section = nextSection === null ? rest : rest.slice(0, nextSection.index)
-  const tableHeading = /^### (?:Parameters|参数)[^\n]*$/m.exec(section)
+  const tableHeading = /^#{3,4} (?:Parameters|参数)[^\n]*$/m.exec(section)
   if (tableHeading === null) return []
   const table = section.slice(tableHeading.index + tableHeading[0].length)
-  const end = /^#{2,3} /m.exec(table)
+  const end = /^#{2,4} /m.exec(table)
   const rows = (end === null ? table : table.slice(0, end.index)).split('\n')
-  const names: string[] = []
+  let nameIndex = 0
+  let defaultIndex: number | undefined
+  let header = false
+  const found: Array<{ name: string; defaultCell?: string }> = []
   for (const row of rows) {
-    const cell = /^\|\s*`([A-Za-z_][\w]*)`\s*\|/.exec(row)
-    if (cell !== null) names.push(cell[1]!)
+    if (!row.trimStart().startsWith('|')) {
+      if (header) break
+      continue
+    }
+    const cells = row
+      .replace(/\\\|/g, '\u0000')
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.replace(/\u0000/g, '|').trim())
+    if (!header) {
+      const parameterIndex = cells.findIndex((cell) => /^(Parameter|参数)$/.test(cell))
+      if (parameterIndex === -1) continue
+      nameIndex = parameterIndex
+      const foundDefault = cells.findIndex((cell) => /^(Default|默认值)$/.test(cell))
+      defaultIndex = foundDefault === -1 ? undefined : foundDefault
+      header = true
+      continue
+    }
+    if (cells.every((cell) => /^-+$/.test(cell))) continue
+    const name = /^`([A-Za-z_][\w]*)`$/.exec(cells[nameIndex] ?? '')
+    if (name === null) continue
+    found.push({
+      name: name[1]!,
+      ...(defaultIndex === undefined ? {} : { defaultCell: cells[defaultIndex] ?? '' }),
+    })
   }
-  return names
+  return found
+}
+
+/** A default cell that is prose rather than a value; not comparable. */
+const UNPARSED = Symbol('unparsed')
+
+/** One documented default cell as a JSON value, undefined for "none", or prose. */
+function docDefaultOf(cell: string | undefined): unknown {
+  if (cell === undefined) return UNPARSED
+  const value = cell.replace(/^`|`$/g, '').trim()
+  if (value === '' || value === '—' || value === '-' || value === 'none' || value === '无') {
+    return undefined
+  }
+  // Required markers and prose ("config cap") are not defaults.
+  if (/^(✓|required|必填|config cap|配置上限)$/.test(value)) return UNPARSED
+  try {
+    return JSON.parse(value)
+  } catch {
+    return UNPARSED
+  }
 }
 
 describe('documented tool calls match the tool schemas', () => {
@@ -217,6 +279,9 @@ describe('documented tool calls match the tool schemas', () => {
       // against the same schemas, so the flag has to be on here.
       writeEnabled: true,
     })
+    // The scholarly component documents seven more tools in the same chapter;
+    // mounting it keeps their examples and tables under the same gate.
+    new ScholarlyService(ctx, { email: createVolatile('doc-examples@example.edu') })
     for (const file of files) examples.push(...examplesIn(file))
   })
 
@@ -236,7 +301,7 @@ describe('documented tool calls match the tool schemas', () => {
   it('prints a parseable example for every registered tool', () => {
     // A tool with no example leaves the model to guess at argument names; the
     // docs are the only surface that shows a whole call.
-    const missing = ZOTERO_TOOL_NAMES.filter((name) => EXAMPLE_EXEMPT[name] === undefined)
+    const missing = ALL_TOOL_NAMES.filter((name) => EXAMPLE_EXEMPT[name] === undefined)
       .filter((name) => !examples.some((example) => example.call === name))
       .sort()
     expect(missing).toEqual([])
@@ -274,13 +339,18 @@ describe('documented tool calls match the tool schemas', () => {
   it('documents exactly the declared parameters in the tool reference', () => {
     const violations: string[] = []
     for (const file of ['docs/tools.md', 'docs/tools.en.md']) {
-      for (const name of ZOTERO_TOOL_NAMES) {
+      for (const name of ALL_TOOL_NAMES) {
         const tool = ctx.tools.get(name)
         if (tool === undefined) continue
-        const declared = Object.keys(
-          (tool.parameters as unknown as { properties?: Record<string, unknown> }).properties ?? {},
-        ).sort()
-        const documented = documentedParameters(file, name).sort()
+        const properties =
+          (
+            tool.parameters as unknown as {
+              properties?: Record<string, { type?: unknown; default?: unknown }>
+            }
+          ).properties ?? {}
+        const declared = Object.keys(properties).sort()
+        const rows = documentedRows(file, name)
+        const documented = rows.map((row) => row.name).sort()
         if (documented.length === 0) {
           violations.push(`${file} ${name}: no parameter table`)
           continue
@@ -295,6 +365,19 @@ describe('documented tool calls match the tool schemas', () => {
         }
         if (extra.length > 0) {
           violations.push(`${file} ${name}: table names undeclared ${extra.join(', ')}`)
+        }
+        // A default is part of the call the docs teach: a schema default that
+        // moves while the table keeps the old value is a silent behavior change.
+        for (const row of rows) {
+          const property = properties[row.name]
+          if (property === undefined) continue
+          const documentedDefault = docDefaultOf(row.defaultCell)
+          if (documentedDefault === UNPARSED) continue
+          if (JSON.stringify(documentedDefault) !== JSON.stringify(property.default)) {
+            violations.push(
+              `${file} ${name}.${row.name}: default is ${JSON.stringify(documentedDefault)}, schema says ${JSON.stringify(property.default)}`,
+            )
+          }
         }
         const prose = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
         if (

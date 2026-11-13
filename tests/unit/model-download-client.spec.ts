@@ -18,6 +18,7 @@ import {
   type FetchLike,
 } from '../../src/enrichment/model-download-client.ts'
 import { ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT } from '../../src/errors.ts'
+import { deferred } from '../helpers/sync.ts'
 import type { SemanticModelSpec } from '../../src/enrichment-model-catalog.ts'
 
 function specOf(overrides: Partial<SemanticModelSpec> = {}): SemanticModelSpec {
@@ -267,31 +268,27 @@ describe('downloadPinnedFile', () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-dl-'))
     const bytes = Buffer.from('model!')
     const controller = new AbortController()
-    const fetch: FetchLike = async (_url, init) =>
-      await new Promise((_resolve, reject) => {
+    const started = deferred<void>()
+    const fetch: FetchLike = async (_url, init) => {
+      started.resolve()
+      return await new Promise((_resolve, reject) => {
         const signal = (init as { signal?: AbortSignal }).signal
-        signal?.addEventListener(
-          'abort',
-          () => {
-            reject(signal.reason)
-            controller.abort(new Error('caller gave up'))
-          },
-          { once: true },
-        )
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
       })
-    void (async () => {
-      controller.abort(new Error('caller gave up'))
-    })()
-    await expect(
-      downloadPinnedFile({
-        model: specOf(),
-        file: pinned(bytes),
-        dir,
-        sources: ['hf-mirror'],
-        signal: controller.signal,
-        deps: { fetch, ...gateDeps },
-      }),
-    ).rejects.toThrow(/caller gave up/)
+    }
+    const pending = downloadPinnedFile({
+      model: specOf(),
+      file: pinned(bytes),
+      dir,
+      sources: ['hf-mirror'],
+      signal: controller.signal,
+      deps: { fetch, ...gateDeps },
+    })
+    // Abort only after the transfer has actually started: a pre-aborted signal
+    // would only exercise the precheck, not the in-flight listener.
+    await started.promise
+    controller.abort(new Error('caller gave up'))
+    await expect(pending).rejects.toThrow(/caller gave up/)
     await rm(dir, { recursive: true, force: true })
   }, 10_000)
 

@@ -86,19 +86,17 @@ export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
   }
 
   // The strip offers exactly the tabs that render a panel. A tab without a
-  // group (library, enrichment) lives in its own settings section, so showing
-  // it here would hide every panel on click.
+  // group (library, scholarly, enrichment) lives in its own settings section,
+  // so showing it here would hide every panel on click.
   const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
     useMemo(
       () =>
-        SETTINGS_TABS.filter((tab) => tab.id !== 'scholarly' && tab.groupKeys.length > 0).map(
-          (tab) => ({
-            value: tab.id,
-            label: t(tab.labelKey),
-            id: `zotero-tab-${tab.id}`,
-            panelId: `zotero-panel-${tab.id}`,
-          }),
-        ) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
+        SETTINGS_TABS.filter((tab) => tab.groupKeys.length > 0).map((tab) => ({
+          value: tab.id,
+          label: t(tab.labelKey),
+          id: `zotero-tab-${tab.id}`,
+          panelId: `zotero-panel-${tab.id}`,
+        })) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
       [t],
     )
   // A requested tab that renders no panel is clamped to the first one, so the

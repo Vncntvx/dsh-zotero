@@ -180,13 +180,13 @@ zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism"
 
 ### 参数
 
-| 参数         | 类型     | 默认值     | 说明                                                                                        |
-| ------------ | -------- | ---------- | ------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | —          | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
-| `format`     | string   | —          | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
-| `style`      | string   | 配置默认值 | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
-| `locale`     | string   | `"en-US"`  | CSL 语言环境（仅用于 citation 和 bibliography）                                             |
-| `outputFile` | string   | —          | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
+| 参数         | 类型     | 默认值                       | 说明                                                                                        |
+| ------------ | -------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `refs`       | string[] | —                            | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
+| `format`     | string   | —                            | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
+| `style`      | string   | 配置默认值                   | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
+| `locale`     | string   | 配置默认值（默认 `"en-US"`） | CSL 语言环境（仅用于 citation 和 bibliography；默认取配置 `defaultLocale`）                 |
+| `outputFile` | string   | —                            | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
 
 `run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。
 
@@ -635,6 +635,12 @@ zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 
 将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
+#### 示例
+
+```text
+scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You Need", doi="10.48550/arXiv.1706.03762")
+```
+
 ---
 
 ## zotero_update_item
@@ -812,6 +818,14 @@ zotero_batch_items(
 
 ---
 
+## 状态码
+
+以下值是状态视图里的告警，不是工具错误：
+
+| 状态码                            | 说明                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| `ZOTERO_SOURCE_PROJECTION_FAILED` | 全量文献轨迹投影注册失败；面板显示降级状态，本地读取仍可用。 |
+
 ## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
 
 bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管理器「包含的组件」中启用该组件即挂载它，并提供以下 7 个模型工具：
@@ -824,18 +838,24 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 参数
 
-| 参数                | 类型     | 默认值        | 说明                                                                                                                                                                              |
-| ------------------- | -------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                      |
-| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题短语表路由                                               |
-| `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                                                                        |
-| `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                      |
-| `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                              |
-| `sort`              | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                                                               |
-| `categories`        | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                                                                           |
-| `limit`             | integer  | `8`           | 返回论文数量上限                                                                                                                                                                  |
-| `abstract`          | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                                                                           |
-| `run_in_background` | boolean  | `false`       | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                | 类型     | 默认值        | 说明                                                                                                                                                                             |
+| ------------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                     |
+| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题短语表路由                                              |
+| `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                                                                       |
+| `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                     |
+| `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                             |
+| `sort`              | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                                                              |
+| `categories`        | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                                                                          |
+| `limit`             | integer  | `8`           | 返回论文数量上限                                                                                                                                                                 |
+| `abstract`          | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                                                                          |
+| `run_in_background` | boolean  | `false`       | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
+
+#### 示例
+
+```text
+scholarly_search(query="transformer attention", limit=5)
+```
 
 ---
 
@@ -848,6 +868,12 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 | 参数 | 类型   | 默认值   | 说明                                                                                     |
 | ---- | ------ | -------- | ---------------------------------------------------------------------------------------- |
 | `id` | string | — (必填) | DOI（如 `10.1038/nature1234`）、arXiv ID（如 `2301.07041`）、PMID、PMCID、URL 或精确标题 |
+
+#### 示例
+
+```text
+scholarly_get(id="10.1038/nature1234")
+```
 
 #### 失败语义
 
@@ -867,6 +893,12 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 | `direction` | string  | — (必填) | 追溯方向：`citations`（引用该论文的文献）、`references`（该论文引用的参考文献）、`related`（语义关联论文） |
 | `limit`     | integer | `10`     | 返回论文数量上限                                                                                           |
 
+#### 示例
+
+```text
+scholarly_citations(id="2301.07041", direction="citations", limit=5)
+```
+
 ---
 
 ### scholarly_read
@@ -875,17 +907,23 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 参数
 
-| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                              |
-| ------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | string   | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                            |
-| `outline`           | boolean  | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                          |
-| `section`           | string   | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                         |
-| `query`             | string   | —        | 自然语言问题，在全文段落中排序检索最相关的证据片段（与 `zotero_retrieve` 同一排序策略与同一切分边界）                                                                             |
-| `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错。逐措辞独立排序，段落取各措辞的最好成绩                                                                               |
-| `passages`          | integer  | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                          |
-| `start`             | integer  | `0`      | 分块阅读起始字符偏移量                                                                                                                                                            |
-| `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数                                                                                                                                                              |
-| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                             |
+| ------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string   | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                           |
+| `outline`           | boolean  | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                         |
+| `section`           | string   | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                        |
+| `query`             | string   | —        | 自然语言问题，在全文段落中排序检索最相关的证据片段（与 `zotero_retrieve` 同一排序策略与同一切分边界）                                                                            |
+| `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错。逐措辞独立排序，段落取各措辞的最好成绩                                                                              |
+| `passages`          | integer  | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                         |
+| `start`             | integer  | `0`      | 分块阅读起始字符偏移量                                                                                                                                                           |
+| `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数                                                                                                                                                             |
+| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
+
+#### 示例
+
+```text
+scholarly_read(id="2301.07041", query="attention mechanism")
+```
 
 #### 网络边界
 
@@ -906,6 +944,12 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 | `style`  | string   | `"apa"`  | 当 `format="text"` 时的 CSL 样式 ID（如 `apa`、`ieee`、`nature`、`china-national-standard-gb-t-7714-2015-numeric`） |
 | `locale` | string   | —        | 语言代码（如 `zh-CN`、`en-US`）                                                                                     |
 
+#### 示例
+
+```text
+scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
+```
+
 ---
 
 ### scholarly_verify
@@ -914,11 +958,17 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 #### 参数
 
-| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                              |
-| ------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出即报错，不会静默截断）                                                                                                              |
-| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；参数恒定声明，当 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时传 `true` 会得到结构化拒绝） |
+| 参数                | 类型     | 默认值   | 说明                                                                                                                                                                             |
+| ------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出即报错，不会静默截断）                                                                                                             |
+| `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
 
 #### 核验结论
 
 每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。
+
+#### 示例
+
+```text
+scholarly_verify(references=["Vaswani et al. 2017, Attention Is All You Need"])
+```

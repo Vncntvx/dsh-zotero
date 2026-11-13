@@ -17,10 +17,8 @@ import {
   type EnrichmentCredentialPort,
   type EnrichmentModelPort,
 } from '../../../src/client/enrichment-form-controller.ts'
-import {
-  EnrichmentEnableNoticeController,
-  type EnableNoticeAcknowledgement,
-} from '../../../src/client/enrichment/enable-notice.ts'
+import { EnrichmentEnableNoticeController } from '../../../src/client/enrichment/enable-notice.ts'
+import { acknowledgementOf } from './support/acknowledgement.ts'
 import { fakeScope } from '../helpers/fake-scope.ts'
 
 const controllers: EnrichmentFormController[] = []
@@ -68,18 +66,6 @@ function modelPort(): EnrichmentModelPort {
     }),
     verifySemanticModel: async () => ({ ok: true as const, value: { ...status, ready: true } }),
   }
-}
-
-/** The acknowledgement as a fresh client keeps it. */
-function acknowledgementOf(): EnableNoticeAcknowledgement & { acknowledged: boolean } {
-  const state = {
-    acknowledged: false,
-    read: () => state.acknowledged,
-    remember: () => {
-      state.acknowledged = true
-    },
-  }
-  return state
 }
 
 describe('the end-to-end enable disclosure', () => {

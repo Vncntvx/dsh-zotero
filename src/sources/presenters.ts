@@ -57,16 +57,6 @@ export function rowStateOf(block: ToolBlockLike): ZoteroRowState {
 }
 
 /**
- * Flatten settled content blocks to display text. The harness's `resultText`
- * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`) is not
- * exported from its package's `./client` entry, so a mirror is the only option;
- * the semantics are copied exactly: text blocks verbatim, other block shapes as
- * pretty JSON, empty content on a failed call falling back to the structured
- * error's `name: code` line, otherwise the empty string. Running blocks return
- * null (the harness helper only accepts settled nodes); callers normalize with
- * `?? ''`. Re-check it on every pin upgrade (`docs/development.md`).
- */
-/**
  * The first text block of a settled result: the artifact bytes a card copies
  * or downloads, kept apart from any block the render appends after it.
  * Running blocks return null.
@@ -79,6 +69,16 @@ export function resultFirstTextOf(block: ToolBlockLike): string | null {
   return ''
 }
 
+/**
+ * Flatten settled content blocks to display text. The harness's `resultText`
+ * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`) is not
+ * exported from its package's `./client` entry, so a mirror is the only option;
+ * the semantics are copied exactly: text blocks verbatim, other block shapes as
+ * pretty JSON, empty content on a failed call falling back to the structured
+ * error's `name: code` line, otherwise the empty string. Running blocks return
+ * null (the harness helper only accepts settled nodes); callers normalize with
+ * `?? ''`. Re-check it on every pin upgrade (`docs/development.md`).
+ */
 export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null
   const parts: string[] = []

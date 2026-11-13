@@ -12,6 +12,9 @@
 export const COMPOSITION_DEPENDENT_PARAMETERS: Readonly<Record<string, readonly string[]>> = {
   zotero_export: ['run_in_background'],
   zotero_changes: ['run_in_background'],
+  scholarly_search: ['run_in_background'],
+  scholarly_read: ['run_in_background'],
+  scholarly_verify: ['run_in_background'],
 }
 
 /** The sentence the tool reference uses instead of a table row. */

@@ -63,6 +63,7 @@ const BROWSE_PARAMETERS = {
   itemLevel: {
     type: 'string',
     enum: ['top', 'all'],
+    default: 'top',
     description: 'Tags only: top-level (default) or all items including children.',
   },
   itemQuery: {
@@ -72,6 +73,7 @@ const BROWSE_PARAMETERS = {
   itemQueryMode: {
     type: 'string',
     enum: ['titleCreatorYear', 'everything'],
+    default: 'titleCreatorYear',
     description: 'itemQuery mode: titleCreatorYear (default) or everything.',
   },
   itemType: {
@@ -85,6 +87,7 @@ const BROWSE_PARAMETERS = {
   match: {
     type: 'string',
     enum: ['contains', 'startsWith'],
+    default: 'contains',
     description: 'Tag q match: contains (default) or startsWith.',
   },
   offset: { type: 'integer', default: 0, description: 'Offset.' },

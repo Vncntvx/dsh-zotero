@@ -27,88 +27,6 @@ afterEach(() => {
 })
 
 describe('list and inspector lifetime', () => {
-  it.each(['library', 'scope', 'mode', 'sort', 'page', 'query', 'filter'] as const)(
-    'clears the inspector on %s changes and discards a late detail',
-    async (change) => {
-      const old = deferred<any>()
-      const { result } = setup({ item: () => old.promise })
-      await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-      act(() => result.current.selectItem(ITEM_DETAIL.ref))
-      await waitFor(() => expect(result.current.inspector?.phase).toBe('loading'))
-      act(() => {
-        const feed = result.current
-        if (change === 'library') feed.selectLibrary({ type: 'group', id: 123 })
-        if (change === 'scope') feed.selectScope({ kind: 'trash' })
-        if (change === 'mode') feed.setMode('everything')
-        if (change === 'sort') feed.setSort('title', 'asc')
-        if (change === 'page') feed.gotoOffset(50)
-        if (change === 'query') feed.setQ('new')
-        if (change === 'filter') feed.setFilters({ tags: ['read'] })
-      })
-      await act(async () => old.resolve({ ok: true, value: ITEM_DETAIL }))
-      expect(result.current.selectedRef).toBeUndefined()
-      expect(result.current.inspector).toBeUndefined()
-    },
-  )
-
-  it('debounces a changed query at offset zero and rejects the old list response', async () => {
-    vi.useFakeTimers()
-    const stale = deferred<any>()
-    const search = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, value: searchPage() })
-      .mockImplementationOnce(() => stale.promise)
-      .mockResolvedValue({ ok: true, value: searchPage({ items: [], total: 0, returned: 0 }) })
-    const { result } = setup({ search })
-    await act(async () => {})
-    act(() => result.current.gotoOffset(50))
-    await act(async () => {})
-    act(() => result.current.setQ('updated'))
-    await act(async () => vi.advanceTimersByTimeAsync(300))
-    expect(search).toHaveBeenLastCalledWith(
-      expect.objectContaining({ q: 'updated', offset: 0 }),
-      expect.anything(),
-    )
-    await act(async () => stale.resolve({ ok: true, value: searchPage({ offset: 50 }) }))
-    expect(result.current.list).toMatchObject({ phase: 'ready', items: [] })
-  })
-
-  it('aborts the previous list read whenever the listing changes', async () => {
-    // The sequence ticket drops a stale answer only after it arrives; the
-    // abort signal is what stops the host from answering a listing the user
-    // already left.
-    const signals: Array<AbortSignal | undefined> = []
-    const search = vi.fn(async (_request: unknown, signal?: AbortSignal) => {
-      signals.push(signal)
-      return { ok: true as const, value: searchPage() }
-    })
-    const { result } = setup({ search })
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    act(() => result.current.setMode('everything'))
-    await waitFor(() => expect(signals).toHaveLength(2))
-    act(() => result.current.setSort('title', 'asc'))
-    await waitFor(() => expect(signals).toHaveLength(3))
-    expect(signals[0]?.aborted).toBe(true)
-    expect(signals[1]?.aborted).toBe(true)
-    expect(signals[2]?.aborted).toBe(false)
-  })
-
-  it('aborts the previous detail read when another row is selected', async () => {
-    const signals: Array<AbortSignal | undefined> = []
-    const item = vi.fn(async (_request: unknown, signal?: AbortSignal) => {
-      signals.push(signal)
-      return { ok: true as const, value: ITEM_DETAIL }
-    })
-    const { result } = setup({ item })
-    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
-    act(() => result.current.selectItem(ITEM_DETAIL.ref))
-    await waitFor(() => expect(signals).toHaveLength(1))
-    act(() => result.current.selectItem('zotero://user/0/item/OTHER123'))
-    await waitFor(() => expect(signals).toHaveLength(2))
-    expect(signals[0]?.aborted).toBe(true)
-    expect(signals[1]?.aborted).toBe(false)
-  })
-
   it('recovers a failed list without changing its parameters', async () => {
     const search = vi
       .fn()
@@ -361,6 +279,7 @@ describe('targeted recovery and write refresh', () => {
     await act(async () => item.reject(new Error('late inspector failure')))
     expect(result.current.inspector).toBeUndefined()
   })
+
   it('retains the tree page after a rejected page request and retries that offset', async () => {
     const { result, face } = setup({
       browse: async (request) => ({

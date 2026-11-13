@@ -106,8 +106,10 @@ describe('parse deployment from the accepted config form', () => {
     }
     expect(remote.startDocumentParse).toHaveBeenCalledTimes(66)
     // The oldest admissions fell out of the 64-entry bound; the newest is
-    // still recallable through the same revision it was admitted under.
+    // still recallable through the same revision it was admitted under, and an
+    // intermediate entry proves the bound is 64 rather than any smaller size.
     expect(port.recall({ sessionId: 's0', target: url(0) })).toBeUndefined()
+    expect(port.recall({ sessionId: 's2', target: url(2) })).toBeDefined()
     expect(port.recall({ sessionId: 's65', target: url(65) })).toMatchObject({
       operationId: lastOperationId,
     })

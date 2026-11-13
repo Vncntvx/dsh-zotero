@@ -334,17 +334,21 @@ describe('the library data plane cancellation', () => {
     const { underlying, seen } = hangingItem()
     const plane = planeOf(underlying)
     const leaving = new AbortController()
+    const holder = new AbortController()
     const abandoned = plane.item(request, leaving.signal)
     // A second caller keeps the shared read alive.
-    void plane.item(request, new AbortController().signal)
+    void plane.item(request, holder.signal).catch(() => undefined)
     leaving.abort()
     await expect(abandoned).rejects.toBeDefined()
     // The other caller still needs the answer, so the wire call stays open.
     expect(seen.signal?.aborted).toBe(false)
     expect(underlying.item).toHaveBeenCalledTimes(1)
-    // One caller without a signal pins the read too.
-    const pinned = plane.item(request)
-    expect(pinned).toBeInstanceOf(Promise)
+    // One caller without a signal pins the read too: aborting the last
+    // signalled waiter must not cancel it.
+    void plane.item(request)
+    holder.abort()
+    expect(seen.signal?.aborted).toBe(false)
+    expect(underlying.item).toHaveBeenCalledTimes(1)
   })
 
   it('starts no request for a caller that is already aborted', async () => {

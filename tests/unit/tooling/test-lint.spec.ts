@@ -12,11 +12,13 @@ import {
   BINARY_EXTENSIONS,
   TEXT_EXTENSIONS,
   TEXT_ROOTS,
+  fetchOwnershipIssuesOf,
   focusViolationsOf,
   helperSizeViolations,
   stripCommentsAndStrings,
   unscannedExtensionsOf,
   upstreamSourceImportsOf,
+  wholesalePrimitiveMocksOf,
 } from '../../../scripts/test-lint.mjs'
 
 describe('focus guard', () => {
@@ -201,5 +203,67 @@ describe('helper size guard', () => {
     expect(helperSizeViolations([], baseline, 300)).toMatchObject([
       { kind: 'stale', path: 'tests/client/helpers/big.ts' },
     ])
+  })
+})
+
+describe('client-primitive mock guard', () => {
+  const module = '@deepseek-ai/dsh-client-ui-primitives'
+
+  it('flags every wholesale factory form', () => {
+    for (const factory of [
+      'async () => ({})',
+      '() => ({})',
+      'async function () { return {} }',
+      'function () { return {} }',
+    ]) {
+      expect(wholesalePrimitiveMocksOf(`vi.mock('${module}', ${factory})`), factory).toHaveLength(1)
+    }
+  })
+
+  it('allows the importOriginal single-export replacement', () => {
+    expect(
+      wholesalePrimitiveMocksOf(
+        `vi.mock('${module}', async (importOriginal) => ({ ...(await importOriginal()) }))`,
+      ),
+    ).toEqual([])
+    expect(
+      wholesalePrimitiveMocksOf(
+        `vi.mock('${module}', async (importAct) => ({ ...(await importAct()) }))`,
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('fetch ownership guard', () => {
+  it('rejects a second undici import outside the seam owner', () => {
+    expect(
+      fetchOwnershipIssuesOf('src/scholarly/tools/get.ts', `import { fetch } from 'undici'`),
+    ).toHaveLength(1)
+    expect(
+      fetchOwnershipIssuesOf(
+        'src/transport/connections.ts',
+        `import { Agent, fetch } from 'undici'`,
+      ),
+    ).toEqual([])
+  })
+
+  it('rejects the runtime fetch outside the documented files', () => {
+    expect(fetchOwnershipIssuesOf('src/local/x.ts', `await fetch('https://x')`)).toHaveLength(1)
+    expect(fetchOwnershipIssuesOf('src/http-client.ts', `await fetch(url)`)).toEqual([])
+    expect(fetchOwnershipIssuesOf('src/client/x.ts', `await fetch(url)`)).toEqual([])
+    // Comments are not code.
+    expect(fetchOwnershipIssuesOf('src/local/x.ts', `// fetch(url)`)).toEqual([])
+  })
+
+  it('rejects a global fetch stub in scholarly specs', () => {
+    expect(
+      fetchOwnershipIssuesOf('tests/scholarly/x.spec.ts', `vi.stubGlobal('fetch', fetchStub)`),
+    ).toHaveLength(1)
+    expect(
+      fetchOwnershipIssuesOf(
+        'tests/scholarly/x.spec.ts',
+        `vi.mock('../../src/transport/connections.js', () => ({ publicFetch: fetchStub }))`,
+      ),
+    ).toEqual([])
   })
 })

@@ -303,6 +303,17 @@ describe('zotero_export tool', () => {
     expect((result.value as { citations: unknown[] }).citations).toHaveLength(50)
   })
 
+  it('refuses outputFile without the filesystem composition as a context failure', async () => {
+    const result = await runTool('zotero_export', {
+      refs: ['zotero://user/0/item/ABCD1234'],
+      format: 'bibtex',
+      outputFile: '/tmp/export.bib',
+    })
+    if (!result.isError) throw new Error('expected a failure')
+    expect(result.error).toMatchObject({ info: { code: 'TOOL_CONTEXT_UNAVAILABLE' } })
+    expect(mock.requests).toEqual([])
+  })
+
   it('declares itself concurrency-safe for valid arguments', () => {
     expect(
       lane

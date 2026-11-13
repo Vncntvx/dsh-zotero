@@ -122,7 +122,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Core service face enrichment needs: the two slots and the attachment resolver. */
 /**
  * One vector cache generation: the entries a single model identity owns.
  *
@@ -183,6 +182,7 @@ function vectorCacheDigestOf(identity: VectorCacheIdentity): string {
   ])
 }
 
+/** Core service face enrichment needs: the two slots and the attachment resolver. */
 interface EnrichmentCoreLink {
   setFulltextEnhancer(enhancer: FulltextEnhancer | undefined): void
   setEvidenceRanker(ranker: EvidenceRanker | undefined): void

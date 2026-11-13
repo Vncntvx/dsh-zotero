@@ -248,8 +248,7 @@ instead of reporting a mocked pass as live verification.
   assemble the real `ToolExecutionSuccess | ToolExecutionFailure` union with a
   branded `ToolCallId`, so a spec states only the arm it varies instead of
   restating the batch shape behind `as never`. `nonTextContent()` supplies a
-  legal non-text block, and `harnessRefusal()` interpolates the refusal
-  sentences owned by `src/library-write-denial.ts`.
+  legal non-text block.
 
 ### Support ownership and dependencies
 
@@ -354,7 +353,7 @@ instead of reporting a mocked pass as live verification.
 
 ## Guards
 
-`npm run lint:test` (also the first step of `npm test`) enforces seven
+`npm run lint:test` (also the first step of `npm test`) enforces nine
 mechanical rules; each one exists because this repository hit it:
 
 - no raw control bytes in source or prose. The SourcesTab spec (since split
@@ -377,6 +376,14 @@ mechanical rules; each one exists because this repository hit it:
   syntax is scanned: the `/src/` string fixtures in the artifact-audit spec
   and in the guard's own positive/negative cases, plus commented-out
   examples, are not dependencies.
+- fetch ownership stays with `src/transport/connections.ts`: no second undici
+  import site, no runtime `fetch` on an external-egress path, and no global
+  `fetch` stub. Specs stub the seam or use `importOriginal`, so the pinned
+  dispatcher and the production `publicFetch` stay the exercised code;
+- no wholesale client-primitives mock. A spec imports the real
+  `@deepseek-ai/dsh-client-ui-primitives` (or a narrow `importOriginal`
+  partial); replacing the module hides primitive regressions the client lane
+  exists to catch.
 
 The helper import graph — specs → module support → shared helpers, with no
 cross-module support references, no support importing specs, and no shared

@@ -27,7 +27,7 @@ import type {
 import { JobError } from '@deepseek-ai/dsh-jobs'
 import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
-import { errorMessageOf, ZoteroError } from './errors.js'
+import { errorMessageOf, ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import { FIBER_STATE } from './fiber-state.js'
 import type { ZoteroProgressEvent } from './types.js'
@@ -205,6 +205,7 @@ export const PROMOTED_OUTPUT_PROPERTIES = {
 export const RUN_IN_BACKGROUND_PARAMETER = {
   run_in_background: {
     type: 'boolean',
+    default: false,
     description:
       'Run in the background and return a job id immediately (collect with job_output, stop with job_kill).',
   },
@@ -636,10 +637,17 @@ export class ZoteroJobRunner {
       // only after the producer promise resolves, so this await cannot block.
       const settled = await done
       if (settled.error instanceof Error) throw settled.error
-      throw new Error(view.detail ?? 'Zotero operation failed')
+      throw new ZoteroError(view.detail ?? 'Zotero operation failed', ZOTERO_UNEXPECTED)
     }
     if (view.status === 'killed') {
-      throw new Error(`Zotero operation cancelled: ${view.detail ?? 'cancelled'}`)
+      // A job killed while this call waited is an abort, not a generic failure:
+      // the model must not retry work another caller cancelled.
+      const error = new HarnessError(
+        `Zotero operation cancelled: ${view.detail ?? 'cancelled'}`,
+        TOOL_ABORTED,
+      )
+      error.name = 'AbortError'
+      throw error
     }
 
     return { kind: 'foreground', value: resultValue! }

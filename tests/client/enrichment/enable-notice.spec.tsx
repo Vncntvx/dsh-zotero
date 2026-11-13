@@ -18,6 +18,7 @@ import {
   type EnrichmentEnableNoticeState,
   type EnrichmentNamespaceStatus,
 } from '../../../src/client/enrichment/enable-notice.ts'
+import { acknowledgementOf } from './support/acknowledgement.ts'
 import { EnrichmentEnableNotice } from '../../../src/client/enrichment/EnableNotice.tsx'
 import type { EnrichmentEnableNoticeProps } from '../../../src/client/enrichment/EnableNotice.tsx'
 import { zh } from '../../../src/client/locales.ts'
@@ -41,20 +42,6 @@ function statusSourceOf() {
     publish: (namespaceStatus: EnrichmentNamespaceStatus) => {
       snapshot = { namespaceStatus }
       for (const listener of listeners) listener()
-    },
-  }
-}
-
-/** The per-client acknowledgement as a spec keeps it. */
-function acknowledgementOf() {
-  let acknowledged = false
-  return {
-    read: () => acknowledged,
-    remember: () => {
-      acknowledged = true
-    },
-    get acknowledged() {
-      return acknowledged
     },
   }
 }

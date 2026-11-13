@@ -439,9 +439,10 @@ describe('ScholarlySettingsSection', () => {
     render(<ScholarlyHarness face={controller.inject()} view="page" dictionary={zh} />)
 
     await vi.waitFor(() => {
-      // The configured state is what the field says, not an attribute: the real
-      // secret field renders the localized label beside its input.
-      expect(screen.getAllByText(zh.secretConfigured).length).toBeGreaterThan(0)
+      // Scope the badge to the S2 row: three secret fields render the same
+      // label, so a page-wide match cannot tell which one is configured.
+      const field = document.getElementById('scholarly-settings-s2ApiKey')?.closest('div')
+      expect(field?.textContent).toContain(zh.secretConfigured)
     })
     controller.dispose()
   })

@@ -42,6 +42,9 @@ describe('the library view store session cache', () => {
     }
 
     expect(store.sessionView('S0', 's0')).toBeUndefined()
+    // An intermediate entry survives: the bound is eight, not merely "the
+    // oldest went away".
+    expect(store.sessionView('S1', 's1')).toBeDefined()
     expect(store.sessionView('S8', 's8')?.lastProbeData?.serverId).toBe('S8')
   })
 
@@ -55,6 +58,7 @@ describe('the library view store session cache', () => {
 
     expect(store.sessionView('S0', 's0')?.lastProbeData?.serverId).toBe('S0-again')
     expect(store.sessionView('S1', 's1')).toBeUndefined()
+    expect(store.sessionView('S2', 's2')).toBeDefined()
   })
 
   it('clears one session or every session', () => {

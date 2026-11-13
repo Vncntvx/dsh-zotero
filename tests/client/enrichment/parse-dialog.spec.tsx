@@ -119,6 +119,9 @@ describe('ParseDocumentDialog confirmation', () => {
     expect(
       (screen.getByRole('button', { name: parseEn.parseConfirm }) as HTMLButtonElement).disabled,
     ).toBe(true)
+    // An unusable URL has no label; the row keeps its placeholder rather than
+    // collapsing to an empty value.
+    expect(document.querySelector('[data-parse-target-label]')!.textContent).toBe('—')
     expect(world.remote.startDocumentParse).not.toHaveBeenCalled()
     expect(world.remote.documentArtifact).toHaveBeenCalledTimes(1)
   })
