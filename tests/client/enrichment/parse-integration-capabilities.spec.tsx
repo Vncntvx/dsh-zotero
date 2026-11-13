@@ -44,7 +44,7 @@ describe('parsing capability integration', () => {
         await editor.inject().save()
       })
       expect(screen.getByText(en.parseModePro)).toBeDefined()
-      expect(screen.getByText(/209715200 bytes.*200 pages/)).toBeDefined()
+      expect(screen.getByText(/200 MB.*200 pages/)).toBeDefined()
       expect(confirm().disabled).toBe(false)
       expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
     } finally {

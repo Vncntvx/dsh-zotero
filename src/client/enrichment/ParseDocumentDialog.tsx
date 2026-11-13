@@ -1,5 +1,5 @@
 /** Standalone parse surface. The composition root supplies committed capabilities and host ports. */
-import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   Button,
   Input,
@@ -45,6 +45,12 @@ export interface ParseDocumentDialogProps {
   readonly t?: ParseTranslate
 }
 
+/** The dialog states the byte cap in human units, not as a raw byte integer. */
+function formatLimit(bytes: number): string {
+  const megabytes = bytes / (1024 * 1024)
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`
+}
+
 /** The only start action is a user form submission; opening only inspects artifacts. */
 export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   const { remote, jobs, capabilities, selection, open, onClose } = props
@@ -68,6 +74,9 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   const inputId = useId()
   const hintId = useId()
   const targetKey = JSON.stringify(selection)
+  // The receipt carries a bounded preview; the dialog keeps it behind an
+  // explicit toggle instead of turning the form into a document reader.
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   useEffect(() => controller.connect(), [controller])
   useEffect(() => {
@@ -103,23 +112,23 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
     state.job?.status === 'failed' ||
     state.job?.status === 'killed'
   const progress = documentParseProgress(state)
+  const failed = receipt?.kind === 'failed'
+  const cancelled = receipt?.kind === 'cancelled'
+  const jobTerminal =
+    state.job !== undefined && ['completed', 'failed', 'killed'].includes(state.job.status)
   const statusKey: ParseLocaleKey = completed
     ? 'parseCompleted'
-    : retryable
-      ? receipt.kind === 'failed'
-        ? 'parseFailed'
-        : 'parseKilled'
-      : state.job
-        ? ({
-            running: 'parseRunning',
-            stopping: 'parseStopping',
-            completed: 'parseCompleted',
-            failed: 'parseFailed',
-            killed: 'parseKilled',
-          }[state.job.status] as ParseLocaleKey)
-        : state.submitting
-          ? 'parseSubmitting'
-          : 'parseWaiting'
+    : state.job
+      ? ({
+          running: 'parseRunning',
+          stopping: 'parseStopping',
+          completed: 'parseCompleted',
+          failed: 'parseFailed',
+          killed: 'parseKilled',
+        }[state.job.status] as ParseLocaleKey)
+      : state.submitting
+        ? 'parseSubmitting'
+        : 'parseWaiting'
 
   return (
     <Modal open={open} onClose={close} title={t('parseTitle')} headless>
@@ -167,14 +176,14 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
             <dt>{t('parseMode')}</dt>
             <dd>{t(state.capabilities.mode === 'pro' ? 'parseModePro' : 'parseModeFree')}</dd>
           </dl>
-          <p>{t('parseUploadMeaning')}</p>
-          <p>
-            {t('parseLimits', {
-              bytes: state.capabilities.maxFileBytes,
-              pages: state.capabilities.maxPages,
-            })}
-          </p>
-          <p className={css.secondary}>{t('parseNoSemantic')}</p>
+          {state.capabilities.maxFileBytes > 0 && (
+            <p className={css.secondary}>
+              {t('parseLimits', {
+                size: formatLimit(state.capabilities.maxFileBytes),
+                pages: state.capabilities.maxPages,
+              })}
+            </p>
+          )}
           <GateNotice state={state} t={t} />
           {state.checking && <p role="status">{t('parseChecking')}</p>}
           {state.failure && (
@@ -183,43 +192,50 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
               {documentParseText(state.failure.message)}
             </p>
           )}
-          {state.artifact && <Artifact state={state} t={t} />}
+          {state.artifact?.kind === 'expired' && <p>{t('parseArtifactExpired')}</p>}
+          {state.artifact?.kind === 'ready' && <Artifact artifact={state.artifact} t={t} />}
           {state.operation && (
             <section className={css.result} aria-live="polite">
-              <p role="status">{t(statusKey)}</p>
-              {progress && <p data-parse-progress>{progress}</p>}
-              {state.cancelRequested && <p>{t('parseCancelRequested')}</p>}
+              <p role={failed ? 'alert' : 'status'} className={failed ? css.error : undefined}>
+                {cancelled ? (
+                  t('parseKilled')
+                ) : failed ? (
+                  <>
+                    {t('parseFailed')} · <code>{documentParseText(receipt.code)}</code>{' '}
+                    {documentParseText(receipt.message)}
+                  </>
+                ) : state.cancelRequested ? (
+                  t('parseCancelRequested')
+                ) : (
+                  ((jobTerminal ? undefined : progress) ??
+                  t(state.job?.status === 'running' ? 'parseInProgress' : statusKey))
+                )}
+              </p>
               {state.observationError && <p className={css.error}>{t('parseReconnectHint')}</p>}
-              {receipt?.kind === 'pending' && <p>{t('parseReceiptPending')}</p>}
-              {(receipt?.kind === 'failed' || receipt?.kind === 'cancelled') && (
-                <p role="alert" className={css.error}>
-                  {t(receipt.kind === 'failed' ? 'parseFailed' : 'parseKilled')} ·{' '}
-                  <code>{documentParseText(receipt.code)}</code>{' '}
-                  {documentParseText(receipt.message)}
-                </p>
-              )}
               {receipt?.kind === 'completed' && (
                 <>
                   <p>{t(receipt.receipt.cached ? 'parseCached' : 'parseFresh')}</p>
                   <dl className={css.facts}>
-                    <dt>{t('parseGeneration')}</dt>
-                    <dd>{receipt.receipt.generation}</dd>
-                    <dt>{t('parseArtifact')}</dt>
-                    <dd>{receipt.receipt.artifactId}</dd>
-                    <dt>{t('parseFingerprint')}</dt>
-                    <dd>{receipt.receipt.fingerprint}</dd>
                     <dt>{t('parseCharacters')}</dt>
                     <dd>{receipt.receipt.characterCount}</dd>
                     <dt>{t('parsePages')}</dt>
                     <dd>{receipt.receipt.pageCount ?? t('parsePagesUnknown')}</dd>
                   </dl>
-                  <p>{t('parsePreview')}</p>
-                  <pre className={css.preview}>{receipt.receipt.preview}</pre>
+                  {receipt.receipt.preview !== '' && (
+                    <Preview
+                      text={receipt.receipt.preview}
+                      open={previewOpen}
+                      onToggle={() => setPreviewOpen((open) => !open)}
+                      t={t}
+                    />
+                  )}
                 </>
               )}
             </section>
           )}
-          <p className={css.secondary}>{t('parseCloseHint')}</p>
+          {!completed && !failed && !cancelled && (
+            <p className={css.secondary}>{t('parseCloseHint')}</p>
+          )}
         </div>
         <footer className={css.footer}>
           <Button
@@ -280,21 +296,44 @@ function GateNotice({ state, t }: { state: DocumentParseState; t: ParseTranslate
   )
 }
 
-function Artifact({ state, t }: { state: DocumentParseState; t: ParseTranslate }) {
-  const artifact = state.artifact!
-  if (artifact.kind !== 'ready')
-    return <p>{t(artifact.kind === 'expired' ? 'parseArtifactExpired' : 'parseArtifactMissing')}</p>
+function Artifact({
+  artifact,
+  t,
+}: {
+  artifact: Extract<DocumentParseState['artifact'], { kind: 'ready' }>
+  t: ParseTranslate
+}) {
   return (
     <section className={css.result}>
       <p>{t('parseArtifactReady')}</p>
       <dl className={css.facts}>
-        <dt>{t('parseArtifact')}</dt>
-        <dd>{artifact.artifactId}</dd>
         <dt>{t('parseCharacters')}</dt>
         <dd>{artifact.characterCount}</dd>
         <dt>{t('parsePages')}</dt>
         <dd>{artifact.pageCount ?? t('parsePagesUnknown')}</dd>
       </dl>
     </section>
+  )
+}
+
+/** The receipt's bounded Markdown, read only when the user asks for it. */
+function Preview({
+  text,
+  open,
+  onToggle,
+  t,
+}: {
+  text: string
+  open: boolean
+  onToggle: () => void
+  t: ParseTranslate
+}) {
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={onToggle}>
+        {t('parsePreview')}
+      </Button>
+      {open && <pre className={css.preview}>{text}</pre>}
+    </>
   )
 }

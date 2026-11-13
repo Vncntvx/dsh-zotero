@@ -79,8 +79,15 @@
   overflow-wrap: anywhere;
 }
 
+/* The receipt's bounded Markdown, read only on request; the block scrolls in
+ * place instead of stretching the dialog into a document reader. */
 .preview {
   margin: 0;
+  padding: var(--dsw-font-xs-13-font-size);
+  max-height: 240px;
+  overflow: auto;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;

@@ -488,7 +488,7 @@ export const en = {
   renderFailed: 'Render failed',
   refresh: 'Refresh',
   lastCheckedLabel: 'Last checked',
-  detailSectionTitle: 'Service status & data maintenance',
+  detailSectionTitle: 'Service status',
   activationTitle: 'Enable Zotero Plugin',
   activationClose: 'Close guidance',
   activationDescription:
@@ -1314,7 +1314,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   renderFailed: '渲染失败',
   refresh: '刷新',
   lastCheckedLabel: '上次检查',
-  detailSectionTitle: '服务状态与数据维护',
+  detailSectionTitle: '服务状态',
   activationTitle: '启用 Zotero 插件',
   activationClose: '关闭新手引导',
   activationDescription: '在让智能体检索和引用本地文献库前，请确保完成以下准备工作：',

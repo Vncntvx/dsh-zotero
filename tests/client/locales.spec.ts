@@ -211,6 +211,10 @@ describe('locale bundles', () => {
       'toolSummaryChildren',
       'toolParentItem',
       'toolChildrenNone',
+      // The parse dialog now states the facts without restating the upload,
+      // and an absent artifact is the absence of a section rather than a line.
+      'parseUploadMeaning',
+      'parseArtifactMissing',
     ]
     for (const key of retired) {
       expect(key in zh, key).toBe(false)

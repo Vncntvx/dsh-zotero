@@ -83,17 +83,20 @@ async function settle() {
 }
 
 describe('ParseDocumentDialog confirmation', () => {
-  it('shows target, mode, upload meaning and limits with zero starts before confirmation', async () => {
+  it('shows the facts and limits with zero starts before confirmation', async () => {
     const world = mount()
     await settle()
     expect(screen.getByRole('dialog', { name: parseEn.parseTitle })).toBeDefined()
     expect(screen.getByText(PARSE_SELECTION.label!)).toBeDefined()
     expect(screen.getByText(parseEn.parseModeFree)).toBeDefined()
-    expect(screen.getByText(parseEn.parseUploadMeaning)).toBeDefined()
     // The provider's product name comes from the dictionary, so a copy review
     // sees it with the rest of the dialog.
     expect(screen.getByText(parseEn.parseProviderValue)).toBeDefined()
-    expect(screen.getByText(/10485760 bytes.*20 pages/)).toBeDefined()
+    expect(screen.getByText(/10 MB.*20 pages/)).toBeDefined()
+    // The pre-submit form carries one limits line and one cancel hint, not a
+    // stack of disclaimers and absence notices.
+    expect(screen.getByText(parseEn.parseCloseHint)).toBeDefined()
+    expect(screen.queryByText('No artifact yet.')).toBeNull()
     expect(world.remote.startDocumentParse).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
     await settle()
@@ -160,23 +163,45 @@ describe('ParseDocumentDialog job controls', () => {
     expect(world.remote.startDocumentParse).toHaveBeenCalledTimes(1)
   })
 
-  it('explicit cancel calls host jobs and renders roster progress without invented percentages', async () => {
+  it('shows the roster phase as one status line, then a single cancelling line', async () => {
     const world = mount()
     await settle()
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
     await settle()
     act(() =>
       world.state.publish({
-        rows: { [PARSE_SESSION]: [parseJob({ progress: 'Downloading result' })] },
+        rows: { [PARSE_SESSION]: [parseJob({ progress: 'MinerU 解析中' })] },
         observed: {},
       }),
     )
-    expect(screen.getByText('Downloading result')).toBeDefined()
+    // The real phase is the whole status line: no vague prefix stacked on it,
+    // and no percentage the host never reported.
+    expect(screen.getByRole('status').textContent).toBe('MinerU 解析中')
+    expect(screen.queryByText(parseEn.parseRunning)).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseCancel }))
     await settle()
     expect(world.jobs.kill).toHaveBeenCalledWith(PARSE_SESSION, PARSE_JOB)
-    expect(screen.getByText(parseEn.parseCancelRequested)).toBeDefined()
-    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(parseEn.parseCancelRequested)
+    expect(screen.getByText(parseEn.parseCloseHint)).toBeDefined()
+  })
+
+  it('keeps a terminal job status instead of a stale roster phase', async () => {
+    const world = mount()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    act(() =>
+      world.state.publish({
+        rows: {
+          [PARSE_SESSION]: [parseJob({ status: 'completed', progress: 'MinerU 解析中' })],
+        },
+        observed: {},
+      }),
+    )
+    const result = document.querySelector('[aria-live="polite"]')!
+    expect(result.querySelector('[role="status"]')?.textContent).toBe(parseEn.parseCompleted)
+    expect(screen.queryByText('MinerU 解析中')).toBeNull()
   })
 
   it('survives StrictMode effect replay and unmount cleanup without a kill', async () => {
@@ -207,13 +232,12 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     await settle()
     expect(screen.getByText(parseEn.parseCompleted)).toBeDefined()
     expect(screen.getByText(parseEn.parseCached)).toBeDefined()
-    // The receipt's own facts, and the explicit unknown when MinerU reported no
-    // page count, instead of a fabricated zero.
-    expect(screen.getByText('generation-1')).toBeDefined()
-    expect(screen.getByText('artifact-1')).toBeDefined()
-    expect(screen.getByText('sha256-1')).toBeDefined()
+    // The result stops at a compact summary; the parsed Markdown stays behind
+    // the preview toggle instead of filling the dialog.
     expect(screen.getByText('9')).toBeDefined()
     expect(screen.getByText(parseEn.parsePagesUnknown)).toBeDefined()
+    expect(screen.queryByText('# Preview')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parsePreview }))
     expect(screen.getByText('# Preview')).toBeDefined()
     expect(screen.getByRole('button', { name: parseEn.parseReparse })).toBeDefined()
   })
@@ -234,18 +258,23 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     await settle()
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
     await settle()
-    expect(screen.getAllByText(parseEn.parseFailed).length).toBeGreaterThan(0)
-    expect(screen.getByText('ZOTERO_ENRICHMENT_TASK_FAILED')).toBeDefined()
-    expect(screen.getByText(/MinerU refused the document/)).toBeDefined()
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain(parseEn.parseFailed)
+    expect(alert.textContent).toContain('ZOTERO_ENRICHMENT_TASK_FAILED')
+    expect(alert.textContent).toContain('MinerU refused the document')
     expect(screen.getByRole('button', { name: parseEn.parseRetry })).toBeDefined()
   })
 
-  it('renders a cancelled receipt as killed work', async () => {
+  it('renders a cancelled receipt as one plain line and offers retry', async () => {
     mount({
       remote: {
         documentParseReceipt: async () => ({
           ok: true,
-          value: { kind: 'cancelled', code: 'job/killed', message: 'stopped by the user' },
+          value: {
+            kind: 'cancelled',
+            code: 'ZOTERO_ENRICHMENT_TASK_FAILED',
+            message: 'Document parsing was cancelled.',
+          },
         }),
       },
     })
@@ -253,7 +282,13 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
     await settle()
     expect(screen.getByText(parseEn.parseKilled)).toBeDefined()
-    expect(screen.getByText('job/killed')).toBeDefined()
+    // Cancellation is an expected outcome: no error code, no English task
+    // message and no second "cancellation requested" line beside it.
+    expect(screen.queryByText('ZOTERO_ENRICHMENT_TASK_FAILED')).toBeNull()
+    expect(screen.queryByText(/Document parsing was cancelled/)).toBeNull()
+    expect(screen.queryByText(parseEn.parseCancelRequested)).toBeNull()
+    // No background hint once the run has ended.
+    expect(screen.queryByText(parseEn.parseCloseHint)).toBeNull()
     expect(screen.getByRole('button', { name: parseEn.parseRetry })).toBeDefined()
   })
 
@@ -276,13 +311,12 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     })
     await settle()
     expect(screen.getByText(parseEn.parseArtifactReady)).toBeDefined()
-    expect(screen.getByText('artifact-9')).toBeDefined()
     expect(screen.getByText('12')).toBeDefined()
     expect(screen.getByText(parseEn.parsePagesUnknown)).toBeDefined()
     expect(screen.getByRole('button', { name: parseEn.parseReparse })).toBeDefined()
   })
 
-  it('distinguishes an expired artifact from a missing one', async () => {
+  it('shows an expired artifact, and no absence notice when there is none', async () => {
     const expired = mount({
       remote: { documentArtifact: async () => ({ ok: true, value: { kind: 'expired' } }) },
     })
@@ -291,7 +325,9 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     expired.unmount()
     mount()
     await settle()
-    expect(screen.getByText(parseEn.parseArtifactMissing)).toBeDefined()
+    expect(screen.queryByText(parseEn.parseArtifactExpired)).toBeNull()
+    expect(screen.queryByText('No artifact yet.')).toBeNull()
+    expect(screen.queryByText(parseEn.parseArtifactReady)).toBeNull()
   })
 
   it('surfaces an observation failure as the reconnect hint', async () => {
