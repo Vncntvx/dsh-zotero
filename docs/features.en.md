@@ -88,7 +88,7 @@ Every write passes a capability check, session approval, and a plan review card.
 
 ## Scholarly Retrieval (Optional Component)
 
-Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address).
+Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address). When first enabled in a browser, the client displays an outbound notice listing the destination hosts.
 
 - Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP; results are fused and deduplicated by relevance and annotated with whether they are already in the local library.
 - It can read open-access full text by DOI, arXiv ID, PMID, or PMCID and locate passages, and it can follow citation networks.
@@ -99,7 +99,7 @@ External retrieval runs through agent tool calls. The literature panel supports 
 
 ## Document Enrichment (Optional Component)
 
-Document parsing is provided by the `dsh-zotero/enrichment` component, shipped with the package and off by default. The component supports user-submitted PDF parsing, read-only reuse of existing Markdown artifacts, and local semantic ranking with model management. Users can submit a specific Zotero PDF attachment or public PDF URL from the literature panel.
+Document parsing is provided by the `dsh-zotero/enrichment` component, shipped with the package and off by default. The component supports user-submitted PDF parsing, read-only reuse of existing Markdown artifacts, and local semantic ranking with model management. Users can submit a specific Zotero PDF attachment or public PDF URL from the literature panel; the client displays an egress disclosure when the component is first enabled.
 
 - `free` uses the token-free Agent lightweight API (API-side ≤10 MB and ≤20 pages); `pro` uses the precise API (API-side ≤200 MB and ≤200 pages) and needs a token. The mode is independent of whether a token is configured. A failed parse does not switch mode or present locally extracted text as a successful parse.
 - Ordinary `zotero_retrieve` and `scholarly_read` use the core's read-only `FulltextEnhancer.lookup` to find valid Markdown for the same source; a hit takes priority, including a valid short document. An absent artifact or a changed source stamp counts as a miss: local reads continue through Zotero `/fulltext`, and scholarly reads through the authorized PDF download and local extraction. Permission, I/O, and corrupt-protocol failures are reported as errors, not misses. Existing valid artifacts always remain readable.

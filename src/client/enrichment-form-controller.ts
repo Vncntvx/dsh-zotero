@@ -29,6 +29,7 @@ import {
   type SettingsFormShell,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { booleanFieldSpec } from './helpers/settings-fields.ts'
+import type { NamespaceStatus } from './helpers/namespace-status.ts'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -205,7 +206,7 @@ interface EnrichmentSecretFieldState {
 /** Everything the enrichment configuration card renders. */
 export interface EnrichmentCardState extends SettingsFormShell {
   /** Namespace lifecycle from the shared settings form; `available` is its boolean face. */
-  readonly namespaceStatus: 'loading' | 'ready' | 'unavailable'
+  readonly namespaceStatus: NamespaceStatus
   readonly mode: SettingsFieldState
   readonly mineruTokenRef: SettingsFieldState
   readonly outputDir: SettingsFieldState

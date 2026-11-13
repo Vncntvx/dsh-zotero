@@ -58,7 +58,14 @@ import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { EnrichmentSettingsSection } from './EnrichmentSettingsSection.tsx'
 import { EnrichmentEnableNotice } from './enrichment/EnableNotice.tsx'
-import { EnrichmentEnableNoticeController } from './enrichment/enable-notice.ts'
+import { ScholarlyEnableNotice } from './scholarly/EnableNotice.tsx'
+import {
+  EnableNoticeArbiter,
+  EnableNoticeController,
+  ENRICHMENT_EGRESS_ACK_KEY,
+  SCHOLARLY_RETRIEVAL_ACK_KEY,
+  clientAcknowledgement,
+} from './enable-notice.ts'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
 import { createZoteroClientFace, type ZoteroClientFace } from './actions/client-face.ts'
@@ -259,17 +266,36 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, probe } = surfaces
-  // Enabling the enrichment component is the deployment's acceptance of
-  // MinerU document egress, so the client owes the user a disclosure whenever
-  // the component is served and this browser has not acknowledged it — a
-  // deployment already enabled at boot included. The acknowledgement is
-  // persisted per client. The overlay lives on the shell rather than the
-  // settings page, so the disclosure can appear wherever the switch was
-  // flipped.
-  const enableNotice = new EnrichmentEnableNoticeController(
+  // Enabling dsh-zotero/enrichment accepts MinerU document egress, and
+  // enabling dsh-zotero/scholarly authorizes external scholarly retrieval, so
+  // the client owes the user a disclosure whenever a component is served and
+  // this browser has not acknowledged the current enable — a deployment
+  // already enabled at boot included. The acknowledgement covers one enable
+  // period and is revoked when the component is observed off, so turning it off
+  // and on again asks once more. One arbiter shows the two disclosures in
+  // registration order instead of stacking two modals. The overlays live on
+  // the shell rather than the settings page, so a disclosure can appear
+  // wherever the switch was flipped.
+  const noticeArbiter = new EnableNoticeArbiter()
+  const enrichmentNotice = new EnableNoticeController(
     enrichmentCard.inject().hooks.enrichmentCard,
+    'enrichmentEnableNotice',
+    clientAcknowledgement(ENRICHMENT_EGRESS_ACK_KEY),
+    noticeArbiter,
   )
-  ctx.effect(() => () => enableNotice.dispose(), 'dsh-zotero: enrichment enable notice state')
+  const scholarlyNotice = new EnableNoticeController(
+    scholarlyCard.inject().hooks.scholarlyCard,
+    'scholarlyEnableNotice',
+    clientAcknowledgement(SCHOLARLY_RETRIEVAL_ACK_KEY),
+    noticeArbiter,
+  )
+  ctx.effect(
+    () => () => {
+      enrichmentNotice.dispose()
+      scholarlyNotice.dispose()
+    },
+    'dsh-zotero: enable notice state',
+  )
   ctx.effect(
     () =>
       ctx.slots.inject('shell.overlay', () =>
@@ -279,12 +305,28 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
             id: 'zotero.enrichment-enable-notice',
             locale: NS,
             registrant: REGISTRANT,
-            inject: () => enableNotice.inject(),
+            inject: () => enrichmentNotice.inject(),
           },
           EnrichmentEnableNotice,
         ),
       ),
     'dsh-zotero: enrichment enable notice',
+  )
+  ctx.effect(
+    () =>
+      ctx.slots.inject('shell.overlay', () =>
+        ctx.slots.register(
+          {
+            name: 'shell.overlay',
+            id: 'zotero.scholarly-enable-notice',
+            locale: NS,
+            registrant: REGISTRANT,
+            inject: () => scholarlyNotice.inject(),
+          },
+          ScholarlyEnableNotice,
+        ),
+      ),
+    'dsh-zotero: scholarly enable notice',
   )
   // Guidance modal on plugin activation (plugins.bundle.activation)
   ctx.slots.inject('plugins.bundle.activation', () =>

@@ -76,6 +76,7 @@ describe('the browser-half entry', () => {
       'shell.overlay',
       'tool.call.toolview',
       'shell.overlay',
+      'shell.overlay',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',
@@ -94,6 +95,40 @@ describe('the browser-half entry', () => {
       'sidebar.right.tab.document.unpreviewable',
       'contextMenu.icon',
     ])
+  })
+
+  it('wires each enable-notice overlay to its own component card store', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+    // The overlay registrations are lazy: their `inject` callback runs when the
+    // host asks the slot for its entry.
+    for (const entry of world.injected.filter((item) => item.name === 'shell.overlay')) {
+      entry.register()
+    }
+    const overlayOf = (id: string) => {
+      const entry = world.registered.find((item) => item.options.id === id)
+      expect(entry, `${id} should be registered`).toBeDefined()
+      const inject = entry!.options.inject as () => {
+        hooks: Record<string, { getSnapshot(): { open: boolean } }>
+        dismiss(): void
+      }
+      return inject()
+    }
+
+    const enrichment = overlayOf('zotero.enrichment-enable-notice')
+    const scholarly = overlayOf('zotero.scholarly-enable-notice')
+    expect(Object.keys(enrichment.hooks)).toEqual(['enrichmentEnableNotice'])
+    expect(Object.keys(scholarly.hooks)).toEqual(['scholarlyEnableNotice'])
+
+    // Reversing the wiring must be observable: each notice reads the card store
+    // of the component named by its hook, not the other component's.
+    world.enrichmentScope.publish({ status: 'unavailable' })
+    world.scholarlyScope.publish({ status: 'ready' })
+    expect(enrichment.hooks.enrichmentEnableNotice!.getSnapshot().open).toBe(false)
+    expect(scholarly.hooks.scholarlyEnableNotice!.getSnapshot().open).toBe(true)
+
+    world.enrichmentScope.publish({ status: 'ready' })
+    expect(enrichment.hooks.enrichmentEnableNotice!.getSnapshot().open).toBe(true)
   })
 
   it('withholds the PDF recovery menu without the readUrlPdf grant', async () => {

@@ -79,6 +79,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
       'shell.overlay',
       'tool.call.toolview',
       'shell.overlay',
+      'shell.overlay',
       'plugins.bundle.activation',
       'plugins.bundle.config',
       'plugins.row.config',

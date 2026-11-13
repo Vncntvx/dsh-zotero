@@ -130,7 +130,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术检索组件配置 (`dsh-zotero/scholarly`)
 
-组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验；本机代理的 fake-IP 占位地址只对白名单索引主机与 HTTPS 全文目标放行，由已审阅主机名和 TLS 绑定身份，明文 HTTP 目标仍要求真实公网地址）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
+组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验；本机代理的 fake-IP 占位地址只对白名单索引主机与 HTTPS 全文目标放行，由已审阅主机名和 TLS 绑定身份，明文 HTTP 目标仍要求真实公网地址）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。启用后客户端在组件处于已启用状态且本机尚未确认时显示外部检索提醒，确认只覆盖当前这次启用，组件关闭后再启用会重新提醒，保持启用时刷新页面不会重复提醒。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
 
 组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。字段变更在下一次工具调用时生效，无需重启 profile：
 
@@ -192,7 +192,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ## 文档解析组件配置 (`dsh-zotero/enrichment`)
 
-内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。组件挂载不发起上传；客户端在组件处于已启用状态且本机尚未确认时显示外发提醒，确认后按浏览器持久记住。组件不注册模型工具、不注入提示词段。普通读取通过核心的只读 `FulltextEnhancer.lookup` 槽复用有效产物，未命中时沿用 Zotero 全文索引或获准的本地 PDF 抽取。组件未启用时槽为空，两条读取链路沿用原路径。
+内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。组件挂载不发起上传；客户端在组件处于已启用状态且本机尚未确认时显示外发提醒，确认只覆盖当前这次启用，组件关闭后再启用会重新提醒，保持启用时刷新页面不会重复提醒。组件不注册模型工具、不注入提示词段。普通读取通过核心的只读 `FulltextEnhancer.lookup` 槽复用有效产物，未命中时沿用 Zotero 全文索引或获准的本地 PDF 抽取。组件未启用时槽为空，两条读取链路沿用原路径。
 
 一次 MinerU 解析由用户提交一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL，并通过远程动作、会话访问检查。打开 PDF、保存设置、启动服务不提交、恢复或上传 MinerU 任务。本地语义排序不调用 MinerU；解析不需要语义模型。旧 profile 中的 `allowDocumentUpload` 字段会被忽略。
 

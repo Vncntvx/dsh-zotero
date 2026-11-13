@@ -23,6 +23,7 @@ import { createFakeContextMenus, type FakeContextMenuRegistration } from './fake
 import { fakeProvideRoot } from './fake-slot-root.ts'
 import { fakeEntryErrorSeam, type EntryErrorListener } from './slot-crash-seam.ts'
 import { emptyCredentialPort } from './credential-port.ts'
+import { fakeLibraryWire, type FakeLibraryWire } from './library-wire-stubs.ts'
 
 export interface FakeSlotsEntry {
   name: string
@@ -53,17 +54,13 @@ export interface FakeApplyWorld {
   libraryScope: ReturnType<typeof fakeScope>
   /** The `scholarly` namespace's form. */
   scholarlyScope: ReturnType<typeof fakeScope>
+  /** The `enrichment` namespace's form. */
+  enrichmentScope: ReturnType<typeof fakeScope>
   /** Scripted namespace `status` result; defaults to ok. */
   status: () => Promise<unknown>
   resolveAttachment: (ref: string) => Promise<unknown>
   /** The wire reads/writes the library panel face forwards. */
-  libraryWire: {
-    browse: (request: unknown) => Promise<unknown>
-    search: (request: unknown) => Promise<unknown>
-    item: (request: unknown) => Promise<unknown>
-    childPage: (request: unknown) => Promise<unknown>
-    write: (request: unknown) => Promise<unknown>
-  }
+  libraryWire: FakeLibraryWire
   /** Dependency lists each `ctx.inject` call declared, in call order. */
   injectDeps: string[][]
   /** Fibers disposed through the entry's disposer. */
@@ -122,12 +119,13 @@ export function fakeWorld(
   const scope = fakeScope()
   const libraryScope = fakeScope()
   const scholarlyScope = fakeScope()
+  const enrichmentScope = fakeScope()
   // Keep shared forms distinct: library flags written through the core form do not apply.
   // Resolve world.scope live so settings-gating specs can replace the core form.
   const forms: Record<string, ReturnType<typeof fakeScope>> = {
     [ZOTERO_LIBRARY_SETTINGS_NAMESPACE]: libraryScope,
     [SCHOLARLY_SETTINGS_NAMESPACE]: scholarlyScope,
-    [ENRICHMENT_SETTINGS_NAMESPACE]: fakeScope(),
+    [ENRICHMENT_SETTINGS_NAMESPACE]: enrichmentScope,
   }
   const whileServedRegistrations: FakeApplyWorld['whileServedRegistrations'] = []
   // Every Zotero endpoint action is granted by default: the world models the
@@ -153,43 +151,10 @@ export function fakeWorld(
     scope,
     libraryScope,
     scholarlyScope,
+    enrichmentScope,
     status: async () => ({ ok: true, value: { connected: true } }),
     resolveAttachment: async (ref: string) => ({ ok: true, value: { ref, kind: 'file' } }),
-    libraryWire: {
-      browse: async () => ({
-        ok: true,
-        value: { kind: 'libraries', items: [], total: 0, offset: 0, returned: 0, limit: 50 },
-      }),
-      search: async () => ({
-        ok: true,
-        value: {
-          scope: { kind: 'library', library: { type: 'user', id: 0 } },
-          items: [],
-          total: 0,
-          offset: 0,
-          returned: 0,
-          limit: 50,
-        },
-      }),
-      item: async () => ({
-        ok: true,
-        value: {
-          ref: 'zotero://user/0/item/ABCD1234',
-          itemType: 'journalArticle',
-          title: 'Paper',
-          creators: [],
-          abstractTruncated: false,
-          tags: [],
-          collections: [],
-          children: { total: 0 },
-        },
-      }),
-      childPage: async () => ({
-        ok: true,
-        value: { kind: 'notes', page: { total: 0, returned: 0, offset: 0, limit: 50, items: [] } },
-      }),
-      write: async () => ({ ok: true, value: { kind: 'applied', message: 'done' } }),
-    },
+    libraryWire: fakeLibraryWire(),
     injectDeps: [],
     uiDisposes: 0,
     disposeOrder: [],

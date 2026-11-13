@@ -182,9 +182,14 @@ export const en = {
   enrichmentTokenVisitMineru: 'Open mineru.net ↗',
   enrichmentEnableNoticeTitle: 'Document parsing is enabled',
   enrichmentEnableNoticeDescription:
-    'Submitting a specific Zotero PDF attachment or public PDF URL sends that document to MinerU (mineru.net) for parsing; the Markdown artifact is stored locally. Ordinary searches, PDF reading, and settings saves never upload a document, and every parse needs your explicit submission in this conversation.',
+    'Submitting a specific Zotero PDF attachment or a public PDF URL sends that document to MinerU (mineru.net) for parsing, and the Markdown result is saved locally. Ordinary searches, opening PDFs, and saving settings upload nothing, and each parse still needs your explicit submission of that document. This reminder comes back when the component is turned off and on again.',
   enrichmentEnableNoticeConfirm: 'Got it',
   enrichmentEnableNoticeClose: 'Close',
+  scholarlyEnableNoticeTitle: 'External scholarly retrieval is enabled',
+  scholarlyEnableNoticeDescription:
+    'With dsh-zotero/scholarly enabled, the agent can search external scholarly sources from a conversation: queries, DOIs, and identifiers go to the allowlisted scholarly indexes (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, Unpaywall), and open-access full-text reading may download a PDF from any public HTTP(S) host. Searching the local library, opening a local PDF, and saving settings send none of these requests. This reminder comes back when the component is turned off and on again.',
+  scholarlyEnableNoticeConfirm: 'Got it',
+  scholarlyEnableNoticeClose: 'Close',
   groupEnrichmentOutput: 'Output & Data Notice',
   groupEnrichmentOutputDesc:
     'Documents you submit are sent to MinerU for parsing; the Markdown artifacts are saved in the directory below. Ordinary reads only reuse existing artifacts and never upload a document.',
@@ -1015,9 +1020,14 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentTokenVisitMineru: '打开 mineru.net ↗',
   enrichmentEnableNoticeTitle: '文档解析组件已启用',
   enrichmentEnableNoticeDescription:
-    '提交具体的 Zotero PDF 附件或公开 PDF URL 时，该文档会发送到 MinerU（mineru.net）解析，Markdown 保存在本机。普通检索、打开 PDF 和保存设置不会上传文档；每次解析都需要你提交该文档。',
+    '提交具体的 Zotero PDF 附件或公开 PDF URL 时，该文档会发往 MinerU（mineru.net）解析，Markdown 结果保存在本机。普通检索、打开 PDF 和保存设置都不会上传文档；每次解析仍然需要你明确提交那一份文档。组件关闭后再次启用，这条提醒会重新出现。',
   enrichmentEnableNoticeConfirm: '我知道了',
   enrichmentEnableNoticeClose: '关闭',
+  scholarlyEnableNoticeTitle: '外部学术检索组件已启用',
+  scholarlyEnableNoticeDescription:
+    '启用 dsh-zotero/scholarly 后，Agent 可以在对话中检索外部学术资料：检索词、DOI 和标识符会发往白名单内的学术索引（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org、Unpaywall），开放获取全文读取可能从任意公网 HTTP(S) 主机下载 PDF。检索本地文献库、打开本地 PDF 和保存设置都不会发出这些请求。组件关闭后再次启用，这条提醒会重新出现。',
+  scholarlyEnableNoticeConfirm: '我知道了',
+  scholarlyEnableNoticeClose: '关闭',
   groupEnrichmentOutput: '输出与数据说明',
   groupEnrichmentOutputDesc:
     '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。普通读取只复用已有产物，不上传文档。',

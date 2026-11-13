@@ -88,7 +88,7 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 
 ## 学术检索（可选组件）
 
-学术检索由 `dsh-zotero/scholarly` 组件提供，随包发布，默认关闭。启用后注册 7 个外部检索工具：索引检索访问白名单内的学术平台，开放获取 PDF 全文下载访问公网 HTTP(S) 主机（支持本机代理与 fake-IP 映射，明文 HTTP 目标要求真实公网地址）。
+学术检索由 `dsh-zotero/scholarly` 组件提供，随包发布，默认关闭。启用后注册 7 个外部检索工具：索引检索访问白名单内的学术平台，开放获取 PDF 全文下载访问公网 HTTP(S) 主机（支持本机代理与 fake-IP 映射，明文 HTTP 目标要求真实公网地址）。组件首次在客户端启用时会弹出外发提醒，说明检索词与标识符涉及的目标主机。
 
 - 检索覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 和 DBLP，结果按相关度融合去重，并标出「已在本地库」。
 - 能按 DOI、arXiv ID、PMID、PMCID 读开放获取全文并做段落定位，也能追踪引文网络。
@@ -99,7 +99,7 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 
 ## 文档解析（可选组件）
 
-文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布，默认关闭。组件支持主动解析 PDF、已有 Markdown 产物复用，以及本地语义排序与模型管理。用户可在文献面板中针对指定的 Zotero PDF 附件或公开 PDF URL 提交解析任务。
+文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布，默认关闭。组件支持主动解析 PDF、已有 Markdown 产物复用，以及本地语义排序与模型管理。用户可在文献面板中针对指定的 Zotero PDF 附件或公开 PDF URL 提交解析任务；首次启用时客户端会显示外发解析提醒。
 
 - `free` 使用免 Token 的 Agent 轻量接口（API 侧 ≤10 MB、≤20 页），`pro` 使用精准接口（API 侧 ≤200 MB、≤200 页）并需要 Token；接口模式与是否配置 Token 相互独立。解析失败时不切换模式，也不以本地抽取文本冒充成功。
 - 普通 `zotero_retrieve` 与 `scholarly_read` 通过核心只读 `FulltextEnhancer.lookup` 查询同一来源、仍有效的 Markdown；命中时优先使用，包括有效短文档。无产物或源已变化时记为未命中，本地读取继续走 Zotero `/fulltext`，学术读取沿已获准的 PDF 下载与本地抽取；权限、I/O、协议损坏等故障按错误处理，不记为未命中。已有且有效的产物始终可读取。

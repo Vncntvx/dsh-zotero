@@ -101,7 +101,7 @@ Child write isolation includes all 15 core tools and `scholarly_save_to_zotero`.
 
 ## Scholarly Literature Subsystem (`src/scholarly/`)
 
-`dsh-zotero/scholarly` is an independent bundle component, shipped with the package but disabled by default. Whether the component is mounted is the only authorization: mounting registers seven model tools and the component's own prompt section and allows requests to the external indexes in the explicit allowlist; while it is not mounted, its service, transport, and tools do not exist.
+`dsh-zotero/scholarly` is an independent bundle component, shipped with the package but disabled by default. Whether the component is mounted is the only authorization: mounting registers seven model tools and the component's own prompt section and allows requests to the external indexes in the explicit allowlist; while it is not mounted, its service, transport, and tools do not exist. The client shows the external-retrieval disclosure while the component is served and this browser has not acknowledged the current enable; the acknowledgement covers only that enable, so turning the component off and on again discloses again, while reloading with it still on does not. The disclosure explains the authorized request scope and is not a second switch.
 
 - Authorization and prompt share one source: the policy prompt is registered by the component itself (`src/scholarly/prompt.ts`, section name `scholarly:policy`), appears when the component mounts, and disappears when it unmounts; it names only the tools the step admits and renders nothing when that set is empty; the web_fetch route ban survives any admitted external scholarly tool; the parent component's policy section describes no external retrieval tool and only classifies the save entry by name when that entry is on the step's surface.
 - Host allowlist: `src/scholarly/transport/hosts.ts` is the single source of truth; both the allowed hosts and the per-host rate interval derive from `SCHOLARLY_HOSTS`.
@@ -115,7 +115,7 @@ Child write isolation includes all 15 core tools and `scholarly_save_to_zotero`.
 
 ## Document Enrichment Subsystem (`src/enrichment/`)
 
-`dsh-zotero/enrichment` is an independent bundle component, shipped with the package but disabled by default. It registers no model tools, prompt section, or skills. Enabling the component accepts MinerU document egress and makes parsing and model management available; every upload still requires the user to submit a specific document and pass remote-action and session checks, and the client shows the egress disclosure whenever the component is served until this browser acknowledges it, remembering the acknowledgement per client — a deployment already enabled at boot sees it too.
+`dsh-zotero/enrichment` is an independent bundle component, shipped with the package but disabled by default. It registers no model tools, prompt section, or skills. Enabling the component accepts MinerU document egress and makes parsing and model management available; every upload still requires the user to submit a specific document and pass remote-action and session checks, and the client shows the egress disclosure whenever the component is served until this browser acknowledges the current enable, so a deployment already enabled at boot sees it too. The acknowledgement covers only that enable: once the client observes the component off, the next enable discloses again, while a reload with it still on does not.
 
 ### Read-only artifact seam
 

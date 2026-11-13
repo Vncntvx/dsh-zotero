@@ -33,6 +33,7 @@ export { CREDENTIAL_REFERENCE }
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { asFormScope } from './helpers/form-scope.ts'
+import type { NamespaceStatus } from './helpers/namespace-status.ts'
 import { SCHOLARLY_KEY_FIELD_PAIRS } from '../credential-names.js'
 
 /** Settings text fields, including the three credential references. */
@@ -93,6 +94,8 @@ interface ScholarlySecretFieldState {
 
 /** Everything the Scholarly configuration card renders. */
 export interface ScholarlyCardState extends SettingsFormShell {
+  /** Namespace lifecycle from the shared settings form; `available` is its boolean face. */
+  readonly namespaceStatus: NamespaceStatus
   readonly email: SettingsFieldState
   readonly s2ApiKeyEnv: SettingsFieldState
   readonly ncbiApiKeyEnv: SettingsFieldState
@@ -188,6 +191,7 @@ export class ScholarlyFormController {
 
     return {
       ...shell,
+      namespaceStatus: this.form.getSnapshot().status,
       email: this.model.field('email'),
       s2ApiKeyEnv: this.model.field('s2ApiKeyEnv'),
       ncbiApiKeyEnv: this.model.field('ncbiApiKeyEnv'),

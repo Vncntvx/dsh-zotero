@@ -1,22 +1,26 @@
 /**
- * Root-overlay disclosure for the moment the enrichment component is enabled.
+ * Root-overlay disclosure for the enrichment component's current enable.
  *
- * It explains what enabling permits and does not gate the component; every
- * parse still needs an explicit submission of one document.
+ * It appears while the component is served and this client has not acknowledged
+ * the current enable. It explains what enabling permits and does not gate the
+ * component; every parse still needs an explicit submission of one document.
  * @module dsh-zotero/client/enrichment/EnableNotice
  */
 
 import type { ReactNode } from 'react'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { EnrichmentEnableNoticeFace } from './enable-notice.ts'
+import { EnableNoticeModal } from '../components/EnableNoticeModal.tsx'
+import type { EnableNoticeFace } from '../enable-notice.ts'
+
+/** The hook name the enrichment entry publishes its snapshot under. */
+export type EnrichmentEnableNoticeFace = EnableNoticeFace<'enrichmentEnableNotice'>
 
 export type EnrichmentEnableNoticeProps = PropsRuntime<'shell.overlay'> &
   PropsLocale<'zotero'> &
   InjectFace<EnrichmentEnableNoticeFace>
 
 /**
- * Render the disclosure while the component's enable transition is open.
+ * Render the disclosure while this client has not acknowledged it.
  * @param props - the notice hook, its dismissal, and the locale seat.
  * @returns the modal, or nothing after dismissal.
  */
@@ -27,17 +31,13 @@ export function EnrichmentEnableNotice({
 }: EnrichmentEnableNoticeProps): ReactNode {
   const open = useEnrichmentEnableNotice((state) => state.open)
   return (
-    <Modal
+    <EnableNoticeModal
       open={open}
-      onClose={dismiss}
       title={t('enrichmentEnableNoticeTitle')}
       description={t('enrichmentEnableNoticeDescription')}
+      confirmLabel={t('enrichmentEnableNoticeConfirm')}
       closeLabel={t('enrichmentEnableNoticeClose')}
-      footer={
-        <Button variant="primary" onClick={dismiss}>
-          {t('enrichmentEnableNoticeConfirm')}
-        </Button>
-      }
+      onDismiss={dismiss}
     />
   )
 }

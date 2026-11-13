@@ -4,30 +4,25 @@
  * the enrichment card store that `EnrichmentFormController.project()` publishes,
  * not a hand-built status source.
  *
- * The unit spec next door owns the notice's own rules. This one owns the
- * connection: if the controller stops publishing `namespaceStatus`, points the
- * hook at another store, or the notice reads a different field, the modal would
- * silently never appear in production while every unit case stayed green.
+ * The shared wiring suite owns both components' connection between the real
+ * card store and the notice, so a controller that stops publishing
+ * `namespaceStatus` cannot pass one component's spec while silently failing
+ * the other's.
  * @module tests/client/enrichment/enable-notice-wiring
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
 import {
   EnrichmentFormController,
   type EnrichmentCredentialPort,
   type EnrichmentModelPort,
 } from '../../../src/client/enrichment-form-controller.ts'
-import { EnrichmentEnableNoticeController } from '../../../src/client/enrichment/enable-notice.ts'
-import { acknowledgementOf } from './support/acknowledgement.ts'
 import { fakeScope } from '../helpers/fake-scope.ts'
+import { describeEnableNoticeWiring } from '../helpers/enable-notice-wiring.ts'
 
-const controllers: EnrichmentFormController[] = []
-const notices: EnrichmentEnableNoticeController[] = []
-
-afterEach(() => {
-  for (const notice of notices.splice(0)) notice.dispose()
-  for (const controller of controllers.splice(0)) controller.dispose()
-})
+interface EnrichmentCard {
+  readonly scope: ReturnType<typeof fakeScope>
+  readonly controller: EnrichmentFormController
+}
 
 function credentialPort(): EnrichmentCredentialPort {
   return {
@@ -68,45 +63,14 @@ function modelPort(): EnrichmentModelPort {
   }
 }
 
-describe('the end-to-end enable disclosure', () => {
-  it('opens when the component becomes served through the real card store', () => {
-    const scope = fakeScope({ status: 'unavailable' })
-    const controller = new EnrichmentFormController(scope, credentialPort(), modelPort())
-    controllers.push(controller)
-    const store = controller.inject().hooks.enrichmentCard
-    const acknowledgement = acknowledgementOf()
-    const notice = new EnrichmentEnableNoticeController(store, acknowledgement)
-    notices.push(notice)
-    const open = () => notice.inject().hooks.enrichmentEnableNotice.getSnapshot().open
-
-    // The component is not served: nothing is owed.
-    expect(store.getSnapshot().namespaceStatus).toBe('unavailable')
-    expect(open()).toBe(false)
-
-    // The deployment flips the component on: the form's namespace becomes
-    // ready, the controller republishes, and the disclosure opens.
-    scope.publish({ status: 'ready' })
-    expect(store.getSnapshot().namespaceStatus).toBe('ready')
-    expect(open()).toBe(true)
-
-    // The user accepts; the acknowledgement is written and the notice closes,
-    // and a later status refresh does not reopen it.
-    notice.dismiss()
-    expect(acknowledgement.read()).toBe(true)
-    expect(open()).toBe(false)
-    scope.publish({ revision: 2 })
-    expect(open()).toBe(false)
-  })
-
-  it('opens for a deployment already enabled when the client mounts', () => {
-    const scope = fakeScope({ status: 'ready' })
-    const controller = new EnrichmentFormController(scope, credentialPort(), modelPort())
-    controllers.push(controller)
-    const store = controller.inject().hooks.enrichmentCard
-    const notice = new EnrichmentEnableNoticeController(store, acknowledgementOf())
-    notices.push(notice)
-
-    expect(store.getSnapshot().namespaceStatus).toBe('ready')
-    expect(notice.inject().hooks.enrichmentEnableNotice.getSnapshot().open).toBe(true)
-  })
+describeEnableNoticeWiring<EnrichmentCard, 'enrichmentEnableNotice'>({
+  label: 'the end-to-end enrichment enable disclosure',
+  hook: 'enrichmentEnableNotice',
+  cardOf: (status) => {
+    const scope = fakeScope({ status })
+    return { scope, controller: new EnrichmentFormController(scope, credentialPort(), modelPort()) }
+  },
+  storeOf: (card) => card.controller.inject().hooks.enrichmentCard,
+  publish: (card, patch) => card.scope.publish(patch),
+  dispose: (card) => card.controller.dispose(),
 })
