@@ -691,6 +691,15 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
                   exportItem={canExport ? props.export : undefined}
+                  {...(props.parse !== undefined && canReadArtifact
+                    ? {
+                        parsedArtifact: {
+                          sessionId: props.sessionId,
+                          read: props.parse.remote.documentArtifact,
+                          revision: parseSurface.revision,
+                        },
+                      }
+                    : {})}
                 />
               </div>
             </div>

@@ -49,9 +49,18 @@ import { CommentIcon } from '../CommentIcon.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { LibraryCitationActions, itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
+import { ParsePdfAction, type ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
 import { pdfAttachmentOf, type LibraryItemState } from './library-model.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
+
+/** The browser face a parsed-artifact row needs: the session and its read. */
+export interface ParsedArtifactFace {
+  readonly sessionId: string
+  readonly read: ParsedArtifactReader
+  /** Bumped when a parse finishes so every row re-probes the store. */
+  readonly revision?: number
+}
 
 interface LibraryInspectorProps {
   readonly t: TranslateNS<'zotero'>
@@ -71,6 +80,8 @@ interface LibraryInspectorProps {
   /** The panel's export face; the citation-copy controls stay wire-disabled without it. */
   readonly readPdf?: (ref: string) => Promise<void>
   readonly parsePdf?: (attachment: ZoteroAttachmentRowView) => void
+  /** Read-only access to a PDF's parsed result; absent when enrichment is off. */
+  readonly parsedArtifact?: ParsedArtifactFace
   readonly exportItem?: LibraryExportItem
 }
 
@@ -200,7 +211,6 @@ function AttachmentItem({
   resolveAttachment,
   openProtocol,
   readPdf,
-  parsePdf,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly attachment: ZoteroAttachmentRowView
@@ -209,7 +219,6 @@ function AttachmentItem({
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
   readonly openProtocol?: (url: string) => Promise<boolean>
   readonly readPdf?: (ref: string) => Promise<void>
-  readonly parsePdf?: (attachment: ZoteroAttachmentRowView) => void
 }) {
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -276,18 +285,6 @@ function AttachmentItem({
         </Button>
       ) : (
         <div className={css.childRow}>{content}</div>
-      )}
-      {parsePdf && isPdfContentType(attachment.contentType) && (
-        <div className={css.cardActions}>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={t('libraryParsePdfNamed', { title: attachment.title })}
-            onClick={() => parsePdf(attachment)}
-          >
-            {t('libraryParsePdf')}
-          </Button>
-        </div>
       )}
     </li>
   )
@@ -495,6 +492,7 @@ export function LibraryInspector({
   exportItem,
   readPdf,
   parsePdf,
+  parsedArtifact,
 }: LibraryInspectorProps) {
   // The abstract's expand state resets with the selection: the section
   // remounts through the inspector's key when another row is picked.
@@ -546,17 +544,6 @@ export function LibraryInspector({
   const creators = formatCreatorsList(detail.creators)
   const origin = [detail.venue, detail.date].filter(Boolean).join(' · ')
   const pdfAttachment = pdfAttachmentOf(detail)
-  const detailIdentity = parseRefIdentity(detail.ref)
-  const pdfIdentity = pdfAttachment && parseRefIdentity(pdfAttachment.ref)
-  const selfPdf =
-    detail.itemType === 'attachment' &&
-    detailIdentity &&
-    pdfIdentity &&
-    detailIdentity.key === pdfIdentity.key &&
-    detailIdentity.libraryType === pdfIdentity.libraryType &&
-    detailIdentity.libraryId === pdfIdentity.libraryId
-      ? pdfAttachment
-      : undefined
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {
     if (!inputActions) return
@@ -593,10 +580,16 @@ export function LibraryInspector({
               t={t}
             />
           )}
-          {parsePdf && selfPdf && (
-            <Button variant="outline" size="sm" onClick={() => parsePdf(selfPdf)}>
-              {t('libraryParsePdf')}
-            </Button>
+          {parsePdf && pdfAttachment !== undefined && (
+            <ParsePdfAction
+              t={t}
+              sessionId={parsedArtifact?.sessionId ?? ''}
+              target={{ kind: 'attachment', ref: pdfAttachment.ref }}
+              title={pdfAttachment.title}
+              read={parsedArtifact?.read}
+              revision={parsedArtifact?.revision}
+              onParse={() => parsePdf(pdfAttachment)}
+            />
           )}
           {inputActions !== undefined && (
             <Button
@@ -734,7 +727,6 @@ export function LibraryInspector({
               t={t}
               attachment={attachment}
               readPdf={readPdf}
-              parsePdf={parsePdf}
               openFile={openFile}
               resolveAttachment={resolveAttachment}
               openProtocol={openProtocol}

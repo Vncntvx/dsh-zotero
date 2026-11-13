@@ -275,6 +275,9 @@ export function useDocumentParseSurface(
   }, [port, sessionId, sessionAllowed])
   const [selection, setSelection] = useState<DocumentParseSelection>()
   const [open, setOpen] = useState(false)
+  // A finished parse changes which artifact exists; the inspector's derived
+  // rows re-probe on this counter instead of polling.
+  const [revision, setRevision] = useState(0)
   const select = (selection: DocumentParseSelection) => {
     setSelection({ ...selection, operation: port?.recall(selection) })
     setOpen(true)
@@ -295,6 +298,7 @@ export function useDocumentParseSurface(
   return {
     openAttachment,
     openUrl,
+    revision,
     dialog: port && selection && (
       <>
         {deployment.error && (
@@ -307,7 +311,12 @@ export function useDocumentParseSurface(
           remote={port.remote}
           jobs={port.jobs}
           capabilities={capabilities}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+            // Closing the dialog is the one point where a newly committed
+            // artifact becomes visible in the inspector behind it.
+            setRevision((previous) => previous + 1)
+          }}
           t={t}
         />
       </>

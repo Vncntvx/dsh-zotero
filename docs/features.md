@@ -101,11 +101,12 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 
 文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布，默认关闭。组件支持主动解析 PDF、已有 Markdown 产物复用，以及本地语义排序与模型管理。用户可在文献面板中针对指定的 Zotero PDF 附件或公开 PDF URL 提交解析任务；首次启用时客户端会显示外发解析提醒。
 
-- `free` 使用免 Token 的 Agent 轻量接口（API 侧 ≤10 MB、≤20 页），`pro` 使用精准接口（API 侧 ≤200 MB、≤200 页）并需要 Token；接口模式与是否配置 Token 相互独立。解析失败时不切换模式，也不以本地抽取文本冒充成功。
-- 普通 `zotero_retrieve` 与 `scholarly_read` 通过核心只读 `FulltextEnhancer.lookup` 查询同一来源、仍有效的 Markdown；命中时优先使用，包括有效短文档。无产物或源已变化时记为未命中，本地读取继续走 Zotero `/fulltext`，学术读取沿已获准的 PDF 下载与本地抽取；权限、I/O、协议损坏等故障按错误处理，不记为未命中。已有且有效的产物始终可读取。
-- 解析 Markdown 落在 `<outputDir>/<sha256>/`；本地附件按大小/修改时间 + 内容指纹缓存，URL 源按 URL 缓存并用一次不带 token 的 HEAD 校验；源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length；`lookup` 先查源索引，命中时不下载 PDF、不联系 MinerU。来源元数据不保存 URL 的 query/fragment；私有任务回执只在上传完成前暂存签名地址。
-- 输出目录支持绝对路径或 `~/`；相对路径在保存时拒绝，不存在/不可写/敏感目录在首次解析时以 `ZOTERO_ENRICHMENT_OUTPUT_INVALID` 失败。
-- 本地向量语义排序提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡默认推荐 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置与物理模型版本解耦，模型升级时配置保持不变。模型需手动下载后启用（支持 HF-Mirror 镜像与 Hugging Face 直连）。关闭语义时使用完整 BM25 词面排序；开启但所选模型缺失、损坏或本地推理运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 失败并提示下载，不降级为词面结果。模型参数量 100M~600M，面向 16GB 内存、纯 CPU 设备。六档模型均已实机验证：零实词重合的改写提问下语义 recall@4 为 58–96%，无关语料不产生语义命中。开启语义检索但未下载模型，或选用精准解析模式但未配置 Token 时，界面显示提示。
+- `free` 使用轻量接口（≤10 MB、≤20 页，免 Token），`pro` 使用精准接口（≤200 MB、≤200 页，需 Token）；接口模式与 Token 独立配置。解析失败时直接返回错误信息。
+- `zotero_retrieve` 与 `scholarly_read` 通过核心 `FulltextEnhancer.lookup` 查询对应来源的有效 Markdown 产物并优先使用；未命中或源文件变更时，分别回退至 Zotero `/fulltext` 与学术 PDF 本地抽取。
+- 解析后的 Markdown 存储在 `<outputDir>/<sha256>/`。本地附件按大小、修改时间与内容指纹缓存；URL 来源通过 HEAD 请求校验 ETag 或 Last-Modified。源索引命中时直接复用既有产物。
+- 解析成功且产物仍有效时，条目动作行里与「阅读 PDF」并排的「解析此 PDF」会变成「查看解析结果」：点开后按页读取并在面板内渲染 Markdown，可复制或下载完整正文，也可从此处重新解析。没有产物或来源已变化时，该按钮保持提交解析；附件列表本身只有附件。
+- 输出目录支持绝对路径或 `~/`；相对路径在保存时拒绝，目录不可用时解析返回 `ZOTERO_ENRICHMENT_OUTPUT_INVALID`。
+- 本地向量语义排序提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡默认推荐 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置与物理模型版本解耦。模型下载后即可启用（支持 HF-Mirror 镜像与 Hugging Face 直连），在 16GB 内存 CPU 设备上运行。语义关闭时使用 BM25 词面排序；开启后若模型未就绪，检索返回 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 并引导下载。六档模型在零实词重合改写测试中语义 recall@4 达 58–96%。开启语义检索但未下载模型，或选用精准模式未填 Token 时，界面会有对应状态提示。
 
 ## 能力与工具对照
 
@@ -115,7 +116,7 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 | 检索                 | `zotero_search`                                  | 条目列表检索与筛选       | 记录检索条件与命中      |
 | 详情与笔记/附件/批注 | `zotero_get`                                     | 条目检视与子集合         | 记录被读取的条目与片段  |
 | 原文片段             | `zotero_retrieve`                                | 不提供                   | 记录片段与来源          |
-| 高质量全文（可选）   | `zotero_retrieve`、`scholarly_read` 使用解析结果 | 不提供                   | 记录读取                |
+| 高质量全文（可选）   | `zotero_retrieve`、`scholarly_read` 使用解析结果 | 查看解析结果（按页渲染） | 记录读取                |
 | 定位 PDF             | `zotero_get` (`locations="best"`)                | 阅读 PDF                 | 记录定位结果            |
 | 引用与导出           | `zotero_export`                                  | 复制引用、BibTeX 等      | 记录导出产物            |
 | 写入                 | 15 个写工具（可选）                              | 受审批写入               | 不记录                  |

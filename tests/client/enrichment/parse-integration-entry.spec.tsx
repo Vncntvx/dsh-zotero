@@ -33,22 +33,27 @@ async function inspect(title: string) {
 }
 
 describe('session library parsing entry', () => {
-  it('selects exactly the clicked child PDF and starts only after explicit confirmation', async () => {
+  it("parses the item's primary PDF from the action row, only after confirmation", async () => {
     const runtime = world()
     runtime.mount()
     await inspect(PARENT_DETAIL.title)
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(runtime.remote.documentArtifact).not.toHaveBeenCalled()
+    // Opening the detail probes each PDF's artifact metadata once, read-only:
+    // that probe is what lets the inspector state "this has a parsed result".
+    expect(runtime.remote.documentArtifact).toHaveBeenCalled()
+    for (const call of runtime.remote.documentArtifact.mock.calls)
+      expect(call[0]).not.toHaveProperty('read')
     expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Parse PDF: Not a PDF' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: Selected PDF' }))
+    // The parse command is an item action beside "Read PDF", not a row in the
+    // attachment list, and it targets the item's primary PDF.
+    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
     await settle()
     expect(screen.getByRole('dialog', { name: en.parseTitle })).toBeDefined()
-    expect(document.querySelector('[data-parse-target-label]')?.textContent).toBe('Selected PDF')
+    expect(document.querySelector('[data-parse-target-label]')?.textContent).toBe('First PDF')
     expect(runtime.remote.documentArtifact).toHaveBeenCalledWith(
       {
         sessionId: PARSE_SESSION,
-        target: { kind: 'attachment', ref: CHILD_PDFS[1]!.ref },
+        target: { kind: 'attachment', ref: CHILD_PDFS[0]!.ref },
       },
       expect.any(AbortSignal),
     )
@@ -58,7 +63,7 @@ describe('session library parsing entry', () => {
     expect(runtime.remote.startDocumentParse).toHaveBeenCalledTimes(1)
     expect(runtime.remote.startDocumentParse).toHaveBeenCalledWith({
       sessionId: PARSE_SESSION,
-      target: { kind: 'attachment', ref: CHILD_PDFS[1]!.ref },
+      target: { kind: 'attachment', ref: CHILD_PDFS[0]!.ref },
       operationId: expect.any(String),
       action: 'parse',
     })
@@ -69,7 +74,7 @@ describe('session library parsing entry', () => {
     const runtime = world()
     runtime.mount(TOP_PDF_DETAIL)
     await inspect(TOP_PDF_DETAIL.title)
-    fireEvent.click(screen.getByRole('button', { name: en.libraryParsePdf }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: Selected PDF' }))
     await settle()
     expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: en.parseConfirm }))
@@ -115,7 +120,7 @@ describe('session library parsing entry', () => {
     const runtime = world()
     let panel = runtime.mount()
     await inspect(PARENT_DETAIL.title)
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: Selected PDF' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
     await settle()
     fireEvent.click(screen.getByRole('button', { name: en.parseConfirm }))
     await settle()
@@ -124,7 +129,7 @@ describe('session library parsing entry', () => {
     expect(runtime.jobs.kill).not.toHaveBeenCalled()
     panel = runtime.remount(panel)
     await inspect(PARENT_DETAIL.title)
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: Selected PDF' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
     await settle()
     expect(runtime.remote.startDocumentParse).toHaveBeenCalledTimes(1)
     expect(runtime.remote.documentParseReceipt).toHaveBeenCalledTimes(2)

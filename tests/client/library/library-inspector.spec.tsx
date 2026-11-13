@@ -21,6 +21,7 @@ function mountInspector(
   inputActions?: InputActions,
   openFile?: (path: string, options?: any) => void,
   resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>,
+  parse?: Pick<Parameters<typeof LibraryInspector>[0], 'parsePdf' | 'parsedArtifact'>,
 ) {
   const pageChild = vi.fn(),
     retryChild = vi.fn()
@@ -47,6 +48,7 @@ function mountInspector(
         },
       })),
     openProtocol,
+    ...parse,
   }
   return {
     ...render(
@@ -640,5 +642,24 @@ describe('library inspector', () => {
     expect(inputActions.setDraft).not.toHaveBeenCalled()
     expect(inputActions.insertText).not.toHaveBeenCalled()
     expect(inputActions.persistDraft).not.toHaveBeenCalled()
+  })
+
+  it('puts the parse action in the header beside Read PDF, not in the attachment list', async () => {
+    const parsePdf = vi.fn()
+    const read = vi.fn(async () => ({ ok: true as const, value: { kind: 'missing' as const } }))
+    mountInspector(ITEM_DETAIL, {}, undefined, undefined, undefined, {
+      parsePdf,
+      parsedArtifact: { sessionId: 'parse-session', read, revision: 1 },
+    })
+    await act(async () => {})
+    // One header action, named for the item's primary PDF.
+    const parseButtons = screen.getAllByRole('button', {
+      name: zh.libraryParsePdfNamed.replace('{title}', 'paper.pdf'),
+    })
+    expect(parseButtons).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: zh.libraryParsePdf })).toBeNull()
+    fireEvent.click(parseButtons[0]!)
+    expect(parsePdf).toHaveBeenCalledTimes(1)
+    expect(parsePdf.mock.calls[0]![0]).toMatchObject({ contentType: 'application/pdf' })
   })
 })
