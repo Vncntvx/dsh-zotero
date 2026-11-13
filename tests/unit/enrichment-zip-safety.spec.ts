@@ -60,7 +60,10 @@ describe('extractParsedFiles', () => {
 
   it("keeps a figure-heavy archive's images beside the Markdown", () => {
     const entries: Record<string, Uint8Array> = {
-      'full.md': encoder.encode('# Figure heavy'),
+      'full.md': encoder.encode(
+        '# Figure heavy\n\n' +
+          Array.from({ length: 300 }, (_, i) => `![](images/page_${i}_image_0.png)`).join('\n\n'),
+      ),
       'doc_content_list.json': encoder.encode('[]'),
     }
     for (let index = 0; index < 300; index += 1) {
@@ -110,7 +113,10 @@ describe('extractParsedFiles', () => {
     const huge = new Uint8Array(9 * 1024 * 1024)
     expect(() =>
       extractParsedFiles(
-        zipSync({ 'full.md': encoder.encode('# Big'), 'images/huge.png': huge }, { level: 0 }),
+        zipSync(
+          { 'full.md': encoder.encode('# Big\n\n![](images/huge.png)'), 'images/huge.png': huge },
+          { level: 0 },
+        ),
       ),
     ).toThrow(/unsafe|oversized|excessive/)
   })

@@ -1,3 +1,4 @@
+import { ARTIFACT_READER_DEFAULTS } from '../../src/artifact-reader-preferences.ts'
 /**
  * The enrichment config resolver: unwraps volatile references and refuses
  * malformed values, mirroring the library resolver's contract.
@@ -17,6 +18,7 @@ function volatileOf<T>(value: T): { get: () => T } & Record<symbol, unknown> {
 describe('resolveEnrichmentConfig', () => {
   it('returns the defaults for an absent section', () => {
     expect(resolveEnrichmentConfig()).toEqual({
+      artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '',
@@ -39,6 +41,7 @@ describe('resolveEnrichmentConfig', () => {
         semanticModelDir: volatileOf(' /models ') as never,
       }),
     ).toEqual({
+      artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'pro',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '/tmp/parsed',

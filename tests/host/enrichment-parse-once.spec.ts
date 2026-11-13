@@ -65,6 +65,7 @@ function storeOf(hit?: ParsedArtifact): {
     root: '/test',
     get: async () => hit,
     put,
+    putNormalized: put,
     getTask: async () => undefined,
     putTask: async () => {},
     deleteTask: async () => {},
@@ -159,7 +160,7 @@ describe('parseOnce', () => {
     const store = {
       root: '/test',
       get: async () => undefined,
-      put: async () => {},
+      putNormalized: async () => {},
       getTask: async () => ({ taskId: 'resumed', createdAt: Date.now(), uploaded: true }),
       putTask: async () => {},
       deleteTask: async () => {},

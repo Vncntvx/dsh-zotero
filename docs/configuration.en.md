@@ -7,9 +7,9 @@ dsh-zotero configuration is split across four settings namespaces. Each namespac
 - Core `zotero` namespace: `src/config.ts`, 37 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 11 fields;
 - Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields;
-- Document parsing `enrichment` namespace: `src/enrichment/config.ts`, 7 fields.
+- Document parsing `enrichment` namespace: `src/enrichment/config.ts`, 8 fields.
 
-The four groups total 64 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
+The four groups total 65 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
@@ -22,7 +22,7 @@ The configuration area of the plugin detail page is a 7-tab form that edits all 
 | Search & Extraction | `zotero`            | 13     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars` |
 | Literature panel    | `library`, `zotero` | 13     | 11 panel preferences for display, details, browsing, PDF reading, citations and conversation; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                                                        |
 | Scholarly Search    | `scholarly`         | 9      | Identity and credential references: `email`, `s2ApiKeyEnv`, `ncbiApiKeyEnv`, `openalexApiKeyEnv`; Search & Full-text Quotas: `maxResults`, `maxContentChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`                                                                                         |
-| Document Enrichment | `enrichment`        | 7      | Mode and output: `mode`, `mineruTokenRef`, `outputDir`; Semantic ranking: `enableSemanticSearch`, `semanticModel`, `semanticDownloadSource`, `semanticModelDir`                                                                                                                                                                         |
+| Document Enrichment | `enrichment`        | 8      | Mode and output: `mode`, `mineruTokenRef`, `outputDir`; Semantic ranking: `enableSemanticSearch`, `semanticModel`, `semanticDownloadSource`, `semanticModelDir`; Deployment limits: `artifactReader`                                                                                                                                    |
 | Advanced            | `zotero`            | 11     | Output limits: `maxInlineResultTokens`, `maxInlineResultBytes`, `maxResponseBytes`, `maxExportChars`, `maxExportRefs`, `maxBrowseResults`, `maxChangesResults`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`, `foregroundWaitMs`; Diagnostics: `debug`                                                                 |
 
 `webEnabled` sits under "General → Literature trail", and the toggle is named "Show literature trail"; it decides whether the literature trail tab appears at the top of the conversation. The literature panel also needs the `dsh-zotero/library` component row to be composed and this component's `rightSidebarEnabled` to be on, as described below in "Literature panel component configuration".
@@ -211,6 +211,22 @@ The component's fields have three entry points:
 | `semanticModel`          | `'balanced'`         | Selected local embedding model tier: `balanced` (general-purpose balanced, backed by Qwen3-0.6B, recommended default), `lightweight` (ultra-lightweight, backed by Granite-97M, RAM <250MB), `bilingual` (Chinese-English, backed by KaLM-0.5B, instruction-tuned), `english` (English long-context, backed by Nomic-137M, 8K context), `hybrid` (multi-vector dense/sparse, backed by BGE-M3), `academic` (classic multilingual baseline, backed by GTE-Base, 768 dimensions) |
 | `semanticDownloadSource` | `'hf-mirror'`        | Download channel / mirror: `hf-mirror` (hf-mirror.com, recommended in China), `huggingface` (huggingface.co)                                                                                                                                                                                                                                                                                                                                                                   |
 | `semanticModelDir`       | `''`                 | Custom absolute directory for downloaded models (or a `~/...` path); empty uses the default `~/.dsh/models/`                                                                                                                                                                                                                                                                                                                                                                   |
+| `artifactReader`         | See below            | Deployment limits for complete document preparation, read snapshots and ZIP workers; configured in the profile                                                                                                                                                                                                                                                                                                                                                                 |
+
+Each `artifactReader` value must be a positive integer. New limits apply to subsequent admissions; an admitted snapshot retains its policy.
+
+| Field                | Default     | Behavior                                                          |
+| -------------------- | ----------- | ----------------------------------------------------------------- |
+| `maxOpen`            | `8`         | Concurrent Host read snapshots                                    |
+| `maxBytes`           | `268435456` | Host snapshot budget, 256 MiB                                     |
+| `preparedMaxBytes`   | `536870912` | Browser complete documents and refresh candidates, 512 MiB        |
+| `idleTimeoutMs`      | `120000`    | Snapshot idle deadline                                            |
+| `maxLifetimeMs`      | `600000`    | Maximum snapshot lifetime                                         |
+| `concurrency`        | `4`         | Browser page and figure request concurrency                       |
+| `archiveConcurrency` | `2`         | Concurrent result download, extraction and persistence operations |
+| `archiveQueueLimit`  | `8`         | Waiting archive operations                                        |
+
+When capacity is exhausted, the UI shows a retryable error. A complete document holds its browser budget until its parsed tab closes, and a failed refresh keeps the previous complete result.
 
 `mode` is its own field and the host dispatches on it; `free` does not resolve the token credential, so a user who configured one can switch back to the free API. When `mode` is `pro` and `mineruTokenRef` does not resolve, the call fails with `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`, without degrading to the free API or an anonymous request.
 

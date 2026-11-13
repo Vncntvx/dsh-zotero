@@ -1,3 +1,4 @@
+import { ARTIFACT_READER_DEFAULTS } from '../../src/artifact-reader-preferences.ts'
 /**
  * The enrichment preferences contract: defaults, omitted-field resolution, and
  * refusal of malformed values (which are never repaired).
@@ -16,6 +17,7 @@ import {
 describe('enrichment preferences', () => {
   it('defaults to free mode with no output override', () => {
     expect(enrichmentPreferencesOf({})).toEqual({
+      artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'free',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '',
@@ -26,6 +28,7 @@ describe('enrichment preferences', () => {
     })
     expect(ENRICHMENT_MODE_CHOICES).toEqual(['free', 'pro'])
     expect(ENRICHMENT_PREFERENCE_KEYS).toEqual([
+      'artifactReader',
       'mode',
       'mineruTokenRef',
       'outputDir',

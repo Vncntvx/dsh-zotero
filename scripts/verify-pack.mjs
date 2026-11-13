@@ -1,3 +1,4 @@
+import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
 /**
  * Prove the artifact a user installs actually carries what the plugin
  * declares.
@@ -201,4 +202,5 @@ const isMain =
 
 if (isMain) {
   verifyPack()
+  if (!process.exitCode) await smokeArchiveWorker(root)
 }

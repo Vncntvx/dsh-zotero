@@ -1,140 +1,90 @@
-/**
- * Extract what the parsed document is made of from a MinerU precise-API result
- * zip: `full.md`, the optional `*_content_list.json`, and the figures under
- * `images/` that `full.md` references.
- *
- * The archive is untrusted input. Entry names are validated before extraction
- * (no `..`, no absolute paths, no backslashes, no directory-escaping names),
- * and every wanted entry's declared uncompressed size is checked against a
- * per-file and total ceiling through fflate's filter, which runs *before* that
- * file is decompressed — so a zip bomb is skipped, not expanded into memory.
- * Figures are kept because a Markdown document that names images it does not
- * carry is broken: only browser-safe raster formats under an `images/`
- * directory are accepted, keyed by basename so the reference in `full.md`
- * resolves. Everything else (`layout.json`, `*_model.json`, anything else) is
- * discarded. Duplicate wanted or image names are rejected rather than silently
- * resolved by "last one wins". Nothing here writes a name from the archive to
- * disk.
- * @module dsh-zotero/enrichment/zip
- */
-
+/** Bounded, two-pass extraction of the Markdown and the figures it actually references. */
 import { unzipSync, type UnzipFileInfo } from 'fflate'
 import {
-  ARCHIVE_MAX_IMAGE_BYTES,
+  artifactImageMediaType,
   ARCHIVE_MAX_IMAGES,
+  ARCHIVE_MAX_IMAGE_BYTES,
   ARCHIVE_MAX_IMAGE_TOTAL_BYTES,
-} from './archive-limits.js'
+} from '../artifact-images.js'
 import type { ZoteroArtifactImageMediaType } from '../contract.js'
-import { ZOTERO_ENRICHMENT_ARCHIVE_INVALID, ZoteroError } from '../errors.js'
+import { markdownImageReferences } from './markdown-images.js'
 
-/** Ceilings on the archive structure and its decompressed content. */
-export const ZIP_MAX_TOTAL_ENTRIES = 4_096
-export const ZIP_MAX_WANTED_ENTRIES = 2
-export const ZIP_MAX_FILE_BYTES = 32 * 1024 * 1024
-export const ZIP_MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
-/** Figures keep their place in the document, within bounded count and bytes. */
+import {
+  ZIP_MAX_TOTAL_ENTRIES,
+  ZIP_MAX_FILE_BYTES,
+  ZIP_MAX_ARCHIVE_BYTES,
+} from './archive-limits.js'
+export {
+  ZIP_MAX_TOTAL_ENTRIES,
+  ZIP_MAX_WANTED_ENTRIES,
+  ZIP_MAX_FILE_BYTES,
+  ZIP_MAX_ARCHIVE_BYTES,
+} from './archive-limits.js'
 export const ZIP_MAX_IMAGES = ARCHIVE_MAX_IMAGES
 export const ZIP_MAX_IMAGE_BYTES = ARCHIVE_MAX_IMAGE_BYTES
 export const ZIP_MAX_IMAGE_TOTAL_BYTES = ARCHIVE_MAX_IMAGE_TOTAL_BYTES
 
-/** The raster formats a browser draws without running anything. */
-const IMAGE_MEDIA_TYPES: Readonly<Record<string, ZoteroArtifactImageMediaType>> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  bmp: 'image/bmp',
-}
-
-/** A name that could escape the intended flat file set if written to disk. */
-function unsafeName(name: string): boolean {
-  if (name === '' || name.startsWith('/') || name.startsWith('\\')) return true
-  if (name.includes('\\')) return true
-  if (name.includes('\0')) return true
-  const segments = name.split('/')
-  return segments.some((seg) => seg === '..' || seg === '')
-}
-
-/** Whether an entry name is one of the two we keep. */
-function wanted(name: string): 'markdown' | 'contentList' | undefined {
-  const base = name.slice(name.lastIndexOf('/') + 1)
-  if (base === 'full.md') return 'markdown'
-  if (base.endsWith('_content_list.json') || base === 'content_list.json') return 'contentList'
-  return undefined
-}
-
-/** One figure kept beside the Markdown, addressed as `full.md` names it. */
 export interface ExtractedImage {
-  /** `images/<file>`, the reference the Markdown carries. */
   readonly name: string
   readonly mediaType: ZoteroArtifactImageMediaType
   readonly data: Uint8Array
 }
+declare const normalizedContentList: unique symbol
+export type NormalizedContentList = string & { readonly [normalizedContentList]: true }
 
-/** The extracted payloads. */
 export interface ExtractedParsedFiles {
   readonly markdown: string
-  readonly contentList?: string
+  readonly contentList?: NormalizedContentList
   readonly images: readonly ExtractedImage[]
 }
 
-/**
- * The canonical name of one figure entry, or undefined when the entry is not a
- * figure this reader serves. Only an `images/` directory's raster files count;
- * the basename is what `full.md` references, so a nested archive path and a
- * flat one resolve to the same figure.
- */
-function imageOf(
-  name: string,
-): { name: string; mediaType: ZoteroArtifactImageMediaType } | undefined {
-  const segments = name.split('/')
-  if (segments.length < 2 || segments[segments.length - 2] !== 'images') return undefined
-  const base = segments[segments.length - 1]!
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/u.test(base)) return undefined
-  const dot = base.lastIndexOf('.')
-  if (dot <= 0) return undefined
-  const mediaType = IMAGE_MEDIA_TYPES[base.slice(dot + 1)]
-  if (mediaType === undefined) return undefined
-  return { name: `images/${base}`, mediaType }
+export class ArchiveValidationError extends Error {
+  readonly code = 'ZOTERO_ENRICHMENT_ARCHIVE_INVALID'
+  constructor(reason: string) {
+    super(`MinerU result archive is invalid: ${reason}`)
+  }
 }
-
 function invalid(reason: string): never {
-  throw new ZoteroError(
-    `MinerU result archive is invalid: ${reason}`,
-    ZOTERO_ENRICHMENT_ARCHIVE_INVALID,
+  throw new ArchiveValidationError(reason)
+}
+function unsafeName(name: string): boolean {
+  return (
+    name === '' ||
+    name.startsWith('/') ||
+    name.includes('\\') ||
+    name.includes('\0') ||
+    name.split('/').some((segment) => segment === '..' || segment === '')
   )
 }
+function wanted(name: string): 'markdown' | 'contentList' | undefined {
+  const base = name.slice(name.lastIndexOf('/') + 1)
+  if (base === 'full.md') return 'markdown'
+  return base === 'content_list.json' || base.endsWith('_content_list.json')
+    ? 'contentList'
+    : undefined
+}
+function imageOf(path: string) {
+  const segments = path.split('/')
+  if (segments.at(-2) !== 'images') return undefined
+  const name = `images/${segments.at(-1)!}`
+  const mediaType = artifactImageMediaType(name)
+  return mediaType === undefined ? undefined : { name, mediaType }
+}
 
-/**
- * Validate and unpack a precise-API result zip.
- * @param bytes - the downloaded zip.
- * @returns the Markdown body and, when present, the content-list JSON text.
- * @throws {ZoteroError} `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` on any structural or
- *   safety violation.
- */
 export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
   if (bytes.byteLength === 0) invalid('the archive is empty')
   if (bytes.byteLength > ZIP_MAX_ARCHIVE_BYTES) invalid('the archive exceeds the size ceiling')
-
   let entries = 0
-  let wantedCount = 0
-  let imageCount = 0
-  let imageBytes = 0
   let unsafe = false
-  const seenKinds = new Set<'markdown' | 'contentList'>()
-  const seenImages = new Set<string>()
-  const selected = new Map<'markdown' | 'contentList', Uint8Array>()
-  const images = new Map<string, { mediaType: ZoteroArtifactImageMediaType; data: Uint8Array }>()
-
-  let archive: ReturnType<typeof unzipSync>
+  const kinds = new Set<string>()
+  const imageEntries = new Map<string, { path: string; size: number }>()
+  const texts = new Map<string, Uint8Array>()
   try {
-    archive = unzipSync(bytes, {
-      filter: (info: UnzipFileInfo): boolean => {
-        entries += 1
+    const archive = unzipSync(bytes, {
+      filter: (info: UnzipFileInfo) => {
         const directory = info.name.endsWith('/')
         if (
-          entries > ZIP_MAX_TOTAL_ENTRIES ||
+          ++entries > ZIP_MAX_TOTAL_ENTRIES ||
           unsafeName(directory ? info.name.slice(0, -1) : info.name)
         ) {
           unsafe = true
@@ -142,75 +92,97 @@ export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
         }
         if (directory) return false
         const kind = wanted(info.name)
-        const image = kind === undefined ? imageOf(info.name) : undefined
-        // Anything else — layout.json, model dumps, unknown directories — is
-        // skipped before decompression, so a bomb hidden in it never expands.
-        if (kind === undefined && image === undefined) return false
-        if (kind !== undefined) {
-          wantedCount += 1
-          if (wantedCount > ZIP_MAX_WANTED_ENTRIES || seenKinds.has(kind)) {
-            unsafe = true
-            return false
-          }
-          seenKinds.add(kind)
-        } else {
-          imageCount += 1
-          imageBytes += info.originalSize
-          if (
-            imageCount > ZIP_MAX_IMAGES ||
-            imageBytes > ZIP_MAX_IMAGE_TOTAL_BYTES ||
-            seenImages.has(image!.name)
-          ) {
-            unsafe = true
-            return false
-          }
-          seenImages.add(image!.name)
+        const image = imageOf(info.name)
+        if (image !== undefined) {
+          if (imageEntries.has(image.name) || imageEntries.size >= ZIP_MAX_IMAGES) unsafe = true
+          imageEntries.set(image.name, { path: info.name, size: info.originalSize })
         }
-        const ceiling = kind !== undefined ? ZIP_MAX_FILE_BYTES : ZIP_MAX_IMAGE_BYTES
-        if (info.originalSize > ceiling || (info.compression !== 0 && info.compression !== 8)) {
+        if (kind === undefined) return false
+        if (
+          kinds.has(kind) ||
+          info.originalSize > ZIP_MAX_FILE_BYTES ||
+          (info.compression !== 0 && info.compression !== 8)
+        ) {
           unsafe = true
           return false
         }
+        kinds.add(kind)
         return true
       },
     })
-  } catch (error) {
-    invalid(`the archive could not be read (${(error as Error).message})`)
-  }
-
-  if (unsafe) invalid('it contains an unsafe, oversized, duplicate, or excessive entry')
-  for (const [name, data] of Object.entries(archive)) {
-    const kind = wanted(name)
-    if (kind !== undefined) {
-      selected.set(kind, data)
-      continue
+    for (const [path, data] of Object.entries(archive)) {
+      if (data.byteLength > ZIP_MAX_FILE_BYTES) invalid('an extracted file is oversized')
+      texts.set(wanted(path)!, data)
     }
-    const image = imageOf(name)
-    if (image !== undefined) images.set(image.name, { mediaType: image.mediaType, data })
+  } catch (error) {
+    invalid(
+      `the archive could not be read (${error instanceof Error ? error.message : String(error)})`,
+    )
   }
-  const markdownBytes = selected.get('markdown')
+  if (unsafe) invalid('it contains an unsafe, oversized, duplicate, or excessive entry')
+  const markdownBytes = texts.get('markdown')
   if (markdownBytes === undefined) invalid('it does not contain full.md')
-
   const decoder = new TextDecoder('utf-8', { fatal: true })
   let markdown: string
-  let contentList: string | undefined
+  let contentList: NormalizedContentList | undefined
+  let references: readonly string[]
   try {
     markdown = decoder.decode(markdownBytes).trim()
-    const contentListBytes = selected.get('contentList')
-    if (contentListBytes !== undefined) {
-      contentList = decoder.decode(contentListBytes)
-      if (!Array.isArray(JSON.parse(contentList))) invalid('content list must be a JSON array')
+    if (markdown === '') invalid('full.md is empty')
+    const list = texts.get('contentList')
+    if (list !== undefined) {
+      const decoded = decoder.decode(list)
+      if (!Array.isArray(JSON.parse(decoded))) invalid('content list must be a JSON array')
+      contentList = decoded as NormalizedContentList
+    }
+    references = markdownImageReferences(markdown)
+  } catch (error) {
+    if (error instanceof ArchiveValidationError) throw error
+    invalid(
+      `text or image references are invalid (${error instanceof Error ? error.message : String(error)})`,
+    )
+  }
+  if (references.length > ZIP_MAX_IMAGES) invalid('it references excessive figures')
+  const selected = new Set<string>()
+  let total = 0
+  for (const name of references) {
+    const entry = imageEntries.get(name)
+    if (entry === undefined) invalid(`a referenced figure is missing: ${name}`)
+    if (
+      entry.size <= 0 ||
+      entry.size > ZIP_MAX_IMAGE_BYTES ||
+      (total += entry.size) > ZIP_MAX_IMAGE_TOTAL_BYTES
+    )
+      invalid('it contains an oversized or excessive figure')
+    selected.add(entry.path)
+  }
+  const images: ExtractedImage[] = []
+  try {
+    const archive = unzipSync(bytes, {
+      filter: (info) => {
+        if (!selected.has(info.name)) return false
+        if (info.compression !== 0 && info.compression !== 8)
+          invalid('a figure uses an unsupported compression')
+        return true
+      },
+    })
+    for (const [path, data] of Object.entries(archive)) {
+      const image = imageOf(path)!
+      if (
+        data.byteLength !== imageEntries.get(image.name)!.size ||
+        data.byteLength > ZIP_MAX_IMAGE_BYTES
+      )
+        invalid('an extracted figure does not match its declared size')
+      images.push({ ...image, data: new Uint8Array(data) })
     }
   } catch (error) {
-    if (error instanceof ZoteroError) throw error
-    invalid('text is not valid UTF-8 or the content list is not valid JSON')
+    if (error instanceof ArchiveValidationError) throw error
+    invalid('a referenced figure could not be decompressed')
   }
-  if (markdown === '') invalid('full.md is empty')
+  if (images.length !== references.length) invalid('a referenced figure could not be read')
   return {
     markdown,
     ...(contentList !== undefined ? { contentList } : {}),
-    images: [...images]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([name, image]) => ({ name, mediaType: image.mediaType, data: image.data })),
+    images: images.sort((a, b) => a.name.localeCompare(b.name, 'en')),
   }
 }

@@ -1,3 +1,8 @@
+import {
+  ARTIFACT_READER_DEFAULTS,
+  artifactReaderPreferencesOf,
+  type ArtifactReaderPreferences,
+} from './artifact-reader-preferences.js'
 /**
  * Shared, host-free contract for the document-enrichment component's settings.
  *
@@ -29,6 +34,7 @@ export const ENRICHMENT_DOCUMENT_LIMITS = Object.freeze({
 })
 
 export interface EnrichmentPreferences {
+  readonly artifactReader: ArtifactReaderPreferences
   /** Which MinerU API to use. Independent of whether a token is configured. */
   readonly mode: EnrichmentMode
   /** Credential-reference name for the precise-API token (a name, never the value). */
@@ -48,6 +54,7 @@ export interface EnrichmentPreferences {
 export type EnrichmentPreferenceKey = keyof EnrichmentPreferences
 
 export const ENRICHMENT_DEFAULTS: EnrichmentPreferences = Object.freeze({
+  artifactReader: ARTIFACT_READER_DEFAULTS,
   mode: 'free',
   mineruTokenRef: ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru,
   outputDir: '',
@@ -84,7 +91,9 @@ export function enrichmentPreferencesOf(
     values[key] = Object.hasOwn(raw, key) ? raw[key] : ENRICHMENT_DEFAULTS[key]
   }
 
+  values.artifactReader = artifactReaderPreferencesOf(values.artifactReader)
   const validators: Record<EnrichmentPreferenceKey, (value: unknown) => boolean> = {
+    artifactReader: () => true,
     mode: (value) => (ENRICHMENT_MODE_CHOICES as readonly unknown[]).includes(value),
     mineruTokenRef: (value) => typeof value === 'string',
     outputDir: (value) => typeof value === 'string',

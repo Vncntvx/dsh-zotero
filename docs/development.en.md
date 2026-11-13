@@ -83,7 +83,7 @@ Chinese documents under `docs/` are maintained in pairs with their `.en.md` Engl
 | [Features](features.en.md)                     | Conversation capabilities, literature trail, literature panel, writing, and scholarly search                              |
 | [Research SOP skills](skills.en.md)            | Eight on-demand research workflows, batch budgets, and evidence boundaries                                                |
 | [Tool reference](tools.en.md)                  | 23 local tools (8 read + 15 write) and 7 scholarly retrieval tools                                                        |
-| [Configuration reference](configuration.en.md) | Four settings namespaces, 64 fields, and the hot-reload mechanism                                                         |
+| [Configuration reference](configuration.en.md) | Four settings namespaces, 65 fields, and the hot-reload mechanism                                                         |
 | [Troubleshooting](troubleshooting.en.md)       | Common issues, causes, and diagnostic steps                                                                               |
 | [Architecture](architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                                                                  |
 | [Development guide](development.en.md)         | Build, test, debug, and release flows                                                                                     |

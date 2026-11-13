@@ -7,9 +7,9 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 - 核心 `zotero` 命名空间：`src/config.ts`，37 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
-- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，7 个字段。
+- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，8 个字段。
 
-四组合计 64 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 65 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -22,7 +22,7 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 | 检索提取 | `zotero`            | 13     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars` |
 | 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                           |
 | 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                          |
-| 文档解析 | `enrichment`        | 7      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`                                                                                                                                                  |
+| 文档解析 | `enrichment`        | 8      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`；部署限额：`artifactReader`                                                                                                                      |
 | 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                           |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
@@ -211,6 +211,22 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 | `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） |
 | `semanticDownloadSource` | `'hf-mirror'`        | 模型资源下载渠道：`hf-mirror`（国内镜像加速，推荐国内直连）、`huggingface`（Hugging Face 官方直连）                                                                                                                                                                                                                                                                                 |
 | `semanticModelDir`       | `''`                 | 下载模型的绝对存储目录（或以 `~/` 开头）；空串表示使用默认目录 `~/.dsh/models/`                                                                                                                                                                                                                                                                                                     |
+| `artifactReader`         | 见下表               | 完整图文准备、读取快照和 ZIP Worker 的部署限额；在 profile 配置中设置                                                                                                                                                                                                                                                                                                               |
+
+`artifactReader` 的各值必须为正整数。新值用于后续准入，已准入的快照保持原配置。
+
+| 子字段               | 默认值      | 行为                                  |
+| -------------------- | ----------- | ------------------------------------- |
+| `maxOpen`            | `8`         | 同时准备的服务端快照上限              |
+| `maxBytes`           | `268435456` | 服务端读取快照预算，256 MiB           |
+| `preparedMaxBytes`   | `536870912` | 浏览器完整文档及刷新候选预算，512 MiB |
+| `idleTimeoutMs`      | `120000`    | 快照空闲期限                          |
+| `maxLifetimeMs`      | `600000`    | 单快照最大寿命                        |
+| `concurrency`        | `4`         | 浏览器分页和图片请求并发              |
+| `archiveConcurrency` | `2`         | 下载结果、解包及落盘的并发上限        |
+| `archiveQueueLimit`  | `8`         | ZIP 处理等待队列上限                  |
+
+容量不足时，界面显示可重试错误。完整文档在解析标签页关闭前持续占用浏览器预算；刷新准备失败时保留上一份完整结果。
 
 `mode` 是独立字段，host 按它分派接口；`free` 模式不解析 Token 凭据，已配置 Token 的用户可切回免费接口。`mode` 为 `pro` 且 `mineruTokenRef` 解析失败时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 报错，不降级为免费接口或匿名请求。
 

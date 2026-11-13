@@ -13,6 +13,7 @@
 
 import type { Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
+import { ARTIFACT_READER_DEFAULTS } from '../artifact-reader-preferences.js'
 import { currentVolatile, schemaChoices } from '../schema-helpers.js'
 import { ENRICHMENT_CREDENTIAL_REFERENCE_NAMES } from '../credential-names.js'
 import { SEMANTIC_DOWNLOAD_SOURCES, SEMANTIC_MODEL_KEYS } from '../enrichment-model-catalog.js'
@@ -30,6 +31,17 @@ export type EnrichmentConfig = {
 }
 
 export const EnrichmentConfigSchema = Schema.object({
+  artifactReader: Schema.object(
+    Object.fromEntries(
+      Object.entries(ARTIFACT_READER_DEFAULTS).map(([key, value]) => [
+        key,
+        Schema.number().step(1).min(1).default(value),
+      ]),
+    ),
+  )
+    .default(ARTIFACT_READER_DEFAULTS)
+    .description('Parsed-document preparation limits and archive worker capacity.')
+    .volatile(),
   mode: schemaChoices(ENRICHMENT_MODE_CHOICES)
     .default(ENRICHMENT_DEFAULTS.mode)
     .description('Which MinerU API to use: free (Agent lightweight) or pro (precise).')

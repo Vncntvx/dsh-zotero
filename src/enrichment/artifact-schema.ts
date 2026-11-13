@@ -1,8 +1,13 @@
 /** Closed v2 persistence contracts; no older artifact or index format is read. */
 import { z } from 'zod'
+import { ARTIFACT_IMAGE_NAME_PATTERN } from '../artifact-images.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import type { FulltextSourceStamp, ParsedArtifactMeta } from './types.js'
-import { ARCHIVE_MAX_IMAGE_BYTES, ARCHIVE_MAX_IMAGES } from './archive-limits.js'
+import {
+  ARCHIVE_MAX_IMAGE_BYTES,
+  ARCHIVE_MAX_IMAGES,
+  ARCHIVE_MAX_IMAGE_TOTAL_BYTES,
+} from './archive-limits.js'
 
 export const SHA256 = z.string().regex(/^[0-9a-f]{64}$/)
 export const PARSE_GENERATION = z.uuid()
@@ -60,9 +65,7 @@ export const sourceStampSchema = z.discriminatedUnion('kind', [
 
 const parsedImageMetaSchema = z
   .object({
-    name: z
-      .string()
-      .regex(/^images\/[A-Za-z0-9][A-Za-z0-9._-]{0,110}\.(?:png|jpe?g|gif|webp|bmp)$/),
+    name: z.string().regex(ARTIFACT_IMAGE_NAME_PATTERN),
     mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']),
     bytes: z.number().int().positive().max(ARCHIVE_MAX_IMAGE_BYTES),
   })
@@ -71,6 +74,16 @@ const parsedImageMetaSchema = z
 export const artifactMetaSchema = z
   .object({
     version: z.literal(2),
+    characterCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(64 * 1024 * 1024),
+    markdownBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(64 * 1024 * 1024),
     parser: z.literal('mineru'),
     format: z.literal('markdown'),
     sourceId: SHA256,
@@ -83,7 +96,15 @@ export const artifactMetaSchema = z
       z.tuple([z.literal('full.md')]),
       z.tuple([z.literal('full.md'), z.literal('content_list.json')]),
     ]),
-    images: z.array(parsedImageMetaSchema).max(ARCHIVE_MAX_IMAGES).optional(),
+    images: z
+      .array(parsedImageMetaSchema)
+      .max(ARCHIVE_MAX_IMAGES)
+      .refine(
+        (images) =>
+          new Set(images.map((image) => image.name)).size === images.length &&
+          images.reduce((sum, image) => sum + image.bytes, 0) <= ARCHIVE_MAX_IMAGE_TOTAL_BYTES,
+      )
+      .optional(),
     pageCount: z.number().int().positive().optional(),
   })
   .strict() satisfies z.ZodType<ParsedArtifactMeta>

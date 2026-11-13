@@ -1,3 +1,4 @@
+import type { NormalizedContentList } from './zip.js'
 /** Durable v2 artifacts and an atomically published, mode-independent source index. */
 import { lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -205,7 +206,8 @@ export class ParsedArtifactStore {
         if (!Array.isArray(JSON.parse(contentList)))
           throw new Error('The stored parsed content list is invalid')
       }
-      return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta }
+      const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
+      return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta: domainMeta }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
@@ -214,12 +216,29 @@ export class ParsedArtifactStore {
 
   /** Validate before I/O; meta.json is the artifact's final commit marker. */
   async put(cacheKey: string, artifact: ParsedArtifact): Promise<void> {
-    const meta = artifactMetaSchema.parse(artifact.meta)
+    if (artifact.contentList !== undefined && !Array.isArray(JSON.parse(artifact.contentList)))
+      throw new Error('The parsed content list is invalid')
+    await this.persist(cacheKey, artifact)
+  }
+
+  /** Only the archive normalizer produces this semantic content-list type. */
+  async putNormalized(
+    cacheKey: string,
+    artifact: ParsedArtifact & { readonly contentList?: NormalizedContentList },
+  ): Promise<void> {
+    await this.persist(cacheKey, artifact)
+  }
+
+  private async persist(cacheKey: string, artifact: ParsedArtifact): Promise<void> {
+    const markdownBytes = encoder.encode(artifact.markdown)
+    const meta = artifactMetaSchema.parse({
+      ...artifact.meta,
+      characterCount: artifact.markdown.length,
+      markdownBytes: markdownBytes.byteLength,
+    })
     if (artifact.markdown.trim() === '') throw new Error('The parsed Markdown is empty')
     if ((artifact.contentList !== undefined) !== (meta.files.length === 2))
       throw new Error('The parsed artifact file list does not match its payload')
-    if (artifact.contentList !== undefined && !Array.isArray(JSON.parse(artifact.contentList)))
-      throw new Error('The parsed content list is invalid')
     const images = artifact.images ?? []
     if (images.length !== (meta.images?.length ?? 0))
       throw new Error('The parsed artifact image list does not match its payload')
@@ -233,7 +252,7 @@ export class ParsedArtifactStore {
     const dir = this.dir(cacheKey)
     await this.ensureRoot()
     await this.deps.mkdir(dir)
-    await this.atomicWrite(join(dir, 'full.md'), encoder.encode(artifact.markdown))
+    await this.atomicWrite(join(dir, 'full.md'), markdownBytes)
     if (artifact.contentList !== undefined)
       await this.atomicWrite(join(dir, 'content_list.json'), encoder.encode(artifact.contentList))
     if (images.length > 0) {

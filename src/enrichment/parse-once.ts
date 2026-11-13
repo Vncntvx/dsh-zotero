@@ -33,7 +33,13 @@ import type { ParsedArtifact, ParsedArtifactMeta } from './types.js'
 import { MINERU_ENDPOINTS, PRO_MODEL_VERSION } from './hosts.js'
 import { MineruClient } from './transport.js'
 import type { ParsedArtifactStore } from './artifact-store.js'
-import { extractParsedFiles, ZIP_MAX_ARCHIVE_BYTES, type ExtractedParsedFiles } from './zip.js'
+import { ZIP_MAX_ARCHIVE_BYTES } from './archive-limits.js'
+import type { ExtractedParsedFiles, NormalizedContentList } from './zip.js'
+import { ArchiveProcessor } from './archive-worker.js'
+import {
+  ARTIFACT_READER_DEFAULTS,
+  type ArtifactReaderPreferences,
+} from '../artifact-reader-preferences.js'
 import { parsedIdentityOf } from './identity.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { sourceKeyOf } from './source-stamp.js'
@@ -279,10 +285,11 @@ async function downloadResult(
   state: Extract<PollState, { kind: 'done' }>,
   client: MineruClient,
   combined: AbortSignal,
-  onProgress?: (phase: ParsePhase) => void,
+  onProgress: ((phase: ParsePhase) => void) | undefined,
+  archives: ArchiveProcessor,
 ): Promise<{
   markdown: string
-  contentList?: string
+  contentList?: NormalizedContentList
   images?: ExtractedParsedFiles['images']
 }> {
   if (state.markdownUrl !== undefined) {
@@ -311,7 +318,7 @@ async function downloadResult(
   })
   onProgress?.('validating')
   combined.throwIfAborted()
-  return await Promise.resolve(extractParsedFiles(zipBytes))
+  return await archives.extract(zipBytes, combined)
 }
 
 interface FlightEntry {
@@ -328,6 +335,10 @@ interface FlightEntry {
  * the entry's own controller; callers race their own signals against it.
  */
 export class ParseFlight {
+  readonly archives: ArchiveProcessor
+  constructor(policy: () => ArtifactReaderPreferences = () => ARTIFACT_READER_DEFAULTS) {
+    this.archives = new ArchiveProcessor(policy)
+  }
   private readonly entries = new Map<string, FlightEntry>()
 
   run(
@@ -501,51 +512,60 @@ export async function parseOnce(
 
         input.onProgress?.('downloading')
         combined.throwIfAborted()
-        const payload = await downloadResult(done, deps.client, combined, input.onProgress)
-        if (/^\s*(?:<!doctype\s+html|<html|<head|<body|<\?xml)/i.test(payload.markdown))
-          throw new MineruApiError(
-            'MinerU returned an HTML/XML error document instead of Markdown',
-            undefined,
-            undefined,
-            taskId,
+        return await deps.flight.archives.run(combined, async () => {
+          const payload = await downloadResult(
+            done,
+            deps.client,
+            combined,
+            input.onProgress,
+            deps.flight.archives,
           )
-        const meta: ParsedArtifactMeta = {
-          version: 2,
-          parser: 'mineru',
-          format: 'markdown',
-          sourceId: sourceKeyOf(input.identity),
-          generation: input.generation,
-          identity: parsedIdentityOf(input.identity),
-          mode: input.mode,
-          contentFingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
-          taskId,
-          files: payload.contentList === undefined ? ['full.md'] : ['full.md', 'content_list.json'],
-          ...(payload.images !== undefined && payload.images.length > 0
-            ? {
-                images: payload.images.map((image) => ({
-                  name: image.name,
-                  mediaType: image.mediaType,
-                  bytes: image.data.byteLength,
-                })),
-              }
-            : {}),
-          ...(pageCount !== undefined ? { pageCount } : {}),
-        }
-        const artifact: ParsedArtifact = {
-          markdown: payload.markdown,
-          ...(payload.contentList !== undefined ? { contentList: payload.contentList } : {}),
-          ...(payload.images !== undefined && payload.images.length > 0
-            ? {
-                images: payload.images.map((image) => ({ name: image.name, data: image.data })),
-              }
-            : {}),
-          meta,
-        }
-        input.onProgress?.('writing')
-        combined.throwIfAborted()
-        await deps.store.put(cacheKey, artifact)
-        await deps.store.deleteTask(cacheKey)
-        return { artifact, cacheKey, cached: false }
+          if (/^\s*(?:<!doctype\s+html|<html|<head|<body|<\?xml)/i.test(payload.markdown))
+            throw new MineruApiError(
+              'MinerU returned an HTML/XML error document instead of Markdown',
+              undefined,
+              undefined,
+              taskId,
+            )
+          const meta: ParsedArtifactMeta = {
+            version: 2,
+            parser: 'mineru',
+            format: 'markdown',
+            sourceId: sourceKeyOf(input.identity),
+            generation: input.generation,
+            identity: parsedIdentityOf(input.identity),
+            mode: input.mode,
+            contentFingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
+            taskId,
+            files:
+              payload.contentList === undefined ? ['full.md'] : ['full.md', 'content_list.json'],
+            ...(payload.images !== undefined && payload.images.length > 0
+              ? {
+                  images: payload.images.map((image) => ({
+                    name: image.name,
+                    mediaType: image.mediaType,
+                    bytes: image.data.byteLength,
+                  })),
+                }
+              : {}),
+            ...(pageCount !== undefined ? { pageCount } : {}),
+          }
+          const artifact: ParsedArtifact & { readonly contentList?: NormalizedContentList } = {
+            markdown: payload.markdown,
+            ...(payload.contentList !== undefined ? { contentList: payload.contentList } : {}),
+            ...(payload.images !== undefined && payload.images.length > 0
+              ? {
+                  images: payload.images.map((image) => ({ name: image.name, data: image.data })),
+                }
+              : {}),
+            meta,
+          }
+          input.onProgress?.('writing')
+          combined.throwIfAborted()
+          await deps.store.putNormalized(cacheKey, artifact)
+          await deps.store.deleteTask(cacheKey)
+          return { artifact, cacheKey, cached: false }
+        })
       } catch (error) {
         if (error instanceof MineruApiError && error.terminal) await deps.store.deleteTask(cacheKey)
         throw error
