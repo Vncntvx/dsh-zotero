@@ -69,6 +69,7 @@ export function LibraryItemList({
 }: LibraryItemListProps) {
   const scroll = useLibraryScroll(scrollKey, list.phase === 'ready')
   const { preferences } = useLibraryPreferences()
+  const compact = preferences?.listDensity === 'compact'
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
   const contextMenu = typeof useContextMenu === 'function' ? useContextMenu() : undefined
 
@@ -145,14 +146,17 @@ export function LibraryItemList({
               return (
                 <li key={item.ref}>
                   <Button
-                    size={preferences?.listDensity === 'compact' ? 'sm' : 'md'}
+                    size={compact ? 'sm' : 'md'}
                     variant={isSelected ? 'outline' : 'ghost'}
                     {...triggerProps}
-                    className={clsx(css.itemRow, hasPdf && css.itemRowHasPdf)}
+                    className={clsx(
+                      css.itemRow,
+                      compact && css.itemRowCompact,
+                      hasPdf && css.itemRowHasPdf,
+                    )}
                     onClick={() => selectItem(isSelected ? undefined : item.ref)}
                   >
                     <span
-                      data-library-title
                       className={clsx(
                         preferenceCss.rowTitle,
                         preferences?.titleLines === 1

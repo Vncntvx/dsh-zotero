@@ -17,8 +17,8 @@ The system provides independent entry points for the model and the user:
 
 The two paths operate independently and never proxy each other:
 
-- **The interface never calls tools directly**: "Ask" and "Add to chat" in the panel only populate item details into the composer. Whether and how to send it is up to the user; the web interface has no channel to trigger model tools directly.
-- **Tool calls never disrupt the interface**: When the agent calls tools in the background to search or read papers, it does not alter the selected item, collection tree state, or scroll position in the literature panel.
+- **Interface decoupled from tools**: "Ask" and "Add to chat" in the panel populate item details into the composer for the user to review and send; the web interface does not trigger model tools directly.
+- **Background calls preserve UI state**: When the agent calls tools to search or read papers, the active item selection, tree expansion, and scroll position in the literature panel remain unchanged.
 
 ## Two Surfaces
 
@@ -29,7 +29,7 @@ The local Zotero desktop app is the single source of truth. The interface offers
 | **Literature panel** | Right sidebar   | **Global library view**: for manual browsing and citing. Navigate collection trees, tags, saved searches, and the Trash; inspect details and read PDFs.                | Local API (via `zoteroLibrary` service endpoints) |
 | **Literature trail** | Session top tab | **Session audit view**: for verifying the agent's work. Lists queried papers, search parameters, extracted passages, and export records from the current conversation. | Tool-call snapshots from the current session      |
 
-Their responsibilities do not overlap: the literature panel does not track what the agent did, and the literature trail does not offer library browsing or editing.
+Their responsibilities are distinct: the literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session.
 
 DSH's built-in "Trail" tab records tool-call execution times and raw parameters; the "Literature trail" focuses purely on literature, showing search conditions, source passages, and export records.
 

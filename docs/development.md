@@ -269,7 +269,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 已运行门禁（真实结果）
 
-- `npm test`：435 个 spec 文件、5248 个测试，433 个文件通过 / 2 跳过（需实时 Zotero 与写入探针）/ 0 失败；没有任何测试加载模型或访问网络。
+- `npm test`：491 个 spec 文件、5736 个测试，489 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
 - `npm run release:check`：退出码 0（format、strict harness、lint:test、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
 - `npm run build:client`、`npx vitest run tests/host/doc-examples.spec.ts`：通过。
 
@@ -340,6 +340,6 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`typecheck`、`test:coverage`、`build` 与 `verify:pack`；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
-8. 素材核对：本版本文档不引用截图，`docs/images/` 只保留插件图标 `icon.png`；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
+8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。

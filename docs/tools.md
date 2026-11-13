@@ -828,7 +828,7 @@ zotero_batch_items(
 
 ## 学术文献检索组件工具 (`dsh-zotero/scholarly`)
 
-bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管理器「包含的组件」中启用该组件即挂载它，并提供以下 7 个模型工具：
+bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管理器「包含的组件」中启用该组件即挂载它，并提供 7 个模型工具：前 6 个为检索、阅读与核验工具（详见下文），第 7 个为写库工具 [`scholarly_save_to_zotero`](#scholarly_save_to_zotero)（详见上文[写入工具](#scholarly_save_to_zotero)）：
 
 其中 `scholarly_search`、`scholarly_read`、`scholarly_verify` 声明 `run_in_background`：结果要么是普通文本，要么是 `{ kind: "background", jobId }` / `{ kind: "promoted", jobId, timeoutMs, message }` 两种作业臂；用 `job_output` 取回结果、`job_kill` 取消。显式后台在 `enableRunInBackground=false` 或宿主未挂载 `jobs` 服务时被结构化拒绝；前台等待超过 `foregroundWaitMs` 自动提升为后台（`promoteOnTimeout=true`），作业结果文本由 `JobOutcome.result` 提供。
 

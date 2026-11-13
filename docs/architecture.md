@@ -32,8 +32,6 @@ graph LR
 
 核心持有数据面与 Agent 能力；文献面板组件没有工具、没有提示词段，本地库端点转交核心，显式 URL PDF 阅读使用独立授权与共享公网传输校验，拆出来是为了可整体关闭并拥有独立设置。学术检索组件是 Agent 外部检索授权边界，未挂载时服务、传输层与工具都不存在。启用文档解析组件即接受 MinerU 文档外发，并使解析和模型管理能力可用；每次上传仍须用户提交具体文档并通过会话门禁。其接入方式是只读产物查询与独立的主动解析操作，均不注册模型工具或提示词段。
 
-本文将 enrichment 的实施前基线 `a3f4759` 与本节的现状说明分开：基线只用于交代历史，enrichment 的当前行为以本章正文为准。WP1 的只读接缝、WP2 的主动解析任务和 WP7 的前台资源排空均已实现，正文按现状叙述。
-
 ## 核心分层
 
 ### 按需研究 SOP 技能
@@ -137,8 +135,6 @@ graph LR
 
 任务取消须同步、幂等发出中止，`done` 只在真实清理完成后落定。关闭界面只释放观察；明确取消、会话关闭或卸载撤销对应等待者，最后一个等待者离开才中止共享 `ParseFlight`。卸载停止接纳、杀死组件自己的解析作业与下载任务并等待清理。重新解析使用新 generation，保留上一份有效产物，完整写入新产物后才原子切换源指针；失败或取消不删除上一份有效产物。只有主动重试可恢复未完成任务，普通读取不能恢复。
 
-实施前基线的 `parse-once.ts` 在一个异步调用中完成提交 → 签名上传 → 轮询 → 下载 → 解压 → 落盘，受总时限、轮询次数与共享 flight 的 signal 约束，没有注册解析后台作业。每服务一份 `ParseFlight` 已使单个等待者取消不影响其他等待者；当前实现新增主动入口、会话作业与完整清理契约，见上文。
-
 ### 前台读取与模型资源
 
 本地 retrieve 与 `scholarly_read` 的 query 路径在任何来源 I/O 前同步接纳可释放的 ranking scope，固定已提交配置、模型目标与服务世代，整次读取在 `finally` 释放。接纳时不提前加载模型；尚未开始排序的请求在组件卸载后仍可按固定目标懒加载，并遵守原请求 deadline。模型切换只在新模型加载成功后提交；新模型失败向其请求报错，旧实例仍被管理，不能代答新目标。旧实例要等最后一个 scope 与实际推理结束才释放。
@@ -157,9 +153,9 @@ graph LR
 
 本地语义排序与 MinerU 解析是独立能力：排序消费已有文本和本地模型，不联系 MinerU、不需要解析凭据；主动解析也不依赖模型。关闭 `enableSemanticSearch` 使用完整 BM25；开启但模型缺失、损坏或运行时不可用时，读取以 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败，不静默改为词面结果。模型下载失败使用 `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`。
 
-`src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；构建侧的下载器直接导入该模块（Node 的类型剥离），不再保留镜像副本。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。下载、安装和取消的完整性修复归 WP4。
+`src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；构建侧的下载器直接导入该模块（Node 的类型剥离），不再保留镜像副本。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。
 
-`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序；词项重合也不证明片段回答了问题。
+`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序。
 
 ## 文献库子组件 (`src/library/`)
 

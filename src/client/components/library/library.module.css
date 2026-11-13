@@ -768,8 +768,10 @@
   gap: 2px;
 }
 
-/* The quiet item row: the workspace `.listItem` geometry — hover wash and a
- * 2px primary left edge for the selection, no box. */
+/* The quiet item row is a multi-line list row, not a one-line control: the
+ * host Button's size classes pin its height and centre a single label, so the
+ * row restores its own row geometry. Doubled selectors outrank those size
+ * classes, the same convention as the workspace's `.backSeat`. */
 .itemRow {
   position: relative;
   display: flex;
@@ -779,9 +781,24 @@
   text-align: left;
 }
 
-/* The PDF detection badge owns the row's right edge; the text keeps clear. */
-.itemRowHasPdf [data-library-title],
-.itemRowHasPdf .itemMeta {
+.itemRow.itemRow {
+  height: auto;
+  gap: 1px;
+  padding: 6px 8px 6px 10px;
+  justify-content: flex-start;
+}
+
+/* Compact density keeps its tighter seat; the row still grows with the title,
+ * so the setting stays a real difference between the two row heights. */
+.itemRow.itemRowCompact {
+  gap: 0;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* The PDF detection badge owns the row's right edge; the row's own padding
+ * keeps every line clear of it, so the title never lands under the badge. */
+.itemRow.itemRowHasPdf {
   padding-right: 44px;
 }
 
@@ -802,20 +819,6 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   user-select: none;
-}
-
-.itemTitle {
-  font: var(--dsw-font-xs-13);
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.itemYear {
-  color: var(--dsw-alias-label-tertiary);
-  font-weight: normal;
 }
 
 .itemMeta {

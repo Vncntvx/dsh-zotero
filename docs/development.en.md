@@ -269,7 +269,7 @@ The following were not run this round and are marked "Not accepted". Before runn
 
 ### Gates actually run (real results)
 
-- `npm test`: 435 spec files / 5248 tests — 433 files passed, 2 skipped (live Zotero and the write probe), 0 failed; no test loads a model or uses the network.
+- `npm test`: 491 spec files / 5736 tests — 489 files passed, 2 files skipped (requiring live Zotero and the write probe, totaling 27 skipped tests), 0 failed; no test loads a model or uses the network.
 - `npm run release:check`: exit 0 (format, strict harness, lint:test, style:check, typecheck, coverage, build, verify:pack all pass; `verify:pack` checked the packed entries).
 - `npm run build:client` and `npx vitest run tests/host/doc-examples.spec.ts`: pass.
 
@@ -340,6 +340,6 @@ Run the following checks in order before a release, and stop at the first failur
 5. `npm run release:check`: the release gate, running `format:check`, `harness-state.mjs --strict`, `lint:test`, `typecheck`, `test:coverage`, `build`, and `verify:pack` in order;
 6. Pack review: step 5's `verify:pack` already validated the tarball's required files; to confirm by hand, run `npm pack --dry-run` and check that the artifact contains `lib/`, `cordis.patch.yml`, `locale/`, `README`, and `docs/plugin-detail.md`;
 7. Walk through acceptance workflows: G1 through G8 are mandatory; add P cases when the change touches the panel or the trail, and add W cases in a separate session with writes enabled when the change touches writing;
-8. Asset check: this version's docs cite no screenshots, and `docs/images/` keeps only the plugin icon `icon.png`; if release notes add images, take them from the current Web UI and keep the wording consistent with the interface.
+8. Asset check: this version's docs embed no screenshots, and `docs/images/` retains the plugin icon `icon.png`, header collage, and Web UI reference screenshots; if release notes add images, take them from the current Web UI and keep the wording consistent with the interface.
 
 `npm test` and the release gate are not the same thing: `npm test` runs `node scripts/test-lint.mjs` plus `vitest run` without the coverage gate, which is the day-to-day regression command; the release path hands those two jobs to steps 3 and 5.

@@ -828,7 +828,7 @@ These values are warnings in status views, not tool errors:
 
 ## Scholarly literature retrieval component tools (`dsh-zotero/scholarly`)
 
-The bundle component `dsh-zotero/scholarly` ships with the package and is off by default. Enabling it under "Included components" in the plugin manager mounts it and provides the following 7 model tools:
+The bundle component `dsh-zotero/scholarly` ships with the package and is off by default. Enabling it under "Included components" in the plugin manager mounts it and provides 7 model tools: the first 6 are retrieval, reading, and verification tools (detailed below), and the 7th is the library write tool [`scholarly_save_to_zotero`](#scholarly_save_to_zotero) (detailed above under [write tools](#scholarly_save_to_zotero)):
 
 `scholarly_search`, `scholarly_read`, and `scholarly_verify` also declare `run_in_background`: a result is either plain text or one of the two job arms `{ kind: "background", jobId }` / `{ kind: "promoted", jobId, timeoutMs, message }`; collect it with `job_output` and cancel it with `job_kill`. An explicit background request is refused with a structured error while `enableRunInBackground=false` or when no `jobs` service is mounted; a foreground wait that exceeds `foregroundWaitMs` is promoted when `promoteOnTimeout=true`, and the job result text is served from `JobOutcome.result`.
 

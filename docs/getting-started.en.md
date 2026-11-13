@@ -104,11 +104,12 @@ The literature trail is a read-only view: it records tool calls completed in the
 
 ## Opening the literature panel
 
-The literature panel lives in the right sidebar. Make sure all three are on:
+The literature panel lives in the right sidebar. Make sure both are on:
 
 1. The `dsh-zotero/library` row under "Included components" in the plugin list is enabled (on by default);
-2. `webEnabled` under "General → Literature trail" on the settings page is on (on by default);
-3. "Show in right sidebar" (`rightSidebarEnabled`) on the "Literature panel" tab of the settings page is on (on by default).
+2. "Show in right sidebar" (`rightSidebarEnabled`) on the "Literature panel" tab of the settings page is on (on by default).
+
+(`webEnabled` in General settings controls only the literature trail at the top of the session and does not affect the panel.)
 
 Once the panel is open, start with the search box at the top; select an item to see its details in the inspector, and use the action row to copy a citation or read the PDF.
 

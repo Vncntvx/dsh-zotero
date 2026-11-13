@@ -56,7 +56,7 @@ The core `webEnabled` flag governs the literature trail at the top of the conver
 
 The navigation area supports multi-library switching (personal and group libraries), a collection tree expanded on demand, saved searches, "My Publications", and "Trash". Saved searches show Zotero's original conditions.
 
-The item list pages through results and can switch between metadata and full-text search modes, five sort fields and both directions, and filter by item type, tag (all/any), year range, and whether an attachment exists. The PDF badge at the end of a row means the best attachment among the search hits is a PDF; a row without the badge does not mean the item has no file.
+The item list pages through results and can switch between metadata and full-text search modes, five sort fields and both directions, and filter by item type, tag (all/any), year range, and whether an attachment exists. A PDF badge at the end of a row marks items whose best attachment is a PDF.
 
 The inspector header has type, title, authors, venue, and year. The action row can read the PDF, ask, add to chat, copy citation or BibTeX, open more formats (bibliography, BibLaTeX, RIS, CSL-JSON, copy item info), and copy the Zotero link. Below it, the info table, the collection and tag chips, and the three child sets (notes, attachments, annotations) each page independently.
 

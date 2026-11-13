@@ -30,8 +30,10 @@ All operations interact with Zotero through its local API (`127.0.0.1:23119`). R
 - **Conversation & Retrieval**
   - Search & reading: Search papers by title, author, year, or full text, and read bibliographic metadata, notes, and local PDF full text.
   - Passage extraction: Locate relevant passages across full text, notes, and annotations for specific research questions, with original page numbers preserved on PDF annotations.
+  - Vector semantic ranking: Optionally enable local CPU-only embedding models (6 decoupled open tiers) combined with BM25 via reciprocal rank fusion (RRF).
   - Citation & export: Generate in-text citations or bibliographies in specified CSL styles, and export BibTeX, RIS, or CSL-JSON.
-  - Writing & extensions (optional): With write access enabled, create notes and update tags or collections (each write requires approval); with the scholarly component enabled, search across seven external indexes and verify references; enabling the document parsing component (`dsh-zotero/enrichment`) accepts MinerU document egress, after which you can reuse existing parsed Markdown or submit one specific Zotero PDF attachment / public PDF URL for parsing (each parse still needs that explicit submission).
+  - Research SOP skills: 8 built-in phased research workflows (paper digest, landscape, lineage, evidence synthesis, manuscript audit, library governance, publication integrity, literature intake) loaded on demand with strict evidence boundaries.
+  - Extensions (optional): With write access enabled, create notes and update tags or collections (each write requires approval); with the scholarly component (`dsh-zotero/scholarly`) enabled, search across seven external indexes, follow citation networks, and verify references; enabling the document parsing component (`dsh-zotero/enrichment`) accepts MinerU document egress, after which you can reuse existing parsed Markdown or submit one specific Zotero PDF attachment / public PDF URL for parsing (each parse still needs that explicit submission).
 - **Literature Trail**
   - Search history: The session header shows query terms, scopes, filter conditions, and hit counts for every tool call on the first screen.
   - Passage review: Review extracted passages and annotations grouped by paper, complete with source tags and page numbers for easy verification.
@@ -39,7 +41,7 @@ All operations interact with Zotero through its local API (`127.0.0.1:23119`). R
 - **Literature Panel**
   - Library browsing: Browse collection trees, tags, saved searches, and the Trash in the right sidebar, with multi-field filtering.
   - Details & reading: Inspect metadata, notes, and attachment lists, and open local PDFs directly in the reading pane.
-  - Citations & handoff: Copy BibTeX entries, CSL citations, or item details directly from the action row, or send selected items into the chat draft with one click.
+  - Citations & handoff: Copy BibTeX entries, CSL citations, or item details directly from the action row, or send selected items into the chat draft with one click; a composer button opens the panel directly from the input bar, and bibliography deliverables link to the panel as well.
 
 For details on interaction patterns, UI roles, and runtime boundaries, see the [product model](docs/product-model.en.md).
 
@@ -112,7 +114,9 @@ When writing papers or organizing literature independently, use the **Literature
 
 ## Tools
 
-The plugin provides eight read tools and fifteen write tools. Write tools are off by default; turn on `writeEnabled` in configuration to enable them.
+The plugin registers 23 local tools (8 read + 15 write) and 7 scholarly retrieval tools. Local write tools are off by default; turn on `writeEnabled` in configuration to enable them. Scholarly tools become available when the `dsh-zotero/scholarly` component is enabled.
+
+### Local read tools (8)
 
 | Tool                      | Purpose                                                                                                   |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -125,7 +129,19 @@ The plugin provides eight read tools and fifteen write tools. Write tools are of
 | `zotero_changes`          | Check recent additions, modifications, and deletions in the library                                       |
 | `zotero_export`           | Generate formatted citations or a bibliography, or export BibTeX, RIS, or CSL JSON                        |
 
-The fifteen write tools (notes, tags and collection membership, collections, items, saved searches, Trash restore, library-wide tags, and batch operations) are off by default. Once enabled they write only to the personal library, and every write needs approval. See the [tool reference](docs/tools.en.md) for the full contract of all 23 local tools.
+### Scholarly retrieval tools (7, optional component `dsh-zotero/scholarly`)
+
+| Tool                       | Purpose                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `scholarly_search`         | Search across arXiv, OpenAlex, Crossref, S2, PubMed, Europe PMC, and DBLP with RRF fusion         |
+| `scholarly_get`            | Retrieve full bibliographic metadata and open-access PDF links for external papers                |
+| `scholarly_citations`      | Follow forward citation and backward reference networks                                           |
+| `scholarly_read`           | Open-access PDF reading and passage extraction (supports outline, section, and query modes)       |
+| `scholarly_cite`           | Fetch authoritative BibTeX, RIS, or formatted citations directly from DOI registration agencies   |
+| `scholarly_verify`         | Verify reference list authenticity, DOI matches, and retraction notices against Crossref          |
+| `scholarly_save_to_zotero` | Save externally retrieved papers to the personal Zotero library (write operation, needs approval) |
+
+The fifteen write tools (notes, tags and collection membership, collections, items, saved searches, Trash restore, library-wide tags, and batch operations) are off by default. Once enabled they write only to the personal library, and every write needs approval. See the [tool reference](docs/tools.en.md) for the full contract of all 23 local tools and 7 scholarly tools.
 
 ## Documentation
 
