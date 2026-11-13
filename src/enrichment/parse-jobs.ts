@@ -18,7 +18,9 @@ import {
 } from '@deepseek-ai/dsh-jobs'
 import { z } from 'zod'
 import {
+  ZOTERO_ARTIFACT_IMAGE_BYTES,
   ZOTERO_ARTIFACT_PAGE_CHARS,
+  type ZoteroArtifactImageMediaType,
   type ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
@@ -258,6 +260,13 @@ export interface EnrichmentParseJobsDeps {
     config: EnrichmentPreferences,
     signal: AbortSignal,
   ) => Promise<FulltextLookupResult>
+  /** One stored figure of an artifact, by artifact id and its `images/<file>` name. */
+  readonly readImage: (
+    artifactId: string,
+    name: string,
+  ) => Promise<
+    { readonly data: Uint8Array; readonly mediaType: ZoteroArtifactImageMediaType } | undefined
+  >
   readonly persistence: ParseJobPersistence
 }
 
@@ -855,6 +864,20 @@ export class EnrichmentParseJobs {
     this.authorize(sessionId, 'documentArtifact', currentCtx)
     if (result.kind === 'fault') throw result.error
     if (result.kind === 'miss') return { kind: result.reason === 'expired' ? 'expired' : 'missing' }
+    if (request.image !== undefined) {
+      const stored = await this.deps.readImage(result.provenance.artifactId, request.image.name)
+      signal.throwIfAborted()
+      this.open()
+      this.authorize(sessionId, 'documentArtifact', currentCtx)
+      if (stored === undefined || stored.data.byteLength > ZOTERO_ARTIFACT_IMAGE_BYTES)
+        return { kind: 'image-missing' }
+      return {
+        kind: 'image',
+        name: request.image.name,
+        mediaType: stored.mediaType,
+        base64: Buffer.from(stored.data).toString('base64'),
+      }
+    }
     const totalChars = result.text.length
     const read = request.read
     return {

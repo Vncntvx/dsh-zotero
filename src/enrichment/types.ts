@@ -5,6 +5,7 @@
  */
 
 import { ENRICHMENT_DOCUMENT_LIMITS, type EnrichmentMode } from '../enrichment-preferences.js'
+import type { ZoteroArtifactImageMediaType } from '../contract.js'
 import type { FulltextEnhancerInput } from '../local/fulltext-enhancer.js'
 
 /** Source validators are private to enrichment, never an upload input to core reads. */
@@ -49,7 +50,17 @@ export interface ParsedArtifactMeta {
   readonly taskId: string
   /** The exact files represented by this artifact, in commit order. */
   readonly files: readonly ['full.md'] | readonly ['full.md', 'content_list.json']
+  /** Figures the stored Markdown references, in name order. */
+  readonly images?: readonly ParsedImageMeta[]
   readonly pageCount?: number
+}
+
+/** One figure kept beside the Markdown it belongs to. */
+export interface ParsedImageMeta {
+  /** `images/<file>`, exactly the reference `full.md` carries. */
+  readonly name: string
+  readonly mediaType: ZoteroArtifactImageMediaType
+  readonly bytes: number
 }
 
 /** One parsed document, ready to be returned as full text. */
@@ -58,5 +69,7 @@ export interface ParsedArtifact {
   readonly markdown: string
   /** `*_content_list.json` content, present for the precise API. */
   readonly contentList?: string
+  /** Figure bytes, in the order the meta lists them. */
+  readonly images?: readonly { readonly name: string; readonly data: Uint8Array }[]
   readonly meta: ParsedArtifactMeta
 }

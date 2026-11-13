@@ -33,7 +33,7 @@ import type { ParsedArtifact, ParsedArtifactMeta } from './types.js'
 import { MINERU_ENDPOINTS, PRO_MODEL_VERSION } from './hosts.js'
 import { MineruClient } from './transport.js'
 import type { ParsedArtifactStore } from './artifact-store.js'
-import { extractParsedFiles, ZIP_MAX_ARCHIVE_BYTES } from './zip.js'
+import { extractParsedFiles, ZIP_MAX_ARCHIVE_BYTES, type ExtractedParsedFiles } from './zip.js'
 import { parsedIdentityOf } from './identity.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { sourceKeyOf } from './source-stamp.js'
@@ -280,7 +280,11 @@ async function downloadResult(
   client: MineruClient,
   combined: AbortSignal,
   onProgress?: (phase: ParsePhase) => void,
-): Promise<{ markdown: string; contentList?: string }> {
+): Promise<{
+  markdown: string
+  contentList?: string
+  images?: ExtractedParsedFiles['images']
+}> {
   if (state.markdownUrl !== undefined) {
     const bytes = await client.bytes(state.markdownUrl, {
       method: 'GET',
@@ -516,11 +520,25 @@ export async function parseOnce(
           contentFingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
           taskId,
           files: payload.contentList === undefined ? ['full.md'] : ['full.md', 'content_list.json'],
+          ...(payload.images !== undefined && payload.images.length > 0
+            ? {
+                images: payload.images.map((image) => ({
+                  name: image.name,
+                  mediaType: image.mediaType,
+                  bytes: image.data.byteLength,
+                })),
+              }
+            : {}),
           ...(pageCount !== undefined ? { pageCount } : {}),
         }
         const artifact: ParsedArtifact = {
           markdown: payload.markdown,
           ...(payload.contentList !== undefined ? { contentList: payload.contentList } : {}),
+          ...(payload.images !== undefined && payload.images.length > 0
+            ? {
+                images: payload.images.map((image) => ({ name: image.name, data: image.data })),
+              }
+            : {}),
           meta,
         }
         input.onProgress?.('writing')

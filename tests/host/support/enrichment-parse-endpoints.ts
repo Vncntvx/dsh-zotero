@@ -261,6 +261,13 @@ export async function endpointFixture(options: { attachment?: 'child' | 'top' } 
         },
         peer,
       )) as ZoteroDocumentArtifactResultView,
+    /** One figure of the artifact, by the reference the Markdown carries. */
+    figure: async (target: ZoteroParseTargetView, name: string, peer = owner) =>
+      (await invoke(
+        'documentArtifact',
+        { sessionId: OWNER, target, image: { name } },
+        peer,
+      )) as ZoteroDocumentArtifactResultView,
     receipt: async (peer = owner) =>
       (await invoke(
         'documentParseReceipt',

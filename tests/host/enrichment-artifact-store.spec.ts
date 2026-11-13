@@ -20,6 +20,79 @@ function readOnlyPhase(fs: ReturnType<typeof memoryFiles>) {
   }
 }
 
+const FIGURE = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+const WITH_FIGURES = {
+  ...ARTIFACT,
+  images: [{ name: 'images/page_0_figure.png', data: FIGURE }],
+  meta: {
+    ...ARTIFACT.meta,
+    images: [
+      {
+        name: 'images/page_0_figure.png',
+        mediaType: 'image/png' as const,
+        bytes: FIGURE.byteLength,
+      },
+    ],
+  },
+}
+
+describe('ParsedArtifactStore figures', () => {
+  it('stores a figure beside the Markdown and serves only the names its meta lists', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, WITH_FIGURES)
+    expect(fs.files.has(`/root/${CACHE_KEY}/images/page_0_figure.png`)).toBe(true)
+    const unchanged = readOnlyPhase(fs)
+    expect(await store.readImage(CACHE_KEY, 'images/page_0_figure.png')).toEqual({
+      data: FIGURE,
+      mediaType: 'image/png',
+    })
+    // A name the artifact does not declare never becomes a file read.
+    expect(await store.readImage(CACHE_KEY, 'images/other.png')).toBeUndefined()
+    expect(await store.readImage(CACHE_KEY, '../meta.json')).toBeUndefined()
+    unchanged()
+  })
+
+  it('keeps the text read to the Markdown while the meta names its figures', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, WITH_FIGURES)
+    const loaded = await store.get(CACHE_KEY)
+    expect(loaded).toEqual({
+      markdown: ARTIFACT.markdown,
+      contentList: ARTIFACT.contentList,
+      meta: WITH_FIGURES.meta,
+    })
+  })
+
+  it('refuses a payload whose figures do not match the metadata', async () => {
+    const store = new ParsedArtifactStore('/root', memoryFiles().deps)
+    await expect(
+      store.put(CACHE_KEY, { ...ARTIFACT, images: WITH_FIGURES.images }),
+    ).rejects.toThrow(/image list/)
+    await expect(store.put(CACHE_KEY, { ...WITH_FIGURES, images: [] })).rejects.toThrow(
+      /image list/,
+    )
+    await expect(
+      store.put(CACHE_KEY, {
+        ...WITH_FIGURES,
+        meta: {
+          ...WITH_FIGURES.meta,
+          images: [{ ...WITH_FIGURES.meta.images![0]!, bytes: 99 }],
+        },
+      }),
+    ).rejects.toThrow(/size/)
+  })
+
+  it('reports a figure whose stored bytes vanished', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, WITH_FIGURES)
+    fs.files.delete(`/root/${CACHE_KEY}/images/page_0_figure.png`)
+    expect(await store.readImage(CACHE_KEY, 'images/page_0_figure.png')).toBeUndefined()
+  })
+})
+
 describe('ParsedArtifactStore artifact reads', () => {
   it('round-trips exact v2 metadata and payload without mutating on read', async () => {
     const fs = memoryFiles()

@@ -10,7 +10,7 @@ import type {
   ZoteroParseReceiptView,
   ZoteroStartDocumentParseRequestView,
 } from '../../src/contract.js'
-import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../../src/contract.js'
+import { ZOTERO_ARTIFACT_IMAGE_BYTES, ZOTERO_ARTIFACT_PAGE_CHARS } from '../../src/contract.js'
 import { refFieldsOf } from '../../src/ref-grammar.js'
 import {
   zoteroDocumentArtifactRequestSchema,
@@ -322,6 +322,39 @@ describe('bounded parse receipts and result DTOs', () => {
       { ...read, read: { offset: -1 } },
       { ...read, read: { offset: 1.5 } },
       { ...read, read: { offset: 0, path: '/tmp/full.md' } },
+    ])
+      expect(zoteroDocumentArtifactRequestSchema.safeParse(invalid).success).toBe(false)
+  })
+
+  it('accepts one bounded figure and refuses a path, an unknown type, or an oversized body', () => {
+    const image = {
+      kind: 'image' as const,
+      name: 'images/page_0_figure.png',
+      mediaType: 'image/png' as const,
+      base64: Buffer.alloc(1024).toString('base64'),
+    }
+    expect(zoteroDocumentArtifactResultSchema.parse(image)).toEqual(image)
+    const request = { ...ARTIFACT_REQUEST, image: { name: image.name } }
+    expect(zoteroDocumentArtifactRequestSchema.parse(request)).toEqual(request)
+    expect(zoteroDocumentArtifactResultSchema.parse({ kind: 'image-missing' })).toEqual({
+      kind: 'image-missing',
+    })
+    for (const invalid of [
+      { ...image, name: '/tmp/images/figure.png' },
+      { ...image, name: 'images/../../secrets.png' },
+      { ...image, name: 'images/figure.svg' },
+      { ...image, mediaType: 'image/svg+xml' },
+      { ...image, path: '/tmp/images/figure.png' },
+      {
+        ...image,
+        base64: 'a'.repeat(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4 + 4),
+      },
+    ])
+      expect(zoteroDocumentArtifactResultSchema.safeParse(invalid).success).toBe(false)
+    for (const invalid of [
+      { ...request, image: { name: '../full.md' } },
+      { ...request, image: { name: 'images/figure.png', path: '/tmp' } },
+      { ...request, image: { name: 'images/figure.png', offset: 0 } },
     ])
       expect(zoteroDocumentArtifactRequestSchema.safeParse(invalid).success).toBe(false)
   })

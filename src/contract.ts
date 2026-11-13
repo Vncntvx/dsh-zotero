@@ -546,15 +546,34 @@ export interface ZoteroStartDocumentParseResultView {
 /** The largest slice of a parsed document one read may return. */
 export const ZOTERO_ARTIFACT_PAGE_CHARS = 16384
 
+/** The largest figure one read may return, before base64 expansion. */
+export const ZOTERO_ARTIFACT_IMAGE_BYTES = 8 * 1024 * 1024
+
+/** The figure formats a parsed artifact carries. */
+export type ZoteroArtifactImageMediaType =
+  'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp'
+
 export interface ZoteroDocumentArtifactRequestView {
   readonly sessionId: string
   readonly target: ZoteroParseTargetView
   /** Omit for metadata only; supply a character offset to read one bounded page. */
   readonly read?: { readonly offset: number }
+  /** Supply `images/<file>` to read one figure the stored Markdown references. */
+  readonly image?: { readonly name: string }
 }
 
 export type ZoteroDocumentArtifactResultView =
   | { readonly kind: 'missing' | 'expired' }
+  /** The artifact exists but carries no figure under the requested name. */
+  | { readonly kind: 'image-missing' }
+  | {
+      readonly kind: 'image'
+      /** `images/<file>`, the reference the Markdown carries. */
+      readonly name: string
+      readonly mediaType: ZoteroArtifactImageMediaType
+      /** The figure's bytes, base64-encoded; never a host path or URL. */
+      readonly base64: string
+    }
   | {
       readonly kind: 'ready'
       readonly sourceId: string

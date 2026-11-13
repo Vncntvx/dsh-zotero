@@ -295,6 +295,12 @@ export class EnrichmentService extends TypertRemoteService {
           signal,
         ),
       lookup: async (input, config, signal) => await this.lookup(input, signal, config),
+      // Figures live beside the Markdown they belong to: the artifact id is the
+      // store's cache key, and the store refuses a name its meta does not list.
+      readImage: async (artifactId, name) => {
+        const store = await this.storeFactory(resolveEnrichmentConfig(this.config), false)
+        return await store.readImage(artifactId, name)
+      },
       persistence:
         deps.parsePersistence ??
         new DiskParseJobPersistence(

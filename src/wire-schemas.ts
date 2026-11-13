@@ -20,6 +20,7 @@ import type {
 } from './contract.js'
 import {
   zoteroDocumentParseInvocation,
+  ZOTERO_ARTIFACT_IMAGE_BYTES,
   ZOTERO_ARTIFACT_PAGE_CHARS,
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
@@ -1080,11 +1081,31 @@ export const zoteroDocumentArtifactRequestSchema = z
       })
       .strict()
       .optional(),
+    image: z
+      .object({
+        // The canonical reference `full.md` carries, `images/<file>`.
+        name: z
+          .string()
+          .regex(/^images\/[A-Za-z0-9][A-Za-z0-9._-]{0,110}\.(?:png|jpe?g|gif|webp|bmp)$/),
+      })
+      .strict()
+      .optional(),
   })
   .strict() satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
 
 export const zoteroDocumentArtifactResultSchema = z.union([
   z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
+  z.object({ kind: z.literal('image-missing') }).strict(),
+  z
+    .object({
+      kind: z.literal('image'),
+      name: z
+        .string()
+        .regex(/^images\/[A-Za-z0-9][A-Za-z0-9._-]{0,110}\.(?:png|jpe?g|gif|webp|bmp)$/),
+      mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']),
+      base64: z.string().max(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('ready'),

@@ -6,7 +6,7 @@
  */
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ParsedArtifactStore } from '../../src/enrichment/artifact-store.js'
 import { parseDigest } from '../../src/enrichment/parse-target.js'
@@ -336,6 +336,43 @@ describe('explicit document parsing through the pinned Gateway', () => {
       totalChars: MARKDOWN.length,
     })
     expect(JSON.stringify(first)).not.toContain('/tmp')
+  })
+
+  it('serves one stored figure by the reference the Markdown carries', async () => {
+    const fixture = await setup()
+    fixture.grant()
+    const { receipt } = await complete(fixture, startRequest(), fixture.guest)
+    // A figure beside the Markdown, committed the way the parser commits them.
+    const directory = join(fixture.outputDir, receipt.artifactId)
+    const metaPath = join(directory, 'meta.json')
+    const meta = JSON.parse(await readFile(metaPath, 'utf8')) as Record<string, unknown>
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+    await mkdir(join(directory, 'images'), { recursive: true })
+    await writeFile(join(directory, 'images', 'page_0_figure.png'), bytes)
+    await writeFile(
+      metaPath,
+      JSON.stringify({
+        ...meta,
+        images: [{ name: 'images/page_0_figure.png', mediaType: 'image/png', bytes: bytes.length }],
+      }),
+    )
+    const target = { kind: 'url' as const, url: DOCUMENT_URL }
+    const figure = zoteroDocumentArtifactResultSchema.parse(
+      await fixture.figure(target, 'images/page_0_figure.png', fixture.guest),
+    )
+    expect(figure).toEqual({
+      kind: 'image',
+      name: 'images/page_0_figure.png',
+      mediaType: 'image/png',
+      base64: Buffer.from(bytes).toString('base64'),
+    })
+    // A name the artifact does not carry reads as absent, not as a path probe.
+    expect(
+      zoteroDocumentArtifactResultSchema.parse(
+        await fixture.figure(target, 'images/other.png', fixture.guest),
+      ),
+    ).toEqual({ kind: 'image-missing' })
+    expect(JSON.stringify(figure)).not.toContain(fixture.outputDir)
   })
 
   it('preserves a corrupt source-index error across the artifact Gateway without resubmission', async () => {

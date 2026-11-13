@@ -14,6 +14,7 @@ import {
   type SourceIndexRecord,
 } from './artifact-schema.js'
 import { stampMatches } from './source-stamp.js'
+import type { ZoteroArtifactImageMediaType } from '../contract.js'
 import type { FulltextSourceStamp, ParsedArtifact } from './types.js'
 
 export type { SourceIndexRecord } from './artifact-schema.js'
@@ -219,13 +220,65 @@ export class ParsedArtifactStore {
       throw new Error('The parsed artifact file list does not match its payload')
     if (artifact.contentList !== undefined && !Array.isArray(JSON.parse(artifact.contentList)))
       throw new Error('The parsed content list is invalid')
+    const images = artifact.images ?? []
+    if (images.length !== (meta.images?.length ?? 0))
+      throw new Error('The parsed artifact image list does not match its payload')
+    images.forEach((image, index) => {
+      const declared = meta.images?.[index]
+      if (declared === undefined || declared.name !== image.name)
+        throw new Error('The parsed artifact image list does not match its payload')
+      if (declared.bytes !== image.data.byteLength)
+        throw new Error('The parsed artifact image size does not match its metadata')
+    })
     const dir = this.dir(cacheKey)
     await this.ensureRoot()
     await this.deps.mkdir(dir)
     await this.atomicWrite(join(dir, 'full.md'), encoder.encode(artifact.markdown))
     if (artifact.contentList !== undefined)
       await this.atomicWrite(join(dir, 'content_list.json'), encoder.encode(artifact.contentList))
+    if (images.length > 0) {
+      // `images/<file>`, exactly the reference the Markdown carries; the name
+      // was validated against the meta schema before this write.
+      await this.deps.mkdir(join(dir, 'images'))
+      for (const image of images) await this.atomicWrite(join(dir, image.name), image.data)
+    }
     await this.atomicWrite(join(dir, 'meta.json'), encoder.encode(JSON.stringify(meta)))
+  }
+
+  /**
+   * Read one figure of a stored artifact. The name must be one the meta lists,
+   * so a request can never address a file outside the artifact's own images.
+   * @returns the bytes and media type, or undefined when this artifact has no
+   *   such figure.
+   */
+  async readImage(
+    cacheKey: string,
+    name: string,
+  ): Promise<
+    { readonly data: Uint8Array; readonly mediaType: ZoteroArtifactImageMediaType } | undefined
+  > {
+    const dir = this.dir(cacheKey)
+    let meta: z.infer<typeof artifactMetaSchema>
+    try {
+      meta = artifactMetaSchema.parse(
+        JSON.parse(decoder.decode(await this.deps.readFile(join(dir, 'meta.json')))),
+      )
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+    const declared = meta.images?.find((image) => image.name === name)
+    if (declared === undefined) return undefined
+    let data: Uint8Array
+    try {
+      data = await this.deps.readFile(join(dir, declared.name))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+    if (data.byteLength !== declared.bytes)
+      throw new Error('The stored parsed image does not match its metadata')
+    return { data, mediaType: declared.mediaType }
   }
 
   private async sourceSnapshot(): Promise<z.infer<typeof sourceIndexSchema>> {

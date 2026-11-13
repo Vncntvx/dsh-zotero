@@ -147,7 +147,7 @@ graph LR
 
 `mode`（`free` / `pro`）独立选择接口；`free` 不解析 token。`pro` 引用无法解析时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 明确失败，不降级免费或匿名；已有缓存产物无需 token 即可读取。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
 
-当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳（`mode` 在 artifact meta 与内容缓存键中），本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，图片跳过不落盘。
+当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`，另有 `images/` 存放 Markdown 引用的插图，上限 512 张、单张 8 MB、合计 128 MB），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳（`mode` 在 artifact meta 与内容缓存键中），本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，图片跳过不落盘。
 
 ### 本地语义排序与模型资产
 

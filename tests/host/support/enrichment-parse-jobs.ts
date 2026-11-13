@@ -184,11 +184,13 @@ export async function parseJobsFixture(
     reason: 'absent',
   }))
   const persistence = new DiskParseJobPersistence(async () => root)
+  const readImage = vi.fn<EnrichmentParseJobsDeps['readImage']>(async () => undefined)
   const deps: EnrichmentParseJobsDeps = {
     config: () => config.value,
     resolveAttachment,
     execute,
     lookup,
+    readImage,
     persistence,
     ...overrides,
   }
@@ -216,6 +218,7 @@ export async function parseJobsFixture(
     config,
     execute,
     lookup,
+    readImage,
     resolveAttachment,
     persistence,
     owners,
