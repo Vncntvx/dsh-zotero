@@ -4,11 +4,9 @@ import {
   Button,
   Input,
   Modal,
-  IconCloseOutlineRegular,
   IconRefreshOutlineRegular,
   IconStopFillRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconButton } from '../components/IconButton.tsx'
 import {
   DocumentParseController,
   documentParseProgress,
@@ -71,6 +69,7 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   )
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   const t = useMemo(() => props.t ?? parseTranslate(props.locale ?? 'zh'), [props.t, props.locale])
+  const formId = useId()
   const inputId = useId()
   const hintId = useId()
   const targetKey = JSON.stringify(selection)
@@ -131,23 +130,62 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
         : 'parseWaiting'
 
   return (
-    <Modal open={open} onClose={close} title={t('parseTitle')} headless>
+    <Modal
+      open={open}
+      onClose={close}
+      title={t('parseTitle')}
+      closeLabel={t('parseClose')}
+      className={css.card}
+      contentClassName={css.content}
+      footer={
+        <div className={css.footer}>
+          <Button
+            type="button"
+            icon={<IconRefreshOutlineRegular />}
+            onClick={() => void controller.refresh()}
+            disabled={
+              !state.capabilities.mounted ||
+              !state.capabilities.connected ||
+              !state.capabilities.sessionAllowed ||
+              !state.capabilities.readAllowed ||
+              !state.valid ||
+              state.checking
+            }
+          >
+            {t('parseReconnect')}
+          </Button>
+          {live && (
+            <Button
+              type="button"
+              icon={<IconStopFillRegular />}
+              onClick={() => void controller.cancel()}
+              disabled={cancelDisabled}
+            >
+              {t('parseCancel')}
+            </Button>
+          )}
+          {(!state.operation || completed || retryable) && (
+            <Button form={formId} type="submit" variant="primary" disabled={!canSubmit}>
+              {t(
+                action === 'retry'
+                  ? 'parseRetry'
+                  : action === 'reparse'
+                    ? 'parseReparse'
+                    : 'parseConfirm',
+              )}
+            </Button>
+          )}
+        </div>
+      }
+    >
       <form
+        id={formId}
         className={css.surface}
         onSubmit={(event) => {
           event.preventDefault()
           if (canSubmit) void controller.submit(action)
         }}
       >
-        <header className={css.header}>
-          <h2 className={css.title}>{t('parseTitle')}</h2>
-          <IconButton
-            icon={<IconCloseOutlineRegular />}
-            aria-label={t('parseClose')}
-            onClick={close}
-            type="button"
-          />
-        </header>
         <div className={css.body}>
           {state.target.kind === 'url' && (
             <div className={css.field}>
@@ -176,16 +214,23 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
             <dt>{t('parseMode')}</dt>
             <dd>{t(state.capabilities.mode === 'pro' ? 'parseModePro' : 'parseModeFree')}</dd>
           </dl>
-          {state.capabilities.maxFileBytes > 0 && (
-            <p className={css.secondary}>
-              {t('parseLimits', {
-                size: formatLimit(state.capabilities.maxFileBytes),
-                pages: state.capabilities.maxPages,
-              })}
-            </p>
-          )}
-          <GateNotice state={state} t={t} />
-          {state.checking && <p role="status">{t('parseChecking')}</p>}
+          {/* The limits, the gates, and the close hint are one note block:
+           * what applies to this submission, divided from the facts above. */}
+          <div className={css.notes}>
+            {state.capabilities.maxFileBytes > 0 && (
+              <p className={css.secondary}>
+                {t('parseLimits', {
+                  size: formatLimit(state.capabilities.maxFileBytes),
+                  pages: state.capabilities.maxPages,
+                })}
+              </p>
+            )}
+            <GateNotice state={state} t={t} />
+            {state.checking && <p role="status">{t('parseChecking')}</p>}
+            {!completed && !failed && !cancelled && (
+              <p className={css.secondary}>{t('parseCloseHint')}</p>
+            )}
+          </div>
           {state.failure && (
             <p role="alert" className={css.error}>
               <code>{documentParseText(state.failure.code)}</code>{' '}
@@ -233,48 +278,7 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
               )}
             </section>
           )}
-          {!completed && !failed && !cancelled && (
-            <p className={css.secondary}>{t('parseCloseHint')}</p>
-          )}
         </div>
-        <footer className={css.footer}>
-          <Button
-            type="button"
-            icon={<IconRefreshOutlineRegular />}
-            onClick={() => void controller.refresh()}
-            disabled={
-              !state.capabilities.mounted ||
-              !state.capabilities.connected ||
-              !state.capabilities.sessionAllowed ||
-              !state.capabilities.readAllowed ||
-              !state.valid ||
-              state.checking
-            }
-          >
-            {t('parseReconnect')}
-          </Button>
-          {live && (
-            <Button
-              type="button"
-              icon={<IconStopFillRegular />}
-              onClick={() => void controller.cancel()}
-              disabled={cancelDisabled}
-            >
-              {t('parseCancel')}
-            </Button>
-          )}
-          {(!state.operation || completed || retryable) && (
-            <Button type="submit" variant="primary" disabled={!canSubmit}>
-              {t(
-                action === 'retry'
-                  ? 'parseRetry'
-                  : action === 'reparse'
-                    ? 'parseReparse'
-                    : 'parseConfirm',
-              )}
-            </Button>
-          )}
-        </footer>
       </form>
     </Modal>
   )

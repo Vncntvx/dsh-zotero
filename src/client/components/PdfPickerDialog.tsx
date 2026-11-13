@@ -6,10 +6,8 @@
  * @module dsh-zotero/client/components/PdfPickerDialog
  */
 
-import { useId } from 'react'
-import { Button, IconCloseOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconButton } from './IconButton.tsx'
 import css from './PdfPickerDialog.module.css'
 
 /** One PDF the dialog offers, and what choosing it does. */
@@ -43,45 +41,38 @@ export function PdfPickerDialog({
   busy = false,
   error,
 }: PdfPickerDialogProps) {
-  const titleId = useId()
   return (
-    <Modal open={open} onClose={onClose} title={title} headless>
-      <section className={css.dialog} aria-labelledby={titleId}>
-        <header className={css.header}>
-          <h2 id={titleId} className={css.title}>
-            {title}
-          </h2>
-          <IconButton
-            icon={<IconCloseOutlineRegular />}
-            aria-label={t('parseClose')}
-            onClick={onClose}
-            type="button"
-          />
-        </header>
-        {error !== undefined && (
-          <p role="alert" className={css.error}>
-            {error}
-          </p>
-        )}
-        <ul className={css.list}>
-          {options.map((option) => (
-            <li key={option.key}>
-              <Button
-                variant="outline"
-                size="sm"
-                className={css.option}
-                title={option.title}
-                aria-label={`${option.title} ${option.action}`}
-                disabled={busy}
-                onClick={option.onSelect}
-              >
-                <span className={css.optionTitle}>{option.title}</span>
-                <span className={css.optionAction}>{option.action}</span>
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </section>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={title}
+      closeLabel={t('parseClose')}
+      className={css.card}
+      contentClassName={css.content}
+    >
+      {error !== undefined && (
+        <p role="alert" className={css.error}>
+          {error}
+        </p>
+      )}
+      <ul className={css.list}>
+        {options.map((option) => (
+          <li key={option.key}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={css.option}
+              title={option.title}
+              aria-label={`${option.title} ${option.action}`}
+              disabled={busy}
+              onClick={option.onSelect}
+            >
+              <span className={css.optionTitle}>{option.title}</span>
+              <span className={css.optionAction}>{option.action}</span>
+            </Button>
+          </li>
+        ))}
+      </ul>
     </Modal>
   )
 }

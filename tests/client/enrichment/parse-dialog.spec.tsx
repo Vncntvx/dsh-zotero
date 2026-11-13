@@ -83,6 +83,15 @@ async function settle() {
 }
 
 describe('ParseDocumentDialog confirmation', () => {
+  it('refreshes artifact status from the standard Modal footer without submitting', async () => {
+    const world = mount()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseReconnect }))
+    await settle()
+    expect(world.remote.documentArtifact).toHaveBeenCalledTimes(2)
+    expect(world.remote.startDocumentParse).not.toHaveBeenCalled()
+  })
+
   it('shows the facts and limits with zero starts before confirmation', async () => {
     const world = mount()
     await settle()

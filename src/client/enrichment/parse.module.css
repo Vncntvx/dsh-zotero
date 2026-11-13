@@ -9,35 +9,44 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.header,
+.card {
+  max-height: 100%;
+}
+.content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content > :first-child {
+  flex: 0 0 auto;
+}
+
+.content > :last-child {
+  min-height: 0;
+  overflow: auto;
+}
+.card > :last-child {
+  flex: 0 0 auto;
+}
+
 .footer {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding: var(--dsw-font-s-14-font-size);
-}
-
-.header {
-  justify-content: space-between;
-}
-
-.title {
-  margin: 0;
-  font: inherit;
-  font-weight: var(--dsw-font-s-strong-14-font-weight);
+  gap: 8px;
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding: var(--dsw-font-s-14-font-size);
+  gap: 16px;
   overflow: auto;
   min-width: 0;
 }
 
 .body p,
+.notes p,
 .facts {
   margin: 0;
 }
@@ -48,11 +57,24 @@
   gap: var(--dsw-radius-xs);
 }
 
+/* The label column sizes to its longest label, so the values line up without
+ * pushing them to the far side of a wide dialog. */
 .facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: var(--dsw-radius-xs) var(--dsw-font-xs-13-font-size);
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px 24px;
   overflow-wrap: anywhere;
+}
+
+/* Hints and gate notices read as one block, divided from the facts. */
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  min-width: 0;
 }
 
 .facts dt,
@@ -68,9 +90,9 @@
 .result {
   display: flex;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding-block: var(--dsw-font-xs-13-font-size);
-  border-block: 0.5px solid var(--dsw-alias-border-l2);
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
   overflow-wrap: anywhere;
 }
 

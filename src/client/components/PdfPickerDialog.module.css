@@ -1,31 +1,23 @@
-/* The host owns the modal and the buttons. This sheet only arranges the rows. */
-.dialog {
-  display: flex;
-  flex-direction: column;
+.card {
+  max-height: 100%;
+}
+
+.content {
   min-height: 0;
-  font-family: var(--dsw-font-s-14-font-family);
-  font-size: var(--dsh-content-font-size);
-  line-height: var(--dsw-font-s-14-line-height);
-  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding: var(--dsw-font-s-14-font-size);
+.content > :first-child {
+  flex: 0 0 auto;
 }
 
-.title {
-  margin: 0;
-  font: inherit;
-  font-weight: var(--dsw-font-s-strong-14-font-weight);
+.content > :last-child {
+  min-height: 0;
+  overflow: auto;
 }
 
 .error {
-  margin: 0;
-  padding: 0 var(--dsw-font-s-14-font-size) var(--dsw-font-s-14-font-size);
+  margin: 0 0 12px;
   color: var(--dsw-alias-state-error-primary);
   overflow-wrap: anywhere;
 }
@@ -34,12 +26,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--dsw-radius-xs);
+  min-height: 0;
   margin: 0;
-  padding: 0 var(--dsw-font-s-14-font-size) var(--dsw-font-s-14-font-size);
+  padding: 0;
   list-style: none;
 }
 
-/* A row spans the dialog so the file name keeps room to truncate. */
 .option {
   width: 100%;
   justify-content: space-between;
