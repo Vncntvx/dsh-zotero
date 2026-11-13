@@ -28,6 +28,7 @@ import { createHash } from 'node:crypto'
 import { LRUCache } from 'lru-cache'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { EMBED_BATCH_SIZE } from './batching.js'
+import { awaitSharedWaiter } from '../../waiter-flight.js'
 
 export const VECTOR_CACHE_MAX_ITEMS = 16_384
 export const VECTOR_CACHE_MAX_BYTES = 64 * 1024 * 1024
@@ -240,17 +241,14 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
   /** Await one flight under the caller's own cancellation. */
   const awaitFlight = async (flight: Flight, signal?: AbortSignal): Promise<Float32Array> => {
     if (signal === undefined) return await flight.done
-    signal.throwIfAborted()
-    return await new Promise<Float32Array>((resolve, reject) => {
-      const onAbort = (): void => {
+    return await awaitSharedWaiter(flight.done, signal, {
+      onLeave: (aborted) => {
+        if (!aborted) return
+        // Only a caller that walked away releases its place; a settlement
+        // leaves the flight for its finally to remove.
         flight.waiters -= 1
         flight.batch?.leave()
-        reject(signal.reason)
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-      void flight.done.then(resolve, reject).finally(() => {
-        signal.removeEventListener('abort', onAbort)
-      })
+      },
     })
   }
 

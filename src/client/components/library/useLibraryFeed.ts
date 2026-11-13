@@ -1,5 +1,9 @@
 import { LIBRARY_DEFAULTS, type LibraryPreferences } from '../../../library-preferences.ts'
-import type { LibraryViewMemory, LibraryViewStore } from './library-view-store.ts'
+import type {
+  LibrarySessionView,
+  LibraryViewMemory,
+  LibraryViewStore,
+} from './library-view-store.ts'
 /**
  * The library panel's data feed: one hook owning the item list, the library
  * selector, the inspector, and persistence, plus the seam through which the
@@ -51,6 +55,7 @@ import {
   writeLibraryState,
   type LibraryStoredState,
 } from './library-storage.ts'
+import { librarySessionKeyOf } from './library-view-store.ts'
 import type { ChildKind, ChildLoadState, LibraryFeedFace } from './library-feed-types.ts'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -129,10 +134,14 @@ export function useLibraryFeed(
   preferences: LibraryPreferences = LIBRARY_DEFAULTS,
   memory?: LibraryViewMemory,
   visible = true,
+  // The panel already read the pre-probe session payload; reuse it instead of
+  // scanning the store a second time. A caller that passes nothing keeps the
+  // hook's own read.
+  initialViewOverride?: LibrarySessionView,
 ): LibraryFeed {
   // The session cache carries only the detail payload; every preference and
   // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
-  const initialView = viewStore.sessionView(undefined, sessionId)
+  const initialView = initialViewOverride ?? viewStore.sessionView(undefined, sessionId)
   const [storageError, setStorageError] = useState<string>()
   const visibleRef = useRef(visible)
   visibleRef.current = visible
@@ -222,7 +231,7 @@ export function useLibraryFeed(
   selectedRefRef.current = selectedRef
   const restoredServer = useRef<string>()
   const restoredSession = useRef<string>()
-  const viewIdentity = JSON.stringify([serverId, sessionId])
+  const viewIdentity = librarySessionKeyOf(serverId, sessionId)
   /** The exact state last written, keyed by instance so a switch re-persists. */
   const lastPersisted = useRef<{ serverId: string; serialized: string }>()
   const [hydratedView, setHydratedView] = useState<string>()

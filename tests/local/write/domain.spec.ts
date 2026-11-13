@@ -572,7 +572,7 @@ describe('createNote', () => {
 describe('the provider seam', () => {
   it('serves the write capability only when the write collaborators are wired', async () => {
     const client = testHttpClient(mock.baseUrl, { timeoutMs: 1000, maxResponseBytes: 1024 })
-    const bare = new LocalApiProvider(client, () => PROVIDER_LIMITS)
+    const bare = new LocalApiProvider({ client, limits: () => PROVIDER_LIMITS })
     expect(bare.capabilities.has('write')).toBe(false)
     let thrown: unknown
     try {

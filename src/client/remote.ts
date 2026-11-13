@@ -139,6 +139,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     ) => Promise<RemoteResult<ZoteroChildPageView>>
     export: (
       request: ZoteroLibraryExportRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
     semanticModelStatus: (
       request: ZoteroSemanticModelStatusRequestView,
@@ -238,6 +239,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     ) => Promise<RemoteResult<ZoteroChildPageView>>
     'zotero/export': (
       request: ZoteroLibraryExportRequestView,
+      signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
   }
   interface TypertRemoteNamespaceMap {

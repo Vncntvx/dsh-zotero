@@ -67,9 +67,12 @@ export function useCopyFeedback(subjectKey?: unknown, contentKey?: unknown): Cop
   const epoch = useRef(0)
   const timer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
   // The latest reported phase, read by the content effect without subscribing
-  // it to every transition of the lane.
+  // it to every transition of the lane. Synced after commit, never during a
+  // render that React may discard.
   const phase = useRef<CopyPhase>('idle')
-  phase.current = state.phase
+  useEffect(() => {
+    phase.current = state.phase
+  }, [state.phase])
 
   const clearTimer = useCallback((): void => {
     if (timer.current !== undefined) {

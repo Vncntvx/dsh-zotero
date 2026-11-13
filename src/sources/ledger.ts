@@ -59,8 +59,12 @@ import type {
 } from './model.js'
 import { supportedLocalLibraryOf } from './model.js'
 import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.js'
-import { hasIssue, type SourceFilterCounts } from './filters.js'
-import { hasPdf } from './source-capabilities.js'
+import {
+  SOURCE_FILTER_MASK_FIELDS,
+  hasIssue,
+  sourceFilterMaskOf,
+  type SourceFilterCounts,
+} from './filters.js'
 import {
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
@@ -131,8 +135,7 @@ interface ItemDraft {
   bestAttachment?: SourceItem['bestAttachment']
   attachment?: SourceAttachment
   retrievalFacts?: SourceRetrievalFacts
-  retrievalSummary?: SourceItem['retrievalSummary']
-  /** Call ids of the successful, meta-recognizable retrieves (run count). */
+  /** Call ids of the successful, meta-recognizable retrieves (the run count). */
   readonly successfulRetrieveCallIds: Set<string>
   exports: ExportArtifact[]
   readonly exportedCallIds: Set<string>
@@ -146,25 +149,11 @@ interface ItemDraft {
    */
   version: number
   /**
-   * The filter membership of the last frozen view (see {@link MASK_PDF}); the
+   * The filter membership of the last frozen view (see `SOURCE_FILTER_BITS`); the
    * shared aggregate counters are adjusted by the delta on each refreeze.
    */
   mask: number
 }
-
-const MASK_PDF = 1
-const MASK_RETRIEVED = 2
-const MASK_EVIDENCE = 4
-const MASK_EXPORTED = 8
-
-/** The mask bits and the aggregate counter each one feeds. */
-const MASK_FIELDS: ReadonlyArray<readonly [number, 'pdf' | 'retrieved' | 'evidence' | 'exported']> =
-  [
-    [MASK_PDF, 'pdf'],
-    [MASK_RETRIEVED, 'retrieved'],
-    [MASK_EVIDENCE, 'evidence'],
-    [MASK_EXPORTED, 'exported'],
-  ]
 
 function emptyOperations(): DraftOperations {
   return { running: 0, failed: 0, stopped: 0 }
@@ -346,15 +335,6 @@ function eventTimeOf(block: ToolBlockLike): number {
 }
 
 /** The filter membership one frozen item contributes to the aggregate counters. */
-function maskOf(item: SourceItem): number {
-  return (
-    (hasPdf(item) ? MASK_PDF : 0) |
-    (item.retrievalFacts === undefined ? 0 : MASK_RETRIEVED) |
-    (item.evidence.length === 0 ? 0 : MASK_EVIDENCE) |
-    (item.exports.length === 0 ? 0 : MASK_EXPORTED)
-  )
-}
-
 /** Freeze one occurrence; the argument arrays are written once and never mutated. */
 function frozenSearchOf(draft: SearchDraft): SearchOccurrence {
   return {
@@ -408,7 +388,14 @@ function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): So
     ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
     ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
     ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
-    ...(draft.retrievalSummary === undefined ? {} : { retrievalSummary: draft.retrievalSummary }),
+    ...(draft.successfulRetrieveCallIds.size === 0
+      ? {}
+      : {
+          retrievalSummary: {
+            runCount: draft.successfulRetrieveCallIds.size,
+            truncated: draft.retrievalFacts?.truncated === true,
+          },
+        }),
     exports: [...draft.exports],
     exportsTotal: draft.exports.length,
     firstSeenAt: draft.firstSeenAt,
@@ -630,11 +617,11 @@ export class SourceWorkspaceIndex {
 
   /** Move the shared filter aggregates by one draft's membership change. */
   private retally(draft: ItemDraft, item: SourceItem): void {
-    const next = maskOf(item)
+    const next = sourceFilterMaskOf(item)
     const prior = draft.mask
     if (next === prior) return
     draft.mask = next
-    for (const [bit, field] of MASK_FIELDS) {
+    for (const [bit, field] of SOURCE_FILTER_MASK_FIELDS) {
       if (((next ^ prior) & bit) === 0) continue
       this.filterTotals[field] += (next & bit) === 0 ? -1 : 1
     }
@@ -837,13 +824,7 @@ export class SourceWorkspaceIndex {
     // A recognized projection always carries `count` (the byte budget may
     // drop `items` alone); only a fully unusable meta yields no facts.
     if (view.items === null && view.count === null) return
-    if (!draft.successfulRetrieveCallIds.has(callId)) {
-      draft.successfulRetrieveCallIds.add(callId)
-      draft.retrievalSummary = {
-        runCount: draft.successfulRetrieveCallIds.size,
-        truncated: false,
-      }
-    }
+    draft.successfulRetrieveCallIds.add(callId)
     if (view.count !== null) {
       draft.facts.reportedEvidenceCount += view.count
     }
@@ -919,13 +900,6 @@ export class SourceWorkspaceIndex {
           existing.passage.callIds.push(callId)
         }
       }
-    }
-    // Refresh the truncation flag after the merge, so the latest retrieve's
-    // facts are reflected even when this call was already counted. The
-    // creation block above guarantees a summary exists by this point.
-    draft.retrievalSummary = {
-      ...draft.retrievalSummary!,
-      truncated: draft.retrievalFacts?.truncated === true,
     }
   }
 

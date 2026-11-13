@@ -247,6 +247,16 @@ describe('the library data plane', () => {
     expect(underlying.export).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards the caller signal to the export read', async () => {
+    const underlying = face()
+    const plane = planeOf(underlying)
+    const controller = new AbortController()
+    await plane.export(EXPORT_REQUEST, controller.signal)
+    // The shared flight carries its own controller signal; the caller's
+    // cancellation reaches it through the refcounted waiters.
+    expect(underlying.export).toHaveBeenCalledWith(EXPORT_REQUEST, expect.any(AbortSignal))
+  })
+
   it('expires a settled export after its ten-second TTL', async () => {
     vi.useFakeTimers()
     try {

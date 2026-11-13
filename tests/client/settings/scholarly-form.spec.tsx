@@ -441,7 +441,7 @@ describe('ScholarlySettingsSection', () => {
     await vi.waitFor(() => {
       // Scope the badge to the S2 row: three secret fields render the same
       // label, so a page-wide match cannot tell which one is configured.
-      const field = document.getElementById('scholarly-settings-s2ApiKey')?.closest('div')
+      const field = document.getElementById('scholarly-settings-s2Key')?.closest('div')
       expect(field?.textContent).toContain(zh.secretConfigured)
     })
     controller.dispose()

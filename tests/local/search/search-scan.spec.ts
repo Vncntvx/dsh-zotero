@@ -581,10 +581,10 @@ describe('search: note-content scan', () => {
     // live limits, so no rebuild is needed for the edit to apply, and the
     // entries already cached keep their `fetchedAt`, which this test observes.
     let scopeListingTtlMs = 0
-    const live = new LocalApiProvider(testHttpClient(mock.baseUrl), () => ({
-      ...PROVIDER_LIMITS,
-      scopeListingTtlMs,
-    }))
+    const live = new LocalApiProvider({
+      client: testHttpClient(mock.baseUrl),
+      limits: () => ({ ...PROVIDER_LIMITS, scopeListingTtlMs }),
+    })
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '7',

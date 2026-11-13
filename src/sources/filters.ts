@@ -42,6 +42,37 @@ const SOURCE_FILTER_PREDICATES = {
   issues: (item: SourceItem) => hasIssue(item),
 } as const satisfies Record<Exclude<SourceFilter, 'all'>, (item: SourceItem) => boolean>
 
+/** One bit per aggregate-counted filter; the ledger folds these into running totals. */
+export const SOURCE_FILTER_BITS = {
+  pdf: 1,
+  retrieved: 2,
+  evidence: 4,
+  exported: 8,
+} as const
+
+/** The mask bits and the aggregate counter each one feeds, in a stable order. */
+export const SOURCE_FILTER_MASK_FIELDS = [
+  [SOURCE_FILTER_BITS.pdf, 'pdf'],
+  [SOURCE_FILTER_BITS.retrieved, 'retrieved'],
+  [SOURCE_FILTER_BITS.evidence, 'evidence'],
+  [SOURCE_FILTER_BITS.exported, 'exported'],
+] as const
+
+/**
+ * The aggregate mask of one source: the same predicates the filter bar counts,
+ * so a predicate change moves the listing and the running totals together.
+ * @param item - the source to probe.
+ * @returns the bit mask of the aggregate-counted filters it matches.
+ */
+export function sourceFilterMaskOf(item: SourceItem): number {
+  let mask = 0
+  if (SOURCE_FILTER_PREDICATES.pdf(item)) mask |= SOURCE_FILTER_BITS.pdf
+  if (SOURCE_FILTER_PREDICATES.retrieved(item)) mask |= SOURCE_FILTER_BITS.retrieved
+  if (SOURCE_FILTER_PREDICATES.evidence(item)) mask |= SOURCE_FILTER_BITS.evidence
+  if (SOURCE_FILTER_PREDICATES.exported(item)) mask |= SOURCE_FILTER_BITS.exported
+  return mask
+}
+
 /** The filter ids in their bar order, derived from the predicate table. */
 const FILTER_IDS = Object.keys(SOURCE_FILTER_PREDICATES) as Array<
   keyof typeof SOURCE_FILTER_PREDICATES

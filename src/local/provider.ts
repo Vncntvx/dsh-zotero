@@ -142,10 +142,31 @@ import type {
   ZoteroDeleteSavedSearchOutcome,
 } from '../types.js'
 
+/** Everything one provider instance needs, named so a swap cannot mis-wire two facts. */
+export interface LocalApiProviderOptions {
+  readonly client: ZoteroHttpClient
+  readonly limits: () => LocalApiLimits
+  readonly writer?: ZoteroWriteHttpClient
+  readonly authorizer?: WriteAuthorizer
+  readonly sink?: DiagnosticSink
+  readonly fulltextEnhancer?: () => FulltextEnhancer | undefined
+  readonly evidenceRanker?: () => EvidenceRanker
+  /**
+   * The stored-grant fact when no authorizer exists (writes disabled). The
+   * authorizer wins while it exists: it also knows this process's in-memory
+   * key, which a credential read cannot see.
+   */
+  readonly readGrant?: (serverId: string) => Promise<boolean>
+}
+
 export class LocalApiProvider implements ZoteroProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly capabilities: ReadonlySet<ZoteroCapability>
 
+  private readonly client: ZoteroHttpClient
+  private readonly writer?: ZoteroWriteHttpClient
+  private readonly authorizer?: WriteAuthorizer
+  private readonly readGrant?: (serverId: string) => Promise<boolean>
   private readonly directory: ScopeDirectory
   private readonly itemSchema: ItemSchemaDirectory
   private readonly getLimits: () => LocalApiLimits
@@ -154,26 +175,16 @@ export class LocalApiProvider implements ZoteroProvider {
   private readonly getFulltextEnhancer: () => FulltextEnhancer | undefined
   private readonly getEvidenceRanker: () => EvidenceRanker
 
-  constructor(
-    private readonly client: ZoteroHttpClient,
-    limits: () => LocalApiLimits,
-    private readonly writer?: ZoteroWriteHttpClient,
-    private readonly authorizer?: WriteAuthorizer,
-    sink?: DiagnosticSink,
-    getFulltextEnhancer: () => FulltextEnhancer | undefined = () => undefined,
-    getEvidenceRanker: () => EvidenceRanker = () => bm25EvidenceRanker,
-    /**
-     * The stored-grant fact when no authorizer exists (writes disabled). The
-     * authorizer wins while it exists: it also knows this process's in-memory
-     * key, which a credential read cannot see.
-     */
-    private readonly readGrant: ((serverId: string) => Promise<boolean>) | undefined = undefined,
-  ) {
-    this.getLimits = limits
+  constructor(options: LocalApiProviderOptions) {
+    this.client = options.client
+    this.writer = options.writer
+    this.authorizer = options.authorizer
+    this.readGrant = options.readGrant
+    this.getLimits = options.limits
     this.searchCaches = createSearchIndexCaches()
-    this.sink = sink
-    this.getFulltextEnhancer = getFulltextEnhancer
-    this.getEvidenceRanker = getEvidenceRanker
+    this.sink = options.sink
+    this.getFulltextEnhancer = options.fulltextEnhancer ?? (() => undefined)
+    this.getEvidenceRanker = options.evidenceRanker ?? (() => bm25EvidenceRanker)
     // The directory owns the scope-listing and breadcrumb caches. It reads the
     // TTL and the fan-out bound through the live limits, so a settings edit
     // changes how long an existing cache entry is trusted (and how wide a
@@ -181,12 +192,12 @@ export class LocalApiProvider implements ZoteroProvider {
     // provider (and with it the HTTP client, the write client and the
     // authorizer's grants).
     this.directory = new ScopeDirectory(
-      client,
+      this.client,
       () => this.getLimits().scopeListingTtlMs,
       () => this.getLimits().graphConcurrency,
-      sink,
+      this.sink,
     )
-    this.itemSchema = new ItemSchemaDirectory(client)
+    this.itemSchema = new ItemSchemaDirectory(this.client)
     // `write` is declared only when the write collaborators are wired: a
     // capability without its method would be a gate that routes into
     // nothing.
@@ -198,7 +209,7 @@ export class LocalApiProvider implements ZoteroProvider {
       'browse',
       'retrieve',
       'changes',
-      ...(writer !== undefined && authorizer !== undefined ? (['write'] as const) : []),
+      ...(this.writer !== undefined && this.authorizer !== undefined ? (['write'] as const) : []),
     ])
   }
 

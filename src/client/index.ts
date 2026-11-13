@@ -546,31 +546,20 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
    * session's surfaces, which this placement (mounted beside the session)
    * always is.
    */
+  // The cancellation argument is passed only when the caller has one: the
+  // wire treats it as optional, and a plane read started without a signal
+  // stays a one-argument call all the way down.
+  const forward =
+    <Request, Result>(call: (request: Request, signal?: AbortSignal) => Promise<Result>) =>
+    (request: Request, signal?: AbortSignal): Promise<Result> =>
+      signal === undefined ? call(request) : call(request, signal)
   const plane = createLibraryDataPlane({
-    // The cancellation argument is passed only when the caller has one: the
-    // wire treats it as optional, and a plane read started without a signal
-    // stays a one-argument call all the way down.
-    collectionPath: (request, signal) =>
-      signal === undefined
-        ? ctx.remote.zotero.collectionPath(request)
-        : ctx.remote.zotero.collectionPath(request, signal),
-    browse: (request, signal) =>
-      signal === undefined
-        ? ctx.remote.zotero.browse(request)
-        : ctx.remote.zotero.browse(request, signal),
-    search: (request, signal) =>
-      signal === undefined
-        ? ctx.remote.zotero.search(request)
-        : ctx.remote.zotero.search(request, signal),
-    item: (request, signal) =>
-      signal === undefined
-        ? ctx.remote.zotero.item(request)
-        : ctx.remote.zotero.item(request, signal),
-    childPage: (request, signal) =>
-      signal === undefined
-        ? ctx.remote.zotero.childPage(request)
-        : ctx.remote.zotero.childPage(request, signal),
-    export: (request) => ctx.remote.zotero.export(request),
+    collectionPath: forward(ctx.remote.zotero.collectionPath),
+    browse: forward(ctx.remote.zotero.browse),
+    search: forward(ctx.remote.zotero.search),
+    item: forward(ctx.remote.zotero.item),
+    childPage: forward(ctx.remote.zotero.childPage),
+    export: forward(ctx.remote.zotero.export),
   })
   const refreshBindings = new Map<string, { refresh: () => void; clear: () => void }>()
   const refreshKey = (sessionId: string, tabId: string) => JSON.stringify([sessionId, tabId])

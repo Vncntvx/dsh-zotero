@@ -53,12 +53,12 @@ function serveListing(rows: readonly { key: string; name: string }[]): void {
 function createWritableProvider(): LocalApiProvider {
   const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
   const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
-  return new LocalApiProvider(
+  return new LocalApiProvider({
     client,
-    () => PROVIDER_LIMITS,
+    limits: () => PROVIDER_LIMITS,
     writer,
-    new WriteAuthorizer({ client: writer, persistKey: () => true }),
-  )
+    authorizer: new WriteAuthorizer({ client: writer, persistKey: () => true }),
+  })
 }
 
 describe('a collection write invalidates the scope directory', () => {

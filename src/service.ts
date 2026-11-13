@@ -42,7 +42,12 @@ import type { SourceLedgerProjectionState } from './sources/event-ledger.js'
 import type { SourceWorkspace } from './sources/model.js'
 import { readSourcePage } from './source-page.js'
 import type { ZoteroSourcePageRequestView, ZoteroSourcePageResultView } from './contract.js'
-import { DiagnosticsRecorder, logMessageToPush, loggerNameMatches } from './diagnostics.js'
+import {
+  DiagnosticsRecorder,
+  diagnosticLevelOf,
+  logMessageToPush,
+  loggerNameMatches,
+} from './diagnostics.js'
 import { ZoteroHttpClient } from './http-client.js'
 import { ZoteroRuntime } from './remote.js'
 import { parseRef } from './refs.js'
@@ -291,9 +296,10 @@ export class ZoteroService extends Service {
       levels: { default: LOGGER_LEVEL.DEBUG },
       export: (message) => {
         if (!loggerNameMatches(message.name)) return
-        const entry = logMessageToPush(message)
-        if (!this.diagnostics.admits(entry.level)) return
-        this.diagnostics.push(entry)
+        // Admit by the cheap type mapping first: a below-threshold emission
+        // never pays the serialize/limit conversion.
+        if (!this.diagnostics.admits(diagnosticLevelOf(message.type))) return
+        this.diagnostics.push(logMessageToPush(message))
       },
     })
     // Fail the load loud on a violating entry; the same gate vetoes
@@ -589,16 +595,16 @@ export class ZoteroService extends Service {
     // must be able to revoke a grant that predates the switch.
     const readGrant = async (serverId: string): Promise<boolean> =>
       await persistedGrantBoundTo(this.credentials(), serverId)
-    const provider = new LocalApiProvider(
+    const provider = new LocalApiProvider({
       client,
-      () => localProviderLimits(this.config),
-      writer,
-      authorizer,
-      this.diagnostics.sink,
-      () => this.installedFulltextEnhancer,
-      () => this.evidenceRanker(),
+      limits: () => localProviderLimits(this.config),
+      ...(writer === undefined ? {} : { writer }),
+      ...(authorizerInstance === undefined ? {} : { authorizer: authorizerInstance }),
+      sink: this.diagnostics.sink,
+      fulltextEnhancer: () => this.installedFulltextEnhancer,
+      evidenceRanker: () => this.evidenceRanker(),
       readGrant,
-    )
+    })
     // The swap is synchronous: registerProvider installs the new provider
     // under the stable id before this releases the old registration (whose
     // identity-checked disposer then no-ops), so a caller between the two

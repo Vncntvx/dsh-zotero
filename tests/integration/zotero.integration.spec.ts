@@ -37,15 +37,15 @@ let firstItemRef: string | undefined
 
 describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', () => {
   beforeAll(() => {
-    provider = new LocalApiProvider(
-      testHttpClient(BASE_URL, { timeoutMs: 10_000, maxResponseBytes: 64 * 1024 * 1024 }),
-      () => ({
+    provider = new LocalApiProvider({
+      client: testHttpClient(BASE_URL, { timeoutMs: 10_000, maxResponseBytes: 64 * 1024 * 1024 }),
+      limits: () => ({
         ...PROVIDER_LIMITS,
         // The live lane reads real abstracts and real full text, so it takes
         // the production-scale budgets for those two bounds.
         maxFulltextChars: 250_000,
       }),
-    )
+    })
   })
 
   it('reports a connected status with API version 3 and the answering build', async () => {

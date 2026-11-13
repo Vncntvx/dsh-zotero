@@ -224,12 +224,12 @@ describe('Server-ID cache identity', () => {
   it('reports the write state with the stored-grant fact when the capability is wired', async () => {
     const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
-    const writable = new LocalApiProvider(
+    const writable = new LocalApiProvider({
       client,
-      () => PROVIDER_LIMITS,
+      limits: () => PROVIDER_LIMITS,
       writer,
-      new WriteAuthorizer({ client: writer, persistKey: () => true }),
-    )
+      authorizer: new WriteAuthorizer({ client: writer, persistKey: () => true }),
+    })
     mock.route('GET', '/api/', (_req, res, helpers) =>
       helpers.raw(200, { 'Zotero-Server-ID': 'srv-identity-1' }, JSON.stringify({})),
     )
@@ -240,12 +240,12 @@ describe('Server-ID cache identity', () => {
   it('handles write state probe when server id header is omitted', async () => {
     const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
-    const writable = new LocalApiProvider(
+    const writable = new LocalApiProvider({
       client,
-      () => PROVIDER_LIMITS,
+      limits: () => PROVIDER_LIMITS,
       writer,
-      new WriteAuthorizer({ client: writer, persistKey: () => true }),
-    )
+      authorizer: new WriteAuthorizer({ client: writer, persistKey: () => true }),
+    })
     mock.route('GET', '/api/', (_req, res, helpers) => helpers.raw(200, {}, JSON.stringify({})))
     const status = await writable.status()
     expect(status.serverId).toBeUndefined()
@@ -264,12 +264,12 @@ describe('Server-ID cache identity', () => {
     })
     const client = testHttpClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
     const writer = testWriteClient(mock.baseUrl, { maxResponseBytes: 1_000_000 })
-    const writable = new LocalApiProvider(
+    const writable = new LocalApiProvider({
       client,
-      () => PROVIDER_LIMITS,
+      limits: () => PROVIDER_LIMITS,
       writer,
-      new WriteAuthorizer({ client: writer, persistKey: () => true }),
-    )
+      authorizer: new WriteAuthorizer({ client: writer, persistKey: () => true }),
+    })
     type SchemaOwner = {
       itemSchema: { getWritableItemFields: (t: string) => Promise<ReadonlySet<string>> }
     }
@@ -302,12 +302,12 @@ describe('Server-ID cache identity', () => {
         throw new Error('keyring disk failure')
       },
     } as unknown as WriteAuthorizer
-    const customProvider = new LocalApiProvider(
+    const customProvider = new LocalApiProvider({
       client,
-      () => PROVIDER_LIMITS,
+      limits: () => PROVIDER_LIMITS,
       writer,
-      failingAuthorizer,
-    )
+      authorizer: failingAuthorizer,
+    })
     mock.route('GET', '/api/', (_req, res, helpers) => helpers.raw(200, {}, JSON.stringify({})))
     const status = await customProvider.status()
     expect(status.connected).toBe(false)

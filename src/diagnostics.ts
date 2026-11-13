@@ -150,6 +150,16 @@ interface DiagnosticLogMessage {
 }
 
 /**
+ * The diagnostic level one logger type maps to; an unknown type is `info`,
+ * the same fallback {@link logMessageToPush} applies.
+ * @param type - the Cordis logger message type.
+ * @returns the bounded diagnostic level.
+ */
+export function diagnosticLevelOf(type: string): DiagnosticLevel {
+  return LOGGER_TYPES.includes(type as DiagnosticLevel) ? (type as DiagnosticLevel) : 'info'
+}
+
+/**
  * Adapt one captured logger message to a ring input. The first argument
  * carries the message (an `Error` contributes its code, when it has one, as
  * an `errorCode` detail); further arguments become `argN` details. The
@@ -159,9 +169,7 @@ interface DiagnosticLogMessage {
  * @returns the ring input, with an unknown logger type mapped to `info`.
  */
 export function logMessageToPush(message: DiagnosticLogMessage): DiagnosticPushInput {
-  const level = LOGGER_TYPES.includes(message.type as DiagnosticLevel)
-    ? (message.type as DiagnosticLevel)
-    : 'info'
+  const level = diagnosticLevelOf(message.type)
   const [first, ...rest] = message.args
   const detail: DiagnosticDetail = {}
   if (message.name !== DIAGNOSTIC_LOG_PREFIX) {

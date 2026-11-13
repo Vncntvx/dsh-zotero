@@ -34,14 +34,11 @@ afterEach(async () => {
 })
 
 function providerOf(server: MockZotero, enhancer?: FulltextEnhancer): LocalApiProvider {
-  return new LocalApiProvider(
-    testHttpClient(server.baseUrl),
-    () => PROVIDER_LIMITS,
-    undefined,
-    undefined,
-    undefined,
-    () => enhancer,
-  )
+  return new LocalApiProvider({
+    client: testHttpClient(server.baseUrl),
+    limits: () => PROVIDER_LIMITS,
+    fulltextEnhancer: () => enhancer,
+  })
 }
 
 async function boot(graph: Pick<ItemGraphSpec, 'parent' | 'children'> = {}): Promise<MockZotero> {

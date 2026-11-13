@@ -34,6 +34,7 @@ import type {
 } from '../types.js'
 import { titleKey } from './normalize.js'
 import type { ScholarlyPaper } from './types.js'
+import type { FulltextEnhancer } from '../local/fulltext-enhancer.js'
 
 export interface ZoteroServiceLike {
   search(
@@ -61,6 +62,8 @@ export interface ZoteroServiceLike {
    * the config schema's defaults.
    */
   evidenceChunkLimits?(): { readonly chunkWords: number; readonly chunkChars: number }
+  /** The core's installed full-text enhancer slot, when one is mounted. */
+  fulltextEnhancer?(): FulltextEnhancer | undefined
 }
 
 /** What one library-status pass managed to determine. */

@@ -145,9 +145,7 @@ export class ScholarlyService extends Service {
       // `zotero_retrieve` consumes, so both tools observe one installed
       // instance and neither imports the component.
       enrichmentEnhancer: (): FulltextEnhancer | undefined =>
-        (
-          ctx.get('zotero') as { fulltextEnhancer?: () => FulltextEnhancer | undefined } | undefined
-        )?.fulltextEnhancer?.(),
+        ctx.get('zotero')?.fulltextEnhancer?.(),
       // The ranking strategy and the chunk boundaries are read through the
       // local Zotero service, which owns both: its own lexical ranker while no
       // component is installed, and the live config that keeps

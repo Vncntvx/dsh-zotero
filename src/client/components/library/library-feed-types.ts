@@ -72,6 +72,7 @@ export interface LibraryFeedFace {
 /** The one-item export call the panel runs for a wire format. */
 export type LibraryExportItem = (
   request: ZoteroLibraryExportRequestView,
+  signal?: AbortSignal,
 ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
 
 /**

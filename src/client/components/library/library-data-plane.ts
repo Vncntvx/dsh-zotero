@@ -29,6 +29,7 @@ import type {
   ZoteroLibrarySearchRequestView,
 } from '../../../contract.ts'
 import type { LibraryPanelWireFace } from './library-feed-types.ts'
+import { awaitSharedWaiter } from '../../../waiter-flight.ts'
 
 /** The wire reads the plane deduplicates. */
 type PlaneMethod = 'collectionPath' | 'browse' | 'search' | 'item' | 'childPage' | 'export'
@@ -86,39 +87,17 @@ function joinFlight<R>(
     flight.pinned = true
     return flight.promise as Promise<RemoteResult<R>>
   }
-  flight.cancelWaiters += 1
-  let left = false
-  const leave = (abort: boolean): void => {
-    if (left) return
-    left = true
-    flight.cancelWaiters -= 1
-    if (!abort || flight.isSettled() || flight.pinned || flight.cancelWaiters > 0) return
-    abandon()
-    flight.controller.abort()
-    void flight.promise.catch(() => undefined)
-  }
-  if (signal.aborted) {
-    leave(true)
-    return Promise.reject(signal.reason)
-  }
-  return new Promise<RemoteResult<R>>((resolve, reject) => {
-    const onAbort = (): void => {
-      leave(true)
-      reject(signal.reason)
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    flight.promise.then(
-      (result) => {
-        signal.removeEventListener('abort', onAbort)
-        leave(false)
-        resolve(result as RemoteResult<R>)
-      },
-      (cause: unknown) => {
-        signal.removeEventListener('abort', onAbort)
-        leave(false)
-        reject(cause)
-      },
-    )
+  return awaitSharedWaiter(flight.promise as Promise<RemoteResult<R>>, signal, {
+    onJoin: () => {
+      flight.cancelWaiters += 1
+    },
+    onLeave: (aborted) => {
+      flight.cancelWaiters -= 1
+      if (!aborted || flight.isSettled() || flight.pinned || flight.cancelWaiters > 0) return
+      abandon()
+      flight.controller.abort()
+      void flight.promise.catch(() => undefined)
+    },
   })
 }
 
@@ -231,8 +210,10 @@ export function createLibraryDataPlane(face: LibraryPanelWireFace): LibraryDataP
       call('childPage', request, signal, (wire) =>
         wire === undefined ? face.childPage(request) : face.childPage(request, wire),
       ),
-    export: (request: ZoteroLibraryExportRequestView) =>
-      call('export', request, undefined, () => face.export(request)),
+    export: (request: ZoteroLibraryExportRequestView, signal?: AbortSignal) =>
+      call('export', request, signal, (wire) =>
+        wire === undefined ? face.export(request) : face.export(request, wire),
+      ),
     invalidate: () => {
       generation += 1
       settled.clear()

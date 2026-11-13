@@ -334,19 +334,8 @@ export function renderUpdateList(
  * @returns the meta the client decodes as `committed-unverified`.
  */
 export function unverifiedPresentationMeta(value: ZoteroWriteCommittedUnverified): JsonValue {
-  return {
-    kind: 'committed-unverified',
-    committed: true,
-    retryable: false,
-    reason: value.reason,
-    serverId: value.serverId,
-    ...(value.ref !== undefined ? { ref: value.ref } : {}),
-    ...(value.key !== undefined ? { key: value.key } : {}),
-    ...(value.version !== undefined ? { version: value.version } : {}),
-    ...(value.libraryVersion !== undefined ? { libraryVersion: value.libraryVersion } : {}),
-    ...(value.parentRef !== undefined ? { parentRef: value.parentRef } : {}),
-    ...(value.completedRefs !== undefined ? { completedRefs: value.completedRefs } : {}),
-  }
+  // One encoder and one omission policy for every committed-unverified arm.
+  return createWritePresentationMeta({ ...value, kind: 'committed-unverified' })
 }
 
 /** The declined-arm title every write result card shares. */

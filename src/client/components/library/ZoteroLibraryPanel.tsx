@@ -238,6 +238,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     accepted.preferences,
     memory,
     tabInfo?.tab.visible ?? true,
+    initialView,
   )
   // The session view's only writer: the detail payload and the probe snapshot
   // are one record, so neither can clear the other through a partial merge.

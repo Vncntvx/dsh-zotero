@@ -106,11 +106,16 @@ export interface LibraryViewStore {
 const MAX_SESSION_VIEW_ENTRIES = 8
 
 /**
- * One session's key. The spelling matches `LibraryViewMemory.saveScrollKey`,
- * which the feed writes, so the abort-time flush decision compares equal.
+ * One session's key, shared with the feed's `LibraryViewMemory.saveScrollKey`
+ * so the abort-time flush decision compares equal. It is opaque outside this
+ * module; callers use this helper rather than rebuilding the spelling.
+ * @param serverId - the connected instance.
+ * @param sessionId - the owning session.
+ * @returns the map key.
  */
-const sessionKey = (serverId: string, sessionId: string): string =>
-  JSON.stringify([serverId, sessionId])
+export function librarySessionKeyOf(serverId: string | undefined, sessionId: string): string {
+  return JSON.stringify([serverId, sessionId])
+}
 
 /**
  * Create the panel's in-memory cache.
@@ -126,7 +131,7 @@ export function createLibraryViewStore(): LibraryViewStore {
   let disposed = false
 
   const clearView = (serverId: string, sessionId: string): void => {
-    for (const memory of memories.get(sessionKey(serverId, sessionId)) ?? []) {
+    for (const memory of memories.get(librarySessionKeyOf(serverId, sessionId)) ?? []) {
       memory.cancelScrollSave()
       memory.snapshot = undefined
       memory.childPages = undefined
@@ -138,12 +143,13 @@ export function createLibraryViewStore(): LibraryViewStore {
 
   return {
     viewMemory(signal, serverId, sessionId = '', scheduler = scheduleScrollSave) {
+      if (disposed) throw new Error('The library view store is disposed.')
       let instances = occurrences.get(signal)
       if (instances === undefined) {
         instances = new Map()
         occurrences.set(signal, instances)
       }
-      const key = sessionKey(serverId, sessionId)
+      const key = librarySessionKeyOf(serverId, sessionId)
       const existing = instances.get(key)
       if (existing !== undefined) return existing
       let cancelScheduled: (() => void) | undefined
@@ -193,15 +199,17 @@ export function createLibraryViewStore(): LibraryViewStore {
     clearView,
     clearConversation(sessionId) {
       for (const key of [...memories.keys()]) {
+        const [serverId, storedSessionId] = JSON.parse(key) as [string, string]
+        if (storedSessionId === sessionId) clearView(serverId, sessionId)
+      }
+      for (const key of [...sessionViews.keys()]) {
         const [, storedSessionId] = JSON.parse(key) as [string, string]
-        if (storedSessionId === sessionId) {
-          const [serverId] = JSON.parse(key) as [string, string]
-          clearView(serverId, sessionId)
-        }
+        if (storedSessionId === sessionId) sessionViews.delete(key)
       }
     },
     sessionView(serverId, sessionId) {
-      if (serverId !== undefined) return sessionViews.get(sessionKey(serverId, sessionId))
+      if (disposed) return undefined
+      if (serverId !== undefined) return sessionViews.get(librarySessionKeyOf(serverId, sessionId))
       // Before the probe settles the instance is unknown. Answer only when the
       // session has exactly one cached payload: two instances must never hand
       // each other's item to an inspector.
@@ -213,7 +221,7 @@ export function createLibraryViewStore(): LibraryViewStore {
     },
     writeSessionView(serverId, sessionId, view) {
       if (disposed) return
-      const key = sessionKey(serverId, sessionId)
+      const key = librarySessionKeyOf(serverId, sessionId)
       // Re-insert so the most recent session sits last: Map order is the LRU.
       sessionViews.delete(key)
       sessionViews.set(key, view)
@@ -223,12 +231,13 @@ export function createLibraryViewStore(): LibraryViewStore {
       }
     },
     clearSessionView(serverId, sessionId) {
+      if (disposed) return
       if (serverId === undefined || sessionId === undefined) {
         sessionViews.clear()
         return
       }
       if (serverId !== '') {
-        sessionViews.delete(sessionKey(serverId, sessionId))
+        sessionViews.delete(librarySessionKeyOf(serverId, sessionId))
         return
       }
       for (const key of [...sessionViews.keys()]) {
