@@ -191,7 +191,7 @@ describe('explicit parsing admission and receipts', () => {
     }))
     expect(
       await fixture.helper.documentArtifact(
-        { sessionId: request.sessionId, target: request.target },
+        { sessionId: request.sessionId, op: 'inspect', target: request.target },
         parseSignal(),
       ),
     ).toMatchObject({ kind: 'ready', characterCount: 10 })

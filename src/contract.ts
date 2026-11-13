@@ -1,3 +1,4 @@
+import type { ArtifactReaderPreferences } from './artifact-reader-preferences.js'
 /**
  * The zotero wire contract's shared structural surface: types, wire identity,
  * and the invocation factory both halves use. This module is dependency-free,
@@ -544,7 +545,7 @@ export interface ZoteroStartDocumentParseResultView {
 }
 
 /** The largest slice of a parsed document one read may return. */
-export const ZOTERO_ARTIFACT_PAGE_CHARS = 16384
+export const ZOTERO_ARTIFACT_PAGE_CHARS = 65_536
 
 /** The largest figure one read may return, before base64 expansion. */
 export const ZOTERO_ARTIFACT_IMAGE_BYTES = 8 * 1024 * 1024
@@ -553,42 +554,75 @@ export const ZOTERO_ARTIFACT_IMAGE_BYTES = 8 * 1024 * 1024
 export type ZoteroArtifactImageMediaType =
   'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp'
 
-export interface ZoteroDocumentArtifactRequestView {
-  readonly sessionId: string
-  readonly target: ZoteroParseTargetView
-  /** Omit for metadata only; supply a character offset to read one bounded page. */
-  readonly read?: { readonly offset: number }
-  /** Supply `images/<file>` to read one figure the stored Markdown references. */
-  readonly image?: { readonly name: string }
+export type ZoteroDocumentArtifactRequestView =
+  | { readonly sessionId: string; readonly op: 'inspect'; readonly target: ZoteroParseTargetView }
+  | {
+      readonly sessionId: string
+      readonly op: 'open'
+      readonly requestId: string
+      readonly target: ZoteroParseTargetView
+    }
+  | {
+      readonly sessionId: string
+      readonly op: 'page'
+      readonly lease: string
+      readonly offset: number
+    }
+  | {
+      readonly sessionId: string
+      readonly op: 'image'
+      readonly lease: string
+      readonly name: string
+    }
+  | { readonly sessionId: string; readonly op: 'release'; readonly requestId: string }
+
+export interface ZoteroArtifactImageView {
+  readonly name: string
+  readonly mediaType: ZoteroArtifactImageMediaType
+  readonly bytes: number
+}
+
+export interface ZoteroArtifactMetadataView {
+  readonly sourceId: string
+  readonly targetLabel: string
+  readonly mode: 'free' | 'pro'
+  readonly artifactId: string
+  readonly fingerprint: string
+  readonly characterCount: number
+  readonly pageCount?: number
+  readonly images: readonly ZoteroArtifactImageView[]
+}
+
+export interface ZoteroArtifactPageView {
+  readonly offset: number
+  readonly text: string
+  readonly totalChars: number
 }
 
 export type ZoteroDocumentArtifactResultView =
   | { readonly kind: 'missing' | 'expired' }
-  /** The artifact exists but carries no figure under the requested name. */
-  | { readonly kind: 'image-missing' }
+  | { readonly kind: 'released' }
+  | ({ readonly kind: 'ready' } & ZoteroArtifactMetadataView)
+  | ({
+      readonly kind: 'opened'
+      readonly lease: string
+      readonly expiresAt: number
+      readonly policy: ArtifactReaderPreferences
+      readonly page: ZoteroArtifactPageView
+    } & ZoteroArtifactMetadataView)
   | {
-      readonly kind: 'image'
-      /** `images/<file>`, the reference the Markdown carries. */
-      readonly name: string
-      readonly mediaType: ZoteroArtifactImageMediaType
-      /** The figure's bytes, base64-encoded; never a host path or URL. */
-      readonly base64: string
+      readonly kind: 'page'
+      readonly lease: string
+      readonly artifactId: string
+      readonly page: ZoteroArtifactPageView
     }
   | {
-      readonly kind: 'ready'
-      readonly sourceId: string
-      readonly targetLabel: string
-      readonly mode: 'free' | 'pro'
+      readonly kind: 'image'
+      readonly lease: string
       readonly artifactId: string
-      readonly fingerprint: string
-      readonly characterCount: number
-      readonly pageCount?: number
-      /** Present only when the request carried `read`; never a host path or URL. */
-      readonly page?: {
-        readonly offset: number
-        readonly text: string
-        readonly totalChars: number
-      }
+      readonly name: string
+      readonly mediaType: ZoteroArtifactImageMediaType
+      readonly base64: string
     }
 
 export interface ZoteroDocumentParseReceiptRequestView {

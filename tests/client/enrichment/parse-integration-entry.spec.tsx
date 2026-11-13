@@ -59,6 +59,7 @@ describe('session library parsing entry', () => {
     expect(runtime.remote.documentArtifact).toHaveBeenCalledWith(
       {
         sessionId: PARSE_SESSION,
+        op: 'inspect',
         target: { kind: 'attachment', ref: CHILD_PDFS[0]!.ref },
       },
       expect.any(AbortSignal),
@@ -82,6 +83,7 @@ describe('session library parsing entry', () => {
         ok: true,
         value: {
           kind: 'ready',
+          images: [],
           sourceId: 'a'.repeat(64),
           targetLabel: 'Selected PDF',
           mode: 'free',

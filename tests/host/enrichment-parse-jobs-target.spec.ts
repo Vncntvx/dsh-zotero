@@ -144,7 +144,7 @@ describe('explicit parse target and receipt boundary', () => {
       parseSignal(),
     )
     const status = await fixture.helper.documentArtifact(
-      { sessionId: request.sessionId, target: request.target },
+      { sessionId: request.sessionId, op: 'inspect', target: request.target },
       parseSignal(),
     )
     expect(receipt).toMatchObject({

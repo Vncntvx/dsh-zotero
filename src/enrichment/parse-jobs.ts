@@ -1,3 +1,4 @@
+import { ArtifactReads, type DisplayArtifactLookup } from './artifact-reads.js'
 /** Session-owned explicit parsing jobs; the UI observes jobs without owning their lifetime. */
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
@@ -18,9 +19,6 @@ import {
 } from '@deepseek-ai/dsh-jobs'
 import { z } from 'zod'
 import {
-  ZOTERO_ARTIFACT_IMAGE_BYTES,
-  ZOTERO_ARTIFACT_PAGE_CHARS,
-  type ZoteroArtifactImageMediaType,
   type ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
@@ -41,7 +39,6 @@ import {
   ZOTERO_NOT_FOUND,
   ZOTERO_PROVIDER_UNAVAILABLE,
 } from '../errors.js'
-import type { FulltextLookupResult } from '../local/fulltext-enhancer.js'
 import { raceWithSignal } from '../race-signal.js'
 import {
   zoteroDocumentArtifactRequestSchema,
@@ -255,18 +252,12 @@ export interface EnrichmentParseJobsDeps {
   readonly resolveAttachment: ParseAttachmentResolver
   /** Must settle after its own resources and shared ParseFlight waiter have been released. */
   readonly execute: (request: ParseJobExecution) => Promise<ParseDocumentResult>
-  readonly lookup: (
+  readonly displayCandidate: (
     input: ParseSourceInput,
     config: EnrichmentPreferences,
     signal: AbortSignal,
-  ) => Promise<FulltextLookupResult>
-  /** One stored figure of an artifact, by artifact id and its `images/<file>` name. */
-  readonly readImage: (
-    artifactId: string,
-    name: string,
-  ) => Promise<
-    { readonly data: Uint8Array; readonly mediaType: ZoteroArtifactImageMediaType } | undefined
-  >
+    targetLabel: string,
+  ) => Promise<DisplayArtifactLookup>
   readonly persistence: ParseJobPersistence
 }
 
@@ -305,6 +296,7 @@ function cancelled(): DOMException {
 
 /** No tools are dispatched. Jobs are admitted against a live session and the real registry. */
 export class EnrichmentParseJobs {
+  private readonly reads: ArtifactReads
   private closed = false
   private disposal: Promise<void> | undefined
   private readonly operations = new Map<string, Operation>()
@@ -324,7 +316,33 @@ export class EnrichmentParseJobs {
   constructor(
     private readonly ctx: Context,
     private readonly deps: EnrichmentParseJobsDeps,
-  ) {}
+  ) {
+    this.reads = new ArtifactReads({
+      policy: () => this.config().artifactReader,
+      owner: async (id, signal, currentCtx) => {
+        await this.owner(SessionId(id), 'documentArtifact', signal, currentCtx)
+        const peer = currentCtx.invocation?.peer
+        const agent = currentCtx.get('agents')?.get(SessionId(id))
+        if (peer === undefined || agent === undefined)
+          throw new ZoteroError(
+            'Document reading requires a live invocation.',
+            ZOTERO_INVALID_ARGUMENT,
+          )
+        return { peer, agent }
+      },
+      candidate: async (request, signal) => {
+        const config = this.config()
+        const target = await resolveParseTarget(
+          parseTargetOf(request.target),
+          this.deps.resolveAttachment,
+          signal,
+        )
+        signal.throwIfAborted()
+        return await this.deps.displayCandidate(target.input, config, signal, target.targetLabel)
+      },
+    })
+    ctx.on('agent/disposed', ({ agent }) => this.reads.retireAgent(agent))
+  }
 
   private open(): void {
     if (this.closed)
@@ -844,61 +862,8 @@ export class EnrichmentParseJobs {
     signal: AbortSignal,
     currentCtx: Context = this.ctx,
   ): Promise<ZoteroDocumentArtifactResultView> {
-    signal.throwIfAborted()
-    this.open()
     const request = parseWire(zoteroDocumentArtifactRequestSchema, input)
-    const sessionId = SessionId(request.sessionId)
-    await this.owner(sessionId, 'documentArtifact', signal, currentCtx)
-    const config = this.config()
-    const target = await resolveParseTarget(
-      parseTargetOf(request.target),
-      this.deps.resolveAttachment,
-      signal,
-    )
-    signal.throwIfAborted()
-    this.open()
-    this.authorize(sessionId, 'documentArtifact', currentCtx)
-    const result = await this.deps.lookup(target.input, config, signal)
-    signal.throwIfAborted()
-    this.open()
-    this.authorize(sessionId, 'documentArtifact', currentCtx)
-    if (result.kind === 'fault') throw result.error
-    if (result.kind === 'miss') return { kind: result.reason === 'expired' ? 'expired' : 'missing' }
-    if (request.image !== undefined) {
-      const stored = await this.deps.readImage(result.provenance.artifactId, request.image.name)
-      signal.throwIfAborted()
-      this.open()
-      this.authorize(sessionId, 'documentArtifact', currentCtx)
-      if (stored === undefined || stored.data.byteLength > ZOTERO_ARTIFACT_IMAGE_BYTES)
-        return { kind: 'image-missing' }
-      return {
-        kind: 'image',
-        name: request.image.name,
-        mediaType: stored.mediaType,
-        base64: Buffer.from(stored.data).toString('base64'),
-      }
-    }
-    const totalChars = result.text.length
-    const read = request.read
-    return {
-      kind: 'ready',
-      sourceId: result.provenance.sourceId,
-      targetLabel: target.targetLabel,
-      mode: result.provenance.mode,
-      artifactId: result.provenance.artifactId,
-      fingerprint: result.provenance.fingerprint,
-      characterCount: totalChars,
-      ...(result.pageCount !== undefined ? { pageCount: result.pageCount } : {}),
-      ...(read !== undefined
-        ? {
-            page: {
-              offset: Math.min(read.offset, totalChars),
-              text: result.text.slice(read.offset, read.offset + ZOTERO_ARTIFACT_PAGE_CHARS),
-              totalChars,
-            },
-          }
-        : {}),
-    }
+    return await this.reads.request(request, signal, currentCtx)
   }
 
   async documentParseReceipt(
@@ -960,6 +925,7 @@ export class EnrichmentParseJobs {
     for (const entry of this.shared.values())
       if (!entry.controller.signal.aborted) entry.controller.abort(cancelled())
     this.disposal = (async () => {
+      await this.reads.dispose()
       await Promise.allSettled([...this.admissions.values()].map(({ task }) => task))
       await Promise.allSettled([...this.owned].map(({ done }) => done))
       await Promise.allSettled(this.tails.values())

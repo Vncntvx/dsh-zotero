@@ -1,3 +1,5 @@
+import { ParsedDocuments } from './parsed-documents.ts'
+import type {} from '@deepseek-ai/dsh-client-resources/client'
 import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMenu.tsx'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { createPdfReaderRegistry, type PdfReaderRegistry } from './url-pdf-readers.ts'
@@ -103,14 +105,10 @@ import { createLibraryDataPlane } from './components/library/library-data-plane.
 import { clearLibraryState } from './components/library/library-storage.ts'
 import { createLibraryViewStore } from './components/library/library-view-store.ts'
 import { LIBRARY_ICON_KEY, LIBRARY_TAB_KIND } from './library-tab.ts'
-import {
-  PARSED_TAB_KIND,
-  PARSED_TAB_PATTERN,
-  parseParsedTabAddress,
-  parsedTabAddress,
-} from './parsed-tab.ts'
+import { PARSED_TAB_KIND, PARSED_TAB_PATTERN, parsedTabAddress } from './parsed-tab.ts'
 import {
   ParsedDocumentTab,
+  ParsedDocumentTitle,
   type ParsedDocumentTabFace,
 } from './components/library/ParsedDocumentTab.tsx'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
@@ -152,6 +150,7 @@ export const inject = [
   'configForms',
   'sidebarRight',
   'sidebarRightTabs',
+  'resources',
 ]
 
 /**
@@ -208,6 +207,7 @@ interface UiSurfaces {
   /** The one preference source; the panel publishes it through its context. */
   readonly preferenceSource: LibraryPreferenceSource
   readonly parse: DocumentParseSurfacePort
+  readonly parsedDocuments: ParsedDocuments
 }
 
 /**
@@ -637,16 +637,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     openParsed: (attachment, title, itemRef) =>
       ctx.sidebarRight.openResourceIn(
         sessionId,
-        parsedTabAddress({
-          sessionId,
-          ref: attachment.ref,
-          // The paper names the tab and its download; the attachment file name
-          // is only a fallback for an untitled item.
-          title: title !== '' ? title : attachment.title,
-          // The address carries the item too: an explain request cites it so
-          // the model can retrieve the whole paper, not just the passage.
-          ...(itemRef !== '' ? { item: itemRef } : {}),
-        }),
+        parsedTabAddress({ sessionId, ref: attachment.ref, title: '' }),
+        { params: { title: title || attachment.title, ...(itemRef ? { item: itemRef } : {}) } },
       ),
     preferenceSource,
     readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
@@ -725,7 +717,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       const parse = surfaces.parse
       if (parse === undefined) return () => {}
       const parsedFace = (): ParsedDocumentTabFace => ({
-        read: parse.remote.documentArtifact,
+        refresh: (address) => surfaces.parsedDocuments.refresh(address),
         // The explain request cites the item, so the model can read the rest
         // of the paper through the read tools.
         item: (request, signal) => ctx.remote.zotero.item(request, signal),
@@ -736,12 +728,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         kind: PARSED_TAB_KIND,
         patterns: [PARSED_TAB_PATTERN],
         // The chip names the paper itself: no synthetic prefix, no suffix.
-        title: (address) => {
-          const target = parseParsedTabAddress(address)
-          return target === undefined || target.title === ''
-            ? panelT('tabParsedFallback')
-            : target.title
-        },
+        title: () => panelT('tabParsedFallback'),
       })
       const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () =>
         ctx.slots.register(
@@ -755,7 +742,19 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           ParsedDocumentTab,
         ),
       )
+      const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+        ctx.slots.register(
+          {
+            name: 'sidebar.right.pane.tab.title',
+            key: PARSED_TAB_ID,
+            locale: NS,
+            registrant: REGISTRANT,
+          },
+          ParsedDocumentTitle,
+        ),
+      )
       return () => {
+        disposeTitle()
         disposeBody()
         disposeType()
       }
@@ -1152,6 +1151,19 @@ function registerUi(ctx: ClientContext): void {
     preferenceSource.getSnapshot().preferences
   // The declared client services are supplied by the post-mount UI fiber.
   // Host contracts also merge a jobs key into Cordis; keep this client seam typed as IJobs.
+  const parsedDocuments = new ParsedDocuments(
+    (request, signal) => ctx.remote.zotero.documentArtifact(request, signal),
+    (sessionId) => ctx.remoteAccess.source('session', sessionId, 'zotero/documentArtifact'),
+    (error) => ctx.logger.warn('Parsed-document lease release failed', error),
+    { translate: ctx.locale.bind(NS) },
+  )
+  ctx.effect(
+    () =>
+      ctx.configForms.whileServed([ENRICHMENT_SETTINGS_NAMESPACE], () =>
+        ctx.resources.register(parsedDocuments),
+      ),
+    'dsh-zotero: parsed document resources',
+  )
   const parse = createDocumentParseSurface(
     {
       remote: ctx.remote,
@@ -1160,10 +1172,14 @@ function registerUi(ctx: ClientContext): void {
       configForms: ctx.configForms,
     },
     enrichmentForm,
+    (sessionId, target) => {
+      if (target.kind === 'attachment') parsedDocuments.committed(sessionId, target.ref)
+    },
   )
   ctx.effect(() => () => parse.dispose(), 'dsh-zotero: document parsing surface')
   const surfaces: UiSurfaces = {
     parse,
+    parsedDocuments,
     form,
     card,
     scholarlyCard,

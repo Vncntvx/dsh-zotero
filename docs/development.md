@@ -120,6 +120,8 @@ npm run format:check         # 检查代码格式
 
 `prepare`（npm install 时触发）从源码构建 `lib/`；`prepublishOnly` 在发布前运行 `release:check`。
 
+解析阅读器的快照、文件读取和 Worker 行为由 `tests/host/enrichment-read-*`、`enrichment-artifact-*` 与 `enrichment-archive-worker` 覆盖；浏览器资源所有权、完整图文发布及交互由 `tests/client/library/parsed-document-*` 和 `parsed-resource-composition` 覆盖。`verify:pack` 会从实际 npm tarball 执行生成的 JS Worker。构建后可运行 `node scripts/smoke-parsed-ui.mjs`，在 Chromium 中检查真实组件的亮暗、窄宽布局、选区菜单和完整刷新；该脚本使用受控远程响应。`node scripts/measure-parsed-archive.mjs` 对同一份含 128 MiB 图片的合成归档，比较同步解包与 Worker 的主线程延迟，报告写入 `/tmp/dsh-zotero-archive-performance.json`。这两项检查不调用 Zotero 或 MinerU，实时上传仍须单独验收。
+
 说明：本仓库通常与 `deepseek-harness` 作为 sibling 目录并列开发。类型定义通过符号链接读取上游构建产物。若上游代码发生更新，需先在上游执行构建以同步声明文件。
 
 发布版的 `@deepseek-ai/dsh-client-*` 把第三方运行时依赖声明在自身的 `devDependencies`（由 shell 打包时提供），并在 `lib/` 中直接引用 `.module.css`。因此本仓库在 `devDependencies` 中补齐这些第三方依赖，`vitest.config.ts` 把 `@deepseek-ai/dsh-client-*` 列为内联依赖，使只有 registry 安装、没有 sibling 的环境（CI）也能运行客户端测试车道。

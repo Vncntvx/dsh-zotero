@@ -27,6 +27,7 @@ export interface ArtifactStoreDeps {
   readonly writeFile: (path: string, data: Uint8Array | string) => Promise<void>
   readonly rename: (from: string, to: string) => Promise<void>
   readonly rm: (path: string, options: { recursive: boolean; force: boolean }) => Promise<void>
+  readonly readArtifactFile?: (path: string, maxBytes: number) => Promise<Uint8Array>
   readonly readSourceIndex?: (path: string, maxBytes: number) => Promise<Uint8Array>
   readonly withSourceLock?: typeof withFileLock
 }
@@ -101,6 +102,7 @@ const hostDeps: ArtifactStoreDeps = {
   rename,
   rm,
   readSourceIndex: readIndexFile,
+  readArtifactFile: readIndexFile,
   withSourceLock: hostSourceLock,
 }
 const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -264,33 +266,75 @@ export class ParsedArtifactStore {
     await this.atomicWrite(join(dir, 'meta.json'), encoder.encode(JSON.stringify(meta)))
   }
 
-  /**
-   * Read one figure of a stored artifact. The name must be one the meta lists,
-   * so a request can never address a file outside the artifact's own images.
-   * @returns the bytes and media type, or undefined when this artifact has no
-   *   such figure.
-   */
-  async readImage(
-    cacheKey: string,
-    name: string,
-  ): Promise<
-    { readonly data: Uint8Array; readonly mediaType: ZoteroArtifactImageMediaType } | undefined
-  > {
-    const dir = this.dir(cacheKey)
+  /** Read metadata against the already validated source-index pointer. */
+  async metadataFor(
+    record: SourceIndexRecord,
+  ): Promise<z.infer<typeof artifactMetaSchema> | undefined> {
+    const candidate = sourceRecordSchema.parse(record)
     let meta: z.infer<typeof artifactMetaSchema>
     try {
-      meta = artifactMetaSchema.parse(
-        JSON.parse(decoder.decode(await this.deps.readFile(join(dir, 'meta.json')))),
+      const bytes = await this.readBounded(
+        join(this.dir(candidate.cacheKey), 'meta.json'),
+        256 * 1024,
       )
+      meta = artifactMetaSchema.parse(JSON.parse(decoder.decode(bytes)))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
+    }
+    if (
+      meta.contentFingerprint !== candidate.fingerprint ||
+      meta.generation !== candidate.generation ||
+      meta.parser !== candidate.parser ||
+      meta.format !== candidate.format
+    )
+      throw new Error('The parsed artifact does not match its source index')
+    return meta
+  }
+
+  private async readBounded(path: string, maxBytes: number): Promise<Uint8Array> {
+    const bytes = await (this.deps.readArtifactFile?.(path, maxBytes) ?? this.deps.readFile(path))
+    if (bytes.byteLength > maxBytes)
+      throw new Error('The parsed artifact file exceeds its size ceiling')
+    return bytes
+  }
+
+  async readMarkdown(cacheKey: string, characterCount: number, byteCount: number): Promise<string> {
+    const bytes = await this.readBounded(join(this.dir(cacheKey), 'full.md'), byteCount)
+    const text = decoder.decode(bytes)
+    if (bytes.byteLength !== byteCount || text.trim() === '' || text.length !== characterCount)
+      throw new Error('The stored parsed Markdown does not match its metadata')
+    return text
+  }
+
+  /** The caller supplies metadata captured by its source-bound read snapshot. */
+  async readImage(
+    cacheKey: string,
+    name: string,
+    captured?: z.infer<typeof artifactMetaSchema>,
+  ): Promise<
+    { readonly data: Uint8Array; readonly mediaType: ZoteroArtifactImageMediaType } | undefined
+  > {
+    let meta = captured
+    if (meta === undefined) {
+      try {
+        meta = artifactMetaSchema.parse(
+          JSON.parse(
+            decoder.decode(
+              await this.readBounded(join(this.dir(cacheKey), 'meta.json'), 256 * 1024),
+            ),
+          ),
+        )
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+        throw error
+      }
     }
     const declared = meta.images?.find((image) => image.name === name)
     if (declared === undefined) return undefined
     let data: Uint8Array
     try {
-      data = await this.deps.readFile(join(dir, declared.name))
+      data = await this.readBounded(join(this.dir(cacheKey), declared.name), declared.bytes)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error

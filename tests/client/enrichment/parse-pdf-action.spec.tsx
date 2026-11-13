@@ -34,6 +34,7 @@ const OTHER: ZoteroAttachmentRowView = {
 const SESSION = 'parse-session'
 const READY = {
   kind: 'ready' as const,
+  images: [],
   sourceId: 'a'.repeat(64),
   targetLabel: 'Selected PDF',
   mode: 'free' as const,
@@ -46,13 +47,16 @@ function readerOf(pages: (offset: number) => RemoteResult<ZoteroDocumentArtifact
   return vi.fn(
     async (
       request: ZoteroDocumentArtifactRequestView,
-    ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> => pages(request.read?.offset ?? -1),
+    ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> =>
+      pages(request.op === 'page' ? request.offset : -1),
   )
 }
 
 /** The attachment ref a request targets; every probe here names an attachment. */
 function targetedRef(request: ZoteroDocumentArtifactRequestView): string | undefined {
-  return request.target.kind === 'attachment' ? request.target.ref : undefined
+  return 'target' in request && request.target.kind === 'attachment'
+    ? request.target.ref
+    : undefined
 }
 
 /** One attachment arrives at the panel's opener. */

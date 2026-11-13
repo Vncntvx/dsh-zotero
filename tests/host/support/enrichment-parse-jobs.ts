@@ -1,3 +1,4 @@
+import type { FulltextLookupResult } from '../../../src/local/fulltext-enhancer.js'
 /** Real Cordis job registry assembly; only Agent driving and parse I/O are controlled. */
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type Inbox, type Model } from '@deepseek-ai/dsh-agent'
@@ -139,7 +140,13 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 
 export async function parseJobsFixture(
-  overrides: Partial<EnrichmentParseJobsDeps> = {},
+  overrides: Partial<EnrichmentParseJobsDeps> & {
+    lookup?: (
+      input: ParseJobExecution['input'],
+      config: EnrichmentPreferences,
+      signal: AbortSignal,
+    ) => Promise<FulltextLookupResult>
+  } = {},
   options: { controller?: boolean } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), 'zotero-parse-jobs-'))
@@ -179,22 +186,54 @@ export async function parseJobsFixture(
   const execute = vi.fn<EnrichmentParseJobsDeps['execute']>(async (request) =>
     parsedResult(request),
   )
-  const lookup = vi.fn<EnrichmentParseJobsDeps['lookup']>(async () => ({
-    kind: 'miss',
-    reason: 'absent',
-  }))
+  const lookup = vi.fn<NonNullable<typeof overrides.lookup>>(
+    overrides.lookup ?? (async () => ({ kind: 'miss', reason: 'absent' })),
+  )
   const persistence = new DiskParseJobPersistence(async () => root)
-  const readImage = vi.fn<EnrichmentParseJobsDeps['readImage']>(async () => undefined)
+  const displayCandidate = vi.fn<EnrichmentParseJobsDeps['displayCandidate']>(
+    async (input, config, signal, targetLabel) => {
+      const result = await lookup(input, config, signal)
+      if (result.kind === 'fault') throw result.error
+      if (result.kind === 'miss')
+        return { kind: result.reason === 'expired' ? 'expired' : 'missing' }
+      return {
+        metadata: {
+          sourceId: result.provenance.sourceId,
+          targetLabel,
+          mode: result.provenance.mode,
+          artifactId: result.provenance.artifactId,
+          fingerprint: result.provenance.fingerprint,
+          characterCount: result.text.length,
+          images: [],
+          ...(result.pageCount ? { pageCount: result.pageCount } : {}),
+        },
+        markdownBytes: Buffer.byteLength(result.text),
+        read: async () => result.text,
+        image: async () => undefined,
+      }
+    },
+  )
   const deps: EnrichmentParseJobsDeps = {
     config: () => config.value,
     resolveAttachment,
     execute,
-    lookup,
-    readImage,
+    displayCandidate,
     persistence,
     ...overrides,
   }
-  const helper = new EnrichmentParseJobs(ctx, deps)
+  const peer = new Peer(ctx, { principal: { kind: 'owner' } })
+  const helperContext = ctx.extend({
+    invocation: {
+      peer,
+      request: { namespace: 'zotero', method: 'documentArtifact', args: {} },
+      service: 'enrichment',
+      signal: parseSignal(),
+      uplink: <In>(): AsyncIterable<In> => ({
+        [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }),
+      }),
+    } satisfies RemoteInvocation,
+  })
+  const helper = new EnrichmentParseJobs(helperContext, deps)
   const helpers = [helper]
   let bindings: readonly RemoteAccessBinding[] = []
   ctx.remoteAccess.registerPolicy('parse-guest', { bindings: () => bindings })
@@ -218,7 +257,7 @@ export async function parseJobsFixture(
     config,
     execute,
     lookup,
-    readImage,
+    displayCandidate,
     resolveAttachment,
     persistence,
     owners,
@@ -245,7 +284,7 @@ export async function parseJobsFixture(
       ctx.remoteAccess.invalidate()
     },
     remount() {
-      const next = new EnrichmentParseJobs(ctx, deps)
+      const next = new EnrichmentParseJobs(helperContext, deps)
       helpers.push(next)
       return next
     },

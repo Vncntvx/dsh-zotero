@@ -508,7 +508,7 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
     try {
       const artifact = typedRemoteResult(
         await this.remote.documentArtifact(
-          { sessionId: this.selection.sessionId, target: this.selection.target },
+          { sessionId: this.selection.sessionId, op: 'inspect', target: this.selection.target },
           abort.signal,
         ),
       )

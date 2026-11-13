@@ -22,7 +22,7 @@ describe('parsedTabAddress', () => {
     const address = parsedTabAddress(target)
     expect(address.startsWith('dsh-resource://zotero-parsed/')).toBe(true)
     expect(address).not.toContain('?server=S1')
-    expect(parseParsedTabAddress(address)).toEqual(target)
+    expect(parseParsedTabAddress(address, target)).toEqual(target)
   })
 
   it('matches the glob the tab type registers', () => {
@@ -40,10 +40,10 @@ describe('parsedTabAddress', () => {
       title: 'Paper',
       item: 'zotero://user/0/item/I1',
     }
-    expect(parseParsedTabAddress(parsedTabAddress(target))).toEqual(target)
+    expect(parseParsedTabAddress(parsedTabAddress(target), target)).toEqual(target)
     // An item ref with its own query survives the round trip.
     const queried = { ...target, item: 'zotero://user/0/item/I1?server=S1' }
-    expect(parseParsedTabAddress(parsedTabAddress(queried))).toEqual(queried)
+    expect(parseParsedTabAddress(parsedTabAddress(queried), queried)).toEqual(queried)
   })
 
   it('reads a missing title as an empty one', () => {

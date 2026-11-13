@@ -109,7 +109,8 @@
         "@deepseek-ai/dsh-client-ui-chat",
         "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-context-menu",
-        "@deepseek-ai/dsh-client-ui-tool"
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-resources"
       ],
       "platform": "web"
     }
@@ -162,7 +163,8 @@
     "@deepseek-ai/dsh-user-approval": ">=0.2.2-rc.2",
     "@deepseek-ai/dsh-user-questions": ">=0.2.2-rc.2",
     "@deepseek-ai/dsh-util-values": ">=0.2.2-rc.2",
-    "@deepseek-ai/dsh-util-workspace-path": ">=0.2.2-rc.2"
+    "@deepseek-ai/dsh-util-workspace-path": ">=0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-resources": ">=0.2.2-rc.2"
   },
   "dependencies": {
     "@deepseek-ai/cosmokit": "^1.9.0",
@@ -200,6 +202,7 @@
     "@deepseek-ai/dsh-chunked-list": "0.2.2-rc.2",
     "@deepseek-ai/dsh-client-connection": "0.2.2-rc.2",
     "@deepseek-ai/dsh-client-locale": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-resources": "0.2.2-rc.2",
     "@deepseek-ai/dsh-client-store": "0.2.2-rc.2",
     "@deepseek-ai/dsh-client-ui-chat": "0.2.2-rc.2",
     "@deepseek-ai/dsh-client-ui-context-menu": "0.2.2-rc.2",
@@ -391,7 +394,8 @@
     "@deepseek-ai/dsh-util-values": "0.2.2-rc.2",
     "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.2",
     "@deepseek-ai/dsh-working-directory": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-workspace": "0.2.2-rc.2"
+    "@deepseek-ai/dsh-workspace": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-resources": "0.2.2-rc.2"
   },
   "license": "MIT",
   "repository": {

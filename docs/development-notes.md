@@ -18,7 +18,18 @@
 - **验证**：当前实现如何证明要点成立。
 - **后续处理**：条件变化后如何迁移、删除或更新实现与测试。
 
-上游契约绕行还必须补充：当前现象、现做法、妥协原因和具体的上游期望。缺少验证方式或后续处理的条目视为不完整。上游 pin 每次升级时，`## 升级复核` 的流程必跑。
+上游契约绕行还必须补充：当前现象、现做法、妥协原因和具体的上游期望。缺少验证方式或后续处理的条目视为不完整。上游 pin 每次升级时，执行“升级复核”流程。
+
+## DN-2：完整文档读取快照与 Worker
+
+- **类型**：生命周期 / 安全边界。
+- **状态**：生效中（2026-11-14，pin `0.2.2-rc.2`）。
+- **位置**：`artifact-reads.ts`、`parsed-documents.ts`、`archive-worker.ts`。
+- **要点**：读取 lease 绑定真实 peer、会话、原 Agent 与 open 时固定的 store。源换代和目录切换不影响旧快照。browserPeer 可被浏览器连接共享，因此页面关闭由显式 release、一次性期限和资源预算共同兜底，不能只依赖 peer.signal。撤权在每次请求前后复核；无后续请求时由期限回收。候选和已显示版本分别拥有 Blob URL，完整准备成功才换代。
+- **Worker**：ZIP 的解包、引用分析与内容列表语义校验在 Worker 中完成；父线程验证闭合消息，持久化只接收归一化负载。取消须等待 Worker 退出再释放并发槽。发布运行使用 `lib/enrichment/zip-worker.js`，由正常 build/prepare 生成。归档准入的并发与队列上限取自配置的 `artifactReader`；`ParseFlight` 必须收到实时的限额策略，用默认策略构造会让这两个配置静默失效。
+- **触发条件**：升级 harness 资源、peer 或 invocation 契约，改变快照配置/产物格式，修改 Worker 构建路径。
+- **验证**：`enrichment-read-snapshots`、`enrichment-read-lifetime`、`enrichment-archive-worker`、`enrichment-archive-admission`、`parsed-document-*` 测试及 `verify:pack` 的真实 JS Worker smoke。
+- **后续处理**：上游提供连接级生命周期或资源刷新 API 后，核实其语义再替换本插件相应管理，保留源绑定、完整发布和资源回收的回归用例。
 
 ## DN-1：面板解析完成通知的抑制
 

@@ -98,3 +98,5 @@ Both primary paths reach the local library through `ctx.zotero`. Agent external 
 Collection and saved-search pages accumulate within each prefix. Moving between collections and All items in one library preserves query and extra filters by default; panel settings can clear them. Switching libraries, saved searches or Trash always clears them while preserving mode and sorting. Re-selecting the current scope preserves the query. Expand controls only expand, names select, and Locate follows the real parent chain.
 
 Explicit user reading of URL PDFs in the library requires the panel's independent permission. It resolves an existing attachment and downloads only after a click, without enabling scholarly search. Profile settings and browsing positions are separate: positions belong to the browser, Zotero instance and conversation.
+
+Parsed result pages prepare the complete text and figures together, then replace the document after a successful refresh. The page shows preparation progress and errors.

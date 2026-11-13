@@ -184,7 +184,7 @@ describe('parse job real document pipeline', () => {
     )
     host.calls.length = 0
     const status = await host.helper.documentArtifact(
-      { sessionId: 'parse-owner', target: { kind: 'url', url } },
+      { sessionId: 'parse-owner', op: 'inspect', target: { kind: 'url', url } },
       parseSignal(),
     )
     expect(status).toMatchObject({

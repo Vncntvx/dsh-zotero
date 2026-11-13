@@ -45,6 +45,7 @@ const NON_WIRE_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   [ZOTERO_ENRICHMENT_SERVICE_KEY]: [
     'acquireCacheGeneration',
     'lookup',
+    'displayCandidate',
     'maybeDisposeCacheGeneration',
     'parseWire',
     'releaseCacheGeneration',

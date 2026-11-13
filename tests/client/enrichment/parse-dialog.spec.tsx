@@ -308,6 +308,7 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
           ok: true,
           value: {
             kind: 'ready',
+            images: [],
             sourceId: 'source-1',
             targetLabel: 'Selected PDF',
             mode: 'free',

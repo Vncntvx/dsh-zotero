@@ -320,15 +320,15 @@ describe('explicit document parsing through the pinned Gateway', () => {
     await complete(fixture, startRequest(), fixture.guest)
     const target = { kind: 'url' as const, url: DOCUMENT_URL }
     const first = zoteroDocumentArtifactResultSchema.parse(
-      await fixture.artifact(target, fixture.guest, 0),
+      await fixture.open(target, fixture.guest),
     )
-    expect(first).toMatchObject({ kind: 'ready', characterCount: MARKDOWN.length })
-    if (first.kind !== 'ready' || first.page === undefined) throw new Error('expected a page')
+    expect(first).toMatchObject({ kind: 'opened', characterCount: MARKDOWN.length })
+    if (first.kind !== 'opened') throw new Error('expected a page')
     expect(first.page).toEqual({ offset: 0, text: MARKDOWN, totalChars: MARKDOWN.length })
     const past = zoteroDocumentArtifactResultSchema.parse(
-      await fixture.artifact(target, fixture.guest, MARKDOWN.length + 100),
+      await fixture.page(first.lease, MARKDOWN.length, fixture.guest),
     )
-    if (past.kind !== 'ready' || past.page === undefined) throw new Error('expected a page')
+    if (past.kind !== 'page') throw new Error('expected a page')
     // Reading past the end yields an empty page rather than an unbounded body.
     expect(past.page).toEqual({
       offset: MARKDOWN.length,
@@ -357,21 +357,20 @@ describe('explicit document parsing through the pinned Gateway', () => {
       }),
     )
     const target = { kind: 'url' as const, url: DOCUMENT_URL }
+    const opened = await fixture.open(target, fixture.guest)
+    if (opened.kind !== 'opened') throw new Error('expected open')
     const figure = zoteroDocumentArtifactResultSchema.parse(
-      await fixture.figure(target, 'images/page_0_figure.png', fixture.guest),
+      await fixture.figure(opened.lease, 'images/page_0_figure.png', fixture.guest),
     )
     expect(figure).toEqual({
       kind: 'image',
+      lease: opened.lease,
+      artifactId: receipt.artifactId,
       name: 'images/page_0_figure.png',
       mediaType: 'image/png',
       base64: Buffer.from(bytes).toString('base64'),
     })
-    // A name the artifact does not carry reads as absent, not as a path probe.
-    expect(
-      zoteroDocumentArtifactResultSchema.parse(
-        await fixture.figure(target, 'images/other.png', fixture.guest),
-      ),
-    ).toEqual({ kind: 'image-missing' })
+    await expect(fixture.figure(opened.lease, 'images/other.png', fixture.guest)).rejects.toThrow()
     expect(JSON.stringify(figure)).not.toContain(fixture.outputDir)
   })
 

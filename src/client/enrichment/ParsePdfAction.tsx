@@ -73,7 +73,7 @@ export function ParsePdfAction({
       attachments.map(async (attachment): Promise<Probe> => {
         try {
           const result = await read(
-            { sessionId, target: { kind: 'attachment', ref: attachment.ref } },
+            { sessionId, op: 'inspect', target: { kind: 'attachment', ref: attachment.ref } },
             abort.signal,
           )
           return result.ok && result.value.kind === 'ready' ? { kind: 'ready' } : { kind: 'absent' }

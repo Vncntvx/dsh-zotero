@@ -129,7 +129,7 @@ graph LR
 
 界面在提交前展示解析目标与所选模式，用户确认后调用 enrichment 提供的端点执行解析。解析失败时直接返回错误信息。
 
-`documentArtifact` 同时负责产物探测和内容读取：不带 `read` 时只返回元数据，详情据此切换「解析此 PDF」与「查看解析结果」；带 `read.offset` 时返回该偏移处一页有界 Markdown（上限 `ZOTERO_ARTIFACT_PAGE_CHARS`）及总字符数。条目带多个 PDF 时，详情逐个探测，选择框标记已有产物；阅读面绑定用户选中的附件。读取沿用相同的会话、远程动作和 PDF 类型门禁，只返回文本；右侧解析结果标签页自动按页续读，读齐后可复制和下载。
+`documentArtifact` 使用严格的 `op` 联合：`inspect` 验证来源并返回元数据；`open` 携带客户端 UUID `requestId`，固定配置目录、源索引和产物，返回读取 lease、图片 manifest 与首块正文；`page` 和 `image` 携带 lease 读取固定版本；`release` 按 requestId 幂等释放。正文块上限为 65,536 字符。每个 lease 绑定真实 peer、会话和原 Agent 实例，读取前及异步 I/O 后复核授权。来源检查与正文读取各执行一次，阅读器不读取内容列表。
 
 设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。作业启动后由宿主的 `EnrichmentParseJobs` 以重叠续挂持有 `wait`（后继 waiter 在当前 waiter 到期前挂上），结算因此被记为 `awaited`，harness 的完成通知不会唤醒空闲模型；该机制不假设 job 生命周期有固定上界（排队、来源传输与解析都计入），结算记录仍保留给面板读取回执。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
 
@@ -191,7 +191,7 @@ graph LR
 - 请求纪律：探针返回前不发出任何面板请求；离线段不发请求；关闭面板后不再发起新请求。
 - 写入口：`writeEnabled` 且选中个人库时显示；仅当所属会话正在运行时才能提交。
 - 引用复制：动作行经 `zotero/export` 端点复制 CSL 引用、BibTeX 等格式，面板只取与 `zotero_export` 同源的渲染文本/引文（不含工具侧的逐条文档定位）；失败就地展示错误，不自动重试。
-- 解析结果页（`zotero-parsed`）：一个 PDF 一个标签页，地址是 `dsh-resource://zotero-parsed/<会话>/<附件 ref>`，重复打开只揭示既有标签页。页面打开即按页读取产物（每页上限 `ZOTERO_ARTIFACT_PAGE_CHARS`，单趟最多 64 页，超出后显示「继续读取」），边读边渲染；正文读齐后可复制和下载，刷新命令从第一页重读。选中正文后可「让模型解释」或复制选段，解释把选段作为一条引用写进当前会话草稿。渲染前将 MinerU 内联 HTML 转为渲染器支持的 Markdown/TeX（上下标、粗斜体、`<br>`），代码块原样保留；产物中的图片按引用加载，读取失败时保留题注。
+- 解析结果页（`zotero-parsed`）：资源地址只包含会话和附件 ref，论文标题和条目 ref 存在标签页参数中。通过宿主 `ResourceProvider` / `useResource` 准备完整正文与图片，期间显示进度；准备齐全后一次提交给 `MarkdownText`。刷新保持旧文档可读，成功后整体换代，失败时保留旧文档并显示错误。准备结束释放宿主 lease，Blob URL 随资源换代或最后一个 holder 释放而回收。选区动作使用宿主 `Menu`，解释和复制消费打开菜单时保存的文本快照。
 
 ### 工具卡片
 

@@ -34,7 +34,7 @@ describe('document parse admission', () => {
     world.controller.open(PARSE_SELECTION)
     await world.settled()
     expect(remote.documentArtifact).toHaveBeenCalledWith(
-      { sessionId: PARSE_SESSION, target: PARSE_SELECTION.target },
+      { sessionId: PARSE_SESSION, op: 'inspect', target: PARSE_SELECTION.target },
       expect.any(AbortSignal),
     )
     expect(remote.startDocumentParse).not.toHaveBeenCalled()

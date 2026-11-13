@@ -156,6 +156,7 @@ describe('the item PDF actions', () => {
       ok: true as const,
       value: {
         kind: 'ready' as const,
+        images: [],
         sourceId: 'a'.repeat(64),
         targetLabel: PDF.title,
         mode: 'free' as const,

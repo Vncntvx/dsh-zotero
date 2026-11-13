@@ -42,6 +42,7 @@ const START = {
   action: 'parse',
 } satisfies ZoteroStartDocumentParseRequestView
 const ARTIFACT_REQUEST = {
+  op: 'inspect',
   sessionId: START.sessionId,
   target: TARGET,
 } satisfies ZoteroDocumentArtifactRequestView
@@ -61,6 +62,7 @@ const RECEIPT = {
 } satisfies ZoteroParseReceiptView
 const READY_ARTIFACT = {
   kind: 'ready',
+  images: [],
   sourceId: RECEIPT.sourceId,
   targetLabel: RECEIPT.targetLabel,
   mode: RECEIPT.mode,
@@ -85,7 +87,9 @@ describe('the explicit parse target', () => {
     expect(refFieldsOf(TARGET.ref)).toMatchObject({ kind: 'attachment', key: ATTACHMENT_KEY })
     expect(zoteroParseTargetSchema.parse(TARGET)).toEqual(TARGET)
     expect(zoteroStartDocumentParseRequestSchema.parse(START).target).toEqual(TARGET)
-    expect(zoteroDocumentArtifactRequestSchema.parse(ARTIFACT_REQUEST).target).toEqual(TARGET)
+    expect(zoteroDocumentArtifactRequestSchema.parse(ARTIFACT_REQUEST)).toMatchObject({
+      target: TARGET,
+    })
   })
 
   it('retains group and server identity in an attachment ref', () => {
@@ -104,8 +108,8 @@ describe('the explicit parse target', () => {
     expect(zoteroParseTargetSchema.parse(target)).toEqual(target)
     expect(zoteroStartDocumentParseRequestSchema.parse({ ...START, target }).target).toEqual(target)
     expect(
-      zoteroDocumentArtifactRequestSchema.parse({ ...ARTIFACT_REQUEST, target }).target,
-    ).toEqual(target)
+      zoteroDocumentArtifactRequestSchema.parse({ ...ARTIFACT_REQUEST, target }),
+    ).toMatchObject({ target })
   })
 
   it.each(['http://127.0.0.1/document.pdf', 'https://unresolved.invalid/document.pdf'])(
@@ -307,9 +311,9 @@ describe('bounded parse receipts and result DTOs', () => {
       text: 'm'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS),
       totalChars: 40000,
     }
-    const result = { ...READY_ARTIFACT, page }
+    const result = { kind: 'page', lease: OPERATION_ID, artifactId: RECEIPT.artifactId, page }
     expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
-    const read = { ...ARTIFACT_REQUEST, read: { offset: 16384 } }
+    const read = { sessionId: START.sessionId, op: 'page', lease: OPERATION_ID, offset: 16384 }
     expect(zoteroDocumentArtifactRequestSchema.parse(read)).toEqual(read)
     for (const invalid of [
       { ...result, page: { ...page, text: 'm'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS + 1) } },
@@ -319,9 +323,9 @@ describe('bounded parse receipts and result DTOs', () => {
     ])
       expect(zoteroDocumentArtifactResultSchema.safeParse(invalid).success).toBe(false)
     for (const invalid of [
-      { ...read, read: { offset: -1 } },
-      { ...read, read: { offset: 1.5 } },
-      { ...read, read: { offset: 0, path: '/tmp/full.md' } },
+      { ...read, offset: -1 },
+      { ...read, offset: 1.5 },
+      { ...read, path: '/tmp/full.md' },
     ])
       expect(zoteroDocumentArtifactRequestSchema.safeParse(invalid).success).toBe(false)
   })
@@ -329,16 +333,20 @@ describe('bounded parse receipts and result DTOs', () => {
   it('accepts one bounded figure and refuses a path, an unknown type, or an oversized body', () => {
     const image = {
       kind: 'image' as const,
+      lease: OPERATION_ID,
+      artifactId: RECEIPT.artifactId,
       name: 'images/page_0_figure.png',
       mediaType: 'image/png' as const,
       base64: Buffer.alloc(1024).toString('base64'),
     }
     expect(zoteroDocumentArtifactResultSchema.parse(image)).toEqual(image)
-    const request = { ...ARTIFACT_REQUEST, image: { name: image.name } }
+    const request = {
+      sessionId: START.sessionId,
+      op: 'image',
+      lease: OPERATION_ID,
+      name: image.name,
+    }
     expect(zoteroDocumentArtifactRequestSchema.parse(request)).toEqual(request)
-    expect(zoteroDocumentArtifactResultSchema.parse({ kind: 'image-missing' })).toEqual({
-      kind: 'image-missing',
-    })
     for (const invalid of [
       { ...image, name: '/tmp/images/figure.png' },
       { ...image, name: 'images/../../secrets.png' },
@@ -352,9 +360,9 @@ describe('bounded parse receipts and result DTOs', () => {
     ])
       expect(zoteroDocumentArtifactResultSchema.safeParse(invalid).success).toBe(false)
     for (const invalid of [
-      { ...request, image: { name: '../full.md' } },
-      { ...request, image: { name: 'images/figure.png', path: '/tmp' } },
-      { ...request, image: { name: 'images/figure.png', offset: 0 } },
+      { ...request, name: '../full.md' },
+      { ...request, path: '/tmp' },
+      { ...request, offset: 0 },
     ])
       expect(zoteroDocumentArtifactRequestSchema.safeParse(invalid).success).toBe(false)
   })

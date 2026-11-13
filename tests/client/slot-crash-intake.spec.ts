@@ -82,6 +82,7 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
   }
   const ctx = {
     ...createParseRuntimeStub(),
+    resources: { register: () => () => {} },
     effect: (register: () => unknown): (() => void) => {
       const dispose = register()
       const disposer = typeof dispose === 'function' ? (dispose as () => void) : () => {}

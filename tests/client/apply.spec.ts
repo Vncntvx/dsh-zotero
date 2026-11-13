@@ -38,6 +38,7 @@ describe('the browser-half entry', () => {
       'configForms',
       'sidebarRight',
       'sidebarRightTabs',
+      'resources',
     ])
   })
 
@@ -88,6 +89,7 @@ describe('the browser-half entry', () => {
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
       'sidebar.right.pane.tab',
+      'sidebar.right.pane.tab.title',
       'sidebar.right.tab.menu.item',
       'sidebar.right.tab.menu.item',
       'conversation.input.left',
@@ -232,7 +234,8 @@ describe('the browser-half entry', () => {
     const worldServed = fakeWorld()
     await applyEntry(worldServed)
     expect(worldServed.whileServedRegistrations).toEqual([
-      // Parse capability source follows enrichment independently of the panel row.
+      // Resource provider and parse capability source follow enrichment.
+      { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
       { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
       { namespaces: [SCHOLARLY_SETTINGS_NAMESPACE] },
       { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
@@ -524,7 +527,7 @@ describe('the browser-half entry', () => {
     expect(parsedTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed/**'])
     const parsedTitle = (parsedTabDef as unknown as { title: (address: string) => string }).title
     // The chip is the paper's own name; only an untitled address falls back.
-    expect(parsedTitle('dsh-resource://zotero-parsed/s/r?title=Paper')).toBe('Paper')
+    expect(parsedTitle('dsh-resource://zotero-parsed/s/r')).toBe('tabParsedFallback')
     expect(parsedTitle('dsh-resource://zotero-parsed/s/r')).toBe('tabParsedFallback')
 
     const rightTabEntry = world.injected.find((e) => e.name === 'sidebar.right.pane.tab')

@@ -18,7 +18,18 @@ This is not a backlog, design discussion, or general implementation guide. Add a
 - **Verification**: how the current implementation proves the point.
 - **Follow-up**: how to migrate, remove, or update the implementation and tests when the condition changes.
 
-An upstream-contract workaround must also state the current symptom, current workaround, why it is a compromise, and the specific upstream ask. An entry without verification or follow-up is incomplete. Run the `## Upgrade review` procedure on every harness pin bump.
+An upstream-contract workaround must also state the current symptom, current workaround, why it is a compromise, and the specific upstream ask. An entry without verification or follow-up is incomplete. Run the Upgrade review procedure on every harness pin bump.
+
+## DN-2: Complete document read snapshots and Worker
+
+- **Type**: Lifecycle / security boundary.
+- **Status**: Active (2026-11-14, pin `0.2.2-rc.2`).
+- **Location**: `artifact-reads.ts`, `parsed-documents.ts`, `archive-worker.ts`.
+- **Behavior**: Each read lease belongs to a real peer, session, original Agent and the store fixed at open. Source generations and output-directory changes leave the old snapshot intact. Browser connections can share browserPeer, so explicit release, one-shot deadlines and resource budgets jointly cover closed pages; peer.signal alone is insufficient. Authorization is checked before and after each read; abandoned leases expire. Candidate and displayed versions own separate Blob URLs, and replacement requires complete preparation.
+- **Worker**: ZIP extraction, reference analysis and content-list semantic validation run in the Worker. The parent validates the closed message and persistence accepts normalized payloads. Cancellation awaits Worker exit before releasing admission. Published execution uses `lib/enrichment/zip-worker.js`, emitted by the normal build/prepare path. The archive admission's concurrency and queue ceiling come from the configured `artifactReader`; `ParseFlight` must receive that live limits policy, because building it with the defaults silently voids both settings.
+- **Review trigger**: Harness resource, peer or invocation upgrades; snapshot policy or artifact format changes; Worker build-path changes.
+- **Verification**: `enrichment-read-snapshots`, `enrichment-read-lifetime`, `enrichment-archive-worker`, `enrichment-archive-admission`, and `parsed-document-*` tests, plus the real JS Worker smoke in `verify:pack`.
+- **Follow-up**: When upstream supplies connection-level lifetime or resource refresh, verify its semantics before replacing local management; retain source-binding, complete-publication and cleanup regressions.
 
 ## DN-1: Panel parse completion notices
 

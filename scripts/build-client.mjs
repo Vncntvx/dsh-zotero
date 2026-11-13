@@ -119,6 +119,7 @@ const EXTERNALS = [
   'react-dom',
   'react-dom/client',
   'zod',
+  '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-primitives',
   '@tanstack/react-virtual',

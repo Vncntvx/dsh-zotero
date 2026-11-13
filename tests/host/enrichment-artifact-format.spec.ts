@@ -36,6 +36,15 @@ const invalidMeta: ReadonlyArray<{ name: string; value: unknown }> = [
 ]
 
 describe('strict v2 artifact format', () => {
+  it('rejects changed UTF-8 bytes even when the displayed character count is unchanged', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, { ...ARTIFACT, markdown: 'é' })
+    await expect(store.readMarkdown(CACHE_KEY, 1, 2)).resolves.toBe('é')
+    await fs.deps.writeFile(`/root/${CACHE_KEY}/full.md`, 'e')
+    await expect(store.readMarkdown(CACHE_KEY, 1, 2)).rejects.toThrow(/metadata/)
+  })
+
   it.each(invalidMeta)('rejects $name metadata in a committed artifact', async ({ value }) => {
     const fs = memoryFiles()
     const store = new ParsedArtifactStore('/root', fs.deps)

@@ -1,3 +1,4 @@
+import type { DisplayArtifactLookup } from './artifact-reads.js'
 /**
  * Cordis Service plugin providing `ctx.enrichment`.
  *
@@ -274,7 +275,11 @@ export class EnrichmentService extends TypertRemoteService {
       }
       return await core.resolveAttachment(ref, signal)
     }
-    const flight = deps.flight ?? new ParseFlight()
+    // The archive admission follows the configured reader limits. The policy is
+    // read on every admission, so a configuration change applies to the next
+    // operation without rebuilding the coordinator.
+    const flight =
+      deps.flight ?? new ParseFlight(() => resolveEnrichmentConfig(this.config).artifactReader)
     this.parsing = new EnrichmentParseJobs(ctx, {
       config: () => resolveEnrichmentConfig(this.config),
       resolveAttachment: this.resolveAttachment,
@@ -294,12 +299,13 @@ export class EnrichmentService extends TypertRemoteService {
           },
           signal,
         ),
-      lookup: async (input, config, signal) => await this.lookup(input, signal, config),
-      // Figures live beside the Markdown they belong to: the artifact id is the
-      // store's cache key, and the store refuses a name its meta does not list.
-      readImage: async (artifactId, name) => {
-        const store = await this.storeFactory(resolveEnrichmentConfig(this.config), false)
-        return await store.readImage(artifactId, name)
+      displayCandidate: async (input, config, signal, targetLabel) => {
+        try {
+          return await this.displayCandidate(input, config, signal, targetLabel)
+        } catch (error) {
+          if (signal.aborted) throw signal.reason
+          throw parsingErrorOf(error)
+        }
       },
       persistence:
         deps.parsePersistence ??
@@ -632,6 +638,49 @@ export class EnrichmentService extends TypertRemoteService {
       create ? { create: true } : { create: false, readOnly: true, allowMissing: true },
     )
     return new ParsedArtifactStore(dir)
+  }
+
+  private async displayCandidate(
+    input: FulltextEnhancerInput,
+    config: EnrichmentPreferences,
+    signal: AbortSignal,
+    targetLabel: string,
+  ): Promise<DisplayArtifactLookup> {
+    const store = await this.storeFactory(config, false)
+    const identity = canonicalSourceIdentityOf(input.key)
+    const source = canonicalSourceIdentityOf(
+      input.source.kind === 'url' ? input.source.url : input.source.attachmentRef,
+    )
+    if (identity !== source) throw new Error('The parsed source identity is inconsistent')
+    const record = await store.sourceRecord(sourceKeyOf(identity))
+    signal.throwIfAborted()
+    if (record === undefined) return { kind: 'missing' }
+    const stamp = await probeSource(
+      input,
+      ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+      hostSourceBytesDeps(this.resolveAttachment, this.client),
+      signal,
+    )
+    signal.throwIfAborted()
+    if (!stampMatches(record.stamp, stamp)) return { kind: 'expired' }
+    const meta = await store.metadataFor(record)
+    signal.throwIfAborted()
+    if (meta === undefined) return { kind: 'expired' }
+    return {
+      metadata: {
+        sourceId: meta.sourceId,
+        targetLabel,
+        mode: meta.mode,
+        artifactId: record.cacheKey,
+        fingerprint: meta.contentFingerprint,
+        characterCount: meta.characterCount,
+        images: meta.images ?? [],
+        ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
+      },
+      markdownBytes: meta.markdownBytes,
+      read: () => store.readMarkdown(record.cacheKey, meta.characterCount, meta.markdownBytes),
+      image: (name) => store.readImage(record.cacheKey, name, meta),
+    }
   }
 
   /**

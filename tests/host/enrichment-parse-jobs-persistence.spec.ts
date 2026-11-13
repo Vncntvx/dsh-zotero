@@ -289,7 +289,7 @@ describe('artifact lookup projections', () => {
 
     expect(
       await fixture.helper.documentArtifact(
-        { sessionId: request.sessionId, target: request.target },
+        { sessionId: request.sessionId, op: 'inspect', target: request.target },
         parseSignal(),
       ),
     ).toEqual({ kind: 'expired' })
@@ -310,7 +310,7 @@ describe('artifact lookup projections', () => {
 
     expect(
       await fixture.helper.documentArtifact(
-        { sessionId: request.sessionId, target: request.target },
+        { sessionId: request.sessionId, op: 'inspect', target: request.target },
         parseSignal(),
       ),
     ).toMatchObject({ kind: 'ready', characterCount: 7, pageCount: 12 })

@@ -112,24 +112,10 @@
   overflow-wrap: anywhere;
 }
 
-/* The page budget ends before the document does; the rest loads in place. */
-.more {
-  display: flex;
-  justify-content: center;
-  margin: 16px 0 0;
-}
-
-/* The selection menu sits where the passage was selected, over everything. */
-.menu {
-  position: fixed;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: var(--dsw-radius-xs);
-  padding: var(--dsw-radius-xs);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
-  corner-shape: round;
-  background: var(--dsw-alias-bg-overlay);
-  box-shadow: var(--dsw-shadow-lv2);
+.progress {
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
 }

@@ -1,3 +1,5 @@
+import { ParsedArtifactStore } from '../../../src/enrichment/artifact-store.ts'
+import { randomUUID } from 'node:crypto'
 /** Parsing endpoint composition: real host/domain services, controlled Session controller and HTTP. */
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type Inbox, type Model } from '@deepseek-ai/dsh-agent'
@@ -24,6 +26,7 @@ import { EnrichmentService } from '../../../src/enrichment/index.js'
 import type { EnrichmentConfig } from '../../../src/enrichment/config.js'
 import { MineruClient } from '../../../src/enrichment/transport.js'
 import { setupHostLane } from '../../helpers/lanes/host-lane.js'
+import { progress } from '../../helpers/sync.js'
 import { ATTACHMENT_KEY, ITEM_KEY, attachmentRef } from '../../helpers/server/keys.js'
 import { attachment, versionHeaders } from '../../helpers/server/objects.js'
 import { serveJson, serveText } from '../../helpers/server/serve.js'
@@ -37,9 +40,12 @@ export const MARKDOWN = '# Parsed endpoint document\n\nEvidence available to ord
 const SUBMIT = 'https://mineru.net/api/v1/agent/parse/file'
 const POLL = 'https://mineru.net/api/v1/agent/parse/endpoint-task'
 const UPLOAD = 'https://upload.example.org/document'
-const RESULT = 'https://cdn.example.org/full.md'
+export const RESULT = 'https://cdn.example.org/full.md'
 export const ENDPOINTS = ['startDocumentParse', 'documentArtifact', 'documentParseReceipt'] as const
 export type ParseEndpoint = (typeof ENDPOINTS)[number]
+
+/** Every PDF the fixture serves; each parse needs a source of its own. */
+const isDocumentUrl = (url: string): boolean => /\.pdf(?:$|\?)/.test(url)
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface PrincipalMap {
@@ -57,7 +63,7 @@ export function endpointRequest(method: ParseEndpoint, sessionId: string = OWNER
   return method === 'startDocumentParse'
     ? { ...request, sessionId }
     : method === 'documentArtifact'
-      ? { sessionId, target: request.target }
+      ? { sessionId, op: 'inspect', target: request.target }
       : { sessionId, operationId: OPERATION_ID }
 }
 
@@ -102,16 +108,22 @@ async function registerIdleAgent(ctx: Context, id: SessionId) {
 }
 
 /** No socket: the real transport still executes public-DNS admission, request and response handling. */
-function scriptedMineru() {
+function scriptedMineru(options: { holdResult?: boolean } = {}) {
   const calls: { url: string; init: RequestInit }[] = []
   const headers = { etag: '"endpoint-v1"', 'content-length': String(PDF.byteLength) }
+  const activity = progress()
+  let releaseResult = (): void => {}
+  const resultGate = new Promise<void>((resolve) => {
+    releaseResult = resolve
+  })
   const client = new MineruClient({
     resolver: async () => [{ address: '93.184.216.34', family: 4 }],
     dispatcher: () => ({ dispatcher: {} as never, close: async () => {} }),
     fetch: async (url, init) => {
       calls.push({ url, init: init ?? {} })
-      if (url === DOCUMENT_URL && init?.method === 'HEAD') return new Response(null, { headers })
-      if (url === DOCUMENT_URL && init?.method === 'GET')
+      activity.notify()
+      if (isDocumentUrl(url) && init?.method === 'HEAD') return new Response(null, { headers })
+      if (isDocumentUrl(url) && init?.method === 'GET')
         return new Response(new Uint8Array(PDF).buffer, { headers })
       if (url === SUBMIT && init?.method === 'POST')
         return Response.json({ code: 0, data: { task_id: 'endpoint-task', file_url: UPLOAD } })
@@ -121,16 +133,30 @@ function scriptedMineru() {
           code: 0,
           data: { task_id: 'endpoint-task', state: 'done', markdown_url: RESULT },
         })
-      if (url === RESULT && init?.method === 'GET') return new Response(MARKDOWN)
+      if (url === RESULT) {
+        // The result download runs inside the archive slot; holding it keeps
+        // that slot busy for a spec that observes the admission.
+        if (options.holdResult) await resultGate
+        return new Response(MARKDOWN)
+      }
       throw new Error(`Unexpected scripted HTTP request: ${init?.method} ${url}`)
     },
   })
-  return { client, calls }
+  return { client, calls, activity, releaseResult }
 }
 
-export async function endpointFixture(options: { attachment?: 'child' | 'top' } = {}) {
+export async function endpointFixture(
+  options: {
+    attachment?: 'child' | 'top'
+    store?: ParsedArtifactStore
+    /** The service configuration; the fixture owns the output directory. */
+    config?: Partial<EnrichmentConfig>
+    /** Hold every result download, so the archive slot stays busy. */
+    holdResult?: boolean
+  } = {},
+) {
   const root = await mkdtemp(join(tmpdir(), 'zotero-parse-endpoints-'))
-  const http = scriptedMineru()
+  const http = scriptedMineru({ holdResult: options.holdResult })
   let bindings: readonly RemoteAccessBinding[] = []
   const sessionCalls: SessionId[] = []
   let removeSessionResource: () => void = () => {}
@@ -191,9 +217,13 @@ export async function endpointFixture(options: { attachment?: 'child' | 'top' } 
   const outputDir = join(root, 'parsed')
   const config = {
     outputDir,
+    ...options.config,
   } satisfies EnrichmentConfig
   const enrichmentFiber = ctx.plugin((enrichmentCtx) => {
-    new EnrichmentService(enrichmentCtx, config, { client: http.client })
+    new EnrichmentService(enrichmentCtx, config, {
+      client: http.client,
+      ...(options.store ? { store: async () => options.store! } : {}),
+    })
   })
   await enrichmentFiber
   const owner = new Peer(ctx, { principal: { kind: 'owner' } })
@@ -251,21 +281,28 @@ export async function endpointFixture(options: { attachment?: 'child' | 'top' } 
     invoke,
     start: async (request = startRequest(), peer = owner) =>
       (await invoke('startDocumentParse', request, peer)) as ZoteroStartDocumentParseResultView,
-    artifact: async (target: ZoteroParseTargetView, peer = owner, offset?: number) =>
+    artifact: async (target: ZoteroParseTargetView, peer = owner) =>
       (await invoke(
         'documentArtifact',
-        {
-          sessionId: OWNER,
-          target,
-          ...(offset !== undefined ? { read: { offset } } : {}),
-        },
+        { sessionId: OWNER, op: 'inspect', target },
         peer,
       )) as ZoteroDocumentArtifactResultView,
-    /** One figure of the artifact, by the reference the Markdown carries. */
-    figure: async (target: ZoteroParseTargetView, name: string, peer = owner) =>
+    open: async (target: ZoteroParseTargetView, peer = owner) =>
       (await invoke(
         'documentArtifact',
-        { sessionId: OWNER, target, image: { name } },
+        { sessionId: OWNER, op: 'open', requestId: randomUUID(), target },
+        peer,
+      )) as ZoteroDocumentArtifactResultView,
+    page: async (lease: string, offset: number, peer = owner) =>
+      (await invoke(
+        'documentArtifact',
+        { sessionId: OWNER, op: 'page', lease, offset },
+        peer,
+      )) as ZoteroDocumentArtifactResultView,
+    figure: async (lease: string, name: string, peer = owner) =>
+      (await invoke(
+        'documentArtifact',
+        { sessionId: OWNER, op: 'image', lease, name },
         peer,
       )) as ZoteroDocumentArtifactResultView,
     receipt: async (peer = owner) =>

@@ -26,13 +26,11 @@ export interface ParsedTabTarget {
 
 /**
  * Compose the tab address. The session and the ref are opaque strings and the
- * ref may carry its own query, so both ride percent-encoded path segments and
- * only the title uses a query parameter.
+ * ref may carry its own query, so both ride percent-encoded path segments.
+ * Presentation values travel separately in the tab's navigation parameters.
  */
 export function parsedTabAddress(target: ParsedTabTarget): string {
-  const query = new URLSearchParams({ title: target.title })
-  if (target.item !== undefined) query.set('item', target.item)
-  return `${PREFIX}${encodeURIComponent(target.sessionId)}/${encodeURIComponent(target.ref)}?${query.toString()}`
+  return `${PREFIX}${encodeURIComponent(target.sessionId)}/${encodeURIComponent(target.ref)}`
 }
 
 /**
@@ -40,22 +38,26 @@ export function parsedTabAddress(target: ParsedTabTarget): string {
  * @param address - a tab address as recorded by the right sidebar.
  * @returns the target, or undefined for an address this page does not own.
  */
-export function parseParsedTabAddress(address: string): ParsedTabTarget | undefined {
+export function parseParsedTabAddress(
+  address: string,
+  presentation?: unknown,
+): ParsedTabTarget | undefined {
   if (!address.startsWith(PREFIX)) return undefined
   const rest = address.slice(PREFIX.length)
   const separator = rest.indexOf('?')
   const path = separator === -1 ? rest : rest.slice(0, separator)
-  const query = separator === -1 ? '' : rest.slice(separator + 1)
   const segments = path.split('/')
   if (segments.length !== 2 || segments[0] === '' || segments[1] === '') return undefined
   try {
-    const params = new URLSearchParams(query)
-    const item = params.get('item')
+    const values =
+      presentation !== null && typeof presentation === 'object'
+        ? (presentation as Record<string, unknown>)
+        : {}
     return {
       sessionId: decodeURIComponent(segments[0]!),
       ref: decodeURIComponent(segments[1]!),
-      title: params.get('title') ?? '',
-      ...(item !== null && item !== '' ? { item } : {}),
+      title: typeof values.title === 'string' ? values.title : '',
+      ...(typeof values.item === 'string' && values.item !== '' ? { item: values.item } : {}),
     }
   } catch {
     // A malformed escape is not this page's document; the caller shows its

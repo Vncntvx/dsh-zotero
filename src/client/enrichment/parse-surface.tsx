@@ -12,7 +12,7 @@ import {
 } from '../../enrichment-preferences.ts'
 import { ENRICHMENT_SETTINGS_NAMESPACE } from '../../settings-namespace.ts'
 import { refFieldsOf } from '../../ref-grammar.ts'
-import type { ZoteroAttachmentRowView } from '../../contract.ts'
+import type { ZoteroAttachmentRowView, ZoteroParseTargetView } from '../../contract.ts'
 import { ParseDocumentDialog } from './ParseDocumentDialog.tsx'
 import type {
   DocumentParseCapabilities,
@@ -52,6 +52,7 @@ export interface DocumentParseSurfacePort {
 export function createDocumentParseSurface(
   ctx: DocumentParseClientContext,
   form: ConfigForm<Record<string, unknown>>,
+  onCommitted?: (sessionId: string, target: ZoteroParseTargetView) => void,
 ): DocumentParseSurfacePort & { dispose(): void } {
   const listeners = new Set<() => void>()
   // At most 64 recent operations live in memory; document URLs never enter storage.
@@ -67,6 +68,19 @@ export function createDocumentParseSurface(
   const admissions = new Set<{ sessionId: string; valid: boolean }>()
   const keyOf = (selection: Pick<DocumentParseSelection, 'sessionId' | 'target'>) =>
     JSON.stringify([selection.sessionId, selection.target])
+  const committed = new Set<string>()
+  const notifyCommitted = (sessionId: string, operationId: string, generation: string) => {
+    const key = JSON.stringify([sessionId, operationId, generation])
+    if (committed.has(key) || disposed) return
+    const entry = [...operations.values()].find(
+      (value) =>
+        value.selection.sessionId === sessionId && value.operation.operationId === operationId,
+    )
+    if (entry === undefined) return
+    committed.add(key)
+    if (committed.size > 128) committed.delete(committed.values().next().value!)
+    onCommitted?.(sessionId, entry.selection.target)
+  }
   let sequence = 0
   let disposed = false
   let mounted = false
@@ -146,14 +160,20 @@ export function createDocumentParseSurface(
             })
             if (operations.size > 64) operations.delete(operations.keys().next().value!)
           }
+          if (result.ok && result.value.receipt)
+            notifyCommitted(request.sessionId, result.value.operationId, result.value.generation)
           return result
         } finally {
           admissions.delete(admission)
         }
       },
       documentArtifact: (request, signal) => ctx.remote.zotero.documentArtifact(request, signal),
-      documentParseReceipt: (request, signal) =>
-        ctx.remote.zotero.documentParseReceipt(request, signal),
+      documentParseReceipt: async (request, signal) => {
+        const result = await ctx.remote.zotero.documentParseReceipt(request, signal)
+        if (result.ok && result.value.kind === 'completed')
+          notifyCommitted(request.sessionId, request.operationId, result.value.receipt.generation)
+        return result
+      },
     },
     jobs: ctx.jobs,
     recall: (selection) => {
@@ -189,6 +209,7 @@ export function createDocumentParseSurface(
     dispose: () => {
       disposed = true
       operations.clear()
+      committed.clear()
       for (const dispose of disposers.reverse()) dispose()
       listeners.clear()
     },

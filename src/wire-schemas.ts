@@ -1,3 +1,5 @@
+import { ARTIFACT_IMAGE_NAME_PATTERN } from './artifact-images.js'
+import { ARCHIVE_MAX_IMAGES } from './artifact-images.js'
 import {
   zoteroReadUrlPdfInvocation,
   zoteroReleaseUrlPdfInvocation,
@@ -1067,63 +1069,132 @@ export const zoteroStartDocumentParseResultSchema = z
   })
   .strict() satisfies z.ZodType<ZoteroStartDocumentParseResultView>
 
-export const zoteroDocumentArtifactRequestSchema = z
-  .object({
-    sessionId: z.string().min(1).max(256),
-    target: zoteroParseTargetSchema,
-    read: z
-      .object({
-        offset: z
-          .number()
-          .int()
-          .nonnegative()
-          .max(2 ** 31 - 1),
-      })
-      .strict()
-      .optional(),
-    image: z
-      .object({
-        // The canonical reference `full.md` carries, `images/<file>`.
-        name: z
-          .string()
-          .regex(/^images\/[A-Za-z0-9][A-Za-z0-9._-]{0,110}\.(?:png|jpe?g|gif|webp|bmp)$/),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
-
-export const zoteroDocumentArtifactResultSchema = z.union([
-  z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
-  z.object({ kind: z.literal('image-missing') }).strict(),
+const artifactSession = z.string().min(1).max(256)
+const artifactImageNameSchema = z.string().regex(ARTIFACT_IMAGE_NAME_PATTERN)
+export const zoteroDocumentArtifactRequestSchema = z.discriminatedUnion('op', [
   z
     .object({
-      kind: z.literal('image'),
-      name: z
-        .string()
-        .regex(/^images\/[A-Za-z0-9][A-Za-z0-9._-]{0,110}\.(?:png|jpe?g|gif|webp|bmp)$/),
-      mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']),
-      base64: z.string().max(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4),
+      sessionId: artifactSession,
+      op: z.literal('inspect'),
+      target: zoteroParseTargetSchema,
     })
     .strict(),
   z
     .object({
-      kind: z.literal('ready'),
-      sourceId: z.string().regex(/^[a-f0-9]{64}$/),
-      targetLabel: z.string().min(1).max(2048),
-      mode: z.enum(['free', 'pro']),
-      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
-      fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-      characterCount: z.number().int().nonnegative(),
-      pageCount: z.number().int().positive().optional(),
-      page: z
+      sessionId: artifactSession,
+      op: z.literal('open'),
+      requestId: z.uuid(),
+      target: zoteroParseTargetSchema,
+    })
+    .strict(),
+  z
+    .object({
+      sessionId: artifactSession,
+      op: z.literal('page'),
+      lease: z.uuid(),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(2 ** 31 - 1),
+    })
+    .strict(),
+  z
+    .object({
+      sessionId: artifactSession,
+      op: z.literal('image'),
+      lease: z.uuid(),
+      name: artifactImageNameSchema,
+    })
+    .strict(),
+  z.object({ sessionId: artifactSession, op: z.literal('release'), requestId: z.uuid() }).strict(),
+]) satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
+
+const artifactImageMediaType = z.enum([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+])
+const artifactMetadata = z.object({
+  sourceId: z.string().regex(/^[a-f0-9]{64}$/),
+  targetLabel: z.string().min(1).max(2048),
+  mode: z.enum(['free', 'pro']),
+  artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  characterCount: z.number().int().nonnegative(),
+  pageCount: z.number().int().positive().optional(),
+  images: z
+    .array(
+      z
         .object({
-          offset: z.number().int().nonnegative(),
-          text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
-          totalChars: z.number().int().nonnegative(),
+          name: artifactImageNameSchema,
+          mediaType: artifactImageMediaType,
+          bytes: z.number().int().positive().max(ZOTERO_ARTIFACT_IMAGE_BYTES),
         })
-        .strict()
-        .optional(),
+        .strict(),
+    )
+    .max(ARCHIVE_MAX_IMAGES),
+})
+const artifactPage = z
+  .object({
+    offset: z.number().int().nonnegative(),
+    text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
+    totalChars: z.number().int().nonnegative(),
+  })
+  .strict()
+const artifactLimit = z.number().int().positive()
+const artifactPolicy = z
+  .object({
+    maxOpen: artifactLimit,
+    maxBytes: artifactLimit,
+    preparedMaxBytes: artifactLimit,
+    idleTimeoutMs: artifactLimit,
+    maxLifetimeMs: artifactLimit,
+    concurrency: artifactLimit,
+    archiveConcurrency: artifactLimit,
+    archiveQueueLimit: artifactLimit,
+  })
+  .strict()
+export const zoteroDocumentArtifactResultSchema = z.union([
+  z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
+  z.object({ kind: z.literal('released') }).strict(),
+  artifactMetadata.extend({ kind: z.literal('ready') }).strict(),
+  artifactMetadata
+    .extend({
+      kind: z.literal('opened'),
+      lease: z.uuid(),
+      expiresAt: z.number().finite(),
+      policy: artifactPolicy,
+      page: artifactPage,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('page'),
+      lease: z.uuid(),
+      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+      page: artifactPage,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('image'),
+      lease: z.uuid(),
+      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+      name: artifactImageNameSchema,
+      mediaType: artifactImageMediaType,
+      base64: z
+        .string()
+
+        .max(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4)
+        .refine(
+          (value) =>
+            value.length % 4 === 0 &&
+            !/[^A-Za-z0-9+/=]/u.test(value) &&
+            !/=./u.test(value.replace(/={1,2}$/u, '')),
+        ),
     })
     .strict(),
 ]) satisfies z.ZodType<ZoteroDocumentArtifactResultView>
