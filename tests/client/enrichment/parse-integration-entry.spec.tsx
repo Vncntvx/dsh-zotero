@@ -17,8 +17,8 @@ afterEach(() => {
   cleanup()
   for (const world of worlds.splice(0)) world.dispose()
 })
-function world() {
-  const result = parseIntegrationWorld()
+function world(overrides: Parameters<typeof parseIntegrationWorld>[0] = {}) {
+  const result = parseIntegrationWorld(overrides)
   worlds.push(result)
   return result
 }
@@ -74,6 +74,35 @@ describe('session library parsing entry', () => {
       action: 'parse',
     })
     expect(runtime.jobs.observe).toHaveBeenCalledWith(PARSE_SESSION, expect.any(String))
+  })
+
+  it('opens a committed artifact as its own right-sidebar tab', async () => {
+    const runtime = world({
+      documentArtifact: async () => ({
+        ok: true,
+        value: {
+          kind: 'ready',
+          sourceId: 'a'.repeat(64),
+          targetLabel: 'Selected PDF',
+          mode: 'free',
+          artifactId: 'b'.repeat(64),
+          fingerprint: 'c'.repeat(64),
+          characterCount: 12,
+        },
+      }),
+    })
+    runtime.mount(TOP_PDF_DETAIL)
+    await inspect(TOP_PDF_DETAIL.title)
+    fireEvent.click(screen.getByRole('button', { name: 'Parsed result: Selected PDF' }))
+    await settle()
+    expect(runtime.openParsed).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: CHILD_PDFS[1]!.ref }),
+      // The paper names the tab, not the attachment's file name.
+      TOP_PDF_DETAIL.title,
+      // The item ref rides along so an explanation can cite the whole paper.
+      TOP_PDF_DETAIL.ref,
+    )
+    expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
   })
 
   it('opens the standalone PDF detail against its own canonical attachment identity', async () => {

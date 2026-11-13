@@ -87,6 +87,7 @@ describe('the browser-half entry', () => {
       'conversation.view',
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
+      'sidebar.right.pane.tab',
       'sidebar.right.tab.menu.item',
       'sidebar.right.tab.menu.item',
       'conversation.input.left',
@@ -509,11 +510,22 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     await applyEntry(world)
 
-    // Right sidebar surfaces
-    expect(world.sidebarRightTabDefinitions).toHaveLength(1)
-    const rightTabDef = world.sidebarRightTabDefinitions[0] as { id: string; kind: string }
-    expect(rightTabDef.id).toBe('dsh-zotero#library')
-    expect(rightTabDef.kind).toBe('zotero-library')
+    // Right sidebar surfaces: the library panel and one parsed-document page.
+    expect(world.sidebarRightTabDefinitions).toHaveLength(2)
+    const [rightTabDef, parsedTabDef] = world.sidebarRightTabDefinitions as {
+      id: string
+      kind: string
+      patterns?: readonly string[]
+    }[]
+    expect(rightTabDef!.id).toBe('dsh-zotero#library')
+    expect(rightTabDef!.kind).toBe('zotero-library')
+    expect(parsedTabDef!.id).toBe('dsh-zotero#parsed')
+    expect(parsedTabDef!.kind).toBe('zotero-parsed')
+    expect(parsedTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed/**'])
+    const parsedTitle = (parsedTabDef as unknown as { title: (address: string) => string }).title
+    // The chip is the paper's own name; only an untitled address falls back.
+    expect(parsedTitle('dsh-resource://zotero-parsed/s/r?title=Paper')).toBe('Paper')
+    expect(parsedTitle('dsh-resource://zotero-parsed/s/r')).toBe('tabParsedFallback')
 
     const rightTabEntry = world.injected.find((e) => e.name === 'sidebar.right.pane.tab')
     expect(rightTabEntry).toBeDefined()

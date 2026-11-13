@@ -67,6 +67,7 @@ import { LibraryInspector } from './LibraryInspector.tsx'
 import { LibraryFilters } from './LibraryFilters.tsx'
 import { LibraryWrite } from './LibraryWrite.tsx'
 import type {
+  ZoteroAttachmentRowView,
   ZoteroLibraryWriteRequestView,
   ZoteroLibraryWriteResultView,
 } from '../../../contract.ts'
@@ -103,6 +104,15 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
   readonly status: () => Promise<RemoteResult<ZoteroStatusView>>
   readonly resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly openResource: (url: string) => void
+  /**
+   * Opens a parsed artifact as its own right-sidebar tab, named after the item
+   * rather than the attachment file; absent while enrichment is off.
+   */
+  readonly openParsed?: (
+    attachment: ZoteroAttachmentRowView,
+    title: string,
+    itemRef: string,
+  ) => void
   readonly write: (
     request: ZoteroLibraryWriteRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
@@ -691,12 +701,15 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
                   exportItem={canExport ? props.export : undefined}
-                  {...(props.parse !== undefined && canReadArtifact
+                  {...(props.parse !== undefined &&
+                  canReadArtifact &&
+                  props.openParsed !== undefined
                     ? {
                         parsedArtifact: {
                           sessionId: props.sessionId,
                           read: props.parse.remote.documentArtifact,
                           revision: parseSurface.revision,
+                          open: props.openParsed,
                         },
                       }
                     : {})}

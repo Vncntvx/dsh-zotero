@@ -1,0 +1,135 @@
+/* The host owns the tab chrome; this sheet arranges one document seat: a
+ * single toolbar row, the scrolling body, and the selection menu. */
+.surface {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* One 38px row flush under the pane's strip: the paper, its size, then this
+ * page's controls — the host's own document preview draws the same row. */
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.heading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The title takes the room it needs and yields it first: at narrow widths the
+ * chip already carries the name, so the row never grows taller. */
+.title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--dsw-font-s-14-font-family);
+  font-size: var(--dsh-content-font-size);
+  line-height: var(--dsw-font-s-14-line-height);
+  font-weight: var(--dsw-font-s-strong-14-font-weight);
+}
+
+.meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
+}
+
+/* Controls keep their single row whatever the pane's width. */
+.tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+/* The re-parse label sits beside its glyph until the pane narrows. */
+.actionLabel {
+  white-space: nowrap;
+}
+
+/* Past this width the re-parse control keeps its glyph and its accessible
+ * name, so the title keeps the row's room. */
+@container (max-width: 420px) {
+  .actionLabel {
+    display: none;
+  }
+}
+
+/* A refused insertion surfaces where the host shows change notices. */
+.banner {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
+  background: var(--dsw-alias-bg-layer-2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  overflow-wrap: anywhere;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--dsw-font-s-14-font-size) 16px 20px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  margin: 0;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The page budget ends before the document does; the rest loads in place. */
+.more {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 0;
+}
+
+/* The selection menu sits where the passage was selected, over everything. */
+.menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-radius-xs);
+  padding: var(--dsw-radius-xs);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  corner-shape: round;
+  background: var(--dsw-alias-bg-overlay);
+  box-shadow: var(--dsw-shadow-lv2);
+}

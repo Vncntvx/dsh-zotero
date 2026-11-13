@@ -649,7 +649,7 @@ describe('library inspector', () => {
     const read = vi.fn(async () => ({ ok: true as const, value: { kind: 'missing' as const } }))
     mountInspector(ITEM_DETAIL, {}, undefined, undefined, undefined, {
       parsePdf,
-      parsedArtifact: { sessionId: 'parse-session', read, revision: 1 },
+      parsedArtifact: { sessionId: 'parse-session', read, revision: 1, open: vi.fn() },
     })
     await act(async () => {})
     // One header action, named for the item's primary PDF.

@@ -90,6 +90,40 @@ describe('the item PDF actions', () => {
     expect(screen.getByRole('heading', { name: mockT('libraryPickPdfRead') })).toBeDefined()
   })
 
+  it('stringifies a read that throws a plain value', async () => {
+    const readPdf = vi.fn(async () => {
+      throw 'plain failure'
+    })
+    render(
+      <PdfActions
+        t={mockT}
+        attachments={[PDF, OTHER]}
+        readPdf={readPdf}
+        resolveAttachment={resolveAttachment}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    fireEvent.click(screen.getByRole('button', { name: `${PDF.title} ${mockT('readPdf')}` }))
+    await act(async () => {})
+    expect(screen.getByRole('alert').textContent).toBe('plain failure')
+  })
+
+  it('closes the read chooser without reading', async () => {
+    const readPdf = vi.fn(async () => {})
+    render(
+      <PdfActions
+        t={mockT}
+        attachments={[PDF, OTHER]}
+        readPdf={readPdf}
+        resolveAttachment={resolveAttachment}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+    fireEvent.click(screen.getByRole('button', { name: mockT('parseClose') }))
+    expect(screen.queryByRole('heading', { name: mockT('libraryPickPdfRead') })).toBeNull()
+    expect(readPdf).not.toHaveBeenCalled()
+  })
+
   it('disables the chooser without a way to open a file', () => {
     render(<PdfActions t={mockT} attachments={[PDF, OTHER]} />)
     const button = screen.getByRole('button', { name: mockT('readPdf') }) as HTMLButtonElement
@@ -114,6 +148,38 @@ describe('the item PDF actions', () => {
       }),
     )
     expect(onParse).toHaveBeenCalledWith(PDF)
+  })
+
+  it('hands a parsed attachment to the tab opener', async () => {
+    const onOpenParsed = vi.fn()
+    const read = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        kind: 'ready' as const,
+        sourceId: 'a'.repeat(64),
+        targetLabel: PDF.title,
+        mode: 'free' as const,
+        artifactId: 'b'.repeat(64),
+        fingerprint: 'c'.repeat(64),
+        characterCount: 12,
+      },
+    }))
+    render(
+      <PdfActions
+        t={mockT}
+        attachments={[PDF]}
+        readPdf={vi.fn(async () => {})}
+        resolveAttachment={resolveAttachment}
+        parse={{ sessionId: 'parse-session', read, onParse: vi.fn(), onOpenParsed }}
+      />,
+    )
+    await act(async () => {})
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: mockT('libraryParsedResultNamed', { title: PDF.title }),
+      }),
+    )
+    expect(onOpenParsed).toHaveBeenCalledWith(PDF)
   })
 
   it('renders nothing without a PDF', () => {

@@ -53,12 +53,14 @@ import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
 
-/** The browser face the parsed-artifact probes need: the session and its read. */
+/** The browser face the parsed-artifact actions need: the session, its read, and the tab opener. */
 export interface ParsedArtifactFace {
   readonly sessionId: string
   readonly read: PdfParseFace['read']
   /** Bumped when a parse finishes so every PDF re-probes the store. */
   readonly revision?: number
+  /** Opens a committed artifact as its own right-sidebar tab, named by the item. */
+  readonly open: (attachment: ZoteroAttachmentRowView, title: string, itemRef: string) => void
 }
 
 interface LibraryInspectorProps {
@@ -551,6 +553,12 @@ export function LibraryInspector({
           ...(parsedArtifact?.read !== undefined ? { read: parsedArtifact.read } : {}),
           ...(parsedArtifact?.revision !== undefined ? { revision: parsedArtifact.revision } : {}),
           onParse: parsePdf,
+          ...(parsedArtifact !== undefined
+            ? {
+                onOpenParsed: (attachment: ZoteroAttachmentRowView) =>
+                  parsedArtifact.open(attachment, detail.title, detail.ref),
+              }
+            : {}),
         }
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {

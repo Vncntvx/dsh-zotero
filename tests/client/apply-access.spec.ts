@@ -13,7 +13,8 @@ describe('the literature panel access gate', () => {
     const world = fakeWorld()
     await applyEntry(world)
 
-    expect(world.sidebarRightTabDefinitions).toHaveLength(1)
+    // The panel and the parsed-document page it opens are one surface group.
+    expect(world.sidebarRightTabDefinitions).toHaveLength(2)
     expect(world.contextMenuRegistrations.length).toBeGreaterThan(0)
   })
 
@@ -31,7 +32,7 @@ describe('the literature panel access gate', () => {
     world.grantedActions.delete('zotero/write')
     await applyEntry(world)
 
-    expect(world.sidebarRightTabDefinitions).toHaveLength(1)
+    expect(world.sidebarRightTabDefinitions).toHaveLength(2)
   })
 
   it('declares the access seam the panel reads', async () => {

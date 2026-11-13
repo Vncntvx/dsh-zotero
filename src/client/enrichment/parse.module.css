@@ -115,56 +115,6 @@
   font: inherit;
 }
 
-/* The parsed result opens as a reader over the panel: a bounded document,
- * not a new row in the attachment list. */
-.reader {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  font-family: var(--dsw-font-s-14-font-family);
-  font-size: var(--dsh-content-font-size);
-  line-height: var(--dsw-font-s-14-line-height);
-  color: var(--dsw-alias-label-primary);
-}
-
-.readerHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding: var(--dsw-font-s-14-font-size);
-}
-
-.readerBody {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dsw-font-xs-13-font-size);
-  padding: 0 var(--dsw-font-s-14-font-size) var(--dsw-font-s-14-font-size);
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-}
-
-.readerMarkdown {
-  max-height: 480px;
-  overflow: auto;
-  overflow-wrap: anywhere;
-}
-
-.readerActions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--dsw-radius-xs);
-  padding: var(--dsw-font-s-14-font-size);
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.footer {
-  justify-content: flex-end;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
 @media (pointer: coarse) {
   .field input:focus {
     font-size: 16px;

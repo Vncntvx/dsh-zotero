@@ -116,8 +116,11 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
   // registration, not on the pane tab body, so a remount reads what the
   // previous body cached.
   const viewStore = createLibraryViewStore()
+  // The panel only offers a parsed result when it can open its tab.
+  const openParsed = vi.fn()
   const surface: Partial<ZoteroLibraryPanelProps> = {
     parse: port,
+    openParsed,
     viewStore,
     t: makeTranslate(en),
     preferenceSource,
@@ -131,6 +134,7 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
   }
   return {
     port,
+    openParsed,
     form,
     connection,
     remote,

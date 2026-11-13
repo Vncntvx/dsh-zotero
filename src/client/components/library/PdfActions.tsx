@@ -22,6 +22,8 @@ export interface PdfParseFace {
   /** Bumped when a parse finishes so the probes re-read the store. */
   readonly revision?: number
   readonly onParse: (attachment: ZoteroAttachmentRowView) => void
+  /** Opens a committed artifact as its own right-sidebar tab. */
+  readonly onOpenParsed?: (attachment: ZoteroAttachmentRowView) => void
 }
 
 export interface PdfActionsProps {
@@ -100,6 +102,7 @@ export function PdfActions({
           read={parse.read}
           revision={parse.revision}
           onParse={parse.onParse}
+          {...(parse.onOpenParsed !== undefined ? { onOpenParsed: parse.onOpenParsed } : {})}
         />
       )}
       {attachments.length > 1 && (
