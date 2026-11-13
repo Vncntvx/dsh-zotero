@@ -46,7 +46,21 @@ These properties are intentional; regressions are treated as security bugs. The
   `src/scholarly/transport/hosts.ts` governs the index arms; the open-access PDF
   fulltext arm is the single exception that may fetch from any public HTTP(S)
   host, guarded by the two-gate public-address check (the `allowlist.ts` lexical
-  gate plus `network.ts` connect-time resolution and pinning).
+  gate plus `network.ts` connect-time resolution and pinning). The allowlist
+  arm is HTTPS-only: `assertAllowedScholarlyUrl` refuses a downgraded hop at
+  both the initial URL and every redirect, because the fake-IP exception relies
+  on TLS binding the peer to the reviewed name. One documented exception: when
+  the local resolver answers inside `198.18.0.0/15` (the local proxy's fake-IP
+  placeholder), the allowlist arm accepts it for reviewed hostnames, the PDF
+  arm accepts it only for HTTPS targets, and the MinerU transport accepts it
+  only for HTTPS targets — every MinerU address is HTTPS and its token stays
+  host-scoped — where the TLS certificate binds the peer to the requested name.
+  Plain-HTTP PDF targets, URL PDF reading, plain-HTTP MinerU targets, and
+  model downloads keep the strict check; an HTTP PDF target with a validated
+  public address is still allowed — it merely cannot use the placeholder.
+  A deterministic address refusal is final: it is not retried and not recorded
+  against the host's circuit. A transient DNS resolution failure is retried and
+  counted like any transport failure.
 - **Rejection messages leak nothing**: tool errors name hostnames at most; full
   URLs, which can carry credentials or DOIs, are never echoed back.
 - **Session-log maintenance goes through the persistence seam**: the repair

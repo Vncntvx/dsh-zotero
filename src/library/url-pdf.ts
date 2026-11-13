@@ -62,8 +62,13 @@ export class UrlPdfReader {
         combined.throwIfAborted()
         if (!this.deps.allowed()) throw failure('DISABLED', 'URL PDF reading is disabled.')
         if (url.username || url.password || !isPublicUrl(url.href))
-          throw new PublicAddressError('PDF address is not a permitted public HTTP(S) address.')
-        const addresses = await resolvePublicAddresses(url.hostname, this.deps.resolver, combined)
+          throw new PublicAddressError(
+            'PDF address is not a permitted public HTTP(S) address.',
+            'policy',
+          )
+        const addresses = await resolvePublicAddresses(url.hostname, this.deps.resolver, {
+          signal: combined,
+        })
         const connection = this.deps.dispatcher(addresses)
         try {
           const response = await this.deps.fetch(url.href, {
@@ -82,7 +87,10 @@ export class UrlPdfReader {
               throw failure('REDIRECT', 'PDF redirect limit exceeded or Location is missing.')
             const next = new URL(location, url)
             if (url.protocol === 'https:' && next.protocol !== 'https:')
-              throw new PublicAddressError('HTTPS PDF redirects may not downgrade to HTTP.')
+              throw new PublicAddressError(
+                'HTTPS PDF redirects may not downgrade to HTTP.',
+                'policy',
+              )
             url = next
             continue
           }

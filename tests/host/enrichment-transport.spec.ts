@@ -72,6 +72,42 @@ describe('MineruClient request', () => {
     ).rejects.toBeInstanceOf(PublicAddressError)
   })
 
+  it('accepts a fake-IP answer for HTTPS and pins it into the connection', async () => {
+    const { client, calls, pinned } = clientOf(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      async () => [{ address: '198.18.4.25', family: 4 }],
+    )
+    await client.json('https://mineru.net/api/v1/agent/parse/file', {
+      method: 'POST',
+      token: 'secret-token',
+    })
+    expect(calls).toHaveLength(1)
+    expect(headersOf(calls[0]!.init).authorization).toBe('Bearer secret-token')
+    expect(pinned).toEqual([[{ address: '198.18.4.25', family: 4 }]])
+  })
+
+  it('still refuses a fake-IP answer for a plain-HTTP target', async () => {
+    const { client, calls } = clientOf(
+      async () => new Response('', { status: 200 }),
+      async () => [{ address: '198.18.4.25', family: 4 }],
+    )
+    await expect(
+      client.get('http://cdn.example.com/pdf/full.md', { method: 'GET' }),
+    ).rejects.toBeInstanceOf(PublicAddressError)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('refuses a URL that spells the fake-IP placeholder itself', async () => {
+    const { client, calls } = clientOf(
+      async () => new Response('', { status: 200 }),
+      async (hostname) => [{ address: hostname, family: 4 }],
+    )
+    await expect(
+      client.get('https://198.18.4.25/pdf/full.md', { method: 'GET' }),
+    ).rejects.toBeInstanceOf(PublicAddressError)
+    expect(calls).toHaveLength(0)
+  })
+
   it.each(['request', 'get', 'head'] as const)(
     '%s returns the validated terminal request URL without consulting Response.url',
     async (method) => {

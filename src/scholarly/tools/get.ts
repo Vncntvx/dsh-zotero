@@ -14,7 +14,12 @@ import { lookupSemanticScholar } from '../sources/semanticscholar.js'
 import { titleKey } from '../normalize.js'
 import { SCHOLARLY_SOURCE_NAMES, type ScholarlyPaper, type ScholarlySourceId } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
-import { failureTextOf } from './failure.js'
+import {
+  allSourcesFailedText,
+  failureTextOf,
+  isLocalAddressRejection,
+  someSourcesFailedText,
+} from './failure.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
@@ -57,6 +62,8 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
        * simply holds no record is not a failure and stays out of this list.
        */
       const failedSources: string[] = []
+      /** Failures whose cause is the local address gate, not the index. */
+      let localRejections = 0
       /** Every index read this call started, answered or failed. */
       let attemptedSources = 0
 
@@ -79,6 +86,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
           return await read()
         } catch (error) {
           if (exec.signal.aborted) throw error
+          if (isLocalAddressRejection(error)) localRejections += 1
           failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${failureTextOf(error)})`)
           return undefined
         }
@@ -183,14 +191,19 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
         const answeredSources = attemptedSources - failedSources.length
         if (attemptedSources > 0 && failedSources.length === attemptedSources) {
           return {
-            text: `Every scholarly index was unavailable for "${raw}": ${failedSources.join('; ')}. Nothing is known about this identifier; retry after the sources recover.`,
+            text: allSourcesFailedText(
+              'this identifier',
+              raw,
+              failedSources,
+              localRejections === failedSources.length,
+            ),
             papers: [],
             issues: failedSources,
           }
         }
         if (failedSources.length > 0) {
           return {
-            text: `No matching work among the ${answeredSources} scholarly source(s) that answered for "${raw}". Unanswered sources: ${failedSources.join('; ')}. Verify the identifier after they recover, or use scholarly_search for broader candidates.`,
+            text: `No matching work among the ${answeredSources} scholarly source(s) that answered for "${raw}". Unanswered sources: ${failedSources.join('; ')}. ${someSourcesFailedText(localRejections, failedSources.length)} Or use scholarly_search for broader candidates.`,
             papers: [],
             issues: failedSources,
           }

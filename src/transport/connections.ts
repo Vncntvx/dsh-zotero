@@ -17,6 +17,7 @@ import {
   pinnedLookup,
   validatingLookup,
   type AddressResolver,
+  type HostnamePredicate,
   type PinnedDispatcher,
   type ResolvedAddress,
 } from './network.js'
@@ -60,10 +61,15 @@ export function createPinnedDispatcher(addresses: readonly ResolvedAddress[]): P
  * pool opens is judged by the addresses it actually uses. One agent serves
  * the transport's whole allowlist traffic; its pool keeps connections warm.
  * @param resolver - the DNS seam to resolve through.
+ * @param acceptFakeIpFor - per-hostname fake-IP acceptance, supplied by the
+ *   scholarly allowlist; absent is strict.
  * @returns the dispatcher and its pool handle.
  */
-export function createValidatingDispatcher(resolver: AddressResolver): PinnedDispatcher {
-  const agent = new Agent({ connect: { lookup: validatingLookup(resolver) } })
+export function createValidatingDispatcher(
+  resolver: AddressResolver,
+  acceptFakeIpFor?: HostnamePredicate,
+): PinnedDispatcher {
+  const agent = new Agent({ connect: { lookup: validatingLookup(resolver, acceptFakeIpFor) } })
   return { dispatcher: agent, close: async () => await agent.close() }
 }
 
@@ -71,10 +77,14 @@ export function createValidatingDispatcher(resolver: AddressResolver): PinnedDis
  * The host seams both scholarly arms need, as one composition-ready object
  * for `createScholarlyHttp`'s `publicAccess` option: the DNS resolver, the
  * closed-set pinned dispatcher factory for the open-access PDF arm, and the
- * validating pool factory every allowlist fetch connects through.
+ * validating pool factory every allowlist fetch connects through. The pool
+ * factory takes the allowlist's fake-IP acceptance predicate; the PDF arm's
+ * policy is decided per URL by the transport and its dispatcher factory is
+ * unchanged.
  */
 export const scholarlyPublicAccess = {
   resolver: dnsAddressResolver,
   createDispatcher: createPinnedDispatcher,
-  createValidatingDispatcher: () => createValidatingDispatcher(dnsAddressResolver),
+  createValidatingDispatcher: (acceptFakeIpFor?: HostnamePredicate) =>
+    createValidatingDispatcher(dnsAddressResolver, acceptFakeIpFor),
 } as const

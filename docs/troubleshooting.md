@@ -191,3 +191,20 @@
   ```
 
   这是对安装期执行该包脚本的授权；`protobufjs` 的脚本不产生构建产物。不要通过关闭 pnpm 的构建脚本策略来绕过。
+
+## 28. 学术检索在本地代理的 fake-IP 下失败
+
+- **现象**：`scholarly_search` / `scholarly_get` 的每个源都报 `fetch failed`，或错误消息写明某个主机解析到 `198.18.x.x`；文献面板的 MinerU 解析在提交阶段失败；浏览器或普通 `fetch` 访问同一站点正常。
+- **原因**：Clash/mihomo 的 TUN 模式启用 fake-IP 后，本机解析器把域名解析成 `198.18.0.0/15` 的占位地址。插件现在对白名单索引主机、HTTPS 开放获取 PDF 与 MinerU 的 HTTPS 目标接受这个占位地址，连接身份由已审阅主机名和 TLS 证书绑定；明文 HTTP 的 PDF、文献面板的 URL PDF 阅读，以及模型下载仍要求真实公网地址。解析失败的对话框、回执与持久记录会带上失败原因（地址与凭据已脱敏、长度受限），不再只给统一的「解析失败」文案。
+- **修复**（仅在需要让白名单索引主机重新使用真实公网地址时）：在 Clash Verge 的 Merge/覆写配置中关闭这些主机的 fake-IP。已审阅主机名的唯一真源是 `src/scholarly/transport/hosts.ts` 的 `SCHOLARLY_HOSTS`，其中一个的后缀写法如下：
+
+  ```yaml
+  dns:
+    fake-ip-filter:
+      - '+.publisher.example'
+  ```
+
+  按该表逐个补 `+.` 条目即可，不要在本文档再抄一份清单。出版商域名、`mineru.net` 与模型下载种子主机都不在这张表里：它们要么是已接受占位地址的 HTTPS 目标，要么是需要自身真实公网地址的严格路径。URL PDF 阅读与模型下载从不使用占位地址，给索引主机加 `fake-ip-filter` 不会改变它们；要用明文 HTTP 访问出版商或阅读 URL PDF，请让该目标拿到真实公网地址（或把代理切到 `redir-host`）。
+
+- **自查**：`node -e 'require("node:dns").lookup("api.openalex.org",{all:true},(e,a)=>console.log(e||a))'`；返回 `104.20.x.x` 这类真实公网地址即生效。
+- **边界**：不要为了让它通过而放宽插件的地址判断；`redir-host` 模式也能通过，但会失去 fake-IP 的分流与防泄漏优势。

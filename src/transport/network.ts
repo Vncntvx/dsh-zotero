@@ -1,9 +1,13 @@
 /**
  * Shared public-address validation and DNS pinning for scholarly requests and
- * user-initiated URL PDF reading. Every resolved address must be public, and
- * the validated answer set is pinned into the socket to prevent DNS rebinding.
- * Pure contracts stay browser-type-safe; production DNS/undici adapters live
- * in connections.ts. Errors identify hosts and addresses, never signed URLs.
+ * user-initiated URL PDF reading. By default every resolved address must be
+ * public, and the validated answer set is pinned into the socket to prevent
+ * DNS rebinding. A caller may accept the local proxy's fake-IP marker
+ * (198.18.0.0/15) only where it can bind the peer's identity another way: a
+ * reviewed allowlist hostname, or an HTTPS target whose certificate names the
+ * host. Pure contracts stay browser-type-safe; production DNS/undici adapters
+ * live in connections.ts. Errors identify hosts and addresses, never signed
+ * URLs.
  * @module dsh-zotero/transport/network
  */
 
@@ -47,6 +51,25 @@ export interface PinnedDispatcher {
 }
 
 /**
+ * Parse one dotted-quad into its four octets.
+ * @param ip - the candidate literal.
+ * @returns the octets, or undefined when the spelling is not an IPv4 literal.
+ */
+function ipv4OctetsOf(ip: string): readonly [number, number, number, number] | undefined {
+  const parts = ip.split('.')
+  // Only decimal digits spell an octet: `Number()` would also accept an empty
+  // string, a hex literal, exponent notation, and surrounding whitespace.
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return undefined
+  const values = parts.map((part) => Number(part))
+  if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
+    return undefined
+  }
+  const [a, b, c, d] = values
+  if (a === undefined || b === undefined || c === undefined || d === undefined) return undefined
+  return [a, b, c, d]
+}
+
+/**
  * Whether one dotted-quad is a public unicast IPv4 address.
  *
  * The refused set is every non-global range: this-network, private,
@@ -55,11 +78,9 @@ export interface PinnedDispatcher {
  * (including the broadcast address).
  */
 function isPublicIpv4(ip: string): boolean {
-  const octets = ip.split('.')
-  if (octets.length !== 4) return false
-  const values = octets.map((octet) => Number(octet))
-  if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return false
-  const [a, b, c] = values as [number, number, number]
+  const octets = ipv4OctetsOf(ip)
+  if (octets === undefined) return false
+  const [a, b, c] = octets
   if (a === 0) return false // this network
   if (a === 10) return false // private
   if (a === 100 && b >= 64 && b <= 127) return false // carrier-grade NAT
@@ -74,6 +95,38 @@ function isPublicIpv4(ip: string): boolean {
   if (a === 203 && b === 0 && c === 113) return false // TEST-NET-3
   if (a >= 224) return false // multicast, reserved, broadcast
   return true
+}
+
+/**
+ * Whether one hostname is an IPv4 literal rather than a DNS name.
+ *
+ * The fake-IP exception applies to a resolver's answer, never to a URL that
+ * spells the placeholder itself. IPv6 literals never reach here: the lexical
+ * gate refuses them as a class.
+ * @param host - the URL hostname.
+ * @returns true for a dotted-quad.
+ */
+export function isIpv4Literal(host: string): boolean {
+  return ipv4OctetsOf(host) !== undefined
+}
+
+/**
+ * Whether one dotted-quad is inside the fake-IP block local DNS proxies use.
+ *
+ * `198.18.0.0/15` is the RFC 2544 benchmarking range, which mihomo and Clash
+ * TUN mode reuse as the placeholder pool: the answer is not a destination,
+ * only a handle the local proxy maps back to the requested name. The bare
+ * public-address judgment still refuses it; `resolvePublicAddresses` accepts
+ * it only when the caller's policy says the peer's identity is bound another
+ * way. IPv6 fake-IP (a ULA answer) is deliberately not recognised here.
+ * @param ip - the literal address, as DNS answered it.
+ * @returns true when the address is a fake-IP placeholder.
+ */
+export function isFakeIpAddress(ip: string): boolean {
+  const octets = ipv4OctetsOf(ip)
+  if (octets === undefined) return false
+  const [a, b] = octets
+  return a === 198 && (b === 18 || b === 19)
 }
 
 /**
@@ -197,20 +250,39 @@ export function isPublicIpAddress(ip: string): boolean {
   return false
 }
 
+/** How strict one resolution is, and whose cancellation bounds it. */
+export interface PublicAddressOptions {
+  /** The caller's cancellation, when one exists. */
+  readonly signal?: AbortSignal
+  /**
+   * Accept answers inside 198.18.0.0/15. The allowlist arm sets this for
+   * reviewed hostnames; the open-access PDF and MinerU arms set it only for
+   * HTTPS targets, where the TLS certificate names the host. Any other
+   * non-public answer in the set still refuses the whole name.
+   */
+  readonly acceptFakeIp?: boolean
+}
+
+/** A hostname predicate, shared by the address gate's validating pool. */
+export type HostnamePredicate = (hostname: string) => boolean
+
 /**
  * Resolve one hostname and require every answer to be public.
  * @param hostname - the name to resolve.
  * @param resolver - the DNS seam; production resolves through the
  *   `node:dns` adapter in `host-connections.ts`.
- * @returns the resolved addresses, all public, in answer order.
+ * @param options - the caller's cancellation and acceptance policy; absent
+ *   means public-only.
+ * @returns the resolved addresses, all acceptable, in answer order.
  * @throws {PublicAddressError} when the name does not resolve, or any
- *   answer is a non-public address.
+ *   answer is a non-public address the policy does not accept.
  */
 export async function resolvePublicAddresses(
   hostname: string,
   resolver: AddressResolver,
-  signal?: AbortSignal,
+  options: PublicAddressOptions = {},
 ): Promise<readonly ResolvedAddress[]> {
+  const { signal, acceptFakeIp = false } = options
   let answers: readonly ResolvedAddress[]
   try {
     const resolution = signal === undefined ? resolver(hostname) : resolver(hostname, signal)
@@ -219,17 +291,26 @@ export async function resolvePublicAddresses(
     if (signal?.aborted) throw error
     throw new PublicAddressError(
       `Security rejection: "${hostname}" did not resolve (${errorMessageOf(error)}).`,
+      'resolution-failed',
     )
   }
   if (answers.length === 0) {
     throw new PublicAddressError(
       `Security rejection: "${hostname}" did not resolve to any address.`,
+      'resolution-failed',
     )
   }
-  const offender = answers.find((answer) => !isPublicIpAddress(answer.address))
+  const offender = answers.find(
+    (answer) =>
+      !isPublicIpAddress(answer.address) && !(acceptFakeIp && isFakeIpAddress(answer.address)),
+  )
   if (offender !== undefined) {
+    const hint = isFakeIpAddress(offender.address)
+      ? ' A local DNS proxy (Clash/mihomo TUN) answers with this fake-IP placeholder; add the host to its fake-ip-filter or switch the DNS mode to redir-host.'
+      : ''
     throw new PublicAddressError(
-      `Security rejection: "${hostname}" resolves to a non-public address (${offender.address}).`,
+      `Security rejection: "${hostname}" resolves to a non-public address (${offender.address}).${hint}`,
+      'non-public-address',
     )
   }
   return answers
@@ -317,13 +398,24 @@ export function pinnedLookup(addresses: readonly ResolvedAddress[]): PinnedLooku
  * allowlist arm's address gate: the names are reviewed constants, but a name
  * is not an address, and the DNS answer for a reviewed name still gets the
  * same public-unicast judgment the open-access arm applies.
+ *
+ * The optional predicate is the one exception: when it returns true for a
+ * hostname, the connector also accepts the local proxy's fake-IP placeholder.
+ * Only the scholarly allowlist supplies it, where the reviewed name and the
+ * TLS certificate bind the peer's identity.
  * @param resolver - the DNS seam; production resolves through the
  *   `node:dns` adapter in `host-connections.ts`.
+ * @param acceptFakeIpFor - per-hostname fake-IP acceptance; absent is strict.
  * @returns the validating lookup.
  */
-export function validatingLookup(resolver: AddressResolver): PinnedLookup {
+export function validatingLookup(
+  resolver: AddressResolver,
+  acceptFakeIpFor?: HostnamePredicate,
+): PinnedLookup {
   return (hostname, options, callback) => {
-    void resolvePublicAddresses(hostname, resolver).then(
+    void resolvePublicAddresses(hostname, resolver, {
+      acceptFakeIp: acceptFakeIpFor?.(hostname) === true,
+    }).then(
       (addresses) => {
         answerFrom(addresses, options, callback)
       },

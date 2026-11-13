@@ -198,10 +198,10 @@ async function gatedFetch(
   signal: AbortSignal,
 ): Promise<GatedResponse> {
   if (!isPublicUrl(url)) {
-    throw new PublicAddressError(`model download refused a non-public address (${url})`)
+    throw new PublicAddressError(`model download refused a non-public address (${url})`, 'policy')
   }
   const { hostname, origin } = new URL(url)
-  const addresses = await resolvePublicAddresses(hostname, deps.resolver, signal)
+  const addresses = await resolvePublicAddresses(hostname, deps.resolver, { signal })
   const pinned = deps.dispatcher(addresses)
   let body: ReadableStream<Uint8Array> | null = null
   try {
@@ -217,7 +217,10 @@ async function gatedFetch(
       // public host, or the attempt dies here.
       const next = new URL(location, origin)
       if (next.protocol !== 'https:') {
-        throw new PublicAddressError('model download redirect downgraded to insecure HTTP')
+        throw new PublicAddressError(
+          'model download redirect downgraded to insecure HTTP',
+          'policy',
+        )
       }
       return {
         status: response.status,

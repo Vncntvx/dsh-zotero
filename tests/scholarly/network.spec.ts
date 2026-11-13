@@ -19,14 +19,9 @@ import {
 } from '../../src/transport/network.js'
 import { ScholarlySecurityError } from '../../src/scholarly/transport/allowlist.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from './fixtures.js'
+import { stubPublicAccess, resolverOf } from './fixtures.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
 import { deferred } from '../helpers/sync.js'
-
-/** A resolver whose every name answers these addresses. */
-function resolverOf(addresses: readonly ResolvedAddress[]): AddressResolver {
-  return vi.fn(async () => addresses)
-}
 
 const PUBLIC_V4: ResolvedAddress = { address: '93.184.216.34', family: 4 }
 

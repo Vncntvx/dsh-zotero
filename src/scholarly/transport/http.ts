@@ -15,11 +15,18 @@
  *   fetch plus its body read: retry backoff happens outside the gate, so one
  *   host's rate-limit wait cannot starve the other sources of their slots.
  * - **Address safety** is two gates: `allowlist.ts` judges the name lexically
- *   (and refuses non-standard ports), and for the open-access PDF arm — the
- *   only arm that leaves the allowlist — `network.ts` resolves the hostname,
- *   refuses non-public answers, and pins the resolved set into the connection
- *   through an undici `Agent`, so DNS rebinding cannot re-bind the socket.
- *   Every redirect hop re-runs both gates against its own URL.
+ *   (and refuses non-standard ports and allowlist-arm downgrades), and
+ *   `network.ts` resolves the hostname and refuses non-public answers before
+ *   the connection. One documented exception: when the local DNS proxy answers
+ *   with its fake-IP placeholder, the allowlist arm accepts it for the reviewed
+ *   hostnames and the open-access PDF arm accepts it for HTTPS targets only,
+ *   where the TLS certificate binds the peer to the requested name. Plain-HTTP
+ *   PDF targets and every other non-public answer stay refused. The validated
+ *   set is pinned into the connection through an undici `Agent`, so DNS
+ *   rebinding cannot re-bind the socket. Every redirect hop re-runs both gates
+ *   against its own URL. A deterministic address refusal is final — neither
+ *   retried nor recorded against the host's circuit — while a transient DNS
+ *   resolution failure is retried and counted like any other transport failure.
  *
  * A redirect is not a success. Counting each 3xx as one resets the breaker's
  * failure count once per hop for a redirect-looping host.
@@ -32,12 +39,19 @@ import { ConcurrencyGate } from '../../concurrency.js'
 import { DEFAULT_MAX_RESPONSE_BYTES } from '../../constants.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../transport-bounds.js'
 import { errnoCodeOf, errorDetailOf } from '../../errors.js'
-import { assertAllowedScholarlyUrl, ScholarlySecurityError } from './allowlist.js'
+import { addressRefusalOf } from '../../transport/public-url.js'
+import {
+  assertAllowedScholarlyUrl,
+  isAllowedScholarlyHost,
+  ScholarlySecurityError,
+} from './allowlist.js'
 import { CircuitBreaker, ScholarlyCircuitOpenError } from './circuit-breaker.js'
 import { HostPacer, abortableSleep } from './pacing.js'
 import {
+  isIpv4Literal,
   resolvePublicAddresses,
   type AddressResolver,
+  type HostnamePredicate,
   type PinnedDispatcher,
   type ResolvedAddress,
 } from '../../transport/network.js'
@@ -51,12 +65,14 @@ type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
  * validating pool the allowlist arm connects through. The host composition
  * supplies them from `host-connections.ts`; a test supplies stubs. When the
  * transport runs without them, every external request fails loud instead of
- * connecting to an unjudged address.
+ * connecting to an unjudged address. The pool factory takes the allowlist's
+ * fake-IP acceptance predicate; the PDF arm's policy is decided per URL by
+ * the transport and its dispatcher factory is unchanged.
  */
 export interface ScholarlyPublicAccess {
   readonly resolver: AddressResolver
   readonly createDispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
-  readonly createValidatingDispatcher: () => PinnedDispatcher
+  readonly createValidatingDispatcher: (acceptFakeIpFor?: HostnamePredicate) => PinnedDispatcher
 }
 
 /** Deadline code stamped on a provider timeout, so a call can classify it. */
@@ -231,18 +247,21 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
   // One validating connection pool shared by every allowlist fetch: its
   // connector resolves through the DNS seam at connect time and refuses any
   // non-public answer, so every socket's address is judged at the moment it
-  // is used. Built lazily, because an http that never fetches builds no
-  // agent, and closed by `dispose` with the owning service. The attempt
-  // loop already fails loud on an unwired seam before reaching this point;
-  // the guard here keeps the closure total.
+  // is used. The fake-IP predicate is the reviewed-host exception: the name
+  // comes from the same allowlist that gates every request above, and TLS
+  // binds the peer's identity. Built lazily, because an http that never
+  // fetches builds no agent, and closed by `dispose` with the owning service.
+  // The attempt loop already fails loud on an unwired seam before reaching
+  // this point; the guard here keeps the closure total.
   let validatingAgent: PinnedDispatcher | undefined
   const sharedValidatingDispatcher = (): PinnedDispatcher => {
     if (publicAccess === undefined) {
       throw new ScholarlySecurityError(
         'Security rejection: the scholarly transport is not wired to an address resolver, so no external request can be fetched safely.',
+        'policy',
       )
     }
-    validatingAgent ??= publicAccess.createValidatingDispatcher()
+    validatingAgent ??= publicAccess.createValidatingDispatcher(isAllowedScholarlyHost)
     return validatingAgent
   }
   const dispose = (): Promise<void> => validatingAgent?.close() ?? Promise.resolve()
@@ -283,11 +302,22 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         releaseProbe(new URL(currentUrl).hostname)
         throw reqOptions.signal?.reason ?? new Error('Operation aborted')
       }
-      assertAllowedScholarlyUrl(currentUrl, publicOnly)
+      // The lexical gate lives in the allowlist module, so the initial URL
+      // and every redirect hop are judged by the same rule (including the
+      // allowlist arm's HTTPS-only requirement). A same-host redirect may
+      // still hold this request's half-open probe token, so a rejection here
+      // must release the token it owns before leaving the loop.
+      const target = new URL(currentUrl)
+      const hostname = target.hostname
+      try {
+        assertAllowedScholarlyUrl(currentUrl, publicOnly)
+      } catch (error) {
+        if (probeTokens.has(hostname)) releaseProbe(hostname)
+        throw error
+      }
       // The breaker, the pacer, and every error message key on the bare
       // hostname: the interval table has no port column, and a keyed-by-port
       // entry would bypass pacing and split breaker circuits.
-      const hostname = new URL(currentUrl).hostname
       using d = deadline(reqOptions.signal, timeoutMs, SCHOLARLY_TIMEOUT)
 
       const probeToken = circuitBreaker.beforeRequest(hostname, probeTokens.get(hostname))
@@ -315,10 +345,19 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         if (publicAccess === undefined) {
           throw new ScholarlySecurityError(
             'Security rejection: the scholarly transport is not wired to an address resolver, so no external request can be fetched safely.',
+            'policy',
           )
         }
         if (publicOnly) {
-          const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver, d.signal)
+          // An HTTPS target binds the peer's identity to the requested name,
+          // so the fake-IP placeholder is acceptable there. A plain-HTTP
+          // target has no such binding, and an IP literal spelled the
+          // placeholder itself rather than a DNS answer.
+          const acceptFakeIp = target.protocol === 'https:' && !isIpv4Literal(hostname)
+          const addresses = await resolvePublicAddresses(hostname, publicAccess.resolver, {
+            signal: d.signal,
+            acceptFakeIp,
+          })
           pinned = publicAccess.createDispatcher(addresses)
         }
       } catch (error) {
@@ -355,7 +394,10 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           // counting it as success would reset a count a peer just raised.
           redirectCount += 1
           if (redirectCount > maxRedirects) {
-            throw new ScholarlySecurityError(`Too many redirects (maximum ${maxRedirects})`)
+            throw new ScholarlySecurityError(
+              `Too many redirects (maximum ${maxRedirects})`,
+              'policy',
+            )
           }
           const location = response.headers.get('location')
           if (location === null) {
@@ -402,9 +444,17 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           releaseProbe(hostname)
           throw error
         }
-        if (error instanceof ScholarlySecurityError) {
+        // undici reports a connector lookup rejection as `fetch failed` with
+        // the real cause attached. Recover the owned deterministic refusal —
+        // whether it is the error itself or sits in the cause chain — and make
+        // it final: the answer is deterministic, it says nothing about the
+        // host's health, and the message is the actionable one. A transient
+        // `resolution-failed` is not a refusal, so it falls through to the
+        // retry and circuit-accounting path below.
+        const addressRejection = addressRefusalOf(error)
+        if (addressRejection !== undefined) {
           releaseProbe(hostname)
-          throw error
+          throw addressRejection
         }
         if (error instanceof ScholarlyHttpError) {
           releaseProbe(hostname)

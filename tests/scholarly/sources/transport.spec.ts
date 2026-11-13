@@ -90,6 +90,15 @@ describe('scholarly transport safety: allowlist', () => {
     )
   })
 
+  it('keeps the allowlist arm HTTPS-only while the PDF arm may use plain HTTP', () => {
+    expect(() => assertAllowedScholarlyUrl('http://api.openalex.org/works')).toThrow(
+      /must use HTTPS/,
+    )
+    expect(() =>
+      assertAllowedScholarlyUrl('http://publisher.example/paper.pdf', true),
+    ).not.toThrow()
+  })
+
   it('never repeats the full URL in a rejection message', () => {
     // A rejection string reaches tool output; a URL can carry a credential or
     // a DOI the user is researching, so only the hostname may appear.

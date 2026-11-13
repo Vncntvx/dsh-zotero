@@ -88,14 +88,14 @@ Every write passes a capability check, session approval, and a plan review card.
 
 ## Scholarly Retrieval (Optional Component)
 
-Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package but off by default. Enabling that component row is the authorization: once enabled it registers seven tools — index searches go only to allowlisted external scholarly indexes, and the open-access PDF fulltext arm is the single exception (any public HTTP(S) host under the two-gate public-address check). While it is not enabled, those tools do not exist and no scholarly retrieval requests are issued.
+Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address).
 
 - Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP; results are fused and deduplicated by relevance and annotated with whether they are already in the local library.
 - It can read open-access full text by DOI, arXiv ID, PMID, or PMCID and locate passages, and it can follow citation networks.
 - Citation formats come from DOI registration agencies. When verifying a reference list, the conclusion is one of "verified", "needs manual confirmation", "the registry says it does not exist", or "unable to verify".
 - When the user explicitly asks, it saves an external result to the local personal library. Only after saving does the result enter the Zotero library and the literature trail.
 
-External retrieval belongs to the agent entry point. With its separate `allowUrlPdfRead` permission enabled, the literature panel downloads PDFs only when a user clicks an existing URL attachment in the library; it performs no external search.
+External retrieval runs through agent tool calls. The literature panel supports downloading PDFs from existing URL attachments when `allowUrlPdfRead` is enabled, without running external searches.
 
 ## Document Enrichment (Optional Component)
 

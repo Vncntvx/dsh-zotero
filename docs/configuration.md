@@ -130,7 +130,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 学术检索组件配置 (`dsh-zotero/scholarly`)
 
-组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
+组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验；本机代理的 fake-IP 占位地址只对白名单索引主机与 HTTPS 全文目标放行，由已审阅主机名和 TLS 绑定身份，明文 HTTP 目标仍要求真实公网地址）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
 
 组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。字段变更在下一次工具调用时生效，无需重启 profile：
 

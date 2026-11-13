@@ -1,9 +1,22 @@
 import { Agent, fetch as undiciFetch } from 'undici'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }))
+const { lookupMock, agentMocks } = vi.hoisted(() => ({
+  lookupMock: vi.fn(),
+  agentMocks: [] as Array<{ connect?: { lookup?: unknown } }>,
+}))
 
 vi.mock('node:dns/promises', () => ({ lookup: lookupMock }))
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>()
+  class RecordingAgent extends actual.Agent {
+    constructor(options: { connect?: { lookup?: unknown } }) {
+      super(options as ConstructorParameters<typeof actual.Agent>[0])
+      agentMocks.push(options)
+    }
+  }
+  return { ...actual, Agent: RecordingAgent }
+})
 
 import {
   createPinnedDispatcher,
@@ -11,9 +24,11 @@ import {
   publicFetch,
   scholarlyPublicAccess,
 } from '../../src/transport/connections.js'
+import { PublicAddressError } from '../../src/transport/public-url.js'
 
 beforeEach(() => {
   lookupMock.mockReset()
+  agentMocks.length = 0
 })
 
 describe('dnsAddressResolver', () => {
@@ -60,5 +75,35 @@ describe('scholarlyPublicAccess', () => {
   it('composes the two host seams for the public-PDF arm', () => {
     expect(scholarlyPublicAccess.resolver).toBe(dnsAddressResolver)
     expect(scholarlyPublicAccess.createDispatcher).toBe(createPinnedDispatcher)
+  })
+
+  it('forwards the fake-IP predicate into the validating pool connector', async () => {
+    lookupMock.mockResolvedValue([{ address: '198.18.4.25', family: 4 }])
+    const validating = scholarlyPublicAccess.createValidatingDispatcher(
+      (hostname) => hostname === 'api.openalex.org',
+    )
+    expect(validating.dispatcher).toBeInstanceOf(Agent)
+    const connector = agentMocks.at(-1)?.connect
+    const lookup = connector?.lookup as
+      | ((
+          hostname: string,
+          options: object,
+          callback: (error: Error | null, address: string) => void,
+        ) => void)
+      | undefined
+    expect(lookup).toBeTypeOf('function')
+
+    const answerFor = (hostname: string): Promise<string | Error> =>
+      new Promise((resolve) => {
+        lookup!(hostname, { family: 4 }, (error, address) => resolve(error ?? address))
+      })
+
+    // The predicate admits the reviewed host, so its placeholder is served.
+    await expect(answerFor('api.openalex.org')).resolves.toBe('198.18.4.25')
+    // A name outside the allowlist keeps the strict public-address gate.
+    const refused = await answerFor('publisher.example')
+    expect(refused).toBeInstanceOf(PublicAddressError)
+    expect((refused as Error).message).toContain('fake-ip-filter')
+    await validating.close()
   })
 })

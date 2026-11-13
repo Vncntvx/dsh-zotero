@@ -927,7 +927,7 @@ scholarly_read(id="2301.07041", query="attention mechanism")
 
 #### 网络边界
 
-检索类工具（`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`）只访问固定的学术索引主机白名单（`src/scholarly/transport/hosts.ts`），并拒绝回环与私网地址。全文解析是例外：开放获取 PDF 与 PDF 直链托管在出版商自己的域名上，因此该路径只做公网/回环地址校验，「不走主机白名单」，重定向最多 5 跳。这意味着 `id` 传入的 URL 或其解析出的 PDF 地址可以是任意公网主机，请只读取可信来源的文献链接。
+检索类工具（`scholarly_search` / `scholarly_get` / `scholarly_citations` / `scholarly_verify`）只访问固定的学术索引主机白名单（`src/scholarly/transport/hosts.ts`），索引臂只允许 HTTPS，并逐跳做公网地址双门校验（词法门 + 解析门），拒绝回环、私网与其他非公网单播地址。全文解析是例外：开放获取 PDF 与 PDF 直链托管在出版商自己的域名上，因此该路径「不走主机白名单」，但仍逐跳校验地址是否为公网（回环与私网答案一律拒绝），重定向最多 5 跳。本机 fake-IP 代理下，白名单索引主机与 HTTPS 全文目标接受 `198.18.0.0/15` 占位地址（身份由已审阅主机名与 TLS 绑定）；明文 HTTP 全文目标仍要求真实公网地址，不接受占位地址。这意味着 `id` 传入的 URL 或其解析出的 PDF 地址可以是任意公网主机，请只读取可信来源的文献链接。
 
 ---
 

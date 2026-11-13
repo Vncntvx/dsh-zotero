@@ -8,6 +8,13 @@
  * (DNS answers judged public and pinned into the socket, so rebinding cannot
  * re-point it). Every redirect hop re-runs both gates against its own URL.
  *
+ * Every MinerU address is HTTPS (the API schemas refuse plain HTTP), so an
+ * HTTPS target accepts the local proxy's fake-IP placeholder the way the
+ * open-access PDF arm does: the TLS certificate binds the peer to the
+ * requested name, which the placeholder itself does not. A plain-HTTP target
+ * and an IP literal keep the strict judgment — the exception applies to a
+ * resolver's answer, never to an address a URL spells.
+ *
  * Credentials are dispatched **by host**: the Bearer token is attached only to
  * the fixed `mineru.net` API host. Signed upload URLs, result CDN links, and
  * source-URL HEAD requests are returned by the API or supplied by the caller
@@ -22,6 +29,7 @@
 
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
 import {
+  isIpv4Literal,
   resolvePublicAddresses,
   type AddressResolver,
   type PinnedDispatcher,
@@ -192,16 +200,25 @@ export class MineruClient {
       try {
         parsed = new URL(currentUrl)
       } catch {
-        throw new PublicAddressError('MinerU address is not a valid URL.')
+        throw new PublicAddressError('MinerU address is not a valid URL.', 'policy')
       }
       if (parsed.username || parsed.password || !isPublicUrl(parsed.href)) {
-        throw new PublicAddressError('MinerU address is not a permitted public HTTP(S) address.')
+        throw new PublicAddressError(
+          'MinerU address is not a permitted public HTTP(S) address.',
+          'policy',
+        )
       }
 
       const hostname = parsed.hostname
       if (isMineruApiHost(hostname) && parsed.origin !== MINERU_API_ORIGIN)
-        throw new PublicAddressError('MinerU API requests require the fixed HTTPS origin.')
-      const addresses = await resolvePublicAddresses(hostname, this.deps.resolver, combined)
+        throw new PublicAddressError(
+          'MinerU API requests require the fixed HTTPS origin.',
+          'policy',
+        )
+      const addresses = await resolvePublicAddresses(hostname, this.deps.resolver, {
+        signal: combined,
+        acceptFakeIp: parsed.protocol === 'https:' && !isIpv4Literal(hostname),
+      })
       const connection: PinnedDispatcher = this.deps.dispatcher(addresses)
 
       // Authorization is host-scoped: only the fixed API host ever sees it.
@@ -237,7 +254,10 @@ export class MineruClient {
           }
           const next = new URL(location, parsed)
           if (parsed.protocol === 'https:' && next.protocol !== 'https:') {
-            throw new PublicAddressError('HTTPS MinerU redirects may not downgrade to HTTP.')
+            throw new PublicAddressError(
+              'HTTPS MinerU redirects may not downgrade to HTTP.',
+              'policy',
+            )
           }
           if (
             isMineruApiHost(hostname) ||

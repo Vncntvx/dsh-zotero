@@ -16,7 +16,12 @@ import { SOURCE_SEARCHERS } from '../sources/index.js'
 import { SCHOLARLY_SOURCE_IDS, SCHOLARLY_SOURCE_NAMES, type ScholarlyQuery } from '../types.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
-import { failureTextOf } from './failure.js'
+import {
+  allSourcesFailedText,
+  failureTextOf,
+  isLocalAddressRejection,
+  someSourcesFailedText,
+} from './failure.js'
 import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
 import { metaRecordOf } from '../../tools/present.js'
 import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
@@ -124,6 +129,8 @@ export function createScholarlySearchTool(
         run: async (signal, onProgress) => {
           const keys = await host.keys()
           const failedSources: string[] = []
+          /** Failures whose cause is the local address gate, not the index. */
+          let localRejections = 0
 
           const sourceResults = await Promise.all(
             selectedSources.map(async (sourceId, index) => {
@@ -152,6 +159,7 @@ export function createScholarlySearchTool(
                 } satisfies RankedSourceList
               } catch (error) {
                 if (signal.aborted) throw error
+                if (isLocalAddressRejection(error)) localRejections += 1
                 failedSources.push(`${SCHOLARLY_SOURCE_NAMES[sourceId]} (${failureTextOf(error)})`)
                 return {
                   sourceId,
@@ -181,14 +189,19 @@ export function createScholarlySearchTool(
             const attempted = selectedSources.map((s) => SCHOLARLY_SOURCE_NAMES[s]).join(', ')
             if (failedSources.length === selectedSources.length && selectedSources.length > 0) {
               return {
-                text: `Every scholarly index was unavailable for "${text}": ${failedSources.join('; ')}. Nothing is known about these keywords; retry after the sources recover.`,
+                text: allSourcesFailedText(
+                  'these keywords',
+                  text,
+                  failedSources,
+                  localRejections === failedSources.length,
+                ),
                 papers: [],
                 issues: failedSources,
               }
             }
             const failureNotice =
               failedSources.length > 0
-                ? `\nUnanswered sources: ${failedSources.join('; ')}. No match came from the ${selectedSources.length - failedSources.length} source(s) that answered; retry after they recover.`
+                ? `\nUnanswered sources: ${failedSources.join('; ')}. No match came from the ${selectedSources.length - failedSources.length} source(s) that answered. ${someSourcesFailedText(localRejections, failedSources.length)}`
                 : ''
             return {
               text: `No papers found for "${text}" across ${attempted}.${failureNotice} Try fewer or alternative keywords.`,

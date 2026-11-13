@@ -18,7 +18,7 @@ import { cleanDoi, parseYear } from '../sources/helpers.js'
 import type { ScholarlyKeys, ScholarlyPaper } from '../types.js'
 import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
 import { metaRecordOf } from '../../tools/present.js'
-import { failureTextOf } from './failure.js'
+import { failureTextOf, isLocalAddressRejection, verificationNextStepOf } from './failure.js'
 import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
 import { toCleanJsonRecords, type ScholarlyToolHost } from './common.js'
 
@@ -56,6 +56,8 @@ interface ReferenceCheckResult {
   doi?: string
   foundPaper?: ScholarlyPaper
   notes: string[]
+  /** Internal only: the address gate refused this reference's registry read. */
+  localRejection?: true
 }
 
 export function parseReferenceSnippet(text: string): {
@@ -188,7 +190,13 @@ async function verifySingleReference(
       // else, so a throw here is a transport or registry failure, never proof
       // that the DOI does not exist.
       notes.push(`Crossref lookup failed for ${parsed.doi}: ${failureTextOf(error)}`)
-      return { raw: rawReference, verdict: 'unverified', doi: parsed.doi, notes }
+      return {
+        raw: rawReference,
+        verdict: 'unverified',
+        doi: parsed.doi,
+        notes,
+        ...(isLocalAddressRejection(error) ? { localRejection: true as const } : {}),
+      }
     }
   }
 
@@ -198,7 +206,12 @@ async function verifySingleReference(
     record = hits[0]
   } catch (error) {
     notes.push(`Crossref search failed: ${failureTextOf(error)}`)
-    return { raw: rawReference, verdict: 'unverified', notes }
+    return {
+      raw: rawReference,
+      verdict: 'unverified',
+      notes,
+      ...(isLocalAddressRejection(error) ? { localRejection: true as const } : {}),
+    }
   }
 
   if (!record || !record.title?.[0]) {
@@ -345,6 +358,9 @@ export function createScholarlyVerifyTool(
           )
 
           for (const checked of results) counts[checked.verdict] += 1
+          const localRejections = results.filter((result) => result.localRejection === true).length
+          const allUnverifiedAreLocal =
+            counts.unverified > 0 && localRejections === counts.unverified
 
           const summary =
             `Reference verification summary: ${counts.verified} verified, ${counts.check} to check, ` +
@@ -352,14 +368,20 @@ export function createScholarlyVerifyTool(
             'VERIFIED: official record exists and matches.\n' +
             'CHECK: record found but discrepancies detected (mismatched DOI/year or retracted).\n' +
             'NOT FOUND: no matching record found in official registries; verify before using.\n' +
-            'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n' +
-            'Next: retry scholarly_verify after Crossref recovers; scholarly_get checks alternate indexes before excluding a reference.'
+            (allUnverifiedAreLocal
+              ? 'UNVERIFIED: the local address gate refused the registry read; this is not an index outage.\n'
+              : 'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n') +
+            verificationNextStepOf(localRejections, counts.unverified)
 
           const lines = results.map((r, i) => formatVerificationResult(r, i + 1)).join('\n\n')
 
           return {
             text: `${summary}\n\n${lines}`,
-            checks: toCleanJsonRecords(results),
+            // The marker is an internal classification, not part of the tool's
+            // JSON contract; strip it before projecting the checks.
+            checks: toCleanJsonRecords(
+              results.map(({ localRejection: _localRejection, ...result }) => result),
+            ),
           }
         },
       })

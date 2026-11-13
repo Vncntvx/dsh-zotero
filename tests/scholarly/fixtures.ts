@@ -15,6 +15,11 @@ import {
   type ScholarlyPublicAccess,
 } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
+import type {
+  AddressResolver,
+  HostnamePredicate,
+  ResolvedAddress,
+} from '../../src/transport/network.js'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 
 /**
@@ -41,17 +46,39 @@ export async function bootScholarlyContext(): Promise<Context> {
   return ctx
 }
 
+/** A resolver whose every name answers these addresses. */
+export function resolverOf(answers: readonly ResolvedAddress[]): AddressResolver {
+  return async () => answers
+}
+
 /**
  * The inert public-access stub every mocked transport carries: the fetch
  * replacement never opens a socket, so neither the resolver nor the
  * dispatcher factories are exercised — they only satisfy the seam the
- * transport now requires of every external request.
+ * transport now requires of every external request. A spec that needs to
+ * observe the allowlist pool's fake-IP predicate passes `onPredicate`.
+ * @param resolver - the DNS answer the unstubbed seam would return.
+ * @param onPredicate - receives the predicate handed to the validating pool.
+ * @returns the stub, with inert dispatcher factories.
  */
-export const stubPublicAccess: ScholarlyPublicAccess = {
-  resolver: async () => [{ address: '93.184.216.34', family: 4 }],
-  createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
-  createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+export function stubPublicAccessWith(
+  resolver: AddressResolver,
+  onPredicate?: (predicate: HostnamePredicate | undefined) => void,
+): ScholarlyPublicAccess {
+  return {
+    resolver,
+    createDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+    createValidatingDispatcher: (predicate) => {
+      onPredicate?.(predicate)
+      return { dispatcher: {}, close: async () => {} }
+    },
+  }
 }
+
+/** The default stub: one public IPv4 answer and no sockets. */
+export const stubPublicAccess: ScholarlyPublicAccess = stubPublicAccessWith(
+  resolverOf([{ address: '93.184.216.34', family: 4 }]),
+)
 
 export function createMockHttp(
   handler: (url: string, init?: RequestInit) => Response | Promise<Response>,

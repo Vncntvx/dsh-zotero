@@ -54,6 +54,12 @@ function rejectedHostOf(urlString: string): string {
 
 /**
  * Asserts that the URL is safe and permitted.
+ *
+ * The allowlist arm is HTTPS-only: its fake-IP exception relies on the TLS
+ * certificate binding the peer to a reviewed hostname, so a downgraded hop
+ * must be refused here at both the initial URL and every redirect. The
+ * open-access PDF arm may use plain HTTP, where the strict public-address
+ * judgment still applies (no fake-IP placeholder).
  * @param urlString - The URL to validate.
  * @param allowPublicOnly - If true, permits any public URL (used for resolving OA PDFs).
  */
@@ -61,14 +67,22 @@ export function assertAllowedScholarlyUrl(urlString: string, allowPublicOnly = f
   if (!isPublicUrl(urlString)) {
     throw new ScholarlySecurityError(
       `Security rejection: "${rejectedHostOf(urlString)}" is not a valid public HTTP(S) address.`,
+      'policy',
     )
   }
 
   if (!allowPublicOnly) {
     const parsed = new URL(urlString)
+    if (parsed.protocol !== 'https:') {
+      throw new ScholarlySecurityError(
+        `Security rejection: scholarly requests must use HTTPS ("${parsed.hostname}").`,
+        'policy',
+      )
+    }
     if (!isAllowedScholarlyHost(parsed.hostname)) {
       throw new ScholarlySecurityError(
         `Security rejection: Host "${parsed.hostname}" is not on the scholarly allowlist.`,
+        'policy',
       )
     }
   }

@@ -4,6 +4,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
+import { findInCauseChain } from './cause-chain.js'
 import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 
 /** Zotero is not reachable on its local port. */
@@ -650,20 +651,13 @@ export function errorDetailOf(error: unknown): string {
  * underlying errno (`ETIMEDOUT`, `ECONNREFUSED`, …).
  */
 export function errnoCodeOf(error: unknown): string | undefined {
-  const seen = new Set<object>()
-  const queue: unknown[] = [error]
-  for (let depth = 0; depth < 10 && queue.length > 0; depth += 1) {
-    const current = queue.shift()
-    if (typeof current !== 'object' || current === null || seen.has(current)) continue
-    seen.add(current)
+  return findInCauseChain(error, (current) => {
     if ('code' in current && typeof current.code === 'string' && current.code !== '') {
       // A harness domain code is not an errno; keep walking the cause chain.
       if (!(current instanceof HarnessError)) return current.code
     }
-    if (current instanceof Error && current.cause !== undefined) queue.push(current.cause)
-    if (current instanceof AggregateError) queue.push(...current.errors)
-  }
-  return undefined
+    return undefined
+  })
 }
 
 /** True for a translated 404 domain error, which specific endpoints reinterpret. */
