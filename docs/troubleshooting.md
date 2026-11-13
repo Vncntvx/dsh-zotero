@@ -178,3 +178,16 @@
   - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`：同一操作 id 被以不同目标或配置快照重放；用新的操作标识重新提交。
   - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`：分别是 MinerU 任务失败、归档包校验失败、输入超出接口上限或非 PDF、输出目录校验失败、模型在全部镜像源下载失败。解析失败不切换模式，也不以本地抽取文本冒充成功。
 - 完整错误码清单见[工具参考 · 错误码](tools.md#错误码)；上传相关的网络与授权边界见[产品模型](product-model.md)。
+
+## 27. 安装报 ERR_PNPM_IGNORED_BUILDS
+
+- **现象**：执行 `dsh plugin --profile <profile> add` 时 pnpm 以 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: protobufjs@…` 失败，退出码 1；包已链接，但命令报告失败。
+- **原因**：插件依赖本地语义排序运行时 `onnxruntime-web`，它传递依赖 `protobufjs`，其 `postinstall` 只做版本方案检查。pnpm 11 起，没有显式决定的依赖构建脚本会让整次安装判为失败。
+- **排查**：在当前 profile 的 `pnpm-workspace.yaml` 中批准该脚本，然后重跑同一条 `add`：
+
+  ```yaml
+  allowBuilds:
+    protobufjs: true
+  ```
+
+  这是对安装期执行该包脚本的授权；`protobufjs` 的脚本不产生构建产物。不要通过关闭 pnpm 的构建脚本策略来绕过。

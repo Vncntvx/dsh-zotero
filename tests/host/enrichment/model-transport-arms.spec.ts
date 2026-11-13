@@ -81,7 +81,15 @@ describe('hostDownloadFsDeps', () => {
     const outside = await tempRoot()
     await symlink(outside, join(root, 'link'))
     await expect(hostDownloadFsDeps.mkdir(join(root, 'link', 'child'))).rejects.toThrow(
-      /not a (regular )?directory/,
+      /destination parent is not a directory/,
+    )
+  })
+
+  it('refuses a regular file sitting at the destination parent', async () => {
+    const root = await tempRoot()
+    await writeFile(join(root, 'file'), 'not a directory')
+    await expect(hostDownloadFsDeps.mkdir(join(root, 'file'))).rejects.toThrow(
+      /destination parent is not a directory/,
     )
   })
 

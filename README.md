@@ -68,7 +68,7 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 
 安装完成后新建会话即可使用。在插件管理器中打开 **dsh-zotero** 详情页，其配置区提供完整配置表单。
 
-> 提示：从 `main` 源码分支直接安装需要本地执行构建。pnpm 默认拦截依赖构建，使用 `#release` 分支可免除构建配置直接安装。
+> 提示：从 `main` 源码分支直接安装需要本地执行 `prepare` 构建，并在 profile 的 `pnpm-workspace.yaml` 中允许 `dsh-zotero` 的构建脚本；改用 `#release` 分支或 npm 包可免除这一步。另外，npm、`#release` 与本地 tarball 安装在 pnpm 11 上需要一次性批准传递依赖 `protobufjs` 的安装脚本，详见[快速入门](docs/getting-started.md)。
 
 ## 前置条件
 

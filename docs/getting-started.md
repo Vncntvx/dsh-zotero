@@ -49,12 +49,17 @@ cd dsh-zotero && npm pack
 dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 ```
 
-从 GitHub `main` 源码分支安装时，需要在本地执行 `prepare` 构建脚本；在 profile 对应的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 中允许该包的构建脚本：
+### 安装时的构建脚本批准
+
+本地语义排序运行时 `onnxruntime-web` 传递依赖 `protobufjs`，它的 `postinstall` 只检查版本方案、不产生构建产物。pnpm 11 会把「没有显式决定的依赖构建脚本」判为安装失败（`ERR_PNPM_IGNORED_BUILDS`），因此先在 profile 的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 写入批准，再重跑同一条 `add`：
 
 ```yaml
 allowBuilds:
-  dsh-zotero: true
+  protobufjs: true # npm、GitHub #release 与本地 tarball 安装都需要
+  dsh-zotero: true # 仅从 GitHub main 源码分支安装时需要（prepare）
 ```
+
+pnpm 10 不会因缺这项批准中断安装。
 
 若需固定特定版本或 commit，可在链接后附加 hash：
 

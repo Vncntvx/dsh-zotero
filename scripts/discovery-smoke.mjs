@@ -5,7 +5,8 @@
  * `exports["./client"]`, tarball contents, and the ClientModuleRegistry)
  * without a browser.
  *
- * Steps: npm pack → temp profile → `dsh plugin --profile <name> add <tarball>` → `dsh web
+ * Steps: npm pack → temp profile → record its build approvals → `dsh plugin
+ * --profile <name> add <tarball>` → `dsh web
  * --port 0` → read the boot token the CLI prints → exchange it for the page
  * cookie (instance auth gates the composition) → GET /
  * → parse the `globalThis["__DSH_BOOT__"]` manifest → assert the dsh-zotero
@@ -23,6 +24,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { APPROVED_BUILD_SCRIPTS, missingApprovals, policyYaml } from './shared/build-approvals.mjs'
 import { resolveHarnessRoot } from './shared/harness-packages.mjs'
 import { chromium } from 'playwright'
 
@@ -137,6 +139,30 @@ async function waitForIndex(port, cookie, attempts = 240) {
   throw new Error(`dsh web did not serve an index within the probe window on port ${port}`)
 }
 
+/**
+ * Click an open menu's item at its own centre after proving the point resolves
+ * to that item. Playwright's own click scrolls the item into view first, and the
+ * host menu closes on scroll to stay anchored, so that scroll dismisses the menu
+ * before the click lands. The hit check keeps the direct click honest: it fails
+ * when the item is covered or has already been dismissed.
+ */
+async function clickMenuItem(page, name) {
+  const item = page.getByRole('menuitem', { name, exact: true })
+  const box = await item.boundingBox()
+  if (box === null) throw new Error(`menu item ${name} has no layout box`)
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const hit = await page.evaluate((target) => {
+    const element = document.elementFromPoint(target.x, target.y)
+    return element?.closest('[role="menuitem"]')?.textContent?.trim() ?? ''
+  }, point)
+  if (!hit.includes(name)) {
+    throw new Error(
+      `menu item ${name} is not hit-testable at its own centre (hit: ${JSON.stringify(hit)})`,
+    )
+  }
+  await page.mouse.click(point.x, point.y)
+}
+
 async function reservePort() {
   const server = createServer()
   await new Promise((resolveListen) => {
@@ -169,10 +195,61 @@ async function pinDocumentsDirectory() {
   )
 }
 
+/**
+ * Initialize the profile before anything writes its pnpm policy. The harness
+ * writes its own `pnpm-workspace.yaml` template (hoisted linker, no automatic
+ * peers) only when the file is absent, so a policy written first would cost the
+ * profile those defaults. `version-exemptions` is a DSH-owned command: it
+ * initializes the profile without installing anything or touching the network.
+ */
+async function initializeProfile() {
+  const init = dshCommand(['plugin', '--profile', PROFILE, 'version-exemptions'])
+  await execFileAsync(init.command, init.args, { env: ENV })
+}
+
+/**
+ * Record the build approvals pnpm requires for the packed dependency tree.
+ * pnpm 11 fails a run whose dependency declares an install script it has no
+ * decision for (`ERR_PNPM_IGNORED_BUILDS`); that decision lives in the profile's
+ * `pnpm-workspace.yaml`, so the smoke writes the entries a user would.
+ */
+async function approveBuildScripts() {
+  const policyPath = join(HOME, 'profiles', PROFILE, 'pnpm-workspace.yaml')
+  const existing = (() => {
+    try {
+      return readFileSync(policyPath, 'utf8')
+    } catch (error) {
+      if (error?.code === 'ENOENT') return undefined
+      throw error
+    }
+  })()
+  const missing = missingApprovals(existing)
+  if (missing.length === 0) {
+    console.log(`profile build approvals: already recorded (${APPROVED_BUILD_SCRIPTS.join(', ')})`)
+    return
+  }
+  if (existing !== undefined && /^allowBuilds:/m.test(existing)) {
+    // The harness or the user owns an approval policy here; a second
+    // `allowBuilds` key would be invalid YAML, and editing theirs would hide
+    // which decision this run needed.
+    throw new Error(
+      `${policyPath} already carries an allowBuilds policy; add ${missing.join(', ')} there and re-run`,
+    )
+  }
+  const policy =
+    existing === undefined ? policyYaml(missing) : `${existing.trimEnd()}\n\n${policyYaml(missing)}`
+  await mkdir(join(HOME, 'profiles', PROFILE), { recursive: true })
+  await writeFile(policyPath, policy)
+  console.log(`profile build approvals: ${missing.join(', ')}`)
+}
+
 async function main() {
   const tarball = packPath()
   console.log(`packed: ${tarball}`)
   console.log(`home: ${HOME} (profile ${PROFILE})`)
+
+  await initializeProfile()
+  await approveBuildScripts()
 
   const add = dshCommand(['plugin', '--profile', PROFILE, 'add', tarball])
   await execFileAsync(add.command, add.args, { env: ENV })
@@ -372,7 +449,7 @@ async function verifyBrowser(port, cookie) {
     )
       throw new Error('Removed preview, navigation or global reset controls are still present')
     await settings.getByRole('button', { name: 'List density', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Compact', exact: true }).click()
+    await clickMenuItem(page, 'Compact')
     if (
       !(
         await settings.getByRole('button', { name: 'List density', exact: true }).innerText()

@@ -49,12 +49,17 @@ cd dsh-zotero && npm pack
 dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 ```
 
-When installing from the GitHub `main` source branch, the `prepare` build script must run locally. Allow that package's build scripts in `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
+### Build-script approval at install time
+
+The local semantic-ranking runtime, `onnxruntime-web`, depends transitively on `protobufjs`, whose `postinstall` only checks its version scheme and produces no build output. pnpm 11 fails an install whose dependency declares a build script it has no decision for (`ERR_PNPM_IGNORED_BUILDS`), so record the approval in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` and re-run the same `add`:
 
 ```yaml
 allowBuilds:
-  dsh-zotero: true
+  protobufjs: true # needed by npm, GitHub #release, and local tarball installs
+  dsh-zotero: true # needed only when installing from the GitHub main source branch (prepare)
 ```
+
+pnpm 10 installs without this approval.
 
 To pin a specific version or commit, append its hash to the link:
 

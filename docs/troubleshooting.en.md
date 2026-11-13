@@ -178,3 +178,16 @@ Note: diagnostic records stay in the current process memory and are cleared when
   - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`: an operation id was replayed with a different target or settings snapshot; resubmit with a fresh operation id.
   - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`: respectively a MinerU task failure, an archive validation failure, input over the API limit or not a PDF, an output-directory validation failure, and a model download that failed on every mirror. A failed parse does not switch mode or present locally extracted text as a successful parse.
     The full error-code list is in the [tool reference · error codes](tools.en.md#error-codes); upload network and authorization boundaries are in the [product model](product-model.en.md).
+
+## 27. Installation fails with ERR_PNPM_IGNORED_BUILDS
+
+- Symptom: `dsh plugin --profile <profile> add` fails with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: protobufjs@…` and exit code 1; the package links, but the command reports failure.
+- Cause: the plugin depends on the local semantic-ranking runtime `onnxruntime-web`, which depends transitively on `protobufjs`, whose `postinstall` only checks its version scheme. From pnpm 11 on, a dependency build script with no explicit decision fails the whole install.
+- Fix: approve that script in the current profile's `pnpm-workspace.yaml`, then re-run the same `add`:
+
+  ```yaml
+  allowBuilds:
+    protobufjs: true
+  ```
+
+  This authorizes running that package's script at install time; `protobufjs`'s script produces no build output. Do not work around it by disabling pnpm's build-script policy.

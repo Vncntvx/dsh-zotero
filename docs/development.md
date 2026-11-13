@@ -105,7 +105,7 @@ npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
 npm run deps:check           # 查询 registry，列出落后于最新版的直接依赖
 npm run verify:pack          # 校验打包产物文件完整性
 npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
-npm run smoke:discovery      # 打包产物 → 临时 profile → dsh web 启动探针
+npm run smoke:discovery      # 打包产物 → 临时 profile（先写入 protobufjs 构建批准）→ dsh web 启动探针
 npm run release:branch       # 切出可发布的 release 分支（清单驱动）
 npm run release:check        # 发布门禁：格式、版本钉、测试、类型、覆盖率、构建、打包
 npm run link:local-harness   # 将 @deepseek-ai/dsh-* 依赖链接到 sibling 检出
