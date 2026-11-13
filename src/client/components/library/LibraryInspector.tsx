@@ -46,19 +46,18 @@ import { CopyButton } from '../CopyButton.tsx'
 import { IconButton } from '../IconButton.tsx'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import { CommentIcon } from '../CommentIcon.tsx'
-import { PdfReadButton } from '../open/PdfReadButton.tsx'
 import { LibraryCitationActions, itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
-import { ParsePdfAction, type ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
-import { pdfAttachmentOf, type LibraryItemState } from './library-model.ts'
+import { PdfActions, type PdfParseFace } from './PdfActions.tsx'
+import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
 
-/** The browser face a parsed-artifact row needs: the session and its read. */
+/** The browser face the parsed-artifact probes need: the session and its read. */
 export interface ParsedArtifactFace {
   readonly sessionId: string
-  readonly read: ParsedArtifactReader
-  /** Bumped when a parse finishes so every row re-probes the store. */
+  readonly read: PdfParseFace['read']
+  /** Bumped when a parse finishes so every PDF re-probes the store. */
   readonly revision?: number
 }
 
@@ -543,7 +542,16 @@ export function LibraryInspector({
   const detail = inspector.detail
   const creators = formatCreatorsList(detail.creators)
   const origin = [detail.venue, detail.date].filter(Boolean).join(' · ')
-  const pdfAttachment = pdfAttachmentOf(detail)
+  const pdfs = pdfAttachmentsOf(detail)
+  const parseFace =
+    parsePdf === undefined
+      ? undefined
+      : {
+          sessionId: parsedArtifact?.sessionId ?? '',
+          ...(parsedArtifact?.read !== undefined ? { read: parsedArtifact.read } : {}),
+          ...(parsedArtifact?.revision !== undefined ? { revision: parsedArtifact.revision } : {}),
+          onParse: parsePdf,
+        }
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {
     if (!inputActions) return
@@ -569,26 +577,15 @@ export function LibraryInspector({
         {creators !== '' && <p className={css.inspectorCreators}>{creators}</p>}
         {origin !== '' && <p className={css.inspectorOrigin}>{origin}</p>}
         <div className={css.inspectorActions}>
-          {pdfAttachment !== undefined && (
-            <PdfReadButton
-              onReadAttachment={readPdf}
-              attachmentRef={pdfAttachment.ref}
-              onOpenFile={openFile}
+          {pdfs.length > 0 && (
+            <PdfActions
+              t={t}
+              attachments={pdfs}
+              readPdf={readPdf}
+              openFile={openFile}
               resolveAttachment={resolveAttachment}
               requireSessionForResolvedFile={openFile === undefined}
-              emphasis="primary"
-              t={t}
-            />
-          )}
-          {parsePdf && pdfAttachment !== undefined && (
-            <ParsePdfAction
-              t={t}
-              sessionId={parsedArtifact?.sessionId ?? ''}
-              target={{ kind: 'attachment', ref: pdfAttachment.ref }}
-              title={pdfAttachment.title}
-              read={parsedArtifact?.read}
-              revision={parsedArtifact?.revision}
-              onParse={() => parsePdf(pdfAttachment)}
+              {...(parseFace !== undefined ? { parse: parseFace } : {})}
             />
           )}
           {inputActions !== undefined && (

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 /**
  * The item-level parse action is state-aware: the same button submits a parse
- * while no artifact exists and reads the committed artifact once one does. The
- * result opens in a reader; nothing is added to the attachment list.
+ * while no artifact exists and reads the committed artifact once one does. An
+ * item with several PDFs asks which one first, in the same chooser the read
+ * action uses. The result opens in a reader; nothing is added to the
+ * attachment list.
  */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -11,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ParsePdfAction } from '../../../src/client/enrichment/ParsePdfAction.tsx'
 import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../../../src/contract.ts'
 import type {
+  ZoteroAttachmentRowView,
   ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
 } from '../../../src/contract.ts'
@@ -19,7 +22,16 @@ import { mockT } from '../helpers/mock-translate.ts'
 
 afterEach(cleanup)
 
-const TARGET = { kind: 'attachment' as const, ref: attachmentRef() }
+const PDF: ZoteroAttachmentRowView = {
+  ref: attachmentRef(),
+  title: 'Selected PDF',
+  contentType: 'application/pdf',
+}
+const OTHER: ZoteroAttachmentRowView = {
+  ref: attachmentRef('OTHERAT1'),
+  title: 'Supplement PDF',
+  contentType: 'application/pdf',
+}
 const SESSION = 'parse-session'
 const BODY = '# Parsed\n\nEvidence paragraph.'
 const READY = {
@@ -40,13 +52,21 @@ function readerOf(pages: (offset: number) => RemoteResult<ZoteroDocumentArtifact
   )
 }
 
-function mount(read: ReturnType<typeof readerOf> | undefined, onParse = vi.fn()) {
+/** The attachment ref a request targets; every probe here names an attachment. */
+function targetedRef(request: ZoteroDocumentArtifactRequestView): string | undefined {
+  return request.target.kind === 'attachment' ? request.target.ref : undefined
+}
+
+function mount(
+  read: ReturnType<typeof readerOf> | undefined,
+  onParse = vi.fn(),
+  attachments: readonly ZoteroAttachmentRowView[] = [PDF],
+) {
   render(
     <ParsePdfAction
       t={mockT}
       sessionId={SESSION}
-      target={TARGET}
-      title="Selected PDF"
+      attachments={attachments}
       {...(read !== undefined ? { read } : {})}
       onParse={onParse}
     />,
@@ -324,8 +344,7 @@ describe('the item parse action', () => {
       <ParsePdfAction
         t={mockT}
         sessionId={SESSION}
-        target={TARGET}
-        title="***"
+        attachments={[{ ...PDF, title: '***' }]}
         read={read}
         onParse={vi.fn()}
       />,
@@ -338,5 +357,85 @@ describe('the item parse action', () => {
     )
     await act(async () => {})
     expect(screen.getByRole('alert').textContent).toContain('plain failure')
+  })
+
+  it('asks which PDF to parse when the item carries several', async () => {
+    const read = readerOf(() => ({ ok: true, value: { kind: 'missing' } }))
+    const { onParse } = mount(read, vi.fn(), [PDF, OTHER])
+    await act(async () => {})
+    // Each attachment's own store entry is probed, and no page is read yet.
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(read.mock.calls.map((call) => targetedRef(call[0]))).toEqual([PDF.ref, OTHER.ref])
+    fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsePdfAny') }))
+    await act(async () => {})
+    expect(screen.getByRole('heading', { name: mockT('libraryPickPdf') })).toBeDefined()
+    fireEvent.click(
+      screen.getByRole('button', { name: `${OTHER.title} ${mockT('libraryParsePdfAny')}` }),
+    )
+    expect(onParse).toHaveBeenCalledWith(OTHER)
+  })
+
+  it('marks the parsed PDF in the chooser and opens it from there', async () => {
+    const read = vi.fn(
+      async (
+        request: ZoteroDocumentArtifactRequestView,
+      ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> => {
+        if (targetedRef(request) !== OTHER.ref) return { ok: true, value: { kind: 'missing' } }
+        if (request.read === undefined) return { ok: true, value: READY }
+        return {
+          ok: true,
+          value: {
+            ...READY,
+            page: { offset: request.read.offset, text: 'Second paper', totalChars: 12 },
+          },
+        }
+      },
+    )
+    mount(read, vi.fn(), [PDF, OTHER])
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedView') }))
+    await act(async () => {})
+    // The chooser states each file's own state before anything is opened.
+    expect(screen.getByRole('heading', { name: mockT('libraryPickPdf') })).toBeDefined()
+    expect(
+      screen.getByRole('button', { name: `${PDF.title} ${mockT('libraryParsePdfAny')}` }),
+    ).toBeDefined()
+    fireEvent.click(
+      screen.getByRole('button', { name: `${OTHER.title} ${mockT('libraryParsedView')}` }),
+    )
+    await act(async () => {})
+    expect(screen.getByText('Second paper')).toBeDefined()
+  })
+
+  it('asks which parsed result to open when several are parsed', async () => {
+    const read = vi.fn(
+      async (
+        request: ZoteroDocumentArtifactRequestView,
+      ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> => {
+        if (request.read === undefined) return { ok: true, value: READY }
+        const body = targetedRef(request) === OTHER.ref ? 'Second paper' : 'First paper'
+        return {
+          ok: true,
+          value: { ...READY, page: { offset: request.read.offset, text: body, totalChars: 12 } },
+        }
+      },
+    )
+    mount(read, vi.fn(), [PDF, OTHER])
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedView') }))
+    await act(async () => {})
+    expect(screen.getByRole('heading', { name: mockT('libraryPickPdf') })).toBeDefined()
+    fireEvent.click(
+      screen.getByRole('button', { name: `${OTHER.title} ${mockT('libraryParsedView')}` }),
+    )
+    await act(async () => {})
+    expect(screen.getByText('Second paper')).toBeDefined()
+    // The reader is bound to the chosen attachment, not to the first one.
+    expect(read).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        target: { kind: 'attachment', ref: OTHER.ref },
+        read: { offset: 0 },
+      }),
+    )
   })
 })

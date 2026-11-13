@@ -13,11 +13,11 @@ The system provides independent entry points for the model and the user:
 | **Agent tools**    | AI model | Tool calls (Function Calling)                   | Search, read full texts, locate passages, and generate citations in conversation; modify the library under approval. |
 | **User interface** | User     | Browser interface (right sidebar & session tab) | Browse the library, filter items, read PDFs, and copy citations; verify papers and passages queried by the agent.    |
 
-### Non-Proxying Principle
+### Separate Responsibilities
 
-The two paths operate independently and never proxy each other:
+The two paths serve separate responsibilities:
 
-- **Interface decoupled from tools**: "Ask" and "Add to chat" in the panel populate item details into the composer for the user to review and send; the web interface does not trigger model tools directly.
+- **Interface decoupled from tools**: "Ask" and "Add to chat" in the panel populate item details into the composer for the user to review and send.
 - **Background calls preserve UI state**: When the agent calls tools to search or read papers, the active item selection, tree expansion, and scroll position in the literature panel remain unchanged.
 
 ## Two Surfaces

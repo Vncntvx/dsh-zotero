@@ -31,6 +31,13 @@ async function inspect(title: string) {
   }
   await settle()
 }
+/** The item carries two PDFs, so the action asks which one before submitting. */
+async function startParse(title: string) {
+  fireEvent.click(screen.getByRole('button', { name: en.libraryParsePdfAny }))
+  await settle()
+  fireEvent.click(screen.getByRole('button', { name: `${title} ${en.libraryParsePdfAny}` }))
+  await settle()
+}
 
 describe('session library parsing entry', () => {
   it("parses the item's primary PDF from the action row, only after confirmation", async () => {
@@ -45,9 +52,8 @@ describe('session library parsing entry', () => {
       expect(call[0]).not.toHaveProperty('read')
     expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()
     // The parse command is an item action beside "Read PDF", not a row in the
-    // attachment list, and it targets the item's primary PDF.
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
-    await settle()
+    // attachment list; two PDFs mean it asks which one first.
+    await startParse('First PDF')
     expect(screen.getByRole('dialog', { name: en.parseTitle })).toBeDefined()
     expect(document.querySelector('[data-parse-target-label]')?.textContent).toBe('First PDF')
     expect(runtime.remote.documentArtifact).toHaveBeenCalledWith(
@@ -120,8 +126,7 @@ describe('session library parsing entry', () => {
     const runtime = world()
     let panel = runtime.mount()
     await inspect(PARENT_DETAIL.title)
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
-    await settle()
+    await startParse('First PDF')
     fireEvent.click(screen.getByRole('button', { name: en.parseConfirm }))
     await settle()
     fireEvent.click(screen.getByRole('button', { name: en.parseClose }))
@@ -129,8 +134,7 @@ describe('session library parsing entry', () => {
     expect(runtime.jobs.kill).not.toHaveBeenCalled()
     panel = runtime.remount(panel)
     await inspect(PARENT_DETAIL.title)
-    fireEvent.click(screen.getByRole('button', { name: 'Parse PDF: First PDF' }))
-    await settle()
+    await startParse('First PDF')
     expect(runtime.remote.startDocumentParse).toHaveBeenCalledTimes(1)
     expect(runtime.remote.documentParseReceipt).toHaveBeenCalledTimes(2)
     expect(runtime.jobs.observe).toHaveBeenCalledTimes(2)

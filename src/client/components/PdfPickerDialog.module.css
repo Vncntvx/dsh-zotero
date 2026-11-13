@@ -1,0 +1,58 @@
+/* The host owns the modal and the buttons. This sheet only arranges the rows. */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: var(--dsw-font-s-14-font-family);
+  font-size: var(--dsh-content-font-size);
+  line-height: var(--dsw-font-s-14-line-height);
+  color: var(--dsw-alias-label-primary);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dsw-font-xs-13-font-size);
+  padding: var(--dsw-font-s-14-font-size);
+}
+
+.title {
+  margin: 0;
+  font: inherit;
+  font-weight: var(--dsw-font-s-strong-14-font-weight);
+}
+
+.error {
+  margin: 0;
+  padding: 0 var(--dsw-font-s-14-font-size) var(--dsw-font-s-14-font-size);
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-radius-xs);
+  margin: 0;
+  padding: 0 var(--dsw-font-s-14-font-size) var(--dsw-font-s-14-font-size);
+  list-style: none;
+}
+
+/* A row spans the dialog so the file name keeps room to truncate. */
+.option {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.optionTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionAction {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}

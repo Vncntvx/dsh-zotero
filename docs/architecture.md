@@ -129,7 +129,7 @@ graph LR
 
 界面在提交前展示解析目标与所选模式，用户确认后调用 enrichment 提供的端点执行解析。解析失败时直接返回错误信息。
 
-`documentArtifact` 既是产物探测也是唯一的内容读取口：不带 `read` 时只返回元数据，详情据此判断该条目是否已有解析结果，并把「解析此 PDF」按钮切成「查看解析结果」；带 `read.offset` 时返回该偏移处一页有界 Markdown（上限 `ZOTERO_ARTIFACT_PAGE_CHARS`）与总字符数。读取沿用与探测相同的会话、远程动作与 PDF 类型门禁，只读、用户驱动、不轮询，只返回文本，绝不返回主机路径或签名 URL；阅读面按页续读，完整正文读齐后才允许复制和下载。
+`documentArtifact` 既是产物探测也是唯一的内容读取口：不带 `read` 时只返回元数据，详情据此判断该条目是否已有解析结果，并把「解析此 PDF」按钮切成「查看解析结果」；带 `read.offset` 时返回该偏移处一页有界 Markdown（上限 `ZOTERO_ARTIFACT_PAGE_CHARS`）与总字符数。条目带多个 PDF 时，详情对每个 PDF 各探测一次，选择框据此标出哪个已有产物；阅读面始终绑定最后选中的那个附件。读取沿用与探测相同的会话、远程动作与 PDF 类型门禁，只读、用户驱动、不轮询，只返回文本，绝不返回主机路径或签名 URL；阅读面按页续读，完整正文读齐后才允许复制和下载。
 
 设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
 

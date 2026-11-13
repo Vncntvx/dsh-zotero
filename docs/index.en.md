@@ -4,7 +4,7 @@
 
 ## Usage
 
-Read these in order to get from installation to daily use:
+Read these in order to move from installation to daily use:
 
 1. [Getting started](getting-started.en.md): install, verify the connection, and run the first task
 2. [Product model](product-model.en.md): two entry points, two UI surfaces, component division, and system boundaries
@@ -21,7 +21,7 @@ Read these in order to get from installation to daily use:
 
 ## Internal
 
-The following documents are for repository maintainers and are not product user documentation:
+The following documents are for repository maintainers:
 
 - [Repository rules](../AGENTS.md): constraints for agents and contributors
 - [Test suite rules](../tests/README.md): test lanes and fixture rules

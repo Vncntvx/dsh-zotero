@@ -25,6 +25,9 @@ export const en = {
   ...parseEn,
   libraryParsePdf: 'Parse this PDF',
   libraryParsePdfNamed: 'Parse PDF: {title}',
+  libraryParsePdfAny: 'Parse PDF',
+  libraryPickPdfRead: 'Choose a PDF to read',
+  libraryPickPdf: 'Choose a PDF',
   libraryParseUrl: 'Parse PDF URL',
   libraryParseConfigError: 'Could not read committed parsing settings: {message}',
   libraryParsedResultNamed: 'Parsed result: {title}',
@@ -49,7 +52,7 @@ export const en = {
   libraryLocate: 'Locate current scope',
   libraryWriteActions: 'Write actions',
   libraryWriteApprovalHint:
-    'Submit once to review the exact plan in this conversation. Every change requires session approval and plan approval. Writes are never retried automatically.',
+    'Submit once to review the exact plan in this conversation. Every change requires session approval and plan approval. Check Zotero before retrying an unverified commit.',
   libraryWriteNeedsSession:
     'This conversation is not running. Start it to receive the write approval and plan card.',
   libraryWriteNeedsAccess:
@@ -112,7 +115,7 @@ export const en = {
   sourceProjectionSyncing:
     'The literature-trail projection is ready; waiting for this session snapshot.',
   sourceProjectionFailed:
-    'The literature-trail projection could not start. Check plugin diagnostics, then reload the plugin.',
+    'The literature-trail projection could not start. Check diagnostics and reload the plugin.',
   sourceProjectionStatusUnavailable:
     'Could not determine whether the literature-trail projection is available.',
   overridden: 'Overridden',
@@ -120,13 +123,12 @@ export const en = {
   readOnly: 'This deployment stores settings read-only.',
   save: 'Save',
   saving: 'Saving…',
-  saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
-  unavailable:
-    'This deployment does not serve the Zotero settings namespace, so there is nothing to configure here.',
+  saveFailed: 'The deployment rejected these values. Review and save again.',
+  unavailable: 'Zotero settings are unavailable in this deployment.',
   scholarlyDisabled:
-    'Scholarly search comes from the dsh-zotero/scholarly component. Enable that component under "Included components" to turn the external scholarly tools on; they will then contact the external indexes, the DOI registry, and the open-access lookup service. Nothing here is configurable while the component is off.',
+    'Scholarly search is provided by dsh-zotero/scholarly. Enable it under "Included components" to use the external indexes, DOI registry, and open-access lookup service.',
   enrichmentDisabled:
-    'Document parsing comes from the dsh-zotero/enrichment component. Enable it under "Included components" to make parsing available; each parse needs your explicit submission of the specific document.',
+    'Document parsing is provided by dsh-zotero/enrichment. Enable it under "Included components" to submit a specific document for parsing.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCredentialRef:
     'Enter an environment-variable name: start with a letter or underscore, then letters, digits, or underscores; leave blank to use anonymous access.',
@@ -196,17 +198,17 @@ export const en = {
   enrichmentTokenVisitMineru: 'Open mineru.net ↗',
   enrichmentEnableNoticeTitle: 'Document parsing is enabled',
   enrichmentEnableNoticeDescription:
-    'Submitting a specific Zotero PDF attachment or a public PDF URL sends that document to MinerU (mineru.net) for parsing, and the Markdown result is saved locally. Ordinary searches, opening PDFs, and saving settings upload nothing, and each parse still needs your explicit submission of that document. This reminder comes back when the component is turned off and on again.',
+    'Submitting a specific Zotero PDF attachment or public PDF URL sends it to MinerU (mineru.net) for parsing, and saves the Markdown result locally. The notice reappears when the component is enabled again.',
   enrichmentEnableNoticeConfirm: 'Got it',
   enrichmentEnableNoticeClose: 'Close',
   scholarlyEnableNoticeTitle: 'External scholarly retrieval is enabled',
   scholarlyEnableNoticeDescription:
-    'With dsh-zotero/scholarly enabled, the agent can search external scholarly sources from a conversation: queries, DOIs, and identifiers go to the allowlisted scholarly indexes (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, Unpaywall), and open-access full-text reading may download a PDF from any public HTTP(S) host. Searching the local library, opening a local PDF, and saving settings send none of these requests. This reminder comes back when the component is turned off and on again.',
+    'With dsh-zotero/scholarly enabled, the agent can search external scholarly sources from a conversation. Queries, DOIs, and identifiers go to the allowlisted indexes (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, and Unpaywall). Open-access full-text reading may download a PDF from any public HTTP(S) host. The notice reappears when the component is enabled again.',
   scholarlyEnableNoticeConfirm: 'Got it',
   scholarlyEnableNoticeClose: 'Close',
   groupEnrichmentOutput: 'Output & Data Notice',
   groupEnrichmentOutputDesc:
-    'Documents you submit are sent to MinerU for parsing; the Markdown artifacts are saved in the directory below. Ordinary reads only reuse existing artifacts and never upload a document.',
+    'Submitted documents are sent to MinerU for parsing. Markdown artifacts are saved in the directory below.',
   enrichmentOutputDir: 'Parsed-file directory',
   enrichmentOutputDirHint:
     'Absolute directory for parsed Markdown files. Leave blank to use the default location; Reset to default clears a custom path.',
@@ -238,7 +240,7 @@ export const en = {
   semanticModelStatusCancelling: 'Cancelling the download…',
   semanticModelStatusDeleting: 'Deleting…',
   semanticModelBundleRepairHint:
-    'The bundle is missing or corrupted. Use Download to fetch it, Redownload to replace it, or Verify to check the files already on disk. Semantic search is not auto-disabled.',
+    'The bundle is missing or corrupted. Use Download to fetch it, Redownload to replace it, or Verify to check the files on disk.',
   semanticModelDownloadAction: 'Download model',
   semanticModelRedownloadAction: 'Redownload',
   semanticModelVerifyAction: 'Verify model',
@@ -258,7 +260,7 @@ export const en = {
   semanticModelNotReadyWarningTag: 'Model Required',
   semanticModelNotReadyWarningTitle: 'Local semantic search is enabled, but the model is not ready',
   semanticModelNotReadyWarningDesc:
-    'With semantic search enabled but the model missing or corrupt, a read fails with ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, without falling back to BM25. Select a model matching your hardware and click "Download model", or turn semantic search off to use BM25 alone.',
+    'A read fails with ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE while semantic search is enabled and its model is missing or corrupt. Select a model that fits your hardware and click "Download model", or turn semantic search off to use BM25.',
   semanticModelDownloadingNotice:
     'Model is downloading. Local semantic search will become active once complete.',
   semanticModelNotDownloadedWarningNotice:
@@ -890,6 +892,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   ...parseZh,
   libraryParsePdf: '解析此 PDF',
   libraryParsePdfNamed: '解析 PDF：{title}',
+  libraryParsePdfAny: '解析 PDF',
+  libraryPickPdfRead: '选择要阅读的 PDF',
+  libraryPickPdf: '选择 PDF',
   libraryParseUrl: '解析 PDF URL',
   libraryParseConfigError: '无法读取已提交解析设置：{message}',
   libraryParsedResultNamed: '解析结果：{title}',
@@ -915,7 +920,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryLocate: '定位当前范围',
   libraryWriteActions: '写入操作',
   libraryWriteApprovalHint:
-    '提交后请在当前会话中核对具体计划。每次变更都需要会话审批和计划批准，写入不会自动重试。',
+    '提交后请在当前会话中核对具体计划。每次变更都需要会话审批和计划批准；未核验的提交请先检查 Zotero 再重试。',
   libraryWriteNeedsSession: '当前会话未运行；启动该会话后才能接收写入审批与计划卡。',
   libraryWriteNeedsAccess: '当前身份无权写入该会话的 Zotero 文库。',
   libraryWriteSession: '审批会话',
@@ -980,12 +985,12 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   readOnly: '本部署的设置为只读。',
   save: '保存',
   saving: '保存中…',
-  saveFailed: '本部署没有接受这些值，已保留供你修改。',
-  unavailable: '本部署没有提供 Zotero 设置项，这里暂无可配置内容。',
+  saveFailed: '本部署拒绝了这些值，请检查后重新保存。',
+  unavailable: '本部署无法使用 Zotero 设置。',
   scholarlyDisabled:
-    '学术检索由 dsh-zotero/scholarly 组件提供。在插件列表的「包含的组件」中启用该组件，即启用外部学术检索；此后会访问外部学术索引、DOI 注册中心与开放获取查找服务。组件未启用时此处不可配置。',
+    '学术检索由 dsh-zotero/scholarly 提供。在插件列表的「包含的组件」中启用后，即可访问外部学术索引、DOI 注册中心与开放获取查找服务。',
   enrichmentDisabled:
-    '文档解析由 dsh-zotero/enrichment 组件提供。在插件列表的「包含的组件」中启用后可使用解析功能；每次解析都需要你明确提交具体文档。',
+    '文档解析由 dsh-zotero/enrichment 提供。在插件列表的「包含的组件」中启用后，提交具体文档即可解析。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCredentialRef:
     '请填写环境变量名：首字符为字母或下划线，其后仅含字母、数字、下划线；留空表示匿名访问。',
@@ -1048,17 +1053,16 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentTokenVisitMineru: '打开 mineru.net ↗',
   enrichmentEnableNoticeTitle: '文档解析组件已启用',
   enrichmentEnableNoticeDescription:
-    '提交具体的 Zotero PDF 附件或公开 PDF URL 时，该文档会发往 MinerU（mineru.net）解析，Markdown 结果保存在本机。普通检索、打开 PDF 和保存设置都不会上传文档；每次解析仍然需要你明确提交那一份文档。组件关闭后再次启用，这条提醒会重新出现。',
+    '提交具体的 Zotero PDF 附件或公开 PDF URL 后，文档会发往 MinerU（mineru.net）解析，Markdown 结果保存在本机。组件再次启用时会重新显示此提醒。',
   enrichmentEnableNoticeConfirm: '我知道了',
   enrichmentEnableNoticeClose: '关闭',
   scholarlyEnableNoticeTitle: '外部学术检索组件已启用',
   scholarlyEnableNoticeDescription:
-    '启用 dsh-zotero/scholarly 后，Agent 可以在对话中检索外部学术资料：检索词、DOI 和标识符会发往白名单内的学术索引（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org、Unpaywall），开放获取全文读取可能从任意公网 HTTP(S) 主机下载 PDF。检索本地文献库、打开本地 PDF 和保存设置都不会发出这些请求。组件关闭后再次启用，这条提醒会重新出现。',
+    '启用 dsh-zotero/scholarly 后，Agent 可在对话中检索外部学术资料。检索词、DOI 和标识符会发往白名单内的学术索引（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org 和 Unpaywall）。开放获取全文读取可能从任意公网 HTTP(S) 主机下载 PDF。组件再次启用时会重新显示此提醒。',
   scholarlyEnableNoticeConfirm: '我知道了',
   scholarlyEnableNoticeClose: '关闭',
   groupEnrichmentOutput: '输出与数据说明',
-  groupEnrichmentOutputDesc:
-    '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。普通读取只复用已有产物，不上传文档。',
+  groupEnrichmentOutputDesc: '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。',
   enrichmentOutputDir: '解析文件目录',
   enrichmentOutputDirHint:
     '解析后 Markdown 文件的绝对目录。留空使用默认位置；「恢复默认」可清除自定义路径。',
@@ -1084,7 +1088,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelStatusCancelling: '正在取消下载…',
   semanticModelStatusDeleting: '正在删除…',
   semanticModelBundleRepairHint:
-    '模型包缺失或损坏。可用「下载模型」获取、「重新下载」替换，或用「校验模型」检查磁盘上已有的文件；语义检索不会被自动关闭。',
+    '模型包缺失或损坏。可用「下载模型」获取、「重新下载」替换，或用「校验模型」检查磁盘上的文件。',
   semanticModelVerifyAction: '校验模型',
   semanticModelDownloadAction: '下载模型',
   semanticModelRedownloadAction: '重新下载',
@@ -1102,7 +1106,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelNotReadyWarningTag: '需要下载模型',
   semanticModelNotReadyWarningTitle: '已开启本地语义检索，但所选模型尚未下载',
   semanticModelNotReadyWarningDesc:
-    '已开启语义检索但模型缺失或损坏时，读取以 ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE 失败，不回退到 BM25。在下方选择适合设备的模型并点击「下载模型」，或关闭语义检索改用 BM25。',
+    '语义检索已开启但模型缺失或损坏时，读取以 ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE 失败。请选择适合设备的模型并点击「下载模型」，或关闭语义检索改用 BM25。',
   semanticModelDownloadingNotice: '模型正在下载中，下载完成后本地语义检索将自动生效。',
   semanticModelNotDownloadedWarningNotice: '已开启本地语义检索，请下载模型以生效。',
   semanticModelBalanced: '通用平衡 (balanced · Qwen3-0.6B · 默认)',

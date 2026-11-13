@@ -16,12 +16,17 @@ import {
   listRequestOf,
   listStateOf,
   pageRangeOf,
+  pdfAttachmentsOf,
   savedSearchRowsOf,
   scopeViewOf,
   treeRequestOf,
   type CollectionRowView,
 } from '../../../src/client/components/library/library-model.ts'
-import type { ZoteroLibraryBrowseItemView } from '../../../src/contract.ts'
+import type {
+  ZoteroAttachmentRowView,
+  ZoteroItemDetailView,
+  ZoteroLibraryBrowseItemView,
+} from '../../../src/contract.ts'
 
 describe('scopeViewOf', () => {
   it('derives the wire scope for the fixed and named selections', () => {
@@ -130,6 +135,58 @@ describe('row projections', () => {
       { library: { type: 'group', id: 2 }, name: 'G2' },
       { library: { type: 'group', id: 9 }, name: 'G9' },
     ])
+  })
+})
+
+describe('pdfAttachmentsOf', () => {
+  const detail = (rows: {
+    bestAttachment?: ZoteroAttachmentRowView
+    attachments?: readonly ZoteroAttachmentRowView[]
+  }): ZoteroItemDetailView => ({
+    ref: 'zotero://user/0/item/ITEM0001',
+    itemType: 'journalArticle',
+    title: 'Paper',
+    creators: [],
+    abstractTruncated: false,
+    tags: [],
+    collections: [],
+    children: { total: rows.attachments?.length ?? 0 },
+    ...(rows.bestAttachment !== undefined ? { bestAttachment: rows.bestAttachment } : {}),
+    ...(rows.attachments !== undefined
+      ? {
+          attachments: {
+            offset: 0,
+            total: rows.attachments.length,
+            returned: rows.attachments.length,
+            limit: rows.attachments.length,
+            items: rows.attachments,
+          },
+        }
+      : {}),
+  })
+  const pdf = (ref: string): ZoteroAttachmentRowView => ({
+    ref,
+    title: `${ref}.pdf`,
+    contentType: 'application/pdf',
+  })
+
+  it('lists every PDF with the best attachment first and one row per ref', () => {
+    const first = pdf('a')
+    expect(
+      pdfAttachmentsOf(
+        detail({
+          bestAttachment: first,
+          attachments: [first, { ref: 'n', title: 'note', contentType: 'text/html' }, pdf('b')],
+        }),
+      ).map((row) => row.ref),
+    ).toEqual(['a', 'b'])
+  })
+
+  it('falls back to the attachment listing without a best attachment', () => {
+    expect(pdfAttachmentsOf(detail({ attachments: [pdf('b')] })).map((row) => row.ref)).toEqual([
+      'b',
+    ])
+    expect(pdfAttachmentsOf(detail({}))).toEqual([])
   })
 })
 

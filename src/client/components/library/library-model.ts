@@ -53,12 +53,22 @@ export function sameLibrary(a: SupportedLocalLibrary, b: SupportedLocalLibrary):
   return a.type === b.type && a.id === b.id
 }
 
-/** The attachment the inspector's head action opens: Zotero's best choice first. */
-export function pdfAttachmentOf(detail: ZoteroItemDetailView): ZoteroAttachmentRowView | undefined {
-  if (detail.bestAttachment !== undefined && isPdfContentType(detail.bestAttachment.contentType)) {
-    return detail.bestAttachment
+/**
+ * Every PDF the item offers, Zotero's best choice first and one row per ref:
+ * an item that carries several PDFs asks which one the action applies to.
+ */
+export function pdfAttachmentsOf(detail: ZoteroItemDetailView): ZoteroAttachmentRowView[] {
+  const seen = new Set<string>()
+  const pdfs: ZoteroAttachmentRowView[] = []
+  for (const row of [
+    ...(detail.bestAttachment !== undefined ? [detail.bestAttachment] : []),
+    ...(detail.attachments?.items ?? []),
+  ]) {
+    if (!isPdfContentType(row.contentType) || seen.has(row.ref)) continue
+    seen.add(row.ref)
+    pdfs.push(row)
   }
-  return detail.attachments?.items.find((attachment) => isPdfContentType(attachment.contentType))
+  return pdfs
 }
 
 /** The sort fields the panel offers, in toolbar order. */
