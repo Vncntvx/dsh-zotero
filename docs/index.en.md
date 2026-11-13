@@ -25,3 +25,4 @@ The following documents are for repository maintainers:
 
 - [Repository rules](../AGENTS.md): constraints for agents and contributors
 - [Test suite rules](../tests/README.md): test lanes and fixture rules
+- [Development notes](development-notes.en.md): constraints, behavior boundaries, and migrations to revisit during future development

@@ -131,7 +131,7 @@ graph LR
 
 `documentArtifact` 既是产物探测也是唯一的内容读取口：不带 `read` 时只返回元数据，详情据此判断该条目是否已有解析结果，并把「解析此 PDF」按钮切成「查看解析结果」；带 `read.offset` 时返回该偏移处一页有界 Markdown（上限 `ZOTERO_ARTIFACT_PAGE_CHARS`）与总字符数。条目带多个 PDF 时，详情对每个 PDF 各探测一次，选择框据此标出哪个已有产物；阅读面始终绑定最后选中的那个附件。读取沿用与探测相同的会话、远程动作与 PDF 类型门禁，只读、用户驱动、不轮询，只返回文本，绝不返回主机路径或签名 URL；阅读面按页续读，完整正文读齐后才允许复制和下载。
 
-设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
+设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。作业启动后由宿主的 `EnrichmentParseJobs` 以重叠续挂持有 `wait`（后继 waiter 在当前 waiter 到期前挂上），结算因此被记为 `awaited`，harness 的完成通知不会唤醒空闲模型；该机制不假设 job 生命周期有固定上界（排队、来源传输与解析都计入），结算记录仍保留给面板读取回执。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
 
 任务取消须同步、幂等发出中止，`done` 只在真实清理完成后落定。关闭界面只释放观察；明确取消、会话关闭或卸载撤销对应等待者，最后一个等待者离开才中止共享 `ParseFlight`。卸载停止接纳、杀死组件自己的解析作业与下载任务并等待清理。重新解析使用新 generation，保留上一份有效产物，完整写入新产物后才原子切换源指针；失败或取消不删除上一份有效产物。只有主动重试可恢复未完成任务，普通读取不能恢复。
 

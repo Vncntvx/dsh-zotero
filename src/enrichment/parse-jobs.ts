@@ -48,6 +48,7 @@ import {
   zoteroStartDocumentParseRequestSchema,
 } from '../wire-schemas.js'
 import { resolveEnrichmentConfig } from './config.js'
+import { PARSE_TOTAL_TIMEOUT_MS } from './limits.js'
 import type { ParseDocumentResult } from './parse-document.js'
 import type { ParsePhase } from './parse-once.js'
 import { sanitizedErrorDetail } from './transport.js'
@@ -69,6 +70,16 @@ declare module '@deepseek-ai/dsh-jobs' {
 
 export const PARSE_JOB_KIND = 'zotero-enrichment'
 export const PARSE_JOB_LABEL = '文档解析 · MinerU'
+/**
+ * One completion-notice waiter's lifetime, and the cadence at which its
+ * successor is armed. These are slices, not job bounds: a queued reparse waits
+ * for its lane predecessor, downloads its source, and parses, so the job can
+ * outlive any single wait. A successor is armed while the current waiter is
+ * still live, so at least one waiter is registered for the job's whole actual
+ * lifetime.
+ */
+export const PARSE_NOTICE_WAIT_MS = PARSE_TOTAL_TIMEOUT_MS
+export const PARSE_NOTICE_REARM_MS = PARSE_TOTAL_TIMEOUT_MS / 2
 export const PARSE_CANCELLED_MESSAGE = 'Document parsing was cancelled.'
 export const PARSE_FAILED_MESSAGE =
   'Document parsing failed. Retry the operation to resume its generation.'
@@ -492,8 +503,9 @@ export class EnrichmentParseJobs {
     this.authorize(SessionId(request.sessionId), 'startDocumentParse', currentCtx)
     const generation = request.action === 'reparse' ? randomUUID() : (previous ?? randomUUID())
     let operation!: Operation
+    let jobId: JobId
     try {
-      registry.start({
+      jobId = registry.start({
         kind: PARSE_JOB_KIND,
         label: PARSE_JOB_LABEL,
         owner: SessionId(request.sessionId),
@@ -612,7 +624,53 @@ export class EnrichmentParseJobs {
         { cause: error },
       )
     }
+    this.holdNotice(registry, jobId, SessionId(request.sessionId))
     return operation
+  }
+
+  /**
+   * Keep this panel-owned job's completion out of the agent inbox.
+   *
+   * The harness announces every settled owned job to its session and wakes an
+   * idle agent with a follow-up turn. That notice is meant for work the model
+   * started: a panel parse has no user request behind it, and `job_output`
+   * returns only the receipt, so the wake spends a turn hunting a host artifact
+   * it cannot read. A settlement that released a live `wait` is reported as
+   * already delivered (`awaited`), which the completion reporter skips, so the
+   * host — the actual owner of the receipt — holds a waiter for as long as the
+   * job runs.
+   *
+   * A single bounded wait cannot cover the job: a queued reparse waits on its
+   * lane predecessor and then downloads and parses, so the job lifetime has no
+   * constant upper bound. Successors are therefore armed while their
+   * predecessor is still live (`PARSE_NOTICE_REARM_MS < PARSE_NOTICE_WAIT_MS`).
+   * Node runs due timers in expiry order and drains microtasks between
+   * callbacks, so a successor overdue with its predecessor still registers
+   * first; every settlement therefore releases at least one waiter. The steady
+   * state is two waiters and one interval, and settlement clears both.
+   *
+   * The settled record itself stays in place: the panel reads its terminal row
+   * to fetch the receipt, and removing it would strand the dialog.
+   */
+  private holdNotice(registry: JobRegistry, jobId: JobId, owner: SessionId): void {
+    let cadence: ReturnType<typeof setInterval> | undefined
+    const stop = (): void => {
+      if (cadence === undefined) return
+      clearInterval(cadence)
+      cadence = undefined
+    }
+    const watch = async (): Promise<void> => {
+      try {
+        const view = await registry.wait(jobId, PARSE_NOTICE_WAIT_MS, owner)
+        if (view.status === 'completed' || view.status === 'failed' || view.status === 'killed')
+          stop()
+      } catch {
+        /* A vanished job or a disposed registry has nothing left to announce. */
+        stop()
+      }
+    }
+    cadence = setInterval(() => void watch(), PARSE_NOTICE_REARM_MS)
+    void watch()
   }
 
   private reserve(
