@@ -19,7 +19,10 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 // Type-only: installs the `zoteroSources` entry in the shared projection map.
 import type {} from './types.js'
 import {
+  blockCountOf,
   emptyLedgerState,
+  factsFrom,
+  factsOf,
   foldLedgerEvent,
   pendingBlocksOf,
   settledBlockOf,
@@ -63,7 +66,7 @@ const pendingCallSchema = z
 
 const ledgerStateSchema = z
   .object({
-    blocks: z.array(blockFactSchema),
+    blockChunks: z.array(z.array(blockFactSchema)),
     pending: z.record(z.string(), pendingCallSchema),
     // The recorded callIds the fold dedupes against; see SourceLedgerState.
     recorded: z.record(z.string(), z.literal(true)),
@@ -88,18 +91,18 @@ type SourceLedgerProjectionDefinition = Omit<
   }
 }
 
-/** One session's incremental fold and the number of folded blocks it covers. */
+/** One session's incremental fold; `index.applied` is the number of blocks it covers. */
 interface LedgerChain {
   readonly index: SourceWorkspaceIndex
-  readonly applied: number
 }
 
 /** The literature-trail projection together with the fold cache it owns. */
 export interface SourceLedgerProjection {
   readonly definition: SourceLedgerProjectionDefinition
   /**
-   * The complete (unwindowed) workspace at one state, shared with the wire
-   * view: two reads of the same state return the same object.
+   * The complete (unwindowed) workspace at one state. Repeated reads of the
+   * same state and windowing shape return the same object, and the full and
+   * wire views share one fold/index (not one object: their shapes differ).
    * @param state - the projection state to read.
    * @param currentServerId - the connected instance's Server ID, when known.
    * @returns the aggregated workspace over the full fold.
@@ -116,9 +119,9 @@ export interface SourceLedgerProjection {
  * Create the literature-trail projection and the fold cache it owns.
  *
  * Fork-inherited events are folded like any other: a forked session's trail is
- * the history its user can see. `stateVersion` stays 1 because the fold cache
- * is not part of the state — the persisted shape and every fold rule are
- * unchanged.
+ * the history its user can see. The fold is lazy: a session whose trail is
+ * never viewed stores its blocks but builds no index; the first view builds
+ * one from the whole log, and every later apply extends it.
  * @returns the definition to register, plus the full-view reader and the disposer.
  */
 export function createSourceLedgerProjection(): SourceLedgerProjection {
@@ -133,17 +136,15 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
   const currentChain = (state: SourceLedgerProjectionState): LedgerChain | undefined => {
     const chain = chains.get(state)
     if (chain === undefined) return undefined
-    if (chain.applied !== state.ledger.blocks.length) return undefined
-    if (chain.index.applied !== chain.applied) return undefined
-    return chain
+    return chain.index.applied === blockCountOf(state.ledger) ? chain : undefined
   }
 
   const chainOf = (state: SourceLedgerProjectionState): LedgerChain => {
     const current = currentChain(state)
     if (current !== undefined) return current
     const index = new SourceWorkspaceIndex()
-    for (const fact of state.ledger.blocks) index.apply(settledBlockOf(fact))
-    const rebuilt: LedgerChain = { index, applied: index.applied }
+    for (const fact of factsOf(state.ledger)) index.apply(settledBlockOf(fact))
+    const rebuilt: LedgerChain = { index }
     chains.set(state, rebuilt)
     return rebuilt
   }
@@ -160,26 +161,24 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
 
   const definition: SourceLedgerProjectionDefinition = {
     key: SOURCE_LEDGER_KEY,
-    stateVersion: 1,
+    // Version 2 chunks the settled facts: an append copies the outer chunk
+    // list plus at most one short chunk, never the whole fact array.
+    stateVersion: 2,
     stateSchema,
-    init: (_header, inheritedEventCount) => {
-      const state: SourceLedgerProjectionState = {
-        inheritedEventCount,
-        ledger: emptyLedgerState() satisfies SourceLedgerState,
-      }
-      chains.set(state, { index: new SourceWorkspaceIndex(), applied: 0 })
-      return state
-    },
+    init: (_header, inheritedEventCount) => ({
+      inheritedEventCount,
+      ledger: emptyLedgerState() satisfies SourceLedgerState,
+    }),
     apply: (state, event) => {
       const ledger = foldLedgerEvent(state.ledger, event)
       if (ledger === state.ledger) return state
       const next = { ...state, ledger }
       const chain = currentChain(state)
       if (chain !== undefined) {
-        for (let index = chain.applied; index < ledger.blocks.length; index += 1) {
-          chain.index.apply(settledBlockOf(ledger.blocks[index]!))
+        for (const fact of factsFrom(ledger, chain.index.applied)) {
+          chain.index.apply(settledBlockOf(fact))
         }
-        chains.set(next, { index: chain.index, applied: ledger.blocks.length })
+        chains.set(next, { index: chain.index })
       }
       return next
     },

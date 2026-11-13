@@ -10,6 +10,7 @@ import { RESULT_RECEIPT_PREFIX } from '../../src/constants.js'
 
 import {
   emptyLedgerState,
+  factsOf,
   foldLedgerEvent,
   workspaceOf,
   type SourceLedgerState,
@@ -128,7 +129,7 @@ describe('the host literature-trail fold', () => {
         message: { toolCallId: 'call-3', content: [] },
       }),
     ])
-    expect(state.blocks).toHaveLength(1)
+    expect(factsOf(state)).toHaveLength(1)
     expect(() => workspaceOf(state)).not.toThrow()
   })
 
@@ -293,7 +294,7 @@ describe('the host literature-trail fold', () => {
     expect(Object.keys(started.pending)).toHaveLength(1)
     const next = foldLedgerEvent(started, event('turn/start', { turn: 2 }))
     expect(Object.keys(next.pending)).toHaveLength(0)
-    expect(next.blocks).toHaveLength(0)
+    expect(factsOf(next)).toHaveLength(0)
     expect(foldLedgerEvent(next, event('turn/start', { turn: 3 }))).toBe(next)
   })
 
@@ -317,7 +318,7 @@ describe('the host literature-trail fold', () => {
         meta: { title: 'Attention Is All You Need' },
       }),
     ])
-    expect(state.blocks).toHaveLength(1)
+    expect(factsOf(state)).toHaveLength(1)
     expect(workspaceOf(state).sources[0]?.title).toBe('Attention Is All You Need')
   })
 
@@ -337,7 +338,7 @@ describe('the host literature-trail fold', () => {
       event('tool/ptc-dispatch', settle),
       event('tool/ptc-dispatch', settle),
     ])
-    expect(state.blocks).toHaveLength(1)
+    expect(factsOf(state)).toHaveLength(1)
   })
 
   it('records a PTC dispatch that outlives its turn, whose pending was cleared', () => {
@@ -363,7 +364,7 @@ describe('the host literature-trail fold', () => {
     ])
     // The late dispatch must still land: the trail records subagent outcomes
     // that outlive the turn which started them.
-    expect(state.blocks).toHaveLength(1)
+    expect(factsOf(state)).toHaveLength(1)
     expect(workspaceOf(state).sources[0]?.title).toBe('Attention Is All You Need')
   })
 
@@ -397,7 +398,7 @@ describe('the host literature-trail fold', () => {
         },
       }),
     ])
-    expect(withReceipt.blocks).toHaveLength(1)
+    expect(factsOf(withReceipt)).toHaveLength(1)
 
     const withoutReceipt = fold([
       event('tool/call', {
@@ -413,7 +414,7 @@ describe('the host literature-trail fold', () => {
         message: { toolCallId: 'call-job-2', content: [{ type: 'text', text: 'plain' }] },
       }),
     ])
-    expect(withoutReceipt.blocks).toHaveLength(0)
+    expect(factsOf(withoutReceipt)).toHaveLength(0)
   })
 
   it('records one call once when its result is replayed', () => {
@@ -433,7 +434,7 @@ describe('the host literature-trail fold', () => {
     const once = fold([call, result])
     const replayed = foldLedgerEvent(once, result)
     expect(replayed).toBe(once)
-    expect(once.blocks).toHaveLength(1)
+    expect(factsOf(once)).toHaveLength(1)
   })
 
   it('keeps the state and the served value JSON-safe', () => {
@@ -489,7 +490,7 @@ describe('the projection lifecycle', () => {
     const initial = definition.init({} as never, 0 as never)
     expect(initial).toEqual({
       inheritedEventCount: 0,
-      ledger: { blocks: [], pending: {}, recorded: {} },
+      ledger: { blockChunks: [], pending: {}, recorded: {} },
     })
 
     const called = definition.apply(
@@ -536,7 +537,7 @@ describe('the projection lifecycle', () => {
     // No block, no recorded entry: the trail is a read ledger, and folding a
     // write used to grow the projection state for the session's lifetime.
     expect(result).toBe(call)
-    expect(result.blocks).toEqual([])
+    expect(factsOf(result)).toEqual([])
     expect(result.recorded).toEqual({})
   })
 })

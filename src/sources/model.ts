@@ -36,6 +36,24 @@ export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 import type { SupportedLocalLibrary } from '../contract.js'
 export type { SupportedLocalLibrary } from '../contract.js'
 
+/**
+ * The one acceptance rule for a local library argument: the personal library
+ * (`user/0`) or a positive safe-integer group. It is shared by the tool
+ * surface's detailed validator and the ledger's search identity, so a call the
+ * tool accepts is the call the trail attributes.
+ * @param value - the raw `library` argument.
+ * @returns the supported library, or undefined for absent/unsupported shapes.
+ */
+export function supportedLocalLibraryOf(value: unknown): SupportedLocalLibrary | undefined {
+  if (value === null || typeof value !== 'object') return undefined
+  const { type, id } = value as { type?: unknown; id?: unknown }
+  if (type === 'user' && id === 0) return { type: 'user', id: 0 }
+  if (type === 'group' && typeof id === 'number' && Number.isSafeInteger(id) && id > 0) {
+    return { type: 'group', id }
+  }
+  return undefined
+}
+
 /** The normalized search scope, free of raw tool arguments. */
 export type SourceScope =
   | { readonly kind: 'library'; readonly library?: SupportedLocalLibrary }

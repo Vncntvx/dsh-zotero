@@ -13,6 +13,7 @@ import {
   writeNoteTooLongMessage,
 } from '../errors.js'
 import { parseRef, requireWritableRef } from '../refs.js'
+import { supportedLocalLibraryOf } from '../sources/model.js'
 import type { ZoteroKind, ZoteroObjectRef, SupportedLocalLibrary } from '../types.js'
 
 /** The item-ref format for read tools that serve personal and group libraries. */
@@ -147,6 +148,10 @@ export const LIBRARY_REQUIRED_MESSAGE = 'library is required here, as {type: "us
  */
 export function parseLibrary(value: unknown): SupportedLocalLibrary | undefined {
   if (value === undefined || value === null) return undefined
+  // The acceptance rule is shared with the ledger's search identity; the
+  // detailed messages below only explain which part of it failed.
+  const supported = supportedLocalLibraryOf(value)
+  if (supported !== undefined) return supported
   const rec = value as Record<string, unknown>
   const type = rec.type
   const id = rec.id

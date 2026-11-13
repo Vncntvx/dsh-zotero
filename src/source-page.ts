@@ -24,17 +24,8 @@ import { ZoteroError, invalid } from './errors.js'
 import { requireZoteroService } from './service.js'
 import { filterSources } from './sources/filters.js'
 import type { SourceItem } from './sources/model.js'
+import { windowedItem } from './sources/window.js'
 import { zoteroSourcePageRequestSchema } from './wire-schemas.js'
-
-/** One source with its row lists bounded to the serving cap. */
-function boundedItem(item: SourceItem): SourceItem {
-  return {
-    ...item,
-    searches: item.searches.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
-    evidence: item.evidence.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
-    exports: item.exports.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
-  }
-}
 
 /**
  * Read one bounded page of the authorized session's complete literature trail.
@@ -104,14 +95,14 @@ export async function readSourcePage(
   if (target.kind === 'sources') {
     const matching = filterSources(full.sources, target.filter)
     total = matching.length
-    sources = matching.slice(offset, offset + limit).map(boundedItem)
+    sources = matching.slice(offset, offset + limit).map(windowedItem)
   } else if (target.kind === 'source') {
     const item = full.sources.find((source) => source.key === target.key)
     if (item === undefined)
       throw new ZoteroError('The requested source is not in this session.', 'ZOTERO_NOT_FOUND')
     const rows = target.rows
     total = item[rows].length
-    sources = [{ ...boundedItem(item), [rows]: item[rows].slice(offset, offset + limit) }]
+    sources = [{ ...windowedItem(item), [rows]: item[rows].slice(offset, offset + limit) }]
   } else {
     total = full.exports.length
     exports = full.exports.slice(offset, offset + limit)

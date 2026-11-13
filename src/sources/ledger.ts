@@ -21,6 +21,7 @@
 
 import { receiptOf } from './receipt.js'
 import { exportBodyOf } from './export-body.js'
+import { windowedItem } from './window.js'
 
 import type { ArgsView, ToolBlockLike } from './block-types.js'
 import {
@@ -56,6 +57,7 @@ import type {
   SourceWorkspace,
   SupportedLocalLibrary,
 } from './model.js'
+import { supportedLocalLibraryOf } from './model.js'
 import { evidenceMatchOf, normalizeRefKey, serverIdOf } from './evidence-match.js'
 import { hasIssue, type SourceFilterCounts } from './filters.js'
 import { hasPdf } from './source-capabilities.js'
@@ -169,35 +171,47 @@ function emptyOperations(): DraftOperations {
 }
 
 /**
- * The identity of one logical search: query, mode, scope, library and filter
- * fields. When the result's presentation meta resolved both the scope and the
- * library, they override the raw argument parse: the resolved values are
- * what Zotero actually served.
+ * The normalized shape of one search call: the identity string and every
+ * field the occurrence carries, parsed once.
  *
- * A null identity means the arguments are not a readable object payload, so
+ * A null result means the arguments are not a readable object payload, so
  * nothing can be compared: two calls whose payload merely failed to index are
  * not the same search, and folding them would merge distinct queries. The
  * view reports that through `invalid` (`packages/util/values/src/
  * partial-json.ts`), which covers malformed JSON and every non-object payload
  * (array, number, string, boolean, null).
  */
-/** The library argument's raw type/id fields when a record is present, else null. */
-function rawLibraryArg(args: ArgsView): { type: unknown; id: unknown } | null {
-  const libArg = recordArg(args, 'library')
-  if (libArg === null) return null
-  return { type: libArg['type'], id: libArg['id'] }
+interface NormalizedSearch {
+  readonly identity: string
+  readonly query?: string
+  readonly mode: 'metadata' | 'everything'
+  readonly scope: SourceScope
+  /** The library the occurrence carries; absent when the call did not name one. */
+  readonly occurrenceLibrary?: SupportedLocalLibrary
+  readonly itemTypes: readonly string[]
+  readonly tags: readonly string[]
+  readonly tagMatch: 'all' | 'any'
+  readonly excludeTags: readonly string[]
+  readonly includeTrashed: boolean
 }
 
-function searchIdentityOf(
+function normalizedSearchOf(
   args: ArgsView,
   overrides?: {
     readonly resolvedScope: ZoteroResolvedScope
     readonly resolvedLibrary: SupportedLocalLibrary
   },
-): string | null {
+): NormalizedSearch | null {
   if (args.invalid) return null
-  const query = textArg(args, 'query') ?? ''
+  const query = textArg(args, 'query')
   const mode = textArg(args, 'mode') === 'everything' ? 'everything' : 'metadata'
+  const scope =
+    overrides !== undefined
+      ? resolvedToSourceScope(overrides.resolvedScope)
+      : scopeOf(valueArg(args, 'scope'))
+  const namedLibrary =
+    overrides?.resolvedLibrary ?? supportedLocalLibraryOf(recordArg(args, 'library'))
+  const identityLibrary = namedLibrary ?? { type: 'user' as const, id: 0 as const }
   const itemTypes = normalizedListOf(listArg(args, 'itemTypes'))
   const tags = normalizedListOf(listArg(args, 'tags'))
   const tagMatch = textArg(args, 'tagMatch') === 'any' ? 'any' : 'all'
@@ -205,35 +219,30 @@ function searchIdentityOf(
   const includeTrashed = boolArg(args, 'includeTrashed')
   const sort = textArg(args, 'sort') ?? ''
   const direction = textArg(args, 'direction') ?? ''
-  const library =
-    overrides?.resolvedLibrary ??
-    (() => {
-      const raw = rawLibraryArg(args)
-      if (
-        raw !== null &&
-        (raw.type === 'user' || raw.type === 'group') &&
-        typeof raw.id === 'number'
-      ) {
-        return { type: raw.type as 'user' | 'group', id: raw.id as number }
-      }
-      return { type: 'user' as const, id: 0 }
-    })()
-  return JSON.stringify({
-    query,
+  return {
+    identity: JSON.stringify({
+      query: query ?? '',
+      mode,
+      library: identityLibrary,
+      scope,
+      itemTypes,
+      tags,
+      tagMatch,
+      excludeTags,
+      includeTrashed,
+      sort,
+      direction,
+    }),
+    ...(query !== undefined && query !== '' ? { query } : {}),
     mode,
-    library,
-    scope:
-      overrides !== undefined
-        ? resolvedToSourceScope(overrides.resolvedScope)
-        : scopeOf(valueArg(args, 'scope')),
+    scope,
+    ...(namedLibrary === undefined ? {} : { occurrenceLibrary: namedLibrary }),
     itemTypes,
     tags,
     tagMatch,
     excludeTags,
     includeTrashed,
-    sort,
-    direction,
-  })
+  }
 }
 
 /** String entries of a list field, deduplicated and ordered (order-free identity). */
@@ -470,6 +479,10 @@ interface ViewCache {
   overlay?: PendingOverlay
   /** The views built from the current fold and overlay; each shape is built at most once. */
   built?: { windowed?: SourceWorkspace; full?: SourceWorkspace }
+  /** The scalar revision this cache's views were built at. */
+  scalarRevision: number
+  /** How many entries of the index change log this cache has processed. */
+  changeCursor: number
 }
 
 /**
@@ -494,6 +507,18 @@ export class SourceWorkspaceIndex {
   private passages = 0
   private omitted = 0
   private folded = 0
+  /**
+   * The drafts whose frozen view must be rebuilt, in mutation order. Each view
+   * cache keeps a cursor into this log, so a read costs the changes since its
+   * last read rather than a scan of every source.
+   */
+  private readonly changeLog: number[] = []
+  /**
+   * A counter for session-wide scalar aggregates that have no draft to bump
+   * (`artifactOperations`, `omitted`). A cache whose views were built at an
+   * older revision rebuilds even when no draft version changed.
+   */
+  private scalarRevision = 0
 
   constructor(startSeq = 0) {
     this.folded = startSeq
@@ -533,8 +558,14 @@ export class SourceWorkspaceIndex {
     const cache = this.cacheFor(currentServerId)
     const changed = this.refreeze(cache, currentServerId)
     const overlay = this.overlayOf(pending, currentServerId)
-    if (changed || cache.built === undefined || !sameOverlay(cache.overlay, overlay)) {
+    if (
+      changed ||
+      cache.scalarRevision !== this.scalarRevision ||
+      cache.built === undefined ||
+      !sameOverlay(cache.overlay, overlay)
+    ) {
       cache.overlay = overlay
+      cache.scalarRevision = this.scalarRevision
       cache.built = {}
     }
     const built = cache.built
@@ -546,24 +577,43 @@ export class SourceWorkspaceIndex {
     return built.windowed
   }
 
+  /**
+   * The view cache for one connected Server ID. The wire view (`undefined`)
+   * plus the one instance the paging endpoint currently reads are the whole
+   * live set: a new ID evicts the previous page view instead of retaining a
+   * full frozen source array per client-supplied string.
+   */
   private cacheFor(currentServerId: string | undefined): ViewCache {
     let cache = this.viewCaches.get(currentServerId)
-    if (cache === undefined) {
-      cache = { items: [], versions: [], issues: 0 }
-      this.viewCaches.set(currentServerId, cache)
+    if (cache !== undefined) return cache
+    if (currentServerId !== undefined) {
+      for (const key of [...this.viewCaches.keys()]) {
+        if (key !== undefined) this.viewCaches.delete(key)
+      }
     }
+    cache = {
+      items: [],
+      versions: [],
+      issues: 0,
+      scalarRevision: -1,
+      changeCursor: 0,
+    }
+    this.viewCaches.set(currentServerId, cache)
     return cache
   }
 
   /**
    * Freeze every draft this cache has not yet frozen at its current version.
-   * Only the touched items cost anything; the scan itself is one comparison
-   * per source.
+   * The index records each mutation in `changeLog`, and a cache keeps a cursor
+   * into it, so a read costs the changes since its last read plus the items it
+   * actually has to rebuild, not a scan of every source.
    */
   private refreeze(cache: ViewCache, currentServerId: string | undefined): boolean {
     let changed = false
-    for (let index = 0; index < this.drafts.length; index += 1) {
-      const draft = this.drafts[index]!
+    for (let cursor = cache.changeCursor; cursor < this.changeLog.length; cursor += 1) {
+      const index = this.changeLog[cursor]!
+      const draft = this.drafts[index]
+      if (draft === undefined) continue
       if ((cache.versions[index] ?? 0) === draft.version) continue
       const previous = cache.items[index]
       const item = frozenItemOf(draft, currentServerId)
@@ -574,6 +624,7 @@ export class SourceWorkspaceIndex {
       this.retally(draft, item)
       changed = true
     }
+    cache.changeCursor = this.changeLog.length
     return changed
   }
 
@@ -737,10 +788,11 @@ export class SourceWorkspaceIndex {
         mask: 0,
       }
       this.indexByKey.set(key, this.drafts.length)
+      this.changeLog.push(this.drafts.length)
       this.drafts.push(draft)
     } else {
       draft = this.drafts[at]!
-      draft.version += 1
+      this.touchDraft(at)
     }
     if (seq < draft.firstSeenAt) draft.firstSeenAt = seq
     if (seq > draft.lastTouchedAt) draft.lastTouchedAt = seq
@@ -754,6 +806,25 @@ export class SourceWorkspaceIndex {
     if (state === 'running') draft.operations.running += 1
     else if (state === 'stopped') draft.operations.stopped += 1
     else if (state === 'error') draft.operations.failed += 1
+  }
+
+  /** Mark one draft changed and record its index for the view caches. */
+  private touchDraft(index: number): void {
+    const draft = this.drafts[index]
+    if (draft === undefined) return
+    draft.version += 1
+    this.changeLog.push(index)
+  }
+
+  /** Mark a draft reached through an episode's member set. */
+  private touchMember(draft: ItemDraft): void {
+    const index = this.indexByKey.get(draft.key)
+    if (index !== undefined) this.touchDraft(index)
+  }
+
+  /** A session-wide scalar aggregate changed with no draft to invalidate. */
+  private bumpScalar(): void {
+    this.scalarRevision += 1
   }
 
   private pushEvidence(
@@ -878,49 +949,27 @@ export class SourceWorkspaceIndex {
         const resolvedLibrary = view.library
         // The resolved pair overrides the raw args only when both are
         // present, which is exactly what Zotero served for this call.
-        const identity =
+        const normalized =
           resolvedScope !== null && resolvedLibrary !== null
-            ? searchIdentityOf(args, { resolvedScope, resolvedLibrary })
-            : searchIdentityOf(args)
+            ? normalizedSearchOf(args, { resolvedScope, resolvedLibrary })
+            : normalizedSearchOf(args)
+        const identity = normalized?.identity ?? null
         let episode = this.openSearch
         if (episode === null || identity === null || episode.identity !== identity) {
-          const scopeForEpisode =
-            resolvedScope !== null
-              ? resolvedToSourceScope(resolvedScope)
-              : scopeOf(valueArg(args, 'scope'))
-          const libraryForEpisode: SupportedLocalLibrary | undefined =
-            resolvedLibrary ??
-            (() => {
-              // Same contract as the host `isSupportedLocalLibrary` and the
-              // scope decoder (user/0 or a positive safe-integer group id),
-              // spelled inline: the client bundle must not value-import host
-              // modules, so the check lives in both halves by design.
-              const raw = rawLibraryArg(args)
-              if (raw === null) return undefined
-              if (raw.type === 'user' && raw.id === 0) return { type: 'user', id: 0 as const }
-              if (
-                raw.type === 'group' &&
-                typeof raw.id === 'number' &&
-                Number.isSafeInteger(raw.id) &&
-                raw.id > 0
-              ) {
-                return { type: 'group', id: raw.id }
-              }
-              return undefined
-            })()
-          const query = textArg(args, 'query')
           episode = {
             identity,
             callId: block.callId,
-            ...(query !== undefined && query !== '' ? { query } : {}),
-            mode: textArg(args, 'mode') === 'everything' ? 'everything' : 'metadata',
-            scope: scopeForEpisode,
-            ...(libraryForEpisode ? { library: libraryForEpisode } : {}),
-            itemTypes: normalizedListOf(listArg(args, 'itemTypes')),
-            tags: normalizedListOf(listArg(args, 'tags')),
-            tagMatch: textArg(args, 'tagMatch') === 'any' ? 'any' : 'all',
-            excludeTags: normalizedListOf(listArg(args, 'excludeTags')),
-            includeTrashed: boolArg(args, 'includeTrashed'),
+            ...(normalized?.query === undefined ? {} : { query: normalized.query }),
+            mode: normalized?.mode ?? 'metadata',
+            scope: normalized?.scope ?? scopeOf(valueArg(args, 'scope')),
+            ...(normalized?.occurrenceLibrary === undefined
+              ? {}
+              : { library: normalized.occurrenceLibrary }),
+            itemTypes: normalized?.itemTypes ?? [],
+            tags: normalized?.tags ?? [],
+            tagMatch: normalized?.tagMatch ?? 'all',
+            excludeTags: normalized?.excludeTags ?? [],
+            includeTrashed: normalized?.includeTrashed ?? false,
             returned: 0,
             ...(view.total === null ? {} : { total: view.total }),
             ...(view.noteMatches === null ? {} : { noteMatches: view.noteMatches }),
@@ -933,7 +982,11 @@ export class SourceWorkspaceIndex {
         // hits over the budget and carry note-supplement rows, so they cannot
         // stand in for the hit count when the projection reports one.
         episode.returned += view.returned ?? view.rows.length
-        this.omitted += view.omitted ?? 0
+        const omitted = view.omitted ?? 0
+        if (omitted !== 0) {
+          this.omitted += omitted
+          this.bumpScalar()
+        }
         for (const row of view.rows) {
           const draft = this.draftOf(row.ref, seq)
           draft.title ??= row.title
@@ -957,7 +1010,7 @@ export class SourceWorkspaceIndex {
         // `returned` describes the episode, so a continuation page changes the
         // occurrence of every item the episode already listed, not only the
         // rows this page happened to repeat.
-        for (const member of episode.members) member.version += 1
+        for (const member of episode.members) this.touchMember(member)
         break
       }
       case 'zotero_get': {
@@ -1041,6 +1094,7 @@ export class SourceWorkspaceIndex {
           if (state === 'running') this.artifactOperations.running += 1
           else if (state === 'stopped') this.artifactOperations.stopped += 1
           else this.artifactOperations.failed += 1
+          this.bumpScalar()
         }
         const metaView = meta === null ? null : exportMetaOf(meta)
         const { refs, refsOmitted } = exportRefsOf(metaView, args)
@@ -1079,7 +1133,7 @@ export class SourceWorkspaceIndex {
           if (draft !== undefined && !draft.exportedCallIds.has(block.callId)) {
             draft.exportedCallIds.add(block.callId)
             draft.exports.push(artifact)
-            draft.version += 1
+            this.touchMember(draft)
           }
         }
         break
@@ -1091,36 +1145,9 @@ export class SourceWorkspaceIndex {
 }
 
 /**
- * Cut one item's row lists to the wire cap. An item whose lists are already
- * inside the cap keeps its identity, so a windowed read only allocates for the
- * items that are actually cut.
+ * The workspace's wire window is built by the index directly; the item-level
+ * cut lives in `./window` and is shared with the paging endpoint.
  */
-function windowedItem(item: SourceItem): SourceItem {
-  const rowCap = ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS
-  const searches = item.searches.length > rowCap ? item.searches.slice(0, rowCap) : item.searches
-  const evidence = item.evidence.length > rowCap ? item.evidence.slice(0, rowCap) : item.evidence
-  const exports = item.exports.length > rowCap ? item.exports.slice(0, rowCap) : item.exports
-  if (searches === item.searches && evidence === item.evidence && exports === item.exports) {
-    return item
-  }
-  return { ...item, searches, evidence, exports }
-}
-
-/**
- * The workspace's wire window: the source union and each capped row list keep
- * their transcript head, while every total and session-wide aggregate stays
- * exact over the full fold. The index builds this shape directly; this
- * derivation serves a caller holding a complete workspace.
- * @param workspace - the complete workspace.
- * @returns the same workspace with its lists windowed.
- */
-export function windowSourceWorkspace(workspace: SourceWorkspace): SourceWorkspace {
-  return {
-    ...workspace,
-    sources: workspace.sources.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).map(windowedItem),
-    exports: workspace.exports.slice(0, ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS),
-  }
-}
 
 /**
  * Build the source workspace in one pass over the session's zotero call

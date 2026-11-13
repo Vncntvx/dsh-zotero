@@ -15,7 +15,6 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
-import { ZOTERO_READ_TOOL_NAMES } from '../constants.js'
 import { asRecord, asString } from '../json.js'
 import { buildSourceWorkspace } from './ledger.js'
 import type { SourceWorkspace } from './model.js'
@@ -47,7 +46,11 @@ export interface LedgerPendingCall {
 
 /** The fold state: settled facts in transcript order plus unsettled calls. */
 export interface SourceLedgerState {
-  readonly blocks: readonly LedgerBlockFact[]
+  /**
+   * Settled facts in transcript order, chunked so an append copies the outer
+   * list plus at most one short chunk instead of the whole block array.
+   */
+  readonly blockChunks: readonly (readonly LedgerBlockFact[])[]
   readonly pending: Readonly<Record<string, LedgerPendingCall>>
   /**
    * Call ids that need a durable dedupe: the ones a `tool/ptc-dispatch`
@@ -60,6 +63,9 @@ export interface SourceLedgerState {
   readonly recorded: Readonly<Record<string, true>>
 }
 
+/** One append copies at most this many facts. */
+const BLOCK_CHUNK_SIZE = 256
+
 /** The projection state: the fold plus the fork-inherited prefix length. */
 export interface SourceLedgerProjectionState {
   readonly inheritedEventCount: number
@@ -68,19 +74,57 @@ export interface SourceLedgerProjectionState {
 
 /** The empty fold state. */
 export function emptyLedgerState(): SourceLedgerState {
-  return { blocks: [], pending: {}, recorded: {} }
+  return { blockChunks: [], pending: {}, recorded: {} }
+}
+
+/** How many settled facts the state holds. */
+export function blockCountOf(state: SourceLedgerState): number {
+  let count = 0
+  for (const chunk of state.blockChunks) count += chunk.length
+  return count
+}
+
+/** Every settled fact, flattened. Used by a rebuild, not by the per-event fold. */
+export function factsOf(state: SourceLedgerState): readonly LedgerBlockFact[] {
+  return state.blockChunks.flat()
 }
 
 /**
- * The tools whose calls the literature trail records.
- *
- * A name prefix was the old rule, and it admitted every write tool: their
- * arguments and results were folded into the projection state and kept for the
- * session even though no view consumes them, while the surface contract says
- * the trail holds reads and exports only. The read list is the same constant
- * the prompt and the client use, so adding a read tool adds it here.
+ * The settled facts at or after one transcript index, without flattening the
+ * prefix the caller already folded.
+ * @param state - the fold state.
+ * @param start - the first fact index to return.
+ * @returns the facts in transcript order.
  */
-const TRAIL_TOOL_NAMES: ReadonlySet<string> = new Set(ZOTERO_READ_TOOL_NAMES)
+export function factsFrom(state: SourceLedgerState, start: number): readonly LedgerBlockFact[] {
+  const facts: LedgerBlockFact[] = []
+  let base = 0
+  for (const chunk of state.blockChunks) {
+    if (start < base + chunk.length) {
+      facts.push(...chunk.slice(Math.max(0, start - base)))
+    }
+    base += chunk.length
+  }
+  return facts
+}
+
+/**
+ * The tool names the literature trail folds into its projection state.
+ *
+ * These are exactly the names with a fold arm; browse, changes, and the write
+ * tools are read calls the trail surfaces do not consume, so recording them
+ * would keep their arguments, content, and metadata in the session state for
+ * no view. `job_output` is admitted separately because it can carry a
+ * completed export result through its receipt.
+ */
+const TRAIL_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'zotero_search',
+  'zotero_get',
+  'zotero_get_batch',
+  'zotero_match_references',
+  'zotero_retrieve',
+  'zotero_export',
+])
 
 /** Whether a tool name is one the literature trail records. */
 function isTrailTool(name: string): boolean {
@@ -180,9 +224,14 @@ function record(
     ...(block.error === undefined ? {} : { error: block.error }),
     ...(block.meta === undefined ? {} : { meta: block.meta as JsonValue }),
   }
+  const last = state.blockChunks[state.blockChunks.length - 1]
+  const blockChunks =
+    last !== undefined && last.length < BLOCK_CHUNK_SIZE
+      ? [...state.blockChunks.slice(0, -1), [...last, fact]]
+      : [...state.blockChunks, [fact]]
   return {
     ...state,
-    blocks: [...state.blocks, fact],
+    blockChunks,
     ...(tracked ? { recorded: { ...state.recorded, [block.callId]: true } } : {}),
   }
 }
@@ -317,7 +366,7 @@ export function pendingBlocksOf(state: SourceLedgerState): readonly ToolBlockLik
  * @returns the ordered blocks.
  */
 export function blocksOf(state: SourceLedgerState): readonly ToolBlockLike[] {
-  return [...state.blocks.map(settledBlockOf), ...pendingBlocksOf(state)]
+  return [...factsOf(state).map(settledBlockOf), ...pendingBlocksOf(state)]
 }
 
 /**

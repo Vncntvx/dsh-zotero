@@ -12,7 +12,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { emptyLedgerState, foldLedgerEvent, workspaceOf } from '../../src/sources/event-ledger.js'
+import {
+  emptyLedgerState,
+  factsOf,
+  foldLedgerEvent,
+  workspaceOf,
+} from '../../src/sources/event-ledger.js'
 import { REF, foldEvents, searchMetaOf } from './support/source-ledger-arms.js'
 
 describe('the event fold defensive arms', () => {
@@ -57,7 +62,7 @@ describe('the event fold defensive arms', () => {
         },
       },
     ])
-    expect(state.blocks[0]?.error).toEqual({
+    expect(factsOf(state)[0]?.error).toEqual({
       name: 'ZoteroError',
       code: 'interrupted',
       reason: 'cancelled',
@@ -88,7 +93,7 @@ describe('the event fold defensive arms', () => {
         data: { message: { toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] } },
       },
     ])
-    expect(state.blocks[0]).not.toHaveProperty('meta')
+    expect(factsOf(state)[0]).not.toHaveProperty('meta')
     const workspace = workspaceOf(state)
     expect(workspace.sources[0]?.ref).toBe(REF('AAAA1111'))
     expect(workspace.sources[0]?.title).toBeUndefined()
@@ -140,7 +145,7 @@ describe('the event fold defensive arms', () => {
         meta: { title: 'Attention Is All You Need' },
       },
     } as never)
-    expect(settled.blocks[0]?.argsRaw).toBe(argsRaw)
+    expect(factsOf(settled)[0]?.argsRaw).toBe(argsRaw)
     expect(workspaceOf(settled).sources[0]?.title).toBe('Attention Is All You Need')
   })
 
@@ -165,8 +170,8 @@ describe('the event fold defensive arms', () => {
         content: [{ type: 'text', text: 'nothing' }],
       },
     } as never)
-    expect(settled.blocks[0]?.argsRaw).toBe('{}')
-    expect(settled.blocks[0]).not.toHaveProperty('meta')
+    expect(factsOf(settled)[0]?.argsRaw).toBe('{}')
+    expect(factsOf(settled)[0]).not.toHaveProperty('meta')
   })
 
   it('ignores a dispatch outcome without a sub-call identity', () => {
@@ -201,7 +206,7 @@ describe('the event fold defensive arms', () => {
         },
       },
     ])
-    expect(state.blocks[0]?.content).toEqual([])
+    expect(factsOf(state)[0]?.content).toEqual([])
     expect(workspaceOf(state).sources[0]?.title).toBe('Attention Is All You Need')
   })
 

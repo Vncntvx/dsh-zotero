@@ -265,14 +265,30 @@ async function exactFilteredSearch(
   const includeTrashed = request.includeTrashed === true || scope.resolved.kind === 'trash'
   const indexKey = searchIndexKeyOf(scope, request, options.cacheGeneration)
 
-  let rescanned = false
+  let led = false
   let scanRows: ReadonlyMap<string, ZoteroSearchItem> | undefined
+  let rescanRows: ReadonlyMap<string, ZoteroSearchItem> | undefined
   const cachedIndex = deps.searchCaches.filtered.get(indexKey)
   // The scan reads the whole candidate stream; two identical listings in
   // flight (the panel's refresh racing a paging read) share one scan. Only the
   // caller that ran it keeps the downloaded rows for the fresh-scan fast path;
   // a sharing caller serves its page through the batched read-back, exactly
   // like a cache hit.
+  const loadIndex = async (loadSignal: AbortSignal): Promise<FilteredIndex> => {
+    const scan = await scanFilteredIndex(
+      deps,
+      scope,
+      request,
+      library,
+      includeTrashed,
+      loadSignal,
+      options,
+    )
+    scanRows ??= scan.rows
+    rescanRows = scan.rows
+    led = true
+    return scan.index
+  }
   let index =
     cachedIndex ??
     (await sharedRead({
@@ -284,21 +300,12 @@ async function exactFilteredSearch(
         store: () => [indexKey],
       },
       ...(signal === undefined ? {} : { signal }),
-      load: async (loadSignal) => {
-        const scan = await scanFilteredIndex(
-          deps,
-          scope,
-          request,
-          library,
-          includeTrashed,
-          loadSignal,
-          options,
-        )
-        scanRows ??= scan.rows
-        return scan.index
-      },
+      load: loadIndex,
     }))
-  if (cachedIndex === undefined) rescanned = true
+  // Only the caller that actually ran the scan has rows for the fresh-scan
+  // fast path. A caller that joined another flight behaves exactly like a
+  // cache hit, including the drift branch below.
+  const rescanned = led
 
   /** Serve one page from an index; `undefined` means the index drifted. */
   const servePage = async (
@@ -365,18 +372,20 @@ async function exactFilteredSearch(
       )
     }
     deps.searchCaches.filtered.delete(indexKey)
-    const rescan = await scanFilteredIndex(
-      deps,
-      scope,
-      request,
-      library,
-      includeTrashed,
-      signal,
-      options,
-    )
-    index = rescan.index
-    deps.searchCaches.filtered.put(indexKey, index)
-    page = await servePage(index, rescan.rows)
+    // The rescan is a new shared read: concurrent callers that both observe
+    // the drift run one scan, and a caller that joins uses the read-back path.
+    index = await sharedRead({
+      cache: deps.searchCaches.filtered,
+      inFlight: deps.searchCaches.filteredInFlight,
+      keys: {
+        flightKey: indexKey,
+        find: () => deps.searchCaches.filtered.get(indexKey),
+        store: () => [indexKey],
+      },
+      ...(signal === undefined ? {} : { signal }),
+      load: loadIndex,
+    })
+    page = await servePage(index, rescanRows)
     if (page === undefined) {
       throw new ZoteroError(
         'The library changed while a filtered search page was served; retry the request.',

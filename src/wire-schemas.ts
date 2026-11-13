@@ -284,7 +284,7 @@ export const zoteroSourcePageRequestSchema = z
   .object({
     sessionId: z.string().min(1),
     target: zoteroSourcePageTargetSchema,
-    currentServerId: z.string().min(1).optional(),
+    currentServerId: z.string().min(1).max(128).optional(),
     limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).optional(),
     offset: z.number().int().nonnegative().optional(),
     revision: z.number().int().min(-1).optional(),

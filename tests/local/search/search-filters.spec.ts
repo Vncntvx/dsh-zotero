@@ -14,6 +14,7 @@ import { ScopeDirectory } from '../../../src/local/scope-directory.js'
 import { PROVIDER_LIMITS, request } from '../../helpers/provider-harness.js'
 import type { ZoteroSearchOptions } from '../../../src/types.js'
 import { attachment, searchHit } from '../../helpers/server/objects.js'
+import { deferred } from '../../helpers/sync.ts'
 
 const LISTING_PAGE = 100
 
@@ -160,13 +161,78 @@ describe('exact panel filters', () => {
     const soloWalks = one.attachmentWalks()
 
     const world = setup(250)
-    const [first, second] = await Promise.all([world.search(filter), world.search(filter)])
+    // Hold the leader's first listing page until the joiner is admitted, so
+    // the pair really overlaps instead of relying on call timing.
+    const admitted = deferred<void>()
+    const release = deferred<void>()
+    let gated = false
+    const original = world.getJson.getMockImplementation()!
+    world.getJson.mockImplementation(async (...args) => {
+      const [path, params] = args
+      if (!gated && path.endsWith('/items/top') && (params?.get('start') ?? '0') === '0') {
+        gated = true
+        admitted.resolve()
+        await release.promise
+      }
+      return await original(...args)
+    })
+    const firstPromise = world.search(filter)
+    await admitted.promise
+    const secondPromise = world.search(filter)
+    release.resolve()
+    const [first, second] = await Promise.all([firstPromise, secondPromise])
 
     expect(first.total).toBe(solo.total)
     expect(second.total).toBe(solo.total)
     expect(second.items.map((item) => item.ref)).toEqual(first.items.map((item) => item.ref))
     expect(world.listingStarts().length).toBe(soloListingReads)
     expect(world.attachmentWalks()).toBe(soloWalks)
+  })
+
+  it('lets a caller that joined the in-flight scan take the cache-hit drift path', async () => {
+    const world = setup(250)
+    const listingAdmitted = deferred<void>()
+    const releaseListing = deferred<void>()
+    const batchAdmitted = deferred<void>()
+    const releaseBatch = deferred<void>()
+    let gatedListing = false
+    let gatedBatch = false
+    const original = world.getJson.getMockImplementation()!
+    world.getJson.mockImplementation(async (...args) => {
+      const [path, params] = args
+      if (!gatedListing && path.endsWith('/items/top') && (params?.get('start') ?? '0') === '0') {
+        gatedListing = true
+        listingAdmitted.resolve()
+        await releaseListing.promise
+      }
+      if (!gatedBatch && params?.get('itemKey') !== null && params?.get('itemKey') !== undefined) {
+        gatedBatch = true
+        batchAdmitted.resolve()
+        await releaseBatch.promise
+      }
+      return await original(...args)
+    })
+    const query = { yearFrom: 2023, hasAttachment: false }
+    const leader = world.search(query)
+    await listingAdmitted.promise
+    const joiner = world.search(query)
+    // Both callers are inside the shared scan; let it finish with the old
+    // version, then drift the library before either serves its page.
+    releaseListing.resolve()
+    await batchAdmitted.promise
+    world.listingVersion.current = 8
+    world.batchVersion.current = 8
+    releaseBatch.resolve()
+
+    const [leaderResult, joinerResult] = await Promise.allSettled([leader, joiner])
+    // The leader downloaded rows and reports the race; the joiner behaves like
+    // a cache hit: it drops the stale index and rescans once.
+    expect(leaderResult.status).toBe('rejected')
+    if (leaderResult.status === 'rejected') {
+      expect((leaderResult.reason as { code?: string }).code).toBe(ZOTERO_UNEXPECTED)
+    }
+    expect(joinerResult.status).toBe('fulfilled')
+    if (joinerResult.status === 'fulfilled') expect(joinerResult.value.total).toBe(2)
   })
 
   it.each(['refresh', 'version drift'] as const)(
