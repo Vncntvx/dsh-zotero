@@ -49,19 +49,15 @@ The plugin is split into four components with distinct roles:
 - **Core component**: The plugin body. Manages communication with the local Zotero API (`127.0.0.1:23119`), registers 8 read tools and 15 write tools, and maintains the literature trail and configuration options.
 - **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend. It registers no tools and injects no prompts; local-library operations forward to the core service. Explicit user reading of URL PDFs has its own `allowUrlPdfRead` permission and public download boundary. It can be unmounted entirely if the sidebar is not needed.
 - **Scholarly retrieval component**: Provides external academic retrieval for the agent. When disabled, no scholarly tools are registered; when enabled, it registers seven tools querying allowlisted academic platforms (HTTPS) and open-access PDF hosts (with public address validation and fake-IP support).
-- **Document parsing component**: provides explicit parsing, existing-artifact lookup, and local semantic model management. Enabling the component accepts MinerU document egress; the client shows the egress disclosure while the component is served and this browser has not acknowledged it, and remembers the acknowledgement per client. It registers no model tools and injects no prompt section. Ordinary `zotero_retrieve` and `scholarly_read` calls use the core's read-only `FulltextEnhancer.lookup` to find valid Markdown for the same source. A hit takes priority; a miss continues through the existing Zotero fulltext index or authorized PDF download and local extraction. Local semantic ranking is independent of MinerU; explicit parsing needs no semantic model.
+- **Document parsing component**: Provides explicit document parsing, artifact lookup, and local semantic model management. Enabling the component grants MinerU parsing access. Ordinary `zotero_retrieve` and `scholarly_read` calls query valid Markdown via `FulltextEnhancer.lookup` and prioritize it, falling back to Zotero fulltext or local PDF extraction on a miss. Local semantic ranking runs independently using local embedding models.
 
 `src/skills/` registers phased instructions through the Harness's optional `ctx.skills`, with the core component owning four and the scholarly retrieval component owning four. The model selects from a catalog of names and short descriptions, then loads the full Markdown body with the `skill` tool; bodies stay out of the standing system prompt. See the [research SOP skill reference](skills.en.md).
 
 ### Explicit Parsing Contract
 
-The descriptions below state the current enrichment implementation.
+Document parsing is explicitly submitted by the user from the literature panel for a specific Zotero PDF attachment or public PDF URL, displaying the selected mode and destination before submission.
 
-Enabling the component accepts MinerU document egress; mounting starts no upload. The user submits one specific Zotero PDF attachment (child or top-level) or one public PDF URL, and the host checks remote-action and session access. Before submission, the interface shows the target, MinerU, the selected mode, what uploading means, and the limits. It does not select every PDF under a parent item automatically or accept host paths, session files, or caller-supplied raw bytes. Neither the panel's URL PDF reading permission nor scholarly authorization grants MinerU parsing.
-
-Ordinary reads, PDF opening, settings saves, and service startup do not create or resume a MinerU task or upload a document. Existing valid artifacts always remain readable. When an artifact is absent or the source has changed, reads use the original index or locally extracted text. A failed parse does not change mode or present local text as a successful parse.
-
-Explicit parsing uses session-owned `ctx.jobs` work with progress, cancellation, and bounded receipts; the interface submits through typed endpoints without calling model tools. Closing the interface releases observation only; cancellation, session close, and component unmount revoke the corresponding waiter. Shared parsing aborts when its last waiter leaves and finishes cleanup. Accepted foreground reads drain within their original deadlines, with model resources retained through switches or unmounts. No aliases or migrations for legacy components, config, cache formats, or interfaces are added.
+Parsing jobs are managed by the session job system with progress tracking and cancellation. Successfully parsed Markdown is automatically reused in subsequent searches; if parsing is pending or missing, retrieval directly uses existing full-text indexes or local text extraction. Parsing and local semantic ranking are decoupled, allowing semantic search to be enabled independently.
 
 ## Data Flow
 
@@ -82,7 +78,7 @@ graph LR
     PA -.->|component authorization and explicit submission| M[MinerU external parsing service]
 ```
 
-Both primary paths reach the local library through `ctx.zotero`. Agent external scholarly retrieval requires the scholarly component. Explicit user reading of URL attachments is authorized independently by the literature panel and does not mount scholarly. The enrichment paths in the diagram are the current implementation: ordinary reads only query existing artifacts, and only a specific target explicitly submitted by the user enters a parsing job and generates external requests.
+Both primary paths reach the local library through `ctx.zotero`. Agent external scholarly retrieval requires the scholarly component. Explicit user reading of URL attachments is authorized independently by the literature panel. The enrichment flow reuses existing artifacts for normal reads and initiates external requests only when the user explicitly submits a document.
 
 ## Four Boundaries
 

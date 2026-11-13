@@ -302,6 +302,7 @@ describe('explicit document parsing through the pinned Gateway', () => {
         characterCount: MARKDOWN.length,
       })
       expect(artifact).not.toHaveProperty('markdown')
+      expect(artifact).not.toHaveProperty('page')
       expect(fixture.http.calls.slice(beforeArtifact).map(({ init }) => init.method)).toEqual(
         kind === 'url' ? ['HEAD'] : [],
       )
@@ -312,6 +313,30 @@ describe('explicit document parsing through the pinned Gateway', () => {
         expect(new Headers(init.headers).get('authorization')).toBeNull()
     },
   )
+
+  it('pages one artifact by character offset without exposing a path or URL', async () => {
+    const fixture = await setup()
+    fixture.grant()
+    await complete(fixture, startRequest(), fixture.guest)
+    const target = { kind: 'url' as const, url: DOCUMENT_URL }
+    const first = zoteroDocumentArtifactResultSchema.parse(
+      await fixture.artifact(target, fixture.guest, 0),
+    )
+    expect(first).toMatchObject({ kind: 'ready', characterCount: MARKDOWN.length })
+    if (first.kind !== 'ready' || first.page === undefined) throw new Error('expected a page')
+    expect(first.page).toEqual({ offset: 0, text: MARKDOWN, totalChars: MARKDOWN.length })
+    const past = zoteroDocumentArtifactResultSchema.parse(
+      await fixture.artifact(target, fixture.guest, MARKDOWN.length + 100),
+    )
+    if (past.kind !== 'ready' || past.page === undefined) throw new Error('expected a page')
+    // Reading past the end yields an empty page rather than an unbounded body.
+    expect(past.page).toEqual({
+      offset: MARKDOWN.length,
+      text: '',
+      totalChars: MARKDOWN.length,
+    })
+    expect(JSON.stringify(first)).not.toContain('/tmp')
+  })
 
   it('preserves a corrupt source-index error across the artifact Gateway without resubmission', async () => {
     const fixture = await setup()

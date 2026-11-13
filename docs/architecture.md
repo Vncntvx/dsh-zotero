@@ -129,7 +129,9 @@ graph LR
 
 主动解析目标采用闭合联合 `{kind:'attachment',ref}` 或 `{kind:'url',url}`，分别覆盖子附件、顶层 PDF 附件及具体公开 PDF URL；拒绝主机路径、会话文件、原始字节和未知字段。请求携带会话与每次用户操作的幂等标识，解析模式固定为已提交配置快照。宿主校验附件 ref、实例、库和 PDF 类型；公开 URL 逐跳经过公网地址、DNS 固定连接、端口、重定向、字节与 PDF 文件头校验。
 
-界面须先展示目标名称或脱敏 URL、MinerU、所选模式、上传含义与限制，用户明确提交后才调用 enrichment 自有的短端点。上传要求组件已启用、用户针对具体目标提交，以及远程动作和会话访问获准；不借用 scholarly 或 `library.allowUrlPdfRead` 的阅读许可。解析不需要 query 或语义模型；失败明确失败，不切模式、不以本地抽取文本冒充成功。新接口不增加旧名称、配置或缓存格式的别名与迁移。
+界面在提交前展示解析目标与所选模式，用户确认后调用 enrichment 提供的端点执行解析。解析失败时直接返回错误信息。
+
+`documentArtifact` 既是产物探测也是唯一的内容读取口：不带 `read` 时只返回元数据，详情据此判断该条目是否已有解析结果，并把「解析此 PDF」按钮切成「查看解析结果」；带 `read.offset` 时返回该偏移处一页有界 Markdown（上限 `ZOTERO_ARTIFACT_PAGE_CHARS`）与总字符数。读取沿用与探测相同的会话、远程动作与 PDF 类型门禁，只读、用户驱动、不轮询，只返回文本，绝不返回主机路径或签名 URL；阅读面按页续读，完整正文读齐后才允许复制和下载。
 
 设计使用真实 `ctx.jobs` 承载会话所属解析作业，不填写 `JobSpec.toolCall`，不伪造模型工具调用。通过 session controller 解析获准的活 Agent，允许空闲会话；缺 jobs、controller 或 Agent 时明确拒绝。前端计划复用 job-controller 的 `watchRows/observe/kill` 观察获取源、上传、等待、结果下载、校验与落盘阶段，不自建常驻轮询器。幂等标识防止 RPC 重放；同源、同模式、同代任务共享解析，各会话只可读取或取消自己的任务。回执包含目标身份、代次、模式、缓存或新产物、fingerprint、artifact revision、实际可得页数、字符数与有界预览，不泄露主机路径、签名 URL、token 或正文日志。
 

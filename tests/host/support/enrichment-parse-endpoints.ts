@@ -251,10 +251,14 @@ export async function endpointFixture(options: { attachment?: 'child' | 'top' } 
     invoke,
     start: async (request = startRequest(), peer = owner) =>
       (await invoke('startDocumentParse', request, peer)) as ZoteroStartDocumentParseResultView,
-    artifact: async (target: ZoteroParseTargetView, peer = owner) =>
+    artifact: async (target: ZoteroParseTargetView, peer = owner, offset?: number) =>
       (await invoke(
         'documentArtifact',
-        { sessionId: OWNER, target },
+        {
+          sessionId: OWNER,
+          target,
+          ...(offset !== undefined ? { read: { offset } } : {}),
+        },
         peer,
       )) as ZoteroDocumentArtifactResultView,
     receipt: async (peer = owner) =>

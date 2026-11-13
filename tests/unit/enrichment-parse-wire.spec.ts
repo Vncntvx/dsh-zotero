@@ -10,6 +10,7 @@ import type {
   ZoteroParseReceiptView,
   ZoteroStartDocumentParseRequestView,
 } from '../../src/contract.js'
+import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../../src/contract.js'
 import { refFieldsOf } from '../../src/ref-grammar.js'
 import {
   zoteroDocumentArtifactRequestSchema,
@@ -298,6 +299,31 @@ describe('bounded parse receipts and result DTOs', () => {
   it('accepts bounded ready-artifact metadata without document contents', () => {
     const result = { ...READY_ARTIFACT, targetLabel: 'l'.repeat(2048), pageCount: 1 }
     expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
+  })
+
+  it('accepts one bounded document page and refuses an unbounded body or a host path', () => {
+    const page = {
+      offset: 0,
+      text: 'm'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS),
+      totalChars: 40000,
+    }
+    const result = { ...READY_ARTIFACT, page }
+    expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
+    const read = { ...ARTIFACT_REQUEST, read: { offset: 16384 } }
+    expect(zoteroDocumentArtifactRequestSchema.parse(read)).toEqual(read)
+    for (const invalid of [
+      { ...result, page: { ...page, text: 'm'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS + 1) } },
+      { ...result, page: { ...page, path: '/tmp/full.md' } },
+      { ...result, page: { ...page, url: 'https://example.org/secret' } },
+      { ...result, markdown: '# unbounded body' },
+    ])
+      expect(zoteroDocumentArtifactResultSchema.safeParse(invalid).success).toBe(false)
+    for (const invalid of [
+      { ...read, read: { offset: -1 } },
+      { ...read, read: { offset: 1.5 } },
+      { ...read, read: { offset: 0, path: '/tmp/full.md' } },
+    ])
+      expect(zoteroDocumentArtifactRequestSchema.safeParse(invalid).success).toBe(false)
   })
 
   it.each([

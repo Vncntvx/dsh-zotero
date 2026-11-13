@@ -20,6 +20,7 @@ import type {
 } from './contract.js'
 import {
   zoteroDocumentParseInvocation,
+  ZOTERO_ARTIFACT_PAGE_CHARS,
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
   ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
@@ -1069,6 +1070,16 @@ export const zoteroDocumentArtifactRequestSchema = z
   .object({
     sessionId: z.string().min(1).max(256),
     target: zoteroParseTargetSchema,
+    read: z
+      .object({
+        offset: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(2 ** 31 - 1),
+      })
+      .strict()
+      .optional(),
   })
   .strict() satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
 
@@ -1084,6 +1095,14 @@ export const zoteroDocumentArtifactResultSchema = z.union([
       fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
       characterCount: z.number().int().nonnegative(),
       pageCount: z.number().int().positive().optional(),
+      page: z
+        .object({
+          offset: z.number().int().nonnegative(),
+          text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
+          totalChars: z.number().int().nonnegative(),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
 ]) satisfies z.ZodType<ZoteroDocumentArtifactResultView>

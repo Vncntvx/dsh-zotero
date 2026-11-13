@@ -17,8 +17,9 @@ import {
   type JobRegistry,
 } from '@deepseek-ai/dsh-jobs'
 import { z } from 'zod'
-import type {
-  ZoteroDocumentArtifactRequestView,
+import {
+  ZOTERO_ARTIFACT_PAGE_CHARS,
+  type ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
   ZoteroDocumentParseReceiptResultView,
@@ -28,6 +29,7 @@ import type {
 } from '../contract.js'
 import type { EnrichmentPreferences } from '../enrichment-preferences.js'
 import {
+  errorMessageOf,
   ZoteroError,
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
@@ -48,6 +50,7 @@ import {
 import { resolveEnrichmentConfig } from './config.js'
 import type { ParseDocumentResult } from './parse-document.js'
 import type { ParsePhase } from './parse-once.js'
+import { sanitizedErrorDetail } from './transport.js'
 import {
   parseDigest,
   parseTargetOf,
@@ -69,15 +72,30 @@ export const PARSE_JOB_LABEL = '文档解析 · MinerU'
 export const PARSE_CANCELLED_MESSAGE = 'Document parsing was cancelled.'
 export const PARSE_FAILED_MESSAGE =
   'Document parsing failed. Retry the operation to resume its generation.'
+/** Real phase labels for the jobs roster; no invented percentages. */
 export const PARSE_JOB_PHASES: Readonly<Record<ParsePhase, string>> = {
-  acquiring: '获取源文档',
-  uploading: '上传文档',
-  waiting: '等待解析',
+  acquiring: '读取 PDF',
+  uploading: '上传 PDF 到 MinerU',
+  waiting: 'MinerU 解析中',
   downloading: '下载解析结果',
   validating: '校验解析结果',
   writing: '保存解析产物',
 }
 export type ParseJobPhase = ParsePhase
+
+/**
+ * The failed receipt's line: the request's own reason, not only its code.
+ *
+ * A bare "parsing failed" makes a security rejection, a MinerU task error, and
+ * a filesystem failure indistinguishable in the dialog and in the persisted
+ * record. The detail is bounded to 256 characters with addresses and bearer
+ * tokens reduced, so a signed upload URL or a credential cannot cross the
+ * durable receipt boundary. An empty message still falls back to the fixed
+ * line, and cancellation keeps its own fixed line.
+ */
+function failureMessageOf(error: unknown): string {
+  return sanitizedErrorDetail(errorMessageOf(error)) ?? PARSE_FAILED_MESSAGE
+}
 
 type ReceiptState = ZoteroDocumentParseReceiptResultView
 
@@ -549,7 +567,7 @@ export class EnrichmentParseJobs {
                 const state: ReceiptState = {
                   kind: wasCancelled ? 'cancelled' : 'failed',
                   code: error instanceof ZoteroError ? error.code : ZOTERO_ENRICHMENT_TASK_FAILED,
-                  message: wasCancelled ? PARSE_CANCELLED_MESSAGE : PARSE_FAILED_MESSAGE,
+                  message: wasCancelled ? PARSE_CANCELLED_MESSAGE : failureMessageOf(error),
                 }
                 operation.record = { ...effective, state }
                 try {
@@ -779,6 +797,8 @@ export class EnrichmentParseJobs {
     this.authorize(sessionId, 'documentArtifact', currentCtx)
     if (result.kind === 'fault') throw result.error
     if (result.kind === 'miss') return { kind: result.reason === 'expired' ? 'expired' : 'missing' }
+    const totalChars = result.text.length
+    const read = request.read
     return {
       kind: 'ready',
       sourceId: result.provenance.sourceId,
@@ -786,8 +806,17 @@ export class EnrichmentParseJobs {
       mode: result.provenance.mode,
       artifactId: result.provenance.artifactId,
       fingerprint: result.provenance.fingerprint,
-      characterCount: result.text.length,
+      characterCount: totalChars,
       ...(result.pageCount !== undefined ? { pageCount: result.pageCount } : {}),
+      ...(read !== undefined
+        ? {
+            page: {
+              offset: Math.min(read.offset, totalChars),
+              text: result.text.slice(read.offset, read.offset + ZOTERO_ARTIFACT_PAGE_CHARS),
+              totalChars,
+            },
+          }
+        : {}),
     }
   }
 

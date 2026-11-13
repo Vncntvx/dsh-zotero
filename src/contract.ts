@@ -543,9 +543,14 @@ export interface ZoteroStartDocumentParseResultView {
   readonly receipt?: ZoteroParseReceiptView
 }
 
+/** The largest slice of a parsed document one read may return. */
+export const ZOTERO_ARTIFACT_PAGE_CHARS = 16384
+
 export interface ZoteroDocumentArtifactRequestView {
   readonly sessionId: string
   readonly target: ZoteroParseTargetView
+  /** Omit for metadata only; supply a character offset to read one bounded page. */
+  readonly read?: { readonly offset: number }
 }
 
 export type ZoteroDocumentArtifactResultView =
@@ -559,6 +564,12 @@ export type ZoteroDocumentArtifactResultView =
       readonly fingerprint: string
       readonly characterCount: number
       readonly pageCount?: number
+      /** Present only when the request carried `read`; never a host path or URL. */
+      readonly page?: {
+        readonly offset: number
+        readonly text: string
+        readonly totalChars: number
+      }
     }
 
 export interface ZoteroDocumentParseReceiptRequestView {
