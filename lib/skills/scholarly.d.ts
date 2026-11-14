@@ -1,0 +1,2 @@
+export declare const SCHOLARLY_SOPS: readonly [import("./definition.js").ResearchSop, import("./definition.js").ResearchSop, import("./definition.js").ResearchSop, import("./definition.js").ResearchSop];
+//# sourceMappingURL=scholarly.d.ts.map

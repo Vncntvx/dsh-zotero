@@ -1,0 +1,1577 @@
+/**
+ * Zotero domain vocabulary for the dsh-zotero plugin.
+ *
+ * Model-facing tools exchange {@link ZoteroObjectRef}s serialized as
+ * `zotero://user/0/item/<KEY>` strings, optionally carrying the serving
+ * instance's identity as a provenance qualifier
+ * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
+ * lossless-JSON-safe DTO; tool `execute` bodies return these values directly.
+ * The one exception is {@link ZoteroWriteCall}, which carries the asking tool
+ * run (agent, signal, tool name, call id) into the seam and never crosses the
+ * wire.
+ * @module dsh-zotero/types
+ */
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
+import type { JsonValue } from '@deepseek-ai/dsh-util-values';
+import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js';
+import type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js';
+export type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js';
+import type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroCollectionPathRequestView, ZoteroCollectionPathResultView, ZoteroResolvedScope } from './contract.js';
+export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolvedScope };
+export { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js';
+import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js';
+import type { ZoteroErrorCode } from './errors.js';
+import type { CitationKeyConflict, CitationKeySource } from './citation-key.js';
+declare module '@deepseek-ai/dsh-jobs' {
+    interface JobKindMap {
+        zotero: 'zotero';
+        scholarly: 'scholarly';
+    }
+}
+/** A progress event emitted by a domain operation (e.g. export, changes). */
+export interface ZoteroProgressEvent {
+    readonly phase: string;
+    readonly current?: number;
+    readonly total?: number;
+    readonly message: string;
+}
+/** A capability a provider may safely support. */
+export type ZoteroCapability = 'search' | 'metadata' | 'attachments'
+/** Reserved for providers exposing raw full-text access; retrieval itself uses `retrieve`. */
+ | 'fulltext' | 'citation' | 'browse'
+/** Ranked evidence across a work's sources; not synonymous with raw fulltext access. */
+ | 'retrieve'
+/** Incremental library reads through local transaction versions (`?since=`). */
+ | 'changes'
+/**
+ * Writes to the local personal library: notes, item tags, collection
+ * membership, collections, items, and library tags. Zotero 10 gates every
+ * write behind a locally issued API key and the serving instance id; the
+ * write domain owns that protocol.
+ */
+ | 'write';
+/** The library a Zotero object lives in. The Local API serves the logged-in user's library. */
+export interface ZoteroLibraryRef {
+    type: 'user' | 'group';
+    id: number;
+}
+/** The object kinds the reference grammar distinguishes. */
+export type ZoteroKind = 'item' | 'attachment' | 'annotation' | 'collection' | 'search';
+/**
+ * A parsed Zotero object reference. `serverId`, when present, records which
+ * Zotero instance (database) produced the ref; using the ref against a
+ * different instance must fail closed instead of resolving same-key objects.
+ */
+export interface ZoteroObjectRef {
+    library: ZoteroLibraryRef;
+    kind: ZoteroKind;
+    key: string;
+    serverId?: string;
+}
+/** Live connectivity facts for one provider, served by the wire `status` endpoint. */
+export interface ZoteroStatus {
+    providerId: string;
+    /**
+     * The authority this provider dialled, e.g. `127.0.0.1:23119`. It is the
+     * endpoint the provider actually dialled, which is the one fact a user
+     * needs when the probe failed. A status card naming a configured default
+     * instead would send them to the wrong place.
+     */
+    endpoint: string;
+    connected: boolean;
+    apiVersion?: string;
+    serverId?: string;
+    schemaVersion?: string;
+    /**
+     * The answering Zotero build (`X-Zotero-Version`). This is the only one of
+     * the three version headers that distinguishes releases: `Zotero-API-Version`
+     * is 3 on every build that speaks API v3, and `Zotero-Schema-Version` moves
+     * with Zotero's data schema rather than with the release. It is the fact a
+     * version-scoped expectation has to be checked against.
+     */
+    zoteroVersion?: string;
+    /**
+     * The write state of the answering provider, present only when the provider
+     * wires the write capability at all. `authorized` says whether a grant for
+     * the connected instance is already stored. That is a diagnostic fact, not
+     * a capability: the gate still answers every write.
+     */
+    write?: {
+        enabled: boolean;
+        authorized: boolean;
+    };
+    diagnosis: string;
+}
+/**
+ * Where `zotero_search` looks for items. The `trash` kind serves the library
+ * panel's trash listing; the model-facing tool schema does not offer it.
+ */
+export type ZoteroSearchScope = {
+    kind: 'library';
+} | {
+    kind: 'publications';
+} | {
+    kind: 'collection';
+    refOrName: string;
+} | {
+    kind: 'savedSearch';
+    refOrName: string;
+} | {
+    kind: 'trash';
+};
+/**
+ * Sort field names accepted by `zotero_search`. Mirrors the runtime
+ * `ZOTERO_SORT_FIELDS` array in `constants.ts`; keep the two in sync.
+ */
+export type ZoteroSortField = 'dateModified' | 'dateAdded' | 'date' | 'title' | 'creator';
+export type ZoteroSortDirection = 'asc' | 'desc';
+/** Search mode: `metadata` matches title/creator/year; `everything` adds indexed full text. */
+export type ZoteroSearchMode = 'metadata' | 'everything';
+export interface ZoteroSearchRequest {
+    query?: string;
+    mode: ZoteroSearchMode;
+    scope: ZoteroSearchScope;
+    /** Library for library-scope or name-resolution; omitted defaults to user/0. */
+    library?: SupportedLocalLibrary;
+    itemTypes?: string[];
+    tags?: string[];
+    /** Tag query mode: all=AND (default) any=OR */
+    tagMatch?: 'all' | 'any';
+    yearFrom?: number;
+    yearTo?: number;
+    hasAttachment?: boolean;
+    excludeTags?: string[];
+    includeTrashed?: boolean;
+    sort: ZoteroSortField;
+    direction: ZoteroSortDirection;
+    offset: number;
+    limit: number;
+    /** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications, saved searches, and trash serve one listing. */
+    itemLevel?: ZoteroItemLevel;
+}
+/**
+ * Per-caller search policy, kept off {@link ZoteroSearchRequest} so an
+ * internal knob can never ride a model-facing request.
+ */
+export interface ZoteroSearchOptions {
+    /**
+     * Whether the caller consumes the note-body supplement. Every caller states
+     * it: the tool path scans note bodies, the panel's wire view does not.
+     */
+    includeSupplemental: boolean;
+    /**
+     * The library panel's data generation: the panel bumps it on every refresh
+     * and post-write invalidation, and the host's filtered-search index keys on
+     * it so a bumped generation rescans instead of serving the previous scan.
+     */
+    cacheGeneration?: number;
+}
+/** Scope level: top counts/searches top items only (default); all includes child items. Applies to library/collection scopes; publications and saved searches serve one listing. */
+export type ZoteroItemLevel = 'top' | 'all';
+/** The Zotero quick search mode for item queries in scoped tags. */
+export type ZoteroItemQueryMode = 'titleCreatorYear' | 'everything';
+/** One compact search hit. `bestAttachment*` come from Zotero's own attachment selection. */
+export interface ZoteroSearchItem {
+    ref: string;
+    title: string;
+    creatorSummary: string;
+    authors?: string[];
+    venue?: string;
+    year?: number;
+    itemType: string;
+    /** Parent item of a child note; provenance-qualified like the record's own ref. */
+    parentRef?: string;
+    bestAttachmentRef?: string;
+    bestAttachmentType?: string;
+    attachmentSize?: number;
+    /** Extra metadata (e.g. Citation Key, arXiv ID, PMID). */
+    extra?: string;
+    citationKey?: string;
+    citationKeySource?: CitationKeySource;
+    citationKeyConflict?: CitationKeyConflict;
+    /** Item DOI from data.DOI, normalized. */
+    doi?: string;
+}
+/**
+ * First-page note-body supplement: client-side scanned matches listed apart
+ * from the paged primary results. Zotero's index never searches note bodies,
+ * so these hits cannot join the API page; listing them separately keeps
+ * `items`/`total`/`returned`/`nextOffset` describing one collection under the
+ * requested sort.
+ */
+export interface ZoteroSearchSupplement {
+    kind: 'noteBody';
+    items: ZoteroSearchItem[];
+    /** Note rows the scan examined before returning (≤ `maxNoteScanRecords`). */
+    scanned: number;
+    /** True when the scan stopped at `maxNoteScanRecords` before reaching the library's last note. */
+    truncated: boolean;
+}
+export interface ZoteroSearchResult {
+    scope: ZoteroResolvedScope;
+    /** Primary API hits only: the collection `total`/`offset`/`returned`/`nextOffset` describe. */
+    items: ZoteroSearchItem[];
+    /** The paged API total, the count `offset` pagination walks; supplements are not part of it. */
+    total: number;
+    offset: number;
+    /** Primary hits on this page (`items.length`); supplements never inflate it. */
+    returned: number;
+    normalizedQuery?: string;
+    queryWasEmpty?: boolean;
+    nextActions?: string[];
+    maximum?: number;
+    nextOffset?: number;
+    /**
+     * On the first page of a library/collection-scope query (saved-search
+     * scopes never scan), note-body matches fill unused result slots. They are
+     * listed here, ordered by dateModified desc, capped by the page headroom and
+     * `maxNoteScanRecords`, and omitted when none matched.
+     */
+    supplemental?: ZoteroSearchSupplement;
+}
+/** Child content kinds `zotero_get` can include beyond plain metadata. */
+export type ZoteroInclude = 'notes' | 'annotations' | 'attachments';
+export interface ZoteroGetRequest {
+    ref: ZoteroObjectRef;
+    include: ReadonlySet<ZoteroInclude>;
+    locations?: 'none' | 'best' | 'included';
+    childPages?: Partial<Record<'notes' | 'attachments' | 'annotations', {
+        offset: number;
+        limit: number;
+    }>>;
+    /**
+     * `standard` (default) returns the normalized model; `all` additionally
+     * passes through every `data` field the model does not consume, so
+     * dataset/patent/statute-style metadata survives instead of being dropped.
+     */
+    fields?: 'standard' | 'all';
+}
+/** One bounded batch metadata read. Results preserve input order and isolate failures. */
+export interface ZoteroGetBatchRequest {
+    refs: ZoteroObjectRef[];
+    fields?: 'standard' | 'all';
+    include?: {
+        children?: boolean;
+        attachments?: boolean;
+        relations?: boolean;
+        bestAttachment?: boolean;
+    };
+}
+export type ZoteroGetBatchItem = {
+    ref: string;
+    status: 'ok';
+    item: ZoteroItemDetail;
+} | {
+    ref: string;
+    status: 'error';
+    code: string;
+    message: string;
+    next?: string;
+};
+export interface ZoteroGetBatchResult {
+    items: ZoteroGetBatchItem[];
+    counts: {
+        requested: number;
+        succeeded: number;
+        failed: number;
+    };
+}
+export interface ZoteroMatchReferenceInput {
+    inputId: string;
+    bibKey?: string;
+    doi?: string;
+    title?: string;
+    authors?: string[];
+    year?: number;
+    venue?: string;
+}
+export interface ZoteroMatchReferenceCandidate {
+    ref: string;
+    citationKey?: string;
+    citationKeySource?: CitationKeySource;
+    exportKey?: string;
+    title: string;
+    authors?: string[];
+    year?: number;
+    doi?: string;
+    venue?: string;
+    citationKeyConflict?: CitationKeyConflict;
+    matchMethod: string;
+    confidence: string;
+}
+export interface ZoteroMatchReferenceResult {
+    inputId: string;
+    bibKey?: string;
+    status: 'matched' | 'ambiguous' | 'notFound' | 'conflict';
+    reason?: string;
+    selected?: ZoteroMatchReferenceCandidate;
+    candidates?: ZoteroMatchReferenceCandidate[];
+    fieldDiff?: Record<string, {
+        input: JsonValue;
+        zotero: JsonValue;
+    }>;
+}
+export interface ZoteroMatchReferencesRequest {
+    references: ZoteroMatchReferenceInput[];
+    includeFieldDiff?: boolean;
+}
+export interface ZoteroMatchReferencesResult {
+    items: ZoteroMatchReferenceResult[];
+}
+export interface ZoteroNoteRecord {
+    ref: string;
+    text: string;
+    truncated: boolean;
+    /** The note's parent item, when Zotero reports one; provenance-qualified like `ref`. */
+    parentRef?: string;
+}
+export interface ZoteroAnnotationRecord {
+    ref: string;
+    type: string;
+    text: string;
+    comment?: string;
+    color?: string;
+    /** Zotero-owned page label; never a plugin-invented locator. */
+    pageLabel?: string;
+    /** The annotation's parent attachment, when Zotero reports one; provenance-qualified like `ref`. */
+    parentRef?: string;
+}
+export type ZoteroResolvedLocation = {
+    kind: 'file';
+    path: string;
+} | {
+    kind: 'url';
+    url: string;
+} | {
+    kind: 'unavailable';
+    reason: string;
+};
+export interface ZoteroAttachmentRecord {
+    location?: ZoteroResolvedLocation;
+    ref: string;
+    title: string;
+    contentType: string;
+    linkMode?: string;
+    path?: string;
+    url?: string;
+}
+export interface ZoteroCollectionRecord {
+    ref: string;
+    name?: string;
+}
+/** One included child kind: Zotero's total count plus the bounded records returned. */
+export interface ZoteroChildCollection<T> {
+    completeness?: 'complete' | 'page';
+    total: number;
+    returned: number;
+    items: T[];
+    offset?: number;
+    /**
+     * The page size the host served. Paged detail reads always set it (the wire
+     * view requires it); the unbounded tool reads leave it absent.
+     */
+    limit?: number;
+    nextOffset?: number;
+}
+export interface ZoteroCreator {
+    creatorType: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+}
+/** One paged child-listing read. */
+export interface ZoteroChildPageRequest {
+    ref: ZoteroObjectRef;
+    kind: 'notes' | 'attachments' | 'annotations';
+    offset: number;
+    limit: number;
+}
+/** One child page, discriminated by the kind it carries. */
+export type ZoteroChildPage = {
+    kind: 'notes';
+    page: ZoteroChildCollection<ZoteroNoteRecord>;
+} | {
+    kind: 'attachments';
+    page: ZoteroChildCollection<ZoteroAttachmentRecord>;
+} | {
+    kind: 'annotations';
+    page: ZoteroChildCollection<ZoteroAnnotationRecord>;
+};
+export interface ZoteroItemDetail {
+    location?: ZoteroResolvedLocation;
+    ref: string;
+    itemType: string;
+    title: string;
+    creators: ZoteroCreator[];
+    extra?: string;
+    citationKey?: string;
+    citationKeySource?: CitationKeySource;
+    citationKeyConflict?: CitationKeyConflict;
+    date?: string;
+    year?: number;
+    venue?: string;
+    doi?: string;
+    url?: string;
+    abstract?: string;
+    abstractTruncated: boolean;
+    /** The item's own note body, when the item is a note; bounded, `truncated` signals the cut. */
+    noteBody?: {
+        text: string;
+        truncated: boolean;
+    };
+    tags: string[];
+    collections: ZoteroCollectionRecord[];
+    children: {
+        total: number;
+    };
+    bestAttachment?: ZoteroAttachmentRecord;
+    notes?: ZoteroChildCollection<ZoteroNoteRecord>;
+    annotations?: ZoteroChildCollection<ZoteroAnnotationRecord>;
+    attachments?: ZoteroChildCollection<ZoteroAttachmentRecord>;
+    relations?: ZoteroRelation[];
+    /** Local object version (Zotero 10+); may differ from Web API versions. */
+    version?: number;
+    /** Identity of the Zotero instance that served this record. */
+    serverId?: string;
+    /**
+     * `data` fields the normalized model does not consume, present only when
+     * the request asked `fields:"all"`. Values are lossless JSON.
+     */
+    extraFields?: Record<string, JsonValue>;
+    /** On-disk local file path when reading an attachment ref. */
+    path?: string;
+    /** Content type when reading an attachment ref. */
+    contentType?: string;
+}
+/** Evidence sources `zotero_retrieve` can rank against the query. */
+export type ZoteroEvidenceSource = EvidenceSource;
+/**
+ * How `zotero_retrieve` picks the attachment(s) whose full text enters
+ * ranking. `best` (default) keeps Zotero's own single choice; `allIndexed`
+ * ranks every PDF child as a first-class source; `specified` ranks exactly
+ * the attachments named in `attachmentRefs`.
+ */
+export type ZoteroAttachmentPolicy = 'best' | 'allIndexed' | 'specified';
+export interface ZoteroRetrieveRequest {
+    ref: ZoteroObjectRef;
+    query: string;
+    /**
+     * Additional phrasings of the same question, ranked alongside `query`. Each
+     * scores independently and the best score per passage wins, so a paraphrase
+     * raises a passage the caller's wording missed without pooling weights.
+     */
+    queryVariants?: string[];
+    sources: ZoteroEvidenceSource[];
+    passages: number;
+    attachmentPolicy?: ZoteroAttachmentPolicy;
+    /** Required for `attachmentPolicy:"specified"`: attachment refs of the same library. */
+    attachmentRefs?: ZoteroObjectRef[];
+}
+/**
+ * A ranked field of an evidence passage. Only an annotation has two: the
+ * highlight a reader selected (`text`) and the comment they wrote on it
+ * (`comment`).
+ */
+export type ZoteroEvidenceField = EvidenceField;
+/** Provenance remains a pure core contract; retrieval never imports enrichment runtime. */
+export type ZoteroArtifactProvenance = import('./local/fulltext-enhancer.js').FulltextArtifactProvenance;
+/** The format of a fulltext source's exact text. */
+export type ZoteroFulltextFormat = 'markdown' | 'text';
+/** One bounded evidence passage. Fulltext passages never carry page locators. */
+export interface ZoteroEvidence {
+    source: ZoteroEvidenceSource;
+    sourceRef: string;
+    text: string;
+    /** Fulltext format; absent for annotations, notes, and abstracts. */
+    textFormat?: ZoteroFulltextFormat;
+    /** Exact parsed artifact used by a fulltext cache hit; absent for Zotero index text. */
+    artifact?: ZoteroArtifactProvenance;
+    /** Original fulltext character span [start, end); reported only as a pair. */
+    start?: number;
+    end?: number;
+    /** Position within a multi-chunk source (note/fulltext), so the Agent can locate the span. */
+    chunkIndex?: number;
+    /** Total chunks of the source this passage belongs to. */
+    chunkCount?: number;
+    comment?: string;
+    pageLabel?: string;
+    /** The annotation passage's parent attachment ref; absent for other sources. */
+    attachmentRef?: string;
+    /**
+     * Why this passage was returned: its own text carries the query's terms
+     * (`lexical`), only the meaning matched (`semantic`), or both (`hybrid`). A
+     * `semantic` hit must never be reported as wording the source contains.
+     */
+    matchKind: EvidenceMatchKind;
+    /**
+     * The passage's fields that carry matched query terms, so a match found in
+     * the annotator's own comment is never read as the paper saying it. Present
+     * only for the two-field source (an annotation carrying a comment) whose
+     * ranking involved the lexical route. A semantic-only hit names no field,
+     * since it shares no specific wording with the query.
+     */
+    matchedFields?: ZoteroEvidenceField[];
+}
+/**
+ * How one attachment of a multi-attachment retrieval was accounted for.
+ * `indexed`: its full text was read and entered the ranking. `unindexed`:
+ * Zotero's index has no full text for it. `unread`: this call did not read
+ * it, because the per-call attachment cap was already reached.
+ */
+export type ZoteroRetrieveAttachmentStatus = 'indexed' | 'unindexed' | 'unread';
+/**
+ * One full-text source a multi-attachment retrieval considered, whether or
+ * not it contributed text. The record exists so a source that produced
+ * nothing is visible instead of absent: a work whose supplement is
+ * unindexed reads as "the supplement is not covered here", never as
+ * "the supplement has nothing on this".
+ */
+export interface ZoteroRetrieveAttachment {
+    ref: string;
+    contentType?: string;
+    status: ZoteroRetrieveAttachmentStatus;
+    /** Format and artifact of the text this source contributed. */
+    textFormat?: ZoteroFulltextFormat;
+    artifact?: ZoteroArtifactProvenance;
+    /** Zotero's own indexing coverage for this file; absent for parsed artifacts. */
+    coverage?: ZoteroCoverage;
+    /** True when this file's share of the call's character budget cut its text. */
+    inputTruncated?: boolean;
+    /** Passages this file contributed to the ranked corpus, returned or not. */
+    passages?: number;
+}
+/** Full-text indexing coverage as reported by Zotero; `complete` is derived. */
+export interface ZoteroCoverage {
+    indexedPages?: number;
+    totalPages?: number;
+    indexedChars?: number;
+    totalChars?: number;
+    complete: boolean;
+}
+export interface ZoteroRetrieveResult {
+    ref: string;
+    /**
+     * The attachment behind the fulltext evidence when exactly one attachment
+     * contributed; with several (allIndexed/specified), per-passage
+     * `attachmentRef` provenance carries the mapping instead.
+     */
+    attachmentRef?: string;
+    /** The content type of the attachment `attachmentRef` points at; absent when Zotero reported none. */
+    attachmentContentType?: string;
+    /** Fulltext facts when exactly one attachment contributed. */
+    textFormat?: ZoteroFulltextFormat;
+    artifact?: ZoteroArtifactProvenance;
+    coverage?: ZoteroCoverage;
+    /**
+     * Every full-text source a multi-attachment policy considered, with its
+     * status and what it contributed. Absent under `best`, whose single
+     * source is already named by `attachmentRef`/`coverage`.
+     */
+    attachments?: ZoteroRetrieveAttachment[];
+    evidence: ZoteroEvidence[];
+    truncated: boolean;
+    /** Requested sources the item could not provide; retrieval degrades instead of failing. */
+    sourcesSkipped: ZoteroEvidenceSource[];
+    /**
+     * The distinct query terms the lexical route scored across `query` and
+     * `queryVariants`. An empty list means the query held only function words, so
+     * an empty `evidence` is expected.
+     */
+    queryTerms: string[];
+    /**
+     * Present only when the evidence list is empty, naming the fact the call
+     * established. `no-overlap`: the item offered rankable passages and no route
+     * scored any against the query. `no-sources`: the item offered no rankable
+     * passage (no annotation, note, abstract, or full text), so no overlap test
+     * ran. Neither indicates the item has nothing on the subject. Absent when
+     * passages matched but budgets omitted them (`truncated`).
+     */
+    noMatch?: 'no-overlap' | 'no-sources';
+    /**
+     * The ranking routes this call actually ran, in fixed order. `semantic` is
+     * present only when semantic ranking was enabled and its model answered; a
+     * caller phrasing an empty answer must not claim a comparison a route never
+     * made.
+     */
+    rankedRoutes?: ('lexical' | 'semantic')[];
+}
+export type ZoteroAttachmentLocation = {
+    ref: string;
+    title: string;
+    contentType: string;
+    kind: 'file';
+    path: string;
+} | {
+    ref: string;
+    title: string;
+    contentType: string;
+    kind: 'url';
+    url: string;
+};
+/** Export/citation output formats. `citation`/`bibliography` use Zotero's CSL engine. */
+export type ZoteroExportFormat = 'citation' | 'bibliography' | 'bibtex' | 'biblatex' | 'ris' | 'csljson' | 'csv';
+/**
+ * The export formats Zotero renders as a whole-body translator export (no CSL
+ * engine): the arms whose text the panel serves un-itemized and the tool
+ * serves with one located entry per exported document.
+ */
+export type ZoteroItemizedExportFormat = Exclude<ZoteroExportFormat, 'citation' | 'bibliography' | 'csv'>;
+/**
+ * Export request for one or more items. Export is single-library only: all refs
+ * must belong to the same library (personal user/0 or a single group). Mixing
+ * libraries throws `ZOTERO_INVALID_ARGUMENT`.
+ */
+export interface ZoteroExportRequest {
+    refs: ZoteroObjectRef[];
+    format: ZoteroExportFormat;
+    style?: string;
+    locale?: string;
+}
+/**
+ * One exported document inside a translator-format export, keyed to its ref
+ * and located within the merged body. The provider locates each ref's entry
+ * in the batch body in memory. BibTeX/BibLaTeX are located by the `extra`
+ * citation key, the entry's own citation key, DOI, normalized title
+ * (disambiguated by year and first author), or whole-token item-key mention;
+ * RIS by record id; CSL JSON by bare id or trailing `/<key>` URI suffix. A ref
+ * it cannot prove stays unlocated, never positionally guessed. The merged body's entry
+ * order belongs to Zotero, and citation keys are generated in the export
+ * context.
+ */
+export interface ZoteroExportItem {
+    /** The formatted `zotero://` ref the entry was exported for. */
+    ref: string;
+    /**
+     * The batch body's real key: the BibTeX/BibLaTeX citation key or the CSL
+     * JSON id; absent when the format has none (RIS) or the entry could not
+     * be located.
+     */
+    exportKey?: string;
+    citationKey?: string;
+    citationKeySource?: CitationKeySource;
+    citationKeyConflict?: CitationKeyConflict;
+    /** The item's title for display, when the entry carried one. */
+    title?: string;
+    /** The located entry's index within the parsed CSL JSON array. */
+    entryIndex?: number;
+    /** The located entry's start offset within the original batch body. */
+    start?: number;
+    /** The located entry's end offset (exclusive) within the original batch body. */
+    end?: number;
+}
+/**
+ * The text-only export result: the rendered output for the requested items
+ * with no per-document itemization. Citation exports keep Zotero's per-item
+ * HTML strings paired with their refs, ordered as requested; the
+ * bibliography's ordering belongs to the CSL style, not the caller; the
+ * translator formats keep the merged body opaque (same ordering caveat). The
+ * panel endpoint serves this arm, because it renders text/citations and never
+ * locates individual documents inside the batch body.
+ */
+export type ZoteroExportTextResult = {
+    format: 'citation';
+    style?: string;
+    locale?: string;
+    citations: {
+        ref: string;
+        text: string;
+    }[];
+} | {
+    format: 'bibliography';
+    style?: string;
+    locale?: string;
+    text: string;
+} | {
+    format: 'csv';
+    text: string;
+} | {
+    format: ZoteroItemizedExportFormat;
+    style?: string;
+    locale?: string;
+    text: string;
+};
+/**
+ * The `zotero_export` tool's result: {@link ZoteroExportTextResult} plus, for
+ * the translator formats, one located entry per exported document (its
+ * citation key, span offsets, and display title where the batch body proves
+ * them). Itemization is tool-only, so the extra members live on the tool arm
+ * alone.
+ */
+export type ZoteroExportResult = Extract<ZoteroExportTextResult, {
+    format: 'citation';
+}> | Extract<ZoteroExportTextResult, {
+    format: 'bibliography';
+}> | Extract<ZoteroExportTextResult, {
+    format: 'csv';
+}> | (Extract<ZoteroExportTextResult, {
+    format: ZoteroItemizedExportFormat;
+}> & {
+    items: ZoteroExportItem[];
+    /**
+     * The raw-metadata batch behind citekey and field alignment failed; the
+     * body is complete but the per-document facts cover only what arrived.
+     */
+    metadataIncomplete?: true;
+});
+/** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
+export interface ZoteroFulltextPayload {
+    content: string;
+    indexedPages?: number;
+    totalPages?: number;
+    indexedChars?: number;
+    totalChars?: number;
+}
+/** A single relation extracted from Zotero data.relations */
+export interface ZoteroRelation {
+    predicate: string;
+    targetUri: string;
+    targetRef?: string;
+}
+/** Bounded browse kinds (v3 lock: no recursive collection) */
+export type ZoteroBrowseKind = 'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes' | 'itemFields';
+export interface ZoteroBrowseRequest {
+    kind: ZoteroBrowseKind;
+    library?: SupportedLocalLibrary;
+    /**
+     * Collections only: a collection ref whose children to list. Omitted lists
+     * top-level collections (`/collections/top`); present lists that
+     * collection's children (`/collections/<key>/collections`), real
+     * server-side tree navigation instead of one whole-library snapshot.
+     */
+    parentRef?: string;
+    /**
+     * Tags only: the item set whose tags the listing counts. Omitted keeps the
+     * whole-library `/tags` listing; `collection` and `publications` use the
+     * scoped tag endpoints, turning browse into a faceted-navigation primitive
+     * (search → scoped tags for the same query → narrow).
+     */
+    scope?: ZoteroTagScope;
+    /** Tags only with a scope: `top` counts bibliographic items (default), `all` includes child items. Applies to library/collection scopes; publications tags serve one listing. */
+    itemLevel?: ZoteroItemLevel;
+    /** Tags only with a scope: count only tags of items matching this item query (`itemQ`). */
+    itemQuery?: string;
+    /** Tags only with an itemQuery: the Zotero item-query mode (default titleCreatorYear). */
+    itemQueryMode?: ZoteroItemQueryMode;
+    /** ItemFields only: the Zotero item type whose fields and creator types to list. */
+    itemType?: string;
+    q?: string;
+    match?: 'contains' | 'startsWith';
+    offset: number;
+    limit: number;
+}
+/** The item set a scoped tags listing counts over. */
+export type ZoteroTagScope = {
+    kind: 'library';
+} | {
+    kind: 'collection';
+    refOrName: string;
+} | {
+    kind: 'publications';
+};
+export interface ZoteroLibraryInfo {
+    library: SupportedLocalLibrary;
+    name: string;
+}
+export interface ZoteroCollectionInfo {
+    ref: string;
+    name: string;
+    parentRef?: string;
+    path: string[];
+    depth: number;
+    /**
+     * Sub-collections Zotero counted (`meta.numCollections`); absent when the
+     * response did not report it.
+     */
+    childCount?: number;
+    /** Items Zotero counted directly (`meta.numItems`); absent when unreported. */
+    itemCount?: number;
+}
+export interface ZoteroSavedSearchInfo {
+    ref: string;
+    name: string;
+    /**
+     * Zotero's saved-search condition rows, normalized to the plugin's closed
+     * record by the browse domain (which refuses malformed rows); absent when
+     * the record carried none.
+     */
+    conditions?: ZoteroSavedSearchCondition[];
+}
+export interface ZoteroTagInfo {
+    tag: string;
+    count?: number;
+}
+export interface ZoteroItemTypeInfo {
+    itemType: string;
+    localized?: string;
+}
+/** One metadata field valid for a requested item type, with its localized label. */
+export interface ZoteroItemFieldInfo {
+    field: string;
+    localized?: string;
+}
+/** One creator type valid for a requested item type. */
+export interface ZoteroCreatorTypeInfo {
+    creatorType: string;
+    localized?: string;
+}
+export type ZoteroBrowseItem = ZoteroLibraryInfo | ZoteroCollectionInfo | ZoteroSavedSearchInfo | ZoteroTagInfo | ZoteroItemTypeInfo | ZoteroItemFieldInfo | ZoteroCreatorTypeInfo;
+export interface ZoteroBrowseResult {
+    readonly libraryVersion?: number;
+    kind: ZoteroBrowseKind;
+    library?: SupportedLocalLibrary;
+    serverId?: string;
+    items: ZoteroBrowseItem[];
+    total: number;
+    offset: number;
+    returned: number;
+    nextOffset?: number;
+}
+/** The resource kinds `zotero_changes` can diff. */
+import type { ZoteroChangesInclude } from './changes-contract.js';
+export type { ZoteroChangesInclude };
+/**
+ * An incremental checkpoint: the library version a diff read through, pinned
+ * to the instance and the library it came from.
+ *
+ * A library version is a counter of one database's transactions. The same
+ * integer means unrelated things in another Zotero instance, and nothing at
+ * all in another library. A cursor therefore carries its provenance, and
+ * passing one back is the only way to diff from a previous read: the instance
+ * travels with the request as `Zotero-Server-ID` (the server rejects a foreign
+ * one with 412), the library is checked before any read, and the covered
+ * resource kinds travel with the checkpoint so a later diff cannot silently
+ * switch streams and skip changes.
+ */
+export interface ZoteroChangesCursor {
+    /** The instance the version describes (`Zotero-Server-ID` of its responses). */
+    serverId: string;
+    /** The library whose version counter `version` belongs to. */
+    library: SupportedLocalLibrary;
+    /** The library version the diff read through. */
+    version: number;
+    /** Resource kinds this checkpoint tracked; reuse it with the same include set. */
+    include: ZoteroChangesInclude[];
+    /**
+     * Kinds this call included that the answering build does not serve at all.
+     * They are never claimable as covered, but resuming them is safe — the next
+     * diff meets the same absence — so they ride the cursor instead of being
+     * dropped. Disjoint from `include`.
+     */
+    unserved: ZoteroChangesInclude[];
+}
+export interface ZoteroChangesRequest {
+    library?: SupportedLocalLibrary;
+    /**
+     * The cursor to diff from, passed back verbatim from an earlier result.
+     * Omitted takes a baseline reading: the result carries the current cursor,
+     * which the next call can pass as `since`.
+     */
+    since?: ZoteroChangesCursor;
+    include?: ReadonlySet<ZoteroChangesInclude>;
+}
+/** One changed object: its key and the local version it reached. */
+export interface ZoteroChangedObject {
+    key: string;
+    version: number;
+}
+/** Why a kind this call included contributed nothing to the diff. */
+export type ZoteroChangesUnobservableReason = 
+/**
+ * The build does not serve the endpoint (it answered 404). The kind is not
+ * observable in any range on this build, so no cursor could ever account for
+ * it and withholding one would not recover anything.
+ */
+'not-served'
+/**
+ * The build serves the kind but not back to `fromVersion` (Zotero's delete
+ * log starts later and answered 409). Removals in this range are lost; a
+ * fresh baseline covers them from here on.
+ */
+ | 'range-not-covered'
+/**
+ * The response arrived but did not carry the documented shape, so this call
+ * cannot know what changed. Unlike the two above, the data exists and this
+ * call failed to read it, which is why this reason withholds the cursor.
+ */
+ | 'unreadable';
+/** A kind this call included that contributed nothing, and the reason why. */
+export interface ZoteroChangesUnobservable {
+    kind: ZoteroChangesInclude;
+    reason: ZoteroChangesUnobservableReason;
+}
+/**
+ * The true changed-object counts per resource, as the server reported them.
+ * A listing under `changed` / `deleted` may be capped for the model; these are
+ * the totals behind it, and they are also what tells a caller how much of a
+ * capped listing it is not seeing. A count is present exactly when its kind
+ * was read, so presence, not the value, is the coverage statement.
+ */
+export type ZoteroChangesTotals = Partial<Record<ChangeTotalKey, number>>;
+export interface ZoteroChangesResult {
+    library: SupportedLocalLibrary;
+    serverId?: string;
+    /** The version the diff started from; absent on a baseline reading. */
+    fromVersion?: number;
+    /**
+     * The checkpoint to diff from next. It is present only when this call
+     * verified the whole reported range, the library version did not move while
+     * it read, and the instance answering is known, which is what makes it safe
+     * to pass back as `since`. Absent means the caller must not advance from this
+     * result. The version inside is the one the diff read through.
+     *
+     * For a standalone resource, a kind that is `not-served` or
+     * `range-not-covered` does not withhold the cursor: those changes were never
+     * observable, so no version could account for them. The `items` kind is
+     * stricter: every top-level, live, and trash partition must succeed. An
+     * `unreadable` kind always withholds the cursor, because the rows exist and
+     * this call failed to read them. A result that explicitly includes
+     * independently versioned `fulltext` also omits the library cursor.
+     */
+    cursor?: ZoteroChangesCursor;
+    /**
+     * A write landed in the library while this call was reading, so the range
+     * could not be pinned to a version (`cursor` is withheld). Re-running is
+     * the remedy: the next call either reads a quiet library or reports again.
+     */
+    libraryChanged?: boolean;
+    /**
+     * The answering build reported no library version for this call, so no
+     * version can be read or advanced here, because a Zotero build without
+     * local transaction versions cannot be diffed at all. This is decided per call
+     * from what the responses carry, never from a version number: the wire has
+     * no header that says which build serves versioned reads.
+     */
+    versionUnavailable?: boolean;
+    changed: Partial<Record<ChangeSectionKey, ZoteroChangedObject[]>>;
+    /**
+     * Tombstoned objects, keyed by kind. Present exactly when the tombstone read
+     * was observed: an empty object is the positive statement "nothing was
+     * removed in this range", which is why it is never omitted for brevity.
+     */
+    deleted?: Record<DeletionSectionKey, string[]>;
+    /** The uncapped changed counts behind `changed` and `deleted`. */
+    totals?: ZoteroChangesTotals;
+    /**
+     * Resource kinds this call included that contributed nothing, each with the
+     * reason. Absence from this list is the statement that the kind was read.
+     */
+    unobservable?: ZoteroChangesUnobservable[];
+    /** True when a listing was capped at the configured display bound. */
+    truncated?: boolean;
+}
+/**
+ * The write domain. Zotero 10 accepts local writes only behind its own
+ * authorization: a locally issued API key bound to the serving instance id.
+ * Requests here are validated and converted by the provider (markdown
+ * becomes note HTML under an escape-unknown grammar); a per-object failure
+ * inside a batch surfaces as a typed error, never as a silently skipped
+ * object. Every applied result carries the written object's ref and the
+ * library version the write advanced to.
+ */
+export interface ZoteroCreateNoteRequest {
+    /** The note body in markdown; converted to safe note HTML under the plugin's restricted grammar. */
+    markdown: string;
+    /** Parent item ref: the note is created as that item's child note. */
+    parentItem?: ZoteroObjectRef;
+    /**
+     * Collections (refs or names) a standalone note joins. Must be omitted (or
+     * empty) when `parentItem` is set, because child notes inherit their
+     * parent's collections; non-empty collections on a child note are refused with
+     * `WRITE_CHILD_COLLECTIONS_MESSAGE` at the tool `buildRequest` and again in
+     * the write domain for non-tool callers.
+     */
+    collections?: string[];
+    /** Tags applied at creation. */
+    tags?: string[];
+    /** Source item refs the note derives from, recorded as `dc:relation` links. */
+    sourceRefs?: ZoteroObjectRef[];
+}
+export interface ZoteroCreateNoteResult {
+    kind: 'applied';
+    /** The created note ref, provenance-qualified with the serving instance id. */
+    ref: string;
+    key: string;
+    /** The note's object version; equals the library version it was written at. */
+    version: number;
+    /** The parent item ref, for a child note. */
+    parentItem?: string;
+    /** Collections Zotero saved on the note, as refs; empty for a child note. Never filled from the request. */
+    collections: string[];
+    /** Tags as Zotero saved them. Never filled from the request. */
+    tags: string[];
+    /** The source relations as Zotero recorded them, echoed back as `zotero://...` refs. Never filled from the request. */
+    sourceRefs: string[];
+    /** The library version the write advanced the library to. */
+    libraryVersion: number;
+    serverId?: string;
+}
+export interface ZoteroUpdateNoteRequest {
+    item: ZoteroObjectRef;
+    markdown: string;
+}
+export interface ZoteroUpdateNoteResult {
+    kind: 'applied';
+    ref: string;
+    version: number;
+    libraryVersion: number;
+    serverId?: string;
+}
+/**
+ * A write (create, update, or delete) that must be treated as committed for
+ * retry safety, although Zotero's response could not prove the complete saved
+ * state. This is deliberately not an ordinary retryable error: retrying can
+ * create a duplicate object. Reconcile by the returned key/ref when one is
+ * available.
+ *
+ * The same shape is used across write operations so a missing receipt never
+ * turns into an ordinary retryable error.
+ */
+export interface ZoteroWriteCommittedUnverified {
+    kind: 'committed-unverified';
+    /** The caller must not retry; for `commit-unknown` this is conservative. */
+    committed: true;
+    retryable: false;
+    reason: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown';
+    ref?: string;
+    key?: string;
+    version?: number;
+    /** Present when the response supplied a trustworthy library version. */
+    libraryVersion?: number;
+    /**
+     * The object the graph write was issued for, when the uncertain node is a
+     * child inside a whole-graph write such as a Trash restore.
+     */
+    parentRef?: string;
+    /** Refs the same graph write already acknowledged before this outcome. */
+    completedRefs?: string[];
+    serverId: string;
+}
+export interface ZoteroUpdateItemTagsRequest {
+    /** The item whose tags change. */
+    item: ZoteroObjectRef;
+    /** Tags to add; merged with what the item already carries. */
+    add?: string[];
+    /** Tags to remove; matched exactly. */
+    remove?: string[];
+}
+export interface ZoteroUpdateItemTagsResult {
+    kind: 'applied';
+    ref: string;
+    /** The item's version after the update (or the read version when unchanged). */
+    version: number;
+    /** The full tag list now on the item. */
+    tags: string[];
+    /** The tags this call actually added. */
+    added: string[];
+    /** The tags this call actually removed. */
+    removed: string[];
+    /** True when the merged list equalled the saved list and nothing was written. */
+    unchanged: boolean;
+    /** The library version the write advanced the library to; absent when unchanged. */
+    libraryVersion?: number;
+    serverId?: string;
+}
+export interface ZoteroUpdateItemCollectionsRequest {
+    /** The item whose membership changes. */
+    item: ZoteroObjectRef;
+    /** Collections to join, as refs or exact names. */
+    add?: string[];
+    /** Collections to leave, as refs or exact names. */
+    remove?: string[];
+}
+export interface ZoteroUpdateItemCollectionsResult {
+    kind: 'applied';
+    ref: string;
+    /** The item's version after the update (or the read version when unchanged). */
+    version: number;
+    /** The item's collections after the update, as refs. */
+    collections: string[];
+    /** The collection refs this call actually added. */
+    added: string[];
+    /** The collection refs this call actually removed. */
+    removed: string[];
+    /** True when the merged list equalled the saved list and nothing was written. */
+    unchanged: boolean;
+    /** The library version the write advanced the library to; absent when unchanged. */
+    libraryVersion?: number;
+    serverId?: string;
+}
+export interface ZoteroCreateCollectionRequest {
+    /** The new collection's name (non-blank). */
+    name: string;
+    /** The parent collection, as a ref or an exact name; omit for a top-level collection. */
+    parent?: string;
+}
+export interface ZoteroCreateCollectionResult {
+    kind: 'applied';
+    ref: string;
+    key: string;
+    /** The collection's version; equals the library version it was written at. */
+    version: number;
+    name: string;
+    parentRef?: string;
+    /** The library version the write advanced the library to. */
+    libraryVersion: number;
+    serverId?: string;
+}
+export interface ZoteroDeleteCollectionRequest {
+    /** The collection to delete, as a ref or an exact name. */
+    collection: string;
+}
+export interface ZoteroDeleteCollectionResult {
+    kind: 'deleted';
+    ref: string;
+    key: string;
+    deleted: true;
+    /** The library version the delete advanced the library to. */
+    libraryVersion: number;
+    serverId?: string;
+}
+export interface ZoteroUpdateCollectionRequest {
+    collection: ZoteroObjectRef;
+    name?: string;
+    parent?: ZoteroObjectRef | null;
+}
+export interface ZoteroUpdateCollectionResult {
+    kind: 'applied';
+    ref: string;
+    version: number;
+    name?: string;
+    parentRef?: string;
+    libraryVersion: number;
+    serverId?: string;
+}
+export interface ZoteroSavedSearchCondition {
+    condition: string;
+    operator: string;
+    value: string;
+}
+export interface ZoteroCreateSavedSearchRequest {
+    name: string;
+    conditions: ZoteroSavedSearchCondition[];
+}
+export interface ZoteroSavedSearchResult {
+    kind: 'applied';
+    ref: string;
+    key: string;
+    version: number;
+    name: string;
+    conditions: ZoteroSavedSearchCondition[];
+    libraryVersion: number;
+    serverId?: string;
+}
+export interface ZoteroUpdateSavedSearchRequest {
+    search: ZoteroObjectRef;
+    name?: string;
+    conditions?: ZoteroSavedSearchCondition[];
+}
+export interface ZoteroDeleteSavedSearchRequest {
+    search: ZoteroObjectRef;
+}
+export interface ZoteroDeleteSavedSearchResult {
+    kind: 'deleted';
+    ref: string;
+    key: string;
+    deleted: true;
+    libraryVersion: number;
+    serverId?: string;
+}
+export type ZoteroCreatableItemType = (typeof ZOTERO_CREATABLE_ITEM_TYPES)[number];
+export interface ZoteroCreateItemRequest {
+    itemType: ZoteroCreatableItemType;
+    title?: string;
+    url?: string;
+    date?: string;
+    doi?: string;
+    abstractNote?: string;
+    publicationTitle?: string;
+    creators?: ZoteroCreator[];
+    tags?: string[];
+    collections?: (string | ZoteroObjectRef)[];
+}
+export interface ZoteroCreateItemResult {
+    kind: 'applied';
+    ref: string;
+    key: string;
+    /** The item's version; equals the library version it was written at. */
+    version: number;
+    itemType: string;
+    title?: string;
+    tags?: string[];
+    collections?: string[];
+    /** The library version the write advanced the library to. */
+    libraryVersion: number;
+    serverId?: string;
+}
+export type ZoteroUpdatableItemField = (typeof ZOTERO_UPDATABLE_ITEM_FIELDS)[number];
+export interface ZoteroUpdateItemRequest {
+    /** The item whose scalar fields change. */
+    item: ZoteroObjectRef;
+    /** Field updates; at least one closed-set field, values are non-blank strings. */
+    set: Partial<Record<ZoteroUpdatableItemField, string>>;
+}
+export interface ZoteroUpdateItemResult {
+    kind: 'applied';
+    ref: string;
+    /** The item's version after the update. */
+    version: number;
+    /** The fields this call changed. */
+    changed: string[];
+    /** The library version the write advanced the library to. */
+    libraryVersion?: number;
+    unchanged?: boolean;
+    serverId?: string;
+}
+export interface ZoteroDeleteLibraryTagsRequest {
+    /** Tag names to delete library-wide (1..writeListMaxItems). */
+    tags: string[];
+}
+export interface ZoteroDeleteLibraryTagsResult {
+    kind: 'deleted';
+    deletedTags: string[];
+    /**
+     * Requested names the plan card already proved absent: they are no-ops,
+     * reported so the receipt never counts an unknown name as deleted.
+     */
+    absentTags?: string[];
+    /** The library version the delete advanced the library to. */
+    libraryVersion: number;
+    serverId?: string;
+}
+export type ZoteroBatchCreateItemInput = ZoteroCreateItemRequest;
+export interface ZoteroBatchUpdateItemInput {
+    ref: ZoteroObjectRef;
+    addTags?: string[];
+    removeTags?: string[];
+    addCollections?: (string | ZoteroObjectRef)[];
+    removeCollections?: (string | ZoteroObjectRef)[];
+}
+export interface ZoteroBatchItemsRequest {
+    create?: ZoteroBatchCreateItemInput[];
+    update?: ZoteroBatchUpdateItemInput[];
+    delete?: ZoteroObjectRef[];
+}
+export interface ZoteroBatchCreateItemResult {
+    index: number;
+    ref: string;
+    key: string;
+    version: number;
+    itemType: string;
+    title?: string;
+    url?: string;
+}
+export interface ZoteroBatchUpdateItemResult {
+    ref: string;
+    version: number;
+    addedTags: string[];
+    removedTags: string[];
+    addedCollections: string[];
+    removedCollections: string[];
+    unchanged: boolean;
+}
+export interface ZoteroBatchDeleteItemResult {
+    ref: string;
+    key: string;
+    deleted: true;
+    version: number;
+    /** All verified descendant refs, including notes, attachments and annotations. */
+    children: string[];
+}
+export interface ZoteroBatchOperationFailure {
+    op: 'create' | 'update' | 'delete';
+    ref?: string;
+    index?: number;
+    code: ZoteroErrorCode;
+    message: string;
+    /** Trash PATCHes already acknowledged before this operation failed. */
+    completedRefs?: string[];
+}
+/** A non-retryable batch operation whose commit or saved state cannot be proven. */
+export interface ZoteroBatchOperationUnverified {
+    op: 'create' | 'update' | 'delete';
+    index: number;
+    committed: true;
+    retryable: false;
+    reason: 'saved-state-unverified' | 'commit-unknown' | 'receipt-unknown';
+    key?: string;
+    ref?: string;
+    version?: number;
+    libraryVersion?: number;
+    serverId: string;
+}
+export type ZoteroBatchCreateUnverified = ZoteroBatchOperationUnverified & {
+    op: 'create';
+};
+export interface ZoteroBatchItemsResult {
+    kind: 'applied';
+    total: number;
+    created: ZoteroBatchCreateItemResult[];
+    updated: ZoteroBatchUpdateItemResult[];
+    deleted: ZoteroBatchDeleteItemResult[];
+    unverified: ZoteroBatchOperationUnverified[];
+    failed: ZoteroBatchOperationFailure[];
+    libraryVersion?: number;
+    serverId?: string;
+}
+export interface ZoteroRestoreItemsRequest {
+    items: ZoteroObjectRef[];
+}
+export interface ZoteroRestoreItemResult {
+    ref: string;
+    /**
+     * True when nodes of the graph moved out of the Trash. False with
+     * `alreadyPresent` means the whole graph was already live and nothing was
+     * written; a partial restore with a failed node is reported in `failed`
+     * with the acknowledged refs, never here.
+     */
+    restored: boolean;
+    /** The whole graph was already live in the library; no write happened. */
+    alreadyPresent?: true;
+    /** The requested item's version after the call. */
+    version: number;
+    /** The library version the restore writes advanced to; absent when nothing was written. */
+    libraryVersion?: number;
+    serverId?: string;
+    /** The child graph this restore covered, children first; absent for a childless item. */
+    children?: {
+        ref: string;
+    }[];
+}
+export interface ZoteroRestoreItemsResult {
+    kind: 'restored';
+    restored: ZoteroRestoreItemResult[];
+    unverified: ZoteroWriteCommittedUnverified[];
+    failed: ZoteroBatchOperationFailure[];
+    serverId?: string;
+}
+/**
+ * How destructive the reviewed write is, so the approval prompt can name the
+ * blast radius before the plan card shows the detail. Omitted means a plain
+ * mutation (create or update), which is the common case.
+ */
+export type ZoteroWriteRisk = 'mutation' | 'recoverable-delete' | 'irreversible-delete';
+/**
+ * Who is asking for one write, and the plan the user reviews.
+ *
+ * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
+ * without a call like this: the service runs the session approval policy
+ * (`ctx.approval.request`, where `never` auto-rejects) and then asks the user
+ * with {@link ZoteroWriteCall.plan} on every write, and fails closed when no
+ * channel can answer. `plan` is the caller's deterministic markdown, so what
+ * the user approves is exactly what the service passes on. `exec` is
+ * structurally the fields the asks need (agent, signal, tool name, call id),
+ * so a tool's `ToolRunContext` satisfies it directly and a test can build one.
+ *
+ * The approval request carries `toolName`/`callId` so the audit pair links to
+ * the already-logged tool call. The plan-review intent deliberately carries
+ * **no `callId`**: that field names a logged invocation whose arguments hold
+ * the reviewed plan, and a write tool's arguments hold the note body or the
+ * tag list, so naming the call would send the client's plan panel after a
+ * document that does not exist.
+ */
+export interface ZoteroWriteCall {
+    /** The asking tool run: agent routes the asks, signal cancels them, name/callId audit the approval. */
+    readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name' | 'callId'>;
+    /** The plan markdown the user reviews; it must describe exactly this request. */
+    readonly plan: string;
+    /**
+     * The blast radius the approval prompt states. Only deletions set it: a
+     * destructive write must not open with the same sentence an additive one
+     * uses, because the first prompt is read without the plan detail.
+     */
+    readonly risk?: ZoteroWriteRisk;
+}
+/**
+ * The outcome when the user answers the plan-review card without approving.
+ * Nothing was written, nothing was contacted beyond the approval channel,
+ * and the tool returns this instead of an error. Declining is a normal
+ * outcome, not a failure.
+ */
+export interface ZoteroWriteDeclined {
+    kind: 'declined';
+}
+export type ZoteroCreateNoteCommittedOutcome = ZoteroCreateNoteResult | ZoteroWriteCommittedUnverified;
+export type ZoteroCreateNoteOutcome = ZoteroCreateNoteCommittedOutcome | ZoteroWriteDeclined;
+export type ZoteroUpdateItemTagsOutcome = ZoteroUpdateItemTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroUpdateItemCollectionsOutcome = ZoteroUpdateItemCollectionsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroCreateCollectionCommittedOutcome = ZoteroCreateCollectionResult | ZoteroWriteCommittedUnverified;
+export type ZoteroCreateCollectionOutcome = ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined;
+export type ZoteroDeleteCollectionOutcome = ZoteroDeleteCollectionResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroCreateItemCommittedOutcome = ZoteroCreateItemResult | ZoteroWriteCommittedUnverified;
+export type ZoteroCreateItemOutcome = ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined;
+export type ZoteroUpdateItemOutcome = ZoteroUpdateItemResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroUpdateNoteOutcome = ZoteroUpdateNoteResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroUpdateCollectionOutcome = ZoteroUpdateCollectionResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroRestoreItemsOutcome = ZoteroRestoreItemsResult | ZoteroWriteDeclined;
+export type ZoteroCreateSavedSearchOutcome = ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroUpdateSavedSearchOutcome = ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroDeleteSavedSearchOutcome = ZoteroDeleteSavedSearchResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroDeleteLibraryTagsOutcome = ZoteroDeleteLibraryTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined;
+export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined;
+/**
+ * The storage side of the `ctx.zotero` seam. Providers declare which
+ * capabilities they safely support; the service gates every domain call on
+ * that declaration first and on the corresponding method's presence second.
+ * A provider that does not serve a domain simply omits the capability and
+ * leaves the method undefined, so no stub is required. The Agent never sees
+ * which provider satisfied a request. `available()` is deliberately absent:
+ * request-driven providers fail with typed domain errors, and only `status()`
+ * performs a health check.
+ */
+export interface ZoteroProvider {
+    id: string;
+    capabilities: ReadonlySet<ZoteroCapability>;
+    /**
+     * Probe connectivity and report the instance identity facts.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the status record; failures are reported in `diagnosis`, never
+     *   thrown, except an explicit caller abort, which propagates so a cancel
+     *   is never mistaken for a connectivity problem.
+     */
+    status(signal?: AbortSignal): Promise<ZoteroStatus>;
+    /**
+     * Discover candidates in the requested scope.
+     * @param request - scope, mode, filters, sort, and pagination.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the resolved scope plus the compact hit records.
+     */
+    search?(request: ZoteroSearchRequest, signal: AbortSignal | undefined, options: ZoteroSearchOptions): Promise<ZoteroSearchResult>;
+    /**
+     * Read one item's detail, including requested child kinds.
+     * @param request - the item ref and the child kinds to include.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the normalized item detail.
+     */
+    getItem?(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail>;
+    getBatch?(request: ZoteroGetBatchRequest, signal?: AbortSignal): Promise<ZoteroGetBatchResult>;
+    matchReferences?(request: ZoteroMatchReferencesRequest, signal?: AbortSignal): Promise<ZoteroMatchReferencesResult>;
+    /**
+     * Read one page of a single child kind.
+     * @param request - the item/attachment ref, kind, and page window.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the normalized child page.
+     */
+    getChildPage?(request: ZoteroChildPageRequest, signal?: AbortSignal): Promise<ZoteroChildPage>;
+    /**
+     * Diff the library against a local transaction version.
+     * @param request - the baseline version and the resource kinds to diff.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns changed/deleted keys plus the library's current version.
+     */
+    changes?(request: ZoteroChangesRequest, signal?: AbortSignal, onProgress?: (progress: ZoteroProgressEvent) => void): Promise<ZoteroChangesResult>;
+    /**
+     * Resolve an item or attachment ref to a usable location.
+     * @param ref - the item or attachment ref to resolve.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the verified file path or linked URL.
+     */
+    getAttachmentLocation?(ref: ZoteroObjectRef, signal?: AbortSignal): Promise<ZoteroAttachmentLocation>;
+    /**
+     * Gather ranked evidence passages for one item.
+     * @param request - the item ref, ranking query, sources, and passage cap.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the bounded ranked evidence with a truncation flag.
+     */
+    retrieve?(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult>;
+    /**
+     * Export citations or formatted output for the requested items.
+     * @param request - the item refs, format, and optional style/locale.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns per-ref citations or the joined export text.
+     */
+    export?(request: ZoteroExportRequest, signal?: AbortSignal, onProgress?: (progress: ZoteroProgressEvent) => void): Promise<ZoteroExportResult>;
+    /**
+     * Export rendered text (citations, bibliography, or a translator format)
+     * for the requested items, without per-document itemization. The library
+     * panel endpoint serves this arm; {@link ZoteroProvider.export} stays the
+     * tool's itemized arm, so the text the panel renders never depends on
+     * locating documents inside the batch body.
+     * @param request - the item refs, format, and optional style/locale.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @param onProgress - optional progress reporter.
+     * @returns per-ref citations or the rendered export text.
+     */
+    exportText?(request: ZoteroExportRequest, signal?: AbortSignal, onProgress?: (progress: ZoteroProgressEvent) => void): Promise<ZoteroExportTextResult>;
+    collectionPath?(request: ZoteroCollectionPathRequestView, signal?: AbortSignal): Promise<ZoteroCollectionPathResultView>;
+    browse?(request: ZoteroBrowseRequest, signal?: AbortSignal): Promise<ZoteroBrowseResult>;
+    /**
+     * Create a research note (standalone or under a parent item) with tags,
+     * collections, and source relations.
+     * @param request - the markdown body, optional parent, collections, tags, and sources.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the created note's verified saved state, or an explicit
+     *   committed-unverified outcome when the response cannot prove the saved
+     *   state or the post-dispatch commit outcome.
+     */
+    createNote?(request: ZoteroCreateNoteRequest, signal?: AbortSignal): Promise<ZoteroCreateNoteCommittedOutcome>;
+    updateNote?(request: ZoteroUpdateNoteRequest, signal?: AbortSignal): Promise<ZoteroUpdateNoteOutcome>;
+    /**
+     * Update one item's tags (read-merge-write; add and remove settle in one write).
+     * @param request - the item ref and the tags to add/remove.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the merged tag list, the actual additions/removals, and the versions.
+     */
+    updateItemTags?(request: ZoteroUpdateItemTagsRequest, signal?: AbortSignal): Promise<ZoteroUpdateItemTagsOutcome>;
+    /**
+     * Update one item's collection membership (read-merge-write).
+     * @param request - the item ref and the collections to add/remove (refs or names).
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the resulting collection list, the actual additions/removals, and the versions.
+     */
+    updateItemCollections?(request: ZoteroUpdateItemCollectionsRequest, signal?: AbortSignal): Promise<ZoteroUpdateItemCollectionsOutcome>;
+    /**
+     * Create a collection, optionally under a parent.
+     * @param request - the name and the optional parent ref or name.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the created collection's saved state, or committed-unverified.
+     */
+    createCollection?(request: ZoteroCreateCollectionRequest, signal?: AbortSignal): Promise<ZoteroCreateCollectionCommittedOutcome>;
+    updateCollection?(request: ZoteroUpdateCollectionRequest, signal?: AbortSignal): Promise<ZoteroUpdateCollectionOutcome>;
+    /**
+     * Delete a collection by ref or name.
+     * @param request - the collection ref or name.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the deletion receipt with the library version it advanced to.
+     */
+    deleteCollection?(request: ZoteroDeleteCollectionRequest, signal?: AbortSignal): Promise<ZoteroDeleteCollectionOutcome>;
+    /**
+     * Create a bibliographic item from the closed field set.
+     * @param request - the itemType plus title/url/date/doi/abstract/publicationTitle/creators.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the created item's saved state, or committed-unverified.
+     */
+    createItem?(request: ZoteroCreateItemRequest, signal?: AbortSignal): Promise<ZoteroCreateItemCommittedOutcome>;
+    /**
+     * Update one item's scalar metadata fields (read-merge-write).
+     * @param request - the item ref and the closed-set field updates.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the changed fields and the resulting versions.
+     */
+    updateItem?(request: ZoteroUpdateItemRequest, signal?: AbortSignal): Promise<ZoteroUpdateItemOutcome>;
+    /**
+     * Delete tags library-wide.
+     * @param request - the tag names to delete.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the deleted names and the library version it advanced to.
+     */
+    deleteLibraryTags?(request: ZoteroDeleteLibraryTagsRequest, signal?: AbortSignal): Promise<ZoteroDeleteLibraryTagsOutcome>;
+    /**
+     * Perform batch item mutations (create/import, update tags/collections, delete).
+     * @param request - the create, update, and delete item operations.
+     * @param signal - caller cancellation; forwarded to the transport.
+     * @returns the outcome detailing created, updated, deleted, and failed operations.
+     */
+    batchItems?(request: ZoteroBatchItemsRequest, signal?: AbortSignal): Promise<ZoteroBatchItemsResult>;
+    restoreItems?(request: ZoteroRestoreItemsRequest, signal?: AbortSignal): Promise<ZoteroRestoreItemsResult>;
+    createSavedSearch?(request: ZoteroCreateSavedSearchRequest, signal?: AbortSignal): Promise<ZoteroCreateSavedSearchOutcome>;
+    updateSavedSearch?(request: ZoteroUpdateSavedSearchRequest, signal?: AbortSignal): Promise<ZoteroUpdateSavedSearchOutcome>;
+    deleteSavedSearch?(request: ZoteroDeleteSavedSearchRequest, signal?: AbortSignal): Promise<ZoteroDeleteSavedSearchOutcome>;
+}
+/**
+ * A directly callable provider method name. Capability `metadata` gates both
+ * `getItem` and `children`; `retrieve` and `changes` consume full-text data
+ * internally, so call sites name their method explicitly. Derived from the interface so a new
+ * domain method cannot drift from this union.
+ */
+export type ZoteroProviderMethod = Exclude<keyof ZoteroProvider, 'id' | 'capabilities' | 'status'>;
+//# sourceMappingURL=types.d.ts.map

@@ -1,0 +1,2 @@
+export declare const CORE_SOPS: readonly [import("./definition.js").ResearchSop, import("./definition.js").ResearchSop, import("./definition.js").ResearchSop, import("./definition.js").ResearchSop];
+//# sourceMappingURL=core.d.ts.map

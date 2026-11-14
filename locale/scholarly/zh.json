@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/scholarly",
+    "description": "DeepSeek Harness 的学术文献检索插件：在 Semantic Scholar、Crossref 与 arXiv 中检索论文，追踪引文，解析开放获取全文并管理阅读列表。"
+  }
+}

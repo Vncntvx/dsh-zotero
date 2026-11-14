@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/enrichment",
+    "description": "Optional document-enrichment component for DeepSeek Harness. Enabling it allows the specific PDF you submit to be sent to MinerU (mineru.net) for Markdown extraction, with the artifact stored locally; it also provides local semantic ranking and embedding-model management. Disabled by default."
+  }
+}

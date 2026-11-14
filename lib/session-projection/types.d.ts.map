@@ -1,0 +1,1 @@
+{"version":3,"file":"types.d.ts","sourceRoot":"","sources":["../../src/session-projection/types.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAGH,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,qBAAqB,CAAA;AAE1D,OAAO,QAAQ,2CAA2C,CAAC;IACzD,UAAU,oBAAoB;QAC5B,4EAA4E;QAC5E,aAAa,EAAE,gCAAgC,CAAC,eAAe,CAAC,CAAA;KACjE;CACF;AAED,OAAO,EAAE,CAAA"}
