@@ -66,6 +66,16 @@
 - **验证**：`tests/host/enrichment-artifact-management.spec.ts` 的「serves the inventory from cache until the store is written again」与分组用例；`tests/host/enrichment-artifact-store.spec.ts` 的索引读契约。
 - **后续处理**：若上游提供产物存储的变更通知或失效钩子，可把写代数替换为权威失效；保留「写即失效」与「索引失败不缓存」的回归用例。
 
+## DN-5：打包冒烟必须脱离父进程的 npm dry-run 模式
+
+- **类型**：其他开发约束（npm CLI 行为）。
+- **状态**：生效中（2026-11-15，npm 12）。
+- **位置**：`scripts/smoke-archive-worker.mjs` 的 `smokeArchiveWorker`。
+- **要点**：`npm publish --dry-run` 会带着 `npm_config_dry_run=true` 运行 `prepublishOnly`，冒烟里嵌套的 `npm pack` 继承该环境后产出 0 个 tarball，`verify:pack` 因此报「npm pack did not produce exactly one tarball」。冒烟在子进程环境里删掉这一个变量，让嵌套 pack 始终真实落盘；其余 npm 设置照常继承。
+- **触发条件**：修改发布门禁的脚本链、升级 npm 主版本，或给该冒烟新增子进程调用时，重跑 `npm publish --dry-run` 复核。
+- **验证**：`npm publish --dry-run` 全程通过，日志里同时出现 `archive-worker pack smoke ok` 与 `verify-pack ok`；单独 `npm run release:check` 仍通过。
+- **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「冒烟必须拿到真实 tarball」的断言。
+
 ## 升级复核
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。

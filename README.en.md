@@ -27,21 +27,30 @@ All operations interact with Zotero through its local API (`127.0.0.1:23119`). R
 
 ## Features
 
-- **Conversation & Retrieval**
-  - Search & reading: Search papers by title, author, year, or full text, and read bibliographic metadata, notes, and local PDF full text.
-  - Passage extraction: Locate relevant passages across full text, notes, and annotations for specific research questions, with original page numbers preserved on PDF annotations.
-  - Vector semantic ranking: Optionally enable local CPU-only embedding models (6 decoupled open tiers) combined with BM25 via reciprocal rank fusion (RRF).
-  - Citation & export: Generate in-text citations or bibliographies in specified CSL styles, and export BibTeX, RIS, or CSL-JSON.
-  - Research SOP skills: 8 built-in phased research workflows (paper digest, landscape, lineage, evidence synthesis, manuscript audit, library governance, publication integrity, literature intake) loaded on demand with strict evidence boundaries.
-  - Extensions (optional): With write access enabled, create notes and update tags or collections (each write requires approval); with the scholarly component (`dsh-zotero/scholarly`) enabled, search across seven external indexes, follow citation networks, and verify references; enabling the document parsing component (`dsh-zotero/enrichment`) accepts MinerU document egress, after which you can reuse existing parsed Markdown or submit one specific Zotero PDF attachment / public PDF URL for parsing (each parse still needs that explicit submission).
-- **Literature Trail**
-  - Search history: The session header shows query terms, scopes, filter conditions, and hit counts for every tool call on the first screen.
-  - Passage review: Review extracted passages and annotations grouped by paper, complete with source tags and page numbers for easy verification.
-  - Export collection: Review all citations and BibTeX entries generated in the conversation, deduplicated across items and ready to copy or download.
-- **Literature Panel**
-  - Library browsing: Browse collection trees, tags, saved searches, and the Trash in the right sidebar, with multi-field filtering.
-  - Details & reading: Inspect metadata, notes, and attachment lists, and open local PDFs directly in the reading pane.
-  - Citations & handoff: Copy BibTeX entries, CSL citations, or item details directly from the action row, or send selected items into the chat draft with one click; a composer button opens the panel directly from the input bar, and bibliography deliverables link to the panel as well.
+The agent searches, reads, and cites the library with tools in conversation; the literature trail checks what it did in this session; the literature panel is yours to browse the whole library.
+
+- **Conversation**
+  - Search and browsing: Search by title, author, year, tag, or full text, scoped to the whole library, My Publications, one collection, or one saved search. Read collection trees, tags, and saved searches, and batch-read known refs with a separate result for each one.
+  - Passage location: Pull passages from full text, notes, and annotations for a specific question. Every passage names its source, annotations keep their Zotero page numbers, and the result reports full-text coverage and the sources it skipped.
+  - Ranking and matches: BM25 lexical ranking by default. Optional local semantic ranking runs six CPU-only embedding tiers and fuses them with BM25 through RRF, with every passage reporting a lexical, semantic, or hybrid match. Up to four query variants are scored separately and each passage keeps its best score; an empty result says whether nothing overlapped or no source was available.
+  - Citations and export: Generate in-text citations or a merged bibliography in CSL styles, and export BibTeX, BibLaTeX, RIS, or CSL-JSON. Style and locale follow the configured defaults.
+  - Reconciliation and changes: Reconcile DOIs, BibTeX keys, or bibliographic fields against the library and get back refs, citation keys, confidence, and a reviewable field diff. Report additions, modifications, and deletions from the library version, with the Trash counted separately.
+  - Research SOPs: Eight phased workflows loaded on demand, with only their names and short descriptions resident in the prompt and each carrying stage budgets and stop conditions. The core component ships four (paper digest, evidence synthesis, manuscript audit, library governance) and the scholarly component adds four (research landscape, citation lineage, publication integrity, literature intake).
+- **Literature trail (session header)**
+  - Search conditions: Every call lists its query, scope (library, My Publications, collection, saved search), mode (metadata or full text), filters, and hit count, with the total and note hits counted separately.
+  - Passage review: Passages and annotations are grouped by item with their source, page number, and coverage; refused or cancelled calls are recorded too.
+  - Export summary: Every citation and BibTeX entry from the session is collected across items, split by format, and deduplicated, ready to copy or download; failed exports are listed on their own.
+  - Long sessions: History-window truncation leaves early items intact. Long lists page, and switching to the trail reads the existing result.
+- **Literature panel (right sidebar)**
+  - Browsing and filtering: Switch libraries, expand the collection tree on demand, and open saved searches, My Publications, and the Trash. The item list searches metadata or full text, sorts by several fields, and filters by type, tag, year, and attachment presence.
+  - Details and reading: Metadata, collections and tags, and the notes, attachments, and annotations sub-collections page independently. Local PDFs open in the right reading pane, and with `allowUrlPdfRead` enabled the panel also reads URL attachments already in the library.
+  - Citations and handoff: Copy a citation, bibliography, or BibTeX entry from the action row, and send selected items into the chat draft. The composer's Zotero button and bibliography deliverables both open the panel.
+  - State restoration: Per Zotero instance, the panel remembers the selected item, the active section, and expanded collection branches, along with the scroll position and child pagination.
+  - Parsed results: With the document parsing component enabled, an item's action row opens a parsed tab named after the paper (full text, figures, selection actions), and the toolbar's Manage parsed docs page lists every artifact, with state and keyword filters, per-row open or reparse, and page-wide batch discard.
+- **Optional capabilities (off by default)**
+  - Library writes: Enabling `writeEnabled` registers 15 tools that write only to the personal library, covering notes, tags and collection membership, collections, items, saved searches, Trash restore, library-wide tags, and batch operations. Every write passes a capability check, a session approval, and a plan-review card; a commit that cannot be verified reports "committed but unverified".
+  - Scholarly retrieval (`dsh-zotero/scholarly`): Seven tools cover arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, fuse and deduplicate the results, and mark what the library already holds. They read open-access full text by DOI, arXiv ID, PMID, or PMCID, follow citation networks, fetch authoritative citations from the DOI registry, verify references and retraction status (verified, needs review, registry says none, or unverifiable), and save results into the personal library when you ask for it.
+  - Document parsing and semantic ranking (`dsh-zotero/enrichment`): Enabling the document parsing component accepts MinerU document egress for documents you submit yourself, and a parse still needs you to submit one specific Zotero PDF attachment or public PDF URL. Once it succeeds, ordinary reads and scholarly full-text reads reuse the Markdown artifact and keep its figures; the six semantic tiers can be downloaded, verified, and deleted here.
 
 For details on interaction patterns, UI roles, and runtime boundaries, see the [product model](docs/product-model.en.md).
 

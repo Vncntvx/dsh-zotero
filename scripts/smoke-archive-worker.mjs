@@ -10,9 +10,15 @@ export async function smokeArchiveWorker(root) {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const staging = await mkdtemp(join(tmpdir(), 'zotero-worker-pack-'))
   try {
+    // `npm publish --dry-run` runs this gate with npm_config_dry_run set, and
+    // the nested pack would then write no archive at all. The smoke needs a
+    // real tarball to execute, so the child loses that one setting.
+    const env = { ...process.env }
+    delete env.npm_config_dry_run
     execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', staging], {
       cwd: root,
       stdio: 'pipe',
+      env,
     })
     const archives = (await readdir(staging)).filter((name) => name.endsWith('.tgz'))
     if (archives.length !== 1) throw new Error('npm pack did not produce exactly one tarball')

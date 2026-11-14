@@ -66,6 +66,16 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Verification**: the "serves the inventory from cache until the store is written again" and grouping cases in `tests/host/enrichment-artifact-management.spec.ts`; the index-read contract in `tests/host/enrichment-artifact-store.spec.ts`.
 - **Follow-up**: when upstream offers change notifications or invalidation hooks for the artifact store, replace the write generation with authoritative invalidation; keep the "write invalidates" and "index failures are never cached" regressions.
 
+## DN-5: The pack smoke must escape the parent's npm dry-run mode
+
+- **Type**: other development constraint (npm CLI behaviour).
+- **Status**: active (2026-11-15, npm 12).
+- **Location**: `smokeArchiveWorker` in `scripts/smoke-archive-worker.mjs`.
+- **Behavior**: `npm publish --dry-run` runs `prepublishOnly` with `npm_config_dry_run=true`, and the smoke's nested `npm pack` inherits that environment and writes no archive at all, so `verify:pack` fails with "npm pack did not produce exactly one tarball". The smoke deletes that one variable from the child environment so the nested pack always produces a real tarball; every other npm setting is inherited unchanged.
+- **Review trigger**: run `npm publish --dry-run` again when the release gate's script chain changes, the npm major moves, or this smoke gains another child process.
+- **Verification**: `npm publish --dry-run` completes, and its log carries both `archive-worker pack smoke ok` and `verify-pack ok`; a standalone `npm run release:check` still passes.
+- **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup but keep the assertion that the smoke needs a real tarball.
+
 ## Upgrade review
 
 Every harness pin change walks this page from the top: check whether upstream now provides the requested contract; if it does, migrate and retire the entry in the same change, because a capability that exists while the workaround remains is not an acceptable state. If it does not, update only the pin version and the review date, leaving the workaround untouched.
