@@ -51,11 +51,15 @@ export interface RemoteZoteroWorld {
     search(request: unknown): unknown
     item(request: unknown): unknown
     childPage(request: unknown): unknown
+    collectionPath(request: unknown): unknown
+    export(request: unknown): unknown
     write(request: unknown): unknown
   }
   openProtocolCalls: string[]
   /** Scripted protocol-launch result; a spec sets it to model a refusal. */
   openProtocolOutcome?: () => unknown
+  /** Scripted lease-release result; a spec sets it to model a refusal. */
+  releaseUrlPdfOutcome?: () => unknown
 }
 
 /**
@@ -83,7 +87,48 @@ export function createRemoteZoteroStub(world: RemoteZoteroWorld) {
     search: (request: unknown) => world.libraryWire.search(request),
     item: (request: unknown) => world.libraryWire.item(request),
     childPage: (request: unknown) => world.libraryWire.childPage(request),
+    collectionPath: (request: unknown) => world.libraryWire.collectionPath(request),
+    export: (request: unknown) => world.libraryWire.export(request),
     write: (request: unknown) => world.libraryWire.write(request),
+    readUrlPdf: async (request: { ref: string }) => ({
+      ok: true as const,
+      value: { ref: request.ref, lease: 'lease-1', url: 'blob:pdf', leaseMs: 60_000 },
+    }),
+    releaseUrlPdf: async (_lease: string) =>
+      world.releaseUrlPdfOutcome?.() ?? { ok: true as const, value: undefined },
+    listParsedDocuments: async (request: { sessionId: string; offset: number; limit: number }) => ({
+      ok: true as const,
+      value: { rows: [], total: 0 },
+      request,
+    }),
+    discardParsedDocument: async (request: { sessionId: string; artifactId: string }) => ({
+      ok: true as const,
+      value: { kind: 'discarded' as const, removedAliases: 0, removedReceipts: 0 },
+      request,
+    }),
+    deleteSemanticModel: async () => ({
+      ok: true as const,
+      value: {
+        success: true,
+        model: 'balanced',
+        path: '',
+        removed: true,
+        removedFiles: 0,
+        removedBytes: 0,
+      },
+    }),
+    verifySemanticModel: async () => ({
+      ok: true as const,
+      value: {
+        model: 'balanced',
+        ready: false,
+        downloading: false,
+        path: '',
+        downloadedBytes: 0,
+        totalBytes: 0,
+        percent: 0,
+      },
+    }),
     diagnostics: async () =>
       ({
         ok: true as const,

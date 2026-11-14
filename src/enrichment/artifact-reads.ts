@@ -66,6 +66,16 @@ export interface ArtifactReadDependencies {
     request: Extract<ZoteroDocumentArtifactRequestView, { op: 'open' | 'inspect' }>,
     signal: AbortSignal,
   ) => Promise<DisplayArtifactLookup>
+  /** Lease-free metadata for one stored artifact; never resolves an attachment. */
+  readonly metadata: (
+    request: Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>,
+    signal: AbortSignal,
+  ) => Promise<{ readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }>
+  /** One freshness probe per ref, answered from a single index snapshot. */
+  readonly probe: (
+    request: Extract<ZoteroDocumentArtifactRequestView, { op: 'probe' }>,
+    signal: AbortSignal,
+  ) => Promise<Extract<ZoteroDocumentArtifactResultView, { kind: 'probed' }>>
 }
 
 /** Every resource has a bounded lifetime; no polling or source revalidation runs behind the user. */
@@ -179,6 +189,22 @@ export class ArtifactReads {
       if (checked.agent !== owner.agent)
         throw new ZoteroError('The document owner changed.', ZOTERO_NOT_FOUND)
       return 'kind' in candidate ? candidate : { kind: 'ready', ...candidate.metadata }
+    }
+    if (request.op === 'meta') {
+      const combined = AbortSignal.any([signal, peer.signal])
+      const resolved = await this.deps.metadata(request, combined)
+      const checked = await this.deps.owner(request.sessionId, combined, ctx)
+      if (checked.agent !== owner.agent)
+        throw new ZoteroError('The document owner changed.', ZOTERO_NOT_FOUND)
+      return 'kind' in resolved ? resolved : { kind: 'meta', ...resolved.metadata }
+    }
+    if (request.op === 'probe') {
+      const combined = AbortSignal.any([signal, peer.signal])
+      const probed = await this.deps.probe(request, combined)
+      const checked = await this.deps.owner(request.sessionId, combined, ctx)
+      if (checked.agent !== owner.agent)
+        throw new ZoteroError('The document owner changed.', ZOTERO_NOT_FOUND)
+      return probed
     }
     if (request.op === 'open') return await this.open(request, owner, signal, ctx)
     const entry = this.tokens.get(request.lease)
@@ -390,6 +416,14 @@ export class ArtifactReads {
 
   retireAgent(agent: Agent): void {
     for (const entry of this.requests.values()) if (entry.owner.agent === agent) this.retire(entry)
+  }
+
+  /** Invalidate open leases for one artifact before its files are removed. */
+  retireArtifact(artifactId: string): void {
+    for (const entry of this.requests.values())
+      if (entry.candidate?.metadata.artifactId === artifactId) this.retire(entry)
+    for (const entry of this.draining)
+      if (entry.candidate?.metadata.artifactId === artifactId) this.retire(entry)
   }
 
   async dispose(): Promise<void> {

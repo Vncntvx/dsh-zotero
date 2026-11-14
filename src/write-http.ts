@@ -22,7 +22,7 @@
  * @module dsh-zotero/write-http
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { acquireSlot, ConcurrencyGate } from './concurrency.js'

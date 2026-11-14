@@ -1,5 +1,6 @@
 /** Real panel/parse surface assembly; substitute only accepted config, access, jobs and Remote. */
 import { createLibraryViewStore } from '../../../../src/client/components/library/library-view-store.ts'
+import { cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import type { ZoteroItemDetailView } from '../../../../src/contract.ts'
@@ -12,6 +13,11 @@ import {
   type ZoteroLibraryPanelProps,
 } from '../../../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import type { DocumentParseRemote } from '../../../../src/client/enrichment/parse-controller.ts'
+import {
+  ParsedManagerTab,
+  type ParsedManagerTabProps,
+} from '../../../../src/client/enrichment/ParsedManagerTab.tsx'
+import { parsedManagerTabAddress } from '../../../../src/client/parsed-manager-tab.ts'
 import { attachmentRef } from '../../../helpers/server/keys.ts'
 import { fakeScope } from '../../helpers/fake-scope.ts'
 import { ITEM_DETAIL, mountPanel, searchPage } from '../../helpers/library-panel-harness.tsx'
@@ -84,7 +90,7 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
         },
       },
     },
-    form,
+    { form, management: managementStubs() },
   )
   const access = observable<ReadonlySet<string>>(new Set(PARSE_ACTIONS))
   const removed = observable(false)
@@ -121,6 +127,7 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
   const surface: Partial<ZoteroLibraryPanelProps> = {
     parse: port,
     openParsed,
+    openParsedManager: () => {},
     viewStore,
     t: makeTranslate(en),
     preferenceSource,
@@ -132,6 +139,28 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
         running: false,
       } as Parameters<typeof selector>[0]),
   }
+  // The URL parse entry now lives in the manager tab, so these integration
+  // specs mount both surfaces against one port and one session.
+  const managerProps = {
+    t: makeTranslate(en),
+    useAccess: (action: string) =>
+      useSyncExternalStore(access.subscribe, access.getSnapshot).has(action),
+    useSession: (selector: (snapshot: { removed: boolean }) => unknown) =>
+      selector({ removed: useSyncExternalStore(removed.subscribe, removed.getSnapshot) }),
+    useTabInfo: () => ({
+      tab: {
+        navigation: { address: parsedManagerTabAddress({ sessionId: PARSE_SESSION }), params: {} },
+      },
+    }),
+    management: {
+      listParsedDocuments: async () => ({ ok: true, value: { rows: [], total: 0 } }),
+      discardParsedDocument: async () => ({ ok: true, value: { kind: 'missing' } }),
+    },
+    parse: port,
+    openParsed: () => {},
+    discarded: () => {},
+  } as unknown as ParsedManagerTabProps
+  const mountManager = () => render(<ParsedManagerTab {...managerProps} />)
   return {
     port,
     openParsed,
@@ -143,10 +172,13 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
     removed,
     mount: (next = PARENT_DETAIL) => {
       detail = next
+      mountManager()
       return mountPanel({ item, search }, sessions, surface)
     },
     remount: (panel: ReturnType<typeof mountPanel>) => {
       panel.view.unmount()
+      cleanup()
+      mountManager()
       return mountPanel({ item, search }, sessions, surface)
     },
     withdraw: () => {
@@ -161,3 +193,17 @@ export function parseIntegrationWorld(overrides: Partial<DocumentParseRemote> = 
 }
 
 export { ZoteroLibraryPanel, en, PARSE_SESSION }
+
+/** The management wire stubs the parse surface forwards; world-driven specs override per test. */
+export function managementStubs() {
+  return {
+    listParsedDocuments: vi.fn(async () => ({
+      ok: true as const,
+      value: { rows: [], total: 0 },
+    })),
+    discardParsedDocument: vi.fn(async () => ({
+      ok: true as const,
+      value: { kind: 'discarded' as const, removedAliases: 0, removedReceipts: 0 },
+    })),
+  }
+}

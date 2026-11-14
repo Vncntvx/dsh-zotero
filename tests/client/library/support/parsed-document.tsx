@@ -12,6 +12,7 @@ import {
 } from '../../../../src/client/parsed-documents.ts'
 import {
   ParsedDocumentTab,
+  ParsedDocumentTitle,
   type ParsedDocumentTabProps,
 } from '../../../../src/client/components/library/ParsedDocumentTab.tsx'
 import { parsedTabAddress } from '../../../../src/client/parsed-tab.ts'
@@ -43,6 +44,7 @@ export function documentRead(
   text: string,
   options: {
     artifactId?: string
+    title?: string
     images?: { name: string; mediaType: 'image/png'; bytes: number; base64: string }[]
   } = {},
 ) {
@@ -55,6 +57,26 @@ export function documentRead(
   return vi.fn<ParsedArtifactRead>(async (request) => {
     if (request.op === 'release') return { ok: true, value: { kind: 'released' } }
     if (request.op === 'inspect') return { ok: true, value: { kind: 'ready', ...metadata } }
+    if (request.op === 'meta')
+      return {
+        ok: true,
+        value: {
+          kind: 'meta',
+          ...metadata,
+          ...(options.title !== undefined ? { title: options.title } : {}),
+        },
+      }
+    if (request.op === 'probe')
+      return {
+        ok: true,
+        value: {
+          kind: 'probed',
+          results: request.refs.map((ref) => ({
+            ref,
+            state: ref === REF ? ('ready' as const) : ('missing' as const),
+          })),
+        },
+      }
     const offset = request.op === 'page' ? request.offset : 0
     const page = {
       offset,
@@ -160,6 +182,7 @@ export function parsedRuntime(
       t: mockT,
       sessionId: SESSION,
       refresh: (address: string) => documents.refresh(address),
+      documents,
       item: options.item,
       inputActions: options.actions,
       useResource: () => useSyncExternalStore(source.subscribe, source.getSnapshot),
@@ -200,7 +223,7 @@ export function parsedRuntime(
             },
           }
         : {}),
-    }) as unknown as ParsedDocumentTabProps
+    }) as unknown as ParsedDocumentTabProps & Parameters<typeof ParsedDocumentTitle>[0]
   return {
     source,
     access,

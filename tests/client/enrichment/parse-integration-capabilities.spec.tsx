@@ -69,9 +69,18 @@ describe('parsing capability integration', () => {
     expect(runtime.stopRows).toHaveBeenCalled()
     act(() => runtime.connection.publish('connected'))
     act(() => runtime.withdraw())
-    expect(screen.getByText(en.parseUnavailable)).toBeDefined()
-    expect(confirm().disabled).toBe(true)
+    // The manager tab withdraws with the component instead of keeping a dialog
+    // open against a withdrawn capability.
+    expect(screen.getByText(en.parsedManagerUnavailable)).toBeDefined()
+    expect(screen.queryByRole('dialog')).toBeNull()
     act(() => runtime.serve())
+    await act(async () => {})
+    // Re-enter the manager's URL form: the withdrawn tab dropped its dialog,
+    // so a fresh submission starts from a clean selection.
+    fireEvent.click(screen.getByRole('button', { name: en.libraryParseUrl }))
+    fireEvent.change(screen.getByRole('textbox', { name: en.parseUrl }), {
+      target: { value: 'https://papers.example.org/paper.pdf' },
+    })
     await act(async () => {})
     expect(confirm().disabled).toBe(false)
     expect(runtime.remote.startDocumentParse).not.toHaveBeenCalled()

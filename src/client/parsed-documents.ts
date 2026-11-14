@@ -1,14 +1,17 @@
 /** Complete document preparation owned by the host resource model, outside React. */
+import { useEffect, useMemo, useState } from 'react'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError, remoteErrorOf, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ZoteroArtifactMetadataView,
   ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
+  ZoteroParseTargetView,
 } from '../contract.ts'
 import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../contract.ts'
 import { parsedDisplayMarkdown } from './parsed-markdown.ts'
-import { parseParsedTabAddress, parsedTabAddress } from './parsed-tab.ts'
+import { parseParsedTabAddress, type ParsedTabTarget } from './parsed-tab.ts'
+import { isGenericParsedTitle } from '../parsed-title.ts'
 import { en, type ZoteroLocaleKey } from './locales.ts'
 
 export type ParsedArtifactRead = (
@@ -49,6 +52,8 @@ interface Entry {
   readonly listeners: Set<() => void>
   frame: RemoteResult<ParsedDocumentResource>
   document?: PreparedParsedDocument
+  /** Set once a read opens; a discard refresh only touches matching tabs. */
+  artifactId?: string
   abort?: AbortController
   work: Promise<void>
   generation: number
@@ -97,6 +102,27 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
   readonly protocol = 'zotero-parsed' as const
   private readonly entries = new Map<string, Entry>()
   private bytes = 0
+  /** Lease-free tab titles keyed by address; `missing` entries re-resolve. */
+  private readonly titles = new Map<string, ParsedTitleMeta>()
+  private readonly titleListeners = new Map<string, Set<(meta: ParsedTitleMeta) => void>>()
+  private readonly titleReads = new Map<string, AbortController>()
+  /** Bumped by every commit and discard, so derived views re-probe without polling. */
+  private probeGenerations = 0
+  private readonly probeListeners = new Set<() => void>()
+  readonly probeRevision = {
+    getSnapshot: () => this.probeGenerations,
+    subscribe: (listener: () => void): (() => void) => {
+      this.probeListeners.add(listener)
+      return () => {
+        this.probeListeners.delete(listener)
+      }
+    },
+  }
+
+  private bumpProbeRevision(): void {
+    this.probeGenerations++
+    for (const listener of this.probeListeners) listener()
+  }
   constructor(
     private readonly read: ParsedArtifactRead,
     private readonly access: (sessionId: string) => AccessSource,
@@ -219,23 +245,31 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
         },
       })
       try {
-        const document = await this.prepare(target.sessionId, target.ref, abort.signal, (next) => {
-          if (generation === entry.generation)
-            this.publish(entry, {
-              ok: true,
-              value: {
-                phase: 'preparing',
-                progress: next,
-                ...(entry.document !== undefined ? { document: entry.document } : {}),
-              },
-            })
-        })
+        const document = await this.prepare(
+          target.sessionId,
+          target.artifactId !== undefined
+            ? { kind: 'artifact', artifactId: target.artifactId }
+            : { kind: 'attachment', ref: target.ref },
+          abort.signal,
+          (next) => {
+            if (generation === entry.generation)
+              this.publish(entry, {
+                ok: true,
+                value: {
+                  phase: 'preparing',
+                  progress: next,
+                  ...(entry.document !== undefined ? { document: entry.document } : {}),
+                },
+              })
+          },
+        )
         if (entry.closed || generation !== entry.generation || abort.signal.aborted) {
           this.revoke(document)
           return
         }
         const previous = entry.document
         entry.document = document
+        entry.artifactId = document.metadata.artifactId
         this.publish(entry, {
           ok: true,
           value: {
@@ -263,7 +297,109 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
   }
 
   committed(sessionId: string, ref: string): void {
-    this.refresh(parsedTabAddress({ sessionId, ref, title: '' }))
+    // Addresses carry presentation values in their query, so open tabs match
+    // structurally on (session, ref) rather than by exact address string.
+    this.refreshMatching(sessionId, (target) => target.ref === ref)
+    this.invalidateTitles(sessionId, (target) => target.ref === ref)
+    this.bumpProbeRevision()
+  }
+
+  /** A discarded artifact invalidates every open tab bound to it. */
+  discarded(sessionId: string, artifactId: string): void {
+    this.refreshMatching(
+      sessionId,
+      (target, bound) => target.artifactId === artifactId || bound === artifactId,
+    )
+    this.invalidateTitles(sessionId, (target) => target.artifactId === artifactId)
+    this.bumpProbeRevision()
+  }
+
+  private refreshMatching(
+    sessionId: string,
+    matches: (target: ParsedTabTarget, boundArtifactId?: string) => boolean,
+  ): void {
+    for (const [address, entry] of this.entries) {
+      const target = parseParsedTabAddress(address)
+      if (target === undefined || target.sessionId !== sessionId) continue
+      if (matches(target, entry.artifactId)) this.refresh(address)
+    }
+  }
+
+  /** The cached tab title for one address; `missing` entries re-resolve. */
+  titleSnapshot(address: string): ParsedTitleMeta {
+    return this.titles.get(address) ?? { state: 'missing' }
+  }
+
+  subscribeTitle(address: string, listener: (meta: ParsedTitleMeta) => void): () => void {
+    const listeners = this.titleListeners.get(address) ?? new Set()
+    listeners.add(listener)
+    this.titleListeners.set(address, listeners)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.titleListeners.get(address) === listeners)
+        this.titleListeners.delete(address)
+    }
+  }
+
+  /**
+   * Resolve one address's title through the lease-free `meta` arm, once: a
+   * non-generic address title needs no read, a cached or in-flight read is
+   * kept, and a `missing` result re-resolves on the next invalidation.
+   */
+  resolveTitle(address: string, target: ParsedTabTarget | undefined): void {
+    if (target === undefined || !isGenericParsedTitle(target.title)) return
+    const cached = this.titles.get(address)
+    if (cached?.state === 'ready' || cached?.state === 'resolving') return
+    if (this.titleReads.has(address)) return
+    const controller = new AbortController()
+    this.titleReads.set(address, controller)
+    const request: ZoteroDocumentArtifactRequestView = {
+      sessionId: target.sessionId,
+      op: 'meta',
+      target:
+        target.artifactId !== undefined
+          ? { kind: 'artifact', artifactId: target.artifactId }
+          : { kind: 'attachment', ref: target.ref },
+    }
+    void this.read(request, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        const value =
+          result.ok && result.value.kind !== 'missing' && result.value.kind !== 'expired'
+            ? result.value
+            : undefined
+        if (value === undefined || !('title' in value) || value.title === undefined) {
+          this.publishTitle(
+            address,
+            value === undefined ? { state: 'missing' } : { state: 'ready' },
+          )
+          return
+        }
+        this.publishTitle(address, { state: 'ready', title: value.title })
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) this.publishTitle(address, { state: 'missing' })
+      })
+      .finally(() => {
+        if (this.titleReads.get(address) === controller) this.titleReads.delete(address)
+      })
+  }
+
+  private publishTitle(address: string, meta: ParsedTitleMeta): void {
+    this.titles.set(address, meta)
+    for (const notify of this.titleListeners.get(address) ?? []) notify(meta)
+  }
+
+  private invalidateTitles(sessionId: string, matches: (target: ParsedTabTarget) => boolean): void {
+    for (const address of new Set([...this.titleListeners.keys(), ...this.titles.keys()])) {
+      const target = parseParsedTabAddress(address)
+      if (target === undefined || target.sessionId !== sessionId || !matches(target)) continue
+      this.titleReads.get(address)?.abort()
+      this.titleReads.delete(address)
+      this.titles.delete(address)
+      this.publishTitle(address, { state: 'missing' })
+      this.resolveTitle(address, target)
+    }
   }
 
   private async call(request: ZoteroDocumentArtifactRequestView, signal: AbortSignal) {
@@ -275,7 +411,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 
   private async prepare(
     sessionId: string,
-    ref: string,
+    target: ZoteroParseTargetView,
     signal: AbortSignal,
     report: (value: ParsedDocumentProgress) => void,
   ): Promise<PreparedParsedDocument> {
@@ -286,10 +422,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     let reserved = 0
     let published = false
     try {
-      const opened = await this.call(
-        { sessionId, op: 'open', requestId, target: { kind: 'attachment', ref } },
-        combined,
-      )
+      const opened = await this.call({ sessionId, op: 'open', requestId, target }, combined)
       if (opened.kind !== 'opened') throw this.failure('parsedErrorMissing')
       reserved =
         opened.characterCount * 6 + opened.images.reduce((total, image) => total + image.bytes, 0)
@@ -404,4 +537,34 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
       }
     }
   }
+}
+
+/** The lease-free title state for one parsed-document tab address. */
+export interface ParsedTitleMeta {
+  readonly state: 'missing' | 'resolving' | 'ready'
+  readonly title?: string
+}
+
+/**
+ * Subscribe one tab chip to its lease-free title: one `meta` read per
+ * unresolved generic title, cached until a commit or discard invalidates it.
+ * The body keeps being the only full-document holder.
+ */
+export function useParsedTitleMeta(
+  documents: ParsedDocuments,
+  address: string,
+  target: ParsedTabTarget | undefined,
+): ParsedTitleMeta {
+  // The parsed target is rebuilt per render; only its identity matters here.
+  const stableTarget = useMemo(
+    () => target,
+    [target?.sessionId, target?.ref, target?.artifactId, target?.title, target?.item],
+  )
+  const [snapshot, setSnapshot] = useState<ParsedTitleMeta>(() => documents.titleSnapshot(address))
+  useEffect(() => {
+    setSnapshot(documents.titleSnapshot(address))
+    documents.resolveTitle(address, stableTarget)
+    return documents.subscribeTitle(address, setSnapshot)
+  }, [documents, address, stableTarget])
+  return snapshot
 }

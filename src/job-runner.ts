@@ -11,7 +11,7 @@ import type { ResultDelivery } from './result-delivery.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution, ToolResultView } from '@deepseek-ai/dsh-tools'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -24,8 +24,7 @@ import type {
   JobSpec,
   JobView,
 } from '@deepseek-ai/dsh-jobs'
-import { JobError } from '@deepseek-ai/dsh-jobs'
-import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { errorMessageOf, ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
@@ -300,7 +299,7 @@ export async function executeWithJobs<T>(options: {
 
   if (options.runInBackground) {
     if (!policy.enableRunInBackground) {
-      throw new JobError(RUN_IN_BACKGROUND_DISABLED_MESSAGE, 'JOB_BACKGROUND_DISABLED')
+      throw new ToolArgsError([RUN_IN_BACKGROUND_DISABLED_MESSAGE])
     }
     if (!runner.isAvailable) {
       throw new ToolContextUnavailableError(JOBS_UNAVAILABLE_MESSAGE)

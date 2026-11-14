@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
 import preferenceCss from '../../library-settings.module.css'
 /**
@@ -13,9 +14,20 @@ import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/cli
 import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
 import { isPdfContentType } from '../../../media-types.ts'
+import type { ZoteroSearchItemView } from '../../../contract.ts'
+import type { ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
+import type { ParsedDocuments } from '../../parsed-documents.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
+
+export interface ParsedArtifactProbeFace {
+  readonly sessionId: string
+  readonly read?: ParsedArtifactReader
+  readonly revision?: number
+  /** Commit/discard invalidation from the parsed-document provider. */
+  readonly documents?: ParsedDocuments
+}
 
 interface LibraryItemListProps {
   readonly scrollKey?: string
@@ -33,6 +45,104 @@ interface LibraryItemListProps {
   readonly selectItem: (ref: string | undefined) => void
   readonly retry: () => void
   readonly useContextMenu?: UseContextMenu
+  readonly parsedArtifact?: ParsedArtifactProbeFace
+}
+
+/**
+ * Probes which visible items have an already-parsed Markdown artifact: one
+ * batched freshness probe per page, invalidated by the parse dialog's
+ * revision and by every commit or discard the parsed-document provider
+ * reports — never by polling.
+ */
+export function useParsedArtifacts(
+  items: readonly ZoteroSearchItemView[] | undefined,
+  parsedArtifact?: ParsedArtifactProbeFace,
+): ReadonlySet<string> {
+  const [parsedRefs, setParsedRefs] = useState<ReadonlySet<string>>(() => new Set())
+  const [probeEpoch, setProbeEpoch] = useState(0)
+  const cacheRef = useRef<Map<string, boolean>>(new Map())
+  const prevRevision = useRef<number | undefined>(parsedArtifact?.revision)
+  const prevProbeRevision = useRef(0)
+  const documents = parsedArtifact?.documents
+
+  useEffect(() => {
+    if (documents === undefined) return
+    return documents.probeRevision.subscribe(() => setProbeEpoch((epoch) => epoch + 1))
+  }, [documents])
+
+  useEffect(() => {
+    const probeRevision = documents?.probeRevision.getSnapshot() ?? 0
+    if (
+      prevRevision.current !== parsedArtifact?.revision ||
+      prevProbeRevision.current !== probeRevision
+    ) {
+      cacheRef.current.clear()
+      prevRevision.current = parsedArtifact?.revision
+      prevProbeRevision.current = probeRevision
+    }
+
+    if (!parsedArtifact?.read || !items || items.length === 0) {
+      setParsedRefs(new Set())
+      return
+    }
+
+    const { sessionId, read } = parsedArtifact
+    const cache = cacheRef.current
+
+    const candidates = items
+      .filter((item) => isPdfContentType(item.bestAttachmentType) && item.bestAttachmentRef)
+      .map((item) => item.bestAttachmentRef!)
+
+    if (candidates.length === 0) {
+      setParsedRefs(new Set())
+      return
+    }
+
+    const knownParsed = new Set<string>()
+    const unknown: string[] = []
+
+    for (const ref of candidates) {
+      const cached = cache.get(ref)
+      if (cached === true) {
+        knownParsed.add(ref)
+      } else if (cached === undefined) {
+        unknown.push(ref)
+      }
+    }
+
+    setParsedRefs(knownParsed)
+
+    const uniqueUnknown = [...new Set(unknown)]
+    if (uniqueUnknown.length === 0) {
+      return
+    }
+
+    const abort = new AbortController()
+
+    void read({ sessionId, op: 'probe', refs: uniqueUnknown }, abort.signal)
+      .then((result) => {
+        if (abort.signal.aborted) return
+        const probed = result.ok && result.value.kind === 'probed' ? result.value : undefined
+        if (probed === undefined) return
+        for (const { ref, state } of probed.results) cache.set(ref, state === 'ready')
+        setParsedRefs((prev) => {
+          const next = new Set(prev)
+          for (const { ref, state } of probed.results) {
+            if (state === 'ready') next.add(ref)
+          }
+          return next
+        })
+      })
+      .catch(() => {
+        // A failed probe stays unknown: the next revision or page turn retries.
+      })
+
+    return () => {
+      abort.abort()
+    }
+  }, [items, parsedArtifact?.sessionId, parsedArtifact?.read, parsedArtifact?.revision, probeEpoch])
+
+  return parsedRefs
 }
 
 /** The header a selection shows; collection/search rows carry their own name. */
@@ -66,12 +176,17 @@ export function LibraryItemList({
   selectItem,
   retry,
   useContextMenu,
+  parsedArtifact,
 }: LibraryItemListProps) {
   const scroll = useLibraryScroll(scrollKey, list.phase === 'ready')
   const { preferences } = useLibraryPreferences()
   const compact = preferences?.listDensity === 'compact'
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
   const contextMenu = typeof useContextMenu === 'function' ? useContextMenu() : undefined
+  const parsedRefs = useParsedArtifacts(
+    list.phase === 'ready' ? list.items : undefined,
+    parsedArtifact,
+  )
 
   return (
     <section
@@ -135,6 +250,10 @@ export function LibraryItemList({
             {list.items.map((item) => {
               const isSelected = selectedRef === item.ref
               const hasPdf = isPdfContentType(item.bestAttachmentType)
+              const isParsed =
+                hasPdf &&
+                item.bestAttachmentRef !== undefined &&
+                parsedRefs.has(item.bestAttachmentRef)
               const triggerProps = contextMenu?.getTriggerProps({
                 kind: 'zoteroItem',
                 value: {
@@ -177,7 +296,21 @@ export function LibraryItemList({
                     {/* A detection badge, not an absence claim: the search
                      * index's best-attachment pick names a PDF when one is
                      * indexed; rows without it may still carry files. */}
-                    {hasPdf && <span className={css.pdfBadge}>{t('badgePdf')}</span>}
+                    {hasPdf && !isParsed && (
+                      <span className={css.pdfBadge} title={t('badgePdfTitle')}>
+                        {t('badgePdf')}
+                      </span>
+                    )}
+                    {hasPdf && isParsed && (
+                      <div className={css.badgeStack}>
+                        <span className={css.pdfBadge} title={t('badgePdfTitle')}>
+                          {t('badgePdf')}
+                        </span>
+                        <span className={css.mdBadge} title={t('badgePdfMarkdownTitle')}>
+                          {t('badgeMarkdown')}
+                        </span>
+                      </div>
+                    )}
                   </Button>
                 </li>
               )

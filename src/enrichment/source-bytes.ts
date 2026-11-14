@@ -230,7 +230,11 @@ export async function probeSource(
   if (source.kind === 'url') {
     return await probeUrl(source.url, maxBytes, deps.client, signal)
   }
-  const resolved = await owned(() => deps.resolveAttachment(source.attachmentRef, signal), signal)
+  // Target validation usually resolved the attachment already; reuse it so a
+  // probe costs one resolution, not two.
+  const resolved =
+    input.resolvedAttachment ??
+    (await owned(() => deps.resolveAttachment(source.attachmentRef, signal), signal))
   if (resolved.kind === 'file' && resolved.path !== undefined) {
     const path = resolved.path
     const info = await owned(() => deps.stat(path), signal)

@@ -24,7 +24,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import {
   catalogFilePinsOf,

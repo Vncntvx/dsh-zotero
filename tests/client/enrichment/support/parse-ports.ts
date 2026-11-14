@@ -109,7 +109,17 @@ export function parseRemote(overrides: Partial<DocumentParseRemote> = {}) {
         })),
     ),
     documentArtifact: vi.fn<DocumentParseRemote['documentArtifact']>(
-      overrides.documentArtifact ?? (async () => ({ ok: true, value: { kind: 'missing' } })),
+      overrides.documentArtifact ??
+        (async (request) =>
+          request.op === 'probe'
+            ? {
+                ok: true as const,
+                value: {
+                  kind: 'probed' as const,
+                  results: request.refs.map((ref) => ({ ref, state: 'missing' as const })),
+                },
+              }
+            : { ok: true, value: { kind: 'missing' } }),
     ),
     documentParseReceipt: vi.fn<DocumentParseRemote['documentParseReceipt']>(
       overrides.documentParseReceipt ??

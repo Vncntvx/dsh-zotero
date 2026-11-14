@@ -512,6 +512,8 @@ export function zoteroSourcePageInvocation(
 export type ZoteroParseTargetView =
   | { readonly kind: 'attachment'; readonly ref: string }
   | { readonly kind: 'url'; readonly url: string }
+  /** An opaque stored artifact id; the host resolves it to a concrete source. */
+  | { readonly kind: 'artifact'; readonly artifactId: string }
 
 export interface ZoteroStartDocumentParseRequestView {
   readonly sessionId: string
@@ -550,6 +552,12 @@ export const ZOTERO_ARTIFACT_PAGE_CHARS = 65_536
 /** The largest figure one read may return, before base64 expansion. */
 export const ZOTERO_ARTIFACT_IMAGE_BYTES = 8 * 1024 * 1024
 
+/**
+ * The artifact id is the store's cache key: a SHA-256 hex string. One shared
+ * pattern serves the wire schemas, the host modules and the client controller.
+ */
+export const ZOTERO_ARTIFACT_ID_PATTERN = /^[a-f0-9]{64}$/
+
 /** The figure formats a parsed artifact carries. */
 export type ZoteroArtifactImageMediaType =
   'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp'
@@ -575,6 +583,13 @@ export type ZoteroDocumentArtifactRequestView =
       readonly name: string
     }
   | { readonly sessionId: string; readonly op: 'release'; readonly requestId: string }
+  /** Lease-free metadata for one stored artifact; no source probe, no lease. */
+  | { readonly sessionId: string; readonly op: 'meta'; readonly target: ZoteroParseTargetView }
+  /** One freshness probe per visible attachment row, answered in a single call. */
+  | { readonly sessionId: string; readonly op: 'probe'; readonly refs: readonly string[] }
+
+/** How one probed attachment relates to its committed artifact. */
+export type ZoteroArtifactProbeState = 'ready' | 'missing' | 'expired'
 
 export interface ZoteroArtifactImageView {
   readonly name: string
@@ -591,6 +606,13 @@ export interface ZoteroArtifactMetadataView {
   readonly characterCount: number
   readonly pageCount?: number
   readonly images: readonly ZoteroArtifactImageView[]
+  /** The Markdown H1 captured at commit time, present for newer artifacts. */
+  readonly title?: string
+}
+
+export interface ZoteroArtifactProbeResultView {
+  readonly ref: string
+  readonly state: ZoteroArtifactProbeState
 }
 
 export interface ZoteroArtifactPageView {
@@ -603,6 +625,8 @@ export type ZoteroDocumentArtifactResultView =
   | { readonly kind: 'missing' | 'expired' }
   | { readonly kind: 'released' }
   | ({ readonly kind: 'ready' } & ZoteroArtifactMetadataView)
+  | ({ readonly kind: 'meta' } & ZoteroArtifactMetadataView)
+  | { readonly kind: 'probed'; readonly results: readonly ZoteroArtifactProbeResultView[] }
   | ({
       readonly kind: 'opened'
       readonly lease: string
@@ -643,7 +667,9 @@ export function zoteroDocumentParseInvocation(
   method:
     | typeof ZOTERO_START_DOCUMENT_PARSE_METHOD
     | typeof ZOTERO_DOCUMENT_ARTIFACT_METHOD
-    | typeof ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+    | typeof ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD
+    | typeof ZOTERO_LIST_PARSED_DOCUMENTS_METHOD
+    | typeof ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
   param: InvocationDescriptor['parameters'][number]['codec'],
   result: InvocationDescriptor['result'],
 ): InvocationDescriptor {
@@ -658,6 +684,72 @@ export function zoteroDocumentParseInvocation(
     result,
   }
 }
+
+/** One inventory row's health: indexed by the source index, orphaned on disk, or broken. */
+export type ZoteroParsedDocumentState = 'indexed' | 'orphan' | 'broken'
+
+/** A server-side page of committed parsed artifacts, newest first. */
+export interface ZoteroListParsedDocumentsRequestView {
+  readonly sessionId: string
+  readonly offset: number
+  readonly limit: number
+  /** Keep only rows in this state; absence keeps every state. */
+  readonly state?: ZoteroParsedDocumentState
+  /** Case-insensitive match over the row title, its safe source label and its artifact id. */
+  readonly query?: string
+}
+
+/** Why one row's meta could not be read; the detail is sanitized at the boundary. */
+export interface ZoteroParsedDocumentBrokenView {
+  readonly code: 'missing-meta' | 'unreadable-meta'
+  readonly detail?: string
+}
+
+export interface ZoteroParsedDocumentRowView {
+  readonly artifactId: string
+  readonly state: ZoteroParsedDocumentState
+  readonly sourceKind: 'attachment' | 'url'
+  /** The Markdown H1 captured at commit; absent for older artifacts and broken rows. */
+  readonly title?: string
+  /** Safe display: a canonical Zotero attachment ref or an origin-only URL. */
+  readonly targetLabel: string
+  readonly mode: 'free' | 'pro'
+  readonly generation: string
+  readonly fingerprint: string
+  readonly characterCount: number
+  readonly pageCount?: number
+  readonly images: readonly {
+    readonly name: string
+    readonly mediaType: ZoteroArtifactImageMediaType
+    readonly bytes: number
+  }[]
+  readonly markdownBytes: number
+  readonly committedAt: number
+  readonly aliases: readonly string[]
+  readonly broken?: ZoteroParsedDocumentBrokenView
+  readonly actionable: boolean
+}
+
+export interface ZoteroListParsedDocumentsResultView {
+  readonly rows: readonly ZoteroParsedDocumentRowView[]
+  readonly total: number
+}
+
+export interface ZoteroDiscardParsedDocumentRequestView {
+  readonly sessionId: string
+  readonly artifactId: string
+}
+
+export type ZoteroDiscardParsedDocumentResultView =
+  | { readonly kind: 'missing' }
+  | {
+      readonly kind: 'discarded'
+      readonly removedAliases: number
+      readonly removedReceipts: number
+    }
+
+export const ZOTERO_LIST_PARSED_DOCUMENTS_METHOD = 'listParsedDocuments'
+export const ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD = 'discardParsedDocument'
 
 export interface ZoteroSemanticModelStatusRequestView {
   readonly model?: string

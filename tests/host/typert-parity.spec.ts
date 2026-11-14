@@ -47,6 +47,7 @@ const NON_WIRE_MEMBERS: Readonly<Record<string, readonly string[]>> = {
     'lookup',
     'displayCandidate',
     'maybeDisposeCacheGeneration',
+    'metadataDeps',
     'parseWire',
     'releaseCacheGeneration',
     'retireActiveCache',

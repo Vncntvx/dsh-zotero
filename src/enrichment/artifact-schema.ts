@@ -1,6 +1,7 @@
 /** Closed v2 persistence contracts; no older artifact or index format is read. */
 import { z } from 'zod'
 import { ARTIFACT_IMAGE_NAME_PATTERN } from '../artifact-images.js'
+import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import type { FulltextSourceStamp, ParsedArtifactMeta } from './types.js'
 import {
@@ -9,7 +10,7 @@ import {
   ARCHIVE_MAX_IMAGE_TOTAL_BYTES,
 } from './archive-limits.js'
 
-export const SHA256 = z.string().regex(/^[0-9a-f]{64}$/)
+export const SHA256 = z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN)
 export const PARSE_GENERATION = z.uuid()
 export const SOURCE_INDEX_MAX_BYTES = 16 * 1024 * 1024
 export const SOURCE_INDEX_MAX_ENTRIES = 50_000
@@ -89,6 +90,8 @@ export const artifactMetaSchema = z
     sourceId: SHA256,
     generation: PARSE_GENERATION,
     identity: safeDisplay,
+    /** Canonical URL for a URL-sourced artifact; the only way an orphan can rebuild its target. */
+    sourceUrl: sourceUrl.optional(),
     mode: z.enum(['free', 'pro']),
     contentFingerprint: SHA256,
     taskId: z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/),
@@ -106,6 +109,8 @@ export const artifactMetaSchema = z
       )
       .optional(),
     pageCount: z.number().int().positive().optional(),
+    /** The Markdown H1, captured at commit; the tab chip names the paper with it. */
+    title: z.string().min(1).max(2048).optional(),
   })
   .strict() satisfies z.ZodType<ParsedArtifactMeta>
 

@@ -12,7 +12,15 @@ import {
 } from '../../enrichment-preferences.ts'
 import { ENRICHMENT_SETTINGS_NAMESPACE } from '../../settings-namespace.ts'
 import { refFieldsOf } from '../../ref-grammar.ts'
-import type { ZoteroAttachmentRowView, ZoteroParseTargetView } from '../../contract.ts'
+import type {
+  ZoteroAttachmentRowView,
+  ZoteroParseTargetView,
+  ZoteroListParsedDocumentsRequestView,
+  ZoteroListParsedDocumentsResultView,
+  ZoteroDiscardParsedDocumentRequestView,
+  ZoteroDiscardParsedDocumentResultView,
+} from '../../contract.ts'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ParseDocumentDialog } from './ParseDocumentDialog.tsx'
 import type {
   DocumentParseCapabilities,
@@ -35,9 +43,27 @@ export type DocumentParseDeployment = Pick<
   'mounted' | 'connected' | 'mode' | 'revision' | 'maxFileBytes' | 'maxPages'
 > & { readonly error?: string }
 
+/** The management endpoints are separate from the parse dialog's transport. */
+export interface ParsedDocumentManagementRemote {
+  listParsedDocuments(
+    request: ZoteroListParsedDocumentsRequestView,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroListParsedDocumentsResultView>>
+  discardParsedDocument(
+    request: ZoteroDiscardParsedDocumentRequestView,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<ZoteroDiscardParsedDocumentResultView>>
+}
+
 /** Kept separate from the five-member shared Zotero client face. */
 export interface DocumentParseSurfacePort {
   readonly remote: DocumentParseRemote
+  /**
+   * The management endpoints are separate from the parse dialog's transport.
+   * Availability is decided by the consumer's access gates and the manager
+   * tab's `whileServed` registration, never by presence here.
+   */
+  readonly management: ParsedDocumentManagementRemote
   readonly jobs: DocumentParseJobs
   readonly deployment: ParseSnapshotSource<DocumentParseDeployment>
   readonly recall: (selection: DocumentParseSelection) => DocumentParseOperation | undefined
@@ -51,9 +77,14 @@ export interface DocumentParseSurfacePort {
  */
 export function createDocumentParseSurface(
   ctx: DocumentParseClientContext,
-  form: ConfigForm<Record<string, unknown>>,
-  onCommitted?: (sessionId: string, target: ZoteroParseTargetView) => void,
+  options: {
+    readonly form: ConfigForm<Record<string, unknown>>
+    /** Fires once per committed parse, for panels that show committed state. */
+    readonly onCommitted?: (sessionId: string, target: ZoteroParseTargetView) => void
+    readonly management: ParsedDocumentManagementRemote
+  },
 ): DocumentParseSurfacePort & { dispose(): void } {
+  const { form, onCommitted, management } = options
   const listeners = new Set<() => void>()
   // At most 64 recent operations live in memory; document URLs never enter storage.
   const operations = new Map<
@@ -123,6 +154,7 @@ export function createDocumentParseSurface(
     }),
   ]
   return {
+    management,
     remote: {
       startDocumentParse: async (request) => {
         const key = keyOf(request)
@@ -316,10 +348,18 @@ export function useDocumentParseSurface(
         select(port.recentUrl(sessionId) ?? { sessionId, target: { kind: 'url', url: '' } })
       }
     : undefined
+  const openArtifact = port
+    ? (artifactId: string, label: string) => {
+        if (!sessionAllowed) return
+        select({ sessionId, target: { kind: 'artifact', artifactId }, label })
+      }
+    : undefined
   return {
     openAttachment,
     openUrl,
+    openArtifact,
     revision,
+    mounted: deployment.mounted,
     dialog: port && selection && (
       <>
         {deployment.error && (

@@ -11,6 +11,7 @@ import type {
   ZoteroStartDocumentParseRequestView,
   ZoteroStartDocumentParseResultView,
 } from '../../contract.ts'
+import { ZOTERO_ARTIFACT_ID_PATTERN } from '../../contract.ts'
 
 /** Only the public jobs service is accepted; the surface owns no stream or job engine. */
 export type DocumentParseJobs = Pick<IJobs, 'state' | 'watchRows' | 'observe' | 'kill'>
@@ -98,6 +99,7 @@ export function typedRemoteResult<T>(result: RemoteResult<T>): T {
 
 /** Display labels never include signed paths, URL credentials or query strings. */
 export function documentParseLabel(target: ZoteroParseTargetView, label?: string): string {
+  if (target.kind === 'artifact') return documentParseText(label ?? '')
   if (target.kind === 'url') {
     try {
       const url = new URL(target.url)
@@ -125,6 +127,7 @@ export function documentParseText(value: string): string {
 
 /** Draft validation performs no RPC, source request, DNS lookup or PDF download. */
 export function validDocumentParseTarget(target: ZoteroParseTargetView): boolean {
+  if (target.kind === 'artifact') return ZOTERO_ARTIFACT_ID_PATTERN.test(target.artifactId)
   if (target.kind === 'attachment') {
     const ref = refFieldsOf(target.ref)
     if (!ref || ref.kind !== 'attachment') return false

@@ -18,15 +18,22 @@ import type {
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
   ZoteroDocumentParseReceiptResultView,
+  ZoteroListParsedDocumentsRequestView,
+  ZoteroListParsedDocumentsResultView,
+  ZoteroDiscardParsedDocumentRequestView,
+  ZoteroDiscardParsedDocumentResultView,
   ZoteroParseReceiptView,
 } from './contract.js'
 import {
   zoteroDocumentParseInvocation,
+  ZOTERO_ARTIFACT_ID_PATTERN,
   ZOTERO_ARTIFACT_IMAGE_BYTES,
   ZOTERO_ARTIFACT_PAGE_CHARS,
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
   ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+  ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
+  ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
 } from './contract.js'
 import {
   ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL,
@@ -1031,6 +1038,12 @@ export const zoteroParseTargetSchema = z.discriminatedUnion('kind', [
         }, 'expected an HTTP(S) URL without credentials'),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('artifact'),
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+    })
+    .strict(),
 ])
 
 export const zoteroStartDocumentParseRequestSchema = z
@@ -1046,12 +1059,12 @@ export const zoteroParseReceiptSchema = z
   .object({
     operationId: z.uuid(),
     generation: z.uuid(),
-    sourceId: z.string().regex(/^[a-f0-9]{64}$/),
+    sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
     targetLabel: z.string().min(1).max(2048),
     mode: z.enum(['free', 'pro']),
     cached: z.boolean(),
-    artifactId: z.string().regex(/^[a-f0-9]{64}$/),
-    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+    fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
     format: z.literal('markdown'),
     characterCount: z.number().int().nonnegative(),
     preview: z.string().max(4096),
@@ -1108,6 +1121,20 @@ export const zoteroDocumentArtifactRequestSchema = z.discriminatedUnion('op', [
     })
     .strict(),
   z.object({ sessionId: artifactSession, op: z.literal('release'), requestId: z.uuid() }).strict(),
+  z
+    .object({
+      sessionId: artifactSession,
+      op: z.literal('meta'),
+      target: zoteroParseTargetSchema,
+    })
+    .strict(),
+  z
+    .object({
+      sessionId: artifactSession,
+      op: z.literal('probe'),
+      refs: z.array(z.string().min(1).max(1024)).min(1).max(100),
+    })
+    .strict(),
 ]) satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
 
 const artifactImageMediaType = z.enum([
@@ -1117,25 +1144,24 @@ const artifactImageMediaType = z.enum([
   'image/webp',
   'image/bmp',
 ])
+const artifactImageMeta = z
+  .object({
+    name: artifactImageNameSchema,
+    mediaType: artifactImageMediaType,
+    bytes: z.number().int().positive().max(ZOTERO_ARTIFACT_IMAGE_BYTES),
+  })
+  .strict()
+
 const artifactMetadata = z.object({
-  sourceId: z.string().regex(/^[a-f0-9]{64}$/),
+  sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
   targetLabel: z.string().min(1).max(2048),
   mode: z.enum(['free', 'pro']),
-  artifactId: z.string().regex(/^[a-f0-9]{64}$/),
-  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+  fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
   characterCount: z.number().int().nonnegative(),
   pageCount: z.number().int().positive().optional(),
-  images: z
-    .array(
-      z
-        .object({
-          name: artifactImageNameSchema,
-          mediaType: artifactImageMediaType,
-          bytes: z.number().int().positive().max(ZOTERO_ARTIFACT_IMAGE_BYTES),
-        })
-        .strict(),
-    )
-    .max(ARCHIVE_MAX_IMAGES),
+  images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
+  title: z.string().max(2048).optional(),
 })
 const artifactPage = z
   .object({
@@ -1161,6 +1187,22 @@ export const zoteroDocumentArtifactResultSchema = z.union([
   z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
   z.object({ kind: z.literal('released') }).strict(),
   artifactMetadata.extend({ kind: z.literal('ready') }).strict(),
+  artifactMetadata.extend({ kind: z.literal('meta') }).strict(),
+  z
+    .object({
+      kind: z.literal('probed'),
+      results: z
+        .array(
+          z
+            .object({
+              ref: z.string().min(1).max(1024),
+              state: z.enum(['ready', 'missing', 'expired']),
+            })
+            .strict(),
+        )
+        .max(100),
+    })
+    .strict(),
   artifactMetadata
     .extend({
       kind: z.literal('opened'),
@@ -1174,7 +1216,7 @@ export const zoteroDocumentArtifactResultSchema = z.union([
     .object({
       kind: z.literal('page'),
       lease: z.uuid(),
-      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
       page: artifactPage,
     })
     .strict(),
@@ -1182,7 +1224,7 @@ export const zoteroDocumentArtifactResultSchema = z.union([
     .object({
       kind: z.literal('image'),
       lease: z.uuid(),
-      artifactId: z.string().regex(/^[a-f0-9]{64}$/),
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
       name: artifactImageNameSchema,
       mediaType: artifactImageMediaType,
       base64: z
@@ -1220,6 +1262,68 @@ export const zoteroDocumentParseReceiptResultSchema = z.union([
     .strict(),
 ]) satisfies z.ZodType<ZoteroDocumentParseReceiptResultView>
 
+const parsedDocumentRow = z
+  .object({
+    artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+    state: z.enum(['indexed', 'orphan', 'broken']),
+    sourceKind: z.enum(['attachment', 'url']),
+    title: z.string().min(1).max(2048).optional(),
+    targetLabel: z.string().max(1024),
+    mode: z.enum(['free', 'pro']),
+    generation: z.uuid().or(z.literal('')),
+    fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN).or(z.literal('')),
+    characterCount: z.number().int().nonnegative(),
+    pageCount: z.number().int().positive().optional(),
+    images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
+    markdownBytes: z.number().int().nonnegative(),
+    committedAt: z.number().finite().nonnegative(),
+    aliases: z.array(z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN)).max(50_000),
+    broken: z
+      .object({
+        code: z.enum(['missing-meta', 'unreadable-meta']),
+        detail: z.string().max(512).optional(),
+      })
+      .strict()
+      .optional(),
+    actionable: z.boolean(),
+  })
+  .strict()
+
+export const zoteroListParsedDocumentsRequestSchema = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    offset: z.number().int().nonnegative().max(50_000),
+    limit: z.number().int().positive().max(200),
+    state: z.enum(['indexed', 'orphan', 'broken']).optional(),
+    query: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict() satisfies z.ZodType<ZoteroListParsedDocumentsRequestView>
+
+export const zoteroListParsedDocumentsResultSchema = z
+  .object({
+    rows: z.array(parsedDocumentRow).max(200),
+    total: z.number().int().nonnegative(),
+  })
+  .strict() satisfies z.ZodType<ZoteroListParsedDocumentsResultView>
+
+export const zoteroDiscardParsedDocumentRequestSchema = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+  })
+  .strict() satisfies z.ZodType<ZoteroDiscardParsedDocumentRequestView>
+
+export const zoteroDiscardParsedDocumentResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('missing') }).strict(),
+  z
+    .object({
+      kind: z.literal('discarded'),
+      removedAliases: z.number().int().nonnegative(),
+      removedReceipts: z.number().int().nonnegative(),
+    })
+    .strict(),
+]) satisfies z.ZodType<ZoteroDiscardParsedDocumentResultView>
+
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroDocumentParseInvocation(
     ZOTERO_START_DOCUMENT_PARSE_METHOD,
@@ -1249,6 +1353,28 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
     strictCodec(
       'dsh-zotero#ZoteroDocumentParseReceiptResultView',
       zoteroDocumentParseReceiptResultSchema,
+    ),
+  ),
+  zoteroDocumentParseInvocation(
+    ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
+    strictCodec(
+      'dsh-zotero#ZoteroListParsedDocumentsRequestView',
+      zoteroListParsedDocumentsRequestSchema,
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroListParsedDocumentsResultView',
+      zoteroListParsedDocumentsResultSchema,
+    ),
+  ),
+  zoteroDocumentParseInvocation(
+    ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
+    strictCodec(
+      'dsh-zotero#ZoteroDiscardParsedDocumentRequestView',
+      zoteroDiscardParsedDocumentRequestSchema,
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroDiscardParsedDocumentResultView',
+      zoteroDiscardParsedDocumentResultSchema,
     ),
   ),
   zoteroSemanticModelStatusInvocation(

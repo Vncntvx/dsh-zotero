@@ -22,7 +22,7 @@
  * @module dsh-zotero/tools/degradable
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ZOTERO_NOT_FOUND, ZOTERO_SCOPE_AMBIGUOUS, ZoteroError } from '../errors.js'
 import { TOOL_ABORTED_MESSAGE } from '../abort.js'

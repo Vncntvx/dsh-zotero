@@ -64,6 +64,14 @@ export function parseTargetOf(value: ZoteroParseTargetView): ParseTarget {
     throw new ZoteroError('Invalid document parsing target.', ZOTERO_INVALID_ARGUMENT)
   }
   const target = parsed.data
+  // An artifact id is an opaque handle, not a source. expandRequestTarget
+  // must resolve it to a concrete attachment/URL target before this point.
+  if (target.kind === 'artifact') {
+    throw new ZoteroError(
+      'A parsed artifact id must be resolved before parsing.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
   if (target.kind === 'url') {
     const url = publicPdfUrl(target.url)
     return {
@@ -99,6 +107,10 @@ export async function resolveParseTarget(
 ): Promise<ParseTarget> {
   signal.throwIfAborted()
   if (target.target.kind === 'url') return target
+  if (target.target.kind !== 'attachment') {
+    // parseTargetOf rejects artifact ids; this keeps the invariant local.
+    throw new ZoteroError('Invalid document parsing target.', ZOTERO_INVALID_ARGUMENT)
+  }
   const requested = parseSupportedRef(target.target.ref, ['attachment'])
   const resolved = await resolveAttachment(target.target.ref, signal)
   signal.throwIfAborted()
@@ -142,6 +154,7 @@ export async function resolveParseTarget(
       key: ref,
       source: { kind: 'local', attachmentRef: ref },
       contentType: 'application/pdf',
+      resolvedAttachment: resolved,
     },
     sourceId: parseDigest(ref),
     targetLabel: safeParseText(resolved.title, 2048).trim() || target.targetLabel,

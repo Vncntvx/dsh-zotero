@@ -43,6 +43,10 @@
   min-width: 0;
 }
 
+.parsedManagerWrap {
+  flex: none;
+}
+
 .searchModeWrap {
   flex: none;
 }
@@ -786,6 +790,7 @@
   gap: 1px;
   padding: 6px 8px 6px 10px;
   justify-content: flex-start;
+  align-items: flex-start;
 }
 
 /* Compact density keeps its tighter seat; the row still grows with the title,
@@ -809,8 +814,10 @@
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   height: 16px;
-  padding: 0 4px;
+  width: 28px;
+  padding: 0;
   box-sizing: border-box;
   border: 1px solid var(--dsw-alias-state-business-primary);
   border-radius: var(--dsw-radius-xs);
@@ -821,10 +828,46 @@
   user-select: none;
 }
 
+.badgeStack {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.badgeStack .pdfBadge,
+.badgeStack .mdBadge {
+  position: static;
+  transform: none;
+  height: 14px;
+  width: 28px;
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: var(--dsw-radius-xs);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.mdBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
 .itemMeta {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
+  max-width: 100%;
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
   overflow: hidden;
@@ -1513,6 +1556,11 @@
   .librarySelectWrap {
     order: 1;
     max-width: 140px;
+  }
+
+  /* Shares the selector's order so DOM order keeps My Library first. */
+  .parsedManagerWrap {
+    order: 1;
   }
 
   .spacer {

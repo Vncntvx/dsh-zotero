@@ -1,5 +1,10 @@
 /** v2 artifact and source-index reads preserve data and never mutate the filesystem. */
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { symlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ParsedArtifactStore } from '../../src/enrichment/artifact-store.ts'
 import { memoryFiles } from './support/enrichment-parse-domain.ts'
 import {
@@ -103,6 +108,18 @@ describe('ParsedArtifactStore artifact reads', () => {
     unchanged()
   })
 
+  it('commits the Markdown H1 as the artifact title when meta omits it', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, {
+      ...ARTIFACT,
+      markdown: '# A Different Paper\n\nbody',
+      meta: { ...ARTIFACT.meta, title: undefined },
+    })
+    const stored = await store.metaFor(CACHE_KEY)
+    expect(stored?.meta.title).toBe('A Different Paper')
+  })
+
   it('reads an absent artifact without creating a root', async () => {
     const fs = memoryFiles()
     const unchanged = readOnlyPhase(fs)
@@ -178,6 +195,34 @@ describe('ParsedArtifactStore artifact reads', () => {
       unchanged()
     },
   )
+})
+
+describe('ParsedArtifactStore real-filesystem discard', () => {
+  it('removes a real directory under the publication lock and refuses foreign paths', async () => {
+    // Normalize the root through realpath so the store's own path guards
+    // compare equal on hosts whose tmpdir sits behind a symlink.
+    const dir = await realpath(await mkdtemp(join(tmpdir(), 'zotero-store-discard-')))
+    try {
+      const store = new ParsedArtifactStore(dir)
+      await store.put(CACHE_KEY, ARTIFACT)
+      // The publication path creates the sources directory its lock guards.
+      await store.putSource(SOURCE_KEY, SOURCE_RECORD)
+      expect(await store.hasArtifactDirectory(CACHE_KEY)).toBe(true)
+      // A directory entry that is not a regular, expected path is not an
+      // artifact directory, and a symlink is never followed.
+      const foreign = join(dir, 'f'.repeat(64))
+      await mkdir(foreign)
+      await symlink(join(dir, 'elsewhere'), join(dir, 'd'.repeat(64)))
+      expect(await store.hasArtifactDirectory('d'.repeat(64))).toBe(false)
+      const removed = await store.discardArtifact(CACHE_KEY)
+      expect(removed).toBe(1)
+      expect(await store.metaFor(CACHE_KEY)).toBeUndefined()
+      expect(await store.hasArtifactDirectory(CACHE_KEY)).toBe(false)
+      expect(existsSync(foreign)).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('ParsedArtifactStore source-index reads', () => {

@@ -45,11 +45,24 @@ it('names a tab from presentation parameters while keeping its resource address 
   const runtime = await fixture({ title: 'Paper title' })
   cleanup()
   const props = runtime.props({ title: 'Paper title' })
-  render(<ParsedDocumentTitle {...props} />)
+  render(<ParsedDocumentTitle {...props} documents={runtime.documents} />)
   expect(screen.getByText('Paper title')).toBeDefined()
   cleanup()
-  render(<ParsedDocumentTitle {...runtime.props({ title: '' })} />)
+  render(<ParsedDocumentTitle {...runtime.props({ title: '' })} documents={runtime.documents} />)
   expect(screen.getByText(mockT('tabParsedFallback'))).toBeDefined()
+})
+
+it('resolves a generic tab title through the lease-free metadata read alone', async () => {
+  const read = documentRead('Passage', { title: 'Real Paper Title' })
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  await tick()
+  const streamOpens = read.mock.calls.filter(([request]) => request.op === 'open').length
+  render(<ParsedDocumentTitle {...runtime.props({ title: 'PDF' })} documents={runtime.documents} />)
+  await tick()
+  expect(screen.getByText('Real Paper Title')).toBeDefined()
+  expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(streamOpens)
+  expect(read.mock.calls.filter(([request]) => request.op === 'meta')).toHaveLength(1)
 })
 
 it('shows unavailable for a foreign tab address and uses artifact title for an untitled paper', async () => {

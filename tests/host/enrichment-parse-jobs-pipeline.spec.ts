@@ -28,6 +28,12 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 const PDF = new TextEncoder().encode('%PDF-1.7 synthetic job document')
+
+/** These specs only submit concrete sources; artifact ids are expanded by the host. */
+function targetIdentity(target: ZoteroParseTargetView): string {
+  if (target.kind === 'artifact') throw new Error('Unexpected artifact target')
+  return target.kind === 'url' ? target.url : target.ref
+}
 const MARKDOWN = '# Verified parsed document\n\nThis is the parsed evidence.'
 
 async function pipeline() {
@@ -258,15 +264,7 @@ describe('parse job real document pipeline', () => {
       ),
     ).toMatchObject({ kind: 'failed', code: ZOTERO_ENRICHMENT_TASK_FAILED })
     expect(
-      (
-        await host.store.sourceRecord(
-          sourceKeyOf(
-            initialRequest.target.kind === 'url'
-              ? initialRequest.target.url
-              : initialRequest.target.ref,
-          ),
-        )
-      )?.cacheKey,
+      (await host.store.sourceRecord(sourceKeyOf(targetIdentity(initialRequest.target))))?.cacheKey,
     ).toBe(initial.artifactId)
   })
 
@@ -284,13 +282,7 @@ describe('parse job real document pipeline', () => {
       (await host.ctx.jobs.wait(JobId(next.jobId), 5000, SessionId('parse-owner'))).status,
     ).toBe('failed')
     expect(
-      (
-        await host.store.sourceRecord(
-          sourceKeyOf(
-            firstRequest.target.kind === 'url' ? firstRequest.target.url : firstRequest.target.ref,
-          ),
-        )
-      )?.cacheKey,
+      (await host.store.sourceRecord(sourceKeyOf(targetIdentity(firstRequest.target))))?.cacheKey,
     ).toBe(first.artifactId)
     expect(await host.store.get(first.artifactId)).toMatchObject({ markdown: MARKDOWN })
   })

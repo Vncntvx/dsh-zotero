@@ -7,7 +7,7 @@
  * @module dsh-zotero/http-client
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { ResponseTooLargeError, readBoundedText } from './transport-bounds.js'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'

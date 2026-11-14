@@ -78,6 +78,18 @@ export function memoryFiles() {
         if (key === path || (options.recursive && key.startsWith(`${path}/`))) files.delete(key)
       }
     }),
+    readdir: vi.fn(async (path) => {
+      const prefix = `${path}/`
+      const names = new Set<string>()
+      for (const key of files.keys())
+        if (key.startsWith(prefix)) names.add(key.slice(prefix.length).split('/')[0]!)
+      return [...names]
+    }),
+    stat: vi.fn(async (path) => {
+      if (!files.has(path)) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      return { mtimeMs: 1_700_000_000_000 }
+    }),
+    realpath: vi.fn(async (path) => path),
   }
   return { files, deps }
 }

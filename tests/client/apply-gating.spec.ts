@@ -127,8 +127,8 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     expect(world.injected.find((e) => e.name === 'sidebar.right.pane.tab.title')?.active).toBe(
       false,
     )
-    // Both tab types in the group go with the switch.
-    expect(world.sidebarRightTabDisposes).toBe(2)
+    // Every tab type in the group goes with the switch.
+    expect(world.sidebarRightTabDisposes).toBe(3)
 
     // Re-enable right sidebar
     await world.libraryScope.set('rightSidebarEnabled', true)

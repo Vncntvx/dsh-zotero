@@ -39,6 +39,7 @@ import {
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
+import type { ParsedDocuments } from '../../parsed-documents.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -87,6 +88,8 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
    */
   readonly viewStore: LibraryViewStore
   readonly parse?: DocumentParseSurfacePort
+  /** The parsed-document provider, for badge invalidation on commit/discard. */
+  readonly parsedDocuments?: ParsedDocuments
   readonly readUrlPdf?: (
     request: { ref: string },
     signal: AbortSignal,
@@ -113,6 +116,8 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
     title: string,
     itemRef: string,
   ) => void
+  /** Opens the session's parsed-document manager tab. */
+  readonly openParsedManager?: () => void
   readonly write: (
     request: ZoteroLibraryWriteRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
@@ -319,6 +324,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     },
     t,
   )
+  const enrichmentMounted = parseSurface.mounted
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = (path: string): void => {
@@ -470,15 +476,17 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             />
           </div>
 
-          {parseSurface.openUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={parseSurface.openUrl}
-              disabled={sessionRemoved}
-            >
-              {t('libraryParseUrl')}
-            </Button>
+          {enrichmentMounted && props.openParsedManager !== undefined && (
+            <div className={css.parsedManagerWrap}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={props.openParsedManager}
+                disabled={sessionRemoved}
+              >
+                {t('libraryParsedManager')}
+              </Button>
+            </div>
           )}
           <span className={css.spacer} />
 
@@ -654,6 +662,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   selectItem={handleSelectItem}
                   retry={feed.retryList}
                   useContextMenu={props.useContextMenu}
+                  parsedArtifact={
+                    props.parse !== undefined && canReadArtifact
+                      ? {
+                          sessionId: props.sessionId,
+                          read: props.parse.remote.documentArtifact,
+                          revision: parseSurface.revision,
+                          documents: props.parsedDocuments,
+                        }
+                      : undefined
+                  }
                 />
               </div>
               <div
@@ -709,6 +727,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                           sessionId: props.sessionId,
                           read: props.parse.remote.documentArtifact,
                           revision: parseSurface.revision,
+                          documents: props.parsedDocuments,
                           open: props.openParsed,
                         },
                       }

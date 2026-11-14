@@ -12,7 +12,7 @@
 import { lstat, realpath, rmdir, unlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import { assertModelLockPath, safeModelRelativePath } from './model-installation.js'
 import { MANIFEST_PATH, SAFE_SEGMENT } from './model-manifest.js'

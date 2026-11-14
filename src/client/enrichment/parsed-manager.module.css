@@ -1,0 +1,216 @@
+.surface {
+  /* Rows adapt to the pane they sit in, not the window: the same tab can be a
+   * third of a wide screen or the whole of a narrow one. */
+  container-type: inline-size;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filterControl {
+  align-self: stretch;
+}
+
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+}
+
+.statusLineActions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.status {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-s-14);
+}
+
+.hint {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+}
+
+.errorRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.error {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 2px;
+}
+
+.listHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.selectAll {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.list {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  box-sizing: border-box;
+}
+
+.rowSelected {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  /* A selected row keeps its own fill while hovered. */
+  .rowSelected:hover {
+    background: var(--dsw-alias-bg-multi-select);
+  }
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The title is the checkbox's own label: the row's accessible name and its
+ * visible text at once, so it carries the ellipsis instead of an extra line. */
+.rowSelect {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-strong-14);
+}
+
+.rowSelect span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+}
+
+.metaText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.actions {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.broken {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.brokenDetail {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@container (max-width: 520px) {
+  .surface {
+    padding: 8px 8px 16px;
+  }
+}
+
+/* The three actions leave the metadata line before the metadata is forced to
+ * wrap word by word. */
+@container (max-width: 460px) {
+  .rowMeta {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+
+@container (max-width: 360px) {
+  .metaText {
+    white-space: normal;
+  }
+}

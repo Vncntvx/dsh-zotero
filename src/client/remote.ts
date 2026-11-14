@@ -16,6 +16,10 @@ import type {
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
   ZoteroDocumentParseReceiptResultView,
+  ZoteroListParsedDocumentsRequestView,
+  ZoteroListParsedDocumentsResultView,
+  ZoteroDiscardParsedDocumentRequestView,
+  ZoteroDiscardParsedDocumentResultView,
   ZoteroSemanticModelVerifyRequestView,
 } from '../contract.ts'
 /**
@@ -97,6 +101,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       request: ZoteroDocumentParseReceiptRequestView,
       signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroDocumentParseReceiptResultView>>
+    listParsedDocuments: (
+      request: ZoteroListParsedDocumentsRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroListParsedDocumentsResultView>>
+    discardParsedDocument: (
+      request: ZoteroDiscardParsedDocumentRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDiscardParsedDocumentResultView>>
     sourcePage: (
       request: ZoteroSourcePageRequestView,
       signal?: AbortSignal,
@@ -175,6 +187,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       request: ZoteroDocumentParseReceiptRequestView,
       signal?: AbortSignal,
     ) => Promise<RemoteResult<ZoteroDocumentParseReceiptResultView>>
+    'zotero/listParsedDocuments': (
+      request: ZoteroListParsedDocumentsRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroListParsedDocumentsResultView>>
+    'zotero/discardParsedDocument': (
+      request: ZoteroDiscardParsedDocumentRequestView,
+      signal?: AbortSignal,
+    ) => Promise<RemoteResult<ZoteroDiscardParsedDocumentResultView>>
     'zotero/semanticModelStatus': (
       request: ZoteroSemanticModelStatusRequestView,
       signal?: AbortSignal,

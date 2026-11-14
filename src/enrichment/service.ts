@@ -1,4 +1,9 @@
 import type { DisplayArtifactLookup } from './artifact-reads.js'
+import {
+  discardParsedDocument,
+  listParsedDocuments,
+  type ArtifactManagementDeps,
+} from './artifact-management.js'
 /**
  * Cordis Service plugin providing `ctx.enrichment`.
  *
@@ -62,6 +67,10 @@ import type {
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
   ZoteroDocumentParseReceiptResultView,
+  ZoteroListParsedDocumentsRequestView,
+  ZoteroListParsedDocumentsResultView,
+  ZoteroDiscardParsedDocumentRequestView,
+  ZoteroDiscardParsedDocumentResultView,
 } from '../contract.js'
 import {
   ENRICHMENT_DOCUMENT_LIMITS,
@@ -83,7 +92,7 @@ import {
 import { MineruClient } from './transport.js'
 import { hostSourceBytesDeps, probeSource } from './source-bytes.js'
 import { resolveOutputDir } from './output-dir.js'
-import { ParsedArtifactStore } from './artifact-store.js'
+import { ParsedArtifactStore, type SourceIndexRecord } from './artifact-store.js'
 import { ParseFlight, type parseOnce } from './parse-once.js'
 import { parseDocument } from './parse-document.js'
 import {
@@ -94,6 +103,7 @@ import {
 import { resolveMineruToken } from './credentials.js'
 import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
+import { probeAttachments, storedMetadata, type ArtifactMetadataDeps } from './artifact-metadata.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
 import {
@@ -224,6 +234,7 @@ export class EnrichmentService extends TypertRemoteService {
   ) => Promise<ParsedArtifactStore>
   private readonly resolveAttachment: EnrichmentCoreLink['resolveAttachment']
   private readonly parsing: EnrichmentParseJobs
+  private readonly management: ArtifactManagementDeps
 
   /** The enhancer installed into the core. Stable identity for cleanup. */
   public readonly enhancer: FulltextEnhancer
@@ -280,9 +291,15 @@ export class EnrichmentService extends TypertRemoteService {
     // operation without rebuilding the coordinator.
     const flight =
       deps.flight ?? new ParseFlight(() => resolveEnrichmentConfig(this.config).artifactReader)
+    const persistence =
+      deps.parsePersistence ??
+      new DiskParseJobPersistence(
+        async (config, create) => (await this.storeFactory(config, create)).root,
+      )
     this.parsing = new EnrichmentParseJobs(ctx, {
       config: () => resolveEnrichmentConfig(this.config),
       resolveAttachment: this.resolveAttachment,
+      store: async (config) => await this.storeFactory(config, false),
       execute: async ({ input, config, generation, signal, onProgress }) =>
         await parseDocument(
           input,
@@ -299,20 +316,38 @@ export class EnrichmentService extends TypertRemoteService {
           },
           signal,
         ),
-      displayCandidate: async (input, config, signal, targetLabel) => {
+      displayCandidate: async (input, config, signal, targetLabel, record) => {
         try {
-          return await this.displayCandidate(input, config, signal, targetLabel)
+          return await this.displayCandidate(input, config, signal, targetLabel, record)
         } catch (error) {
           if (signal.aborted) throw signal.reason
           throw parsingErrorOf(error)
         }
       },
-      persistence:
-        deps.parsePersistence ??
-        new DiskParseJobPersistence(
-          async (config, create) => (await this.storeFactory(config, create)).root,
-        ),
+      metadata: async (config, request, signal) => {
+        try {
+          return await storedMetadata(this.metadataDeps(config), config, request, signal)
+        } catch (error) {
+          if (signal.aborted) throw signal.reason
+          throw parsingErrorOf(error)
+        }
+      },
+      probe: async (config, request, signal) => {
+        try {
+          return await probeAttachments(this.metadataDeps(config), config, request, signal)
+        } catch (error) {
+          if (signal.aborted) throw signal.reason
+          throw parsingErrorOf(error)
+        }
+      },
+      persistence,
     })
+    this.management = {
+      store: async (config, create) => await this.storeFactory(config, create),
+      config: () => resolveEnrichmentConfig(this.config),
+      persistence,
+      jobs: this.parsing,
+    }
     // One admitted snapshot per foreground read. `admit()` runs before any
     // source I/O and fixes config, target, calibration and model generation;
     // `rank()` consumes the scope's own loader handle and cache generation, so
@@ -518,6 +553,26 @@ export class EnrichmentService extends TypertRemoteService {
     )
   }
 
+  async listParsedDocuments(
+    request: ZoteroListParsedDocumentsRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroListParsedDocumentsResultView> {
+    return await domainCall(async () => {
+      this.parsing.authorizeManagement(request.sessionId, 'listParsedDocuments', this.ctx)
+      return await listParsedDocuments(this.management, request, signal)
+    })
+  }
+
+  async discardParsedDocument(
+    request: ZoteroDiscardParsedDocumentRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroDiscardParsedDocumentResultView> {
+    return await domainCall(async () => {
+      this.parsing.authorizeManagement(request.sessionId, 'discardParsedDocument', this.ctx)
+      return await discardParsedDocument(this.management, request.artifactId, signal)
+    })
+  }
+
   /** The model endpoints live here, on the component: unmounting the row
    * removes the egress capability along with it, exactly like the MinerU
    * authorization. Request fields override the committed settings; omitted
@@ -627,7 +682,13 @@ export class EnrichmentService extends TypertRemoteService {
     })
   }
 
-  /** Directory validation belongs to the accepted snapshot and is repeated on every operation. */
+  /**
+   * Directory validation belongs to the accepted snapshot and is repeated on
+   * every operation. One store instance is kept per resolved root, so its
+   * per-generation caches (index snapshot, inventory) survive across calls.
+   */
+  private resolvedStore: { readonly dir: string; readonly store: ParsedArtifactStore } | undefined
+
   private async storeFor(
     config: EnrichmentPreferences,
     create: boolean,
@@ -637,7 +698,10 @@ export class EnrichmentService extends TypertRemoteService {
       undefined,
       create ? { create: true } : { create: false, readOnly: true, allowMissing: true },
     )
-    return new ParsedArtifactStore(dir)
+    if (this.resolvedStore?.dir !== dir) {
+      this.resolvedStore = { dir, store: new ParsedArtifactStore(dir) }
+    }
+    return this.resolvedStore.store
   }
 
   private async displayCandidate(
@@ -645,6 +709,7 @@ export class EnrichmentService extends TypertRemoteService {
     config: EnrichmentPreferences,
     signal: AbortSignal,
     targetLabel: string,
+    resolvedRecord?: SourceIndexRecord,
   ): Promise<DisplayArtifactLookup> {
     const store = await this.storeFactory(config, false)
     const identity = canonicalSourceIdentityOf(input.key)
@@ -652,7 +717,9 @@ export class EnrichmentService extends TypertRemoteService {
       input.source.kind === 'url' ? input.source.url : input.source.attachmentRef,
     )
     if (identity !== source) throw new Error('The parsed source identity is inconsistent')
-    const record = await store.sourceRecord(sourceKeyOf(identity))
+    // Artifact targets arrive with the record their expansion already read;
+    // concrete targets look it up by source key.
+    const record = resolvedRecord ?? (await store.sourceRecord(sourceKeyOf(identity)))
     signal.throwIfAborted()
     if (record === undefined) return { kind: 'missing' }
     const stamp = await probeSource(
@@ -680,6 +747,15 @@ export class EnrichmentService extends TypertRemoteService {
       markdownBytes: meta.markdownBytes,
       read: () => store.readMarkdown(record.cacheKey, meta.characterCount, meta.markdownBytes),
       image: (name) => store.readImage(record.cacheKey, name, meta),
+    }
+  }
+
+  /** One composition per accepted snapshot: the store and its source seams. */
+  private metadataDeps(config: EnrichmentPreferences): ArtifactMetadataDeps {
+    return {
+      store: async () => await this.storeFactory(config, false),
+      resolveAttachment: this.resolveAttachment,
+      client: this.client,
     }
   }
 

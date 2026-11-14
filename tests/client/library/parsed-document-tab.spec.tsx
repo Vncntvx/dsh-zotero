@@ -156,3 +156,16 @@ describe('complete parsed-document delivery', () => {
     expect(read.mock.calls.at(-1)![0]).toMatchObject({ op: 'release' })
   })
 })
+
+describe('artifact-addressed parsed result', () => {
+  it('offers reparse through the artifact handle for a URL-sourced document', async () => {
+    const runtime = parsedRuntime(documentRead('# Resource'))
+    owned.push(runtime)
+    runtime.mount({
+      parse: true,
+      address: `dsh-resource://zotero-parsed/artifact/parsed-session/${'a'.repeat(64)}`,
+    })
+    await ready()
+    expect(screen.getByRole('button', { name: /reparse|重新解析/ })).toBeDefined()
+  })
+})

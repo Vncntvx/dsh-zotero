@@ -221,6 +221,7 @@ describe('parseOnce', () => {
       contentFingerprint: fingerprint,
       taskId: 't1',
       files: ['full.md'],
+      title: 'Parsed Markdown',
     })
     expect(cacheKey).toBe(cacheKeyOf({ ...context, mode: 'free' }))
     expect(cached).toBe(false)
@@ -282,6 +283,7 @@ describe('parseOnce', () => {
       taskId: 'b1',
       files: ['full.md', 'content_list.json'],
       pageCount: 7,
+      title: 'Precise Markdown',
     })
     expect(cacheKey).toBe(cacheKeyOf({ ...context, mode: 'pro' }))
     expect(cached).toBe(false)

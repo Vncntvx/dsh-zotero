@@ -281,3 +281,16 @@ export function formatTime(dateOrMs: Date | number, includeSeconds = true): stri
   }
   return `${hours}:${minutes}:${pad(date.getSeconds())}`
 }
+
+/**
+ * Format a Date or timestamp as `YYYY/MM/DD HH:MM`, the absolute date a dated
+ * row shows beside its size. Digits only, so zh and en read it the same way.
+ */
+export function formatDateTime(dateOrMs: Date | number): string {
+  const date = typeof dateOrMs === 'number' ? new Date(dateOrMs) : dateOrMs
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return (
+    `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}

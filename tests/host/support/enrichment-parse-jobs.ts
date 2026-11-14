@@ -28,6 +28,9 @@ import { parsedIdentityOf } from '../../../src/enrichment/identity.js'
 import { sourceKeyOf } from '../../../src/enrichment/source-stamp.js'
 import type { ParseDocumentResult } from '../../../src/enrichment/parse-document.js'
 import { parseDigest } from '../../../src/enrichment/parse-target.js'
+import { probeAttachments, storedMetadata } from '../../../src/enrichment/artifact-metadata.ts'
+import { MineruClient } from '../../../src/enrichment/transport.ts'
+import { ParsedArtifactStore } from '../../../src/enrichment/artifact-store.js'
 import { attachmentRef } from '../../helpers/server/keys.js'
 
 export const parseSignal = (): AbortSignal => new AbortController().signal
@@ -213,6 +216,18 @@ export async function parseJobsFixture(
       }
     },
   )
+  // The same composition the service wires: metadata and probes answer from
+  // the fixture's real store, so a probe means what a single inspect means.
+  const probeClient = new MineruClient({
+    resolver: async () => [],
+    dispatcher: () => ({ dispatcher: {} as never, close: async () => {} }),
+    fetch: async () => new Response(null, { status: 200 }),
+  })
+  const metadataDeps = {
+    store: async () => new ParsedArtifactStore(root),
+    resolveAttachment,
+    client: probeClient,
+  }
   const deps: EnrichmentParseJobsDeps = {
     config: () => config.value,
     resolveAttachment,
@@ -220,6 +235,15 @@ export async function parseJobsFixture(
     displayCandidate,
     persistence,
     ...overrides,
+    store: overrides.store ?? (async () => new ParsedArtifactStore(root)),
+    metadata:
+      overrides.metadata ??
+      (async (config, request, signal) =>
+        await storedMetadata(metadataDeps, config, request, signal)),
+    probe:
+      overrides.probe ??
+      (async (config, request, signal) =>
+        await probeAttachments(metadataDeps, config, request, signal)),
   }
   const peer = new Peer(ctx, { principal: { kind: 'owner' } })
   const helperContext = ctx.extend({

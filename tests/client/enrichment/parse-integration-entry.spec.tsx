@@ -79,19 +79,30 @@ describe('session library parsing entry', () => {
 
   it('opens a committed artifact as its own right-sidebar tab', async () => {
     const runtime = world({
-      documentArtifact: async () => ({
-        ok: true,
-        value: {
-          kind: 'ready',
-          images: [],
-          sourceId: 'a'.repeat(64),
-          targetLabel: 'Selected PDF',
-          mode: 'free',
-          artifactId: 'b'.repeat(64),
-          fingerprint: 'c'.repeat(64),
-          characterCount: 12,
-        },
-      }),
+      documentArtifact: async (request) => {
+        if (request.op === 'probe') {
+          return {
+            ok: true as const,
+            value: {
+              kind: 'probed' as const,
+              results: request.refs.map((ref) => ({ ref, state: 'ready' as const })),
+            },
+          }
+        }
+        return {
+          ok: true as const,
+          value: {
+            kind: 'ready' as const,
+            images: [],
+            sourceId: 'a'.repeat(64),
+            targetLabel: 'Selected PDF',
+            mode: 'free' as const,
+            artifactId: 'b'.repeat(64),
+            fingerprint: 'c'.repeat(64),
+            characterCount: 12,
+          },
+        }
+      },
     })
     runtime.mount(TOP_PDF_DETAIL)
     await inspect(TOP_PDF_DETAIL.title)

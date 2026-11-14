@@ -11,7 +11,7 @@
  * @module dsh-zotero/local/scope-directory
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { awaitSharedOperation, mapWithConcurrency, type SharedOperation } from '../concurrency.js'
 import type { DiagnosticSink } from '../diagnostics.js'

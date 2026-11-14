@@ -9,6 +9,7 @@ import {
   PARSED_TAB_KIND,
   PARSED_TAB_PATTERN,
   parseParsedTabAddress,
+  parsedArtifactTabAddress,
   parsedTabAddress,
 } from '../../src/client/parsed-tab.ts'
 
@@ -46,6 +47,17 @@ describe('parsedTabAddress', () => {
     expect(parseParsedTabAddress(parsedTabAddress(queried), queried)).toEqual(queried)
   })
 
+  it('restores title and item across browser refresh without presentation params', () => {
+    const target = {
+      sessionId: 'session-1',
+      ref: 'zotero://user/0/attachment/A1',
+      title: 'Full Paper Title',
+      item: 'zotero://user/0/item/I1',
+    }
+    const address = parsedTabAddress(target)
+    expect(parseParsedTabAddress(address)).toEqual(target)
+  })
+
   it('reads a missing title as an empty one', () => {
     expect(parseParsedTabAddress('dsh-resource://zotero-parsed/s/r')).toEqual({
       sessionId: 's',
@@ -63,5 +75,41 @@ describe('parsedTabAddress', () => {
 
   it('refuses a malformed escape instead of throwing', () => {
     expect(parseParsedTabAddress('dsh-resource://zotero-parsed/%E0%A4%A/ref')).toBeUndefined()
+  })
+})
+
+describe('parsedArtifactTabAddress', () => {
+  it('round-trips an artifact-addressed URL source', () => {
+    const id = 'a'.repeat(64)
+    const address = parsedArtifactTabAddress({ sessionId: 's1', artifactId: id })
+    expect(parseParsedTabAddress(address, { title: 'A paper' })).toEqual({
+      sessionId: 's1',
+      ref: '',
+      artifactId: id,
+      title: 'A paper',
+    })
+    expect(parseParsedTabAddress(address)).toMatchObject({ artifactId: id, title: '' })
+  })
+
+  it('refuses an incomplete or malformed artifact address', () => {
+    expect(parseParsedTabAddress('dsh-resource://zotero-parsed/artifact/s1/')).toBeUndefined()
+    expect(parseParsedTabAddress('dsh-resource://zotero-parsed/artifact//id')).toBeUndefined()
+    expect(
+      parseParsedTabAddress('dsh-resource://zotero-parsed/artifact/%E0%A4%A/id'),
+    ).toBeUndefined()
+    expect(
+      parseParsedTabAddress('dsh-resource://zotero-parsed/artifact/s1/%E0%A4%A'),
+    ).toBeUndefined()
+  })
+
+  it('treats a null presentation as absent for both address shapes', () => {
+    expect(parseParsedTabAddress('dsh-resource://zotero-parsed/s1/r', null)).toEqual({
+      sessionId: 's1',
+      ref: 'r',
+      title: '',
+    })
+    expect(
+      parseParsedTabAddress('dsh-resource://zotero-parsed/artifact/s1/' + 'a'.repeat(64), null),
+    ).toMatchObject({ artifactId: 'a'.repeat(64), title: '' })
   })
 })

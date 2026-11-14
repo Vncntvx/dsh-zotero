@@ -214,10 +214,12 @@ describe('MinerU durable tasks', () => {
       sourceId,
       generation: input.generation,
       identity: 'https://example.org/…',
+      sourceUrl: 'https://example.org/paper.pdf?version=1',
       mode: 'free',
       contentFingerprint: fingerprint,
       taskId: 'task-1',
       files: ['full.md'],
+      title: 'Successful generation',
     })
 
     const next = { ...input, generation: 'f05ae92a-7ed7-4f86-9a13-1051122dfdeb' }
@@ -332,11 +334,13 @@ describe('MinerU durable tasks', () => {
       sourceId,
       generation: input.generation,
       identity: 'https://example.org/…',
+      sourceUrl: 'https://example.org/paper.pdf?version=1',
       mode: 'pro',
       contentFingerprint: fingerprint,
       taskId: 'batch-1',
       files: ['full.md', 'content_list.json'],
       pageCount: 7,
+      title: 'Parsed',
     })
     expect(await store.get(result.cacheKey)).toEqual(result.artifact)
     expect(result.cacheKey).toBe(cacheKeyOf({ ...input, mode: 'pro' }))

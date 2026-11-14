@@ -152,19 +152,30 @@ describe('the item PDF actions', () => {
 
   it('hands a parsed attachment to the tab opener', async () => {
     const onOpenParsed = vi.fn()
-    const read = vi.fn(async () => ({
-      ok: true as const,
-      value: {
-        kind: 'ready' as const,
-        images: [],
-        sourceId: 'a'.repeat(64),
-        targetLabel: PDF.title,
-        mode: 'free' as const,
-        artifactId: 'b'.repeat(64),
-        fingerprint: 'c'.repeat(64),
-        characterCount: 12,
-      },
-    }))
+    const read = vi.fn(async (request: { op: string; refs?: readonly string[] }) => {
+      if (request.op === 'probe') {
+        return {
+          ok: true as const,
+          value: {
+            kind: 'probed' as const,
+            results: (request.refs ?? []).map((ref) => ({ ref, state: 'ready' as const })),
+          },
+        }
+      }
+      return {
+        ok: true as const,
+        value: {
+          kind: 'ready' as const,
+          images: [],
+          sourceId: 'a'.repeat(64),
+          targetLabel: PDF.title,
+          mode: 'free' as const,
+          artifactId: 'b'.repeat(64),
+          fingerprint: 'c'.repeat(64),
+          characterCount: 12,
+        },
+      }
+    })
     render(
       <PdfActions
         t={mockT}

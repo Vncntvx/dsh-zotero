@@ -188,7 +188,7 @@ zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism"
 | `locale`     | string   | 配置默认值（默认 `"en-US"`） | CSL 语言环境（仅用于 citation 和 bibliography；默认取配置 `defaultLocale`）                 |
 | `outputFile` | string   | —                            | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
 
-`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。
+`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`）。
 
 ### 输出
 
@@ -274,7 +274,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 | `since`   | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
 | `include` | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
 
-`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`）。
+`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`）。
 
 ### 输出
 
@@ -808,6 +808,8 @@ zotero_batch_items(
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                               |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                     |
 | `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                               |
+| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | 解析产物编号没有对应的已提交产物                                                               |
+| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | 解析产物清理失败或路径不安全                                                                   |
 | `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                     |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
 | `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |

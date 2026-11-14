@@ -1,6 +1,6 @@
 /** Stable error classes and codes for the Zotero domain. @module dsh-zotero/errors */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
@@ -61,6 +61,10 @@ export const ZOTERO_ENRICHMENT_OUTPUT_INVALID = 'ZOTERO_ENRICHMENT_OUTPUT_INVALI
 export const ZOTERO_ENRICHMENT_ARCHIVE_INVALID = 'ZOTERO_ENRICHMENT_ARCHIVE_INVALID'
 /** A local semantic-model removal failed or hit an unsafe path. */
 export const ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED = 'ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED'
+/** A parsed artifact id names no committed artifact. */
+export const ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND = 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND'
+/** A parsed artifact cleanup failed or hit an unsafe path. */
+export const ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED = 'ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED'
 /** The document exceeded the selected API's size limit or is not a PDF. */
 export const ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT = 'ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT'
 /**
@@ -142,6 +146,8 @@ export const ZOTERO_ERROR_CODES = [
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED,
   ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT,
+  ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+  ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED,
   ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED,
   ZOTERO_PROVIDER_UNAVAILABLE,
@@ -579,6 +585,8 @@ export const ZOTERO_REMOTE_REASON: Record<
   ZOTERO_ENRICHMENT_TASK_FAILED: 'zotero/enrichment',
   ZOTERO_ENRICHMENT_OUTPUT_INVALID: 'zotero/enrichment',
   ZOTERO_ENRICHMENT_ARCHIVE_INVALID: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND: 'zotero/enrichment',
+  ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED: 'zotero/enrichment',
   ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED: 'zotero/enrichment',
   ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT: 'zotero/enrichment',
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE: 'zotero/enrichment',

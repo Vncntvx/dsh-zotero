@@ -108,4 +108,25 @@ describe('source-bound document snapshots', () => {
     expect(result).toMatchObject({ kind: 'ready', characterCount: 10 })
     expect(host.reads).not.toHaveBeenCalled()
   })
+
+  it('answers the lease-free meta arm and the batched probe without opening a lease', async () => {
+    const host = await fixture()
+    const meta = await host.call({
+      sessionId: 'parse-owner',
+      op: 'meta',
+      target: parseRequest().target,
+    })
+    // The fixture store holds no committed artifact, so the lease-free read
+    // answers missing without ever resolving an attachment or probing.
+    expect(meta).toEqual({ kind: 'missing' })
+    expect(host.lookup).not.toHaveBeenCalled()
+    const target = parseRequest().target
+    const refs = target.kind === 'attachment' ? [target.ref] : ['https://example.org/a.pdf']
+    const probe = await host.call({ sessionId: 'parse-owner', op: 'probe', refs })
+    expect(probe).toEqual({
+      kind: 'probed',
+      results: refs.map((ref) => ({ ref, state: 'missing' })),
+    })
+    expect(host.lookup).not.toHaveBeenCalled()
+  })
 })

@@ -188,7 +188,7 @@ Generate formatted citations or export data files.
 | `locale`     | string   | config value (default `"en-US"`) | CSL locale (citation and bibliography only; defaults to the configured `defaultLocale`)                         |
 | `outputFile` | string   | none                             | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
 
-`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`).
+`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`).
 
 ### Output
 
@@ -274,7 +274,7 @@ Read incremental update and deletion records of the library based on local trans
 | `since`   | object   | none                    | Starting cursor `{serverId, library, version, include, unserved}`; omit it to get the initial baseline |
 | `include` | string[] | all except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                        |
 
-`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`JOB_BACKGROUND_DISABLED` / `TOOL_CONTEXT_UNAVAILABLE`).
+`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`).
 
 ### Output
 
@@ -808,6 +808,8 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | The local semantic model download failed after every source was tried                                                                  |
 | `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | The local semantic model download exceeded its overall deadline                                                                        |
 | `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | The local semantic model could not be removed, or its path failed the safety checks                                                    |
+| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | The parsed artifact id names no committed artifact                                                                                     |
+| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | The parsed artifact cleanup failed, or its path failed the safety checks                                                               |
 | `ZOTERO_JOBS_LIMIT_REACHED`                | Parse endpoint: the session already holds its maximum background parse jobs; collect or cancel one before retrying                     |
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | The configured provider is not registered or the method is unimplemented                                                               |
 | `ZOTERO_UNEXPECTED`                        | Abnormal response payload or unexpected behavior                                                                                       |

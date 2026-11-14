@@ -1,9 +1,12 @@
 import { ArtifactReads, type DisplayArtifactLookup } from './artifact-reads.js'
+import { expandRequestTarget } from './artifact-target.js'
+import type { ParsedArtifactStore, SourceIndexRecord } from './artifact-store.js'
+import { mapWithConcurrency } from '../concurrency.js'
 /** Session-owned explicit parsing jobs; the UI observes jobs without owning their lifetime. */
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
@@ -19,11 +22,13 @@ import {
 } from '@deepseek-ai/dsh-jobs'
 import { z } from 'zod'
 import {
+  type ZoteroArtifactMetadataView,
   type ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
   ZoteroDocumentParseReceiptResultView,
   ZoteroParseReceiptView,
+  ZoteroParseTargetView,
   ZoteroStartDocumentParseRequestView,
   ZoteroStartDocumentParseResultView,
 } from '../contract.js'
@@ -129,6 +134,8 @@ export interface ParseJobPersistence {
   put(config: EnrichmentPreferences, record: ParseJobRecord): Promise<void>
   generation(config: EnrichmentPreferences, source: string): Promise<string | undefined>
   putGeneration(config: EnrichmentPreferences, source: string, generation: string): Promise<void>
+  /** Remove every receipt and generation file bound to one parse generation. */
+  deleteByGeneration(config: EnrichmentPreferences, generation: string): Promise<number>
 }
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
@@ -166,7 +173,17 @@ export class DiskParseJobPersistence implements ParseJobPersistence {
 
   private async read(config: EnrichmentPreferences, key: string): Promise<unknown | undefined> {
     try {
-      const path = join(await this.directory(config, false), `${key}.json`)
+      return await this.readAt(await this.directory(config, false), key)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+  }
+
+  /** One receipt read against an already validated directory, so a scan validates once. */
+  private async readAt(dir: string, key: string): Promise<unknown | undefined> {
+    try {
+      const path = join(dir, `${key}.json`)
       const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
       try {
         const info = await file.stat()
@@ -238,6 +255,36 @@ export class DiskParseJobPersistence implements ParseJobPersistence {
   ): Promise<void> {
     await this.write(config, `source-${source}`, { generation: z.uuid().parse(generation) })
   }
+
+  async deleteByGeneration(config: EnrichmentPreferences, generation: string): Promise<number> {
+    const wanted = z.uuid().parse(generation)
+    let dir: string
+    try {
+      dir = await this.directory(config, false)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+      throw error
+    }
+    // The directory is validated once above; each file's reads run against the
+    // validated path, bounded so a large receipt scan cannot open the host wide.
+    const names = (await readdir(dir)).filter((name) => name.endsWith('.json'))
+    const results = await mapWithConcurrency(names, 4, async (name) => {
+      const path = join(dir, name)
+      const info = await lstat(path)
+      if (info.isSymbolicLink() || !info.isFile()) return false
+      const key = name.slice(0, -5)
+      const value = name.startsWith('source-')
+        ? z
+            .object({ generation: z.uuid() })
+            .strict()
+            .safeParse(await this.readAt(dir, key))
+        : recordSchema.safeParse(await this.readAt(dir, key))
+      if (!value.success || value.data.generation !== wanted) return false
+      await rm(path, { force: true })
+      return true
+    })
+    return results.filter((removed) => removed).length
+  }
 }
 
 export interface ParseJobExecution {
@@ -250,6 +297,8 @@ export interface ParseJobExecution {
 export interface EnrichmentParseJobsDeps {
   readonly config: () => EnrichmentPreferences
   readonly resolveAttachment: ParseAttachmentResolver
+  /** Read-only store for opaque artifact targets and management listings. */
+  readonly store: (config: EnrichmentPreferences) => Promise<ParsedArtifactStore>
   /** Must settle after its own resources and shared ParseFlight waiter have been released. */
   readonly execute: (request: ParseJobExecution) => Promise<ParseDocumentResult>
   readonly displayCandidate: (
@@ -257,7 +306,21 @@ export interface EnrichmentParseJobsDeps {
     config: EnrichmentPreferences,
     signal: AbortSignal,
     targetLabel: string,
+    /** Pre-resolved for artifact targets, so the candidate skips its index lookup. */
+    record?: SourceIndexRecord,
   ) => Promise<DisplayArtifactLookup>
+  /** Lease-free metadata for the parsed-tab title; never resolves an attachment. */
+  readonly metadata: (
+    config: EnrichmentPreferences,
+    request: Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>,
+    signal: AbortSignal,
+  ) => Promise<{ readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }>
+  /** One freshness probe per visible attachment row, from a single index snapshot. */
+  readonly probe: (
+    config: EnrichmentPreferences,
+    request: Extract<ZoteroDocumentArtifactRequestView, { op: 'probe' }>,
+    signal: AbortSignal,
+  ) => Promise<Extract<ZoteroDocumentArtifactResultView, { kind: 'probed' }>>
   readonly persistence: ParseJobPersistence
 }
 
@@ -332,14 +395,23 @@ export class EnrichmentParseJobs {
       },
       candidate: async (request, signal) => {
         const config = this.config()
+        const resolved = await this.expand(request.target, config, signal)
         const target = await resolveParseTarget(
-          parseTargetOf(request.target),
+          parseTargetOf(resolved.target),
           this.deps.resolveAttachment,
           signal,
         )
         signal.throwIfAborted()
-        return await this.deps.displayCandidate(target.input, config, signal, target.targetLabel)
+        return await this.deps.displayCandidate(
+          target.input,
+          config,
+          signal,
+          target.targetLabel,
+          resolved.record,
+        )
       },
+      metadata: async (request, signal) => await this.deps.metadata(this.config(), request, signal),
+      probe: async (request, signal) => await this.deps.probe(this.config(), request, signal),
     })
     ctx.on('agent/disposed', ({ agent }) => this.reads.retireAgent(agent))
   }
@@ -363,6 +435,41 @@ export class EnrichmentParseJobs {
 
   private config(): EnrichmentPreferences {
     return Object.freeze({ ...resolveEnrichmentConfig(this.deps.config()) })
+  }
+
+  private async expand(
+    target: ZoteroParseTargetView,
+    config: EnrichmentPreferences,
+    signal: AbortSignal,
+  ): Promise<{ readonly target: ZoteroParseTargetView; readonly record?: SourceIndexRecord }> {
+    signal.throwIfAborted()
+    if (target.kind !== 'artifact') return { target }
+    const store = await this.deps.store(config)
+    return await expandRequestTarget(target, store)
+  }
+
+  /** Drop in-memory job state bound to one artifact generation. */
+  forgetGeneration(generation: string): void {
+    for (const [key, operation] of this.operations)
+      if (operation.record.generation === generation) {
+        this.operations.delete(key)
+        this.owned.delete(operation)
+      }
+    for (const [source, value] of this.generations)
+      if (value === generation) this.generations.delete(source)
+    for (const [key, shared] of this.shared)
+      if (shared.generation === generation) this.shared.delete(key)
+  }
+
+  /** Invalidate open document leases bound to one artifact. */
+  retireArtifact(artifactId: string): void {
+    this.reads.retireArtifact(artifactId)
+  }
+
+  /** Session-only authorization for the management endpoints. */
+  authorizeManagement(sessionId: string, method: string, currentCtx: Context = this.ctx): void {
+    this.open()
+    this.authorize(SessionId(sessionId), method, currentCtx)
   }
 
   private async owner(
@@ -407,7 +514,9 @@ export class EnrichmentParseJobs {
     signal.throwIfAborted()
     this.open()
     const config = this.config()
-    const request = parseWire(zoteroStartDocumentParseRequestSchema, input)
+    const parsed = parseWire(zoteroStartDocumentParseRequestSchema, input)
+    const resolved = await this.expand(parsed.target, config, signal)
+    const request = { ...parsed, target: resolved.target }
     const target = parseTargetOf(request.target)
     const sessionId = SessionId(request.sessionId)
     const registry = await this.owner(sessionId, 'startDocumentParse', signal, currentCtx)

@@ -39,6 +39,7 @@ import type {
   ZoteroNoteRowView,
 } from '../../../contract.ts'
 import { parseRefIdentity, pdfUrlOf, selectUrlOf } from '../../actions/open-zotero.ts'
+import type { ParsedDocuments } from '../../parsed-documents.ts'
 import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
 import { isObjectKey } from '../../../json.ts'
@@ -59,6 +60,8 @@ export interface ParsedArtifactFace {
   readonly read: PdfParseFace['read']
   /** Bumped when a parse finishes so every PDF re-probes the store. */
   readonly revision?: number
+  /** Commit/discard invalidation from the parsed-document provider. */
+  readonly documents?: ParsedDocuments
   /** Opens a committed artifact as its own right-sidebar tab, named by the item. */
   readonly open: (attachment: ZoteroAttachmentRowView, title: string, itemRef: string) => void
 }
@@ -552,6 +555,9 @@ export function LibraryInspector({
           sessionId: parsedArtifact?.sessionId ?? '',
           ...(parsedArtifact?.read !== undefined ? { read: parsedArtifact.read } : {}),
           ...(parsedArtifact?.revision !== undefined ? { revision: parsedArtifact.revision } : {}),
+          ...(parsedArtifact?.documents !== undefined
+            ? { documents: parsedArtifact.documents }
+            : {}),
           onParse: parsePdf,
           ...(parsedArtifact !== undefined
             ? {

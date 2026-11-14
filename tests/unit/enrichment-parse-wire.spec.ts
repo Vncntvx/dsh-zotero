@@ -305,6 +305,36 @@ describe('bounded parse receipts and result DTOs', () => {
     expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
   })
 
+  it('accepts the lease-free metadata arm with its optional title', () => {
+    const request = { sessionId: START.sessionId, op: 'meta', target: TARGET }
+    expect(zoteroDocumentArtifactRequestSchema.parse(request)).toEqual(request)
+    const result = { ...READY_ARTIFACT, kind: 'meta', title: 'Paper Title' }
+    expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
+    const untitled = zoteroDocumentArtifactResultSchema.parse({ ...result, title: undefined })
+    expect('title' in untitled ? untitled.title : undefined).toBeUndefined()
+  })
+
+  it('bounds the batched freshness probe and its per-ref states', () => {
+    const request = { sessionId: START.sessionId, op: 'probe', refs: [attachmentRef()] }
+    expect(zoteroDocumentArtifactRequestSchema.parse(request)).toEqual(request)
+    expect(
+      zoteroDocumentArtifactRequestSchema.safeParse({
+        sessionId: START.sessionId,
+        op: 'probe',
+        refs: [...Array(101)].map(() => attachmentRef()),
+      }).success,
+    ).toBe(false)
+    const result = {
+      kind: 'probed',
+      results: [
+        { ref: attachmentRef(), state: 'ready' },
+        { ref: attachmentRef('PDF00002'), state: 'missing' },
+        { ref: attachmentRef('PDF00003'), state: 'expired' },
+      ],
+    }
+    expect(zoteroDocumentArtifactResultSchema.parse(result)).toEqual(result)
+  })
+
   it('accepts one bounded document page and refuses an unbounded body or a host path', () => {
     const page = {
       offset: 0,

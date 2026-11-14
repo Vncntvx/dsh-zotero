@@ -60,9 +60,9 @@ describe('zotero_export jobs', () => {
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toBe(
-        `Error: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
+        `Error: invalid arguments: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
       )
-      expect(result.error?.info).toMatchObject({ code: 'JOB_BACKGROUND_DISABLED' })
+      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
 
     it('refuses run_in_background when ctx.jobs service is unavailable', async () => {

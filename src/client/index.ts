@@ -105,12 +105,27 @@ import { createLibraryDataPlane } from './components/library/library-data-plane.
 import { clearLibraryState } from './components/library/library-storage.ts'
 import { createLibraryViewStore } from './components/library/library-view-store.ts'
 import { LIBRARY_ICON_KEY, LIBRARY_TAB_KIND } from './library-tab.ts'
-import { PARSED_TAB_KIND, PARSED_TAB_PATTERN, parsedTabAddress } from './parsed-tab.ts'
+import {
+  PARSED_TAB_KIND,
+  PARSED_TAB_PATTERN,
+  parsedArtifactTabAddress,
+  parsedTabAddress,
+} from './parsed-tab.ts'
 import {
   ParsedDocumentTab,
   ParsedDocumentTitle,
   type ParsedDocumentTabFace,
 } from './components/library/ParsedDocumentTab.tsx'
+import {
+  PARSED_MANAGER_TAB_KIND,
+  PARSED_MANAGER_TAB_PATTERN,
+  parsedManagerTabAddress,
+} from './parsed-manager-tab.ts'
+import {
+  ParsedManagerTab,
+  ParsedManagerTitle,
+  type ParsedManagerTabFace,
+} from './enrichment/ParsedManagerTab.tsx'
 import { ZoteroLibraryIcon } from './components/library/ZoteroLibraryIcon.tsx'
 import { gatedMount, registerGatedSurfaces, watchWebEnabled } from './web-enabled.ts'
 import { registerZoteroToolviews } from './toolviews/index.ts'
@@ -632,14 +647,26 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
   const panelFace = (sessionId: SessionId): ZoteroLibraryPanelFace => ({
     viewStore,
     parse: surfaces.parse,
+    parsedDocuments: surfaces.parsedDocuments,
     // The parsed tab is address-claimed, so two attachments never share one
     // tab and reopening a document reveals it.
-    openParsed: (attachment, title, itemRef) =>
-      ctx.sidebarRight.openResourceIn(
+    openParsed: (attachment, title, itemRef) => {
+      const docTitle = title || attachment.title
+      return ctx.sidebarRight.openResourceIn(
         sessionId,
-        parsedTabAddress({ sessionId, ref: attachment.ref, title: '' }),
-        { params: { title: title || attachment.title, ...(itemRef ? { item: itemRef } : {}) } },
-      ),
+        parsedTabAddress({
+          sessionId,
+          ref: attachment.ref,
+          title: docTitle,
+          ...(itemRef ? { item: itemRef } : {}),
+        }),
+        { params: { title: docTitle, ...(itemRef ? { item: itemRef } : {}) } },
+      )
+    },
+    openParsedManager: () =>
+      void ctx.sidebarRight.openResourceIn(sessionId, parsedManagerTabAddress({ sessionId }), {
+        params: {},
+      }),
     preferenceSource,
     readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
     releaseUrlPdf: (lease) =>
@@ -710,18 +737,17 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     )
 
     // One parsed document per tab: the attachment rides the address, so a
-    // second open reveals the same tab. Registered only while enrichment
-    // serves a document reader.
+    // second open reveals the same tab. The kind stays registered even while
+    // enrichment is off, so a restored tab renders its in-body denial instead
+    // of vanishing; only the manager tab withdraws with the component.
     const PARSED_TAB_ID = `${ZOTERO_REMOTE_PACKAGE}#parsed`
     const disposeParsedTab = ctx.effect(() => {
-      const parse = surfaces.parse
-      if (parse === undefined) return () => {}
       const parsedFace = (): ParsedDocumentTabFace => ({
         refresh: (address) => surfaces.parsedDocuments.refresh(address),
         // The explain request cites the item, so the model can read the rest
         // of the paper through the read tools.
         item: (request, signal) => ctx.remote.zotero.item(request, signal),
-        parse,
+        parse: surfaces.parse,
       })
       const disposeType = ctx.sidebarRightTabs.register({
         id: PARSED_TAB_ID,
@@ -749,6 +775,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
             key: PARSED_TAB_ID,
             locale: NS,
             registrant: REGISTRANT,
+            inject: () => ({ documents: surfaces.parsedDocuments }),
           },
           ParsedDocumentTitle,
         ),
@@ -759,6 +786,60 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         disposeType()
       }
     })
+
+    // One manager tab per session. It is registered only while the enrichment
+    // row is served: with the component off there is nothing to manage.
+    const PARSED_MANAGER_TAB_ID = `${ZOTERO_REMOTE_PACKAGE}#parsed-manager`
+    const disposeParsedManagerTab = ctx.effect(() =>
+      ctx.configForms.whileServed([ENRICHMENT_SETTINGS_NAMESPACE], () => {
+        const managerFace = (): ParsedManagerTabFace => ({
+          management: surfaces.parse.management,
+          parse: surfaces.parse,
+          openParsed: (sessionId, artifactId, title) =>
+            void ctx.sidebarRight.openResourceIn(
+              sessionId as SessionId,
+              parsedArtifactTabAddress({ sessionId, artifactId }),
+              { params: { title } },
+            ),
+          discarded: (sessionId, artifactId) =>
+            surfaces.parsedDocuments.discarded(sessionId, artifactId),
+        })
+        const disposeType = ctx.sidebarRightTabs.register({
+          id: PARSED_MANAGER_TAB_ID,
+          kind: PARSED_MANAGER_TAB_KIND,
+          patterns: [PARSED_MANAGER_TAB_PATTERN],
+          title: () => panelT('tabParsedManagerFallback'),
+        })
+        const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () =>
+          ctx.slots.register(
+            {
+              name: 'sidebar.right.pane.tab',
+              key: PARSED_MANAGER_TAB_ID,
+              locale: NS,
+              registrant: REGISTRANT,
+              inject: managerFace,
+            },
+            ParsedManagerTab,
+          ),
+        )
+        const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+          ctx.slots.register(
+            {
+              name: 'sidebar.right.pane.tab.title',
+              key: PARSED_MANAGER_TAB_ID,
+              locale: NS,
+              registrant: REGISTRANT,
+            },
+            ParsedManagerTitle,
+          ),
+        )
+        return () => {
+          disposeTitle()
+          disposeBody()
+          disposeType()
+        }
+      }),
+    )
 
     const disposeTabMenu = ctx.slots.inject('sidebar.right.tab.menu.item', () =>
       ctx.slots.register(
@@ -1024,6 +1105,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeTabTitle()
       disposeTabBody()
       disposeParsedTab()
+      disposeParsedManagerTab()
       refreshBindings.clear()
       disposeTabDef()
     }
@@ -1171,9 +1253,17 @@ function registerUi(ctx: ClientContext): void {
       connection: (ctx as unknown as Pick<DocumentParseClientContext, 'connection'>).connection,
       configForms: ctx.configForms,
     },
-    enrichmentForm,
-    (sessionId, target) => {
-      if (target.kind === 'attachment') parsedDocuments.committed(sessionId, target.ref)
+    {
+      form: enrichmentForm,
+      onCommitted: (sessionId, target) => {
+        if (target.kind === 'attachment') parsedDocuments.committed(sessionId, target.ref)
+      },
+      management: {
+        listParsedDocuments: (request, signal) =>
+          ctx.remote.zotero.listParsedDocuments(request, signal),
+        discardParsedDocument: (request, signal) =>
+          ctx.remote.zotero.discardParsedDocument(request, signal),
+      },
     },
   )
   ctx.effect(() => () => parse.dispose(), 'dsh-zotero: document parsing surface')

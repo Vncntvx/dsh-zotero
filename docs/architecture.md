@@ -191,7 +191,7 @@ graph LR
 - 请求纪律：探针返回前不发出任何面板请求；离线段不发请求；关闭面板后不再发起新请求。
 - 写入口：`writeEnabled` 且选中个人库时显示；仅当所属会话正在运行时才能提交。
 - 引用复制：动作行经 `zotero/export` 端点复制 CSL 引用、BibTeX 等格式，面板只取与 `zotero_export` 同源的渲染文本/引文（不含工具侧的逐条文档定位）；失败就地展示错误，不自动重试。
-- 解析结果页（`zotero-parsed`）：资源地址只包含会话和附件 ref，论文标题和条目 ref 存在标签页参数中。通过宿主 `ResourceProvider` / `useResource` 准备完整正文与图片，期间显示进度；准备齐全后一次提交给 `MarkdownText`。刷新保持旧文档可读，成功后整体换代，失败时保留旧文档并显示错误。准备结束释放宿主 lease，Blob URL 随资源换代或最后一个 holder 释放而回收。选区动作使用宿主 `Menu`，解释和复制消费打开菜单时保存的文本快照。
+- 已解析文档管理页（`zotero-parsed-manager`）：文献面板 header 的常驻按钮按会话打开，位置紧跟 `My Library`（窄屏与选择器同为 `order: 1`，DOM 序保证库选择器在前）。列表由一次 `listParsedDocuments` 分页读取提供。每行使用提交时抓取的 Markdown H1 命名；没有标题时回退到 artifactId 短码，并显示来源、解析时间、大小与计数。页面支持按状态和输入文本筛选。选择仅在当前可见窗口内有效，换页、换筛选或换搜索时清空。批量删除逐条发起请求；失败行保持选中并在汇总中报告，删除后没有内容的末页会自动回退一页。行按 `artifactId` 打开、重新解析或删除；删除先弹确认框，完成后刷新已打开的解析页。解析组件提供服务后才会显示按钮和标签页，URL 解析入口位于管理页。解析结果页（`zotero-parsed`）：资源地址只包含会话和附件 ref（URL 来源改用 `artifact` 段加 artifactId，由 host 在 `expandRequestTarget` 中还原具体来源），论文标题和条目 ref 存在标签页参数中。宿主 `ResourceProvider` / `useResource` 准备完整正文与图片并显示进度，准备完成后一次提交给 `MarkdownText`。刷新期间保持旧文档可读，成功后整体换代，失败时保留旧文档并显示错误。准备结束释放宿主 lease，Blob URL 随资源换代或最后一个 holder 释放而回收。选区动作使用宿主 `Menu`，解释和复制消费打开菜单时保存的文本快照。
 
 ### 工具卡片
 
@@ -217,7 +217,7 @@ graph LR
 
 ## 远程通信与设置
 
-- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；`EnrichmentService`（`enrichment`）负责主动解析、产物回执与语义模型管理：`startDocumentParse`、`documentArtifact`、`documentParseReceipt`、`semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`deleteSemanticModel`、`verifySemanticModel`。接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答；
+- 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间下注册端点。`ZoteroRuntime`（`zoteroRemote`）负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService`（`zoteroLibrary`）负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；`EnrichmentService`（`enrichment`）负责主动解析、产物回执、已解析文档管理与语义模型管理：`startDocumentParse`、`documentArtifact`、`documentParseReceipt`、`listParsedDocuments`、`discardParsedDocument`、`semanticModelStatus`、`downloadSemanticModel`、`cancelSemanticModelDownload`、`deleteSemanticModel`、`verifySemanticModel`。`listParsedDocuments` 单次返回服务端分页的行（可选状态与文本过滤在排序和切片之前生效，`total` 取过滤后的总数；行的 `title` 取自提交时抓取的 Markdown H1，老产物缺失时由客户端回退到 artifactId 短码），host 直接合并 `sources/index.json` 与产物目录（按 cacheKey 去重，兼容孤儿目录与悬空索引），列表零探测、不触碰 MinerU；库列表与检查器的徽标走 `documentArtifact` 的 `probe`——一页一次的批量新鲜度探测（有界并发、每批一次索引快照），可能对 URL 来源发一次 HEAD，语义与单目标 `inspect` 一致；`discardParsedDocument` 一次清理读租约、解析收据、产物目录、任务文件与全部别名键。完整 URL 只留在 host 磁盘，不进任何 wire 结果。接收方是组件自己的 Cordis 服务，组件行卸载时网关按 `gateway/service-unavailable` 应答；
 - enrichment 远程边界统一经 `errors.ts` 的 `domainCall` 保留领域错误码，并区分取消与 Gateway 错误。只有确切的 `gateway/service-unavailable` 表示组件缺席；权限、连接、目录或协议失败会报告实际原因，不改写成组件不可用；
 - 浏览器半侧通过 `ctx.remote.$mount` 挂载命名空间，配置读写走 `zotero`、`library`、`scholarly`、`enrichment` 四个命名空间的共享设置表单；
 - 文献面板设置同时提供 11 项 `library` 偏好和 2 项核心 CSL 默认值的直接编辑；`CitationFormController` 为后两项持有独立暂存模型，两个入口共用该模型，不会提交连接等其他字段的草稿。`tests/client/settings/citation-defaults.spec.tsx` 验证真实表单组合、保存拒绝与入口一致性；`tests/client/cards/zotero-card-parity.spec.ts` 验证两个核心字段表合并后与宿主 schema 完整对应；打包后浏览器验收由 `smoke:web-composition` 验证保存和刷新持久化。

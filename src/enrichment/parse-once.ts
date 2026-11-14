@@ -44,6 +44,7 @@ import { parsedIdentityOf } from './identity.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { sourceKeyOf } from './source-stamp.js'
 import { PARSE_GENERATION, SHA256 } from './artifact-schema.js'
+import { extractMarkdownTitleOf } from '../parsed-title.js'
 import {
   MAX_POLLS,
   PARSE_TOTAL_TIMEOUT_MS,
@@ -534,6 +535,9 @@ export async function parseOnce(
             sourceId: sourceKeyOf(input.identity),
             generation: input.generation,
             identity: parsedIdentityOf(input.identity),
+            ...(input.identity.startsWith('zotero://')
+              ? {}
+              : { sourceUrl: canonicalSourceIdentityOf(input.identity) }),
             mode: input.mode,
             contentFingerprint: input.fingerprint ?? contentFingerprintOf(input.bytes),
             taskId,
@@ -549,6 +553,7 @@ export async function parseOnce(
                 }
               : {}),
             ...(pageCount !== undefined ? { pageCount } : {}),
+            title: extractMarkdownTitleOf(payload.markdown),
           }
           const artifact: ParsedArtifact & { readonly contentList?: NormalizedContentList } = {
             markdown: payload.markdown,

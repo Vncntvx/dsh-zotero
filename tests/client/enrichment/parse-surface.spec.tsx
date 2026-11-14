@@ -44,7 +44,19 @@ function surfaceWorld(
         whileServed: (_namespaces, register) => register(new Set(['enrichment'])),
       },
     },
-    form,
+    {
+      form,
+      management: {
+        listParsedDocuments: async () => ({
+          ok: true as const,
+          value: { rows: [], total: 0 },
+        }),
+        discardParsedDocument: async () => ({
+          ok: true as const,
+          value: { kind: 'discarded' as const, removedAliases: 0, removedReceipts: 0 },
+        }),
+      },
+    },
   )
   worlds.push(port)
   return { port, remote, form, connection }

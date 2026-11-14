@@ -27,8 +27,22 @@ function fixture() {
         whileServed: (_namespaces, mount) => mount(new Set(['enrichment'])),
       },
     },
-    fakeScope(),
-    committed,
+    {
+      form: fakeScope(),
+      onCommitted: committed,
+      // The commit notice drives this fixture; the management endpoints stay
+      // the real wire stubs the surface forwards to.
+      management: {
+        listParsedDocuments: async () => ({
+          ok: true as const,
+          value: { rows: [], total: 0 },
+        }),
+        discardParsedDocument: async () => ({
+          ok: true as const,
+          value: { kind: 'discarded' as const, removedAliases: 0, removedReceipts: 0 },
+        }),
+      },
+    },
   )
   owned.push(port)
   return { port, remote, committed }

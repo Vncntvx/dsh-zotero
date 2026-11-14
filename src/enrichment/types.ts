@@ -24,6 +24,16 @@ export type FulltextSourceStamp =
 export interface ParseSourceInput extends FulltextEnhancerInput {
   readonly bytes?: Uint8Array
   readonly sourceStamp?: FulltextSourceStamp
+  /**
+   * The attachment as the core already reported it, when the caller resolved
+   * it during target validation: the source probe then stats or HEADs without
+   * a second resolution round-trip. Structurally `ResolvedAttachment`.
+   */
+  readonly resolvedAttachment?: {
+    readonly kind: 'file' | 'url'
+    readonly path?: string
+    readonly url?: string
+  }
 }
 
 /** Local byte and remote page limits, shared with the submission confirmation. */
@@ -44,6 +54,8 @@ export interface ParsedArtifactMeta {
   readonly generation: string
   /** Canonical attachment ref or origin-only redacted URL display. */
   readonly identity: string
+  /** Canonical URL for a URL-sourced artifact; absent for Zotero attachments. */
+  readonly sourceUrl?: string
   readonly mode: EnrichmentMode
   /** SHA-256 of the exact bytes that were sent. */
   readonly contentFingerprint: string
@@ -53,6 +65,8 @@ export interface ParsedArtifactMeta {
   /** Figures the stored Markdown references, in name order. */
   readonly images?: readonly ParsedImageMeta[]
   readonly pageCount?: number
+  /** The Markdown H1, captured at commit; the tab chip names the paper with it. */
+  readonly title?: string
 }
 
 /** One figure kept beside the Markdown it belongs to. */

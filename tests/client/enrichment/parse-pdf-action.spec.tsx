@@ -18,6 +18,7 @@ import type {
 } from '../../../src/contract.ts'
 import { attachmentRef } from '../../helpers/server/keys.ts'
 import { mockT } from '../helpers/mock-translate.ts'
+import { ParsedDocuments } from '../../../src/client/parsed-documents.ts'
 
 afterEach(cleanup)
 
@@ -47,8 +48,27 @@ function readerOf(pages: (offset: number) => RemoteResult<ZoteroDocumentArtifact
   return vi.fn(
     async (
       request: ZoteroDocumentArtifactRequestView,
-    ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> =>
-      pages(request.op === 'page' ? request.offset : -1),
+    ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> => {
+      if (request.op === 'probe') {
+        // One batched answer folded from the same per-target state the
+        // single-target arm gives.
+        const state = pages(-1)
+        return {
+          ok: true,
+          value: {
+            kind: 'probed',
+            results: request.refs.map((ref) => ({
+              ref,
+              state:
+                state.ok && state.value.kind === 'ready'
+                  ? ('ready' as const)
+                  : ('missing' as const),
+            })),
+          },
+        }
+      }
+      return pages(request.op === 'page' ? request.offset : -1)
+    },
   )
 }
 
@@ -169,19 +189,62 @@ describe('the item parse action', () => {
     )
     const { rerender } = render(view())
     await act(async () => {})
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(read).toHaveBeenCalledTimes(1)
     rerender(view(1))
     await act(async () => {})
-    expect(read).toHaveBeenCalledTimes(4)
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-probes when the parsed-document provider reports a commit or discard', async () => {
+    const ready = new Set([PDF.ref])
+    const read = vi.fn(async (request: ZoteroDocumentArtifactRequestView) =>
+      request.op === 'probe'
+        ? {
+            ok: true as const,
+            value: {
+              kind: 'probed' as const,
+              results: request.refs.map((ref) => ({
+                ref,
+                state: ready.has(ref) ? ('ready' as const) : ('missing' as const),
+              })),
+            },
+          }
+        : { ok: true as const, value: READY },
+    )
+    const documents = new ParsedDocuments(
+      read as never,
+      () => ({ getSnapshot: () => true, subscribe: () => () => {} }),
+      vi.fn(),
+    )
+    const view = () => (
+      <ParsePdfAction
+        t={mockT}
+        sessionId={SESSION}
+        attachments={[PDF, OTHER]}
+        read={read as never}
+        documents={documents}
+        onParse={vi.fn()}
+      />
+    )
+    const { rerender } = render(view())
+    await act(async () => {})
+    expect(read).toHaveBeenCalledTimes(1)
+    ready.delete(PDF.ref)
+    act(() => documents.discarded(SESSION, 'b'.repeat(64)))
+    await act(async () => {})
+    expect(read).toHaveBeenCalledTimes(2)
+    rerender(view())
+    await act(async () => {})
+    expect(read).toHaveBeenCalledTimes(2)
   })
 
   it('asks which PDF to parse when the item carries several', async () => {
     const read = readerOf(() => ({ ok: true, value: { kind: 'missing' } }))
     const { onParse } = mount(read, {}, [PDF, OTHER])
     await act(async () => {})
-    // Each attachment's own store entry is probed.
-    expect(read).toHaveBeenCalledTimes(2)
-    expect(read.mock.calls.map((call) => targetedRef(call[0]))).toEqual([PDF.ref, OTHER.ref])
+    // One batched probe answers for every attachment.
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(read.mock.calls[0]![0]).toMatchObject({ op: 'probe', refs: [PDF.ref, OTHER.ref] })
     fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsePdfAny') }))
     await act(async () => {})
     expect(screen.getByRole('heading', { name: mockT('libraryPickPdf') })).toBeDefined()
@@ -195,10 +258,23 @@ describe('the item parse action', () => {
     const read = vi.fn(
       async (
         request: ZoteroDocumentArtifactRequestView,
-      ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> =>
-        targetedRef(request) === OTHER.ref
+      ): Promise<RemoteResult<ZoteroDocumentArtifactResultView>> => {
+        if (request.op === 'probe') {
+          return {
+            ok: true,
+            value: {
+              kind: 'probed',
+              results: request.refs.map((ref) => ({
+                ref,
+                state: ref === OTHER.ref ? ('ready' as const) : ('missing' as const),
+              })),
+            },
+          }
+        }
+        return targetedRef(request) === OTHER.ref
           ? { ok: true, value: READY }
-          : { ok: true, value: { kind: 'missing' } },
+          : { ok: true, value: { kind: 'missing' } }
+      },
     )
     const { onParse, onOpenParsed } = mount(read, {}, [PDF, OTHER])
     await act(async () => {})

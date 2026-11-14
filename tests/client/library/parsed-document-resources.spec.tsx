@@ -6,6 +6,7 @@ import { documentRead, parsedRuntime, type ArtifactAnswer } from './support/pars
 import { deferred } from '../../helpers/sync.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
+import { parsedArtifactTabAddress, parsedTabAddress } from '../../../src/client/parsed-tab.ts'
 
 const owned: ReturnType<typeof parsedRuntime>[] = []
 afterEach(async () => {
@@ -113,6 +114,23 @@ it('starts a new preparation when a committed generation is reported without pol
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(2)
 })
 
+it('matches a committed attachment structurally even when its tab address carries a title', async () => {
+  const read = documentRead('# Resource')
+  const titled = parsedTabAddress({
+    sessionId: 'parsed-session',
+    ref: 'zotero://user/0/attachment/PDF00001',
+    title: 'Real Title',
+  })
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  runtime.mount({ address: titled, title: 'Real Title' })
+  await tick()
+  read.mockImplementation(documentRead('# Committed'))
+  act(() => runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001'))
+  await tick()
+  expect(screen.getByRole('heading', { name: 'Committed' })).toBeDefined()
+})
+
 it('reports a browser decode failure in the active locale and retains the complete document', async () => {
   const read = documentRead('# Complete')
   const runtime = parsedRuntime(read, {
@@ -192,4 +210,60 @@ it('reclaims a prepared candidate closed while the Host release is pending', asy
   await disposed
   expect(revoke).toHaveBeenCalledWith('blob:candidate')
   expect(runtime.source.getSnapshot().value?.document).toBeUndefined()
+})
+
+it('discards an open artifact by id and refreshes only its tab', async () => {
+  const read = documentRead('# Resource')
+  const runtime = mount(read)
+  await tick()
+  const before = read.mock.calls.filter(([request]) => request.op === 'open').length
+  act(() => runtime.documents.discarded('parsed-session', 'b'.repeat(64)))
+  await tick()
+  expect(read.mock.calls.filter(([request]) => request.op === 'open').length).toBe(before + 1)
+})
+
+it('opens an artifact-addressed resource with an opaque target', async () => {
+  const read = documentRead('# Resource')
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  const abort = new AbortController()
+  const iterator = runtime.documents
+    .open(parsedArtifactTabAddress({ sessionId: 'parsed-session', artifactId: 'a'.repeat(64) }), {
+      signal: abort.signal,
+    })
+    [Symbol.asyncIterator]()
+  await iterator.next()
+  await tick()
+  expect(
+    read.mock.calls.some(
+      ([request]) => request.op === 'open' && request.target.kind === 'artifact',
+    ),
+  ).toBe(true)
+  abort.abort()
+  await runtime.dispose()
+})
+
+it('reparses an artifact-addressed document through its own opaque target', async () => {
+  const read = documentRead('# Resource')
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  runtime.mount({
+    address: parsedArtifactTabAddress({ sessionId: 'parsed-session', artifactId: 'a'.repeat(64) }),
+    parse: true,
+  })
+  await tick()
+  fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedReparse') }))
+  expect(screen.getByRole('dialog')).toBeDefined()
+})
+
+it('reports a thrown non-error as the failure text', async () => {
+  const read = documentRead('')
+  read.mockImplementation(async () => {
+    throw 'gateway blip'
+  })
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  runtime.mount()
+  await tick()
+  expect(runtime.source.getSnapshot().failure).toBeDefined()
 })

@@ -17,6 +17,7 @@ import {
   callNameOf,
   errorSummaryOf,
   evidenceItemsOf,
+  formatDateTime,
   formatTime,
   joinNonEmpty,
   listArg,
@@ -310,5 +311,13 @@ describe('formatTime', () => {
     const d = new Date(2025, 0, 1, 14, 25, 59)
     expect(formatTime(d, false)).toBe('14:25')
     expect(formatTime(d.getTime(), false)).toBe('14:25')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('formats a dated row as a zero-padded local date and minute', () => {
+    const d = new Date(2025, 0, 2, 9, 5, 3)
+    expect(formatDateTime(d)).toBe('2025/01/02 09:05')
+    expect(formatDateTime(d.getTime())).toBe('2025/01/02 09:05')
   })
 })

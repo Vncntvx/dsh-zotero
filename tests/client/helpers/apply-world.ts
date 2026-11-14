@@ -71,6 +71,8 @@ export interface FakeApplyWorld {
   eventDisposes: number
   /** Every address the `sidebarRight` service was asked to open. */
   openResourceCalls: string[]
+  /** Every in-session resource open, with its captured presentation params. */
+  openResourceInCalls: Array<{ sessionId: string; address: string; params?: unknown }>
   /** Every page the `sidebarRight` service was asked to open, with its captured session. */
   openTabCalls: Array<{ sessionId?: string; kind: string }>
   /** Every protocol URL the Remote namespace was asked to launch. */
@@ -161,6 +163,7 @@ export function fakeWorld(
     eventDefinitions: [],
     eventDisposes: 0,
     openResourceCalls: [],
+    openResourceInCalls: [],
     openTabCalls: [],
     openProtocolCalls: [],
     notifications: [],
@@ -268,6 +271,9 @@ export function fakeWorld(
       openTabs: { getSnapshot: () => [], subscribe: () => () => {} },
       openResource: (url: string) => {
         world.openResourceCalls.push(url)
+      },
+      openResourceIn: (sessionId: string, address: string, options?: { params?: unknown }) => {
+        world.openResourceInCalls.push({ sessionId, address, params: options?.params })
       },
       openTab: (kind: string) => {
         world.openTabCalls.push({ kind })

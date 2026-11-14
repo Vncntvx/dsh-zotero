@@ -253,6 +253,12 @@ describe('parseDocument sources and generations', () => {
     )
     expect(result.artifact.meta.identity).toBe('https://example.org/…')
     const meta = await world.fs.deps.readFile(`/parsed/${result.cacheKey}/meta.json`)
-    expect(new TextDecoder().decode(meta)).not.toContain('secret')
+    const parsed = JSON.parse(new TextDecoder().decode(meta))
+    // The display identity stays origin-only. The canonical URL (including its
+    // query) is retained in sourceUrl so an orphan directory can rebuild its
+    // target; it matches what the source index already stores in stamp.url and
+    // never reaches a receipt, a wire result, or a display field.
+    expect(parsed.identity).not.toContain('secret')
+    expect(parsed.sourceUrl).toBe('https://example.org/paper.pdf?token=secret')
   })
 })

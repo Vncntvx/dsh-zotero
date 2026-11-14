@@ -39,7 +39,7 @@ import {
   type CredentialProvider,
   type CredentialRecord,
 } from '@deepseek-ai/dsh-credentials'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { asRecord, asString } from './json.js'

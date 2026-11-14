@@ -14,6 +14,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ParsedDocuments } from '../parsed-documents.ts'
 import type {
   ZoteroAttachmentRowView,
   ZoteroDocumentArtifactRequestView,
@@ -36,6 +37,8 @@ export interface ParsePdfActionProps {
   readonly read?: ParsedArtifactReader
   /** Bumped after a parse finishes so the probe re-reads the store. */
   readonly revision?: number
+  /** Commit/discard invalidation from the parsed-document provider. */
+  readonly documents?: ParsedDocuments
   /** Opens the submit form for one attachment. */
   readonly onParse: (attachment: ZoteroAttachmentRowView) => void
   /** Opens a committed artifact as its own right-sidebar tab. */
@@ -55,45 +58,55 @@ export function ParsePdfAction({
   attachments,
   read,
   revision = 0,
+  documents,
   onParse,
   onOpenParsed,
 }: ParsePdfActionProps) {
   const [probes, setProbes] = useState<ReadonlyMap<string, Probe>>()
   const [picking, setPicking] = useState(false)
+  const [probeEpoch, setProbeEpoch] = useState(0)
   const epoch = useRef(0)
   const attachmentKey = attachments.map((attachment) => attachment.ref).join('\n')
   const primary = attachments[0]
+
+  useEffect(() => {
+    if (documents === undefined) return
+    return documents.probeRevision.subscribe(() => setProbeEpoch((epoch) => epoch + 1))
+  }, [documents])
 
   useEffect(() => {
     if (read === undefined) return setProbes(new Map())
     const current = ++epoch.current
     setProbes(undefined)
     const abort = new AbortController()
-    void Promise.all(
-      attachments.map(async (attachment): Promise<Probe> => {
-        try {
-          const result = await read(
-            { sessionId, op: 'inspect', target: { kind: 'attachment', ref: attachment.ref } },
-            abort.signal,
-          )
-          return result.ok && result.value.kind === 'ready' ? { kind: 'ready' } : { kind: 'absent' }
-        } catch {
-          // An unreadable probe is absence, never an error banner beside
-          // "Read PDF": the action stays available as a submit.
-          return { kind: 'absent' }
-        }
-      }),
-    ).then((answers) => {
-      if (current !== epoch.current) return
-      setProbes(new Map(attachments.map((attachment, index) => [attachment.ref, answers[index]!])))
-    })
+    void read({ sessionId, op: 'probe', refs: attachments.map((a) => a.ref) }, abort.signal)
+      .then((result) => {
+        if (current !== epoch.current || abort.signal.aborted) return
+        // A failed batch is absence across the board, never an error banner
+        // beside "Read PDF": the action stays available as a submit.
+        const states = result.ok && result.value.kind === 'probed' ? result.value.results : []
+        setProbes(
+          new Map(
+            attachments.map((attachment) => [
+              attachment.ref,
+              states.find((row) => row.ref === attachment.ref)?.state === 'ready'
+                ? ({ kind: 'ready' } as Probe)
+                : ({ kind: 'absent' } as Probe),
+            ]),
+          ),
+        )
+      })
+      .catch(() => {
+        if (current !== epoch.current || abort.signal.aborted) return
+        setProbes(new Map(attachments.map((attachment) => [attachment.ref, { kind: 'absent' }])))
+      })
     return () => {
       epoch.current++
       abort.abort()
     }
     // `attachmentKey` stands in for the array identity the wire compares.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [read, sessionId, attachmentKey, revision])
+  }, [read, sessionId, attachmentKey, revision, probeEpoch])
 
   if (primary === undefined) return null
   const ready = attachments.some((attachment) => probes?.get(attachment.ref)?.kind === 'ready')

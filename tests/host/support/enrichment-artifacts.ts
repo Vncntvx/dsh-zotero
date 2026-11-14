@@ -22,6 +22,7 @@ export const ARTIFACT: ParsedArtifact = {
     contentFingerprint: 'f'.repeat(64),
     taskId: 't1',
     files: ['full.md', 'content_list.json'],
+    title: 'Parsed body',
   },
 }
 export const SOURCE_RECORD: SourceIndexRecord = {

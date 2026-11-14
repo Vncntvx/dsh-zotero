@@ -13,12 +13,25 @@ export interface FakeLibraryWire {
   search: (request: unknown) => Promise<unknown>
   item: (request: unknown) => Promise<unknown>
   childPage: (request: unknown) => Promise<unknown>
+  collectionPath: (request: unknown) => Promise<unknown>
+  export: (request: unknown) => Promise<unknown>
   write: (request: unknown) => Promise<unknown>
 }
 
 /** @returns the inert wire, with one stable item for the item endpoint. */
 export function fakeLibraryWire(): FakeLibraryWire {
   return {
+    collectionPath: async () => ({
+      ok: true,
+      value: { library: { type: 'user', id: 0 }, libraryVersion: 1, path: [] },
+    }),
+    export: async () => ({
+      ok: true,
+      value: {
+        format: 'citation',
+        citations: [{ ref: 'zotero://user/0/item/ABCD1234', text: 'Dao, T. (2023).' }],
+      },
+    }),
     browse: async () => ({
       ok: true,
       value: { kind: 'libraries', items: [], total: 0, offset: 0, returned: 0, limit: 50 },

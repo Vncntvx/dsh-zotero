@@ -37,7 +37,7 @@
 /* The title takes the room it needs and yields it first: at narrow widths the
  * chip already carries the name, so the row never grows taller. */
 .title {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -56,8 +56,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
-  font-size: var(--dsw-font-xs-13-font-size);
-  line-height: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
 }
 
 /* Controls keep their single row whatever the pane's width. */
@@ -88,8 +87,7 @@
   margin: 0;
   padding: 6px 10px;
   color: var(--dsw-alias-state-error-primary);
-  font-size: var(--dsw-font-xs-13-font-size);
-  line-height: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
   background: var(--dsw-alias-bg-layer-2);
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   overflow-wrap: anywhere;
@@ -116,6 +114,37 @@
   margin: 0;
   padding: 8px 16px;
   color: var(--dsw-alias-label-secondary);
-  font-size: var(--dsw-font-xs-13-font-size);
-  line-height: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
+}
+
+.footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 38px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  background: var(--dsw-alias-bg-layer-2);
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  user-select: none;
+}
+
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.footerMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  line-height: var(--dsw-font-xxs-12-line-height);
+  white-space: nowrap;
+  margin-left: auto;
 }

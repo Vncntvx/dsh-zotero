@@ -90,6 +90,8 @@ describe('the browser-half entry', () => {
       'sidebar.right.pane.tab.title',
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
+      'sidebar.right.pane.tab',
+      'sidebar.right.pane.tab.title',
       'sidebar.right.tab.menu.item',
       'sidebar.right.tab.menu.item',
       'conversation.input.left',
@@ -242,6 +244,8 @@ describe('the browser-half entry', () => {
       { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
       // The panel gate: the library surfaces follow the same served watch.
       { namespaces: [ZOTERO_LIBRARY_SETTINGS_NAMESPACE] },
+      // The parsed-document manager tab follows enrichment inside the panel gate.
+      { namespaces: [ENRICHMENT_SETTINGS_NAMESPACE] },
     ])
     const rowEntries = worldServed.injected.filter((e) => e.name === 'plugins.row.config')
     expect(rowEntries).toHaveLength(3)
@@ -513,9 +517,10 @@ describe('the browser-half entry', () => {
     const world = fakeWorld()
     await applyEntry(world)
 
-    // Right sidebar surfaces: the library panel and one parsed-document page.
-    expect(world.sidebarRightTabDefinitions).toHaveLength(2)
-    const [rightTabDef, parsedTabDef] = world.sidebarRightTabDefinitions as {
+    // Right sidebar surfaces: the library panel, one parsed-document page and
+    // the parsed-document manager.
+    expect(world.sidebarRightTabDefinitions).toHaveLength(3)
+    const [rightTabDef, parsedTabDef, managerTabDef] = world.sidebarRightTabDefinitions as {
       id: string
       kind: string
       patterns?: readonly string[]
@@ -525,6 +530,9 @@ describe('the browser-half entry', () => {
     expect(parsedTabDef!.id).toBe('dsh-zotero#parsed')
     expect(parsedTabDef!.kind).toBe('zotero-parsed')
     expect(parsedTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed/**'])
+    expect(managerTabDef!.id).toBe('dsh-zotero#parsed-manager')
+    expect(managerTabDef!.kind).toBe('zotero-parsed-manager')
+    expect(managerTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed-manager/**'])
     const parsedTitle = (parsedTabDef as unknown as { title: (address: string) => string }).title
     // The chip is the paper's own name; only an untitled address falls back.
     expect(parsedTitle('dsh-resource://zotero-parsed/s/r')).toBe('tabParsedFallback')
@@ -661,5 +669,37 @@ describe('the browser-half entry', () => {
     await expect(applyEntry(world)).rejects.toThrow('inject failed')
     expect(world.uiDisposes).toBe(1)
     expect(world.mountDisposes).toBe(1)
+  })
+
+  it('materializes all three right-sidebar tab bodies', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+    for (const entry of world.injected.filter((item) => item.name === 'sidebar.right.pane.tab'))
+      entry.register()
+    const keys = world.registered
+      .filter((entry) => entry.name === 'sidebar.right.pane.tab')
+      .map((entry) => entry.options.key)
+    expect(keys).toContain('dsh-zotero#library')
+    expect(keys).toContain('dsh-zotero#parsed')
+    expect(keys).toContain('dsh-zotero#parsed-manager')
+    const manager = world.registered.find(
+      (entry) => entry.options.key === 'dsh-zotero#parsed-manager',
+    )
+    const face = (
+      manager!.options.inject as () => {
+        openParsed: (session: string, id: string, title: string) => void
+        discarded: (session: string, id: string) => void
+      }
+    )()
+    face.discarded('s1', 'a'.repeat(64))
+    face.openParsed('s1', 'a'.repeat(64), 'A paper')
+    // The face resolves the artifact address before calling the sidebar service.
+    expect(world.openResourceInCalls).toEqual([
+      {
+        sessionId: 's1',
+        address: 'dsh-resource://zotero-parsed/artifact/s1/' + 'a'.repeat(64),
+        params: { title: 'A paper' },
+      },
+    ])
   })
 })

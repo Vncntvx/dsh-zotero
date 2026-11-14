@@ -55,6 +55,8 @@ import {
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
   ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
+  ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
+  ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
   ZOTERO_ENRICHMENT_SERVICE_KEY,
 } from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
@@ -138,6 +140,18 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
             signature:
               'documentParseReceipt(request: ZoteroDocumentParseReceiptRequestView, signal: AbortSignal): Promise<ZoteroDocumentParseReceiptResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
+            signature:
+              'listParsedDocuments(request: ZoteroListParsedDocumentsRequestView, signal: AbortSignal): Promise<ZoteroListParsedDocumentsResultView>',
+          },
+          {
+            kind: 'method',
+            name: ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
+            signature:
+              'discardParsedDocument(request: ZoteroDiscardParsedDocumentRequestView, signal: AbortSignal): Promise<ZoteroDiscardParsedDocumentResultView>',
           },
           {
             kind: 'method',
