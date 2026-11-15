@@ -335,11 +335,11 @@ instead of reporting a mocked pass as live verification.
 
 ### Complexity budgets
 
-- A new spec stays at or below 400 lines and a new helper at or below 300
-  lines. The helper budget is enforced by lint; the spec budget by review.
-  Count the complete file, including setup and comments. First split
-  by responsibility; moving the same complexity into one oversized helper
-  does not satisfy the rule.
+- A new spec stays at or below 400 lines and a new helper or module support
+  file at or below 300 lines. The helper and support budget is enforced by
+  lint; the spec budget by review. Count the complete file, including setup and
+  comments. First split by responsibility; moving the same complexity into one
+  oversized helper does not satisfy the rule.
 - Existing files above these budgets are grandfathered at their pre-change
   size and must not grow. An exception to a review budget must identify the
   path, reason, and follow-up in the change description. It cannot exceed the
@@ -366,7 +366,8 @@ mechanical rules; each one exists because this repository hit it:
 - no file extension under the text roots that is neither a declared text
   extension nor a declared binary one, so an asset type is skipped only after
   someone decided it should be;
-- helpers stay at or below 300 lines; files over the limit are frozen in a
+- helpers and module support modules (`tests/**/helpers/`, `tests/**/support/`)
+  stay at or below 300 lines; files over the limit are frozen in a
   path-specific baseline that only shrinks, and new files may never enter it;
 - no `src/**` or `tests/**` import may reach into an upstream
   `@deepseek-ai/*` package's private source subtree. Those packages advertise

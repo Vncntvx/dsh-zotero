@@ -54,6 +54,25 @@ function bodyOf(bytes: Buffer): ReadableStream<Uint8Array> {
   })
 }
 
+/**
+ * A body that sends its bytes and then stops: the stream errors only when the
+ * fetch signal aborts, which is what undici's own body does, so the stall
+ * watchdog is what ends the attempt.
+ */
+function stallingBody(
+  bytes: Buffer,
+  signal: AbortSignal | null | undefined,
+): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(bytes))
+      signal?.addEventListener('abort', () => {
+        controller.error(new Error('the mirror connection was torn down'))
+      })
+    },
+  })
+}
+
 interface ScriptedResponse {
   readonly status?: number
   readonly location?: string
@@ -115,6 +134,32 @@ describe('downloadPinnedFile', () => {
     expect(result.source).toBe('hf-mirror')
     expect(result.sha256).toBe(pinned(bytes).sha256)
     expect(await readFile(join(dir, 'onnx/model_quantized.onnx'))).toEqual(bytes)
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('aborts an attempt whose mirror stops sending and reports the stall', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-dl-'))
+    const bytes = Buffer.from('model!')
+    const fetch: FetchLike = async (_url, init) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: stallingBody(bytes, init?.signal),
+    })
+    await expect(
+      downloadPinnedFile({
+        model: specOf(),
+        file: pinned(bytes),
+        dir,
+        sources: ['hf-mirror'],
+        stallMs: 20,
+        deps: { fetch, ...gateDeps },
+      }),
+    ).rejects.toThrow(/model download stalled/)
+    // The attempt's temp file is removed with it; nothing partial is left.
+    await expect(readFile(join(dir, 'onnx/model_quantized.onnx'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
     await rm(dir, { recursive: true, force: true })
   })
 

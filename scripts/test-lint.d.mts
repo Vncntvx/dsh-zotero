@@ -54,6 +54,14 @@ export interface HelperSizeViolation {
 }
 
 /**
+ * Whether one path is a helper subject to the size budget: a TypeScript module
+ * under a `helpers/` or `support/` directory.
+ * @param path - a path relative to the repository root.
+ * @returns true for a helper or module support module.
+ */
+export declare function isHelperFile(path: string): boolean
+
+/**
  * Compare helper sizes against the new-helper limit and the frozen baseline.
  * @param entries - `{ path, lines }` for every helper.
  * @param baseline - frozen path → line count; defaults to the repository baseline.

@@ -51,6 +51,18 @@ export interface PinnedDispatcher {
 }
 
 /**
+ * Close one attempt's pinned dispatcher without letting a failed close decide
+ * the attempt. By the time this runs the response, the caller's cancellation,
+ * or the original error has already settled what the attempt means; a pool
+ * that refuses to close is a diagnostic, not a result. Shared so every
+ * external transport words that rule the same way.
+ * @param dispatcher - the attempt's pinned dispatcher, when the route built one.
+ */
+export async function closePinnedQuietly(dispatcher: PinnedDispatcher | undefined): Promise<void> {
+  await dispatcher?.close().catch(() => undefined)
+}
+
+/**
  * Parse one dotted-quad into its four octets.
  * @param ip - the candidate literal.
  * @returns the octets, or undefined when the spelling is not an IPv4 literal.

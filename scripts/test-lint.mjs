@@ -98,6 +98,8 @@ const HELPER_SIZE_BASELINE = Object.freeze({
   'tests/client/helpers/source-fixtures.ts': 129,
   'tests/client/helpers/apply-world.ts': 378,
   'tests/client/helpers/library-panel-harness.tsx': 299,
+  'tests/host/support/enrichment-parse-endpoints.ts': 335,
+  'tests/host/support/enrichment-parse-jobs.ts': 323,
 })
 
 /**
@@ -141,10 +143,24 @@ function specFiles() {
     .sort()
 }
 
-/** File paths of every helper under a `helpers/` directory, relative to the repo root. */
+/**
+ * Whether one path is a helper subject to the size budget: a TypeScript module
+ * under a `helpers/` or `support/` directory.
+ *
+ * `support/` belongs here because it is where a module's shared fixtures live
+ * (`tests/README.md`: specs → module support → shared helpers), so a budget
+ * that only read `helpers/` let two support modules grow past it unnoticed.
+ * @param path - a path relative to the repository root.
+ * @returns true for a helper or support module.
+ */
+export function isHelperFile(path) {
+  return /[\\/](?:helpers|support)[\\/]/.test(path) && /\.tsx?$/.test(path)
+}
+
+/** File paths of every helper and support module, relative to the repo root. */
 function helperFiles() {
   return filesUnder(join(root, 'tests'))
-    .filter((path) => /[\\/]helpers[\\/]/.test(path) && /\.tsx?$/.test(path))
+    .filter((path) => isHelperFile(path))
     .map((path) => relative(root, path))
     .sort()
 }
@@ -310,13 +326,51 @@ function checkLanes() {
   }
 }
 
+/** The first non-whitespace index at or after `index`, clamped to the end. */
+function skipSpace(text, index) {
+  let i = index
+  while (i < text.length && /\s/.test(text[i])) i += 1
+  return i
+}
+
+/**
+ * The index just past the balanced call whose `(` sits at `open`.
+ *
+ * Strings are already blanked by the scan's stripper, so a parenthesis inside
+ * one is a space here. A regex literal is not stripped (see
+ * {@link stripCommentsAndStrings}); a regex body with an unbalanced parenthesis
+ * inside a chain would end the call early, which errs toward reporting rather
+ * than hiding a focus modifier.
+ */
+function afterCall(text, open) {
+  let depth = 0
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1
+    else if (text[i] === ')') {
+      depth -= 1
+      if (depth === 0) return i + 1
+    }
+  }
+  return text.length
+}
+
+/** The focus and disable modifiers, plus every member vitest lets precede one. */
+const CHAIN_KEYWORD = /\b(it|test|describe|suite)\b/g
+const FOCUS_MODIFIERS = new Set(['only', 'skip', 'todo'])
+const MEMBER_NAME = /^[A-Za-z_$][\w$]*/
+
 /**
  * A focused or disabled test is a decision that outlives its author: `.only`
  * silently removes every other case from the run, and `.skip`/`.todo` turn a
- * red test into a green suite. The chain forms count too (`it.only.each`,
- * `it.concurrent.only`, and a `.only` continued on the next line all focus or
- * disable just as hard), so the scan runs over comment- and string-stripped
- * content with a chain-aware pattern rather than one line at a time.
+ * red test into a green suite.
+ *
+ * The modifier is not always the first member. Vitest hangs `.only`/`.skip`
+ * off the object `each`/`for`/`concurrent` returns, so
+ * `it.each([1]).only('x', …)` focuses the same way `it.only.each([1])` does;
+ * a pattern that only reads dotted identifiers before the modifier misses the
+ * first form, and a line-based scan misses a chain continued on the next line.
+ * The scan therefore walks the member chain, stepping over each call's
+ * argument list, and reports the first focus modifier it meets.
  *
  * `runIf` stays the sanctioned gate. Its unconditional-disable spelling,
  * `runIf(false)`, is refused exactly like `skipIf(true)`: a conditional gate
@@ -327,13 +381,32 @@ function checkLanes() {
 export function focusViolationsOf(source) {
   const stripped = stripCommentsAndStrings(source)
   const violations = []
-  const chain =
-    /\b(it|test|describe|suite)((?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*\.\s*(only|skip|todo)\b/g
-  for (const match of stripped.matchAll(chain)) {
-    violations.push({
-      line: stripped.slice(0, match.index).split('\n').length,
-      construct: `${match[1]}${match[2].replaceAll(/\s+/g, '')}.${match[3]}`,
-    })
+  for (const match of stripped.matchAll(CHAIN_KEYWORD)) {
+    const written = [match[1]]
+    let index = match.index + match[1].length
+    for (;;) {
+      const dot = skipSpace(stripped, index)
+      if (stripped[dot] !== '.') break
+      const nameAt = skipSpace(stripped, dot + 1)
+      const name = MEMBER_NAME.exec(stripped.slice(nameAt))
+      if (name === null) break
+      written.push(`.${name[0]}`)
+      index = nameAt + name[0].length
+      if (FOCUS_MODIFIERS.has(name[0])) {
+        violations.push({
+          line: stripped.slice(0, match.index).split('\n').length,
+          construct: written.join(''),
+        })
+        break
+      }
+      // `it.each([1])` returns the object that carries `.only`: step over the
+      // call so the next member is read from the chain, not from its arguments.
+      const call = skipSpace(stripped, index)
+      if (stripped[call] === '(') {
+        index = afterCall(stripped, call)
+        written.push('(...)')
+      }
+    }
   }
   const conditional = /\b(?:it|test|describe|suite)\s*\.\s*(skipIf|runIf)\s*\(\s*(true|false)\b/g
   for (const match of stripped.matchAll(conditional)) {

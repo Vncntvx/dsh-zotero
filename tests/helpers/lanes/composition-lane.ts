@@ -60,19 +60,24 @@ export async function setupCompositionLane(
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
   context.loader.builtins.include = Include
-  const modules = new Map<string, unknown>([
-    ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
-    ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['dsh-zotero', ZoteroService],
-    ['dsh-zotero/scholarly', ScholarlyService],
-    ['dsh-zotero/library', ZoteroLibraryService],
-    ['dsh-zotero/enrichment', EnrichmentService],
+  // The Loader's `internal.import` is an ES module loader: it hands the entry
+  // a namespace and normalizes it through `unwrapExports`. Returning the class
+  // itself would skip that step, so every composition spec would pass even if
+  // the shipped entry shape stopped surviving it.
+  const modules = new Map<string, { default: unknown }>([
+    ['@deepseek-ai/dsh-system-prompt', { default: SystemPrompt }],
+    ['@deepseek-ai/dsh-tools', { default: ToolRuntime }],
+    ['dsh-zotero', { default: ZoteroService }],
+    ['dsh-zotero/scholarly', { default: ScholarlyService }],
+    ['dsh-zotero/library', { default: ZoteroLibraryService }],
+    ['dsh-zotero/enrichment', { default: EnrichmentService }],
   ])
   context.loader.internal = {
     version: 'v2',
     async import(specifier: string) {
-      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
-      return modules.get(specifier)
+      const namespace = modules.get(specifier)
+      if (namespace === undefined) throw new Error(`unexpected Loader import: ${specifier}`)
+      return namespace
     },
   } as unknown as NonNullable<typeof context.loader.internal>
 

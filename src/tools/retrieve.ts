@@ -274,6 +274,7 @@ export const RETRIEVE_SOURCE_REQUIRED_MESSAGE =
   'mode="fulltext" requires source with exactly one of ref or artifactId.'
 export const RETRIEVE_MAX_CHARS_MESSAGE =
   'maxChars must be a positive integer no greater than fulltextWindowChars.'
+export const RETRIEVE_START_MESSAGE = 'start must be a non-negative integer.'
 export const RETRIEVE_EVIDENCE_REQUIRED_MESSAGE = 'mode="evidence" requires ref and query.'
 
 /**
@@ -334,7 +335,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
     )
       invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
     const start = args.start ?? 0
-    if (!Number.isInteger(start) || start < 0) invalidArgs('start must be a non-negative integer.')
+    if (!Number.isInteger(start) || start < 0) invalidArgs(RETRIEVE_START_MESSAGE)
     const maxChars = args.maxChars ?? config.fulltextWindowChars
     if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > config.fulltextWindowChars)
       invalidArgs(RETRIEVE_MAX_CHARS_MESSAGE)

@@ -15,6 +15,7 @@ import {
   fetchOwnershipIssuesOf,
   focusViolationsOf,
   helperSizeViolations,
+  isHelperFile,
   stripCommentsAndStrings,
   unscannedExtensionsOf,
   upstreamSourceImportsOf,
@@ -53,6 +54,38 @@ describe('focus guard', () => {
     const source = `const focus = process.env.F\nit\n  .only('x', () => {})`
     const violations = focusViolationsOf(source)
     expect(violations).toEqual([{ line: 2, construct: 'it.only' }])
+  })
+
+  it('flags a focus modifier chained after a call expression', () => {
+    // Vitest hangs `.only`/`.skip` off the object `each`/`for` returns, so the
+    // modifier can follow an argument list; a dotted-identifier pattern reads
+    // past it as ordinary chaining.
+    const source = [
+      `it.each([1, 2]).only('x', () => {})`,
+      `test.for([1]).skip('x', () => {})`,
+      `describe.each([1]).only('suite', () => {})`,
+      `it.concurrent.each([1, 2]).todo('x')`,
+    ].join('\n')
+    const violations = focusViolationsOf(source)
+    expect(violations.map((entry) => entry.construct)).toEqual([
+      'it.each(...).only',
+      'test.for(...).skip',
+      'describe.each(...).only',
+      'it.concurrent.each(...).todo',
+    ])
+    expect(violations.map((entry) => entry.line)).toEqual([1, 2, 3, 4])
+  })
+
+  it('leaves an unmodified data table alone, including one followed by its name call', () => {
+    // Negative control for the call-skipping above: stepping over the table
+    // must not turn the name call into a modifier.
+    const source = [
+      `it.each([1, 2])('x', (n) => {})`,
+      `describe.each([1])('suite', () => {})`,
+      `it.for([1])('x', (n) => {})`,
+      `it.concurrent.each([1])('x', (n) => {})`,
+    ].join('\n')
+    expect(focusViolationsOf(source)).toEqual([])
   })
 
   it('flags the unconditional-disable spellings of the conditional gates', () => {
@@ -180,6 +213,16 @@ describe('upstream private-source import guard', () => {
 
 describe('helper size guard', () => {
   const baseline = { 'tests/client/helpers/big.ts': 400 }
+
+  it('counts module support modules, not just shared helpers', () => {
+    // The budget covers where shared fixtures actually live; `support/` was
+    // invisible to it, which is how two of those modules grew past the limit.
+    expect(isHelperFile('tests/host/support/enrichment-parse-jobs.ts')).toBe(true)
+    expect(isHelperFile('tests/client/library/support/parsed-document.tsx')).toBe(true)
+    expect(isHelperFile('tests/client/helpers/apply-world.ts')).toBe(true)
+    expect(isHelperFile('tests/host/support/fixtures/response.json')).toBe(false)
+    expect(isHelperFile('tests/host/result-route.spec.ts')).toBe(false)
+  })
 
   it('allows a new helper at the limit and rejects one line over', () => {
     expect(

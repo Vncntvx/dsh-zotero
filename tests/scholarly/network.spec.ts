@@ -307,6 +307,29 @@ describe('the public-PDF arm inside the transport', () => {
     expect(init.dispatcher).toBe(dispatcher)
   })
 
+  it('returns the response when the pinned pool refuses to close afterwards', async () => {
+    // The pool served the attempt; its refusal to close is a diagnostic and
+    // must not replace the bytes the caller already earned.
+    const closed = vi.fn(async () => {
+      throw new Error('pool already closed')
+    })
+    const fetchImpl = vi.fn(
+      async () => new Response('%PDF-1.4 ' + 'x'.repeat(600), { status: 200 }),
+    )
+    const http = createScholarlyHttp({
+      fetchImpl,
+      publicAccess: {
+        resolver: resolverOf([PUBLIC_V4]),
+        createDispatcher: () => ({ dispatcher: {}, close: closed }),
+        createValidatingDispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+      pacer: new HostPacer({}),
+    })
+    const bytes = await http.bytes('https://example.com/paper.pdf', { allowPublicPdf: true })
+    expect(bytes.byteLength).toBeGreaterThan(600)
+    expect(closed).toHaveBeenCalledOnce()
+  })
+
   it('fails loud when the arm runs without wired seams', async () => {
     const fetchImpl = vi.fn(async () => new Response('%PDF-1.4', { status: 200 }))
     const http = createScholarlyHttp({ fetchImpl, pacer: new HostPacer({}) })

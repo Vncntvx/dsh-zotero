@@ -172,6 +172,32 @@ describe('mode:"fulltext" windows', () => {
     ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT, name: 'ZoteroError' })
   })
 
+  it('never admits a ranking scope for a fulltext window', async () => {
+    // Ranking admission is the evidence mode's model-commitment point. A
+    // fulltext read only copies characters, so the ranker must stay untouched:
+    // a throwing `admit` is how this test would notice the opposite.
+    const server = await boot()
+    const admit = vi.fn((): never => {
+      throw new Error('fulltext reads must not admit a ranking scope')
+    })
+    const rank = vi.fn(async () => ({ matches: [], routes: ['lexical'] as const }))
+    const provider = new LocalApiProvider({
+      client: testHttpClient(server.baseUrl),
+      limits: () => PROVIDER_LIMITS,
+      fulltextEnhancer: () => enhancerOf(hit(markdown)),
+      evidenceRanker: () => ({ admit, rank }),
+    })
+    const result = await provider.retrieve({
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+      start: 0,
+      maxChars: WINDOW_CHARS,
+    })
+    expect(result.fulltext?.text).toBe(markdown.slice(0, WINDOW_CHARS))
+    expect(admit).not.toHaveBeenCalled()
+    expect(rank).not.toHaveBeenCalled()
+  })
+
   it('propagates a parsed-artifact fault instead of falling back to the index', async () => {
     const server = await boot()
     serveFulltext(server, RETRIEVE_ATTACHMENT.key, FULLTEXT_PAYLOAD)

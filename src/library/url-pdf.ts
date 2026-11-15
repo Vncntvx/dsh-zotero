@@ -2,6 +2,7 @@
 import { PublicAddressError, isPublicUrl } from '../transport/public-url.js'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import {
+  closePinnedQuietly,
   resolvePublicAddresses,
   type AddressResolver,
   type PinnedDispatcher,
@@ -147,9 +148,8 @@ export class UrlPdfReader {
           }
         } finally {
           // The proxy route's dispatcher is process-wide and shared; only the
-          // pinned per-attempt agent is closed here. A close rejection must
-          // not replace a successful read or the original failure.
-          await connection?.close().catch(() => undefined)
+          // pinned per-attempt agent is closed here.
+          await closePinnedQuietly(connection)
         }
       }
       throw failure('REDIRECT', 'PDF redirect limit exceeded.')

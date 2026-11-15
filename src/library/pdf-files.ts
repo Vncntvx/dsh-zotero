@@ -10,9 +10,16 @@ export class PdfReadingFiles {
   private readonly pending = new Set<Promise<unknown>>()
   private disposed = false
   private cleanup?: Promise<void>
+  /**
+   * @param root - the directory the reading files live in; the process temp
+   * directory unless a test supplies its own, so an abandoned-directory reap
+   * can be driven without inspecting the shared one.
+   */
+  constructor(private readonly root: string = tmpdir()) {}
+
   /** Only this plugin's private directories belonging to exited processes are reclaimed. */
   private async removeAbandoned(): Promise<void> {
-    for (const entry of await readdir(tmpdir(), { withFileTypes: true })) {
+    for (const entry of await readdir(this.root, { withFileTypes: true })) {
       const match = /^dsh-zotero-pdf-(\d+)-[A-Za-z0-9]+$/.exec(entry.name)
       if (!match || !entry.isDirectory()) continue
       const pid = Number(match[1])
@@ -22,7 +29,7 @@ export class PdfReadingFiles {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ESRCH') continue
       }
-      const path = join(tmpdir(), entry.name)
+      const path = join(this.root, entry.name)
       try {
         const info = await lstat(path)
         if (info.isDirectory() && info.uid === process.getuid?.())
@@ -49,7 +56,7 @@ export class PdfReadingFiles {
       this.cleanup = undefined
       throw error
     }))
-    const directory = await mkdtemp(join(tmpdir(), `dsh-zotero-pdf-${process.pid}-`))
+    const directory = await mkdtemp(join(this.root, `dsh-zotero-pdf-${process.pid}-`))
     try {
       const path = join(directory, 'document.pdf')
       await writeFile(path, data, { mode: 0o600, signal })

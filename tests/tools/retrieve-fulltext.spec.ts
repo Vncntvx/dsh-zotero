@@ -25,6 +25,7 @@ import {
   RETRIEVE_MAX_CHARS_MESSAGE,
   RETRIEVE_MODE_MIXED_MESSAGE,
   RETRIEVE_SOURCE_REQUIRED_MESSAGE,
+  RETRIEVE_START_MESSAGE,
   FULLTEXT_TRUNCATED_REMEDY,
 } from '../../src/tools/retrieve.js'
 
@@ -173,6 +174,47 @@ describe('mode exclusivity', () => {
     expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MAX_CHARS_MESSAGE)
   })
+
+  it('refuses a start or maxChars outside the accepted bounds before any read', async () => {
+    const enhancer = installEnhancer(MARKDOWN)
+    // Two layers answer here. A non-integer never passes the declared
+    // `type: 'integer'` parameter, so the harness's own message names the
+    // field; the range check lives in `buildRequest`, because the harness
+    // admits every integer and the window bound is the deployment's.
+    const cases = [
+      { start: -1, text: RETRIEVE_START_MESSAGE },
+      { maxChars: 0, text: RETRIEVE_MAX_CHARS_MESSAGE },
+      { maxChars: -1, text: RETRIEVE_MAX_CHARS_MESSAGE },
+      { start: 1.5, text: '"start" must be an integer' },
+      { maxChars: 1.5, text: '"maxChars" must be an integer' },
+    ]
+    for (const { start, maxChars, text } of cases) {
+      const result = await lane.runTool('zotero_retrieve', {
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: REF },
+        ...(start === undefined ? {} : { start }),
+        ...(maxChars === undefined ? {} : { maxChars }),
+      })
+      expect(result.isError, JSON.stringify({ start, maxChars })).toBe(true)
+      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+      expect((result.content[0] as { text: string }).text).toContain(text)
+    }
+    expect(enhancer.lookup).not.toHaveBeenCalled()
+  })
+
+  it('honours an explicit maxChars below the window bound', async () => {
+    installEnhancer(MARKDOWN)
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      start: 0,
+      maxChars: 5,
+    })
+    expect(result.isError).toBe(false)
+    const data = (result.value as { data: { fulltext: { text: string; end: number } } }).data
+    expect(data.fulltext.text).toBe(MARKDOWN.slice(0, 5))
+    expect(data.fulltext.end).toBe(5)
+  })
 })
 
 describe('fulltext delivery', () => {
@@ -196,6 +238,19 @@ describe('fulltext delivery', () => {
     expect(data.fulltext.text).toBe(MARKDOWN.slice(0, 12))
     expect(data.fulltext.isTruncated).toBe(true)
     expect(data.fulltext.nextStart).toBe(12)
+    // The registered `output.presentationMeta` projects the window fact onto
+    // the result meta the client card reads; the byte cap must keep the arm.
+    expect(result.meta).toMatchObject({
+      mode: 'fulltext',
+      fulltextRead: {
+        sourceKind: 'attachment',
+        textFormat: 'markdown',
+        start: 0,
+        end: 12,
+        totalChars: MARKDOWN.length,
+        attachmentRef: REF,
+      },
+    })
     const rendered = JSON.stringify(result.content)
     expect(rendered).toContain(FULLTEXT_TRUNCATED_REMEDY)
     expect(rendered).toContain('nextStart=12')

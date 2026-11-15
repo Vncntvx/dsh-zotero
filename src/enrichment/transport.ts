@@ -30,6 +30,7 @@
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import {
+  closePinnedQuietly,
   isIpv4Literal,
   resolvePublicAddresses,
   type AddressResolver,
@@ -310,9 +311,8 @@ export class MineruClient {
         return { status: response.status, bytes, headers: response.headers, finalUrl: parsed.href }
       } finally {
         // The proxy route's dispatcher is process-wide and shared; only the
-        // pinned per-attempt agent is closed here. A close rejection must not
-        // replace the response or the original failure.
-        await connection?.close().catch(() => undefined)
+        // pinned per-attempt agent is closed here.
+        await closePinnedQuietly(connection)
       }
     }
     throw new MineruHttpError(310, new URL(currentUrl).hostname)
