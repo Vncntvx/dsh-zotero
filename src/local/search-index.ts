@@ -18,6 +18,7 @@
 
 import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString } from '../json.js'
+import { LRUCache } from 'lru-cache'
 import { readPagesConcurrentlyFolded } from './pagination.js'
 import { fetchItemKeyBatches } from './item-batch.js'
 import { libraryPrefix } from '../refs.js'
@@ -60,16 +61,23 @@ export interface AttachmentParents {
 }
 
 /**
- * A FIFO-capped, TTL-expiring cache for entries that carry their own
- * `fetchedAt`. Eviction is oldest-insertion; hits do not refresh order.
+ * A real LRU with a TTL: capacity and idle expiry live in `lru-cache` (the
+ * harness' own cache primitive), so a hit refreshes recency — the entry a
+ * panel keeps paging is the one that survives — and `ttlAutopurge` releases
+ * an expired entry's memory instead of leaving it until the next lookup.
+ * The wall-clock check stays in the adapter because freshness here must be
+ * `Date.now()`-deterministic: the provider's other fences (version, server
+ * id) are read at the same clock, and the specs drive expiry with fake timers.
  */
 export class LruTtlCache<V extends { fetchedAt: number }> {
-  private readonly entries = new Map<string, V>()
+  private readonly entries: LRUCache<string, V>
 
   constructor(
-    private readonly limit: number,
+    limit: number,
     private readonly ttlMs: number,
-  ) {}
+  ) {
+    this.entries = new LRUCache<string, V>({ max: limit, ttl: ttlMs, ttlAutopurge: true })
+  }
 
   get(key: string): V | undefined {
     const value = this.entries.get(key)
@@ -83,14 +91,10 @@ export class LruTtlCache<V extends { fetchedAt: number }> {
 
   /** The `Map`-compatible spelling, so a bounded cache can back a shared read. */
   set(key: string, value: V): void {
-    this.put(key, value)
+    this.entries.set(key, value)
   }
 
   put(key: string, value: V): void {
-    if (this.entries.size >= this.limit) {
-      const oldest = this.entries.keys().next().value
-      if (oldest !== undefined) this.entries.delete(oldest)
-    }
     this.entries.set(key, value)
   }
 
@@ -197,7 +201,7 @@ export async function attachmentParentKeys(
   }
   // Two listings in flight over the same library share one walk: the walk
   // reads every attachment page, and a panel refresh must not double it.
-  const walked = await sharedRead({
+  const walked = await sharedRead<AttachmentParents>({
     cache: caches.attachmentParents,
     inFlight: caches.attachmentParentsInFlight,
     keys: { flightKey: key, find: () => caches.attachmentParents.get(key), store: () => [key] },

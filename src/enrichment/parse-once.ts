@@ -27,6 +27,7 @@ import {
   MineruApiError,
 } from './api.js'
 import { raceWithSignal } from '../race-signal.js'
+import { deadline } from '@deepseek-ai/dsh-timeout'
 import { ZOTERO_ENRICHMENT_TASK_FAILED, ZOTERO_INVALID_ARGUMENT, ZoteroError } from '../errors.js'
 import type { EnrichmentMode } from '../enrichment-preferences.js'
 import type { ParsedArtifact, ParsedArtifactMeta } from './types.js'
@@ -56,6 +57,8 @@ import {
 } from './limits.js'
 
 const RESULT_MAX_BYTES = 64 * 1024 * 1024
+/** The deadline's TimeoutReason code: the whole parse ran out of time. */
+const MINERU_PARSE_TIMEOUT_REASON = 'mineru/parse-timeout'
 
 export interface ParseOnceDeps {
   readonly client: MineruClient
@@ -430,8 +433,10 @@ export async function parseOnce(
     `${deps.store.root}:${cacheKey}`,
     input.signal,
     async (flightSignal) => {
-      const timeout = AbortSignal.timeout(totalTimeoutMs)
-      const combined = AbortSignal.any([flightSignal, timeout])
+      // The parse's total deadline fused with the shared flight's cancellation;
+      // its TimeoutReason names the parse timeout instead of a bare abort.
+      using deadlineScope = deadline(flightSignal, totalTimeoutMs, MINERU_PARSE_TIMEOUT_REASON)
+      const combined = deadlineScope.signal
 
       // Re-check inside the shared flight: another caller may have committed
       // between the outer cache read and joining this flight.

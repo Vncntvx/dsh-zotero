@@ -10,6 +10,7 @@
  */
 
 import type { ZoteroParseTargetView } from '../contract.js'
+import type { ArtifactId } from '../contract.js'
 import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
 import {
   ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
@@ -41,15 +42,18 @@ export interface ArtifactTarget {
 
 /**
  * Rebuild the concrete target for a committed or orphaned artifact.
- * @param artifactId - the cache key naming the artifact directory.
+ * @param artifactId - the branded cache key naming the artifact directory.
  * @param store - a read-only store bound to the configured output directory.
  * @returns the resolved target plus the generation, the source-index record
  * and its alias keys, from one index read.
  */
 export async function resolveArtifactTarget(
-  artifactId: string,
+  artifactId: ArtifactId,
   store: ParsedArtifactStore,
 ): Promise<ArtifactTarget> {
+  // The brand is compile-time only: the runtime syntax check stays, so a
+  // value that bypassed an admission point (a cast, a replayed wire frame
+  // from an older build) is still refused as an invalid argument.
   if (!ARTIFACT_ID.test(artifactId)) {
     throw new ZoteroError('Invalid parsed artifact id.', ZOTERO_INVALID_ARGUMENT)
   }

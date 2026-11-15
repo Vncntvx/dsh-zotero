@@ -20,6 +20,7 @@ import { testHttpClient } from '../../helpers/test-clients.js'
 import { PROVIDER_LIMITS } from '../../helpers/provider-harness.js'
 import { ZOTERO_INVALID_ARGUMENT } from '../../../src/errors.js'
 import { attachmentRef } from '../../helpers/server/keys.js'
+import { artifactIdOf } from '../../../src/contract.js'
 import { serveFulltext, serveItemGraph } from '../../helpers/server/serve.js'
 import {
   FULLTEXT_PAYLOAD,
@@ -239,7 +240,7 @@ describe('mode:"fulltext" artifact sources', () => {
     })
     const result = await providerOf(server, enhancer).retrieve({
       mode: 'fulltext',
-      source: { kind: 'artifactId', artifactId: 'e'.repeat(64) },
+      source: { kind: 'artifactId', artifactId: artifactIdOf('e'.repeat(64))! },
       start: 0,
       maxChars: WINDOW_CHARS,
     })
@@ -263,7 +264,7 @@ describe('mode:"fulltext" artifact sources', () => {
     })
     const result = await providerOf(server, enhancer).retrieve({
       mode: 'fulltext',
-      source: { kind: 'artifactId', artifactId: 'e'.repeat(64) },
+      source: { kind: 'artifactId', artifactId: artifactIdOf('e'.repeat(64))! },
       start: 0,
       maxChars: WINDOW_CHARS,
     })
@@ -279,7 +280,7 @@ describe('mode:"fulltext" artifact sources', () => {
     await expect(
       providerOf(server, enhancerOf({ kind: 'miss', reason: 'absent' })).retrieve({
         mode: 'fulltext',
-        source: { kind: 'artifactId', artifactId: 'e'.repeat(64) },
+        source: { kind: 'artifactId', artifactId: artifactIdOf('e'.repeat(64))! },
         start: 0,
         maxChars: WINDOW_CHARS,
       }),
@@ -294,7 +295,7 @@ describe('mode:"fulltext" artifact sources', () => {
     await expect(
       providerOf(server).retrieve({
         mode: 'fulltext',
-        source: { kind: 'artifactId', artifactId: 'e'.repeat(64) },
+        source: { kind: 'artifactId', artifactId: artifactIdOf('e'.repeat(64))! },
         start: 0,
         maxChars: WINDOW_CHARS,
       }),

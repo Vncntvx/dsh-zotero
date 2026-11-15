@@ -86,7 +86,7 @@ import {
   type FulltextEnhancerInput,
   type FulltextLookupResult,
 } from '../local/fulltext-enhancer.js'
-import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
+import type { ArtifactId } from '../contract.js'
 import { EnrichmentConfigSchema, resolveEnrichmentConfig, type EnrichmentConfig } from './config.js'
 import {
   dnsAddressResolver,
@@ -902,7 +902,7 @@ export class EnrichmentService extends TypertRemoteService {
    * absolute path; the host reconstructs the target from the source index.
    */
   private async lookupArtifact(
-    artifactId: string,
+    artifactId: ArtifactId,
     signal?: AbortSignal,
   ): Promise<FulltextLookupResult> {
     try {
@@ -924,14 +924,11 @@ export class EnrichmentService extends TypertRemoteService {
    * target once and fills the entry.
    */
   private async lookupArtifactFrom(
-    artifactId: string,
+    artifactId: ArtifactId,
     store: ParsedArtifactStore,
     signal?: AbortSignal,
   ): Promise<FulltextLookupResult> {
     signal?.throwIfAborted()
-    if (!ZOTERO_ARTIFACT_ID_PATTERN.test(artifactId)) {
-      throw new ZoteroError('Invalid parsed artifact id.', ZOTERO_INVALID_ARGUMENT)
-    }
     const cached = this.documents.hit(artifactId, store.writes)
     if (cached !== undefined) return { kind: 'hit', ...cached }
     const resolved = await resolveArtifactTarget(artifactId, store)

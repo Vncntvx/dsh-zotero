@@ -3,8 +3,9 @@
  * on disk; MinerU bodies remain owned by enrichment and are looked up per read.
  * @module dsh-zotero/scholarly/fulltext/store
  */
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, readFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { join } from 'node:path'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import type { FulltextArtifactProvenance } from '../../local/fulltext-enhancer.js'
@@ -252,13 +253,10 @@ export class ScholarlyTextStore {
     await this.ensureRoot()
     if (this.disposed) return
     const path = join(this.root, CACHE_DIRECTORY, fileNameOf(key))
-    const temporary = `${path}.${randomUUID()}.tmp`
-    try {
-      await writeFile(temporary, encoded, 'utf8')
-      await rename(temporary, path)
-    } finally {
-      await rm(temporary, { force: true })
-    }
+    // The upstream atomic replacement: exclusive-create temp sibling carrying
+    // the 0600 bits through the rename, so a crash or a planted symlink at
+    // the temp path can neither widen the record's permissions nor alias it.
+    await writeFileAtomic(path, encoded, { mode: 0o600, dirMode: 0o700 })
     if (!this.disposed) this.remember(key, validated)
   }
 

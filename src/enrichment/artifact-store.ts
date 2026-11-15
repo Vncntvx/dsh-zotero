@@ -15,7 +15,7 @@ import {
 import { constants } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { z } from 'zod'
 import {
   artifactMetaSchema,
@@ -42,10 +42,42 @@ export interface ArtifactStoreDeps {
   readonly readArtifactFile?: (path: string, maxBytes: number) => Promise<Uint8Array>
   readonly readSourceIndex?: (path: string, maxBytes: number) => Promise<Uint8Array>
   readonly withSourceLock?: typeof withFileLock
-  /** Directory enumeration for orphan recovery; host-only ports when omitted. */
+  /**
+   * The atomic replacement. The host default is the upstream
+   * `writeFileAtomic` with the store's permission bits and an abort veto
+   * before the commit; an injected deps object must supply its own — that is
+   * the fixture's file map, which cannot honor a real temp+rename.
+   */
+  readonly writeAtomic: (
+    path: string,
+    data: Uint8Array | string,
+    signal?: AbortSignal,
+  ) => Promise<void> /** Directory enumeration for orphan recovery; host-only ports when omitted. */
   readonly readdir?: (path: string) => Promise<readonly string[]>
   readonly stat?: (path: string) => Promise<{ readonly mtimeMs: number }>
   readonly realpath?: (path: string) => Promise<string>
+}
+
+/**
+ * The host's atomic replacement: the upstream exclusive-create temp plus
+ * rename, with the store's permission bits and the abort veto between the
+ * ready write and the commit rename. (`writeFileAtomic` owns its own temp
+ * naming and Windows retry; this veto is the store's publish contract — a
+ * cancelled publish must not rename.)
+ */
+async function hostWriteAtomic(
+  path: string,
+  data: Uint8Array | string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const temp = `${path}.tmp-${randomUUID()}`
+  try {
+    await writeFileAtomic(temp, data, { mode: 0o600, dirMode: 0o700 })
+    signal?.throwIfAborted()
+    await rename(temp, path)
+  } finally {
+    await rm(temp, { recursive: false, force: true })
+  }
 }
 
 /** The on-disk state of one parsed artifact, independent of its source-index pointer. */
@@ -143,6 +175,7 @@ const hostDeps: ArtifactStoreDeps = {
   readSourceIndex: readIndexFile,
   readArtifactFile: readIndexFile,
   withSourceLock: hostSourceLock,
+  writeAtomic: hostWriteAtomic,
   // Directory enumeration, mtime and realpath fall through to node:fs when
   // the deps omit them; the injected ports exist for the in-memory fixtures.
 }
@@ -237,14 +270,7 @@ export class ParsedArtifactStore {
     data: Uint8Array | string,
     signal?: AbortSignal,
   ): Promise<void> {
-    const temp = `${path}.tmp-${randomUUID()}`
-    try {
-      await this.deps.writeFile(temp, data)
-      signal?.throwIfAborted()
-      await this.deps.rename(temp, path)
-    } finally {
-      await this.deps.rm(temp, { recursive: false, force: true })
-    }
+    await this.deps.writeAtomic(path, data, signal)
   }
 
   async getTask(cacheKey: string): Promise<ParseTaskRecord | undefined> {

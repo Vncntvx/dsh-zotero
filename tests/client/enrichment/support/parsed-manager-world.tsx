@@ -17,11 +17,12 @@ import type {
   ZoteroListParsedDocumentsResultView,
   ZoteroParsedDocumentRowView,
 } from '../../../../src/contract.ts'
+import { artifactIdOf } from '../../../../src/contract.ts'
 import { makeTranslate } from '../../helpers/mock-translate.ts'
 
 export const SESSION = 's1'
-export const ID = 'a'.repeat(64)
-export const SECOND_ID = 'b'.repeat(64)
+export const ID = artifactIdOf('a'.repeat(64))!
+export const SECOND_ID = artifactIdOf('b'.repeat(64))!
 export const TITLE = 'Attention Is All You Need'
 export const SECOND_TITLE = 'Attention Sinks'
 

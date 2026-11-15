@@ -291,7 +291,7 @@ async function exactFilteredSearch(
   }
   let index =
     cachedIndex ??
-    (await sharedRead({
+    (await sharedRead<FilteredIndex>({
       cache: deps.searchCaches.filtered,
       inFlight: deps.searchCaches.filteredInFlight,
       keys: {
@@ -374,7 +374,7 @@ async function exactFilteredSearch(
     deps.searchCaches.filtered.delete(indexKey)
     // The rescan is a new shared read: concurrent callers that both observe
     // the drift run one scan, and a caller that joins uses the read-back path.
-    index = await sharedRead({
+    index = await sharedRead<FilteredIndex>({
       cache: deps.searchCaches.filtered,
       inFlight: deps.searchCaches.filteredInFlight,
       keys: {

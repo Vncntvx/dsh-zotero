@@ -6,6 +6,7 @@ import { memoryFiles } from './support/enrichment-parse-domain.ts'
 import { ARTIFACT, CACHE_KEY, SOURCE_RECORD } from './support/enrichment-artifacts.ts'
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
 import { attachmentRef } from '../helpers/server/keys.ts'
+import { artifactIdOf, type ArtifactId } from '../../src/contract.ts'
 
 const URL = 'https://papers.example.org/a.pdf?token=secret'
 
@@ -50,16 +51,20 @@ describe('artifact target expansion', () => {
 
   it('rejects a malformed artifact id as an invalid argument', async () => {
     const { store } = world()
-    await expect(resolveArtifactTarget('nope', store)).rejects.toMatchObject({
+    await expect(
+      resolveArtifactTarget(artifactIdOf('nope') ?? ('nope' as ArtifactId), store),
+    ).rejects.toMatchObject({
       code: 'ZOTERO_INVALID_ARGUMENT',
     })
   })
 
   it('rejects an artifact id with no committed meta', async () => {
     const { store } = world()
-    await expect(resolveArtifactTarget('b'.repeat(64), store)).rejects.toMatchObject({
-      code: 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND',
-    })
+    await expect(resolveArtifactTarget(artifactIdOf('b'.repeat(64))!, store)).rejects.toMatchObject(
+      {
+        code: 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND',
+      },
+    )
   })
 
   it('rejects a URL artifact with no recoverable source', async () => {

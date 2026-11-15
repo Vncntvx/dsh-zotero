@@ -16,6 +16,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-jobs'
 import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
+import type { ArtifactId } from './contract.js'
 import type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
 
 export type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
@@ -471,7 +472,7 @@ export type ZoteroRetrieveMode = 'evidence' | 'fulltext'
 /** A full-text source identified by a Zotero attachment ref or opaque artifact id. */
 export type ZoteroFulltextSource =
   | { readonly kind: 'ref'; readonly ref: string }
-  | { readonly kind: 'artifactId'; readonly artifactId: string }
+  | { readonly kind: 'artifactId'; readonly artifactId: ArtifactId }
 
 /** One bounded window of a document's complete text in source order. */
 export interface ZoteroFulltextRead {

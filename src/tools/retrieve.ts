@@ -21,7 +21,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
-import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
+import { artifactIdOf } from '../contract.js'
 import { invalidArgs } from '../errors.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { queryVariantsOf } from './query-variants.js'
@@ -308,10 +308,12 @@ function fulltextSourceOf(args: RetrieveArgs): import('../types.js').ZoteroFullt
     source.ref === undefined
   ) {
     // A malformed id is the caller's argument mistake, not a missing artifact:
-    // shape is checked here so the provider never sees a doomed lookup.
-    if (!ZOTERO_ARTIFACT_ID_PATTERN.test(source.artifactId))
+    // shape is admitted here so the provider never sees a doomed lookup. The
+    // admission also brands the id, which every read seam below requires.
+    const artifactId = artifactIdOf(source.artifactId)
+    if (artifactId === undefined)
       invalidArgs('artifactId must be a 64-character lowercase hex string.')
-    return { kind: 'artifactId', artifactId: source.artifactId }
+    return { kind: 'artifactId', artifactId }
   }
   invalidArgs(RETRIEVE_SOURCE_REQUIRED_MESSAGE)
 }

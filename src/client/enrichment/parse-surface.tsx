@@ -20,6 +20,7 @@ import type {
   ZoteroDiscardParsedDocumentRequestView,
   ZoteroDiscardParsedDocumentResultView,
 } from '../../contract.ts'
+import { artifactIdOf } from '../../contract.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { ParseDocumentDialog } from './ParseDocumentDialog.tsx'
 import type {
@@ -349,8 +350,12 @@ export function useDocumentParseSurface(
       }
     : undefined
   const openArtifact = port
-    ? (artifactId: string, label: string) => {
+    ? (rawArtifactId: string, label: string) => {
         if (!sessionAllowed) return
+        // The row's id comes from the wire; the address stores text, so the
+        // id is re-admitted here before it can enter a document request.
+        const artifactId = artifactIdOf(rawArtifactId)
+        if (artifactId === undefined) return
         select({ sessionId, target: { kind: 'artifact', artifactId }, label })
       }
     : undefined

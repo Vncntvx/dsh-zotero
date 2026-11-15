@@ -4,6 +4,8 @@
  * @module dsh-zotero/local/fulltext-enhancer
  */
 
+import type { ArtifactId } from '../contract.js'
+
 /** Minimum useful text size for the scholarly reader's local PDF extractor. */
 export const FULLTEXT_ENHANCER_MIN_TEXT_CHARS = 500
 
@@ -55,8 +57,8 @@ export type FulltextLookupResult =
  */
 export interface FulltextEnhancer {
   lookup(input: FulltextEnhancerInput, signal?: AbortSignal): Promise<FulltextLookupResult>
-  /** Reads one stored artifact by opaque id. */
-  lookupArtifact?(artifactId: string, signal?: AbortSignal): Promise<FulltextLookupResult>
+  /** Reads one stored artifact by its branded opaque id. */
+  lookupArtifact?(artifactId: ArtifactId, signal?: AbortSignal): Promise<FulltextLookupResult>
 }
 
 /**

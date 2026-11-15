@@ -6,7 +6,8 @@ import { mapWithConcurrency } from '../concurrency.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, realpath, rm } from 'node:fs/promises'
+import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
@@ -209,15 +210,12 @@ export class DiskParseJobPersistence implements ParseJobPersistence {
   private async write(config: EnrichmentPreferences, key: string, value: unknown): Promise<void> {
     const dir = await this.directory(config, true)
     const path = join(dir, `${key}.json`)
-    const temporary = `${path}.tmp-${randomUUID()}`
-    try {
-      await writeFile(temporary, JSON.stringify(value), { mode: 0o600, flag: 'wx' })
-      if ((await this.directory(config, false)) !== dir)
-        throw new Error('Parsing receipt directory changed')
-      await rename(temporary, path)
-    } finally {
-      await rm(temporary, { force: true })
-    }
+    // The upstream atomic replacement carries the receipt's 0600 bits through
+    // the rename; the directory identity is re-checked before the commit so a
+    // moved output dir can never receive the receipt.
+    if ((await this.directory(config, false)) !== dir)
+      throw new Error('Parsing receipt directory changed')
+    await writeFileAtomic(path, JSON.stringify(value), { mode: 0o600, dirMode: 0o700 })
   }
 
   async get(

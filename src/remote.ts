@@ -169,7 +169,7 @@ export async function executeOpenProtocol(
   }
   try {
     signal?.throwIfAborted()
-    const inWsl = platform === 'linux' && isWsl(env)
+    const inWsl = platform === 'linux' && isWsl(env, platform)
     const childEnv = scrubbedEnvironment(env)
     if (platform === 'win32' || inWsl) {
       const wslenv = inWsl ? appendWslEnv(childEnv, 'DSH_ZOTERO_PROTOCOL_URL') : childEnv.WSLENV

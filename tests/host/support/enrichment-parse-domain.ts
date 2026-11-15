@@ -56,28 +56,44 @@ export function memoryFiles() {
       }
     }
   }
+  const writeFileIntoMap = vi.fn(async (path: string, data: Uint8Array | string) => {
+    files.set(path, typeof data === 'string' ? new TextEncoder().encode(data) : data)
+  })
+  const renameInMap = vi.fn(async (from: string, to: string) => {
+    const value = files.get(from)
+    if (value === undefined) throw new Error('ENOENT')
+    files.set(to, value)
+    files.delete(from)
+  })
+  const rmInMap = vi.fn(async (path: string, options: { recursive: boolean; force: boolean }) => {
+    for (const key of files.keys()) {
+      if (key === path || (options.recursive && key.startsWith(`${path}/`))) files.delete(key)
+    }
+  })
   const deps: ArtifactStoreDeps = {
     withSourceLock,
+    // The in-memory stand-in for the host's `writeFileAtomic`: one mapped
+    // write and one mapped rename per commit, so fixture assertions that
+    // count write ports keep their meaning.
+    writeAtomic: vi.fn(async (path, data, signal) => {
+      const temp = `${path}.tmp-fixture`
+      try {
+        await writeFileIntoMap(temp, data)
+        signal?.throwIfAborted()
+        await renameInMap(temp, path)
+      } finally {
+        await rmInMap(temp, { recursive: false, force: true })
+      }
+    }),
     mkdir: vi.fn(async () => {}),
     readFile: vi.fn(async (path) => {
       const value = files.get(path)
       if (value === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       return value
     }),
-    writeFile: vi.fn(async (path, data) => {
-      files.set(path, typeof data === 'string' ? new TextEncoder().encode(data) : data)
-    }),
-    rename: vi.fn(async (from, to) => {
-      const value = files.get(from)
-      if (value === undefined) throw new Error('ENOENT')
-      files.set(to, value)
-      files.delete(from)
-    }),
-    rm: vi.fn(async (path, options) => {
-      for (const key of files.keys()) {
-        if (key === path || (options.recursive && key.startsWith(`${path}/`))) files.delete(key)
-      }
-    }),
+    writeFile: writeFileIntoMap,
+    rename: renameInMap,
+    rm: rmInMap,
     readdir: vi.fn(async (path) => {
       const prefix = `${path}/`
       const names = new Set<string>()

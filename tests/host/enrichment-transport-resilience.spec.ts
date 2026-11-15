@@ -178,9 +178,11 @@ describe('MineruClient retry deadlines', () => {
     const { client, calls } = clientOf(
       async () => new Response(null, { status: 429, headers: { 'retry-after': '60' } }),
     )
+    // The deadline surfaces the harness TimeoutReason: a MinerU transport
+    // timeout names its own code, distinguishable from a caller abort.
     await expect(
       client.bytes('https://cdn.example/full.md', { method: 'GET', timeoutMs: 10 }),
-    ).rejects.toMatchObject({ name: 'TimeoutError' })
+    ).rejects.toMatchObject({ name: 'TimeoutReason', code: 'mineru/transport-timeout' })
     expect(calls).toHaveLength(1)
   })
 })

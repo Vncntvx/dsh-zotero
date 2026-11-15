@@ -22,15 +22,21 @@ import { zoteroError } from '../helpers/server/assert.js'
 
 describe('isWsl and appendWslEnv', () => {
   it('detects WSL when WSL_DISTRO_NAME is set', () => {
-    expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' })).toBe(true)
+    expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' }, 'linux')).toBe(true)
   })
 
   it('detects WSL when WSL_INTEROP is set', () => {
-    expect(isWsl({ WSL_INTEROP: '/run/WSL/1_interop' })).toBe(true)
+    expect(isWsl({ WSL_INTEROP: '/run/WSL/1_interop' }, 'linux')).toBe(true)
   })
 
   it('returns false when neither WSL variable is present', () => {
-    expect(isWsl({})).toBe(false)
+    expect(isWsl({}, 'linux')).toBe(false)
+  })
+
+  it('only a Linux platform can be WSL', () => {
+    // The harness rule: WSL variables on a non-Linux host describe nothing.
+    expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' }, 'darwin')).toBe(false)
+    expect(isWsl({ WSL_INTEROP: '/run/WSL/1_interop' }, 'win32')).toBe(false)
   })
 
   it('appends variable to WSLENV without duplicating', () => {

@@ -1,6 +1,6 @@
 /** Child-process fixture: real store, real filesystem and public cross-process lock. */
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
   ParsedArtifactStore,
   type ArtifactStoreDeps,
@@ -28,6 +28,11 @@ const deps: ArtifactStoreDeps = {
   },
   rename,
   rm,
+  // This fixture only publishes the source index; an atomic replacement over
+  // real files is the upstream helper with the same parent-directory guard.
+  writeAtomic: async (path, data) => {
+    await writeFileAtomic(path, data, { mode: 0o600, dirMode: 0o700 })
+  },
   withSourceLock: async (path, operation, options) => {
     process.send?.('requesting')
     return await withFileLock(

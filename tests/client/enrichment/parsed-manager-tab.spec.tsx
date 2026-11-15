@@ -273,7 +273,10 @@ describe('parsed document manager tab', () => {
   it('validates and labels an opaque artifact target', () => {
     const target = { kind: 'artifact' as const, artifactId: ID }
     expect(validDocumentParseTarget(target)).toBe(true)
-    expect(validDocumentParseTarget({ ...target, artifactId: 'nope' })).toBe(false)
+    // The runtime guard still answers for a frame that bypassed the brand's
+    // admission point (an old persisted address, a hostile wire frame), so
+    // the negative control casts deliberately.
+    expect(validDocumentParseTarget({ ...target, artifactId: 'nope' as typeof ID })).toBe(false)
     expect(documentParseLabel(target, 'A paper')).toBe('A paper')
     expect(documentParseLabel({ kind: 'url', url: 'https://papers.example.org/a.pdf?x=1' })).toBe(
       'https://papers.example.org/…',

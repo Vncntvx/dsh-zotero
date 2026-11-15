@@ -157,7 +157,7 @@ export function candidateMountRootsForDrive(
 
   // Conventional roots are only meaningful in WSL; native POSIX hosts may use
   // these paths for unrelated mounts.
-  if (platform === 'linux' && isWsl(env)) {
+  if (platform === 'linux' && isWsl(env, platform)) {
     candidates.add(`/mnt/${lowerDrive}`)
     candidates.add(`/${lowerDrive}`)
   }
@@ -317,7 +317,7 @@ export function candidateLocalPaths(
         return [`\\\\wsl.localhost\\${parsed.distro}${parsed.subpath.replace(/\//g, '\\')}`]
       }
       // On POSIX: only candidate local POSIX path if we are running in WSL
-      if (isWsl(env)) {
+      if (isWsl(env, platform)) {
         const currentDistro = env.WSL_DISTRO_NAME
         const list = new Set<string>()
         if (!currentDistro || currentDistro.toLowerCase() === parsed.distro.toLowerCase()) {
@@ -383,13 +383,13 @@ export async function resolveExistingAttachmentPath(
     throw new ZoteroError(unsupportedUncShareMessage(parsed.uncPath), ZOTERO_FILE_UNREADABLE)
   }
 
-  if (parsed.kind === 'wsl-unc' && platform !== 'win32' && !isWsl(env)) {
+  if (parsed.kind === 'wsl-unc' && platform !== 'win32' && !isWsl(env, platform)) {
     throw new ZoteroError(unsupportedWslUncMessage(parsed.reported), ZOTERO_FILE_UNREADABLE)
   }
 
   let mountPointsMap: Map<string, string[]> | undefined
   // Only probe WSL mounts on Linux hosts running under WSL
-  if (parsed.kind === 'windows-drive' && platform === 'linux' && isWsl(env)) {
+  if (parsed.kind === 'windows-drive' && platform === 'linux' && isWsl(env, platform)) {
     mountPointsMap = discoverWslMounts(deps)
   }
 
@@ -421,7 +421,7 @@ export async function resolveExistingAttachmentPath(
   // All candidates failed with ENOENT. Diagnose why:
   if (parsed.kind === 'windows-drive' && platform !== 'win32') {
     // If on macOS or non-WSL Linux, Windows drive is inherently not mounted
-    if (platform === 'darwin' || !isWsl(env)) {
+    if (platform === 'darwin' || !isWsl(env, platform)) {
       throw new ZoteroError(
         unmountedDriveMessage(parsed.drive, parsed.reported),
         ZOTERO_FILE_UNREADABLE,

@@ -28,6 +28,7 @@
  */
 
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
+import { deadline } from '@deepseek-ai/dsh-timeout'
 import {
   isIpv4Literal,
   resolvePublicAddresses,
@@ -87,6 +88,8 @@ export interface MineruResponse {
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000
+/** The deadline's TimeoutReason code: a MinerU transport timeout, not a caller abort. */
+const MINERU_TIMEOUT_REASON = 'mineru/transport-timeout'
 const DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 const ERROR_DETAIL_MAX_BYTES = 4 * 1024
 const ERROR_DETAIL_MAX_CHARS = 256
@@ -188,11 +191,15 @@ export class MineruClient {
    * @returns the bounded bytes, status, headers, and validated terminal URL.
    */
   private async attempt(url: string, options: MineruRequestOptions): Promise<MineruResponse> {
-    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
-    const timeout = AbortSignal.timeout(timeoutMs)
-    const signals = options.signal === undefined ? [timeout] : [options.signal, timeout]
-    const combined = AbortSignal.any(signals)
+    // The deadline fuses the caller's cancellation with the request timeout;
+    // its TimeoutReason keeps a MinerU timeout distinguishable from an abort.
+    using timeout = deadline(
+      options.signal,
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      MINERU_TIMEOUT_REASON,
+    )
+    const combined = timeout.signal
 
     let currentUrl = url
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -312,9 +319,12 @@ export class MineruClient {
 
   /** Retry only idempotent operations, bounded by one shared request deadline. */
   async request(url: string, options: MineruRequestOptions): Promise<MineruResponse> {
-    const timeout = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-    const signal =
-      options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal])
+    using timeout = deadline(
+      options.signal,
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      MINERU_TIMEOUT_REASON,
+    )
+    const signal = timeout.signal
     // Cache revalidation is one HEAD operation; a failed probe cannot create
     // extra network requests or silently acquire the document with GET.
     const attempts = options.method === 'POST' || options.method === 'HEAD' ? 1 : 3

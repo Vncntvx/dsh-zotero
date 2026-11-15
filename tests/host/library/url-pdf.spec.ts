@@ -221,24 +221,40 @@ it('rejects a third download and returns capacity after caller cancellation', as
   await expect(reader.read(attachment, signal())).resolves.toMatchObject({ ref })
 })
 it('maps its owned 60 second deadline to a timeout error', async () => {
-  const deadline = new AbortController()
-  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
-  const started = deferred<void>()
-  const { reader } = setup({
-    fetch: async (_url, init) => {
-      started.resolve()
-      return new Promise<Response>((_resolve, reject) =>
-        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true }),
-      )
-    },
-  })
-  const failure = expect(reader.read(attachment, signal())).rejects.toMatchObject({
-    code: 'ZOTERO_URL_PDF_TIMEOUT',
-  })
-  await started.promise
-  deadline.abort(new Error('deadline'))
-  await failure
-  expect(timeout).toHaveBeenCalledWith(60_000)
+  vi.useFakeTimers()
+  try {
+    const started = deferred<void>()
+    const { reader } = setup({
+      fetch: async (_url, init) => {
+        started.resolve()
+        return new Promise<Response>((_resolve, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+            once: true,
+          }),
+        )
+      },
+    })
+    let settled = false
+    const failure = reader.read(attachment, signal()).then(
+      () => {
+        settled = true
+      },
+      (error: unknown) => {
+        settled = true
+        return error
+      },
+    )
+    await started.promise
+    // The read owns one 60-second deadline: one tick short of it no timeout
+    // fires (a caller's own abort is the only other way out), and the next
+    // millisecond lands the panel's TIMEOUT refusal.
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(failure).resolves.toMatchObject({ code: 'ZOTERO_URL_PDF_TIMEOUT' })
+  } finally {
+    vi.useRealTimers()
+  }
 })
 it('refuses local attachments without contacting an external host', async () => {
   const { reader, dependencies } = setup()

@@ -1,11 +1,13 @@
 /** Synthetic committed v2 artifact and source record shared by store contract specs. */
+import { artifactIdOf } from '../../../src/contract.ts'
 import { sourceKeyOf } from '../../../src/enrichment/source-stamp.ts'
 import type { ParsedArtifact } from '../../../src/enrichment/types.ts'
 import type { SourceIndexRecord } from '../../../src/enrichment/artifact-store.ts'
 import { attachmentRef } from '../../helpers/server/keys.ts'
 import { GENERATION } from './enrichment-parse-domain.ts'
 
-export const CACHE_KEY = 'a'.repeat(64)
+/** The shared fixture artifact id, admitted through the real syntax check. */
+export const CACHE_KEY = artifactIdOf('a'.repeat(64))!
 export const SOURCE_KEY = sourceKeyOf(attachmentRef())
 export const FILE_STAMP = { kind: 'file', size: 10, mtimeMs: 20 } as const
 export const ARTIFACT: ParsedArtifact = {

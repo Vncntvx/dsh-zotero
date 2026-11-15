@@ -9,7 +9,7 @@ import type {
   ZoteroDocumentArtifactResultView,
   ZoteroParseTargetView,
 } from '../contract.ts'
-import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../contract.ts'
+import { artifactIdOf, ZOTERO_ARTIFACT_PAGE_CHARS } from '../contract.ts'
 import { parsedDisplayMarkdown } from './parsed-markdown.ts'
 import { parseParsedTabAddress, type ParsedTabTarget } from './parsed-tab.ts'
 import { isGenericParsedTitle } from '../parsed-title.ts'
@@ -68,6 +68,22 @@ const progress = (): ParsedDocumentProgress => ({
 })
 const failure = (message: string) => new RemoteError('gateway/internal', message, {})
 type MessageKey = Extract<ZoteroLocaleKey, `parsedError${string}`> | 'parsedReadDenied'
+
+/**
+ * The document target one parsed tab addresses. A stored artifact id is
+ * admitted through the brand's syntax rule here — the tab address is
+ * persisted text, so the id is re-validated rather than trusted — and a
+ * corrupted address falls back to the attachment ref it also carries, which
+ * the host then answers with its own refusal.
+ */
+function documentTargetOf(target: ParsedTabTarget): ZoteroParseTargetView {
+  if (target.artifactId !== undefined) {
+    const artifactId = artifactIdOf(target.artifactId)
+    if (artifactId !== undefined) return { kind: 'artifact', artifactId }
+  }
+  return { kind: 'attachment', ref: target.ref }
+}
+
 interface PreparationOptions {
   readonly decode?: (url: string, signal: AbortSignal) => Promise<void>
   readonly translate?: (key: MessageKey) => string
@@ -248,9 +264,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
       try {
         const document = await this.prepare(
           target.sessionId,
-          target.artifactId !== undefined
-            ? { kind: 'artifact', artifactId: target.artifactId }
-            : { kind: 'attachment', ref: target.ref },
+          documentTargetOf(target),
           abort.signal,
           (next) => {
             if (generation === entry.generation)
@@ -357,10 +371,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     const request: ZoteroDocumentArtifactRequestView = {
       sessionId: target.sessionId,
       op: 'meta',
-      target:
-        target.artifactId !== undefined
-          ? { kind: 'artifact', artifactId: target.artifactId }
-          : { kind: 'attachment', ref: target.ref },
+      target: documentTargetOf(target),
     }
     void this.read(request, controller.signal)
       .then((result) => {

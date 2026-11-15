@@ -10,6 +10,7 @@ import { MineruClient } from '../../src/enrichment/transport.ts'
 import { memoryFiles } from './support/enrichment-parse-domain.ts'
 import { ARTIFACT, CACHE_KEY, SOURCE_RECORD } from './support/enrichment-artifacts.ts'
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
+import { artifactIdOf } from '../../src/contract.ts'
 import { attachmentRef } from '../helpers/server/keys.ts'
 import { ENRICHMENT_DEFAULTS } from '../../src/enrichment-preferences.ts'
 
@@ -110,7 +111,11 @@ describe('stored parsed artifact metadata', () => {
     const unknown = await storedMetadata(
       depsFor(store, resolveAttachment),
       config,
-      { sessionId: 's1', op: 'meta', target: { kind: 'artifact', artifactId: 'e'.repeat(64) } },
+      {
+        sessionId: 's1',
+        op: 'meta',
+        target: { kind: 'artifact', artifactId: artifactIdOf('e'.repeat(64))! },
+      },
       SIGNAL,
     )
     expect(unknown).toEqual({ kind: 'missing' })

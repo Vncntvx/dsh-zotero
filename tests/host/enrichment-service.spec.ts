@@ -1,5 +1,6 @@
 /** Enrichment composition and the read-only lookup contract; active parsing has domain specs. */
 import { Context } from '@deepseek-ai/cordis'
+import { artifactIdOf } from '../../src/contract.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnrichmentService } from '../../src/enrichment/service.ts'
 import { parseDocument } from '../../src/enrichment/parse-document.ts'
@@ -172,7 +173,9 @@ describe('EnrichmentService artifact lookup', () => {
     world.fetch.mockClear()
     // The stored artifact is the addressed object: reading it by id must not
     // revalidate the origin, so an offline source cannot break a local read.
-    await expect(service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)).resolves.toEqual({
+    await expect(
+      service.enhancer.lookupArtifact?.(artifactIdOf(parsed.provenance.artifactId)!),
+    ).resolves.toEqual({
       kind: 'hit',
       text: MARKDOWN,
       format: 'markdown',
@@ -188,7 +191,7 @@ describe('EnrichmentService artifact lookup', () => {
   it('reports an unknown artifact id as a fault without probing or parsing', async () => {
     const world = domain()
     const { service, parse } = reader(world)
-    const result = await service.enhancer.lookupArtifact?.('f'.repeat(64))
+    const result = await service.enhancer.lookupArtifact?.(artifactIdOf('f'.repeat(64))!)
     expect(result?.kind).toBe('fault')
     expect(world.fetch).not.toHaveBeenCalled()
     expect(parse).not.toHaveBeenCalled()
@@ -204,14 +207,18 @@ describe('EnrichmentService artifact lookup', () => {
     // A windowed read resolves the same artifactId once per window; the
     // read-through cache must answer the second window with no file reads
     // and without contacting the origin.
-    const first = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    const first = await service.enhancer.lookupArtifact?.(
+      artifactIdOf(parsed.provenance.artifactId)!,
+    )
     expect(first?.kind).toBe('hit')
     const pathsAfterFirst = readCalls.mock.calls.map(([path]) => path)
     expect(pathsAfterFirst.filter((path) => path.endsWith('/sources/index.json'))).toHaveLength(1)
     expect(pathsAfterFirst.filter((path) => path.endsWith('/meta.json'))).toHaveLength(1)
     expect(pathsAfterFirst.filter((path) => path.endsWith('/full.md'))).toHaveLength(1)
     readCalls.mockClear()
-    const second = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    const second = await service.enhancer.lookupArtifact?.(
+      artifactIdOf(parsed.provenance.artifactId)!,
+    )
     expect(second).toEqual(first)
     expect(readCalls).not.toHaveBeenCalled()
     expect(world.fetch).not.toHaveBeenCalled()
@@ -221,9 +228,9 @@ describe('EnrichmentService artifact lookup', () => {
     const world = domain()
     const parsed = await parseDocument(URL_INPUT, world.deps)
     const { service } = reader(world)
-    expect((await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId))?.kind).toBe(
-      'hit',
-    )
+    expect(
+      (await service.enhancer.lookupArtifact?.(artifactIdOf(parsed.provenance.artifactId)!))?.kind,
+    ).toBe('hit')
     // Any store write is the invalidation signal: the next window reads the
     // committed state again instead of trusting the pre-write cache.
     const readCalls = vi.mocked(world.fs.deps.readFile)
@@ -234,7 +241,7 @@ describe('EnrichmentService artifact lookup', () => {
       uploaded: true,
     })
     await expect(
-      service.enhancer.lookupArtifact?.(parsed.provenance.artifactId),
+      service.enhancer.lookupArtifact?.(artifactIdOf(parsed.provenance.artifactId)!),
     ).resolves.toMatchObject({ kind: 'hit' })
     expect(readCalls.mock.calls.some(([path]) => path.endsWith('/full.md'))).toBe(true)
   })
@@ -243,9 +250,9 @@ describe('EnrichmentService artifact lookup', () => {
     const world = domain()
     const parsed = await parseDocument(URL_INPUT, world.deps)
     const { service } = reader(world)
-    expect((await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId))?.kind).toBe(
-      'hit',
-    )
+    expect(
+      (await service.enhancer.lookupArtifact?.(artifactIdOf(parsed.provenance.artifactId)!))?.kind,
+    ).toBe('hit')
     const sessionId = 'sess-discard'
     const remoteAccess = { allows: vi.fn(() => true) }
     world.ctx.provide('remoteAccess', remoteAccess as unknown as never)
@@ -259,7 +266,9 @@ describe('EnrichmentService artifact lookup', () => {
     // The retired cache must not answer: the next read resolves the target
     // again and fails on the missing committed meta, without reading bytes
     // that no longer exist.
-    const result = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    const result = await service.enhancer.lookupArtifact?.(
+      artifactIdOf(parsed.provenance.artifactId)!,
+    )
     expect(result?.kind).toBe('fault')
     const paths = readCalls.mock.calls.map(([path]) => path)
     expect(paths.filter((path) => path.endsWith('/full.md'))).toHaveLength(0)

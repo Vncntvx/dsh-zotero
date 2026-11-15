@@ -25,6 +25,7 @@ import type {
   ZoteroParseReceiptView,
 } from './contract.js'
 import {
+  artifactIdOf,
   zoteroDocumentParseInvocation,
   ZOTERO_ARTIFACT_ID_PATTERN,
   ZOTERO_ARTIFACT_IMAGE_BYTES,
@@ -1043,7 +1044,13 @@ export const zoteroParseTargetSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('artifact'),
-      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+      // The parse boundary is where a string becomes an ArtifactId: the
+      // brand then travels through every host seam that resolves the id, so
+      // a fingerprint or another hex string cannot be passed for an id.
+      artifactId: z
+        .string()
+        .regex(ZOTERO_ARTIFACT_ID_PATTERN)
+        .transform((value) => artifactIdOf(value)!),
     })
     .strict(),
 ])

@@ -1,5 +1,6 @@
 /** User-initiated, bounded PDF downloads. Never constructs scholarly services. */
 import { PublicAddressError, isPublicUrl } from '../transport/public-url.js'
+import { deadline } from '@deepseek-ai/dsh-timeout'
 import {
   resolvePublicAddresses,
   type AddressResolver,
@@ -14,6 +15,8 @@ import type { ZoteroAttachmentLocationView } from '../contract.js'
 
 export const URL_PDF_MAX_BYTES = 32 * 1024 * 1024
 export const URL_PDF_TIMEOUT_MS = 60_000
+/** The deadline's TimeoutReason code for a panel PDF download. */
+const URL_PDF_TIMEOUT_REASON = 'zotero/url-pdf-download-timeout'
 export interface UrlPdfDependencies {
   readonly allowed: () => boolean
   readonly resolver: AddressResolver
@@ -53,8 +56,12 @@ export class UrlPdfReader {
       throw failure('BUSY', 'Two PDF downloads are already running. Try again after one finishes.')
     const controller = new AbortController()
     this.running.add(controller)
-    const timeout = AbortSignal.timeout(URL_PDF_TIMEOUT_MS)
-    const combined = AbortSignal.any([signal, timeout, controller.signal])
+    // The download deadline fused with the caller's cancellation and the
+    // reader's release; its TimeoutReason is what the catch below maps to
+    // the panel's TIMEOUT refusal.
+    using timeoutScope = deadline(signal, URL_PDF_TIMEOUT_MS, URL_PDF_TIMEOUT_REASON)
+    const timeout = timeoutScope.signal
+    const combined = AbortSignal.any([timeout, controller.signal])
     try {
       if (attachment.kind !== 'url' || !attachment.url)
         throw failure('NOT_URL', 'This attachment is not a URL PDF.')

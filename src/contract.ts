@@ -1,4 +1,5 @@
 import type { ArtifactReaderPreferences } from './artifact-reader-preferences.js'
+import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 /**
  * The zotero wire contract's shared structural surface: types, wire identity,
  * and the invocation factory both halves use. This module is dependency-free,
@@ -513,7 +514,7 @@ export type ZoteroParseTargetView =
   | { readonly kind: 'attachment'; readonly ref: string }
   | { readonly kind: 'url'; readonly url: string }
   /** An opaque stored artifact id; the host resolves it to a concrete source. */
-  | { readonly kind: 'artifact'; readonly artifactId: string }
+  | { readonly kind: 'artifact'; readonly artifactId: ArtifactId }
 
 export interface ZoteroStartDocumentParseRequestView {
   readonly sessionId: string
@@ -557,6 +558,27 @@ export const ZOTERO_ARTIFACT_IMAGE_BYTES = 8 * 1024 * 1024
  * pattern serves the wire schemas, the host modules and the client controller.
  */
 export const ZOTERO_ARTIFACT_ID_PATTERN = /^[a-f0-9]{64}$/
+
+/**
+ * An opaque parsed-artifact id: the store's cache key as a compile-time brand.
+ *
+ * The brand is the point of this type: an artifact id and a content
+ * fingerprint are both 64-character hex strings, and the read seam that
+ * resolves one is exactly where a fingerprint would silently name no stored
+ * artifact ("the artifact no longer exists"). A string only becomes an
+ * {@link ArtifactId} at an admission point — the wire schema's parse or
+ * {@link artifactIdOf} — and the seam refuses a plain string at compile time.
+ */
+export type ArtifactId = Branded<'ArtifactId'>
+
+/**
+ * Admit a string as an artifact id when it is the store's own syntax.
+ * @param value - the candidate id.
+ * @returns the branded id, or `undefined` when the syntax does not match.
+ */
+export function artifactIdOf(value: string): ArtifactId | undefined {
+  return ZOTERO_ARTIFACT_ID_PATTERN.test(value) ? brandString<ArtifactId>(value) : undefined
+}
 
 /** The figure formats a parsed artifact carries. */
 export type ZoteroArtifactImageMediaType =
