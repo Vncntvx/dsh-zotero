@@ -11,7 +11,7 @@ import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/reso
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../../constants.js'
 import { queryVariantsOf } from '../../tools/query-variants.js'
-import { DEFAULT_SPILL_CHAR_THRESHOLD, trySpillToolOutput } from '../../spill.js'
+import { exceedsInlineTokenBudget, spilledNoticeOf, trySpillToolOutput } from '../../spill.js'
 import { presentJobArm, RUN_IN_BACKGROUND_PARAMETER } from '../../job-runner.js'
 import { metaRecordOf } from '../../tools/present.js'
 import { SCHOLARLY_JOB_OUTPUT_DESCRIPTOR, runScholarlyJob } from './jobs.js'
@@ -20,6 +20,8 @@ import { toCleanJsonRecord, type ScholarlyToolHost } from './common.js'
 export interface ScholarlyReadHost extends ScholarlyToolHost {
   cache?: ScholarlyTextStore
   maxContentChars?(): number
+  /** The live inline token budget, the same number result delivery compares against. */
+  maxInlineResultTokens?(): number
 }
 
 /**
@@ -276,7 +278,11 @@ export function createScholarlyReadTool(
 
             const isTruncated = end < activeText.length
             let spillRef: import('@deepseek-ai/dsh-spill').SpillRef | undefined
-            if (isTruncated && activeText.length > DEFAULT_SPILL_CHAR_THRESHOLD && host.ctx) {
+            // The inline budget decides, not a fixed character count: a
+            // document the delivery would keep inline needs no handle, and
+            // one settings edit moves this threshold with the delivery's own.
+            const inlineBudget = host.maxInlineResultTokens?.() ?? 4_000
+            if (isTruncated && exceedsInlineTokenBudget(activeText, inlineBudget) && host.ctx) {
               spillRef = await trySpillToolOutput(
                 host.ctx,
                 exec,
@@ -284,9 +290,18 @@ export function createScholarlyReadTool(
                 activeText,
               )
             }
+            // The notice states the omitted bytes in the persisted spelling:
+            // this answer carries one window, the handle carries the rest.
             const spillNotice =
               spillRef !== undefined
-                ? `\nFull paper text saved to spill storage: ${spillRef.locator}. ${spillRef.retrievalHint}`
+                ? spilledNoticeOf(
+                    spillRef,
+                    Math.max(
+                      0,
+                      Buffer.byteLength(activeText, 'utf8') -
+                        Buffer.byteLength(activeText.slice(start, end), 'utf8'),
+                    ),
+                  )
                 : ''
 
             const statusTail = isTruncated

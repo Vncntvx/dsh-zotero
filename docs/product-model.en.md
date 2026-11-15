@@ -29,7 +29,7 @@ The local Zotero desktop app is the single source of truth. The interface offers
 | **Literature panel** | Right sidebar   | **Global library view**: for manual browsing and citing. Navigate collection trees, tags, saved searches, and the Trash; inspect details and read PDFs.                | Local API (via `zoteroLibrary` service endpoints) |
 | **Literature trail** | Session top tab | **Session audit view**: for verifying the agent's work. Lists queried papers, search parameters, extracted passages, and export records from the current conversation. | Tool-call snapshots from the current session      |
 
-Their responsibilities are distinct: the literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry. Both are views of the literature panel, not a fifth component.
+Their responsibilities are distinct: the literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry. Both are views of the literature panel.
 
 DSH's built-in "Trail" tab records tool-call execution times and raw parameters; the "Literature trail" focuses purely on literature, showing search conditions, source passages, and export records.
 
@@ -47,7 +47,7 @@ The plugin is split into four components with distinct roles:
 ### Component Roles
 
 - **Core component**: The plugin body. Manages communication with the local Zotero API (`127.0.0.1:23119`), registers 8 read tools and 15 write tools, and maintains the literature trail and configuration options.
-- **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend. It registers no tools and injects no prompts; local-library operations forward to the core service. Explicit user reading of URL PDFs has its own `allowUrlPdfRead` permission and public download boundary. It can be unmounted entirely if the sidebar is not needed.
+- **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend; local-library operations forward to the core service. Explicit user reading of URL PDFs has its own `allowUrlPdfRead` permission and public download boundary. It can be unmounted entirely if the sidebar is not needed.
 - **Scholarly retrieval component**: Provides external academic retrieval for the agent. When disabled, no scholarly tools are registered; when enabled, it registers seven tools querying allowlisted academic platforms (HTTPS) and open-access PDF hosts (with public address validation and fake-IP support). The client displays an outbound disclosure when first enabled, outlining destination hosts.
 - **Document parsing component**: Provides explicit document parsing, artifact lookup, and local semantic model management. Enabling the component grants MinerU parsing access; an egress notice is shown on first enable. Ordinary `zotero_retrieve` and `scholarly_read` calls query valid Markdown via the read-only `FulltextEnhancer.lookup` and `lookupArtifact` and prioritize it, falling back to Zotero fulltext or local PDF extraction on a miss. Local semantic ranking runs independently using local embedding models.
 
@@ -82,7 +82,7 @@ Both primary paths reach the local library through `ctx.zotero`. Agent external 
 
 ## Four Boundaries
 
-1. **Write safety**: Write tools are disabled by default. Once enabled, they modify only the personal library (`zotero://user/0/`); all write operations require approval and plan card confirmation, returning an error on failure without automatic retries.
+1. **Write safety**: Write tools are disabled by default. Once enabled, they modify only the personal library (`zotero://user/0/`); all write operations require approval and plan card confirmation, returning an error on failure.
 2. **Network isolation**: Local communication connects to loopback addresses (`127.0.0.1`). Agent scholarly retrieval accesses allowlisted index platforms and public open-access PDF hosts; the literature panel supports downloading existing URL attachments via `allowUrlPdfRead`; both PDF download paths perform public address validation and DNS pinning (with fake-IP placeholder support). MinerU document uploads occur only when enrichment is enabled and the user explicitly submits a document, with untrusted dynamic upload URLs verified identically.
 3. **Trail scope**: The literature trail displays read tool calls and exports from the current session; writes are recorded on approval cards; external literature enters the trail after being saved to the library.
 4. **Scope limits**: The Trash is accessible only in the literature panel; model search tools exclude the Trash. The literature panel is dedicated to the local library, while external literature discovery is handled by the agent.
@@ -97,6 +97,6 @@ Both primary paths reach the local library through `ctx.zotero`. Agent external 
 
 Collection and saved-search pages accumulate within each prefix. Moving between collections and All items in one library preserves query and extra filters by default; panel settings can clear them. Switching libraries, saved searches or Trash always clears them while preserving sorting. Re-selecting the current scope preserves the query. Expand controls only expand, names select, and Locate follows the real parent chain.
 
-Explicit user reading of URL PDFs in the library requires the panel's independent permission. It resolves an existing attachment and downloads only after a click, without enabling scholarly search. Profile settings and browsing positions are separate: positions belong to the browser, Zotero instance and conversation.
+Explicit user reading of URL PDFs in the library requires the panel's independent permission. It resolves an existing attachment and downloads only after a click. Profile settings and browsing positions are separate: positions belong to the browser, Zotero instance and conversation.
 
 Parsed result pages prepare the complete text and figures together, then replace the document after a successful refresh. The page shows preparation progress and errors.

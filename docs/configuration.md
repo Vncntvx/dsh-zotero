@@ -193,9 +193,9 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ## 文档解析组件配置 (`dsh-zotero/enrichment`)
 
-内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。组件挂载不发起上传；客户端在组件处于已启用状态且本机尚未确认时显示外发提醒，确认只覆盖当前这次启用，组件关闭后再启用会重新提醒，保持启用时刷新页面不会重复提醒。组件不注册模型工具、不注入提示词段。普通读取通过核心的只读 `FulltextEnhancer` 槽（`lookup` 按来源、`lookupArtifact` 按产物 id）复用有效产物，未命中时沿用 Zotero 全文索引或获准的本地 PDF 抽取。组件未启用时槽为空，两条读取链路沿用原路径。
+内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。客户端首次启用时显示外发提醒。普通读取通过核心的只读 `FulltextEnhancer` 槽（`lookup` 按来源、`lookupArtifact` 按产物 id）复用有效产物，未命中时使用 Zotero 全文索引或本地 PDF 抽取。组件未启用时，两条读取链路沿用原路径。
 
-一次 MinerU 解析由用户提交一个具体 Zotero PDF 附件（子附件或顶层附件）或一个公开 PDF URL，并通过远程动作、会话访问检查。打开 PDF、保存设置、启动服务不提交、恢复或上传 MinerU 任务。本地语义排序不调用 MinerU；解析不需要语义模型。旧 profile 中的 `allowDocumentUpload` 字段会被忽略。
+解析任务由用户提交指定 PDF 时启动；常规读取使用已有解析产物。本地语义排序独立于 MinerU，无需解析凭据或语义模型。旧 profile 中的 `allowDocumentUpload` 字段会被忽略。
 
 组件字段有三处入口：
 
@@ -285,4 +285,4 @@ ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布�
 | `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`      | fatal | 会话级任务控制器或活动会话不可用；主动解析无法提交，读取明确失败 |
 | `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`    | fatal | 操作 ID 的目标或配置快照被重放且不一致；拒绝该操作，不复用旧结果 |
 
-解析失败均传递到调用者，不替换为本地抽取或另一 API 模式。
+解析失败时直接向调用方返回错误。

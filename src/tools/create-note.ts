@@ -23,6 +23,7 @@ import { isRefString, parseSupportedRef } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
 import { renderDeclined } from './present.js'
 import {
+  APPLIED_ENVELOPE_PROPERTIES,
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
   DECLINED_OUTPUT_SCHEMA,
@@ -82,14 +83,13 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
+        ...APPLIED_ENVELOPE_PROPERTIES,
         ref: {
           type: 'string',
           required: true,
           description: 'The created note ref (provenance-qualified).',
         },
         key: { type: 'string', required: true },
-        version: { type: 'integer', required: true },
         parentItem: { type: 'string', description: 'The parent ref, for a child note.' },
         collections: {
           type: 'array',
@@ -99,6 +99,7 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
         },
         tags: { type: 'array', items: { type: 'string' }, required: true },
         sourceRefs: { type: 'array', items: { type: 'string' }, required: true },
+        // A creation always advances the library version it committed to.
         libraryVersion: {
           type: 'integer',
           required: true,

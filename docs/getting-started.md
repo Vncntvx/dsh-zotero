@@ -62,19 +62,11 @@ allowBuilds:
 
 本地语义检索的 WASM 运行时随插件一起发布（`assets/onnxruntime/<version>/`，MIT 许可，来源与 SHA-256 记录在 `provenance.json`）。启用前请在设置中下载所选嵌入模型。未下载模型时读取返回 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`；关闭语义检索后可使用 BM25。
 
-若需固定特定版本或 commit，可在链接后附加 hash：
-
-```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
-```
-
 安装后插件以 `zotero` 标识挂载。下次启动 dsh 时生效；若当前会话在插件加载前已存在，新建会话即可使用。
-
-在 Harness 插件管理列表中启用插件时，系统会自动进行本地连接探活，检测 Zotero 本地 API 通信状态。
 
 ## 验证连接
 
-启用插件时系统会自动探活本地连接。需要手动核对时，打开 Harness 插件管理器中 **dsh-zotero** 的详情页，页面底部的服务状态卡显示：
+启用插件时系统会自动检测本地连接。需要手动核对时，打开 Harness 插件管理器中 **dsh-zotero** 的详情页，页面底部的服务状态卡显示：
 
 - 连接状态（已连接 / 不可用）；
 - 应答的 Zotero 版本；
@@ -101,7 +93,7 @@ Agent 会调用 `zotero_search` 检索文献库并返回匹配条目；如果需
 - 检查器的「相关片段」里，Agent 引用的段落来自批注、笔记、摘要还是全文索引，批注是否带页码；
 - 「导出」里是否产生过你在对话里要求的引用文本。
 
-文献轨迹为只读视图，仅记录当前会话已完成的调用，不会发起新请求。
+文献轨迹为只读视图，记录当前会话已完成的调用与引用出处。
 
 ## 打开文献面板
 
@@ -110,7 +102,7 @@ Agent 会调用 `zotero_search` 检索文献库并返回匹配条目；如果需
 1. 插件列表「包含的组件」中 `dsh-zotero/library` 行已启用（默认启用）；
 2. 设置页「文献面板」标签中的「在右侧侧边栏显示」（`rightSidebarEnabled`）开启（默认开启）。
 
-（核心设置中的 `webEnabled` 仅控制会话顶部的文献轨迹，不影响文献面板。）
+`webEnabled` 控制会话顶部的文献轨迹；文献面板由 `rightSidebarEnabled` 控制。
 
 打开面板后先用顶部搜索框检索，选中条目即可在检查器里查看详情，并从动作行复制引用或阅读 PDF。
 

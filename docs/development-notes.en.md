@@ -4,9 +4,7 @@
 
 ## Position and scope
 
-This page records development constraints that future changes must revisit, especially upstream-contract workarounds, upgrade-triggered migrations, and behavior boundaries that are easy to miss in the code and tests. Each entry explains why the constraint exists, when to review it, how to verify it, and how to converge the implementation when the condition changes.
-
-This is not a backlog, design discussion, or general implementation guide. Add an entry only when omitting it could cause a regression, an incorrect migration, or an upstream compatibility break. Do not duplicate ordinary TODOs or material already covered by the architecture docs. Keep the Chinese and English pages synchronized whenever an entry changes.
+This page records critical development constraints, including upstream-contract workarounds, upgrade-triggered migrations, and behavior boundaries that are easy to miss in the code and tests. Each entry explains why the constraint exists, when to review it, how to verify it, and how to converge the implementation when the condition changes. Keep the Chinese and English pages synchronized whenever an entry changes.
 
 ## Entry requirements
 

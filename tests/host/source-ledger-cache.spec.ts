@@ -9,16 +9,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { factsOf, foldLedgerEvent } from '../../src/sources/event-ledger.js'
 import { SourceWorkspaceIndex } from '../../src/sources/ledger.js'
-import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
+import {
+  createSourceLedgerProjection,
+  ledgerStateSchema,
+} from '../../src/session-projection/source-ledger.js'
 import { zoteroSourcePageRequestSchema } from '../../src/wire-schemas.js'
 import { REF, searchIndex, settledBlock } from './support/source-ledger-arms.js'
+import { createEventFactory } from './support/source-ledger-events.js'
 
-let seq = 0
-
-function event(type: string, data: unknown): never {
-  seq += 1
-  return { type, seq, time: seq * 1000, data } as never
-}
+const event = createEventFactory()
 
 function searchPair(callId: string): never[] {
   return [
@@ -98,6 +97,35 @@ describe('chunked block storage', () => {
     expect(factsOf(state)).toHaveLength(600)
     expect(state.blockChunks.map((chunk) => chunk.length)).toEqual([256, 256, 88])
     expect(state.blockChunks.every((chunk) => chunk.length <= 256)).toBe(true)
+    // The writer's bound is the schema's bound: a replayed state cannot carry
+    // a chunk the fold would never produce.
+    expect(ledgerStateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('refuses an empty chunk and a chunk beyond the append bound', () => {
+    const fact = {
+      callId: 'c1',
+      seq: 1,
+      time: 1000,
+      name: 'zotero_search',
+      argsRaw: '{}',
+      callTime: 1000,
+      content: [],
+      isError: false,
+    }
+    expect(
+      ledgerStateSchema.safeParse({ blockChunks: [[]], pending: {}, recorded: {} }).success,
+    ).toBe(false)
+    expect(
+      ledgerStateSchema.safeParse({
+        blockChunks: [Array.from({ length: 257 }, () => fact)],
+        pending: {},
+        recorded: {},
+      }).success,
+    ).toBe(false)
+    expect(
+      ledgerStateSchema.safeParse({ blockChunks: [[fact]], pending: {}, recorded: {} }).success,
+    ).toBe(true)
   })
 })
 

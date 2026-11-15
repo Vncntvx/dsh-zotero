@@ -64,9 +64,16 @@ const pendingCallSchema = z
   })
   .strict()
 
-const ledgerStateSchema = z
+/**
+ * The fold state's strict schema. Exported so the spec can prove the bounds
+ * the writer respects are also the bounds a replayed state must satisfy.
+ */
+export const ledgerStateSchema = z
   .object({
-    blockChunks: z.array(z.array(blockFactSchema)),
+    // The fold appends in bounded chunks; the schema enforces the same bound
+    // the writer respects, so a corrupt or foreign state cannot claim an
+    // unbounded append cost, and an empty chunk cannot exist at all.
+    blockChunks: z.array(z.array(blockFactSchema).min(1).max(256)),
     pending: z.record(z.string(), pendingCallSchema),
     // The recorded callIds the fold dedupes against; see SourceLedgerState.
     recorded: z.record(z.string(), z.literal(true)),

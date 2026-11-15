@@ -833,6 +833,17 @@ export class ZoteroService extends Service {
   }
 
   /**
+   * The live inline-delivery budget in tokens, read by both the result
+   * delivery and the tools that decide whether a complete document is worth
+   * persisting to spill storage. One settings edit moves every spill
+   * threshold; a caller without this core uses the config schema default.
+   * @returns the per-result inline token budget.
+   */
+  inlineResultTokenBudget(): number {
+    return this.config.maxInlineResultTokens
+  }
+
+  /**
    * Resolve an attachment ref to its on-disk file or linked URL.
    * @param ref - the item or attachment ref to resolve.
    * @param signal - caller cancellation; forwarded to the provider.

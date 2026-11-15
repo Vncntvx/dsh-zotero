@@ -19,6 +19,7 @@ import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
 import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
 import { projectRetrieveMeta } from '../../src/presentation-meta.js'
 import type { FulltextArtifactProvenance } from '../../src/local/fulltext-enhancer.js'
+import { createEventFactory } from './support/source-ledger-events.js'
 
 /** Project an evidence result and narrow to its arm; these cases are all evidence. */
 function evidenceProjection(
@@ -30,13 +31,8 @@ function evidenceProjection(
   return meta
 }
 
-let seq = 0
-
 /** One committed event as the fold reads it. */
-function event(type: string, data: unknown): never {
-  seq += 1
-  return { type, seq, time: seq * 1000, data } as never
-}
+const event = createEventFactory()
 
 const REF = 'zotero://user/0/item/ABCD1234?server=SERVER1'
 

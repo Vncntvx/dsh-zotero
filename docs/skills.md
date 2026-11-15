@@ -8,16 +8,16 @@
 
 ## 选择技能
 
-| 技能                                | 组件      | 输入与产出                                           | 职责边界                                     |
-| ----------------------------------- | --------- | ---------------------------------------------------- | -------------------------------------------- |
-| `zotero-research-landscape`         | Scholarly | 研究问题 → 检索日志、主题簇、锚点与待核实空白        | 开题与主题发现，不做种子论文引文追踪         |
-| `zotero-citation-lineage`           | Scholarly | 种子 DOI/arXiv/PMID → 有向引文边及未覆盖分支         | 引用关系不等于支持或因果；相似关系单列       |
-| `zotero-paper-digest`               | 核心      | 单篇文献 → 元数据、核心论点/证据片段与 BibTeX 简报   | 单篇速读提炼，不做多篇横向对比或主题扩展     |
-| `zotero-evidence-synthesis`         | 核心      | 固定 2–12 篇文献 → 带出处的实验/方法比较矩阵         | 比较研究证据，不检查草稿逐条主张             |
-| `zotero-manuscript-reference-audit` | 核心      | 用户提供的草稿/书目 → 主张、引文、记录、原文的核对表 | 不编辑文稿文件，不扩展主题检索               |
-| `zotero-library-governance`         | 核心      | 已有库的明确范围 → 字段/标签/合集差异与经审批修正    | 不发现或导入库外文献，不自动合并/删除重复项  |
-| `zotero-publication-integrity`      | Scholarly | 明确可疑文献 → 身份、字段与来源报告的撤稿状态        | 调查具体疑点，不重复整稿例行核验             |
-| `zotero-literature-intake`          | Scholarly | 用户选定的库外文献 → 核验、去重、审批、入库回执      | 不自主检索更多文献；保存元数据不代表下载 PDF |
+| 技能                                | 组件      | 输入与产出                                           | 职责边界                                    |
+| ----------------------------------- | --------- | ---------------------------------------------------- | ------------------------------------------- |
+| `zotero-research-landscape`         | Scholarly | 研究问题 → 检索日志、主题簇、锚点与待核实空白        | 开题与主题发现，不做种子论文引文追踪        |
+| `zotero-citation-lineage`           | Scholarly | 种子 DOI/arXiv/PMID → 有向引文边及未覆盖分支         | 引用关系不等于支持或因果；相似关系单列      |
+| `zotero-paper-digest`               | 核心      | 单篇文献 → 元数据、核心论点/证据片段与 BibTeX 简报   | 单篇速读提炼，不做多篇横向对比或主题扩展    |
+| `zotero-evidence-synthesis`         | 核心      | 固定 2–12 篇文献 → 带出处的实验/方法比较矩阵         | 比较研究证据，不检查草稿逐条主张            |
+| `zotero-manuscript-reference-audit` | 核心      | 用户提供的草稿/书目 → 主张、引文、记录、原文的核对表 | 不编辑文稿文件，不扩展主题检索              |
+| `zotero-library-governance`         | 核心      | 已有库的明确范围 → 字段/标签/合集差异与经审批修正    | 不发现或导入库外文献，不自动合并/删除重复项 |
+| `zotero-publication-integrity`      | Scholarly | 明确可疑文献 → 身份、字段与来源报告的撤稿状态        | 调查具体疑点，不重复整稿例行核验            |
+| `zotero-literature-intake`          | Scholarly | 用户选定的库外文献 → 核验、去重、审批、入库回执      | 将用户选定的文献元数据保存至本地库          |
 
 Scholarly 指 `dsh-zotero/scholarly` 组件。该组件未启用时，四个对应技能不注册。四个核心技能可以在工具可用时使用条件化的外部核验或全文配方；不可用时交付本地结果和证据缺口，不能借用 shell 或其他网络入口绕过组件授权。
 
@@ -40,10 +40,10 @@ Scholarly 指 `dsh-zotero/scholarly` 组件。该组件未启用时，四个对�
 
 ## 证据与安全边界
 
-- 阅读先定位目录/章节，再检索与问题相关的 BM25 片段，最后引用短原文和真实 locator。本地索引全文没有目录 API，可从附件元数据/批注定位；不能假装读过目录，也不能退化为从头通读全部全文。
-- 只有 Zotero 原生 annotation 可能提供 `pageLabel`；本地全文及 Scholarly 段落不保证页码。没有页码时明确注明，以真实章节、字符或 chunk 位置定位。用户批注评论不当作论文原文。
-- 注册库 `UNVERIFIED` 不等于 `NOT FOUND`；相似标题不等于身份一致；未报告撤稿不等于已证明未撤稿。撤稿输出必须标出检查日期、回答的索引和缺失来源。
-- 写入必须由根 Agent 在用户明确要求后，经 `ctx.zotero` 的能力门、`ctx.approval.request` 和 plan-review 卡执行。Skill 无审批豁免权；子 Agent 只返回拟议改动。`committed-unverified` 或批次未核验项只对账，不重试。
+- 阅读时先结合附件元数据与批注定位章节，再检索相关 BM25 片段，引用原文并标注真实 locator。
+- Zotero 原生批注提供 `pageLabel`；无页码的本地全文及 Scholarly 段落使用真实章节、字符或 chunk 位置定位。用户批注评论与论文原文分别标识。
+- `UNVERIFIED` 表示注册库不可达，`NOT FOUND` 表示未检索到记录；相似标题需比对标识符确认身份；撤稿状态需明确标注检查日期、查询索引与缺失来源。
+- 写入操作在用户明确要求后由根 Agent 执行，依次通过能力检查、审批与计划卡。子 Agent 仅返回修改提议。`committed-unverified` 或未核验项执行对账，不自动重试。
 - 子 Agent 按持久会话 `origin`/`delegationDepth` 判断，包含恢复为运行时 root 的派生会话。15 个核心写工具和 Scholarly 的保存入口均被隐藏，执行 guard 也拒绝按名称绕入；根 Agent 的审批路径不变。
 
 ## 注册与维护

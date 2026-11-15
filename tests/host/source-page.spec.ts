@@ -18,14 +18,10 @@ import { readSourcePage } from '../../src/source-page.js'
 import { normalizeRefKey } from '../../src/sources/evidence-match.js'
 import type { ZoteroRuntime } from '../../src/remote.js'
 import ZoteroService from '../../src/index.js'
-
-let seq = 0
+import { createEventFactory } from './support/source-ledger-events.js'
 
 /** One committed event as the fold reads it. */
-function event(type: string, data: unknown): never {
-  seq += 1
-  return { type, seq, time: seq * 1000, data } as never
-}
+const event = createEventFactory()
 
 const REF_A = 'zotero://user/0/item/AAAA1234'
 const SEARCH_META = {

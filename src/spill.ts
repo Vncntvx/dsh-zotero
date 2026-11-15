@@ -9,9 +9,42 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
-import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
+import { SpillLocator, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
+import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
+import { formatSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 
-export { DEFAULT_SPILL_CHAR_THRESHOLD } from './constants.js'
+/**
+ * Whether one complete result outgrows the inline token budget.
+ *
+ * The same `estimateContent` the result delivery prices results with, and
+ * the same budget it compares against: a caller deciding whether a document
+ * is worth spilling asks the delivery's own question, so "fits inline" means
+ * one thing across the plugin and a settings edit moves every threshold.
+ * @param text - the complete result's text.
+ * @param maxInlineResultTokens - the live inline token budget.
+ * @returns true when the text would not ride inline.
+ */
+export function exceedsInlineTokenBudget(text: string, maxInlineResultTokens: number): boolean {
+  return estimateContent([{ type: 'text', text }]) > maxInlineResultTokens
+}
+
+/**
+ * The persisted-spill notice for one result, in the harness spelling every
+ * spill-aware consumer recognizes (`hasSpillNotice`).
+ * @param ref - the saved text's locator and retrieval guidance; the locator
+ *   may arrive as the plain string a wire projection carries.
+ * @param omittedBytes - UTF-8 bytes of the result left out of this answer.
+ * @returns the notice, prefixed with a blank line for appending.
+ */
+export function spilledNoticeOf(
+  ref: { readonly locator: string; readonly retrievalHint: string },
+  omittedBytes: number,
+): string {
+  return `\n\n${formatSpillNotice(
+    { kind: 'exact', count: omittedBytes },
+    { locator: SpillLocator(ref.locator), retrievalHint: ref.retrievalHint },
+  )}`
+}
 
 /**
  * Opportunistically spills a large tool result to `ctx.spillStore`.

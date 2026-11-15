@@ -29,7 +29,7 @@ import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-me
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { assertIntInRange, assertNonEmptyList, REF_ARG_HINT } from './validate.js'
-import { trySpillToolOutput } from '../spill.js'
+import { exceedsInlineTokenBudget, spilledNoticeOf, trySpillToolOutput } from '../spill.js'
 import type { FulltextSpillSink } from '../local/retrieve-fulltext.js'
 import type { ZoteroService } from '../service.js'
 import type {
@@ -563,7 +563,7 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
       read.coverage === undefined ? '' : coverageLineOf(read.coverage),
       read.spillRef === undefined
         ? ''
-        : `Full document spill: ${read.spillRef.locator} (${read.spillRef.bytes} bytes). ${read.spillRef.retrievalHint} ${FULLTEXT_SPILL_NOTE}`,
+        : `${spilledNoticeOf(read.spillRef, read.spillRef.bytes - (read.end - read.start)).trimEnd()} ${FULLTEXT_SPILL_NOTE}`,
     ].filter((line) => line !== '')
     // The blank line separates the header from the document text and must
     // survive the empty-line filter above.
@@ -723,6 +723,11 @@ export function registerRetrieveTool(
             // The sink is the host spill store's; without one the chain is the
             // only path and the result simply carries no spillRef.
             const spill = async (text: string): Promise<FulltextSpillSinkResult | undefined> => {
+              // The inline budget decides whether the document is worth a
+              // handle: a bounded document the delivery would keep inline
+              // needs none, and the threshold moves with the same setting.
+              if (!exceedsInlineTokenBudget(text, service.config.maxInlineResultTokens))
+                return undefined
               const ref = await trySpillToolOutput(ctx, exec, `${exec.name}-fulltext.md`, text)
               return ref === undefined
                 ? undefined

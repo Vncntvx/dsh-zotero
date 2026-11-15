@@ -28,6 +28,7 @@ import {
   RETRIEVE_ATTACHMENT_CHILDREN,
   RETRIEVE_CHILDREN,
   RETRIEVE_PARENT,
+  fulltextHit,
 } from './support.js'
 
 let mock: MockZotero | undefined
@@ -60,22 +61,7 @@ async function boot(): Promise<MockZotero> {
 }
 
 function hit(text: string): Extract<FulltextLookupResult, { kind: 'hit' }> {
-  return {
-    kind: 'hit',
-    text,
-    format: 'markdown',
-    source: 'MinerU (free)',
-    sourceKind: 'attachment',
-    sourceLabel: attachmentRef(RETRIEVE_ATTACHMENT.key),
-    provenance: {
-      parser: 'mineru',
-      mode: 'free',
-      artifactId: 'a'.repeat(64),
-      fingerprint: 'b'.repeat(64),
-      sourceId: 'c'.repeat(64),
-      generation: 'd'.repeat(64),
-    },
-  }
+  return fulltextHit(text, attachmentRef(RETRIEVE_ATTACHMENT.key))
 }
 
 function enhancerOf(result: FulltextLookupResult | (() => FulltextLookupResult)): FulltextEnhancer {
@@ -353,13 +339,13 @@ describe('mode:"fulltext" spill', () => {
     expect(result.fulltext?.spillRef).toBeUndefined()
   })
 
-  it('skips the spill for a document shorter than the threshold', async () => {
+  it('asks the sink even for a short document; the inline budget is the sink decision', async () => {
     const server = await boot()
-    const spill = vi.fn(async () => ({
-      locator: 'spill://doc/full.md',
-      bytes: 0,
-      retrievalHint: 'Read it.',
-    }))
+    // The domain decides *when* a handle may be offered (first window, more
+    // windows follow). Whether the document is large enough is priced against
+    // the inline token budget by the sink, which is the tool layer's own
+    // decision — so the domain calls it and takes an absent answer as no spill.
+    const spill = vi.fn(async () => undefined)
     const result = await providerOf(server, enhancerOf(hit(markdown))).retrieve(
       {
         mode: 'fulltext',
@@ -370,7 +356,8 @@ describe('mode:"fulltext" spill', () => {
       undefined,
       spill,
     )
-    expect(spill).not.toHaveBeenCalled()
+    expect(spill).toHaveBeenCalledOnce()
+    expect(spill).toHaveBeenCalledWith(markdown)
     expect(result.fulltext?.spillRef).toBeUndefined()
   })
 })

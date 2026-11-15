@@ -440,7 +440,10 @@ describe('zotero_retrieve fulltext render', () => {
         },
       }) as never,
     )
-    expect(text).toContain('Full document spill: spill://session/full.md (40000 bytes).')
-    expect(text).toContain('Read it from spill storage.')
+    // The notice is the persisted spill-policy spelling: it names the omitted
+    // bytes (the document beyond this window) and the one handle.
+    expect(text).toContain(
+      '(Omitted 28000 bytes. Full formatted result stored at: spill://session/full.md. Read it from spill storage.)',
+    )
   })
 })

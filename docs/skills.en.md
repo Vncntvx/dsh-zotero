@@ -17,7 +17,7 @@ Catalog names, descriptions and trigger keywords are English-only. The model mat
 | `zotero-manuscript-reference-audit` | Core      | Supplied draft/bibliography → claim/citation/record/passage audit                           | Does not edit manuscript files or discover new topics                                 |
 | `zotero-library-governance`         | Core      | Explicit existing-library scope → field/tag/collection differences and reviewed corrections | No outside intake, automatic duplicate merging or deletion                            |
 | `zotero-publication-integrity`      | Scholarly | Suspect publications → identity, field and source-reported retraction checks                | Investigates specific concerns rather than repeating routine whole-draft verification |
-| `zotero-literature-intake`          | Scholarly | User-selected outside works → verification, deduplication, approval and receipts            | No autonomous discovery; metadata saving does not download a PDF                      |
+| `zotero-literature-intake`          | Scholarly | User-selected outside works → verification, deduplication, approval and receipts            | Saves metadata for selected literature to the local library                           |
 
 Scholarly means the `dsh-zotero/scholarly` component. Its four skills are absent while it is disabled. Core skills may use conditional external verification/fulltext recipes only when their tools are available; otherwise they return local results and evidence gaps without bypassing authorization through shell or other network routes.
 
@@ -40,10 +40,10 @@ Prefer batch metadata for known local refs: up to 50 unique refs, standard field
 
 ## Evidence and safety boundaries
 
-- Locate outlines/sections, then BM25 passages for a concrete question, then quote short original text with an observed locator. Local indexed fulltext has no outline API; use attachment metadata/annotations and do not pretend a directory exists or sequentially read entire documents.
-- Only native Zotero annotations may provide `pageLabel`; local fulltext and Scholarly passages do not guarantee page numbers. State missing pages and retain actual section/character/chunk locators. User annotation comments are not paper quotations.
-- Registry `UNVERIFIED` differs from `NOT FOUND`; similar titles do not establish identity; no reported retraction is not proof of no retraction. Include the checked-at date, answering indexes and missing sources.
-- Root agents execute explicitly requested writes only through the `ctx.zotero` capability gate, `ctx.approval.request` and plan-review card. Skills have no approval exemption. Children return proposals; `committed-unverified` and unverified batch entries are reconciled, never retried.
+- Locate sections from attachment metadata and annotations, retrieve relevant BM25 passages, and quote source text with verified locators.
+- Native Zotero annotations provide `pageLabel`; when page numbers are absent in local full text or Scholarly passages, locate by section, character offset, or chunk index. User comments and paper text are labeled distinctly.
+- `UNVERIFIED` indicates an unreachable registry, while `NOT FOUND` indicates no record matched; similar titles require identifier checks to confirm identity. Retraction reports must state the check date, queried indexes, and missing sources.
+- Root agents execute explicitly requested writes only through the `ctx.zotero` capability gate, `ctx.approval.request` and plan-review card. Subagents return proposals only. `committed-unverified` and unverified batch entries are reconciled, not retried.
 - Child identity follows durable session `origin`/`delegationDepth`, including resumed derived sessions that are runtime roots. All 15 core writes and the Scholarly save entry are hidden; an execution guard also refuses calls supplied by name. Root approval remains intact.
 
 ## Registration and maintenance

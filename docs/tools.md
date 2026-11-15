@@ -6,7 +6,7 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 
 八个本地读取工具共用交付结构：`{delivery:"inline", data:…}` 在两项预算内返回完整领域结果；`{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` 返回有界事实及标准 Harness FileBlock。不可变 JSON 文件保存 `{version:1, tool, request, data}`，其中 `data` 是完整领域结果。分页完整性（`page` 或 `complete`）与交付方式独立。长单行字段应由官方 `run_code` 的 Node 文件接口解析；逐行预览可能截断长行。
 
-参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具（8 个本地读工具、15 个写入工具与 scholarly 组件工具）都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示只在唯一近似匹配时出现，不改变错误码，不发起请求，也不自动重试。
+参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具（8 个本地读工具、15 个写入工具与 scholarly 组件工具）都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示仅在存在唯一近似匹配时出现，标明拒绝与建议参数。
 
 正文使用 `AttachmentStore.saveFileStream`，校验后的回执写入 `zotero_results` storage domain。超预算或受管理后台结果需要这两项服务；保存、索引、取消及完整性校验失败均明确报错，不回退全文内联。所属 Zotero 后台任务成功后，`job_output` 追加同一文件引用并保留官方 canonical value。PTC 嵌套调用传递标准文件附加上下文。原始后台确认保留 `resultSessionId`；重启后可按持久回执读取已保存结果，但不会恢复运行任务。
 
@@ -126,7 +126,7 @@ zotero_get_batch(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EF
 
 ### 输出
 
-`{items}` 与输入同序。每项包含 `inputId`、`status`，搜索页不完整时附 `reason` 并且不会报告 `matched`；匹配项和候选包含 `ref`、`citationKey`、`citationKeySource`（可用时）、`title`、作者、年份、DOI、来源、匹配方法和置信度；`citationKeyConflict` 会阻止静默选中。`fieldDiff` 返回可比较的标题、DOI、年份、作者和来源差异，可用于审阅 Bib/TeX 修改。
+`{items}` 与输入同序。每项包含 `inputId`、`status`，搜索页不完整时附 `reason` 且状态为未匹配；匹配项和候选包含 `ref`、`citationKey`、`citationKeySource`（可用时）、`title`、作者、年份、DOI、来源、匹配方法和置信度；`citationKeyConflict` 显式标明冲突。`fieldDiff` 返回可比较的标题、DOI、年份、作者和来源差异，可用于审阅 Bib/TeX 修改。
 
 ### 示例
 
@@ -210,7 +210,7 @@ zotero_retrieve(mode="fulltext", source={kind="ref", ref="zotero://user/0/attach
 
 ### 说明
 
-- refs 总数先受 `maxExportRefs` 拦截（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条：这是插件为保持 Zotero translator 的全局排序而设的批边界，不是 Zotero `itemKey` 请求自身的上限，超出即报错，不会自动分批；
+- refs 总数受 `maxExportRefs` 限制（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条；超出时返回错误；
 - `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。默认 `maxExportRefs` 同为 50，因此需先将该配置调至 50 以上，分批才会实际发生；
 - `bibtex`、`biblatex`、`ris`、`csljson` 各使用 1 次 translator 请求和 1 次有界原始元数据批处理，用于 citekey 与字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对，不按位置猜测；无法定位的 ref 在结果中只保留自身。元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）仍会抛出。单次调用最多支持 50 条；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
@@ -533,7 +533,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 | ------ | -------- | ---- | --------------------- |
 | `refs` | string[] | ✓    | 要恢复的条目 ref 列表 |
 
-输出为 `{kind: "restored", restored, unverified, failed, serverId?}`；版本冲突记录在 `failed`，回执未知记录在 `unverified`，两者都不会自动重试。
+输出为 `{kind: "restored", restored, unverified, failed, serverId?}`；版本冲突记录在 `failed`，回执未知记录在 `unverified`。
 
 支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败和未核验对象的 ref、错误码或原因；卡片根据实际结果显示恢复数、未核验数与失败数，未核验回执必须先按 ref/key 核对，禁止重试。
 
@@ -637,7 +637,7 @@ zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 | `tags`             | string[] | —    | 创建时添加的标签                                    |
 | `collections`      | string[] | —    | 目标合集 ref 或精确名称                             |
 
-该工具只在本地 Zotero 组件已挂载且 `writeEnabled=true` 时进入模型的工具清单；写入关闭时它不注册到当前 step 的工具集合，模型不会看到一个只能回答「写入已关闭」的工具。
+该工具仅在本地 Zotero 组件挂载且 `writeEnabled=true` 时向模型注册。
 
 将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
@@ -679,7 +679,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表携带该标签但未给计数时显示 `unknown items`；只有整个列表都未出现的名称才会被列为「确证无效（proven no-ops）」，因此绝不会把第一页之外的标签误判为无效。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称被 Zotero 静默跳过，因此重试是幂等的。
+按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表包含该标签但未给计数时显示 `unknown items`；仅整个列表均未匹配的名称列为「确证无效（proven no-ops）」。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称由 Zotero 忽略，重试具有幂等性。
 
 ### 参数
 
@@ -702,9 +702,9 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ## zotero_batch_items
 
-在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除通过版本化 PATCH 将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复，不是永久擦除。所有操作合并为一张计划卡确认；卡片完整列出每个创建请求的全部字段（包括合集归属），不会省略第 11 项及之后的条目。
+在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除通过版本化 PATCH 将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复。所有操作合并为一张计划卡确认，卡片完整列出每个创建请求的全部字段与合集归属。
 
-单次操作总数（创建、更新与删除之和）受 `writeListMaxItems` 限制（默认 50 项）。每项创建的回执按输入索引列出 Zotero 保存后的 ref、key、版本及可用的标题/URL。若某项创建的提交或已保存状态无法核实，它会出现在 `unverified` 中并标记 `retryable: false`；不得再次提交，应按 ref/key 核对。未返回、重复、矛盾或越界的批次索引不会被静默丢弃，而会作为未核实结果报告。单个条目的版本冲突（HTTP 412）会记录到 `failed` 数组中，不影响其余条目执行。
+单次操作总数（创建、更新与删除之和）受 `writeListMaxItems` 限制（默认 50 项）。每项创建的回执按输入索引列出 Zotero 保存后的 ref、key、版本及可用的标题/URL。若某项创建的提交或已保存状态无法核实，它会出现在 `unverified` 中并标记 `retryable: false`，应按 ref/key 核对。异常的批次索引作为未核实结果报告。单个条目的版本冲突（HTTP 412）记录到 `failed` 数组中，不影响其余条目执行。
 
 ### 参数
 
@@ -769,60 +769,60 @@ zotero_batch_items(
 
 ## 错误码
 
-| 错误码                                     | 说明                                                                                                |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                                                                       |
-| `ZOTERO_API_DISABLED`                      | Zotero 运行中，但高级设置中未启用本地 API（403）                                                    |
-| `ZOTERO_API_VERSION`                       | 本地 API 版本不受支持                                                                               |
-| `ZOTERO_NOT_IMPLEMENTED`                   | 本地 API 明确返回 501，端点或格式在本版本中未实现                                                   |
-| `ZOTERO_SERVER_MISMATCH`                   | 引用的 Server ID 与当前运行的 Zotero 实例不匹配                                                     |
-| `ZOTERO_NOT_FOUND`                         | 引用的条目、合集或保存搜索不存在                                                                    |
-| `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）                                                         |
-| `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                                                                          |
-| `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                                                                  |
-| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，分页参数（offset + revision）失效（刷新后重试）                         |
-| `ZOTERO_URL_PDF_DISABLED`                  | 文献面板未开启 URL PDF 阅读授权                                                                     |
-| `ZOTERO_URL_PDF_BUSY`                      | 已有两个 URL PDF 下载在运行（文献面板端点）                                                         |
-| `ZOTERO_URL_PDF_NOT_URL`                   | 该附件不是 URL PDF（文献面板端点）                                                                  |
-| `ZOTERO_URL_PDF_REDIRECT`                  | PDF 重定向次数超限、缺少 Location 或 HTTPS 降级（文献面板端点）                                     |
-| `ZOTERO_URL_PDF_HTTP`                      | PDF 源站返回非成功状态（文献面板端点）                                                              |
-| `ZOTERO_URL_PDF_NOT_PDF`                   | 响应不是 PDF：媒体类型或文件头不符（文献面板端点）                                                  |
-| `ZOTERO_URL_PDF_TIMEOUT`                   | PDF 下载超过 60 秒（文献面板端点）                                                                  |
-| `ZOTERO_URL_PDF_FORBIDDEN_TARGET`          | PDF 地址未通过公网地址校验（本机、内网或私有地址）（文献面板端点）                                  |
-| `ZOTERO_URL_PDF_TOO_LARGE`                 | PDF 超过 32 MiB 读取上限（文献面板端点）                                                            |
-| `ZOTERO_URL_PDF_NETWORK`                   | PDF 下载在传输层失败（不回显原始 URL）（文献面板端点）                                              |
-| `ZOTERO_FILE_MISSING`                      | 记录的本地附件文件在磁盘上不存在                                                                    |
-| `ZOTERO_FILE_UNREADABLE`                   | 本地附件路径无法解析或文件不可读（`zotero_get` 的 `locations` 会把它降级为 `location.reason`）      |
-| `ZOTERO_INVALID_REF`                       | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库                                             |
-| `ZOTERO_INVALID_ARGUMENT`                  | 参数违反领域约束规则                                                                                |
-| `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                                                                |
-| `ZOTERO_TIMEOUT`                           | 提供方请求超时                                                                                      |
-| `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                          |
-| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                              |
-| `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                        |
-| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析没有找到可读副本（细分原因在消息里；不会冒充本地全文缺失）                              |
-| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                        |
-| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）                                                    |
-| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析（fail-closed，不降级免费/匿名）                        |
-| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | 主动解析需要会话所属 `ctx.jobs` 与会话控制器，但当前不可用                                          |
-| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | 同一操作 id 被以不同目标或配置快照重放                                                              |
-| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU 报告解析任务失败（附带其自身原因）                                                           |
-| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | 解析产物输出目录校验失败                                                                            |
-| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | MinerU 返回归档包结构或 zip 安全校验失败                                                            |
-| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | 文档超过所选接口的体积上限或不是 PDF                                                                |
-| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | 语义检索已开启，但模型缺失/损坏、随包发布的推理运行时文件缺失或推理失败（fail-closed，不回退 BM25） |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                                    |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                          |
-| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                                    |
-| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | 解析产物编号没有对应的已提交产物                                                                    |
-| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | 解析产物清理失败或路径不安全                                                                        |
-| `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                          |
-| `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                                  |
-| `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                        |
-| `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                                    |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）                                                    |
-| `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改                                                       |
-| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                                                                          |
+| 错误码                                     | 说明                                                                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                                                                  |
+| `ZOTERO_API_DISABLED`                      | Zotero 运行中，但高级设置中未启用本地 API（403）                                               |
+| `ZOTERO_API_VERSION`                       | 本地 API 版本不受支持                                                                          |
+| `ZOTERO_NOT_IMPLEMENTED`                   | 本地 API 明确返回 501，端点或格式在本版本中未实现                                              |
+| `ZOTERO_SERVER_MISMATCH`                   | 引用的 Server ID 与当前运行的 Zotero 实例不匹配                                                |
+| `ZOTERO_NOT_FOUND`                         | 引用的条目、合集或保存搜索不存在                                                               |
+| `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）                                                    |
+| `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                                                                     |
+| `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                                                             |
+| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，分页参数（offset + revision）失效（刷新后重试）                    |
+| `ZOTERO_URL_PDF_DISABLED`                  | 文献面板未开启 URL PDF 阅读授权                                                                |
+| `ZOTERO_URL_PDF_BUSY`                      | 已有两个 URL PDF 下载在运行（文献面板端点）                                                    |
+| `ZOTERO_URL_PDF_NOT_URL`                   | 该附件不是 URL PDF（文献面板端点）                                                             |
+| `ZOTERO_URL_PDF_REDIRECT`                  | PDF 重定向次数超限、缺少 Location 或 HTTPS 降级（文献面板端点）                                |
+| `ZOTERO_URL_PDF_HTTP`                      | PDF 源站返回非成功状态（文献面板端点）                                                         |
+| `ZOTERO_URL_PDF_NOT_PDF`                   | 响应不是 PDF：媒体类型或文件头不符（文献面板端点）                                             |
+| `ZOTERO_URL_PDF_TIMEOUT`                   | PDF 下载超过 60 秒（文献面板端点）                                                             |
+| `ZOTERO_URL_PDF_FORBIDDEN_TARGET`          | PDF 地址未通过公网地址校验（本机、内网或私有地址）（文献面板端点）                             |
+| `ZOTERO_URL_PDF_TOO_LARGE`                 | PDF 超过 32 MiB 读取上限（文献面板端点）                                                       |
+| `ZOTERO_URL_PDF_NETWORK`                   | PDF 下载在传输层失败（不回显原始 URL）（文献面板端点）                                         |
+| `ZOTERO_FILE_MISSING`                      | 记录的本地附件文件在磁盘上不存在                                                               |
+| `ZOTERO_FILE_UNREADABLE`                   | 本地附件路径无法解析或文件不可读（`zotero_get` 的 `locations` 会把它降级为 `location.reason`） |
+| `ZOTERO_INVALID_REF`                       | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库                                        |
+| `ZOTERO_INVALID_ARGUMENT`                  | 参数违反领域约束规则                                                                           |
+| `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                                                           |
+| `ZOTERO_TIMEOUT`                           | 提供方请求超时                                                                                 |
+| `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                     |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                         |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                   |
+| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析未找到可读副本，细分原因见错误消息                                                 |
+| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                   |
+| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索凭据引用非法或未提供有效值                                                             |
+| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析                                                   |
+| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | 主动解析需要会话所属 `ctx.jobs` 与会话控制器，但当前不可用                                     |
+| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | 同一操作 id 被以不同目标或配置快照重放                                                         |
+| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU 报告解析任务失败（附带其自身原因）                                                      |
+| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | 解析产物输出目录校验失败                                                                       |
+| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | MinerU 返回归档包结构或 zip 安全校验失败                                                       |
+| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | 文档超过所选接口的体积上限或不是 PDF                                                           |
+| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | 语义检索已开启，但模型缺失/损坏、随包发布的推理运行时文件缺失或推理失败                        |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                               |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                     |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                               |
+| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | 解析产物编号没有对应的已提交产物                                                               |
+| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | 解析产物清理失败或路径不安全                                                                   |
+| `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                     |
+| `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
+| `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |
+| `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                               |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）                                               |
+| `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改                                                  |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                                                                     |
 
 ---
 
@@ -947,7 +947,7 @@ scholarly_read(id="2301.07041", query="attention mechanism")
 
 | 参数     | 类型     | 默认值   | 说明                                                                                                                |
 | -------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `ids`    | string[] | — (必填) | DOI、arXiv ID 或 PMID 列表（单次最多 30 篇；超出即报错，不会静默截断）                                              |
+| `ids`    | string[] | — (必填) | DOI、arXiv ID 或 PMID 列表（单次最多 30 篇；超出限制时返回错误）                                                    |
 | `format` | string   | — (必填) | 引用格式：`bibtex`、`ris`、`csljson`、`text`（格式化引文）                                                          |
 | `style`  | string   | `"apa"`  | 当 `format="text"` 时的 CSL 样式 ID（如 `apa`、`ieee`、`nature`、`china-national-standard-gb-t-7714-2015-numeric`） |
 | `locale` | string   | —        | 语言代码（如 `zh-CN`、`en-US`）                                                                                     |
@@ -968,12 +968,12 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 | 参数                | 类型     | 默认值   | 说明                                                                                                                                                                             |
 | ------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出即报错，不会静默截断）                                                                                                             |
+| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出限制时返回错误）                                                                                                                   |
 | `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
 
 #### 核验结论
 
-每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但存在差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，对该条目无任何结论）。注册库不可达永远不会报告为 `NOT FOUND`。
+每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但有差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，无法核对）。注册库不可达时返回 `UNVERIFIED`。
 
 #### 示例
 

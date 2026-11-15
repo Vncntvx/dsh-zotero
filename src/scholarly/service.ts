@@ -133,6 +133,9 @@ export class ScholarlyService extends Service {
       keys: (): Promise<ScholarlyKeys> => resolveScholarlyKeys(ctx, this.currentConfig),
       maxResults: () => this.currentConfig.maxResults,
       maxContentChars: () => this.currentConfig.maxContentChars,
+      // The inline-delivery budget is the core's: one number decides what
+      // rides inline for `scholarly_read` and `zotero_retrieve` alike.
+      maxInlineResultTokens: () => ctx.get('zotero')?.inlineResultTokenBudget() ?? 4_000,
       jobPolicy: () => jobPolicyOf(this.currentConfig),
       jobRunner: () => this.jobRunner,
       cache: this.store,

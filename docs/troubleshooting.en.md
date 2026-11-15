@@ -44,7 +44,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 - Native reading: clicking "Read PDF" in the literature panel, the literature trail, or a tool card opens a local attachment in the reader bar of the DeepSeek Harness right sidebar, with no jump to an external application; desktop and Web behave the same. The literature panel's reader bar anchors to the session that owns the panel, so with several sessions open it opens in the current one.
 - URL attachments: when the attachment itself is an external URL rather than a local PDF file, "Read PDF" opens that address in a new browser tab.
-- Open refused: when the host refuses to open the reader bar or a new tab, the action row shows an inline hint in place. The action never fails silently and is never retried automatically.
+- Open refused: when the host refuses to open the reader bar or a new tab, the action row shows an inline hint in place.
 - Quick locating: to view the item in the local Zotero client, click "Copy title" and paste it into Zotero quick search (`Cmd+F` or `Ctrl+F`); or click "Copy Zotero link" and paste the canonical deep link (personal and group libraries supported) into an external note or the address bar.
 
 ## 8. Installation says nothing installable
@@ -141,7 +141,7 @@ Note: diagnostic records stay in the current process memory and are cleared when
 ## 21. Citation copy fails
 
 - Symptom: "Copy citation", "Copy BibTeX", or one entry under "More formats" in the literature panel item inspector action row fails, and the action row shows "Copy failed: <reason>" inline; or the control shows "Formatting…" during the request and no clipboard content arrives.
-- Cause: the `zotero/export` endpoint request failed (local API unreachable, timeout, export content over a limit, unsupported ref or format), or the browser refused the clipboard write (insecure context, no clipboard permission). The panel does not retry automatically.
+- Cause: the `zotero/export` endpoint request failed (local API unreachable, timeout, export content over a limit, unsupported ref or format), or the browser refused the clipboard write (insecure context, no clipboard permission).
 - Fix: confirm the Zotero connection is fine (see items 1 and 2), then click that format once more; a single-item copy is not affected by `maxExportRefs`, so if the error points at oversized export content, check `maxExportChars` and `maxExportRefs` under "Advanced → Output limits"; when the clipboard is unavailable, copy the text from "Copy Zotero link" or "Read PDF" instead. If the failure persists, copy diagnostics as in item 18.
 
 ## 22. Literature trail is empty

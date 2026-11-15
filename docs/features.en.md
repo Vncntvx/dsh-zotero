@@ -12,7 +12,7 @@ The agent has eight read-only tools. Parameters and error codes are in the [tool
 - `zotero_browse` reads the collection tree, tag list, and saved searches; the page size is bounded by `maxBrowseResults`, and the response carries the total and paging cursor.
 - `zotero_get` returns title, authors, year, journal, DOI, URL, abstract, and a separate `citationKey`; citekey-source conflicts are explicit. Add `include` to load child note bodies, PDF annotations, and the attachment list.
 - `zotero_get_batch` reads up to 50 known refs in input order and reports each result independently; use `zotero_get` for one ref.
-- `zotero_match_references` reconciles DOI, BibTeX keys, and reference fingerprints with the local library, returning refs, citekeys, confidence, and reviewable field differences; citekey conflicts are never silently selected.
+- `zotero_match_references` reconciles DOI, BibTeX keys, and reference fingerprints with the local library, returning refs, citekeys, confidence, and reviewable field differences; citekey conflicts are explicitly flagged.
 - `zotero_retrieve` finds passages in annotations, notes, the abstract, and the full-text index and ranks them by BM25 term frequency. Each passage carries its source and a page label; only annotations have page numbers, taken from Zotero. The result marks whether a hit landed in body text or an annotation comment. Full-text coverage is in `coverage`, sources that are unindexed or unreadable go into `sourcesSkipped`, and attachment status is `indexed`, `unindexed`, or `unread`.
 - `zotero_export` supports six formats. Every format except `citation` takes at most 50 items per call, the request limit of Zotero's `itemKey`; `citation` batches in groups of 50.
 
@@ -33,17 +33,17 @@ Research SOP skills add eight on-demand workflows: paper digest, research landsc
 
 ## Checking the Literature Trail
 
-The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from a host session projection folded over the whole session log, so a long session does not lose early items to the history window; when the projection is unavailable it falls back to the tool-call snapshot of the currently loaded window. Switching to it issues no new request.
+The literature trail sits at the top of the conversation and groups the literature the agent found and read in this session by item. The data comes from a host session projection folded over the whole session log, so a long session preserves early items; when the projection is unavailable it falls back to the tool-call snapshot of the currently loaded window.
 
-It records the results of read tools and exports. Writes do not enter the trail; modifications have their own cards and approval records. Results from scholarly retrieval appear only after they are saved into the library.
+The literature trail records the results of read tools and exports. Write operations are recorded on approval cards, and scholarly retrieval results appear after being saved to the library.
 
 The criteria of each search sit on the first screen: query, scope (library, My Publications, collection, saved search), mode (metadata or full text), filters (item type, tags, Trash), and the returned count against the total. When the note scan ran, the note hit count gets its own line. The technical ref identifier is displayed directly at the bottom of the audit panel with one-click copy support.
 
-The item inspector has three parts. Overview gives the source and action; passages are grouped by source with page labels and coverage; exports list the citation text this paper produced. The session also has an exports summary page, segmented by format and deduplicated across items. Failed export calls are listed separately under operations and do not count as results.
+The item inspector has three parts. Overview gives the source and action; passages are grouped by source with page labels and coverage; exports list the citation text this paper produced. The session also has an exports summary page, segmented by format and deduplicated across items. Failed export calls are listed in operations.
 
-The status bar at the top shows whether the local Zotero is connected. When offline it offers troubleshooting hints and an in-place refresh. A peer without access to `zotero/status` sees only a refusal notice and issues no probe; the local items in the trail remain readable.
+The status bar at the top shows whether the local Zotero is connected. When offline it offers troubleshooting hints and an in-place refresh. When the session lacks access to `zotero/status`, the status bar displays a permission notice; local items in the trail remain readable.
 
-The built-in DSH "Trail" tab shows how tool calls ran. The literature trail shows only literature-related results.
+DSH's built-in "Trail" tab tracks tool-call execution, while the literature trail focuses specifically on literature-related searches, passages, and exports.
 
 ## Using the Literature Panel
 
@@ -52,7 +52,7 @@ The literature panel lives in the right sidebar, beside the conversation. It app
 - the `dsh-zotero/library` row under "Included components" is enabled;
 - the component's `rightSidebarEnabled` is on.
 
-The core `webEnabled` flag governs the literature trail at the top of the conversation; it does not gate the panel.
+`webEnabled` governs the literature trail at the top of the conversation; `rightSidebarEnabled` controls the literature panel.
 
 The navigation area supports multi-library switching (personal and group libraries), a collection tree expanded on demand, saved searches, "My Publications", and "Trash". Saved searches show Zotero's original conditions. Each collection row ends with the number of items Zotero counts directly in it; an unreported count shows nothing. The toolbar offers a standing "Manage parsed docs" button right after the library selector, including in narrow layouts. It opens a session-scoped manager that names each row with the paper title captured at parse time and shows its attachment or source, parse time, size, and counts. Users can narrow the list by state or keyword, open or reparse a row, and discard the loaded rows in bulk; deletion sends one request per row and keeps failed rows selected. The list loads incrementally through "show more"; a hairline separates adjacent rows, the filter band owns its own top spacing and its own rule, and in a narrow pane the metadata yields while the three row actions stay on one line. The enrichment component must be served to expose the button and page. The PDF URL parse entry lives in the manager.
 
@@ -60,15 +60,15 @@ The item list pages through results and can switch between metadata and full-tex
 
 The inspector header has type, title, authors, venue, and year. The action row can read the PDF, ask, add to chat, copy citation or BibTeX, open more formats (bibliography, BibLaTeX, RIS, CSL-JSON, copy item info), and copy the Zotero link. The abstract sets as body prose: beyond six lines it narrows to a six-line window with its own expand/collapse control under the text, and a paragraph that already fits shows no control. Below it, the info table, the collection and tag chips, and the three child sets (notes, attachments, annotations) each page independently; one hairline separates adjacent blocks, and every block's heading and body share one left edge.
 
-Copying citations uses the same source as `zotero_export`, with style and language following the configuration defaults. BibTeX can be used in LaTeX directly, and the citation key is emitted with the entry. When copying fails, the reason is shown inline in the action row and is not retried automatically.
+Copying citations uses the same source as `zotero_export`, with style and language following the configuration defaults. BibTeX can be used in LaTeX directly, and the citation key is emitted with the entry. When copying fails, the reason is shown inline in the action row.
 
 Local attachments open in the right reader of the owning conversation; URL attachments open in a new browser tab. A host refusal degrades to an inline hint. The panel belongs to the session of the current tab, so write approvals and plan cards go to that session as well.
 
-The panel issues requests only after it is open and the connection is confirmed. No new requests are issued after it closes. When the probe is offline, the area below the toolbar becomes an offline note, and no request is sent until the connection returns.
+The panel loads data once the connection is confirmed. When offline, the area below the toolbar displays troubleshooting guidance until the connection is restored.
 
 Wide screens show three columns side by side (navigation, list, detail); narrow screens switch to segmented navigation. The panel remembers the selected item and current segment per Zotero instance.
 
-The panel searches only the local library. Literature outside it is found by the agent with the scholarly retrieval component and appears in the panel and the trail only after it is saved into the library.
+The panel is dedicated to browsing and searching the local library. External literature is queried by the agent via scholarly retrieval and appears in the panel and trail once saved to the library.
 
 ## Writing to the Library (Optional)
 
@@ -84,7 +84,7 @@ Write tools are off by default. Turning on `writeEnabled` in settings registers 
 | Library-wide tags   | `zotero_delete_library_tags`                                                             | Delete tags library-wide by name (irreversible); unmatched names are ignored, so a retry is idempotent                                   |
 | Batch               | `zotero_batch_items`                                                                     | Create, retag, recollect, or trash items in one call, merged under one plan card                                                         |
 
-Every write passes a capability check, session approval, and a plan review card. Irreversible operations declare their impact on the plan card first. When a commit result is unverified, the status reads "submitted, unconfirmed" and never success. Writes in the panel go the same way as agent writes and differ only in who triggers them; panel writes require the owning conversation to be running.
+Every write passes a capability check, session approval, and a plan review card. Irreversible operations declare their impact on the plan card first. When a commit result is unverified, the status reads "submitted, unconfirmed". Writes in the panel go the same way as agent writes and differ only in who triggers them; panel writes require the owning conversation to be running.
 
 ## Scholarly Retrieval (Optional Component)
 
@@ -95,7 +95,7 @@ Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped
 - Citation formats come from DOI registration agencies. When verifying a reference list, the conclusion is one of "verified", "needs manual confirmation", "the registry says it does not exist", or "unable to verify".
 - When the user explicitly asks, it saves an external result to the local personal library. Only after saving does the result enter the Zotero library and the literature trail.
 
-External retrieval runs through agent tool calls. The literature panel supports downloading PDFs from existing URL attachments when `allowUrlPdfRead` is enabled, without running external searches.
+External retrieval runs through agent tool calls. The literature panel supports downloading PDFs from existing URL attachments when `allowUrlPdfRead` is enabled.
 
 ## Document Enrichment (Optional Component)
 
@@ -104,7 +104,7 @@ Document parsing is provided by the `dsh-zotero/enrichment` component, shipped w
 - `free` uses the lightweight API (≤10 MB, ≤20 pages, token-free); `pro` uses the precise API (≤200 MB, ≤200 pages, requires a token). Mode selection and token configuration are independent. Failed parses return an explicit error.
 - `zotero_retrieve` and `scholarly_read` query valid Markdown through the core's read-only `FulltextEnhancer.lookup` (by source) and `lookupArtifact` (by artifact id) and prioritize it; cache misses or modified source files fall back to Zotero `/fulltext` and scholarly local extraction, respectively.
 - Parsed Markdown is stored in `<outputDir>/<sha256>/`, with the figures it references kept under that directory's `images/` under their original names. Local attachments are cached by size, timestamp, and content fingerprint; URL sources are validated via HEAD requests matching ETag or Last-Modified. Source-index hits reuse existing artifacts directly.
-- When a valid artifact exists, "Parse this PDF" becomes "Read Markdown". Clicking it opens a right-sidebar result tab named after the paper, shows preparation progress, and presents the complete Markdown and all artifact figures with copy and download actions. A failed refresh keeps the previous complete result. For items with several PDFs, "Read PDF" and parsing share a chooser that labels each attachment: existing artifacts open in their result tab, while the others submit that attachment for parsing. Selecting a passage opens a small menu: "Explain" writes the passage and question into the current session draft, while "Copy selection" puts it on the clipboard. The attachment list shows attachments only.
+- When a valid artifact exists, "Parse this PDF" becomes "Read Markdown". Clicking it opens a right-sidebar result tab named after the paper, shows preparation progress, and presents the complete Markdown and all artifact figures with copy and download actions. A failed refresh keeps the previous complete result. For items with several PDFs, "Read PDF" and parsing share a chooser that labels each attachment: existing artifacts open in their result tab, while the others submit that attachment for parsing. Selecting a passage opens a small menu: "Explain" writes the passage and question into the current session draft, while "Copy selection" puts it on the clipboard.
 - The output directory accepts an absolute path or `~/`; relative paths are rejected at save time, and unavailable directories fail with `ZOTERO_ENRICHMENT_OUTPUT_INVALID`.
 - Optional local semantic ranking provides semantic tiers decoupled from physical model versions (`balanced` general & balanced recommended default · backed by Qwen3-0.6B, `lightweight` ultra-lightweight · backed by Granite-97M, `bilingual` Chinese-English · backed by KaLM-0.5B, `english` English long-context · backed by Nomic-137M, `hybrid` multi-vector hybrid · backed by BGE-M3, `academic` classic academic · backed by GTE-Base). Tier configurations stay valid across model updates. The WASM inference runtime ships inside the plugin, and models are downloaded in settings (via HF-Mirror or Hugging Face); both run on 16GB RAM CPU-only machines. When disabled, ranking uses BM25; when enabled but the model is unavailable, queries return `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` with a download prompt. In zero-overlap paraphrase tests, the six tiers achieve 58–96% recall@4. The settings UI indicates when semantic search lacks a model or precision mode lacks a token.
 

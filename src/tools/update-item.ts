@@ -19,6 +19,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { renderDeclined } from './present.js'
 import {
+  APPLIED_ENVELOPE_PROPERTIES,
   COMMITTED_UNVERIFIED_VARIANT,
   DECLINED_OUTPUT_SCHEMA,
   libraryVersionLine,
@@ -70,13 +71,9 @@ const UPDATE_ITEM_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
-        ref: { type: 'string', required: true },
-        version: { type: 'integer', required: true },
+        ...APPLIED_ENVELOPE_PROPERTIES,
         changed: { type: 'array', items: { type: 'string' }, required: true },
-        libraryVersion: { type: 'integer' },
         unchanged: { type: 'boolean' },
-        serverId: { type: 'string' },
       },
     },
   ],

@@ -170,7 +170,9 @@ describe('resolveConfig', () => {
     // rule (lowering the budget governs delivery per call).
     expect(() => resolveConfig({ fulltextWindowChars: 70_000 })).toThrowError(/fulltextWindowChars/)
     expect(resolveConfig({ fulltextWindowChars: 12_000 })).toBeTruthy()
-    expect(resolveConfig({ fulltextWindowChars: 30_000, maxInlineResultBytes: 20_000 })).toBeTruthy()
+    expect(
+      resolveConfig({ fulltextWindowChars: 30_000, maxInlineResultBytes: 20_000 }),
+    ).toBeTruthy()
   })
 })
 

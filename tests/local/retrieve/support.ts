@@ -82,3 +82,29 @@ export const RETRIEVE_ATTACHMENT_CHILDREN = [
 
 /** The canonical full-text body, the shared layer's `canonicalFulltext()`. */
 export const FULLTEXT_PAYLOAD = canonicalFulltext()
+
+/** One parsed-artifact hit for the PDF above, the shape every enhancer stub returns. */
+export function fulltextHit(
+  text: string,
+  sourceLabel = `zotero://user/0/attachment/${ATTACHMENT_KEY}`,
+): Extract<
+  import('../../../src/local/fulltext-enhancer.js').FulltextLookupResult,
+  { kind: 'hit' }
+> {
+  return {
+    kind: 'hit',
+    text,
+    format: 'markdown',
+    source: 'MinerU (free)',
+    sourceKind: 'attachment',
+    sourceLabel,
+    provenance: {
+      parser: 'mineru',
+      mode: 'free',
+      artifactId: 'a'.repeat(64),
+      fingerprint: 'b'.repeat(64),
+      sourceId: 'c'.repeat(64),
+      generation: 'd'.repeat(64),
+    },
+  }
+}

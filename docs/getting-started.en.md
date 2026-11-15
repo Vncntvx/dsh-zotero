@@ -62,15 +62,7 @@ allowBuilds:
 
 The WASM runtime behind local semantic search ships inside the plugin (`assets/onnxruntime/<version>/`, MIT-licensed, with its source and SHA-256 recorded in `provenance.json`). Before enabling the feature, download the embedding model in settings. A read without a model fails with `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`; turn semantic search off to use BM25.
 
-To pin a specific version or commit, append its hash to the link:
-
-```sh
-dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#<commit-hash>
-```
-
 After installation the plugin mounts under the identifier `zotero`. It takes effect the next time dsh starts; if the current session was created before the plugin loaded, start a new session.
-
-When you enable the plugin in the Harness plugin management list, the system probes the local connection automatically to check the Zotero local API status.
 
 ## Verifying Connection
 
@@ -101,7 +93,7 @@ Then switch to the literature trail tab at the top of the session and check item
 - whether the passages the agent cited, in the inspector's "Passages", come from annotations, notes, the abstract, or the full-text index, and whether annotations carry page numbers;
 - whether the "Exports" section holds the citation text you requested in the conversation.
 
-The literature trail is a read-only view: it records tool calls completed in the current session and never issues new requests.
+The literature trail is a read-only view that records completed tool calls and source passages in the current session.
 
 ## Opening the literature panel
 
@@ -110,7 +102,7 @@ The literature panel lives in the right sidebar. Make sure both are on:
 1. The `dsh-zotero/library` row under "Included components" in the plugin list is enabled (on by default);
 2. "Show in right sidebar" (`rightSidebarEnabled`) on the "Literature panel" tab of the settings page is on (on by default).
 
-(`webEnabled` in General settings controls only the literature trail at the top of the session and does not affect the panel.)
+`webEnabled` in General settings controls the literature trail at the top of the session; `rightSidebarEnabled` controls the literature panel.
 
 Once the panel is open, start with the search box at the top; select an item to see its details in the inspector, and use the action row to copy a citation or read the PDF.
 

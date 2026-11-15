@@ -10,6 +10,7 @@ import {
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
+  APPLIED_ENVELOPE_PROPERTIES,
   DECLINED_OUTPUT_SCHEMA,
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
@@ -45,11 +46,8 @@ const OUTPUT = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
-        ref: { type: 'string', required: true },
-        version: { type: 'integer', required: true },
+        ...APPLIED_ENVELOPE_PROPERTIES,
         libraryVersion: { type: 'integer', required: true },
-        serverId: { type: 'string' },
       },
     },
   ],

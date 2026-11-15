@@ -193,9 +193,9 @@ The panel requires a composed component row and `rightSidebarEnabled`; `webEnabl
 
 ## Document parsing component configuration (`dsh-zotero/enrichment`)
 
-Content enrichment is a separate DSH bundle sub-component, shipped with the package and disabled by default (`cordis.patch.yml` contains `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`). Enabling the component accepts MinerU document egress and provides three capabilities: user-submitted document parsing, read-only reuse of valid same-source artifacts, and local semantic ranking with model management. Mounting starts no upload, and the client discloses the egress while the component is served until this browser acknowledges the current enable; turning the component off and on again discloses again. It registers no model tools and no prompt section. Ordinary reads reuse a valid artifact through the core's read-only `FulltextEnhancer` slot (`lookup` by source, `lookupArtifact` by artifact id); on a miss they keep the Zotero fulltext index or authorized local PDF extraction. With the component disabled the slot is empty and both read paths keep their original behavior.
+Content enrichment is a separate DSH bundle sub-component, shipped with the package and disabled by default (`cordis.patch.yml` contains `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`). Enabling the component accepts MinerU document egress and provides three capabilities: user-submitted document parsing, read-only reuse of valid same-source artifacts, and local semantic ranking with model management. The client displays an egress disclosure when first enabled. Ordinary reads reuse a valid artifact through the core's read-only `FulltextEnhancer` slot (`lookup` by source, `lookupArtifact` by artifact id); on a miss they use the Zotero fulltext index or authorized local PDF extraction. With the component disabled, both read paths keep their original behavior.
 
-A MinerU parse requires the user to submit one specific Zotero PDF attachment (child or top-level) or one public PDF URL and to pass remote-action and session access checks. Opening a PDF, saving settings, and starting the service do not submit, resume, or upload a MinerU task. Local semantic ranking makes no MinerU call; parsing needs no semantic model. An old `allowDocumentUpload` value in a profile is ignored.
+Parsing tasks start when the user explicitly submits a specific PDF; ordinary retrieval reuses existing artifacts. Local semantic ranking operates independently of MinerU and requires no parsing credentials or semantic model. An old `allowDocumentUpload` value in a profile is ignored.
 
 The component's fields have three entry points:
 
@@ -284,4 +284,4 @@ Error classification:
 | `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`      | fatal | No session-owned jobs controller or live session; a submitted parse cannot start and the read fails explicitly |
 | `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`    | fatal | An operation id was replayed against a different target or settings snapshot; the operation is refused         |
 
-All parsing failures propagate to the caller without substituting local extraction or another API mode.
+All parsing failures propagate directly to the caller as an explicit error.

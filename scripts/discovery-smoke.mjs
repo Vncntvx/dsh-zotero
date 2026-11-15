@@ -139,28 +139,90 @@ async function waitForIndex(port, cookie, attempts = 240) {
   throw new Error(`dsh web did not serve an index within the probe window on port ${port}`)
 }
 
+/** Resolve after two animation frames: the first lays out, the second paints. */
+async function settlePaint(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolvePaint) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolvePaint)),
+      ),
+  )
+}
+
+/**
+ * Open a menu from its trigger with the trigger centred in its scroller.
+ *
+ * A portalled card opens below its anchor when there is room and flips above
+ * when there is not. Playwright's own click scrolls a trigger the minimum
+ * distance into view, which can leave it on the bottom edge, so the card then
+ * depends on that flip; a flipped card's lower rows can sit outside the layout
+ * viewport on a runner whose font metrics differ, where `elementFromPoint`
+ * resolves nothing. Centring the trigger first gives the card its full height
+ * below the anchor, so the probe exercises the composition rather than the
+ * host's edge placement. The scroll happens before the click because the host
+ * dismisses an open menu on scroll.
+ */
+async function openMenu(page, trigger) {
+  await trigger.scrollIntoViewIfNeeded()
+  await trigger.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', behavior: 'instant' })
+  })
+  await settlePaint(page)
+  await trigger.click()
+  await settlePaint(page)
+}
+
+/** Layout frames a just-opened menu gets to settle before the hit check gives up. */
+const MENU_SETTLE_ATTEMPTS = 5
+
 /**
  * Click an open menu's item at its own centre after proving the point resolves
  * to that item. Playwright's own click scrolls the item into view first, and the
  * host menu closes on scroll to stay anchored, so that scroll dismisses the menu
  * before the click lands. The hit check keeps the direct click honest: it fails
  * when the item is covered or has already been dismissed.
+ *
+ * A portalled card is placed by CSS anchor positioning after the portal inserts,
+ * so the row's first measured position can precede its settled one on a runner
+ * that lays out differently. Re-reading the box and re-testing across a few
+ * paints lets the placement settle without weakening the check: the point that
+ * gets clicked is the one this same attempt proved hittable, and a row that
+ * never becomes hittable still fails with the geometry that explains why.
  */
 async function clickMenuItem(page, name) {
   const item = page.getByRole('menuitem', { name, exact: true })
-  const box = await item.boundingBox()
-  if (box === null) throw new Error(`menu item ${name} has no layout box`)
-  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-  const hit = await page.evaluate((target) => {
-    const element = document.elementFromPoint(target.x, target.y)
-    return element?.closest('[role="menuitem"]')?.textContent?.trim() ?? ''
-  }, point)
-  if (!hit.includes(name)) {
-    throw new Error(
-      `menu item ${name} is not hit-testable at its own centre (hit: ${JSON.stringify(hit)})`,
-    )
+  let failure
+  for (let attempt = 0; attempt < MENU_SETTLE_ATTEMPTS; attempt += 1) {
+    const box = await item.boundingBox()
+    if (box === null) throw new Error(`menu item ${name} has no layout box`)
+    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    const probe = await page.evaluate((target) => {
+      const element = document.elementFromPoint(target.x, target.y)
+      const classes = element?.getAttribute('class')
+      return {
+        name: element?.closest('[role="menuitem"]')?.textContent?.trim() ?? '',
+        at:
+          element === null
+            ? 'no element'
+            : `${element.tagName.toLowerCase()}${classes === null || classes === undefined ? '' : `.${classes.split(/\s+/).join('.')}`}`,
+      }
+    }, point)
+    if (probe.name.includes(name)) {
+      await page.mouse.click(point.x, point.y)
+      return
+    }
+    failure = { box, point, probe }
+    await settlePaint(page)
   }
-  await page.mouse.click(point.x, point.y)
+  const { box, point, probe } = failure
+  const viewport = page.viewportSize()
+  throw new Error(
+    `menu item ${name} is not hit-testable at its own centre (` +
+      `row ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)}; ` +
+      `centre ${Math.round(point.x)},${Math.round(point.y)}; ` +
+      `viewport ${viewport === null ? 'unknown' : `${viewport.width}x${viewport.height}`}; ` +
+      `hit: ${JSON.stringify(probe.name)} from ${probe.at})`,
+  )
 }
 
 async function reservePort() {
@@ -410,7 +472,7 @@ async function verifyBrowser(port, cookie) {
         .count()
     )
       throw new Error('Removed preview, navigation or global reset controls are still present')
-    await settings.getByRole('button', { name: 'List density', exact: true }).click()
+    await openMenu(page, settings.getByRole('button', { name: 'List density', exact: true }))
     await clickMenuItem(page, 'Compact')
     if (
       !(

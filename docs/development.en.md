@@ -145,7 +145,7 @@ The same script also validates the vendored framework packages: the lower bound 
 
 ### Pin upgrade checklist
 
-After `npm run harness:pin -- <ver>`, the artifact-freshness gate above is not enough: the upstream semantics this repository mirrors on purpose do not follow the pin by themselves.
+After `npm run harness:pin -- <ver>`, also review the upstream semantics mirrored in this repository:
 
 ```sh
 # Tool-block predicate: isSettledTool in src/sources/presenters.ts mirrors it
@@ -330,7 +330,7 @@ Supply-chain rules:
 
 - Every third-party GitHub Action is pinned to an immutable commit SHA, with the matching version kept in a trailing comment, so a mutable tag cannot silently change the executed code;
 - `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list direct dependencies behind their published release; upgrades stay manual, and Dependabot opens no version-update pull requests;
-- Dependabot alerts are the CVE reminder only; security updates are off, so no pull request is generated;
+- Dependabot alerts serve as CVE reminders only, with security updates disabled;
 - The browser bundle mirrors the third-party runtime dependencies the sibling harness declares in its own `packages/client/*` manifests (lexical, katex, react, zod, …); those versions move with the harness, and the `deps:check` exclusion set keeps them out of the report;
 - The scanner workflow is granted only `contents: read` and keeps no checkout credentials, so a pull request from a fork runs it under the same constraints.
 

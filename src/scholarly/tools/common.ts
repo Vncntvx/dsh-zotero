@@ -6,6 +6,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
+import { spilledNoticeOf } from '../../spill.js'
 import type { ScholarlyHttp } from '../transport/http.js'
 import type { ScholarlyKeys } from '../types.js'
 import type { JobPolicy, ZoteroJobRunner } from '../../job-runner.js'
@@ -68,9 +69,12 @@ export const SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR = {
     },
   ) => {
     const text = value.text
+    // A result whose body does not already carry the handle gets the
+    // persisted-spill notice: the complete content is at the locator, and the
+    // byte count is stated in the harness spelling a spill-aware reader knows.
     const recovery =
       value.spill !== undefined && !text.includes(value.spill.locator)
-        ? `\n\n(Full content stored at: ${value.spill.locator}. ${value.spill.retrievalHint})`
+        ? spilledNoticeOf(value.spill, value.spill.bytes)
         : ''
     return [{ type: 'text' as const, text: `${text}${recovery}` }]
   },

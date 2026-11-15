@@ -212,27 +212,41 @@ export const DECLINED_OUTPUT_SCHEMA = {
   },
 } as const
 
+/**
+ * The properties every `applied` write receipt carries: the verdict, the
+ * written object's ref and post-write version, and the library version the
+ * write advanced to with its serving instance. Every write tool's applied
+ * variant spreads this list and adds only what its own object reports, so a
+ * field added to the envelope arrives in every receipt at once. A tool whose
+ * contract requires a field the envelope leaves optional (a creation always
+ * advances the library version) re-states just that property after the spread.
+ */
+export const APPLIED_ENVELOPE_PROPERTIES = {
+  kind: { type: 'string', enum: ['applied'], required: true },
+  ref: { type: 'string', required: true },
+  version: { type: 'integer', required: true },
+  libraryVersion: { type: 'integer' },
+  serverId: { type: 'string' },
+} as const
+
 /** Shared creation result for local item creation and the Scholarly write bridge. */
 export const CREATED_ITEM_VARIANT = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    kind: { type: 'string', enum: ['applied'], required: true },
-    ref: { type: 'string', required: true },
+    ...APPLIED_ENVELOPE_PROPERTIES,
     key: { type: 'string', required: true },
-    version: { type: 'integer', required: true },
     itemType: { type: 'string', required: true },
     title: { type: 'string' },
     tags: { type: 'array', items: { type: 'string' } },
     collections: { type: 'array', items: { type: 'string' } },
+    // A creation always advances the library version it committed to.
     libraryVersion: { type: 'integer', required: true },
-    serverId: { type: 'string' },
   },
 } as const
 
 const COMMON_UPDATE_LIST_PROPERTIES = {
-  kind: { type: 'string', enum: ['applied'], required: true },
-  ref: { type: 'string', required: true },
+  ...APPLIED_ENVELOPE_PROPERTIES,
   version: {
     type: 'integer',
     required: true,
@@ -245,7 +259,6 @@ const COMMON_UPDATE_LIST_PROPERTIES = {
     type: 'integer',
     description: 'The library version the write advanced to; absent when unchanged.',
   },
-  serverId: { type: 'string' },
 } as const
 
 export const UPDATE_ITEM_TAGS_OUTPUT_SCHEMA = {

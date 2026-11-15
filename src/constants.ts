@@ -195,13 +195,6 @@ export const ZOTERO_MAX_EVIDENCE_CHARS = 6000
  */
 export const ZOTERO_FULLTEXT_WINDOW_CHARS = 12_000
 /**
- * Character count above which a tool output is worth spilling to the host's
- * spill store. Shared by scholarly full-text reads and fulltext-mode document
- * reads, so both name the same "large enough" boundary.
- */
-export const DEFAULT_SPILL_CHAR_THRESHOLD = 16_000
-
-/**
  * The write-response header carrying the library version a write advanced
  * to (`Last-Modified-Version`). Zotero stamps written objects with that same
  * library version, so it doubles as the written object's version.

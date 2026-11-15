@@ -336,4 +336,29 @@ describe('fulltext spill', () => {
     expect(data.fulltext.spillRef).toBeUndefined()
     expect(saveText).not.toHaveBeenCalled()
   })
+
+  it('keeps a document that fits the inline token budget out of spill storage', async () => {
+    // The threshold is the configured inline budget, not a fixed character
+    // count: a document the delivery would keep inline needs no handle, so
+    // the store is never asked to save it.
+    installEnhancer('z'.repeat(2_000))
+    const saveText = vi.fn(async () => ({
+      locator: 'spill://session/full.md',
+      bytes: 2_000,
+      retrievalHint: 'Read it.',
+    }))
+    ;(lane.ctx as unknown as { provide(name: string, value: unknown): void }).provide(
+      'spillStore',
+      { saveText },
+    )
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      start: 0,
+    })
+    expect(result.isError).toBe(false)
+    const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
+    expect(data.fulltext.spillRef).toBeUndefined()
+    expect(saveText).not.toHaveBeenCalled()
+  })
 })

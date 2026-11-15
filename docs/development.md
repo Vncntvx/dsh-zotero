@@ -145,7 +145,7 @@ pnpm --dir ../deepseek-harness run build:lib:client   # 第 2 项：只重建浏
 
 ### pin 升级复核清单
 
-`npm run harness:pin -- <ver>` 之后，除了上面的产物一致性门禁，还要复核本仓库刻意镜像的上游语义——镜像不会因为 pin 升了就自动跟上：
+`npm run harness:pin -- <ver>` 之后，除了上面的产物一致性门禁，还要复核本仓库刻意镜像的上游语义：
 
 ```sh
 # 工具块谓词：src/sources/presenters.ts 的 isSettledTool 镜像它
@@ -330,7 +330,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 - 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
 - `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出发行版领先的直接依赖；版本更新由人工执行，Dependabot 不开版本更新 PR；
-- Dependabot alerts 只用于 CVE 提醒，security updates 关闭，因此不会生成任何 PR；
+- Dependabot alerts 只用于 CVE 提醒，security updates 关闭；
 - 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；
 - 扫描器工作流只授予 `contents: read` 且不保留 checkout 凭据，因此 fork 的 pull request 也能在同等约束下运行。
 

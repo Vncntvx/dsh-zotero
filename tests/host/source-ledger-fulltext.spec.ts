@@ -15,13 +15,9 @@ import {
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
 import { projectRetrieveMeta } from '../../src/presentation-meta.js'
 import type { ZoteroRetrieveResult } from '../../src/types.js'
+import { createEventFactory } from './support/source-ledger-events.js'
 
-let seq = 0
-
-function event(type: string, data: unknown): never {
-  seq += 1
-  return { type, seq, time: seq * 1000, data } as never
-}
+const event = createEventFactory()
 
 function fold(events: readonly never[]): SourceLedgerState {
   return events.reduce((state, entry) => foldLedgerEvent(state, entry), emptyLedgerState())

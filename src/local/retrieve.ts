@@ -15,7 +15,6 @@ import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../err
 import { chunkText, tokenize, type EvidenceChunk } from '../evidence.js'
 import { queryTermsAcross } from './evidence-ranker.js'
 import { asRecord, asString } from '../json.js'
-import { DEFAULT_SPILL_CHAR_THRESHOLD } from '../constants.js'
 import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
 import {
   formatRef,
@@ -466,13 +465,11 @@ async function readFulltextMode(
     deps.limits.maxFulltextChars,
   )
   // One spill per read: only the first window pays for it, and only when
-  // another window follows and the bounded document is long enough that a
-  // single handle beats the chain.
+  // another window follows. Whether the document is large enough to be worth
+  // a handle is the sink's decision (the tool layer prices it against the
+  // inline token budget); the domain only decides when the attempt happens.
   const spillRef =
-    request.start === 0 &&
-    read.isTruncated &&
-    deps.spill !== undefined &&
-    boundedText.length > DEFAULT_SPILL_CHAR_THRESHOLD
+    request.start === 0 && read.isTruncated && deps.spill !== undefined
       ? await deps.spill(boundedText)
       : undefined
   const fulltext: ZoteroFulltextRead = spillRef === undefined ? read : { ...read, spillRef }

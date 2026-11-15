@@ -18,6 +18,7 @@ import {
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
+  APPLIED_ENVELOPE_PROPERTIES,
   COMMITTED_UNVERIFIED_VARIANT,
   DECLINED_OUTPUT_SCHEMA,
   createWritePresentationMeta,
@@ -70,14 +71,12 @@ const APPLIED = {
   type: 'object' as const,
   additionalProperties: false as const,
   properties: {
-    kind: { type: 'string' as const, enum: ['applied'] as const, required: true },
-    ref: { type: 'string' as const, required: true },
+    ...APPLIED_ENVELOPE_PROPERTIES,
     key: { type: 'string' as const, required: true },
-    version: { type: 'integer' as const, required: true },
     name: { type: 'string' as const },
     conditions: { type: 'array' as const, items: CONDITION },
+    // A saved-search write always advances the library version it committed to.
     libraryVersion: { type: 'integer' as const, required: true },
-    serverId: { type: 'string' as const },
   },
 } as const
 /** The deleted shape the delete outcome carries. */

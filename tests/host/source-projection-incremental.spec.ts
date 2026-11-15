@@ -23,8 +23,7 @@ import type { SourceWorkspace } from '../../src/sources/model.js'
 import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
 import type { SourceLedgerProjectionState } from '../../src/sources/event-ledger.js'
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
-
-let seq = 0
+import { createEventFactory } from './support/source-ledger-events.js'
 
 /** One committed event as the fold reads it. */
 interface RawEvent {
@@ -34,10 +33,7 @@ interface RawEvent {
   readonly data: unknown
 }
 
-function event(type: string, data: unknown): RawEvent {
-  seq += 1
-  return { type, seq, time: seq * 1000, data }
-}
+const event = createEventFactory<RawEvent>()
 
 /** One item ref in the specs' spelling. */
 const REF = (key: string, serverId?: string): string =>

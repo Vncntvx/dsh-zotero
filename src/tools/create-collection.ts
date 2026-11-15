@@ -18,6 +18,7 @@ import {
 import { isRefString } from '../refs.js'
 import { renderDeclined } from './present.js'
 import {
+  APPLIED_ENVELOPE_PROPERTIES,
   COMMITTED_UNVERIFIED_VARIANT,
   createWritePresentationMeta,
   DECLINED_OUTPUT_SCHEMA,
@@ -56,10 +57,8 @@ const CREATE_COLLECTION_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
-        ref: { type: 'string', required: true },
+        ...APPLIED_ENVELOPE_PROPERTIES,
         key: { type: 'string', required: true },
-        version: { type: 'integer', required: true },
         name: { type: 'string', required: true },
         parentRef: { type: 'string' },
         libraryVersion: { type: 'integer', required: true },

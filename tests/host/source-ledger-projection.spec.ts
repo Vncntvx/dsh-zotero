@@ -10,14 +10,10 @@ import { describe, expect, it } from 'vitest'
 
 import { emptyLedgerState, factsOf, foldLedgerEvent } from '../../src/sources/event-ledger.js'
 import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.js'
-
-let seq = 0
+import { createEventFactory } from './support/source-ledger-events.js'
 
 /** One committed event as the fold reads it. */
-function event(type: string, data: unknown): never {
-  seq += 1
-  return { type, seq, time: seq * 1000, data } as never
-}
+const event = createEventFactory()
 
 describe('the projection lifecycle', () => {
   it('initializes, folds, and serves through the registered definition', () => {

@@ -207,7 +207,6 @@
     "@deepseek-ai/dsh-attachment": "0.2.2-rc.3",
     "@deepseek-ai/dsh-attachment-local": "0.2.2-rc.3",
     "@deepseek-ai/dsh-brand": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-chunked-list": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-connection": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-locale": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-resources": "0.2.2-rc.3",
