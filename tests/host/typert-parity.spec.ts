@@ -39,13 +39,16 @@ const NON_WIRE_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   [ZOTERO_STATUS_SERVICE_KEY]: ['debugEnabled'],
   [ZOTERO_LIBRARY_SERVICE_KEY]: ['readResolvedUrlPdf'],
   // `lookup` is the core's FulltextEnhancer seam, `parseWire`/`storeFor` are
-  // component internals, and the cache-generation methods are the in-process
-  // protocol the semantic ranker uses to hold a model generation open. None of
-  // them is an endpoint.
+  // component internals, `hitResultOf`/`lookupArtifactFrom` are the read-only
+  // lookup kernel behind the seam, and the cache-generation methods are the
+  // in-process protocol the semantic ranker uses to hold a model generation
+  // open. None of them is an endpoint.
   [ZOTERO_ENRICHMENT_SERVICE_KEY]: [
     'acquireCacheGeneration',
+    'hitResultOf',
     'lookup',
     'lookupArtifact',
+    'lookupArtifactFrom',
     'lookupSource',
     'displayCandidate',
     'maybeDisposeCacheGeneration',

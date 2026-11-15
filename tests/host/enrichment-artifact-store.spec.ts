@@ -226,6 +226,9 @@ describe('ParsedArtifactStore real-filesystem discard', () => {
 })
 
 describe('ParsedArtifactStore source-index reads', () => {
+  // The index-validated read names Markdown and meta only: the content list
+  // is a parse-side payload, so a source lookup never reads its file.
+  const indexArtifact = { markdown: ARTIFACT.markdown, meta: ARTIFACT.meta }
   it('reads one committed source snapshot and matching artifact without mutations', async () => {
     const fs = memoryFiles()
     const store = new ParsedArtifactStore('/root', fs.deps)
@@ -233,7 +236,7 @@ describe('ParsedArtifactStore source-index reads', () => {
     await store.putSource(SOURCE_KEY, SOURCE_RECORD)
     const unchanged = readOnlyPhase(fs)
     expect(await store.sourceRecord(SOURCE_KEY)).toEqual(SOURCE_RECORD)
-    expect(await store.lookupSource(SOURCE_KEY, FILE_STAMP)).toEqual(ARTIFACT)
+    expect(await store.lookupSource(SOURCE_KEY, FILE_STAMP)).toEqual(indexArtifact)
     unchanged()
   })
 
@@ -309,7 +312,7 @@ describe('ParsedArtifactStore source-index reads', () => {
     })
     const unchanged = readOnlyPhase(fs)
     expect(await store.lookupSource(SOURCE_KEY, { kind: 'url', url, etag: '"v1"' })).toEqual(
-      ARTIFACT,
+      indexArtifact,
     )
     expect(await store.lookupSource(SOURCE_KEY, { kind: 'url', url, etag: '"v2"' })).toBeUndefined()
     expect(await store.lookupSource(SOURCE_KEY, { kind: 'url', url })).toBeUndefined()
@@ -327,10 +330,27 @@ describe('ParsedArtifactStore source-index reads', () => {
     const unchanged = readOnlyPhase(fs)
     expect(
       await store.lookupSource(SOURCE_KEY, { kind: 'bytes', fingerprint: 'c'.repeat(64) }),
-    ).toEqual(ARTIFACT)
+    ).toEqual(indexArtifact)
     expect(
       await store.lookupSource(SOURCE_KEY, { kind: 'bytes', fingerprint: 'd'.repeat(64) }),
     ).toBeUndefined()
+    unchanged()
+  })
+
+  it('answers one stamped source lookup with one index read and one meta read', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, ARTIFACT)
+    await store.putSource(SOURCE_KEY, SOURCE_RECORD)
+    vi.mocked(fs.deps.readFile).mockClear()
+    const unchanged = readOnlyPhase(fs)
+    expect(await store.lookupSource(SOURCE_KEY, FILE_STAMP)).toEqual(indexArtifact)
+    const paths = vi.mocked(fs.deps.readFile).mock.calls.map(([path]) => path)
+    expect(paths.filter((path) => path.endsWith('/sources/index.json'))).toHaveLength(1)
+    expect(paths.filter((path) => path.endsWith('/meta.json'))).toHaveLength(1)
+    expect(paths.filter((path) => path.endsWith('/full.md'))).toHaveLength(1)
+    // The content list is a parse-side payload; the lookup never reads it.
+    expect(paths.filter((path) => path.endsWith('/content_list.json'))).toHaveLength(0)
     unchanged()
   })
 })

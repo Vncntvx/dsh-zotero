@@ -33,7 +33,7 @@ export interface OperationFacts {
  */
 export type EvidenceMatchStatus = 'verified' | 'unknown' | 'mismatch'
 
-import type { SupportedLocalLibrary } from '../contract.js'
+import type { SupportedLocalLibrary, ZoteroFulltextRead } from '../types.js'
 export type { SupportedLocalLibrary } from '../contract.js'
 
 /**
@@ -122,21 +122,13 @@ export interface EvidencePassage extends Pick<
 /**
  * One window of a complete-document read, folded as its own trail fact. It
  * never carries the text itself: the tool result holds the text, the trail
- * holds what the session proved was read and where.
+ * holds what the session proved was read and where. Derived from the
+ * canonical {@link ZoteroFulltextRead} — the payload keys only — so a window
+ * fact the canonical result gains arrives here too, and the trail schema's
+ * compile-time tie (see `sources/workspace-schema.ts`) keeps the wire in step.
  */
-export interface FulltextRead {
-  readonly sourceKind: 'attachment' | 'url'
-  readonly sourceLabel: string
-  readonly textFormat: 'markdown' | 'text'
-  readonly artifact?: EvidenceItem['artifact']
-  /** Zotero's own indexing coverage; absent for parsed artifacts. */
-  readonly coverage?: SourceCoverage
-  readonly totalChars: number
-  readonly inputTruncated: boolean
-  readonly start: number
-  readonly end: number
-  readonly isTruncated: boolean
-  readonly attachmentRef?: string
+export type FulltextRead = Omit<ZoteroFulltextRead, 'text' | 'nextStart' | 'spillRef'> & {
+  /** Call ids of the successful fulltext reads that returned this window. */
   readonly callIds: readonly string[]
 }
 

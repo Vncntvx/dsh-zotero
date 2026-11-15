@@ -33,6 +33,7 @@ import {
 import { Context } from '@deepseek-ai/cordis'
 // Type-only: brings the `ctx.settings` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-settings'
+import { LRUCache } from 'lru-cache'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
   errorMessageOf,
@@ -80,10 +81,12 @@ import {
 import { ZOTERO_ENRICHMENT_SERVICE_KEY, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.js'
 import {
   isPdfCandidateContentType,
+  type FulltextArtifactProvenance,
   type FulltextEnhancer,
   type FulltextEnhancerInput,
   type FulltextLookupResult,
 } from '../local/fulltext-enhancer.js'
+import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
 import { EnrichmentConfigSchema, resolveEnrichmentConfig, type EnrichmentConfig } from './config.js'
 import {
   dnsAddressResolver,
@@ -93,7 +96,11 @@ import {
 import { MineruClient } from './transport.js'
 import { hostSourceBytesDeps, probeSource } from './source-bytes.js'
 import { resolveOutputDir } from './output-dir.js'
-import { ParsedArtifactStore, type SourceIndexRecord } from './artifact-store.js'
+import {
+  ParsedArtifactStore,
+  type SourceIndexRecord,
+  type StoredArtifactMeta,
+} from './artifact-store.js'
 import { resolveArtifactTarget } from './artifact-target.js'
 import { ParseFlight, type parseOnce } from './parse-once.js'
 import { parseDocument } from './parse-document.js'
@@ -105,6 +112,7 @@ import {
 import { resolveMineruToken } from './credentials.js'
 import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
+import type { ParsedArtifactMeta } from './types.js'
 import { probeAttachments, storedMetadata, type ArtifactMetadataDeps } from './artifact-metadata.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
@@ -247,6 +255,78 @@ export function artifactReadFailureOf(error: unknown): Error {
       )
 }
 
+/**
+ * A bounded read-through cache for whole committed documents.
+ *
+ * A `mode:"fulltext"` read walks one document one character window at a time,
+ * and every window would otherwise re-resolve the artifact id and re-read
+ * `full.md` from the store. The cache keys on the artifact id together with
+ * its content fingerprint, its parse generation and the store's write
+ * counter, so any committed change — a re-parse at a new generation or a
+ * store write — misses by construction. The cache is service-instance state,
+ * never module state: it dies with the service, and an explicit discard
+ * retires its entry alongside the readers it belongs to. An entry holds the
+ * full artifactId hit (resolved source facts, provenance and Markdown), so a
+ * hit answers a window read with no file I/O at all; the two-entry, 64 MiB
+ * bound keeps the worst case at the size of two large parsed documents.
+ */
+interface CachedDocument {
+  readonly text: string
+  readonly format: 'markdown'
+  readonly source: string
+  readonly sourceKind: 'attachment' | 'url'
+  readonly sourceLabel: string
+  readonly attachmentRef?: string
+  readonly provenance: FulltextArtifactProvenance
+  readonly pageCount?: number
+}
+
+class DocumentCache {
+  static readonly MAX_ENTRIES = 2
+  static readonly MAX_BYTES = 64 * 1024 * 1024
+
+  private readonly entries = new LRUCache<string, CachedDocument>({
+    max: DocumentCache.MAX_ENTRIES,
+    // ttlAutopurge keeps an idle entry from holding 64 MiB indefinitely; the
+    // identity key already guarantees freshness, so the TTL is memory hygiene.
+    ttl: DOCUMENT_CACHE_TTL_MS,
+    ttlAutopurge: true,
+  })
+
+  hit(cacheKey: string, storeWrites: number): CachedDocument | undefined {
+    return this.entries.get(documentCacheKeyOf(cacheKey, storeWrites))
+  }
+
+  put(cacheKey: string, meta: ParsedArtifactMeta, storeWrites: number, hit: CachedDocument): void {
+    if (Buffer.byteLength(hit.text, 'utf8') > DocumentCache.MAX_BYTES) return
+    // The meta identity rides in the entry check on the next hit: the store's
+    // write counter in the key already invalidates across writes, and the
+    // caller compares the meta it resolves against `hit.provenance`.
+    this.entries.set(documentCacheKeyOf(cacheKey, storeWrites), hit)
+  }
+
+  /** Drop one artifact's entries: a discard retires readers and cache together. */
+  retire(cacheKey: string): void {
+    for (const key of [...this.entries.keys()]) {
+      if (key.startsWith(`${cacheKey}:`)) this.entries.delete(key)
+    }
+  }
+}
+
+/** How long an untouched document stays cached; idle-timeout, not freshness. */
+const DOCUMENT_CACHE_TTL_MS = 120_000
+
+/**
+ * The cache key of one committed document: the artifact id and the store's
+ * write counter. The counter is the one invalidation signal that covers every
+ * commit path — a re-parse publishes through the same store — so the
+ * fingerprint and generation do not need to ride in the key; the cached
+ * entry's provenance states the identity it was read for.
+ */
+function documentCacheKeyOf(cacheKey: string, storeWrites: number): string {
+  return `${cacheKey}:${storeWrites}`
+}
+
 export class EnrichmentService extends TypertRemoteService {
   static readonly Config = EnrichmentConfigSchema
 
@@ -270,6 +350,13 @@ export class EnrichmentService extends TypertRemoteService {
 
   /** One bounded vector cache per model identity, ref-counted by admitted scopes. */
   private vectorCache: CacheGeneration | undefined
+
+  /**
+   * The whole-document read-through cache behind `zotero_retrieve
+   * mode:"fulltext"`: one lookup per window would otherwise re-read
+   * meta.json and full.md for every window of the same document.
+   */
+  private readonly documents = new DocumentCache()
 
   /** Builds one loader per core-injection generation; tests inject a controlled one. */
   private readonly loaderFactory: () => SemanticEmbedderLoader
@@ -593,7 +680,12 @@ export class EnrichmentService extends TypertRemoteService {
   ): Promise<ZoteroDiscardParsedDocumentResultView> {
     return await domainCall(async () => {
       this.parsing.authorizeManagement(request.sessionId, 'discardParsedDocument', this.ctx)
-      return await discardParsedDocument(this.management, request.artifactId, signal)
+      const result = await discardParsedDocument(this.management, request.artifactId, signal)
+      // The artifact's files are gone (or its aliases were): retire the
+      // document cache alongside the readers, so a discard is never followed
+      // by a window read from bytes that no longer exist.
+      if (result.kind === 'discarded') this.documents.retire(request.artifactId)
+      return result
     })
   }
 
@@ -816,28 +908,65 @@ export class EnrichmentService extends TypertRemoteService {
     try {
       const cfg = resolveEnrichmentConfig(this.config)
       const store = await this.storeFactory(cfg, false)
-      const resolved = await resolveArtifactTarget(artifactId, store)
-      const input = resolved.target.input
-      // The resolved target carries the safe display label and the concrete
-      // source; the source record it already read rides along so a windowed
-      // read does not parse the source index a second time.
-      return await this.lookupSource(
-        input,
-        store,
-        signal,
-        {
-          sourceKind: input.source.kind === 'url' ? 'url' : 'attachment',
-          sourceLabel: resolved.target.targetLabel,
-          ...(input.source.kind === 'local' ? { attachmentRef: input.source.attachmentRef } : {}),
-        },
-        resolved.record,
-        // The stored artifact is the addressed object; its bytes are read from
-        // the store, never revalidated against an origin that may be offline.
-        false,
-      )
+      return await this.lookupArtifactFrom(artifactId, store, signal)
     } catch (error) {
       return lookupFailureOf(error, signal)
     }
+  }
+
+  /**
+   * The artifactId read with its read-through cache. The cache entry carries
+   * everything a committed artifact's window read needs — the resolved source
+   * facts, the record, the meta and the Markdown — keyed by the artifact id
+   * plus its content fingerprint, its parse generation and the store's write
+   * counter, so a re-parse at a new generation or any store write misses by
+   * construction. A hit answers with zero file reads; a miss resolves the
+   * target once and fills the entry.
+   */
+  private async lookupArtifactFrom(
+    artifactId: string,
+    store: ParsedArtifactStore,
+    signal?: AbortSignal,
+  ): Promise<FulltextLookupResult> {
+    signal?.throwIfAborted()
+    if (!ZOTERO_ARTIFACT_ID_PATTERN.test(artifactId)) {
+      throw new ZoteroError('Invalid parsed artifact id.', ZOTERO_INVALID_ARGUMENT)
+    }
+    const cached = this.documents.hit(artifactId, store.writes)
+    if (cached !== undefined) return { kind: 'hit', ...cached }
+    const resolved = await resolveArtifactTarget(artifactId, store)
+    const input = resolved.target.input
+    // The resolved target carries the safe display label and the concrete
+    // source; the meta it already read rides along, so the artifact read
+    // below re-reads neither the index nor meta.json. An orphan directory
+    // has no index record: its meta is the only authority, and it was just
+    // validated by the resolution.
+    const display = {
+      sourceKind: (input.source.kind === 'url' ? 'url' : 'attachment') as 'url' | 'attachment',
+      sourceLabel: resolved.target.targetLabel,
+      ...(input.source.kind === 'local' ? { attachmentRef: input.source.attachmentRef } : {}),
+    }
+    const meta = resolved.stored.meta
+    const markdown = await store.readMarkdown(artifactId, meta.characterCount, meta.markdownBytes)
+    signal?.throwIfAborted()
+    if (markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
+    const hit: CachedDocument = {
+      text: markdown,
+      format: 'markdown',
+      source: `MinerU (${meta.mode})`,
+      ...display,
+      provenance: {
+        parser: 'mineru',
+        mode: meta.mode,
+        artifactId,
+        fingerprint: meta.contentFingerprint,
+        sourceId: meta.sourceId,
+        generation: meta.generation,
+      },
+      ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
+    }
+    this.documents.put(artifactId, meta, store.writes, hit)
+    return { kind: 'hit', ...hit }
   }
 
   /**
@@ -859,6 +988,7 @@ export class EnrichmentService extends TypertRemoteService {
       'sourceKind' | 'sourceLabel' | 'attachmentRef'
     >,
     record?: SourceIndexRecord,
+    captured?: StoredArtifactMeta,
     probe: boolean = true,
   ): Promise<FulltextLookupResult> {
     signal?.throwIfAborted()
@@ -881,39 +1011,62 @@ export class EnrichmentService extends TypertRemoteService {
       signal?.throwIfAborted()
       if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
     }
-    const artifact = await store.artifactFor(candidate)
+    // The meta (captured by the caller's resolution or read here) validates
+    // the record before the bytes are read; the artifact read enforces the
+    // meta's own byte and character counts.
+    const meta = captured?.meta ?? (await store.metadataFor(candidate))
     signal?.throwIfAborted()
-    if (artifact === undefined) return { kind: 'miss', reason: 'expired' }
-    if (artifact.markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
+    if (meta === undefined) return { kind: 'miss', reason: 'expired' }
+    const markdown = await store.readMarkdown(
+      candidate.cacheKey,
+      meta.characterCount,
+      meta.markdownBytes,
+    )
+    signal?.throwIfAborted()
+    if (markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
+    return this.hitResultOf(candidate, meta, markdown, display, input)
+  }
+
+  /** The fulltext hit the lookup kernel returns, from validated meta and text. */
+  private hitResultOf(
+    candidate: SourceIndexRecord,
+    meta: ParsedArtifactMeta,
+    markdown: string,
+    display?: Pick<
+      Extract<FulltextLookupResult, { kind: 'hit' }>,
+      'sourceKind' | 'sourceLabel' | 'attachmentRef'
+    >,
+    input?: FulltextEnhancerInput,
+  ): Extract<FulltextLookupResult, { kind: 'hit' }> {
     // A direct lookup knows its own source; an artifactId read receives the
     // facts from the resolved target instead.
     const sourceFacts =
       display ??
-      (input.source.kind === 'url'
+      (input?.source.kind === 'url'
         ? {
             sourceKind: 'url' as const,
             sourceLabel: `${new URL(input.source.url).origin}/…`,
           }
         : {
             sourceKind: 'attachment' as const,
-            sourceLabel: input.source.attachmentRef,
-            attachmentRef: input.source.attachmentRef,
+            sourceLabel: input !== undefined ? input.source.attachmentRef : candidate.cacheKey,
+            ...(input !== undefined ? { attachmentRef: input.source.attachmentRef } : {}),
           })
     return {
       kind: 'hit',
-      text: artifact.markdown,
+      text: markdown,
       format: 'markdown',
-      source: `MinerU (${artifact.meta.mode})`,
+      source: `MinerU (${meta.mode})`,
       ...sourceFacts,
       provenance: {
         parser: 'mineru',
-        mode: artifact.meta.mode,
+        mode: meta.mode,
         artifactId: candidate.cacheKey,
-        fingerprint: artifact.meta.contentFingerprint,
-        sourceId: artifact.meta.sourceId,
-        generation: artifact.meta.generation,
+        fingerprint: meta.contentFingerprint,
+        sourceId: meta.sourceId,
+        generation: meta.generation,
       },
-      ...(artifact.meta.pageCount !== undefined ? { pageCount: artifact.meta.pageCount } : {}),
+      ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
     }
   }
 }

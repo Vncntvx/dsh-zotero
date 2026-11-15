@@ -85,6 +85,7 @@ describe('mode exclusivity', () => {
       source: { kind: 'ref', ref: REF },
     })
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MODE_MIXED_MESSAGE)
   })
 
@@ -96,6 +97,7 @@ describe('mode exclusivity', () => {
       start: 0,
     })
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MODE_MIXED_MESSAGE)
   })
 
@@ -126,6 +128,7 @@ describe('mode exclusivity', () => {
         ...(source === undefined ? {} : { source }),
       })
       expect(result.isError).toBe(true)
+      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       expect((result.content[0] as { text: string }).text).toContain(
         RETRIEVE_SOURCE_REQUIRED_MESSAGE,
       )
@@ -153,6 +156,7 @@ describe('mode exclusivity', () => {
     ]) {
       const result = await lane.runTool('zotero_retrieve', args)
       expect(result.isError).toBe(true)
+      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       expect((result.content[0] as { text: string }).text).toContain(
         RETRIEVE_EVIDENCE_REQUIRED_MESSAGE,
       )
@@ -166,6 +170,7 @@ describe('mode exclusivity', () => {
       maxChars: 13,
     })
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MAX_CHARS_MESSAGE)
   })
 })

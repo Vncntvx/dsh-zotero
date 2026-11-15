@@ -188,6 +188,11 @@ export function SourceEvidence({
       {fulltextPager !== undefined && (
         <SourcePageControls pager={fulltextPager} label={t('fulltextReadsTitle')} t={t} />
       )}
+      {item.fulltextReadsTotal > item.fulltextReads.length && (
+        <p className={css.note}>
+          {t('fulltextReadsOmittedNote', { count: item.fulltextReadsTotal })}
+        </p>
+      )}
       {item.evidence.length === 0 ? (
         hasFulltextReads ? null : (
           <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>

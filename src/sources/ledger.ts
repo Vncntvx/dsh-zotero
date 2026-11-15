@@ -340,9 +340,11 @@ function evidenceKeyOf(item: import('../evidence-item.js').EvidenceItem): string
 /**
  * The dedup identity of one fulltext window: every fact the row presents,
  * so a re-read of the same window merges and a differently bounded read does
- * not. `callIds` is the merge accumulator, not part of the identity.
+ * not. `callIds` is the merge accumulator, not part of the identity. Exported
+ * so the trail specs can pin the identity directly: a field the canonical
+ * window fact gains must join this key or two distinct reads would merge.
  */
-function fulltextReadKeyOf(
+export function fulltextKeyOf(
   read: Pick<
     FulltextRead,
     | 'sourceKind'
@@ -899,8 +901,8 @@ export class SourceWorkspaceIndex {
     // budget flag, or evidence-run count.
     if (view.kind === 'fulltext') {
       const read = view.fulltextRead
-      const key = fulltextReadKeyOf(read)
-      const existing = draft.fulltextReads.findIndex((entry) => fulltextReadKeyOf(entry) === key)
+      const key = fulltextKeyOf(read)
+      const existing = draft.fulltextReads.findIndex((entry) => fulltextKeyOf(entry) === key)
       if (existing === -1) {
         draft.fulltextReads.push({ ...read, callIds: [callId] })
       } else {

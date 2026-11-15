@@ -283,7 +283,10 @@ describe('mode:"fulltext" artifact sources', () => {
         start: 0,
         maxChars: WINDOW_CHARS,
       }),
-    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND })
+    ).rejects.toMatchObject({
+      name: 'ZoteroError',
+      code: ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+    })
   })
 
   it('fails closed when the enhancement slot is absent', async () => {
@@ -295,7 +298,7 @@ describe('mode:"fulltext" artifact sources', () => {
         start: 0,
         maxChars: WINDOW_CHARS,
       }),
-    ).rejects.toMatchObject({ code: ZOTERO_CAPABILITY_UNAVAILABLE })
+    ).rejects.toMatchObject({ name: 'ZoteroError', code: ZOTERO_CAPABILITY_UNAVAILABLE })
   })
 })
 

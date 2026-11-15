@@ -17,10 +17,10 @@ import { formatCreatorsList } from './creators.js'
 import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
-  ZoteroArtifactProvenance,
   ZoteroCoverage,
   ZoteroEvidenceField,
   ZoteroEvidenceSource,
+  ZoteroFulltextRead,
   ZoteroGetBatchResult,
   ZoteroItemDetail,
   ZoteroMatchReferencesResult,
@@ -164,21 +164,14 @@ interface ZoteroSourceAvailabilityView {
   readonly unavailable: boolean
 }
 
-/** Provenance and bounds for one fulltext-mode window in the literature trail. */
-export interface ZoteroFulltextReadFact {
-  readonly sourceKind: 'attachment' | 'url'
-  readonly sourceLabel: string
-  readonly textFormat: 'markdown' | 'text'
-  readonly artifact?: ZoteroArtifactProvenance
-  /** Zotero's own indexing coverage; absent for parsed artifacts. */
-  readonly coverage?: ZoteroCoverage
-  readonly totalChars: number
-  readonly inputTruncated: boolean
-  readonly start: number
-  readonly end: number
-  readonly isTruncated: boolean
-  readonly attachmentRef?: string
-}
+/**
+ * Provenance and bounds for one fulltext-mode window in the literature trail.
+ * Derived from the canonical {@link ZoteroFulltextRead} so a field the window
+ * fact must carry cannot be added to one and missed here: the fact drops the
+ * payload keys only — the window text, its continuation cursor and the spill
+ * handle, which stay in the tool result and never enter a card.
+ */
+export type ZoteroFulltextReadFact = Omit<ZoteroFulltextRead, 'text' | 'nextStart' | 'spillRef'>
 
 /** The evidence-mode card facts: ranked passages and their bounds. */
 interface ZoteroEvidenceRetrievePresentationMeta {

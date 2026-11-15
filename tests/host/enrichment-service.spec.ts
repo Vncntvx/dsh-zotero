@@ -193,4 +193,75 @@ describe('EnrichmentService artifact lookup', () => {
     expect(world.fetch).not.toHaveBeenCalled()
     expect(parse).not.toHaveBeenCalled()
   })
+
+  it('reads the document once for repeated artifact windows (read-through cache)', async () => {
+    const world = domain()
+    const parsed = await parseDocument(URL_INPUT, world.deps)
+    const { service } = reader(world)
+    const readCalls = vi.mocked(world.fs.deps.readFile)
+    readCalls.mockClear()
+    world.fetch.mockClear()
+    // A windowed read resolves the same artifactId once per window; the
+    // read-through cache must answer the second window with no file reads
+    // and without contacting the origin.
+    const first = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    expect(first?.kind).toBe('hit')
+    const pathsAfterFirst = readCalls.mock.calls.map(([path]) => path)
+    expect(pathsAfterFirst.filter((path) => path.endsWith('/sources/index.json'))).toHaveLength(1)
+    expect(pathsAfterFirst.filter((path) => path.endsWith('/meta.json'))).toHaveLength(1)
+    expect(pathsAfterFirst.filter((path) => path.endsWith('/full.md'))).toHaveLength(1)
+    readCalls.mockClear()
+    const second = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    expect(second).toEqual(first)
+    expect(readCalls).not.toHaveBeenCalled()
+    expect(world.fetch).not.toHaveBeenCalled()
+  })
+
+  it('re-reads after a store write invalidates the cached document', async () => {
+    const world = domain()
+    const parsed = await parseDocument(URL_INPUT, world.deps)
+    const { service } = reader(world)
+    expect((await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId))?.kind).toBe(
+      'hit',
+    )
+    // Any store write is the invalidation signal: the next window reads the
+    // committed state again instead of trusting the pre-write cache.
+    const readCalls = vi.mocked(world.fs.deps.readFile)
+    readCalls.mockClear()
+    await world.store.putTask(parsed.provenance.artifactId, {
+      taskId: 't-1',
+      createdAt: 1000,
+      uploaded: true,
+    })
+    await expect(
+      service.enhancer.lookupArtifact?.(parsed.provenance.artifactId),
+    ).resolves.toMatchObject({ kind: 'hit' })
+    expect(readCalls.mock.calls.some(([path]) => path.endsWith('/full.md'))).toBe(true)
+  })
+
+  it('retires the cached document when its artifact is discarded', async () => {
+    const world = domain()
+    const parsed = await parseDocument(URL_INPUT, world.deps)
+    const { service } = reader(world)
+    expect((await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId))?.kind).toBe(
+      'hit',
+    )
+    const sessionId = 'sess-discard'
+    const remoteAccess = { allows: vi.fn(() => true) }
+    world.ctx.provide('remoteAccess', remoteAccess as unknown as never)
+    world.ctx.provide('sessions', { get: vi.fn(() => ({})) } as unknown as never)
+    await service.discardParsedDocument(
+      { sessionId, artifactId: parsed.provenance.artifactId } as never,
+      new AbortController().signal,
+    )
+    const readCalls = vi.mocked(world.fs.deps.readFile)
+    readCalls.mockClear()
+    // The retired cache must not answer: the next read resolves the target
+    // again and fails on the missing committed meta, without reading bytes
+    // that no longer exist.
+    const result = await service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)
+    expect(result?.kind).toBe('fault')
+    const paths = readCalls.mock.calls.map(([path]) => path)
+    expect(paths.filter((path) => path.endsWith('/full.md'))).toHaveLength(0)
+  })
 })

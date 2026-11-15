@@ -148,6 +148,14 @@ const hostDeps: ArtifactStoreDeps = {
 }
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const encoder = new TextEncoder()
+/** meta.json read ceiling; the schema's 64 MiB fields far exceed a real meta. */
+const META_JSON_MAX_BYTES = 256 * 1024
+/**
+ * content_list.json read ceiling. The read path validates the JSON array but
+ * no reader consumes the list today, so the ceiling stays a corruption bound
+ * rather than a payload budget.
+ */
+const CONTENT_LIST_MAX_BYTES = 64 * 1024 * 1024
 
 const taskBase = z.object({
   taskId: z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/),
@@ -173,7 +181,7 @@ export type ParseTaskRecord = z.infer<typeof taskReceipt>
 export class ParsedArtifactStore {
   private rootEnsured: Promise<void> | undefined
   /** Every attempted write advances this; per-generation read caches invalidate on it. */
-  private writes = 0
+  #writes = 0
   private inventoryCache:
     { readonly generation: number; readonly entries: readonly InventoryEntry[] } | undefined
 
@@ -181,6 +189,15 @@ export class ParsedArtifactStore {
     public readonly root: string,
     private readonly deps: ArtifactStoreDeps = hostDeps,
   ) {}
+
+  /**
+   * Every attempted write advances this. Read-through caches key on it: a
+   * store write is the one signal that any earlier read may now be stale,
+   * whether or not the write succeeded.
+   */
+  get writes(): number {
+    return this.#writes
+  }
 
   /**
    * Any attempted write invalidates the read caches, whether or not it
@@ -191,7 +208,7 @@ export class ParsedArtifactStore {
    * never hide behind a cache.
    */
   private touch(): void {
-    this.writes++
+    this.#writes++
     this.inventoryCache = undefined
   }
 
@@ -256,24 +273,44 @@ export class ParsedArtifactStore {
   /** Reads never create directories, acquire locks, evict, or repair corrupt data. */
   async get(cacheKey: string): Promise<ParsedArtifact | undefined> {
     const dir = this.dir(cacheKey)
+    let meta: z.infer<typeof artifactMetaSchema>
     try {
-      const meta = artifactMetaSchema.parse(
-        JSON.parse(decoder.decode(await this.deps.readFile(join(dir, 'meta.json')))),
+      meta = artifactMetaSchema.parse(
+        JSON.parse(
+          decoder.decode(await this.readBounded(join(dir, 'meta.json'), META_JSON_MAX_BYTES)),
+        ),
       )
-      const markdown = decoder.decode(await this.deps.readFile(join(dir, 'full.md')))
-      if (markdown.trim() === '') throw new Error('The stored parsed artifact is invalid')
-      let contentList: string | undefined
-      if (meta.files.length === 2) {
-        contentList = decoder.decode(await this.deps.readFile(join(dir, 'content_list.json')))
-        if (!Array.isArray(JSON.parse(contentList)))
-          throw new Error('The stored parsed content list is invalid')
-      }
-      const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
-      return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta: domainMeta }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
     }
+    // The declared byte count is the read bound: a truncated `full.md` is an
+    // exact-length mismatch, not a silently shortened document. A file that
+    // vanished behind a committed meta is an uncommitted artifact — the same
+    // miss a missing meta.json is.
+    let markdown: string
+    try {
+      markdown = decoder.decode(await this.readExact(join(dir, 'full.md'), meta.markdownBytes))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+    if (markdown.trim() === '') throw new Error('The stored parsed artifact is invalid')
+    let contentList: string | undefined
+    if (meta.files.length === 2) {
+      try {
+        contentList = decoder.decode(
+          await this.readBounded(join(dir, 'content_list.json'), CONTENT_LIST_MAX_BYTES),
+        )
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+        throw error
+      }
+      if (!Array.isArray(JSON.parse(contentList)))
+        throw new Error('The stored parsed content list is invalid')
+    }
+    const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
+    return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta: domainMeta }
   }
 
   /** Validate before I/O; meta.json is the artifact's final commit marker. */
@@ -339,7 +376,7 @@ export class ParsedArtifactStore {
     try {
       const bytes = await this.readBounded(
         join(this.dir(candidate.cacheKey), 'meta.json'),
-        256 * 1024,
+        META_JSON_MAX_BYTES,
       )
       meta = artifactMetaSchema.parse(JSON.parse(decoder.decode(bytes)))
     } catch (error) {
@@ -360,6 +397,14 @@ export class ParsedArtifactStore {
     const bytes = await (this.deps.readArtifactFile?.(path, maxBytes) ?? this.deps.readFile(path))
     if (bytes.byteLength > maxBytes)
       throw new Error('The parsed artifact file exceeds its size ceiling')
+    return bytes
+  }
+
+  /** Read exactly `byteCount` bytes: a shorter answer is a truncated artifact. */
+  private async readExact(path: string, byteCount: number): Promise<Uint8Array> {
+    const bytes = await this.readBounded(path, byteCount)
+    if (bytes.byteLength !== byteCount)
+      throw new Error('The stored parsed artifact does not match its metadata')
     return bytes
   }
 
@@ -385,7 +430,7 @@ export class ParsedArtifactStore {
         meta = artifactMetaSchema.parse(
           JSON.parse(
             decoder.decode(
-              await this.readBounded(join(this.dir(cacheKey), 'meta.json'), 256 * 1024),
+              await this.readBounded(join(this.dir(cacheKey), 'meta.json'), META_JSON_MAX_BYTES),
             ),
           ),
         )
@@ -434,7 +479,7 @@ export class ParsedArtifactStore {
     const path = join(this.dir(cacheKey), 'meta.json')
     try {
       const meta = artifactMetaSchema.parse(
-        JSON.parse(decoder.decode(await this.deps.readFile(path))),
+        JSON.parse(decoder.decode(await this.readBounded(path, META_JSON_MAX_BYTES))),
       )
       const info = this.deps.stat
         ? await this.deps.stat(path)
@@ -496,7 +541,7 @@ export class ParsedArtifactStore {
    * discard-driven refetch re-reads nothing until the store is written again.
    */
   async inventory(signal?: AbortSignal): Promise<readonly InventoryEntry[]> {
-    if (this.inventoryCache?.generation === this.writes) return this.inventoryCache.entries
+    if (this.inventoryCache?.generation === this.#writes) return this.inventoryCache.entries
     const snapshot = await this.sourceSnapshot()
     const ids = new Set<string>([
       ...Object.values(snapshot.sources).map((record) => record.cacheKey),
@@ -515,7 +560,7 @@ export class ParsedArtifactStore {
         })
       }
     }
-    this.inventoryCache = { generation: this.writes, entries }
+    this.inventoryCache = { generation: this.#writes, entries }
     return entries
   }
 
@@ -647,19 +692,40 @@ export class ParsedArtifactStore {
     return (await this.sourceSnapshot()).sources[sourceKey]
   }
 
-  /** The caller may have already read the candidate before probing its source. */
-  async artifactFor(record: SourceIndexRecord): Promise<ParsedArtifact | undefined> {
+  /**
+   * The caller may have already read the candidate before probing its source,
+   * and may carry the meta that read produced, so one lookup reads meta.json
+   * once. Without a captured meta the record's own meta is read here.
+   */
+  async artifactFor(
+    record: SourceIndexRecord,
+    captured?: StoredArtifactMeta,
+  ): Promise<ParsedArtifact | undefined> {
     const candidate = sourceRecordSchema.parse(record)
-    const artifact = await this.get(candidate.cacheKey)
+    // The index-validated read: the record's fingerprint, generation, parser
+    // and format are checked against the artifact meta, and readMarkdown
+    // enforces the meta's own byte and character counts. The artifact's
+    // content list is never part of this contract, so its file is not read.
+    let meta: z.infer<typeof artifactMetaSchema> | undefined
     if (
-      artifact !== undefined &&
-      (artifact.meta.contentFingerprint !== candidate.fingerprint ||
-        artifact.meta.generation !== candidate.generation ||
-        artifact.meta.parser !== candidate.parser ||
-        artifact.meta.format !== candidate.format)
+      captured !== undefined &&
+      captured.meta.contentFingerprint === candidate.fingerprint &&
+      captured.meta.generation === candidate.generation &&
+      captured.meta.parser === candidate.parser &&
+      captured.meta.format === candidate.format
+    ) {
+      meta = captured.meta
+    } else {
+      meta = await this.metadataFor(candidate)
+      if (meta === undefined) return undefined
+    }
+    const markdown = await this.readMarkdown(
+      candidate.cacheKey,
+      meta.characterCount,
+      meta.markdownBytes,
     )
-      throw new Error('The parsed artifact does not match its source index')
-    return artifact
+    const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
+    return { markdown, meta: domainMeta }
   }
 
   async lookupSource(

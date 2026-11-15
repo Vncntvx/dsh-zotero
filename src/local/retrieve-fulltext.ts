@@ -21,6 +21,13 @@ import {
   requireSupportedLocalRef,
 } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
+import type {
+  SupportedLocalLibrary,
+  ZoteroCoverage,
+  ZoteroFulltextPayload,
+  ZoteroObjectRef,
+  ZoteroRetrieveAttachment,
+} from '../types.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type { DiagnosticSink } from '../diagnostics.js'
@@ -31,6 +38,8 @@ import {
   type FulltextLookupResult,
 } from './fulltext-enhancer.js'
 import type { EvidenceRanker } from './evidence-ranker.js'
+
+export { isPdfCandidateContentType } from './fulltext-enhancer.js'
 
 /**
  * Persist one bounded whole document so a model can read it through a single
@@ -79,9 +88,6 @@ export async function lookupParsedFulltext(
   return undefined
 }
 
-/** Identifies sources eligible for PDF parsing. */
-export const isPdfCandidate = isPdfCandidateContentType
-
 /**
  * The complete text of one document and the provenance of its source.
  * Parsed artifacts provide MinerU Markdown; indexed attachments provide
@@ -96,6 +102,79 @@ export interface FulltextDocument {
   readonly artifact?: Extract<FulltextLookupResult, { kind: 'hit' }>['provenance']
   readonly coverage?: import('../types.js').ZoteroCoverage
   readonly attachmentRef?: string
+}
+
+/**
+ * What reading one attachment produced, before any caller-specific budgeting:
+ * an indexed source carries the artifact or index text with its provenance,
+ * an unindexed source names its absence. This is the single
+ * "artifact first, index fallback" kernel every fulltext read shares.
+ */
+export type OneFulltextOutcome =
+  | {
+      readonly status: 'indexed'
+      readonly text: string
+      readonly textFormat: 'markdown' | 'text'
+      readonly artifact?: Extract<FulltextLookupResult, { kind: 'hit' }>['provenance']
+      /** Zotero's own indexing coverage; absent for parsed artifacts. */
+      readonly coverage?: ZoteroCoverage
+    }
+  | { readonly status: 'unindexed' }
+
+/**
+ * Read one attachment's full text: a valid parsed artifact carries its own
+ * format and immutable provenance; a miss falls back to Zotero's index text,
+ * and only an absent index is unindexed. A non-PDF candidate never asks the
+ * enhancer — the artifact store holds parsed PDFs, so asking it for anything
+ * else would spend a lookup the caller knows is doomed. Artifact faults
+ * propagate even when their code happens to name an index condition.
+ */
+export async function readOneFulltext(
+  deps: FulltextDeps,
+  source: {
+    key: string
+    contentType?: string
+    attachmentRef: string
+    library: SupportedLocalLibrary
+    serverId: string | undefined
+  },
+  signal: AbortSignal | undefined,
+): Promise<OneFulltextOutcome> {
+  if (isPdfCandidateContentType(source.contentType) && deps.enhancer !== undefined) {
+    const parsed = await lookupParsedFulltext(
+      deps,
+      {
+        key: source.attachmentRef,
+        source: { kind: 'local', attachmentRef: source.attachmentRef },
+        ...(source.contentType === undefined ? {} : { contentType: source.contentType }),
+      },
+      signal,
+    )
+    if (parsed !== undefined) {
+      return {
+        status: 'indexed',
+        text: parsed.text,
+        textFormat: parsed.format,
+        artifact: parsed.provenance,
+      }
+    }
+  }
+  let payload: ZoteroFulltextPayload
+  try {
+    payload = await fetchFulltext(deps, source.key, source.library, source.serverId, signal)
+  } catch (error) {
+    if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
+      return { status: 'unindexed' }
+    }
+    throw error
+  }
+  const content = typeof payload.content === 'string' ? payload.content : ''
+  return {
+    status: 'indexed',
+    text: content,
+    textFormat: 'text',
+    coverage: normalizeCoverage(payload),
+  }
 }
 
 /** Read one document's complete text in source order. */
@@ -132,37 +211,29 @@ export async function readFulltextDocument(
   }
   const ref = requireSupportedLocalRef(parseSupportedRef(source.ref, ['attachment']))
   const attachmentRef = formatRef(ref)
-  const input: FulltextEnhancerInput = {
-    key: attachmentRef,
-    source: { kind: 'local', attachmentRef },
-  }
-  const parsed = await lookupParsedFulltext(deps, input, signal)
-  if (parsed !== undefined) {
-    return {
-      text: parsed.text,
-      textFormat: parsed.format,
-      sourceKind: parsed.sourceKind,
-      sourceLabel: parsed.sourceLabel,
-      artifact: parsed.provenance,
-      ...(parsed.attachmentRef === undefined
-        ? { attachmentRef }
-        : { attachmentRef: parsed.attachmentRef }),
-    }
-  }
-  const payload = await fetchFulltext(
+  // The shared single-source kernel: artifact first (PDF candidates only),
+  // then Zotero's index text. A missing artifact and an unindexed source are
+  // the same answer here — the complete read has nothing to fall back to.
+  const outcome = await readOneFulltext(
     deps,
-    ref.key,
-    ref.library as import('../types.js').SupportedLocalLibrary,
-    ref.serverId,
+    {
+      key: ref.key,
+      attachmentRef,
+      library: ref.library as SupportedLocalLibrary,
+      serverId: ref.serverId,
+    },
     signal,
   )
-  const content = typeof payload.content === 'string' ? payload.content : ''
+  if (outcome.status === 'unindexed') {
+    throw new ZoteroError(NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT)
+  }
   return {
-    text: content,
-    textFormat: 'text',
+    text: outcome.text,
+    textFormat: outcome.textFormat,
     sourceKind: 'attachment',
     sourceLabel: attachmentRef,
-    coverage: normalizeCoverage(payload),
+    ...(outcome.artifact === undefined ? {} : { artifact: outcome.artifact }),
+    ...(outcome.coverage === undefined ? {} : { coverage: outcome.coverage }),
     attachmentRef,
   }
 }
@@ -207,14 +278,6 @@ export function fulltextWindowOf(
   }
   return { read, boundedText: bounded.text }
 }
-import type {
-  SupportedLocalLibrary,
-  ZoteroCoverage,
-  ZoteroFulltextPayload,
-  ZoteroObjectRef,
-  ZoteroRetrieveAttachment,
-} from '../types.js'
-
 /**
  * One full-text source of a retrieval and what reading it produced. The arms
  * carry exactly what their status can prove: an indexed source has Zotero's
@@ -339,63 +402,31 @@ export async function readFulltextSources(
         key: candidate.key,
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
       }
-
-      // A valid artifact carries its own format and immutable provenance.
-      // Misses keep the index path; faults propagate before any index read.
-      if (isPdfCandidate(candidate.contentType) && deps.enhancer !== undefined) {
-        const attachmentRef = refStringFor(
-          ref.library as SupportedLocalLibrary,
-          'attachment',
-          candidate.key,
-          serverId,
-        )
-        const parsed = await lookupParsedFulltext(
-          deps,
-          {
-            key: attachmentRef,
-            source: { kind: 'local', attachmentRef },
-            contentType: candidate.contentType,
-          },
-          poolSignal,
-        )
-        if (parsed !== undefined) {
-          const chunked = chunkFulltext(parsed.text, perSourceChars, deps.limits)
-          return {
-            ...base,
-            status: 'indexed',
-            textFormat: parsed.format,
-            artifact: parsed.provenance,
-            inputTruncated: chunked.inputTruncated,
-            chunks: chunked.chunks,
-          }
-        }
-      }
-
-      let payload: ZoteroFulltextPayload
-      try {
-        payload = await fetchFulltext(
-          deps,
-          candidate.key,
-          ref.library as SupportedLocalLibrary,
-          serverId,
-          poolSignal,
-        )
-      } catch (error) {
-        if (error instanceof ZoteroError && error.code === ZOTERO_NO_FULLTEXT) {
-          return { ...base, status: 'unindexed' }
-        }
-        throw error
-      }
-      const chunked = chunkFulltext(
-        typeof payload.content === 'string' ? payload.content : '',
-        perSourceChars,
-        deps.limits,
+      const attachmentRef = refStringFor(
+        ref.library as SupportedLocalLibrary,
+        'attachment',
+        candidate.key,
+        serverId,
       )
+      const outcome = await readOneFulltext(
+        deps,
+        {
+          key: candidate.key,
+          attachmentRef,
+          library: ref.library as SupportedLocalLibrary,
+          serverId,
+          ...(candidate.contentType === undefined ? {} : { contentType: candidate.contentType }),
+        },
+        poolSignal,
+      )
+      if (outcome.status === 'unindexed') return { ...base, status: 'unindexed' }
+      const chunked = chunkFulltext(outcome.text, perSourceChars, deps.limits)
       return {
         ...base,
         status: 'indexed',
-        textFormat: 'text',
-        coverage: normalizeCoverage(payload),
+        textFormat: outcome.textFormat,
+        ...(outcome.artifact === undefined ? {} : { artifact: outcome.artifact }),
+        ...(outcome.coverage === undefined ? {} : { coverage: outcome.coverage }),
         inputTruncated: chunked.inputTruncated,
         chunks: chunked.chunks,
       }

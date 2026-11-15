@@ -19,7 +19,11 @@ import {
 import { refFieldsOf } from '../ref-grammar.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { parseTargetOf, type ParseTarget } from './parse-target.js'
-import type { ParsedArtifactStore, SourceIndexRecord } from './artifact-store.js'
+import type {
+  ParsedArtifactStore,
+  SourceIndexRecord,
+  StoredArtifactMeta,
+} from './artifact-store.js'
 
 /** The artifact id itself is the cache key: a SHA-256 hex string. */
 const ARTIFACT_ID = ZOTERO_ARTIFACT_ID_PATTERN
@@ -31,6 +35,8 @@ export interface ArtifactTarget {
   readonly indexed: boolean
   /** The source-index record backing the artifact; undefined for an orphan directory. */
   readonly record?: SourceIndexRecord
+  /** The meta.json already read for this artifact, so one lookup reads it once. */
+  readonly stored: StoredArtifactMeta
 }
 
 /**
@@ -90,6 +96,7 @@ export async function resolveArtifactTarget(
     generation: meta.generation,
     aliases: entries.map(([key]) => key),
     indexed: record !== undefined,
+    stored,
     ...(record !== undefined ? { record } : {}),
   }
 }

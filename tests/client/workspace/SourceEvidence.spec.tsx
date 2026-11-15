@@ -367,6 +367,116 @@ describe('SourceEvidence component', () => {
     expect(screen.queryByText(t('evidenceNotRetrieved'))).toBeNull()
   })
 
+  it.each([
+    {
+      name: 'a bound-cut window',
+      read: {
+        sourceKind: 'attachment' as const,
+        sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+        textFormat: 'markdown' as const,
+        totalChars: 40_000,
+        inputTruncated: true,
+        start: 0,
+        end: 12_000,
+        isTruncated: true,
+        callIds: ['r1'],
+      },
+      expectBounded: true,
+      expectWindowed: true,
+    },
+    {
+      name: 'the final window of a bounded document',
+      read: {
+        sourceKind: 'url' as const,
+        sourceLabel: 'https://papers.example.org/…',
+        textFormat: 'text' as const,
+        totalChars: 40_000,
+        inputTruncated: true,
+        start: 36_000,
+        end: 40_000,
+        isTruncated: false,
+        callIds: ['r2'],
+      },
+      expectBounded: true,
+      expectWindowed: false,
+    },
+    {
+      name: 'a complete short document',
+      read: {
+        sourceKind: 'attachment' as const,
+        sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+        textFormat: 'markdown' as const,
+        totalChars: 900,
+        inputTruncated: false,
+        start: 0,
+        end: 900,
+        isTruncated: false,
+        callIds: ['r3'],
+      },
+      expectBounded: false,
+      expectWindowed: false,
+    },
+  ])(
+    'renders $name with exactly its own bounds notes',
+    ({ read, expectBounded, expectWindowed }) => {
+      const item = sourceOf({ fulltextReads: [read] })
+      render(<SourceEvidence item={item} t={t} />)
+      // The card names the window span the read proves, and the two truncation
+      // notes are independent facts: the configured bound cut the document
+      // before windowing (`inputTruncated`), and more windows follow
+      // (`isTruncated`). Neither note may appear on a read it does not describe.
+      expect(screen.getByText(/已读取/)).toBeDefined()
+      expect(
+        screen.getByText(
+          t('fulltextReadCard', {
+            source: read.sourceLabel,
+            format: read.textFormat,
+            start: read.start,
+            end: read.end,
+            total: read.totalChars,
+          }),
+        ),
+      ).toBeDefined()
+      expect(screen.queryByText(t('fulltextReadWindowed'))).toBe(
+        expectWindowed ? screen.getByText(t('fulltextReadWindowed')) : null,
+      )
+      expect(screen.queryByText(t('fulltextReadBounded'))).toBe(
+        expectBounded ? screen.getByText(t('fulltextReadBounded')) : null,
+      )
+    },
+  )
+
+  it('renders the fulltext windows in trail order and reports the omitted tail', () => {
+    const first = {
+      sourceKind: 'attachment' as const,
+      sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+      textFormat: 'markdown' as const,
+      totalChars: 40_000,
+      inputTruncated: false,
+      start: 0,
+      end: 12_000,
+      isTruncated: true,
+      callIds: ['w1'],
+    }
+    const second = { ...first, start: 12_000, end: 24_000, isTruncated: true, callIds: ['w2'] }
+    const third = { ...first, start: 24_000, end: 36_000, isTruncated: true, callIds: ['w3'] }
+    const item = sourceOf({
+      fulltextReads: [first, second, third],
+      fulltextReadsTotal: 4,
+    })
+    render(<SourceEvidence item={item} t={t} />)
+    const cards = screen.getAllByText(/已读取/).map((node) => node.textContent ?? '')
+    // Window order follows the trail, so the continuation chain reads in
+    // source order: 0–12000, then 12000–24000, then 24000–36000.
+    expect(cards.length).toBe(3)
+    expect(cards[0]).toContain('0–12000')
+    expect(cards[1]).toContain('12000–24000')
+    expect(cards[2]).toContain('24000–36000')
+    // The windowed list is a projection: the trail holds one window more
+    // than the card list shows, and the omission is named.
+    expect(screen.getByText(t('fulltextReadsOmittedNote', { count: 4 }))).toBeDefined()
+  })
+
   it('renders page controls when a pager is provided', () => {
     const pager = {
       pages: [],

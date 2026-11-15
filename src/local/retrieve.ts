@@ -37,7 +37,7 @@ import {
   chunkFulltext,
   fetchFulltext,
   fulltextWindowOf,
-  isPdfCandidate,
+  isPdfCandidateContentType,
   normalizeCoverage,
   readFulltextDocument,
   readFulltextSources,
@@ -192,26 +192,28 @@ async function readBestFulltext(
       attachmentContentType = selectedContentType
     }
 
-    const parsed =
-      isPdfCandidate(selectedContentType) && deps.enhancer !== undefined
-        ? await lookupParsedFulltext(
-            deps,
-            {
-              key: attachmentRef,
-              source: { kind: 'local', attachmentRef },
-              contentType: selectedContentType,
-            },
-            signal,
-          )
-        : undefined
-
-    if (parsed !== undefined) {
-      const chunked = chunkFulltext(parsed.text, deps.limits.maxFulltextChars, deps.limits)
-      fulltextWasCut = chunked.inputTruncated
-      textFormat = parsed.format
-      artifact = parsed.provenance
-      appendFulltextChunks(passages, attachmentRef, chunked.chunks, { textFormat, artifact })
-    } else {
+    // The shared single-source kernel selects between the parsed artifact and
+    // the index text; only the eager prefetch below needs its own await,
+    // because it may already be in flight from the overlap above.
+    if (isPdfCandidateContentType(selectedContentType) && deps.enhancer !== undefined) {
+      const parsed = await lookupParsedFulltext(
+        deps,
+        {
+          key: attachmentRef,
+          source: { kind: 'local', attachmentRef },
+          ...(selectedContentType === undefined ? {} : { contentType: selectedContentType }),
+        },
+        signal,
+      )
+      if (parsed !== undefined) {
+        const chunked = chunkFulltext(parsed.text, deps.limits.maxFulltextChars, deps.limits)
+        fulltextWasCut = chunked.inputTruncated
+        textFormat = parsed.format
+        artifact = parsed.provenance
+        appendFulltextChunks(passages, attachmentRef, chunked.chunks, { textFormat, artifact })
+      }
+    }
+    if (textFormat === undefined) {
       // Only an absent Zotero index is a skipped source. Artifact faults must
       // propagate even when their code happens to name an index condition.
       let payload: FulltextPayload | undefined
