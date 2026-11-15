@@ -73,6 +73,8 @@ function cached(text: string): Extract<FulltextLookupResult, { kind: 'hit' }> {
     text,
     format: 'markdown',
     source: 'MinerU (free)',
+    sourceKind: 'attachment',
+    sourceLabel: 'zotero://user/0/attachment/CACHED000',
     provenance: {
       parser: 'mineru',
       mode: 'free',

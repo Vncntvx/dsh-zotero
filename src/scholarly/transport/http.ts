@@ -40,6 +40,7 @@ import { DEFAULT_MAX_RESPONSE_BYTES } from '../../constants.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../transport-bounds.js'
 import { errnoCodeOf, errorDetailOf } from '../../errors.js'
 import { addressRefusalOf } from '../../transport/public-url.js'
+import { egressRouteFor } from '../../transport/connections.js'
 import {
   assertAllowedScholarlyUrl,
   isAllowedScholarlyHost,
@@ -339,8 +340,12 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
       // exactly the DNS rebinding window. The allowlist arm shares one
       // validating pool whose connector judges each answer at connect time.
       // A composition that never wired the seams fails loud here instead of
-      // connecting to an unjudged address.
+      // connecting to an unjudged address. When the harness resolved a proxy
+      // for this URL, the proxy performs the DNS: the route's process-wide
+      // dispatcher carries the request, no address pinning applies, and the
+      // lexical gate above still refuses a non-public URL before any socket.
       let pinned: PinnedDispatcher | undefined
+      let route: ReturnType<typeof egressRouteFor> | undefined
       try {
         if (publicAccess === undefined) {
           throw new ScholarlySecurityError(
@@ -348,7 +353,8 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
             'policy',
           )
         }
-        if (publicOnly) {
+        route = egressRouteFor(new URL(currentUrl))
+        if (!route.proxied && publicOnly) {
           // An HTTPS target binds the peer's identity to the requested name,
           // so the fake-IP placeholder is acceptable there. A plain-HTTP
           // target has no such binding, and an IP literal spelled the
@@ -366,7 +372,9 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         throw error
       }
-      const dispatcher = pinned ?? sharedValidatingDispatcher()
+      const dispatcher = route?.proxied
+        ? { dispatcher: route.dispatcher }
+        : (pinned ?? sharedValidatingDispatcher())
 
       let release: (() => void) | undefined
       try {

@@ -35,11 +35,13 @@ function toolOf(text: string) {
     }),
   )
   host.enrichmentEnhancer = () => ({
-    lookup: async (): Promise<FulltextLookupResult> => ({
+    lookup: async (input): Promise<FulltextLookupResult> => ({
       kind: 'hit',
       text,
       format: 'markdown',
       source: 'MinerU (free)',
+      sourceKind: input.source.kind === 'url' ? 'url' : 'attachment',
+      sourceLabel: input.key,
       provenance,
     }),
   })

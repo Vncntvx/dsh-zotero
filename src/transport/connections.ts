@@ -13,6 +13,7 @@
 
 import { lookup } from 'node:dns/promises'
 import { Agent, fetch as undiciFetch } from 'undici'
+import { proxyRouteFor, type ProxyRoute } from '@deepseek-ai/dsh-http-proxy'
 import {
   pinnedLookup,
   validatingLookup,
@@ -53,6 +54,29 @@ export const dnsAddressResolver = async (hostname: string): Promise<readonly Res
 export function createPinnedDispatcher(addresses: readonly ResolvedAddress[]): PinnedDispatcher {
   const agent = new Agent({ connect: { lookup: pinnedLookup(addresses) } })
   return { dispatcher: agent, close: async () => await agent.close() }
+}
+
+/**
+ * The route one external request must take, as decided by the harness proxy
+ * policy. A proxied route carries the process-wide dispatcher the policy
+ * installed: it is shared across the whole process and must never be closed
+ * here, and the proxy performs the DNS, so no address pinning applies. A
+ * direct route keeps the closed-set pinned path.
+ */
+export type EgressRoute =
+  | { readonly proxied: true; readonly dispatcher: PinnedDispatcher['dispatcher'] }
+  | { readonly proxied: false }
+
+/**
+ * Ask the harness proxy policy how one request to `url` must be sent.
+ * `proxyRouteFor` reads the launch environment; the returned route's
+ * dispatcher comes from the same undici copy this module owns, because the
+ * proxy package pins the compatible version and `publicFetch` rejects a
+ * dispatcher built by another copy.
+ */
+export function egressRouteFor(url: URL): EgressRoute {
+  const route: ProxyRoute = proxyRouteFor(url)
+  return route.proxied ? { proxied: true, dispatcher: route.dispatcher } : { proxied: false }
 }
 
 /**

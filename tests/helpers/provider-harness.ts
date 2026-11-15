@@ -39,6 +39,7 @@ export const PROVIDER_LIMITS: LocalApiLimits = {
   maxEvidenceChars: 6000,
   maxEvidencePassages: 4,
   maxFulltextChars: 100_000,
+  fulltextWindowChars: 12_000,
   maxExportChars: 1_000_000,
   defaultStyle: 'apa',
   defaultLocale: 'en-US',

@@ -24,6 +24,8 @@ const artifact: FulltextLookupResult = {
   text: '# Artifact\n\nVerified PDF source.',
   format: 'markdown',
   source: 'MinerU (free)',
+  sourceKind: 'url',
+  sourceLabel: 'https://repo.example.org/…',
   provenance: {
     parser: 'mineru',
     mode: 'free',

@@ -52,9 +52,8 @@ const RETRIEVE_PARAMETERS = {
   mode: {
     type: 'string',
     enum: ['evidence', 'fulltext'],
-    required: true,
-    description:
-      'evidence: rank passages against query. fulltext: read one complete document in paged windows.',
+    default: 'evidence',
+    description: 'evidence (default): ranked passages. fulltext: whole document in windows.',
   },
   ref: {
     type: 'string',
@@ -312,7 +311,10 @@ function fulltextSourceOf(args: RetrieveArgs): import('../types.js').ZoteroFullt
 }
 
 function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
-  if (args.mode === 'fulltext') {
+  // The schema's `default` is only an annotation: the request's default is
+  // resolved here, in one place, so an omitted mode can never reach the domain.
+  const mode = args.mode ?? 'evidence'
+  if (mode === 'fulltext') {
     if (
       args.ref !== undefined ||
       args.query !== undefined ||

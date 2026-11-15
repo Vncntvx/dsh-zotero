@@ -38,6 +38,7 @@ import {
   errorMessageOf,
   domainCall,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_FILE_UNREADABLE,
   ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
@@ -216,11 +217,32 @@ export interface EnrichmentServiceDeps {
 
 /** A ZoteroError with its code preserved, so diagnostics and callers can route. */
 function parsingErrorOf(error: unknown): Error {
+  return error instanceof ZoteroError ? error : parseFailureOf(error)
+}
+
+/** Wrap a bare error from a MinerU parse task: that task, not a read, failed. */
+export function parseFailureOf(error: unknown): ZoteroError {
+  return new ZoteroError(
+    `MinerU parsing failed: ${errorMessageOf(error)}`,
+    ZOTERO_ENRICHMENT_TASK_FAILED,
+    {
+      cause: error,
+    },
+  )
+}
+
+/**
+ * Wrap a bare error from a read-only artifact lookup. The lookup never talks
+ * to MinerU, so the message must not borrow the parse task's wording: the
+ * stored artifact could not be read from its own store. A ZoteroError already
+ * carries its domain code and message, so it passes through unchanged.
+ */
+export function artifactReadFailureOf(error: unknown): Error {
   return error instanceof ZoteroError
     ? error
     : new ZoteroError(
-        `MinerU parsing failed: ${errorMessageOf(error)}`,
-        ZOTERO_ENRICHMENT_TASK_FAILED,
+        `The stored parsed artifact could not be read: ${errorMessageOf(error)}`,
+        ZOTERO_FILE_UNREADABLE,
         { cause: error },
       )
 }
@@ -809,6 +831,9 @@ export class EnrichmentService extends TypertRemoteService {
           ...(input.source.kind === 'local' ? { attachmentRef: input.source.attachmentRef } : {}),
         },
         resolved.record,
+        // The stored artifact is the addressed object; its bytes are read from
+        // the store, never revalidated against an origin that may be offline.
+        false,
       )
     } catch (error) {
       return lookupFailureOf(error, signal)
@@ -819,7 +844,11 @@ export class EnrichmentService extends TypertRemoteService {
    * Shared read-only lookup kernel for both direct and artifact-addressed
    * reads. `display` names the stored source when the caller already knows it
    * (an artifactId handle does not); `record` skips the source-index read when
-   * the caller just resolved it.
+   * the caller just resolved it. `probe` decides whether the live source is
+   * revalidated before the stored bytes are trusted: a direct lookup names a
+   * live source and checks it, while an artifactId read addresses the stored
+   * artifact itself and never contacts the origin (AGENTS.md grants the
+   * token-free HEAD to `lookup`, not to `lookupArtifact`).
    */
   private async lookupSource(
     input: FulltextEnhancerInput,
@@ -830,6 +859,7 @@ export class EnrichmentService extends TypertRemoteService {
       'sourceKind' | 'sourceLabel' | 'attachmentRef'
     >,
     record?: SourceIndexRecord,
+    probe: boolean = true,
   ): Promise<FulltextLookupResult> {
     signal?.throwIfAborted()
     const identity = canonicalSourceIdentityOf(input.key)
@@ -841,14 +871,16 @@ export class EnrichmentService extends TypertRemoteService {
     const candidate = record ?? (await store.sourceRecord(sourceKey))
     signal?.throwIfAborted()
     if (candidate === undefined) return { kind: 'miss', reason: 'absent' }
-    const stamp = await probeSource(
-      input,
-      ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
-      hostSourceBytesDeps(this.resolveAttachment, this.client),
-      signal,
-    )
-    signal?.throwIfAborted()
-    if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
+    if (probe) {
+      const stamp = await probeSource(
+        input,
+        ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+        hostSourceBytesDeps(this.resolveAttachment, this.client),
+        signal,
+      )
+      signal?.throwIfAborted()
+      if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
+    }
     const artifact = await store.artifactFor(candidate)
     signal?.throwIfAborted()
     if (artifact === undefined) return { kind: 'miss', reason: 'expired' }
@@ -890,7 +922,7 @@ export class EnrichmentService extends TypertRemoteService {
 function lookupFailureOf(error: unknown, signal?: AbortSignal): FulltextLookupResult {
   if (signal?.aborted) throw signal.reason ?? error
   if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'miss', reason: 'expired' }
-  return { kind: 'fault', error: parsingErrorOf(error) }
+  return { kind: 'fault', error: artifactReadFailureOf(error) }
 }
 
 export default EnrichmentService

@@ -48,10 +48,10 @@ describe('artifact target expansion', () => {
     expect(await expandRequestTarget(target, store)).toEqual({ target })
   })
 
-  it('rejects a malformed artifact id', async () => {
+  it('rejects a malformed artifact id as an invalid argument', async () => {
     const { store } = world()
     await expect(resolveArtifactTarget('nope', store)).rejects.toMatchObject({
-      code: 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND',
+      code: 'ZOTERO_INVALID_ARGUMENT',
     })
   })
 

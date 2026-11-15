@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError, remoteErrorOf, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type {
   ZoteroArtifactMetadataView,
   ZoteroDocumentArtifactRequestView,
@@ -415,7 +416,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     signal: AbortSignal,
     report: (value: ParsedDocumentProgress) => void,
   ): Promise<PreparedParsedDocument> {
-    const requestId = crypto.randomUUID()
+    const requestId = randomUUID()
     const abort = new AbortController()
     const combined = AbortSignal.any([signal, abort.signal])
     const images: Record<string, string> = {}

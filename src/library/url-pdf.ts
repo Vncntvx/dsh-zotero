@@ -8,6 +8,7 @@ import {
 } from '../transport/network.js'
 import { readBoundedBytes, ResponseTooLargeError } from '../transport-bounds.js'
 import type { PublicFetch } from '../transport/connections.js'
+import { egressRouteFor } from '../transport/connections.js'
 import { ZoteroError } from '../errors.js'
 import type { ZoteroAttachmentLocationView } from '../contract.js'
 
@@ -66,10 +67,18 @@ export class UrlPdfReader {
             'PDF address is not a permitted public HTTP(S) address.',
             'policy',
           )
-        const addresses = await resolvePublicAddresses(url.hostname, this.deps.resolver, {
-          signal: combined,
-        })
-        const connection = this.deps.dispatcher(addresses)
+        // The harness proxy policy decides the transport per hop: proxied, the
+        // route's shared dispatcher performs the DNS and is never closed; direct,
+        // the pinned closed set keeps the check-then-connect guarantee.
+        const route = egressRouteFor(url)
+        const addresses = route.proxied
+          ? undefined
+          : await resolvePublicAddresses(url.hostname, this.deps.resolver, {
+              signal: combined,
+            })
+        const connection = route.proxied
+          ? undefined
+          : this.deps.dispatcher(addresses as readonly ResolvedAddress[])
         try {
           const response = await this.deps.fetch(url.href, {
             method: 'GET',
@@ -78,7 +87,7 @@ export class UrlPdfReader {
             credentials: 'omit',
             referrerPolicy: 'no-referrer',
             headers: { accept: 'application/pdf, application/octet-stream;q=0.8' },
-            dispatcher: connection.dispatcher,
+            dispatcher: route.proxied ? route.dispatcher : connection!.dispatcher,
           } as RequestInit)
           if ([301, 302, 303, 307, 308].includes(response.status)) {
             const location = response.headers.get('location')
@@ -120,7 +129,9 @@ export class UrlPdfReader {
             data: new Uint8Array(bytes),
           }
         } finally {
-          await connection.close()
+          // The proxy route's dispatcher is process-wide and shared; only the
+          // pinned per-attempt agent is closed here.
+          await connection?.close()
         }
       }
       throw failure('REDIRECT', 'PDF redirect limit exceeded.')

@@ -27,6 +27,8 @@ export interface LocalApiLimits {
   readonly maxEvidencePassages: number
   /** Character bound for full text accepted into evidence ranking and fulltext reads. */
   readonly maxFulltextChars: number
+  /** Character bound for one fulltext window; the domain clamps `maxChars` to it. */
+  readonly fulltextWindowChars: number
   /** Provider hard limit for export output; never mid-truncated. */
   readonly maxExportChars: number
   /** CSL style for citation/bibliography formats. */

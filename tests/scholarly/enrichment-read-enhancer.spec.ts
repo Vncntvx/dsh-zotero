@@ -93,6 +93,8 @@ function cached(
     text,
     format: 'markdown',
     source: 'MinerU (free)',
+    sourceKind: 'url',
+    sourceLabel: 'https://example.org/…',
     provenance: {
       parser: 'mineru',
       mode: 'free',

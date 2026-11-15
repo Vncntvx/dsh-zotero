@@ -187,6 +187,8 @@ describe('explicit parsing admission and receipts', () => {
       text: '# Existing',
       format: 'markdown',
       source: 'MinerU',
+      sourceKind: 'attachment',
+      sourceLabel: input.source.kind === 'local' ? input.source.attachmentRef : input.key,
       provenance: parsedResult({ input, config, generation: randomUUID() }).provenance,
     }))
     expect(

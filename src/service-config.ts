@@ -53,6 +53,7 @@ export function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     maxEvidenceChars: config.maxEvidenceChars,
     maxEvidencePassages: config.maxEvidencePassages,
     maxFulltextChars: config.maxFulltextChars,
+    fulltextWindowChars: config.fulltextWindowChars,
     maxExportChars: config.maxExportChars,
     maxBrowseResults: config.maxBrowseResults,
     maxChangesResults: config.maxChangesResults,

@@ -18,6 +18,7 @@ import {
 import { MockZotero } from '../../helpers/mock-zotero.js'
 import { testHttpClient } from '../../helpers/test-clients.js'
 import { PROVIDER_LIMITS } from '../../helpers/provider-harness.js'
+import { ZOTERO_INVALID_ARGUMENT } from '../../../src/errors.js'
 import { attachmentRef } from '../../helpers/server/keys.js'
 import { serveFulltext, serveItemGraph } from '../../helpers/server/serve.js'
 import {
@@ -63,6 +64,8 @@ function hit(text: string): Extract<FulltextLookupResult, { kind: 'hit' }> {
     text,
     format: 'markdown',
     source: 'MinerU (free)',
+    sourceKind: 'attachment',
+    sourceLabel: attachmentRef(RETRIEVE_ATTACHMENT.key),
     provenance: {
       parser: 'mineru',
       mode: 'free',
@@ -154,6 +157,32 @@ describe('mode:"fulltext" windows', () => {
     })
     expect(result.fulltext?.artifact).toBeUndefined()
     expect(result.fulltext?.text).toBe((FULLTEXT_PAYLOAD.content as string).slice(0, WINDOW_CHARS))
+  })
+
+  it('clamps a window past the configured bound at the domain layer', async () => {
+    // A same-process caller can reach the provider without the tool; the
+    // window limit is a deployment bound the domain enforces itself.
+    const server = await boot()
+    const result = await providerOf(server, enhancerOf(hit(markdown))).retrieve({
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+      start: 0,
+      maxChars: PROVIDER_LIMITS.fulltextWindowChars + 1,
+    })
+    expect(result.fulltext?.end).toBeLessThanOrEqual(PROVIDER_LIMITS.fulltextWindowChars)
+    expect(result.fulltext?.text).toBe(markdown.slice(0, PROVIDER_LIMITS.fulltextWindowChars))
+  })
+
+  it('rejects a start beyond the document at the domain layer', async () => {
+    const server = await boot()
+    await expect(
+      providerOf(server, enhancerOf(hit(markdown))).retrieve({
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+        start: markdown.length + 1,
+        maxChars: WINDOW_CHARS,
+      }),
+    ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT, name: 'ZoteroError' })
   })
 
   it('propagates a parsed-artifact fault instead of falling back to the index', async () => {

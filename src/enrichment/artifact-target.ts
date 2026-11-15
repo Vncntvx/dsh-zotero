@@ -11,7 +11,11 @@
 
 import type { ZoteroParseTargetView } from '../contract.js'
 import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
-import { ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND, ZoteroError } from '../errors.js'
+import {
+  ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+  ZOTERO_INVALID_ARGUMENT,
+  ZoteroError,
+} from '../errors.js'
 import { refFieldsOf } from '../ref-grammar.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import { parseTargetOf, type ParseTarget } from './parse-target.js'
@@ -41,7 +45,7 @@ export async function resolveArtifactTarget(
   store: ParsedArtifactStore,
 ): Promise<ArtifactTarget> {
   if (!ARTIFACT_ID.test(artifactId)) {
-    throw new ZoteroError('Invalid parsed artifact id.', ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND)
+    throw new ZoteroError('Invalid parsed artifact id.', ZOTERO_INVALID_ARGUMENT)
   }
   const stored = await store.metaFor(artifactId)
   if (stored === undefined) {

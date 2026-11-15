@@ -24,6 +24,7 @@ import { pipeline } from 'node:stream/promises'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { SemanticDownloadSource, SemanticModelSpec } from '../enrichment-model-catalog.js'
 import { isPublicUrl, PublicAddressError } from '../transport/public-url.js'
+import { egressRouteFor } from '../transport/connections.js'
 import {
   createPinnedDispatcher,
   dnsAddressResolver,
@@ -201,14 +202,26 @@ async function gatedFetch(
     throw new PublicAddressError(`model download refused a non-public address (${url})`, 'policy')
   }
   const { hostname, origin } = new URL(url)
-  const addresses = await resolvePublicAddresses(hostname, deps.resolver, { signal })
-  const pinned = deps.dispatcher(addresses)
+  // The harness proxy policy decides the transport: proxied, the route's
+  // shared dispatcher performs the DNS and is never closed; direct, the pinned
+  // closed set keeps the check-then-connect guarantee. Seed-host scoping and
+  // per-revision gating are unaffected either way.
+  const route = egressRouteFor(new URL(url))
+  const addresses = route.proxied
+    ? undefined
+    : await resolvePublicAddresses(hostname, deps.resolver, { signal })
+  const pinned = route.proxied
+    ? undefined
+    : deps.dispatcher(addresses as readonly ResolvedAddress[])
   let body: ReadableStream<Uint8Array> | null = null
+  const release = async (): Promise<void> => {
+    await pinned?.close()
+  }
   try {
     const response = await deps.fetch(url, {
       redirect: 'manual',
       signal,
-      dispatcher: pinned.dispatcher,
+      dispatcher: route.proxied ? route.dispatcher : pinned!.dispatcher,
     })
     body = response.body
     const location = response.headers.get('location')
@@ -227,9 +240,7 @@ async function gatedFetch(
         location: next.toString(),
         headers: response.headers,
         body: null,
-        release: async () => {
-          await pinned.close()
-        },
+        release,
         discardBody: async () => {
           await cancelBody(body, signal)
         },
@@ -240,16 +251,14 @@ async function gatedFetch(
       location: null,
       headers: response.headers,
       body,
-      release: async () => {
-        await pinned.close()
-      },
+      release,
       discardBody: async () => {
         await cancelBody(body, signal)
       },
     }
   } catch (error) {
     await cancelBody(body, signal).catch(() => undefined)
-    await pinned.close().catch(() => undefined)
+    await release().catch(() => undefined)
     throw error
   }
 }

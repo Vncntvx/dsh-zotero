@@ -200,5 +200,47 @@ describe('the panel wire schemas derive from the domain constants', () => {
         makePage({ sources: [minimalSource({ exports: excessExports })] }),
       ),
     ).toThrow('Source pages must remain bounded.')
+
+    // A fulltext window carrying Zotero's own coverage is a complete fact: the
+    // wire schema must accept it, not reject the row it validated elsewhere.
+    const coveredRead = {
+      sourceKind: 'attachment' as const,
+      sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+      textFormat: 'text' as const,
+      coverage: {
+        indexedPages: 3,
+        totalPages: 3,
+        indexedChars: 900,
+        totalChars: 900,
+        complete: true,
+      },
+      totalChars: 900,
+      inputTruncated: false,
+      start: 0,
+      end: 100,
+      isTruncated: true,
+      callIds: ['c1'],
+    }
+    expect(
+      zoteroSourcePageResultSchema.parse(
+        makePage({
+          sources: [minimalSource({ fulltextReads: [coveredRead], fulltextReadsTotal: 1 })],
+        }),
+      ),
+    ).toBeTruthy()
+
+    // The schema stays strict: an unknown fact field is still refused.
+    expect(() =>
+      zoteroSourcePageResultSchema.parse(
+        makePage({
+          sources: [
+            minimalSource({
+              fulltextReads: [{ ...coveredRead, bogus: 1 }],
+              fulltextReadsTotal: 1,
+            }),
+          ],
+        }),
+      ),
+    ).toThrow()
   })
 })

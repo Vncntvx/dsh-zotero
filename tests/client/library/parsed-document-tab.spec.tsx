@@ -133,6 +133,32 @@ describe('complete parsed-document delivery', () => {
     expect(read.mock.calls.at(-1)![0]).toMatchObject({ op: 'release' })
   })
 
+  it('mints the preparation request id without crypto.randomUUID', async () => {
+    // Non-secure contexts (plain-HTTP LAN panel) have no crypto.randomUUID;
+    // the minted id must come from the host's getRandomValues-based helper.
+    const original = globalThis.crypto.randomUUID
+    delete (globalThis.crypto as { randomUUID?: () => string }).randomUUID
+    try {
+      const read = documentRead('# Prepared')
+      mount(read)
+      await ready()
+      expect(screen.getAllByRole('heading').some((h) => h.textContent?.includes('Paper'))).toBe(
+        true,
+      )
+      const opened = read.mock.calls.find(([request]) => request.op === 'open')
+      expect(opened).toBeDefined()
+      expect(opened![0].requestId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      )
+    } finally {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        value: original,
+        configurable: true,
+        writable: true,
+      })
+    }
+  })
+
   it('cleans up a preparation stopped while opening', async () => {
     const pending = deferred<ArtifactAnswer>()
     const read = documentRead('Late')

@@ -10,7 +10,8 @@ import { deferred } from '../../helpers/sync.js'
 
 const { publicFetchMock } = vi.hoisted(() => ({ publicFetchMock: vi.fn() }))
 
-vi.mock('../../../src/transport/connections.js', () => ({
+vi.mock('../../../src/transport/connections.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/transport/connections.js')>()),
   dnsAddressResolver: async () => [{ address: '93.184.216.34', family: 4 }],
   createPinnedDispatcher: () => ({ dispatcher: undefined, close: async () => {} }),
   publicFetch: publicFetchMock,

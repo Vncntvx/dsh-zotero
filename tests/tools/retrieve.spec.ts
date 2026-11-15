@@ -145,12 +145,14 @@ describe('zotero_retrieve tool', () => {
     }
     let current = provenance
     lane.ctx.zotero.setFulltextEnhancer({
-      async lookup() {
+      async lookup(input) {
         return {
           kind: 'hit',
           text,
           format: 'markdown',
           source: 'MinerU (free)',
+          sourceKind: input.source.kind === 'url' ? 'url' : 'attachment',
+          sourceLabel: input.key,
           provenance: current,
         }
       },

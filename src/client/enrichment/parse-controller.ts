@@ -1,6 +1,7 @@
 /** User-submitted document parsing. Transport, permissions and jobs are host-owned. */
 import type { IJobs, JobView } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { refFieldsOf } from '../../ref-grammar.ts'
 import type {
   ZoteroDocumentArtifactRequestView,
@@ -344,7 +345,7 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
         (this.state.receipt?.kind !== 'failed' && this.state.receipt?.kind !== 'cancelled'))
     )
       return
-    const operationId = action === 'retry' ? this.state.operation!.operationId : crypto.randomUUID()
+    const operationId = action === 'retry' ? this.state.operation!.operationId : randomUUID()
     const request: ZoteroStartDocumentParseRequestView = {
       sessionId: this.selection.sessionId,
       target: this.selection.target,

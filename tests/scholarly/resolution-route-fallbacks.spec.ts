@@ -235,6 +235,8 @@ it('refetches a cached PDF source whose artifact is absent and whose text was ne
     text: '# Artifact\n\nVerified PDF source.',
     format: 'markdown',
     source: 'MinerU (free)',
+    sourceKind: 'url',
+    sourceLabel: 'https://repo.example.org/…',
     provenance: {
       parser: 'mineru',
       mode: 'free',

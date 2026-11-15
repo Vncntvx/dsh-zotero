@@ -3,10 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnrichmentService } from '../../src/enrichment/service.ts'
 import { parseDocument } from '../../src/enrichment/parse-document.ts'
-import {
-  ZOTERO_ENRICHMENT_OUTPUT_INVALID,
-  ZOTERO_ENRICHMENT_TASK_FAILED,
-} from '../../src/errors.ts'
+import { ZOTERO_FILE_UNREADABLE, ZOTERO_ENRICHMENT_OUTPUT_INVALID } from '../../src/errors.ts'
 import { deferred } from '../helpers/sync.ts'
 import { LOCAL, MARKDOWN, URL_INPUT, parseDomain } from './support/enrichment-parse-domain.ts'
 
@@ -134,9 +131,11 @@ describe('EnrichmentService artifact lookup', () => {
     await parseDocument(URL_INPUT, world.deps)
     const { service, parse } = reader(world)
     world.fetch.mockRejectedValue(new Error('HEAD offline'))
+    // The read-only lookup never talks to MinerU: a bare storage/transport
+    // failure is a file-read failure, not a parse-task failure.
     await expect(service.enhancer.lookup(URL_INPUT)).resolves.toMatchObject({
       kind: 'fault',
-      error: { code: ZOTERO_ENRICHMENT_TASK_FAILED },
+      error: { code: ZOTERO_FILE_UNREADABLE },
     })
     expect(parse).not.toHaveBeenCalled()
   })
@@ -166,11 +165,13 @@ describe('EnrichmentService artifact lookup', () => {
     expect(world.fetch).not.toHaveBeenCalled()
   })
 
-  it('resolves an opaque artifact id back to the stored document read-only', async () => {
+  it('resolves an opaque artifact id back to the stored document without contacting the origin', async () => {
     const world = domain()
     const parsed = await parseDocument(URL_INPUT, world.deps)
     const { service, parse } = reader(world)
     world.fetch.mockClear()
+    // The stored artifact is the addressed object: reading it by id must not
+    // revalidate the origin, so an offline source cannot break a local read.
     await expect(service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)).resolves.toEqual({
       kind: 'hit',
       text: MARKDOWN,
@@ -180,7 +181,7 @@ describe('EnrichmentService artifact lookup', () => {
       sourceLabel: 'https://example.org/…',
       provenance: parsed.provenance,
     })
-    expect(world.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['HEAD'])
+    expect(world.fetch).not.toHaveBeenCalled()
     expect(parse).not.toHaveBeenCalled()
   })
 

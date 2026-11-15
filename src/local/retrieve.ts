@@ -455,10 +455,12 @@ async function readFulltextMode(
   signal?: AbortSignal,
 ): Promise<ZoteroFulltextRetrieveResult> {
   const document = await readFulltextDocument(deps, request.source, signal)
+  // The window bound is a deployment limit, not only a tool-layer check: a
+  // same-process caller bypassing the tool cannot exceed it either.
   const { read, boundedText } = fulltextWindowOf(
     document,
     request.start,
-    request.maxChars,
+    Math.min(request.maxChars, deps.limits.fulltextWindowChars),
     deps.limits.maxFulltextChars,
   )
   // One spill per read: only the first window pays for it, and only when

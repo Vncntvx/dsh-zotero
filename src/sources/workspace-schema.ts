@@ -1,6 +1,7 @@
 /** Strict source workspace schemas shared by Remote boundaries. */
 
 import { z } from 'zod'
+import type { FulltextRead } from './model.js'
 
 const supportedLibrarySchema = z.union([
   z.object({ type: z.literal('user'), id: z.literal(0) }).strict(),
@@ -99,12 +100,23 @@ const evidencePassageSchema = z
     message: 'An artifact identifies Markdown fulltext',
   })
 
+const coverageSchema = z
+  .object({
+    indexedPages: z.number().int().nonnegative().optional(),
+    totalPages: z.number().int().nonnegative().optional(),
+    indexedChars: z.number().int().nonnegative().optional(),
+    totalChars: z.number().int().nonnegative().optional(),
+    complete: z.boolean(),
+  })
+  .strict()
+
 const fulltextReadSchema = z
   .object({
     sourceKind: z.enum(['attachment', 'url']),
     sourceLabel: z.string(),
     textFormat: z.enum(['markdown', 'text']),
     artifact: artifactProvenanceSchema.optional(),
+    coverage: coverageSchema.optional(),
     totalChars: z.number().int().nonnegative(),
     inputTruncated: z.boolean(),
     start: z.number().int().nonnegative(),
@@ -120,6 +132,20 @@ const fulltextReadSchema = z
   .refine((value) => value.artifact === undefined || value.textFormat === 'markdown', {
     message: 'An artifact identifies Markdown fulltext',
   })
+
+/**
+ * Compile-time tie between the trail model and this wire schema. A field the
+ * model produces and the schema omits makes every row carrying it unparseable
+ * at the projection boundary, so the omission is a type error here instead of
+ * a runtime rejection later. Removing the field from the schema, or adding one
+ * to {@link FulltextRead} without adding it above, flips this to `false`.
+ */
+export const FULLTEXT_READ_SCHEMA_MATCHES_MODEL: Exclude<
+  keyof FulltextRead,
+  keyof z.infer<typeof fulltextReadSchema>
+> extends never
+  ? true
+  : false = true
 
 const exportDocumentItemSchema = z
   .object({
@@ -150,16 +176,6 @@ const exportArtifactSchema = z
     settledAt: z.number().optional(),
     items: z.array(exportDocumentItemSchema).optional(),
     text: z.string(),
-  })
-  .strict()
-
-const coverageSchema = z
-  .object({
-    indexedPages: z.number().int().nonnegative().optional(),
-    totalPages: z.number().int().nonnegative().optional(),
-    indexedChars: z.number().int().nonnegative().optional(),
-    totalChars: z.number().int().nonnegative().optional(),
-    complete: z.boolean(),
   })
   .strict()
 

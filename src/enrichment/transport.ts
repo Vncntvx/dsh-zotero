@@ -36,6 +36,7 @@ import {
   type ResolvedAddress,
 } from '../transport/network.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../transport-bounds.js'
+import { egressRouteFor } from '../transport/connections.js'
 import { isMineruApiHost, MINERU_API_ORIGIN } from './hosts.js'
 import { ConcurrencyGate } from '../concurrency.js'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -215,11 +216,20 @@ export class MineruClient {
           'MinerU API requests require the fixed HTTPS origin.',
           'policy',
         )
-      const addresses = await resolvePublicAddresses(hostname, this.deps.resolver, {
-        signal: combined,
-        acceptFakeIp: parsed.protocol === 'https:' && !isIpv4Literal(hostname),
-      })
-      const connection: PinnedDispatcher = this.deps.dispatcher(addresses)
+      // The harness proxy policy decides the transport per hop: proxied, the
+      // route's shared dispatcher performs the DNS and is never closed; direct,
+      // the pinned closed set keeps the check-then-connect guarantee. The
+      // token stays host-scoped either way.
+      const route = egressRouteFor(parsed)
+      const addresses = route.proxied
+        ? undefined
+        : await resolvePublicAddresses(hostname, this.deps.resolver, {
+            signal: combined,
+            acceptFakeIp: parsed.protocol === 'https:' && !isIpv4Literal(hostname),
+          })
+      const connection: PinnedDispatcher | undefined = route.proxied
+        ? undefined
+        : this.deps.dispatcher(addresses as readonly ResolvedAddress[])
 
       // Authorization is host-scoped: only the fixed API host ever sees it.
       const suppliedHeaders = Object.fromEntries(
@@ -243,7 +253,7 @@ export class MineruClient {
           signal: combined,
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
-          dispatcher: connection.dispatcher,
+          dispatcher: route.proxied ? route.dispatcher : connection!.dispatcher,
         } as RequestInit)
 
         if (REDIRECT_STATUSES.includes(response.status)) {
@@ -292,7 +302,9 @@ export class MineruClient {
         combined.throwIfAborted()
         return { status: response.status, bytes, headers: response.headers, finalUrl: parsed.href }
       } finally {
-        await connection.close()
+        // The proxy route's dispatcher is process-wide and shared; only the
+        // pinned per-attempt agent is closed here.
+        await connection?.close()
       }
     }
     throw new MineruHttpError(310, new URL(currentUrl).hostname)

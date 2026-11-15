@@ -11,7 +11,7 @@ import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import type { HostLane } from '../helpers/lanes/host-lane.js'
 import { setupHostLane } from '../helpers/lanes/host-lane.js'
 import { serveFulltext, serveItemGraph } from '../helpers/server/serve.js'
-import { attachmentRef } from '../helpers/server/keys.js'
+import { attachmentRef, itemRef } from '../helpers/server/keys.js'
 import type { FulltextEnhancer, FulltextLookupResult } from '../../src/local/fulltext-enhancer.js'
 import {
   FULLTEXT_PAYLOAD,
@@ -39,6 +39,9 @@ function enhancer(text: string): FulltextEnhancer {
     text,
     format: 'markdown',
     source: 'MinerU (free)',
+    sourceKind: 'attachment',
+    sourceLabel: REF,
+    attachmentRef: REF,
     provenance: {
       parser: 'mineru',
       mode: 'free',
@@ -92,6 +95,21 @@ describe('mode exclusivity', () => {
     })
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MODE_MIXED_MESSAGE)
+  })
+
+  it('takes an omitted mode as evidence mode', async () => {
+    // `mode` is optional so that the calls documented before fulltext existed
+    // keep working: the default resolves in buildRequest, not in the schema.
+    const result = await lane.runTool('zotero_retrieve', {
+      ref: itemRef(RETRIEVE_PARENT.key),
+      query: 'attention',
+      sources: ['annotation'],
+    })
+    expect(result.isError).toBe(false)
+    const wrapped = result.value as { delivery: string; data: Record<string, unknown> }
+    expect(wrapped.delivery).toBe('inline')
+    expect(wrapped.data.mode).toBe('evidence')
+    expect('fulltext' in wrapped.data).toBe(false)
   })
 
   it('requires exactly one fulltext source', async () => {

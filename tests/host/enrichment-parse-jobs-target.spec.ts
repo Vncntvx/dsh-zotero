@@ -132,6 +132,8 @@ describe('explicit parse target and receipt boundary', () => {
               text: 'Ready',
               format: 'markdown',
               source: 'MinerU',
+              sourceKind: 'attachment',
+              sourceLabel: input.source.kind === 'local' ? input.source.attachmentRef : input.key,
               provenance: parsedResult({ input, config, generation: randomUUID() }).provenance,
             }
           : { kind: 'miss', reason: 'absent' },

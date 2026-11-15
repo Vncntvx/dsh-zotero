@@ -8,6 +8,7 @@ import {
   NO_FULLTEXT_MESSAGE,
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+  ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NO_FULLTEXT,
   ZoteroError,
 } from '../errors.js'
@@ -123,8 +124,8 @@ export async function readFulltextDocument(
     return {
       text: outcome.text,
       textFormat: outcome.format,
-      sourceKind: outcome.sourceKind ?? 'url',
-      sourceLabel: outcome.sourceLabel ?? `artifact ${source.artifactId.slice(0, 8)}…`,
+      sourceKind: outcome.sourceKind,
+      sourceLabel: outcome.sourceLabel,
       artifact: outcome.provenance,
       ...(outcome.attachmentRef === undefined ? {} : { attachmentRef: outcome.attachmentRef }),
     }
@@ -140,8 +141,8 @@ export async function readFulltextDocument(
     return {
       text: parsed.text,
       textFormat: parsed.format,
-      sourceKind: parsed.sourceKind ?? 'attachment',
-      sourceLabel: parsed.sourceLabel ?? attachmentRef,
+      sourceKind: parsed.sourceKind,
+      sourceLabel: parsed.sourceLabel,
       artifact: parsed.provenance,
       ...(parsed.attachmentRef === undefined
         ? { attachmentRef }
@@ -180,7 +181,13 @@ export function fulltextWindowOf(
 ): { readonly read: import('../types.js').ZoteroFulltextRead; readonly boundedText: string } {
   const bounded = truncateText(document.text, maxFulltextChars)
   const totalChars = bounded.text.length
-  const offset = Math.min(Math.max(0, Math.floor(start)), totalChars)
+  if (Math.floor(start) > totalChars || start < 0) {
+    throw new ZoteroError(
+      `start must name a character within the document (0..${totalChars}).`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  const offset = Math.min(Math.floor(start), totalChars)
   const end = Math.min(totalChars, offset + Math.max(1, Math.floor(maxChars)))
   const isTruncated = end < totalChars
   const read: import('../types.js').ZoteroFulltextRead = {

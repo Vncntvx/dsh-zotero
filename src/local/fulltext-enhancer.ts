@@ -36,11 +36,12 @@ export type FulltextLookupResult =
       readonly provenance: FulltextArtifactProvenance
       /**
        * The stored source this artifact belongs to. An artifactId read needs
-       * these facts because the handle itself says nothing about the source.
+       * these facts because the handle itself says nothing about the source,
+       * so the seam requires them: a caller must never guess a source kind.
        */
-      readonly sourceKind?: 'attachment' | 'url'
+      readonly sourceKind: 'attachment' | 'url'
       /** Safe display label: a canonical attachment ref or a URL origin. */
-      readonly sourceLabel?: string
+      readonly sourceLabel: string
       /** The Zotero attachment behind this artifact, when the source is local. */
       readonly attachmentRef?: string
       readonly pageCount?: number

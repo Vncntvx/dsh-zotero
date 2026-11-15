@@ -302,6 +302,8 @@ describe('artifact lookup projections', () => {
         text: '# Ready',
         format: 'markdown',
         source: 'MinerU',
+        sourceKind: 'attachment',
+        sourceLabel: input.source.kind === 'local' ? input.source.attachmentRef : input.key,
         pageCount: 12,
         provenance: parsedResult({ input, config, generation: randomUUID() }).provenance,
       }),

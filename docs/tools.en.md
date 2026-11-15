@@ -142,19 +142,19 @@ Two mutually exclusive modes. `evidence`: extract query-relevant passages from o
 
 ### Parameters
 
-| Parameter          | Type     | Default  | Description                                                                                                                                                  |
-| ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`             | string   | none     | Required. `evidence`: rank passages against query; `fulltext`: read one complete document in paged character windows                                         |
-| `ref`              | string   | none     | `evidence` mode: item ref                                                                                                                                    |
-| `query`            | string   | none     | `evidence` mode: ranking keywords                                                                                                                            |
-| `queryVariants`    | string[] | none     | `evidence` mode: other phrasings of the same question (synonyms, field terminology), at most 4; each is ranked separately and a passage keeps its best score |
-| `sources`          | string[] | all 4    | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                              |
-| `passages`         | integer  | `4`      | `evidence` mode: passage cap (bounded by `maxEvidencePassages`)                                                                                              |
-| `attachmentPolicy` | string   | `"best"` | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                               |
-| `attachmentRefs`   | string[] | none     | `evidence` mode, for `attachmentPolicy="specified"`: attachment refs                                                                                         |
-| `source`           | object   | none     | `fulltext` mode: exactly one source. `kind="ref"` selects a Zotero attachment by `ref`; `kind="artifactId"` selects a stored parsed artifact                 |
-| `start`            | integer  | `0`      | `fulltext` mode: character offset of this window                                                                                                             |
-| `maxChars`         | integer  | none     | `fulltext` mode: characters per window, defaulting to and bounded by `fulltextWindowChars`                                                                   |
+| Parameter          | Type     | Default    | Description                                                                                                                                                  |
+| ------------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence`: rank passages against query; `fulltext`: read one complete document in paged character windows              |
+| `ref`              | string   | none       | `evidence` mode: item ref                                                                                                                                    |
+| `query`            | string   | none       | `evidence` mode: ranking keywords                                                                                                                            |
+| `queryVariants`    | string[] | none       | `evidence` mode: other phrasings of the same question (synonyms, field terminology), at most 4; each is ranked separately and a passage keeps its best score |
+| `sources`          | string[] | all 4      | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                              |
+| `passages`         | integer  | `4`        | `evidence` mode: passage cap (bounded by `maxEvidencePassages`)                                                                                              |
+| `attachmentPolicy` | string   | `"best"`   | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                               |
+| `attachmentRefs`   | string[] | none       | `evidence` mode, for `attachmentPolicy="specified"`: attachment refs                                                                                         |
+| `source`           | object   | none       | `fulltext` mode: exactly one source. `kind="ref"` selects a Zotero attachment by `ref`; `kind="artifactId"` selects a stored parsed artifact                 |
+| `start`            | integer  | `0`        | `fulltext` mode: character offset of this window                                                                                                             |
+| `maxChars`         | integer  | none       | `fulltext` mode: characters per window, defaulting to and bounded by `fulltextWindowChars`                                                                   |
 
 ### Output
 

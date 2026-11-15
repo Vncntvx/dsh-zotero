@@ -12,7 +12,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type { ResolvedConfig } from './config.js'
 import { RESULT_RECEIPT_PREFIX } from './constants.js'
-import { ZOTERO_OUTPUT_TOO_LARGE, ZoteroError } from './errors.js'
+import { ZOTERO_OUTPUT_TOO_LARGE, errorMessageOf, ZoteroError } from './errors.js'
 import { asRecord } from './json.js'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -444,18 +444,29 @@ export class ResultDelivery {
       )
         return next()
       const session = exec.agent.session.header.id
-      const table = await this.receipts()
-      let receipt = table.get(await resultReceiptKey('job', session, jobId))
-      if (!receipt) {
-        // The two receipt puts are not atomic: a crash or storage failure
-        // between them can leave the per-call receipt without its job-key
-        // twin. Reconcile by the job id the receipt itself carries instead of
-        // dropping the re-attach — the write domain's reconcile-never-retry
-        // discipline applied to the delivery side.
-        receipt = [...table.entries()].find(([, candidate]) => {
-          const record = asRecord(candidate)
-          return record?.jobId === jobId && record?.sessionId === session
-        })?.[1]
+      // Receipt lookup is a delivery enhancement, not a job-output requirement:
+      // a missing or failing storage facility leaves the job's own result intact
+      // instead of turning a completed job into a tool failure.
+      let receipt: Receipt | undefined
+      try {
+        const table = await this.receipts()
+        receipt = table.get(await resultReceiptKey('job', session, jobId))
+        if (!receipt) {
+          // The two receipt puts are not atomic: a crash or storage failure
+          // between them can leave the per-call receipt without its job-key
+          // twin. Reconcile by the job id the receipt itself carries instead of
+          // dropping the re-attach — the write domain's reconcile-never-retry
+          // discipline applied to the delivery side.
+          receipt = [...table.entries()].find(([, candidate]) => {
+            const record = asRecord(candidate)
+            return record?.jobId === jobId && record?.sessionId === session
+          })?.[1] as Receipt | undefined
+        }
+      } catch (error) {
+        this.ctx.logger?.warn?.(
+          `job_output receipt lookup failed; delivering the job result without it: ${errorMessageOf(error)}`,
+        )
+        return next()
       }
       if (!receipt) return next()
       const decision = await next()
