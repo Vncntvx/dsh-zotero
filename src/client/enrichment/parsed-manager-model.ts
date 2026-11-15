@@ -20,6 +20,7 @@ export function shortArtifactId(artifactId: string): string {
  */
 export function sourceDescriptorOf(row: ZoteroParsedDocumentRowView): string {
   if (row.sourceKind === 'url') return row.targetLabel
+  // `split` always yields at least one element.
   const path = row.targetLabel.split('?')[0] ?? ''
   return path.slice(path.lastIndexOf('/') + 1)
 }
@@ -29,7 +30,7 @@ export function totalBytesOf(row: ZoteroParsedDocumentRowView): number {
   return row.images.reduce((sum, image) => sum + image.bytes, row.markdownBytes)
 }
 
-/** The last page index a listing can show; an empty listing has one page. */
-export function maxPageOf(total: number, pageSize: number): number {
-  return Math.max(0, Math.ceil(Math.max(0, total) / pageSize) - 1)
+/** Group thousands so a long character count stays readable at a glance. */
+export function formatCount(value: number): string {
+  return String(Math.max(0, Math.trunc(value))).replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
 }

@@ -79,6 +79,12 @@ export interface WorldOptions {
   readonly listAllowed?: boolean
   /** List answers consumed in order; the last one repeats. */
   readonly lists?: readonly ListResult[]
+  /** A list call the spec answers itself, for one-request-at-a-time and abort paths. */
+  readonly listImpl?: (request: {
+    readonly sessionId: string
+    readonly offset: number
+    readonly limit: number
+  }) => Promise<ListResult>
   /** A discard the spec settles itself, for the abort paths. */
   readonly discardImpl?: (
     request: { readonly sessionId: string; readonly artifactId: string },
@@ -91,16 +97,23 @@ export function world(options: WorldOptions = {}) {
   let listIndex = 0
   let discardIndex = 0
   const management = {
-    listParsedDocuments: vi.fn(async () => {
-      if (options.lists !== undefined) {
-        const answer = options.lists[Math.min(listIndex, options.lists.length - 1)]
-        listIndex += 1
-        return answer ?? listOf([row])
-      }
-      return options.pendingList === undefined
-        ? (options.list ?? listOf([row]))
-        : await options.pendingList()
-    }),
+    listParsedDocuments: vi.fn(
+      async (request: {
+        readonly sessionId: string
+        readonly offset: number
+        readonly limit: number
+      }) => {
+        if (options.listImpl !== undefined) return await options.listImpl(request)
+        if (options.lists !== undefined) {
+          const answer = options.lists[Math.min(listIndex, options.lists.length - 1)]
+          listIndex += 1
+          return answer ?? listOf([row])
+        }
+        return options.pendingList === undefined
+          ? (options.list ?? listOf([row]))
+          : await options.pendingList()
+      },
+    ),
     discardParsedDocument: vi.fn(
       async (
         request: { readonly sessionId: string; readonly artifactId: string },

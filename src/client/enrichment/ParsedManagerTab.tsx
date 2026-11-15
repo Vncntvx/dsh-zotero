@@ -2,26 +2,33 @@
  * The parsed-document manager: one session-scoped right-sidebar tab that lists
  * every committed artifact and owns open / reparse / discard actions. The list
  * is a single host-side inventory call; no per-target probe, HEAD or MinerU
- * request runs behind the rows. Rows name the paper by the Markdown H1 the
- * parse captured, narrow by state and text, and can be discarded in bulk — one
- * request per selected artifact, so a failure never hides inside a batch.
+ * request runs behind the rows. The chrome follows the Host's own list
+ * semantics: flat rows (no card), a row checkbox whose accessible name is the
+ * selection action, pills for state narrowing, and "show more" instead of a
+ * pager.
  * @module dsh-zotero/client/enrichment/ParsedManagerTab
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import clsx from 'clsx'
 import {
   Button,
-  Checkbox,
+  IconCloseOutlineRegular,
+  IconDeliverDocRegular,
   IconEyeOutlineRegular,
+  IconLinkOutlineRegular,
+  IconPaperclipOutlineRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   IconSparkleRegular,
   IconTrashOutlineRegular,
   Input,
   Modal,
-  SegmentedControl,
+  Pill,
+  StateDot,
   Tag,
   Toast,
   fileSizeText,
+  relativeTime,
   type TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -32,10 +39,11 @@ import type {
   ZoteroParsedDocumentState,
 } from '../../contract.ts'
 import { formatDateTime, joinNonEmpty } from '../../sources/presenters.js'
+import { messageOf } from '../error-text.ts'
 import { parseParsedManagerTabAddress } from '../parsed-manager-tab.ts'
 import { typedRemoteResult } from './parse-controller.ts'
 import {
-  maxPageOf,
+  formatCount,
   shortArtifactId,
   sourceDescriptorOf,
   totalBytesOf,
@@ -46,18 +54,28 @@ import {
   type DocumentParseSurfacePort,
   type ParsedDocumentManagementRemote,
 } from './parse-surface.tsx'
-import { LibraryPager } from '../components/library/LibraryPager.tsx'
 import { IconButton } from '../components/IconButton.tsx'
 import { useTransientToast } from '../components/use-transient-toast.ts'
 import css from './parsed-manager.module.css'
 
 const PAGE_SIZE = 50
-/** The library panel's own search cadence, kept in step so both feel alike. */
-const SEARCH_DEBOUNCE_MS = 300
-/** Selection never outlives the window it was made in; this is the empty one. */
+/** The widest window this panel materializes; "show more" stops there. */
+const MAX_WINDOW = 200
+/** The Host's panel search cadence (workspace search, plugin market). */
+const SEARCH_DEBOUNCE_MS = 250
+/** Selection resets when the visible window changes. */
 const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
 type StateFilter = 'all' | ZoteroParsedDocumentState
+
+const FILTERS: readonly StateFilter[] = ['all', 'indexed', 'orphan', 'broken']
+
+const FILTER_LABELS = {
+  all: 'parsedManagerFilterAll',
+  indexed: 'parsedManagerFilterIndexed',
+  orphan: 'parsedManagerFilterOrphan',
+  broken: 'parsedManagerFilterBroken',
+} as const
 
 const STATE_LABELS = {
   indexed: 'parsedManagerStateIndexed',
@@ -70,6 +88,15 @@ const STATE_TONES: Record<ZoteroParsedDocumentState, TagTone> = {
   orphan: 'warning',
   broken: 'danger',
 }
+
+/** The host buckets the age; the words stay here, beside the row that shows them. */
+const AGO_LABELS = {
+  minutes: 'parsedManagerAgoMinutes',
+  hours: 'parsedManagerAgoHours',
+  days: 'parsedManagerAgoDays',
+  months: 'parsedManagerAgoMonths',
+  years: 'parsedManagerAgoYears',
+} as const
 
 const BROKEN_LABELS: Record<
   NonNullable<ZoteroParsedDocumentRowView['broken']>['code'],
@@ -126,84 +153,79 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     },
     props.t,
   )
-  const [page, setPage] = useState(0)
   const [filter, setFilter] = useState<StateFilter>('all')
   const [query, setQuery] = useState('')
   const [appliedQuery, setAppliedQuery] = useState('')
   const [list, setList] = useState<ZoteroListParsedDocumentsResultView>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(EMPTY_SELECTION)
   const [confirming, setConfirming] = useState<{ ids: readonly string[]; title?: string }>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [revision, setRevision] = useState(0)
   const { toast, notify, clear } = useTransientToast()
-  /** The in-flight discard aborts when the tab unmounts, like every other owned read. */
+  /** Aborts on unmount, like every other owned read. */
   const discardAbort = useRef<AbortController>()
+  const moreAbort = useRef<AbortController>()
   useEffect(
     () => () => {
       discardAbort.current?.abort()
+      moreAbort.current?.abort()
     },
     [],
   )
 
-  // Typing narrows the listing after the library panel's cadence; the window
-  // and its selection belong to the old filter, so both start over.
+  const requestOf = useCallback(
+    (offset: number, limit: number) => ({
+      sessionId,
+      offset,
+      limit,
+      ...(filter === 'all' ? {} : { state: filter }),
+      ...(appliedQuery === '' ? {} : { query: appliedQuery }),
+    }),
+    [sessionId, filter, appliedQuery],
+  )
+
+  // Typing narrows the listing after the Host's cadence; the window and its
+  // selection belong to the old filter, so both start over.
   useEffect(() => {
     if (query === appliedQuery) return
     const timer = setTimeout(() => {
       setAppliedQuery(query)
-      setPage(0)
       setSelected(EMPTY_SELECTION)
     }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [query, appliedQuery])
 
-  const load = useCallback(
+  const loadFirst = useCallback(
     (signal: AbortSignal) => {
       if (!sessionId || !listAllowed || !deployment.mounted) return
       setBusy(true)
       setError(undefined)
       void management
-        .listParsedDocuments(
-          {
-            sessionId,
-            offset: page * PAGE_SIZE,
-            limit: PAGE_SIZE,
-            ...(filter === 'all' ? {} : { state: filter }),
-            ...(appliedQuery === '' ? {} : { query: appliedQuery }),
-          },
-          signal,
-        )
+        .listParsedDocuments(requestOf(0, PAGE_SIZE), signal)
         .then((result) => {
-          if (signal.aborted) return
-          const value = typedRemoteResult(result)
-          setList(value)
-          // A window past the end means concurrent removals shrank the listing
-          // under an older offset; step back to the last page instead of
-          // leaving an empty page on screen.
-          const last = maxPageOf(value.total, PAGE_SIZE)
-          if (page > last) setPage(last)
+          if (!signal.aborted) setList(typedRemoteResult(result))
         })
         .catch((cause: unknown) => {
-          if (!signal.aborted) setError(cause instanceof Error ? cause.message : String(cause))
+          if (!signal.aborted) setError(messageOf(cause))
         })
         .finally(() => {
           if (!signal.aborted) setBusy(false)
         })
     },
-    [management, sessionId, listAllowed, deployment.mounted, page, filter, appliedQuery],
+    [management, sessionId, listAllowed, deployment.mounted, requestOf],
   )
 
   useEffect(() => {
     const abort = new AbortController()
-    load(abort.signal)
+    loadFirst(abort.signal)
     return () => abort.abort()
-  }, [load, revision, parseSurface.revision])
+  }, [loadFirst, revision, parseSurface.revision])
 
   const changeFilter = (next: StateFilter) => {
     setFilter(next)
-    setPage(0)
     setSelected(EMPTY_SELECTION)
   }
 
@@ -216,13 +238,40 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     })
   }
 
+  /** One more page behind the rows already on screen; the window only grows. */
+  const showMore = async (loaded: readonly ZoteroParsedDocumentRowView[]) => {
+    if (loadingMore) return
+    const abort = new AbortController()
+    moreAbort.current = abort
+    setLoadingMore(true)
+    setError(undefined)
+    try {
+      const page = typedRemoteResult(
+        await management.listParsedDocuments(requestOf(loaded.length, PAGE_SIZE), abort.signal),
+      )
+      if (abort.signal.aborted) return
+      setList(() => ({ rows: [...loaded, ...page.rows], total: page.total }))
+    } catch (cause) {
+      if (!abort.signal.aborted) setError(messageOf(cause))
+    } finally {
+      moreAbort.current = undefined
+      if (!abort.signal.aborted) setLoadingMore(false)
+    }
+  }
+
+  /** Re-read the window the reader was looking at in one request. */
+  const reloadWindow = async (target: number, signal: AbortSignal) => {
+    const limit = Math.min(MAX_WINDOW, Math.max(PAGE_SIZE, target))
+    setList(typedRemoteResult(await management.listParsedDocuments(requestOf(0, limit), signal)))
+  }
+
   /**
    * Discard one or many artifacts in sequence: one request per id, so a
-   * failure is attributable and the survivors stay selected. The filtered
-   * total shrinks by the rows the listing actually held, and the page steps
-   * back when that leaves the current window past the end.
+   * failure is attributable and the survivors stay selected. The window is
+   * re-read at its previous size, so a removal never strands the reader on a
+   * page that no longer holds anything.
    */
-  const discardRows = async (ids: readonly string[]) => {
+  const discardRows = async (ids: readonly string[], loaded: number) => {
     const abort = new AbortController()
     discardAbort.current = abort
     setBusy(true)
@@ -263,11 +312,11 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
       } else {
         notify(props.t('parsedManagerBatchPartial', { removed, failed: failed.length }))
       }
-      const last = maxPageOf(Math.max(0, (list?.total ?? 0) - discardedCount), PAGE_SIZE)
-      if (page > last) setPage(last)
-      setRevision((previous) => previous + 1)
+      await reloadWindow(Math.max(0, loaded - removed), abort.signal)
+    } catch (cause) {
+      if (!abort.signal.aborted) setError(messageOf(cause))
     } finally {
-      if (discardAbort.current === abort) discardAbort.current = undefined
+      discardAbort.current = undefined
       if (!abort.signal.aborted) {
         setBusy(false)
         setProgress(undefined)
@@ -283,11 +332,19 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     )
 
   const rows = list?.rows ?? []
-  const pageIds = rows.map((row) => row.artifactId)
-  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+  const total = list?.total ?? 0
+  const allLoadedSelected = rows.length > 0 && rows.every((row) => selected.has(row.artifactId))
   const filtering = filter !== 'all' || appliedQuery !== ''
+  /** One clock per render, so every row ages against the same moment. */
+  const now = Date.now()
   const titleOf = (row: ZoteroParsedDocumentRowView): string =>
     row.title !== undefined && row.title.trim() !== '' ? row.title : shortArtifactId(row.artifactId)
+  const agoOf = (at: number): string => {
+    const age = relativeTime(at, now)
+    return age.unit === 'now'
+      ? props.t('parsedManagerAgoNow')
+      : props.t(AGO_LABELS[age.unit], { count: age.n })
+  }
   const metaOf = (row: ZoteroParsedDocumentRowView): string => {
     // A broken row has no metadata to describe; its reason line is the copy.
     if (row.state === 'broken') return ''
@@ -298,9 +355,9 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         : row.sourceKind === 'attachment'
           ? props.t('parsedManagerSourceAttachment', { key: source })
           : source,
-      row.committedAt > 0 ? formatDateTime(row.committedAt) : undefined,
+      agoOf(row.committedAt),
       fileSizeText(totalBytesOf(row)),
-      props.t('parsedManagerChars', { count: row.characterCount }),
+      props.t('parsedManagerChars', { count: formatCount(row.characterCount) }),
       row.pageCount === undefined
         ? undefined
         : props.t('libraryParsedPages', { count: row.pageCount }),
@@ -316,20 +373,19 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   return (
     <section className={css.surface} aria-busy={busy}>
       <header className={css.toolbar}>
-        <SegmentedControl
-          id="zotero-parsed-manager-state"
-          className={css.filterControl}
-          label={props.t('parsedManagerFilterLabel')}
-          value={filter}
-          onChange={changeFilter}
-          disabled={!listAllowed}
-          options={[
-            { value: 'all', label: props.t('parsedManagerFilterAll') },
-            { value: 'indexed', label: props.t('parsedManagerStateIndexed') },
-            { value: 'orphan', label: props.t('parsedManagerStateOrphan') },
-            { value: 'broken', label: props.t('parsedManagerStateBroken') },
-          ]}
-        />
+        <div className={css.filters} role="group" aria-label={props.t('parsedManagerFilterLabel')}>
+          {FILTERS.map((value) => (
+            <Pill
+              key={value}
+              active={filter === value}
+              aria-pressed={filter === value}
+              disabled={!listAllowed}
+              onClick={() => changeFilter(value)}
+            >
+              {props.t(FILTER_LABELS[value])}
+            </Pill>
+          ))}
+        </div>
         <div className={css.toolbarRow}>
           <Input
             className={css.search}
@@ -341,56 +397,41 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
             disabled={!listAllowed}
             onChange={(event) => setQuery(event.target.value)}
           />
+          {query !== '' && (
+            <IconButton
+              shape="round"
+              size="sm"
+              icon={<IconCloseOutlineRegular size={12} />}
+              aria-label={props.t('parsedManagerClearSearch')}
+              title={props.t('parsedManagerClearSearch')}
+              onClick={() => setQuery('')}
+            />
+          )}
           <Button
             variant="outline"
             size="sm"
-            icon={<IconSparkleRegular size={14} />}
+            icon={<IconSparkleRegular size={13} />}
             disabled={parseSurface.openUrl === undefined}
             onClick={() => parseSurface.openUrl?.()}
           >
             {props.t('libraryParseUrl')}
           </Button>
-          <IconButton
-            shape="square"
-            icon={<IconRefreshOutlineRegular size={14} />}
+          <Button
+            variant="outline"
+            size="sm"
             aria-label={props.t('parsedManagerRefresh')}
-            title={props.t('parsedManagerRefresh')}
+            aria-busy={busy}
             disabled={busy || !listAllowed}
+            icon={
+              busy ? (
+                <StateDot state="ongoing" size={13} />
+              ) : (
+                <IconRefreshOutlineRegular size={13} />
+              )
+            }
             onClick={() => setRevision((previous) => previous + 1)}
           />
         </div>
-        {(list !== undefined || progress !== undefined || selected.size > 0) && (
-          <div className={css.statusLine} role={progress === undefined ? undefined : 'status'}>
-            {progress !== undefined ? (
-              <span>{props.t('parsedManagerBatchDeleting', { ...progress })}</span>
-            ) : selected.size > 0 ? (
-              <>
-                <span>{props.t('parsedManagerSelected', { count: selected.size })}</span>
-                <span className={css.statusLineActions}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={<IconTrashOutlineRegular size={14} />}
-                    disabled={!discardAllowed || busy}
-                    onClick={() => setConfirming({ ids: [...selected] })}
-                  >
-                    {props.t('parsedManagerDeleteSelected')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => setSelected(EMPTY_SELECTION)}
-                  >
-                    {props.t('parsedManagerClearSelection')}
-                  </Button>
-                </span>
-              </>
-            ) : (
-              <span>{props.t('parsedManagerTotal', { count: list?.total ?? 0 })}</span>
-            )}
-          </div>
-        )}
       </header>
       {error !== undefined && (
         <div className={css.errorRow}>
@@ -411,25 +452,76 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
       )}
       {!listAllowed && <p className={css.status}>{props.t('parsedManagerDenied')}</p>}
       {listAllowed && list === undefined && busy && (
-        <p className={css.status}>{props.t('parsedManagerLoading')}</p>
+        <div className={css.skeleton} role="status" aria-label={props.t('parsedManagerLoading')}>
+          {[0, 1, 2].map((index) => (
+            <span key={index} className={css.skeletonRow} aria-hidden="true" />
+          ))}
+        </div>
       )}
       {listAllowed && list !== undefined && rows.length === 0 && (
         <div className={css.empty}>
-          <p className={css.status}>
+          <span className={css.emptyIcon} aria-hidden="true">
+            <IconDeliverDocRegular size={24} />
+          </span>
+          <p className={css.emptyTitle}>
             {props.t(filtering ? 'parsedManagerEmptyFiltered' : 'parsedManagerEmpty')}
           </p>
           {!filtering && <p className={css.hint}>{props.t('parsedManagerEmptyHint')}</p>}
         </div>
       )}
-      {rows.length > 0 && (
-        <div className={css.listHeader}>
-          <Checkbox
-            className={css.selectAll}
-            checked={allOnPageSelected}
-            label={props.t('parsedManagerSelectPage')}
-            disabled={!discardAllowed || busy}
-            onChange={(next) => setSelected(next ? new Set(pageIds) : EMPTY_SELECTION)}
-          />
+      {listAllowed && list !== undefined && total > 0 && (
+        <div className={css.listBar}>
+          <span className={css.listBarText}>{props.t('parsedManagerTotal', { count: total })}</span>
+          {selected.size > 0 && (
+            <span className={css.listBarText}>
+              {props.t('parsedManagerSelected', { count: selected.size })}
+            </span>
+          )}
+          <span className={css.listBarSpacer} />
+          {progress !== undefined ? (
+            <span className={css.listBarText} role="status">
+              {props.t('parsedManagerBatchDeleting', { ...progress })}
+            </span>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy || rows.length === 0}
+                onClick={() =>
+                  setSelected(
+                    allLoadedSelected
+                      ? EMPTY_SELECTION
+                      : new Set(rows.map((row) => row.artifactId)),
+                  )
+                }
+              >
+                {props.t(allLoadedSelected ? 'parsedManagerDeselectAll' : 'parsedManagerSelectAll')}
+              </Button>
+              {selected.size > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<IconTrashOutlineRegular size={13} />}
+                    disabled={!discardAllowed || busy}
+                    onClick={() => setConfirming({ ids: [...selected] })}
+                  >
+                    {props.t('parsedManagerDeleteSelected')}
+                  </Button>
+                  <IconButton
+                    shape="round"
+                    size="sm"
+                    icon={<IconCloseOutlineRegular size={12} />}
+                    aria-label={props.t('parsedManagerClearSelection')}
+                    title={props.t('parsedManagerClearSelection')}
+                    disabled={busy}
+                    onClick={() => setSelected(EMPTY_SELECTION)}
+                  />
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
       <ul className={css.list}>
@@ -438,29 +530,45 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
           const meta = metaOf(row)
           const isSelected = selected.has(row.artifactId)
           return (
-            <li
-              className={isSelected ? `${css.row} ${css.rowSelected}` : css.row}
-              key={row.artifactId}
-            >
+            <li className={clsx(css.row, { [css.rowSelected]: isSelected })} key={row.artifactId}>
               <div className={css.rowHead}>
-                <Checkbox
-                  className={css.rowSelect}
-                  checked={isSelected}
-                  label={title}
-                  title={row.title ?? row.artifactId}
-                  disabled={!discardAllowed || busy}
-                  onChange={(next) => toggleRow(row.artifactId, next)}
-                />
+                {/* The Host's list rows pair a bare checkbox with a visible
+                 * title and name the control after the action, because the
+                 * primitive Checkbox cannot separate its label from its name. */}
+                <label className={css.rowSelect}>
+                  <input
+                    type="checkbox"
+                    className={css.rowCheck}
+                    checked={isSelected}
+                    disabled={!discardAllowed || busy}
+                    aria-label={props.t('parsedManagerSelectRow', { title })}
+                    onChange={(event) => toggleRow(row.artifactId, event.target.checked)}
+                  />
+                  <span className={css.rowTitle} title={row.title ?? row.artifactId}>
+                    {title}
+                  </span>
+                </label>
                 {row.state !== 'indexed' && (
                   <Tag tone={STATE_TONES[row.state]}>{props.t(STATE_LABELS[row.state])}</Tag>
                 )}
               </div>
               <div className={css.rowMeta}>
-                {meta !== '' && <span className={css.metaText}>{meta}</span>}
+                {meta !== '' && (
+                  <span className={css.metaText} title={formatDateTime(row.committedAt)}>
+                    <span className={css.metaIcon} aria-hidden="true">
+                      {row.sourceKind === 'url' ? (
+                        <IconLinkOutlineRegular size={12} />
+                      ) : (
+                        <IconPaperclipOutlineRegular size={12} />
+                      )}
+                    </span>
+                    <span className={css.metaCopy}>{meta}</span>
+                  </span>
+                )}
                 <span className={css.actions}>
                   <IconButton
+                    className={css.rowAction}
                     shape="square"
-                    size="sm"
                     icon={<IconEyeOutlineRegular size={14} />}
                     aria-label={props.t('parsedManagerOpen')}
                     title={props.t('parsedManagerOpen')}
@@ -468,8 +576,8 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                     onClick={() => openParsed(sessionId, row.artifactId, title)}
                   />
                   <IconButton
+                    className={css.rowAction}
                     shape="square"
-                    size="sm"
                     icon={<IconSparkleRegular size={14} />}
                     aria-label={props.t('libraryParsedReparse')}
                     title={props.t('libraryParsedReparse')}
@@ -477,8 +585,8 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                     onClick={() => parseSurface.openArtifact?.(row.artifactId, title)}
                   />
                   <IconButton
+                    className={css.rowAction}
                     shape="square"
-                    size="sm"
                     icon={<IconTrashOutlineRegular size={14} />}
                     aria-label={props.t('parsedManagerDelete')}
                     title={props.t('parsedManagerDelete')}
@@ -499,34 +607,30 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
           )
         })}
       </ul>
-      {list !== undefined && rows.length > 0 && (
-        <LibraryPager
-          t={props.t}
-          label={props.t('tabParsedManager')}
-          offset={page * PAGE_SIZE}
-          limit={PAGE_SIZE}
-          total={list.total}
-          returned={rows.length}
-          nextOffset={(page + 1) * PAGE_SIZE < list.total ? (page + 1) * PAGE_SIZE : undefined}
-          busy={busy}
-          onPage={(offset) => {
-            setPage(Math.floor(offset / PAGE_SIZE))
-            setSelected(EMPTY_SELECTION)
-          }}
-        />
+      {list !== undefined && rows.length < Math.min(total, MAX_WINDOW) && (
+        <Button
+          variant="outline"
+          size="sm"
+          className={css.more}
+          aria-busy={loadingMore}
+          disabled={loadingMore || busy}
+          onClick={() => void showMore(rows)}
+        >
+          {props.t('parsedManagerShowMore')}
+        </Button>
       )}
       <Modal
-        open={confirming !== undefined}
+        open={pendingDelete !== undefined}
         onClose={() => setConfirming(undefined)}
         title={props.t(
           batchConfirm ? 'parsedManagerBatchDeleteTitle' : 'parsedManagerDeleteTitle',
           {
-            count: confirming?.ids.length ?? 0,
+            count: pendingDelete?.ids.length ?? 0,
           },
         )}
         description={props.t(
           batchConfirm ? 'parsedManagerBatchDeleteDescription' : 'parsedManagerDeleteDescription',
-          { count: confirming?.ids.length ?? 0, title: confirming?.title ?? '' },
+          { count: pendingDelete?.ids.length ?? 0, title: pendingDelete?.title ?? '' },
         )}
         closeLabel={props.t('parsedManagerDeleteCancel')}
         footer={
@@ -538,11 +642,12 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                 {props.t('parsedManagerDeleteCancel')}
               </Button>
               <Button
-                variant="primary"
+                variant="outline"
+                className={css.dangerAction}
                 disabled={busy}
                 onClick={() => {
                   setConfirming(undefined)
-                  void discardRows(pendingDelete.ids)
+                  void discardRows(pendingDelete.ids, rows.length)
                 }}
               >
                 {props.t('parsedManagerDeleteConfirm')}

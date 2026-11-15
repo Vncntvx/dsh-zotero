@@ -10,18 +10,19 @@ import {
   documentParseLabel,
   validDocumentParseTarget,
 } from '../../../src/client/enrichment/parse-controller.ts'
+import { formatDateTime } from '../../../src/sources/presenters.ts'
 import { deferred } from '../../helpers/sync.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
 import {
   ID,
   MISSING,
+  SECOND_TITLE,
   SESSION,
   TITLE,
   listOf,
   listRegion,
   row,
   secondRow,
-  waitForIdle,
   world,
   type ListResult,
 } from './support/parsed-manager-world.tsx'
@@ -35,8 +36,8 @@ describe('parsed document manager tab', () => {
   it('names the row by the captured title and opens it by artifact id', async () => {
     const w = world()
     expect(await screen.findByText(TITLE)).toBeDefined()
-    // A healthy row states its source, not a status tag; only the filter
-    // control carries the state words.
+    // A healthy row states its source, not a status tag; only the pill row
+    // carries the state words.
     expect(within(listRegion()).queryByText(en.parsedManagerStateIndexed)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.parsedManagerOpen }))
     expect(w.openParsed).toHaveBeenCalledWith(SESSION, ID, TITLE)
@@ -45,15 +46,31 @@ describe('parsed document manager tab', () => {
   it('falls back to a short artifact id when no title was captured', async () => {
     world({ list: listOf([{ ...row, title: undefined }]) })
     const name = await screen.findByText(ID.slice(0, 8))
-    expect(name.closest('label')?.getAttribute('title')).toBe(ID)
+    expect(name.getAttribute('title')).toBe(ID)
   })
 
-  it('states the source, the commit time, the size and the counts', async () => {
-    world()
+  it('states the source, the age, the size and the counts', async () => {
+    // A row parsed three days ago reads as an age; the absolute moment stays on
+    // the line's tooltip.
+    const committedAt = Date.now() - 3 * 24 * 60 * 60 * 1000
+    world({ list: listOf([{ ...row, committedAt }]) })
     const meta = await screen.findByText(/Attachment DEF/)
-    expect(meta.textContent).toMatch(
-      /^Attachment DEF · \d{4}\/\d{2}\/\d{2} \d{2}:\d{2} · 1\.2KB · 1200 characters · 7 pages · 1 figures$/,
+    expect(meta.textContent).toBe(
+      'Attachment DEF · 3d · 1.2KB · 1,200 characters · 7 pages · 1 figures',
     )
+    expect(meta.closest('[title]')?.getAttribute('title')).toBe(formatDateTime(committedAt))
+  })
+
+  it('reads a row parsed moments ago as fresh', async () => {
+    world({ list: listOf([{ ...row, committedAt: Date.now() }]) })
+    expect(await screen.findByText(/just now/)).toBeDefined()
+  })
+
+  it('omits the counts a row does not carry', async () => {
+    world({ list: listOf([{ ...row, pageCount: undefined, images: [] }]) })
+    const meta = await screen.findByText(/Attachment DEF/)
+    expect(meta.textContent).not.toContain('pages')
+    expect(meta.textContent).not.toContain('figures')
   })
 
   it('marks pro artifacts and tags only the rows that need a warning', async () => {
@@ -110,16 +127,16 @@ describe('parsed document manager tab', () => {
     expect(await screen.findByText(en.parsedManagerEmpty)).toBeDefined()
     expect(screen.getByText(en.parsedManagerEmptyHint)).toBeDefined()
     expect(screen.queryByRole('button', { name: en.parsedManagerOpen })).toBeNull()
-    expect(screen.queryByRole('checkbox', { name: en.parsedManagerSelectPage })).toBeNull()
+    expect(screen.queryByRole('button', { name: en.parsedManagerSelectAll })).toBeNull()
   })
 
-  it('shows the loading state until the first page arrives', async () => {
+  it('shows a skeleton until the first page arrives', async () => {
     const pending = deferred<ListResult>()
     world({ pendingList: async () => await pending.promise })
-    expect(screen.getByText(en.parsedManagerLoading)).toBeDefined()
+    expect(screen.getByRole('status', { name: en.parsedManagerLoading })).toBeDefined()
     pending.resolve(listOf([row]))
     expect(await screen.findByText(TITLE)).toBeDefined()
-    expect(screen.queryByText(en.parsedManagerLoading)).toBeNull()
+    expect(screen.queryByRole('status', { name: en.parsedManagerLoading })).toBeNull()
   })
 
   it('surfaces a list failure and retries it', async () => {
@@ -162,24 +179,20 @@ describe('parsed document manager tab', () => {
     expect(screen.getByRole('button', { name: en.libraryParsedReparse })).toBeDefined()
   })
 
-  it('pages a long list forward and back', async () => {
-    const w = world({ list: listOf([row, secondRow], 120) })
-    expect(await screen.findByText(TITLE)).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: en.libraryPageNext }))
-    await vi.waitFor(() =>
-      expect(w.management.listParsedDocuments).toHaveBeenLastCalledWith(
-        { sessionId: SESSION, offset: 50, limit: 50 },
-        expect.any(AbortSignal),
-      ),
-    )
-    // The request records before it settles; the pager unlocks on the answer.
-    await waitForIdle()
-    fireEvent.click(screen.getByRole('button', { name: en.libraryPagePrev }))
-    await vi.waitFor(() =>
-      expect(w.management.listParsedDocuments).toHaveBeenLastCalledWith(
-        { sessionId: SESSION, offset: 0, limit: 50 },
-        expect.any(AbortSignal),
-      ),
+  it('offers show more only while the listing holds another page', async () => {
+    world({ list: listOf([row, secondRow], 2) })
+    await screen.findByText(TITLE)
+    expect(screen.queryByRole('button', { name: en.parsedManagerShowMore })).toBeNull()
+  })
+
+  it('grows the window with show more instead of paging', async () => {
+    const w = world({ lists: [listOf([row], 120), listOf([secondRow], 120)] })
+    await screen.findByText(TITLE)
+    fireEvent.click(screen.getByRole('button', { name: en.parsedManagerShowMore }))
+    expect(await screen.findByText(SECOND_TITLE)).toBeDefined()
+    expect(w.management.listParsedDocuments).toHaveBeenLastCalledWith(
+      { sessionId: SESSION, offset: 1, limit: 50 },
+      expect.any(AbortSignal),
     )
   })
 
@@ -195,6 +208,21 @@ describe('parsed document manager tab', () => {
     fireEvent.click(screen.getByRole('button', { name: en.libraryParseUrl }))
     fireEvent.click(screen.getByRole('button', { name: en.parsedManagerRefresh }))
     await vi.waitFor(() => expect(w.management.listParsedDocuments).toHaveBeenCalledTimes(2))
+  })
+
+  it('clears the search text from its own control', async () => {
+    const w = world()
+    await screen.findByText(TITLE)
+    fireEvent.change(screen.getByPlaceholderText(en.parsedManagerSearchPlaceholder), {
+      target: { value: 'attention' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.parsedManagerClearSearch }))
+    await vi.waitFor(() =>
+      expect(w.management.listParsedDocuments).toHaveBeenLastCalledWith(
+        { sessionId: SESSION, offset: 0, limit: 50 },
+        expect.any(AbortSignal),
+      ),
+    )
   })
 
   it('surfaces a discard refusal instead of refreshing open tabs', async () => {

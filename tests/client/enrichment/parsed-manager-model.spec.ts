@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoteroParsedDocumentRowView } from '../../../src/contract.ts'
 import {
-  maxPageOf,
+  formatCount,
   shortArtifactId,
   sourceDescriptorOf,
   totalBytesOf,
@@ -72,11 +72,12 @@ describe('totalBytesOf', () => {
   })
 })
 
-describe('maxPageOf', () => {
-  it('counts the last page index, with an empty listing on page zero', () => {
-    expect(maxPageOf(0, 50)).toBe(0)
-    expect(maxPageOf(50, 50)).toBe(0)
-    expect(maxPageOf(51, 50)).toBe(1)
-    expect(maxPageOf(100, 50)).toBe(1)
+describe('formatCount', () => {
+  it('groups thousands and refuses anything below zero', () => {
+    expect(formatCount(0)).toBe('0')
+    expect(formatCount(999)).toBe('999')
+    expect(formatCount(1200)).toBe('1,200')
+    expect(formatCount(1_234_567)).toBe('1,234,567')
+    expect(formatCount(-5)).toBe('0')
   })
 })

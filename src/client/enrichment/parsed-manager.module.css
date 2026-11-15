@@ -20,8 +20,10 @@
   gap: 8px;
 }
 
-.filterControl {
-  align-self: stretch;
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .toolbarRow {
@@ -36,19 +38,28 @@
   min-width: 0;
 }
 
-.statusLine {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xs-13);
+/* The plugin draws its own clear control, as the Files pane does. */
+.search input::-webkit-search-cancel-button {
+  display: none;
+  appearance: none;
 }
 
-.statusLineActions {
-  margin-left: auto;
+.listBar {
+  flex: none;
   display: flex;
+  align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+
+.listBarSpacer {
+  flex: 1 1 auto;
+}
+
+.listBarText {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
 }
 
 .status {
@@ -60,7 +71,7 @@
 .hint {
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xs-13);
+  font: var(--dsw-font-xxs-12);
 }
 
 .errorRow {
@@ -73,50 +84,83 @@
 .error {
   margin: 0;
   color: var(--dsw-alias-state-error-primary);
-  font: var(--dsw-font-xs-13);
+  font: var(--dsw-font-xxs-12);
 }
 
 .empty {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 2px;
-}
-
-.listHeader {
-  flex: none;
-  display: flex;
   align-items: center;
+  gap: 6px;
+  padding: 40px 8px;
+  text-align: center;
 }
 
-.selectAll {
+.emptyIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  margin: 0;
   color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xs-13);
+  font: var(--dsw-font-s-14);
+}
+
+/* First paint reserves the rows' shape instead of pushing text at the reader. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeletonRow {
+  height: 56px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeletonRow {
+    animation: parsed-skeleton 2s ease-in-out infinite;
+  }
+}
+
+@keyframes parsed-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .list {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* A flat row: the fill alone marks hover and selection, the way the Host's own
+ * lists do. Rows bleed to the surface edge so the fill reads as a full band. */
 .row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  background: var(--dsw-alias-bg-layer-2);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
+  gap: 2px;
+  margin: 0 -8px;
+  padding: 8px;
+  border-radius: var(--dsw-radius-xl);
   box-sizing: border-box;
 }
 
 .rowSelected {
-  background: var(--dsw-alias-bg-multi-select);
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 @media (hover: hover) {
@@ -126,7 +170,7 @@
 
   /* A selected row keeps its own fill while hovered. */
   .rowSelected:hover {
-    background: var(--dsw-alias-bg-multi-select);
+    background: var(--dsw-alias-interactive-bg-active);
   }
 }
 
@@ -137,20 +181,30 @@
   min-width: 0;
 }
 
-/* The title is the checkbox's own label: the row's accessible name and its
- * visible text at once, so it carries the ellipsis instead of an extra line. */
 .rowSelect {
+  display: flex;
   flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-s-strong-14);
+  cursor: pointer;
 }
 
-.rowSelect span {
+.rowCheck {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 1px;
+  accent-color: var(--dsw-alias-state-business-primary);
+}
+
+.rowTitle {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
 }
 
 .rowMeta {
@@ -158,35 +212,51 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 28px;
+  min-height: 24px;
 }
 
 .metaText {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.metaIcon {
+  flex: none;
+  display: inline-flex;
+}
+
+.metaCopy {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xs-13);
 }
 
 .actions {
   flex: none;
   margin-left: auto;
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .broken {
   margin: 0;
   color: var(--dsw-alias-state-error-primary);
-  font: var(--dsw-font-xs-13);
+  font: var(--dsw-font-xxs-12);
 }
 
 .brokenDetail {
   margin-left: 6px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.more {
+  align-self: center;
 }
 
 @container (max-width: 520px) {
@@ -210,7 +280,7 @@
 }
 
 @container (max-width: 360px) {
-  .metaText {
+  .metaCopy {
     white-space: normal;
   }
 }

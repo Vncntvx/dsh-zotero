@@ -15,19 +15,21 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   readonly shape?: 'round' | 'square'
   /** 28px or 20px square. */
   readonly size?: 'md' | 'sm'
+  /** The host Button's visual variant; defaults to ghost. */
+  readonly variant?: 'ghost' | 'outline'
   /** Leading glyph, rendered through the host Button's icon seat. */
   readonly icon: ReactNode
 }
 
 /** Render one icon-only button over the official Button primitive. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { shape = 'square', size = 'md', icon, className, ...rest },
+  { shape = 'square', size = 'md', variant = 'ghost', icon, className, ...rest },
   ref,
 ) {
   return (
     <Button
       ref={ref}
-      variant="ghost"
+      variant={variant}
       size="sm"
       icon={icon}
       className={clsx(css.iconButton, css[shape], css[size], className)}
