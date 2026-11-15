@@ -158,7 +158,14 @@ it('adds an abstract as a quote without replacing or submitting the draft', asyn
     expect(inputActions.insertQuote).toHaveBeenCalledWith(
       expect.stringContaining('Faster attention.'),
     )
-    expect(inputActions.insertQuote).toHaveBeenCalledWith(expect.stringContaining(ITEM_DETAIL.ref))
+    // The item's PDF turns the ask into a fulltext read request; the abstract
+    // rides the same insert under the referenceAndAbstract preference.
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('mode="fulltext"'),
+    )
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('zotero://user/0/item/ATTAC001'),
+    )
     expect(inputActions.setDraft).not.toHaveBeenCalled()
     expect(inputActions.submit).not.toHaveBeenCalled()
   } finally {

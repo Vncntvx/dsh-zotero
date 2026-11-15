@@ -769,6 +769,7 @@ function LibrarySelect({
       portal
       dense
       align="start"
+      className={css.selectorAnchor}
       onClose={() => setOpen(false)}
       anchor={
         <Tooltip label={`${t('librarySelectLibrary')}: ${currentName}`} side="bottom" delayMs={500}>
@@ -839,6 +840,7 @@ function SortSelect({
       portal
       dense
       align="start"
+      className={css.selectorAnchor}
       onClose={() => setOpen(false)}
       anchor={
         <Tooltip label={`${t('librarySortLabel')}: ${currentLabel}`} side="bottom" delayMs={500}>

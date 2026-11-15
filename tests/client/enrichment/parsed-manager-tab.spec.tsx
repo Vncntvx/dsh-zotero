@@ -227,6 +227,19 @@ describe('parsed document manager tab', () => {
     await vi.waitFor(() => expect(w.management.listParsedDocuments).toHaveBeenCalledTimes(2))
   })
 
+  it('keeps the URL parse entry a glyph-plus-label seat with a stable accessible name', async () => {
+    world()
+    await screen.findByText(TITLE)
+    // The compact toolbar hides the label through CSS, never unmounts it: the
+    // accessible name cannot drift between the wide and narrow toolbars, and
+    // the glyph rides inside the button instead of the icon seat.
+    const button = screen.getByRole('button', { name: en.libraryParseUrl })
+    expect(button.getAttribute('aria-label')).toBe(en.libraryParseUrl)
+    const label = within(button).getByText(en.libraryParseUrl)
+    expect(label.className).toContain('urlParseLabel')
+    expect(button.querySelector('[class*="urlParseGlyph"]')).not.toBeNull()
+  })
+
   it('clears the search text from its own control', async () => {
     const w = world()
     await screen.findByText(TITLE)

@@ -410,11 +410,13 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
           <Button
             variant="outline"
             size="sm"
-            icon={<IconSparkleRegular size={13} />}
+            className={clsx(css.textSeat, css.urlParseCompact)}
+            aria-label={props.t('libraryParseUrl')}
             disabled={parseSurface.openUrl === undefined}
             onClick={() => parseSurface.openUrl?.()}
           >
-            {props.t('libraryParseUrl')}
+            <IconLinkOutlineRegular size={13} className={css.urlParseGlyph} />
+            <span className={css.urlParseLabel}>{props.t('libraryParseUrl')}</span>
           </Button>
           <Button
             variant="outline"

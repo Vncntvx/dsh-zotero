@@ -637,11 +637,46 @@ describe('library inspector', () => {
     }
     mountInspector(ITEM_DETAIL, {}, inputActions as unknown as InputActions)
     fireEvent.click(screen.getByRole('button', { name: zh.libraryAskInChat }))
-    expect(inputActions.insertQuote).toHaveBeenCalledWith(expect.stringContaining(ITEM_DETAIL.ref))
+    // The item's PDF turns the ask into a fulltext read request addressed to
+    // the attachment; the item metadata still rides along.
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining(zh.libraryAskFulltextPrompt.split('{source}')[0]!),
+    )
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('zotero://user/0/item/ATTAC001'),
+    )
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('FlashAttention-2'),
+    )
     expect(screen.getByRole('alert').textContent).toBe(zh.libraryInsertFailed)
     expect(inputActions.setDraft).not.toHaveBeenCalled()
     expect(inputActions.insertText).not.toHaveBeenCalled()
     expect(inputActions.persistDraft).not.toHaveBeenCalled()
+  })
+
+  it('addresses the ask to the item ref alone when no PDF attachment exists', () => {
+    const insertQuote = vi.fn(() => true)
+    const inputActions = {
+      insertQuote,
+      captureInsertion: vi.fn(),
+      insertText: vi.fn(),
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+    }
+    const { attachments: _attachments, bestAttachment: _best, ...detail } = ITEM_DETAIL
+    mountInspector(detail, {}, inputActions as unknown as InputActions)
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryAskInChat }))
+    // Without a PDF there is nothing to read whole: the ask stays the
+    // metadata referral, addressed by the item ref for evidence reads.
+    expect(insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining(
+        zh.libraryAskPrompt
+          .replace('{title}', 'FlashAttention-2')
+          .replace('{ref}', ITEM_DETAIL.ref),
+      ),
+    )
+    expect(insertQuote).not.toHaveBeenCalledWith(expect.stringContaining('fulltext'))
+    expect(insertQuote).toHaveBeenCalledWith(expect.stringContaining(ITEM_DETAIL.ref))
   })
 
   it('puts the parse action in the header beside Read PDF, not in the attachment list', async () => {

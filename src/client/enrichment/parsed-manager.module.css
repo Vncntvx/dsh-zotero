@@ -40,6 +40,30 @@
   min-width: 0;
 }
 
+/* The row's text buttons never rewrap: the host Button has no white-space
+ * contract, and a squeezed label lines out of its fixed-height box (the
+ * misaligned stack this sheet once shipped). Buttons keep their natural
+ * width; the search is the row's only shrinking part, and the compact
+ * toolbar swaps the URL label for an icon-only seat (`.urlParseCompact`).
+ * Doubled like `IconButton.module.css` to outrank the host sheet's own
+ * `.button` without relying on injection order. */
+.textSeat.textSeat {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The URL entry's glyph rides beside the label; the compact seat hides the
+ * label and centers the glyph, so the button reads as icon-only. */
+.urlParseGlyph {
+  display: block;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.urlParseLabel {
+  white-space: nowrap;
+}
+
 .search {
   flex: 1 1 auto;
   min-width: 0;
@@ -156,7 +180,8 @@
 
 /* A flat row: the fill alone marks hover and selection, the way the Host's own
  * lists do, while one hairline separates each row from the previous one. Rows
- * bleed to the surface edge so the fill reads as a full band. */
+ * bleed to the surface edge so the fill reads as a full band; the list clips
+ * the bleed so the surface never gains a horizontal scrollbar from it. */
 .row {
   display: flex;
   flex-direction: column;
@@ -164,6 +189,11 @@
   margin: 0 -8px;
   padding: 8px;
   box-sizing: border-box;
+  min-width: 0;
+}
+
+.list {
+  overflow-x: clip;
 }
 
 .list > .row + .row {
@@ -278,12 +308,19 @@
   }
 }
 
-/* The metadata slot is the row's one shrinking part: at narrow widths the text
- * truncates or wraps and the three actions keep their one-line seat. The host's
- * own job rows wrap their metadata rather than drop the action cluster. */
+/* The compact toolbar: the URL entry keeps its action but drops its label,
+ * the way the Host's own job rows collapse a text trigger to an icon seat —
+ * a squeezed label lines out of the Button's fixed height instead. */
 @container (max-width: 360px) {
-  .metaCopy {
-    white-space: normal;
+  .urlParseLabel {
+    display: none;
+  }
+
+  .urlParseCompact.urlParseCompact {
+    width: 28px;
+    min-width: 28px;
+    padding-inline: 0;
+    justify-content: center;
   }
 }
 

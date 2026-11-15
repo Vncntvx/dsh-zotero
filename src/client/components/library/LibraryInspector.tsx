@@ -573,7 +573,22 @@ export function LibraryInspector({
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
   const askInChat = () => {
     if (!inputActions) return
-    const information = [askPrompt, itemInfoTextOf(detail), detail.ref]
+    // A PDF attachment turns the ask into a read request: the fulltext mode
+    // serves a committed parsed artifact when one exists and Zotero's index
+    // text otherwise, so one attachment ref covers both worlds and the client
+    // never probes which shape it will meet. A record without a PDF keeps the
+    // metadata-only ask; its evidence reads stay addressable by the item ref.
+    // The instruction opens the card, the facts follow, and the ref the model
+    // reads through sits last — the explain card's order without the excerpt.
+    const pdf = pdfs[0]
+    const instruction =
+      pdf === undefined
+        ? askPrompt
+        : t('libraryAskFulltextPrompt', {
+            title: detail.title,
+            source: JSON.stringify({ kind: 'ref', ref: pdf.ref }),
+          })
+    const information = [instruction, itemInfoTextOf(detail), pdf?.ref ?? detail.ref]
     if (preferences.preferences?.chatInsertContent === 'referenceAndAbstract') {
       information.push(
         detail.abstract === undefined

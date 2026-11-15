@@ -99,7 +99,7 @@ it('instructs the model to read the full document through zotero_retrieve', asyn
   expect(draft).not.toContain('{source}')
   expect(draft).not.toContain('/full.md')
   expect(draft).toContain(
-    'Explain request (not part of the paper): read the paper’s complete parsed document before answering.',
+    'Explain request: read the paper’s complete parsed document before answering.',
   )
   expect(draft.endsWith('\n\nPassage')).toBe(true)
 })

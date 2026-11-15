@@ -76,7 +76,17 @@
 
 /* The library/sort pickers are the host Button. It fills its wrap so a
  * shrunken wrap drags the button with it — an auto-width button would keep
- * painting at full width across its neighbour — and the cap bounds the label. */
+ * painting at full width across its neighbour — and the cap bounds the label.
+ * The width must resolve against the wrap, not the button's own content: the
+ * anchor sits inside the Menu's inline-flex root span, so that span — not the
+ * Button — is the shrink-to-fit box the seat's 100% resolves against. The
+ * selector classes land on that span through Menu's className. */
+.selectorAnchor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
 .selectorSeat {
   width: 100%;
   max-width: 220px;

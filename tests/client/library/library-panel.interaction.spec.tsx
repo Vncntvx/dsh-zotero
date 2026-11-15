@@ -386,7 +386,11 @@ describe('the inspector chat actions ride the session input face', () => {
     expect(inputActions.insertQuote).toHaveBeenCalledTimes(1)
     const [quote] = inputActions.insertQuote.mock.calls[0] as unknown as [string]
     expect(quote).toContain('FlashAttention-2')
-    expect(quote).toContain('zotero://user/0/item/ITEM0001')
+    // The item's PDF turns the ask into a fulltext read request addressed to
+    // the attachment; the item ref stays out of the source seat.
+    expect(quote).toContain('mode="fulltext"')
+    expect(quote).toContain('zotero://user/0/item/ATTAC001')
+    expect(quote).not.toContain('zotero://user/0/item/ITEM0001')
     expect(inputActions.submit).not.toHaveBeenCalled()
   })
 })
