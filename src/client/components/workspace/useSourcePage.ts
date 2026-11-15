@@ -16,7 +16,7 @@ import type {
   ZoteroSourcePageResultView,
   ZoteroSourcePageTarget,
 } from '../../../contract.ts'
-import { messageOf } from '../../error-text.ts'
+import { LibraryFailure, laneFailureOf } from '../library/library-errors.ts'
 
 /** The wire call one page needs. */
 export type SourcePageCall = (
@@ -162,7 +162,7 @@ export function useSourcePage(
         if (controller.signal.aborted) return
         if (!result.ok) throw result.error
         if (result.value.sessionId !== sessionId) {
-          throw new Error('The source page belongs to another session.')
+          throw new LibraryFailure('libraryErrorForeignSession')
         }
         inflightRef.current = undefined
         setState((previous) =>
@@ -182,7 +182,7 @@ export function useSourcePage(
         inflightRef.current = undefined
         setState((previous) =>
           previous.key === key
-            ? { ...previous, key, loading: false, error: messageOf(error), attempt: click }
+            ? { ...previous, key, loading: false, error: laneFailureOf(error), attempt: click }
             : previous,
         )
       }

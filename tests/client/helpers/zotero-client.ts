@@ -11,6 +11,7 @@ import type { ZoteroAttachmentLocationView } from '../../../src/contract.ts'
 import type {
   ZoteroClientFace,
   ZoteroProtocolNotice,
+  ZoteroSurfaceNotice,
 } from '../../../src/client/actions/client-face.ts'
 
 /**
@@ -44,12 +45,22 @@ export function zoteroClientStub(
       path: '/tmp/paper.pdf',
     },
   })
+  // The panel-notice channel behaves the same way: one snapshot store a spec
+  // can seed, and a dismisser that clears it.
+  const surface = createSnapshotStore<ZoteroSurfaceNotice | null>(null)
   return {
     reportClientError: overrides.reportClientError ?? vi.fn(async () => {}),
     openProtocol: overrides.openProtocol ?? vi.fn(async () => true),
     resolveAttachment: overrides.resolveAttachment ?? vi.fn(resolveAttachment),
     protocolNotice: shown,
     dismissProtocolNotice: overrides.dismissProtocolNotice ?? dismiss,
+    surfaceNotice: overrides.surfaceNotice ?? surface,
+    notifySurface:
+      overrides.notifySurface ??
+      ((text, tone) => {
+        surface.set({ seq: 1, text, ...(tone === undefined ? {} : { tone }) })
+      }),
+    dismissSurfaceNotice: overrides.dismissSurfaceNotice ?? (() => surface.set(null)),
   }
 }
 

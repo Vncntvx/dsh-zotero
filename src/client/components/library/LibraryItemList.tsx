@@ -22,6 +22,7 @@ import { pageRangeOf, type LibraryListState, type LibrarySelection } from './lib
 import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
+import { laneTextOf } from './library-errors.ts'
 
 export interface ParsedArtifactProbeFace {
   readonly sessionId: string
@@ -234,7 +235,7 @@ export function LibraryItemList({
 
       {locate !== undefined && locateError !== undefined && (
         <p role="alert" className={clsx(css.treeError, css.listLocateError)}>
-          {locateError}
+          {laneTextOf(locateError, t)}
         </p>
       )}
 
@@ -247,7 +248,7 @@ export function LibraryItemList({
 
         {list.phase === 'error' && (
           <div role="alert" className={css.listErrorWrap}>
-            <p className={css.listError}>{list.message}</p>
+            <p className={css.listError}>{laneTextOf(list.message, t)}</p>
             <Button variant="outline" size="sm" onClick={retry}>
               {t('libraryRetry')}
             </Button>

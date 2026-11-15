@@ -75,6 +75,7 @@ describe('the browser-half entry', () => {
     // right-sidebar library surfaces.
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'shell.overlay',
+      'shell.overlay',
       'tool.call.toolview',
       'shell.overlay',
       'shell.overlay',

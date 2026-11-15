@@ -127,7 +127,7 @@ it('stops after one automatic rebuild when the library keeps changing', async ()
   await waitFor(() =>
     expect(result.current.treeLane(undefined)).toMatchObject({
       phase: 'error',
-      message: expect.stringContaining('keeps changing'),
+      message: 'libraryErrorChanging',
     }),
   )
   expect(

@@ -26,7 +26,6 @@ import {
   Pill,
   StateDot,
   Tag,
-  Toast,
   fileSizeText,
   relativeTime,
   type TagTone,
@@ -55,7 +54,6 @@ import {
   type ParsedDocumentManagementRemote,
 } from './parse-surface.tsx'
 import { IconButton } from '../components/IconButton.tsx'
-import { useTransientToast } from '../components/use-transient-toast.ts'
 import css from './parsed-manager.module.css'
 
 const PAGE_SIZE = 50
@@ -113,6 +111,11 @@ export interface ParsedManagerTabFace {
   readonly openParsed: (sessionId: string, artifactId: string, title: string) => void
   /** Notify already-open parsed tabs that an artifact was discarded. */
   readonly discarded: (sessionId: string, artifactId: string) => void
+  /**
+   * Raise one transient notice in the shell overlay. It lives there, not in
+   * this tab, so closing the manager does not take the report with it.
+   */
+  readonly notify: (text: string, tone?: 'success') => void
 }
 
 export type ParsedManagerTabProps = PropsRuntime<'sidebar.right.pane.tab'> &
@@ -131,7 +134,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const tab = props.useTabInfo().tab
   const target = parseParsedManagerTabAddress(tab.navigation.address)
   const sessionId = target?.sessionId ?? ''
-  const { management, parse, openParsed, discarded } = props
+  const { management, parse, openParsed, discarded, notify } = props
   const listAllowed = props.useAccess('zotero/listParsedDocuments')
   const discardAllowed = props.useAccess('zotero/discardParsedDocument')
   const startAllowed = props.useAccess('zotero/startDocumentParse')
@@ -164,7 +167,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const [confirming, setConfirming] = useState<{ ids: readonly string[]; title?: string }>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [revision, setRevision] = useState(0)
-  const { toast, notify, clear } = useTransientToast()
   /** Aborts on unmount, like every other owned read. */
   const discardAbort = useRef<AbortController>()
   const moreAbort = useRef<AbortController>()
@@ -655,9 +657,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
           )
         }
       />
-      {toast !== null && (
-        <Toast key={toast.seq} tone={toast.tone} text={toast.text} onDone={clear} />
-      )}
       {parseSurface.dialog}
     </section>
   )

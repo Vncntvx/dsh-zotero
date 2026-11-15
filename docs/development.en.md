@@ -62,7 +62,7 @@ src/
   write-auth.ts         # Zotero local write key acquisition and persistence
   write-http.ts         # Local write HTTP request handling
   write-item-rules.ts   # Write fields and update rules (shared by tools and the write domain)
-  shell-write-detector.ts # Interception detection for shell commands that write to the local API directly
+  shell-write-detector.ts # Detection for shell commands that write to the local API directly (a hit becomes one approval; best-effort)
   remote.ts             # Web-side Remote service
   typert.ts             # Typert manifest
   settings-namespace.ts # Settings namespace constants

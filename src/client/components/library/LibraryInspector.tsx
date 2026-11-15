@@ -54,6 +54,7 @@ import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
 import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
+import { laneTextOf } from './library-errors.ts'
 
 /** The browser face the parsed-artifact actions need: the session, its read, and the tab opener. */
 export interface ParsedArtifactFace {
@@ -535,7 +536,7 @@ export function LibraryInspector({
     return (
       <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
         <p className={css.listError} role="alert">
-          {inspector.message}
+          {laneTextOf(inspector.message, t)}
         </p>
         <Button
           variant="outline"

@@ -95,6 +95,17 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Verification**: `tests/unit/library-views.spec.ts` asserts `authors`/`venue` cross the wire and an empty author list leaves no key; `tests/client/library/remote-contract-library.spec.ts` asserts the strict codec accepts both optional fields; `tests/client/library/use-item-type-labels.spec.tsx` asserts the paged walk, retry after failure, a non-advancing cursor, the unmount drop, and the three-step resolution order; `tests/client/library/library-panel.interaction.spec.tsx` asserts the current row's `aria-current`, its friendly type label, venue, and structured authors; `tests/client/library/library-tree.spec.tsx` asserts the collection item-count badge and that an unreported count renders nothing; `tests/client/library/library-inspector-layout.spec.tsx` asserts the abstract window appears only when the prose overflows.
 - **Follow-up**: if upstream starts carrying a localized type name or structured authors (for example a wire `localizedItemType`), delete the client dictionary and the `/itemTypes` walk and consume the wire instead; if paging ever becomes accumulating, migrate to `LibraryLaneControls.tsx`'s show-more plus loaded-count pattern and update the window state in `library-storage.ts` together with `docs/features`.
 
+### DN-9: Upstream's "no session surface" refusal is prose, so the client matches a substring
+
+- **Type**: upstream workaround (missing error code).
+- **Status**: in effect (2026-11-15, pin `0.2.2-rc.3`).
+- **Location**: `NO_SESSION_SURFACE_REFUSAL` and `openFile` in `src/client/components/library/ZoteroLibraryPanel.tsx`; `tests/client/library/library-panel.reader.spec.tsx`.
+- **Behavior**: opening a local PDF goes through the host right sidebar's `openResource`. When the current conversation has no session surface mounted, `@deepseek-ai/dsh-client-ui-sidebar-right` (`src/client/service.ts`) throws `new Error('sidebarRight: no session surface is mounted')` — no error code and no distinguishable error type. To show the branch as its own hint (`libraryNoSessionForOpen`), the plugin can only match that message text.
+- **Current approach**: the substring lives in the `NO_SESSION_SURFACE_REFUSAL` constant with its upstream provenance in the comment; the spec throws the same constant rather than keeping a second copy of the prose. Other `openResource` failures keep their own message (there is a separate case). The match uses `includes` because upstream prefixes the sentence with `sidebarRight: `.
+- **Review trigger**: after every `npm run harness:pin`, re-check the string in the sibling source: `rg "no session surface is mounted" ../deepseek-harness/packages/client/ui-sidebar-right/src`.
+- **Verification**: `tests/client/library/library-panel.reader.spec.tsx` (the refusal becomes the panel hint; a foreign refusal keeps its own message).
+- **Follow-up**: if upstream gives that branch an error code or error type, switch to matching the code and delete the constant and this entry.
+
 ## Upgrade review
 
 Every harness pin change walks this page from the top: check whether upstream now provides the requested contract; if it does, migrate and retire the entry in the same change, because a capability that exists while the workaround remains is not an acceptable state. If it does not, update only the pin version and the review date, leaving the workaround untouched.

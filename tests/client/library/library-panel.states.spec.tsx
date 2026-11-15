@@ -15,6 +15,7 @@ import {
   searchPage,
 } from '../helpers/library-panel-harness.tsx'
 import { zh } from '../../../src/client/locales.ts'
+import { mockT } from '../helpers/mock-translate.ts'
 
 beforeEach(() => {
   localStorage.clear()
@@ -360,7 +361,9 @@ describe('lane states', () => {
     act(() => {
       row.click()
     })
-    expect(await screen.findByText('detail gone')).toBeTruthy()
+    expect(
+      await screen.findByText(mockT('libraryErrorDetail', { message: 'detail gone' })),
+    ).toBeTruthy()
   })
 
   it('renders the absent-side arms of notes and annotations', async () => {
@@ -445,7 +448,9 @@ describe('lane states', () => {
     mountPanel({
       search: vi.fn(async () => ({ ok: false, error: { message: 'Zotero 未连接' } })),
     })
-    expect(await screen.findByText('Zotero 未连接')).toBeTruthy()
+    expect(
+      await screen.findByText(mockT('libraryErrorDetail', { message: 'Zotero 未连接' })),
+    ).toBeTruthy()
   })
 
   it('shows the empty-list note for a ready page with no rows', async () => {

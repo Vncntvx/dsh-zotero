@@ -10,7 +10,6 @@ import {
   MarkdownText,
   Menu,
   TextShimmer,
-  Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -33,7 +32,6 @@ import {
 import { itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { IconButton } from '../IconButton.tsx'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
-import { useTransientToast } from '../use-transient-toast.ts'
 import css from './parsed-document.module.css'
 
 export type { ParsedArtifactRead } from '../../parsed-documents.ts'
@@ -44,6 +42,11 @@ export interface ParsedDocumentTabFace {
     signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroItemDetailView>>
   readonly parse?: DocumentParseSurfacePort
+  /**
+   * Raise one transient notice in the shell overlay. It lives there, not in
+   * this tab, so closing the tab does not take the report with it.
+   */
+  readonly notify?: (text: string, tone?: 'success') => void
 }
 export type ParsedDocumentTabProps = PropsRuntime<'sidebar.right.pane.tab'> &
   InjectFace<ParsedDocumentTabFace> &
@@ -321,14 +324,12 @@ function ParsedDocumentView(
   const titleId = useId()
   const copy = useCopyFeedback(address)
   const copyDocument = useCopyFeedback(document?.metadata.artifactId, document?.text)
-  const { toast: copiedToast, notify: notifyCopied, clear: clearCopied } = useTransientToast()
   useEffect(() => {
-    if (copy.phase === 'done' || copyDocument.phase === 'done')
-      notifyCopied(t('libraryParsedCopied'), 'success')
-  }, [copy.phase, copyDocument.phase, notifyCopied, t])
-  useEffect(() => {
-    clearCopied()
-  }, [address, clearCopied])
+    if (copy.phase === 'done' || copyDocument.phase === 'done') {
+      // The shell overlay owns the notice, so it outlives this tab.
+      props.notify?.(t('libraryParsedCopied'), 'success')
+    }
+  }, [copy.phase, copyDocument.phase, props, t])
   const labels = useMemo(
     () => ({
       code: { copyLabel: t('libraryParsedCopyCode'), copiedLabel: t('libraryParsedCopiedCode') },
@@ -577,14 +578,6 @@ function ParsedDocumentView(
         <p role="alert" className={css.banner}>
           {insertError}
         </p>
-      )}
-      {copiedToast !== null && (
-        <Toast
-          key={copiedToast.seq}
-          tone={copiedToast.tone}
-          text={copiedToast.text}
-          onDone={clearCopied}
-        />
       )}
       {preparing && (
         <p role="status" className={css.progress}>

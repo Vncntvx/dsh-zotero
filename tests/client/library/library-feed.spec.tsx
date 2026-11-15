@@ -266,7 +266,10 @@ describe('targeted recovery and write refresh', () => {
     })
     const { result } = setup({ search, item: () => item.promise })
     await waitFor(() =>
-      expect(result.current.list).toEqual({ phase: 'error', message: 'scope missing' }),
+      expect(result.current.list).toEqual({
+        phase: 'error',
+        message: 'scope missing',
+      }),
     )
     expect(result.current.selection).toEqual({ kind: 'library' })
     act(() => result.current.selectItem(ITEM_DETAIL.ref))

@@ -12,6 +12,7 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ListingStatus } from './library-feed-types.ts'
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
+import { laneTextOf } from './library-errors.ts'
 
 /** The pager window one served page reports. */
 export interface ListingPage {
@@ -63,13 +64,13 @@ export function ListingPager({
       {status?.phase === 'error' &&
         (errorVariant === 'lane' ? (
           <div role="alert" className={css.laneError}>
-            <p className={css.treeError}>{status.message}</p>
+            <p className={css.treeError}>{laneTextOf(status.message, t)}</p>
             {retryButton}
           </div>
         ) : (
           <>
             <p role="alert" className={css.treeError}>
-              {status.message}
+              {laneTextOf(status.message, t)}
             </p>
             {retryButton}
           </>

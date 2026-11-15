@@ -144,7 +144,9 @@ describe('useSourcePage', () => {
       }),
     )
     act(() => result.current.loadMore())
-    await waitFor(() => expect(result.current.error).toContain('changed'))
+    // The host's own sentence is stored verbatim; the surface that renders it
+    // wraps it in one localized sentence (`laneTextOf`).
+    await waitFor(() => expect(result.current.error).toBe('The literature trail changed.'))
     expect(result.current.pages).toHaveLength(0)
     act(() => result.current.retry())
     await waitFor(() => expect(result.current.pages).toHaveLength(1))
@@ -178,7 +180,7 @@ describe('useSourcePage', () => {
       }),
     )
     act(() => result.current.loadMore())
-    await waitFor(() => expect(result.current.error).toContain('belongs to another session'))
+    await waitFor(() => expect(result.current.error).toBe('libraryErrorForeignSession'))
     expect(result.current.pages).toHaveLength(0)
   })
 
@@ -198,7 +200,7 @@ describe('useSourcePage', () => {
       }),
     )
     act(() => result.current.loadMore())
-    await waitFor(() => expect(result.current.error).toContain('Failed to retrieve source page.'))
+    await waitFor(() => expect(result.current.error).toBe('Failed to retrieve source page.'))
     expect(result.current.pages).toHaveLength(0)
   })
 

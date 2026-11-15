@@ -193,7 +193,7 @@ describe('child feed selection, failures, and guards', () => {
     await waitFor(() =>
       expect(result.current.childStates.notes).toEqual({
         phase: 'error',
-        message: 'The child page answered a different kind.',
+        message: 'libraryErrorChildKind',
       }),
     )
     // The inspector keeps its detail; the mismatch never patches the state.

@@ -19,6 +19,7 @@ import {
 import type { ZoteroLibraryBrowseRequestView } from '../../../src/client/remote.ts'
 import type { DocumentParseSurfacePort } from '../../../src/client/enrichment/parse-surface.tsx'
 import { zh } from '../../../src/client/locales.ts'
+import { mockT } from '../helpers/mock-translate.ts'
 
 beforeEach(() => {
   localStorage.clear()
@@ -468,7 +469,9 @@ describe('a rejecting wire face surfaces its lane error, then recovers', () => {
         return { ok: true, value: searchPage({ offset: request.offset }) }
       }),
     })
-    expect(await screen.findByText('search blew up')).toBeTruthy()
+    expect(
+      await screen.findByText(mockT('libraryErrorDetail', { message: 'search blew up' })),
+    ).toBeTruthy()
     // Recovery goes through a refresh, which re-issues the same page.
     act(() => {
       screen.getByRole('button', { name: zh.refresh }).click()
@@ -489,7 +492,9 @@ describe('a rejecting wire face surfaces its lane error, then recovers', () => {
     act(() => {
       row.click()
     })
-    expect(await screen.findByText('item blew up')).toBeTruthy()
+    expect(
+      await screen.findByText(mockT('libraryErrorDetail', { message: 'item blew up' })),
+    ).toBeTruthy()
     act(() => {
       row.click()
     })

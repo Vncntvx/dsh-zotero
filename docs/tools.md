@@ -173,7 +173,7 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ```text
 zotero_retrieve(mode="evidence", ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
-zotero_retrieve(mode="fulltext", source={kind="ref", ref="zotero://user/0/attachment/EFGH5678"}, start=0)
+zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/attachment/EFGH5678"}, start=0)
 ```
 
 ---
@@ -753,8 +753,8 @@ zotero_batch_items(
    - 写操作必须提供 Zotero 本地签发的 API key；
    - 首次写入需在 Zotero 本地授权弹窗中确认（允许、始终允许或拒绝）；
    - 开启 `writePersistKey` 时，“始终允许”签发的持久密钥会安全保存在宿主凭据管理器中；设置页「基础设置 → 写入」分组提供撤销入口，撤销只删除宿主保存的密钥，下一次写入会重新弹窗。
-3. Shell 写入拦截：
-   - 监听器检测指向本地 API 的写命令，拦截并提升为 Harness 审批请求，防止未授权脚本修改文献库。
+3. Shell 写入检测（转审批）：
+   - 监听器检测指向本地 API 的写命令，并在命令执行前把它转成一次 Harness 审批请求，防止未授权脚本修改文献库。这是 best-effort，不是边界。
 
    检测只读命令文本，无法覆盖所有路径。下列路径无法被检出：
    - 写入脚本文件后再执行（`bash build.sh`）；
@@ -763,7 +763,7 @@ zotero_batch_items(
    - 配置端口之外的 loopback 端口（例外：对 `/api/users/` 的写请求与 authorize 调用在任意 loopback 端口都会被检出）；
    - 用户自有的任何二进制。
 
-   系统提示约束模型只使用写工具；绕开写工具的 shell 直写，由上述拦截与审批把关。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
+   系统提示约束模型只使用写工具；绕开写工具的 shell 直写，由上述检测转成的审批把关。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
 
 ---
 

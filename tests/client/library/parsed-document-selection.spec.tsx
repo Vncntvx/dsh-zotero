@@ -45,22 +45,23 @@ async function mount() {
   owned.push(runtime)
   runtime.mount({ actions })
   await act(async () => {})
-  return actions
+  return { actions, runtime }
 }
 
 describe('parsed passage menu', () => {
   it('copies the saved passage after DOM selection is gone', async () => {
-    await mount()
+    const { runtime } = await mount()
     select()
     window.getSelection()!.removeAllRanges()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedCopySelection') }))
     await act(async () => {})
     expect(clipboardWrites).toHaveBeenCalledWith('Selected passage')
-    expect(screen.getByRole('alert').textContent).toContain(mockT('libraryParsedCopied'))
+    // The confirmation is raised in the shell overlay, so it outlives this tab.
+    expect(runtime.notify).toHaveBeenCalledWith(mockT('libraryParsedCopied'), 'success')
   })
 
   it('inserts the whole request as one quote card', async () => {
-    const actions = await mount()
+    const { actions } = await mount()
     select()
     window.getSelection()!.removeAllRanges()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
@@ -84,7 +85,7 @@ describe('parsed passage menu', () => {
   })
 
   it('keeps rejected insertion visible without sending a message', async () => {
-    const actions = await mount()
+    const { actions } = await mount()
     actions.insertQuote.mockReturnValue(false)
     select()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))

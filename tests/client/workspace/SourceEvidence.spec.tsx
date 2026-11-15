@@ -362,9 +362,76 @@ describe('SourceEvidence component', () => {
       ],
     })
     render(<SourceEvidence item={item} t={t} />)
-    expect(screen.getByText(/已读取/)).toBeDefined()
+    const card = screen.getByText(/已读取/)
+    expect(card.textContent).toBe(
+      t('fulltextReadCard', {
+        source: t('fulltextSourceAttachment'),
+        format: t('fulltextFormatMarkdown'),
+        start: 0,
+        end: 12_000,
+        total: 40_000,
+      }),
+    )
+    // The sentence states what kind of source and format were read. The raw
+    // `zotero://` ref and the `markdown` wire enum never reach the prose; the
+    // ref stays available on the card's title.
+    expect(card.textContent).not.toContain('zotero://')
+    expect(card.textContent).not.toContain('markdown')
+    expect((card.closest('[title]') as HTMLElement | null)?.title).toBe(
+      'zotero://user/0/attachment/EFGH5678',
+    )
     expect(screen.getByText(t('fulltextReadWindowed'))).toBeDefined()
     expect(screen.queryByText(t('evidenceNotRetrieved'))).toBeNull()
+  })
+
+  it('names a URL-sourced window by its kind and keeps the origin off the sentence', () => {
+    const item = sourceOf({
+      fulltextReads: [
+        {
+          sourceKind: 'url' as const,
+          sourceLabel: 'https://papers.example.org/…',
+          textFormat: 'text' as const,
+          totalChars: 900,
+          inputTruncated: false,
+          start: 0,
+          end: 900,
+          isTruncated: false,
+          callIds: ['url-read'],
+        },
+      ],
+    })
+    render(<SourceEvidence item={item} t={t} />)
+    const card = screen.getByText(/已读取/)
+    expect(card.textContent).toContain(t('fulltextSourceUrl'))
+    expect(card.textContent).toContain(t('fulltextFormatText'))
+    expect(card.textContent).not.toContain('https://')
+    expect(card.textContent).not.toContain('text')
+  })
+
+  it('keys two windows of one document without a duplicate-key warning', () => {
+    const first = {
+      sourceKind: 'attachment' as const,
+      sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+      textFormat: 'markdown' as const,
+      totalChars: 40_000,
+      inputTruncated: false,
+      start: 0,
+      end: 12_000,
+      isTruncated: true,
+      callIds: ['w1'],
+    }
+    const second = { ...first, start: 12_000, end: 24_000, callIds: ['w2'] }
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(' '))
+    })
+    try {
+      render(<SourceEvidence item={sourceOf({ fulltextReads: [first, second] })} t={t} />)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(screen.getAllByText(/已读取/)).toHaveLength(2)
+    expect(errors.filter((line) => line.includes('same key'))).toEqual([])
   })
 
   it.each([
@@ -429,8 +496,10 @@ describe('SourceEvidence component', () => {
       expect(
         screen.getByText(
           t('fulltextReadCard', {
-            source: read.sourceLabel,
-            format: read.textFormat,
+            source: t(read.sourceKind === 'url' ? 'fulltextSourceUrl' : 'fulltextSourceAttachment'),
+            format: t(
+              read.textFormat === 'markdown' ? 'fulltextFormatMarkdown' : 'fulltextFormatText',
+            ),
             start: read.start,
             end: read.end,
             total: read.totalChars,

@@ -225,7 +225,7 @@ it('reports a removed saved search after exhausting its listing', async () => {
     expanded: [],
   })
   const { result } = setupLibraryFeed()
-  await waitFor(() => expect(result.current.locateError).toContain('no longer exists'))
+  await waitFor(() => expect(result.current.locateError).toBe('libraryErrorSavedSearchGone'))
 })
 it('reports a path whose target is absent from the actual parent listing', async () => {
   store()
@@ -235,7 +235,7 @@ it('reports a path whose target is absent from the actual parent listing', async
       value: { library: { type: 'user', id: 0 }, libraryVersion: 1, path: [target] },
     }),
   })
-  await waitFor(() => expect(result.current.locateError).toContain('path changed'))
+  await waitFor(() => expect(result.current.locateError).toBe('libraryErrorPathChanged'))
   expect(result.current.locatedRef).toBeUndefined()
 })
 it('stops locating at a failed child lane and leaves its retry available', async () => {
@@ -251,7 +251,7 @@ it('stops locating at a failed child lane and leaves its retry available', async
       value: { library: { type: 'user', id: 0 }, libraryVersion: 1, path: [parent, target] },
     }),
   })
-  await waitFor(() => expect(result.current.locateError).toContain('Cannot load'))
+  await waitFor(() => expect(result.current.locateError).toBe('libraryErrorPathFailed'))
   expect(result.current.treeLane(parent.ref)).toMatchObject({
     phase: 'error',
     message: 'child down',
@@ -267,7 +267,7 @@ it('shows a navigation failure before attempting a restored path', async () => {
         ? { ok: false, error: new RemoteError('gateway/internal', 'root failed', {}) }
         : browse(request),
   })
-  await waitFor(() => expect(result.current.locateError).toContain('Load navigation'))
+  await waitFor(() => expect(result.current.locateError).toBe('libraryErrorScopeMissing'))
 })
 it('shows a saved-search listing failure during restored location', async () => {
   writeLibraryState('S1', 'session-1', {

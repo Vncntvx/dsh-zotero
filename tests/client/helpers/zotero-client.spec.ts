@@ -10,16 +10,31 @@ import type { ZoteroClientFace } from '../../../src/client/actions/client-face.t
 import { zoteroClientStub } from './zotero-client.ts'
 
 describe('zoteroClientStub', () => {
-  it('satisfies the complete five-member client face', () => {
+  it('satisfies the complete client face, panel notices included', () => {
     const face = zoteroClientStub()
     expectTypeOf(face).toEqualTypeOf<ZoteroClientFace>()
     expect(Object.keys(face).sort()).toEqual([
       'dismissProtocolNotice',
+      'dismissSurfaceNotice',
+      'notifySurface',
       'openProtocol',
       'protocolNotice',
       'reportClientError',
       'resolveAttachment',
+      'surfaceNotice',
     ])
+  })
+
+  it('raises and clears a panel notice through the face', () => {
+    const face = zoteroClientStub()
+    face.notifySurface('Saved the passage', 'success')
+    expect(face.surfaceNotice.getSnapshot()).toEqual({
+      seq: 1,
+      text: 'Saved the passage',
+      tone: 'success',
+    })
+    face.dismissSurfaceNotice()
+    expect(face.surfaceNotice.getSnapshot()).toBeNull()
   })
 
   it('clears a preset protocol notice through the dismisser', () => {

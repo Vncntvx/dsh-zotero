@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mountPanel, searchPage } from '../helpers/library-panel-harness.tsx'
 import { writeLibraryState } from '../../../src/client/components/library/library-storage.ts'
 import { zh } from '../../../src/client/locales.ts'
+import { mockT } from '../helpers/mock-translate.ts'
 
 beforeEach(() => localStorage.clear())
 afterEach(cleanup)
@@ -51,7 +52,9 @@ it('lets the user explicitly leave a missing collection for all items', async ()
   )
   mountPanel({ search })
   fireEvent.click(await screen.findByText('LLM Papers'))
-  expect(await screen.findByText('Collection deleted')).toBeTruthy()
+  expect(
+    await screen.findByText(mockT('libraryErrorDetail', { message: 'Collection deleted' })),
+  ).toBeTruthy()
   const buttons = screen.getAllByRole('button', { name: zh.libraryAllItems })
   fireEvent.click(buttons.at(-1)!)
   expect(await screen.findByText('FlashAttention-2')).toBeTruthy()

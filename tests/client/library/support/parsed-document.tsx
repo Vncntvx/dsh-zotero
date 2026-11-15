@@ -170,6 +170,8 @@ export function parsedRuntime(
     return value
   }
   const bindCommands = vi.fn((_commands: { refresh(): void }) => () => {})
+  // Notices leave through the shell overlay; the runtime records them.
+  const notify = vi.fn()
   const props = (
     options: {
       actions?: InputActions
@@ -187,6 +189,7 @@ export function parsedRuntime(
       documents,
       item: options.item,
       inputActions: options.actions,
+      notify,
       useResource: () => useSyncExternalStore(source.subscribe, source.getSnapshot),
       useAccess: (action: string) => {
         const value = grant(action)
@@ -231,6 +234,7 @@ export function parsedRuntime(
     access,
     documents,
     failures,
+    notify,
     grants,
     grant,
     bindCommands,

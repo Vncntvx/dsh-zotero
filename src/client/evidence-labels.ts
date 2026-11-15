@@ -30,6 +30,31 @@ export function sourceLabelKeyOf(
 }
 
 /**
+ * The locale key of one fulltext window's source kind. The card states what
+ * kind of source was read; the concrete ref stays out of the sentence (long
+ * refs would break the line in the narrow panel) and rides the card's title.
+ * @param kind - the window's source kind.
+ * @returns the locale key naming it.
+ */
+export function fulltextSourceKeyOf(
+  kind: 'attachment' | 'url',
+): 'fulltextSourceAttachment' | 'fulltextSourceUrl' {
+  return kind === 'url' ? 'fulltextSourceUrl' : 'fulltextSourceAttachment'
+}
+
+/**
+ * The locale key of one fulltext window's text format, so `markdown` never
+ * reaches the reader as a bare wire enum.
+ * @param format - the window's text format.
+ * @returns the locale key naming it.
+ */
+export function fulltextFormatKeyOf(
+  format: 'markdown' | 'text',
+): 'fulltextFormatMarkdown' | 'fulltextFormatText' {
+  return format === 'markdown' ? 'fulltextFormatMarkdown' : 'fulltextFormatText'
+}
+
+/**
  * The locale key of one match kind. Only a `lexical` passage's own text may be
  * quoted as carrying the query's words; the label marks that distinction.
  */

@@ -86,6 +86,8 @@ export interface WorldOptions {
     readonly offset: number
     readonly limit: number
   }) => Promise<ListResult>
+  /** Where the tab's notices go; defaults to a recording stub. */
+  readonly notify?: (text: string, tone?: 'success') => void
   /** A discard the spec settles itself, for the abort paths. */
   readonly discardImpl?: (
     request: { readonly sessionId: string; readonly artifactId: string },
@@ -140,6 +142,9 @@ export function world(options: WorldOptions = {}) {
   }
   const openParsed = vi.fn()
   const discarded = vi.fn()
+  // The tab raises its notices through the shell overlay; the world records
+  // them instead of rendering one, because surviving the tab is the point.
+  const notify = vi.fn(options.notify)
   const props = {
     t: makeTranslate(en),
     useAccess: (method: string) =>
@@ -152,9 +157,10 @@ export function world(options: WorldOptions = {}) {
     parse,
     openParsed,
     discarded,
+    notify,
   } as unknown as ParsedManagerTabProps
   const rendered = render(<ParsedManagerTab {...props} />)
-  return { management, openParsed, discarded, unmount: rendered.unmount }
+  return { management, openParsed, discarded, notify, unmount: rendered.unmount }
 }
 
 /**

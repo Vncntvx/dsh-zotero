@@ -173,7 +173,7 @@ The returned structure contains `mode`. `evidence` mode carries `ref`, `attachme
 
 ```text
 zotero_retrieve(mode="evidence", ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
-zotero_retrieve(mode="fulltext", source={kind="ref", ref="zotero://user/0/attachment/EFGH5678"}, start=0)
+zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/attachment/EFGH5678"}, start=0)
 ```
 
 ---
@@ -753,8 +753,8 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
    - A write must carry an API key issued by local Zotero;
    - The first write needs confirmation in Zotero's local authorization dialog (Allow, Always Allow, or Decline);
    - With `writePersistKey` on, the persistent key issued by Always Allow is stored safely in the host credentials manager; the settings page's "General → Writing" group can revoke it, and the next write asks again.
-3. Shell write interception:
-   - A listener detects write commands aimed at the local API, intercepts them, and escalates them to a Harness approval request, so unauthorized scripts cannot modify the library.
+3. Shell write detection (turned into one approval):
+   - A listener detects write commands aimed at the local API and turns each one into a Harness approval request before the command runs, so an unauthorized script cannot modify the library unasked. This is best-effort, not a boundary.
 
    Detection reads command text only and cannot cover every path. These paths are not detected:
    - writing a request into a script file and then running it (`bash build.sh`);
@@ -763,7 +763,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
    - a loopback port other than the configured one (exception: write requests to `/api/users/` and authorize calls are detected on any loopback port);
    - any binary of the user's own.
 
-   The system prompt keeps the model on the write tools, and shell writes that bypass them are gated by this interception and approval. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A raw write that is confirmed and allowed bypasses the plugin's write domain entirely: no plan card, no version precondition, no Markdown-to-note HTML conversion, and no provenance. That is the price accepted at the moment of confirmation.
+   The system prompt keeps the model on the write tools, and shell writes that bypass them are gated by the approval this detection raises. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A raw write that is confirmed and allowed bypasses the plugin's write domain entirely: no plan card, no version precondition, no Markdown-to-note HTML conversion, and no provenance. That is the price accepted at the moment of confirmation.
 
 ---
 

@@ -115,8 +115,9 @@ describe('parsed document manager tab', () => {
       expect.any(AbortSignal),
     )
     expect(w.discarded).toHaveBeenCalledWith(SESSION, ID)
+    // The report leaves through the shell overlay, so it outlives this tab.
     await vi.waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain(en.parsedManagerDeleted),
+      expect(w.notify).toHaveBeenCalledWith(en.parsedManagerDeleted, 'success'),
     )
   })
 

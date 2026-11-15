@@ -61,7 +61,9 @@ describe('SourcePageControls component', () => {
     const pager = stubPager({ hasMore: false, error: 'Failed to page literature trail' })
     render(<SourcePageControls pager={pager} label="Sources" t={t} />)
     const alert = screen.getByRole('alert')
-    expect(alert.textContent).toBe('Failed to page literature trail')
+    expect(alert.textContent).toBe(
+      mockT('libraryErrorDetail', { message: 'Failed to page literature trail' }),
+    )
     const retryBtn = screen.getByRole('button', { name: t('sourcePageRetry') })
     fireEvent.click(retryBtn)
     expect(pager.retry).toHaveBeenCalledTimes(1)

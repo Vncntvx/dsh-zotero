@@ -170,7 +170,11 @@ describe('library inspector', () => {
         { count: 2 },
       )
       const section = screen.getByRole('heading', { name: title }).closest('section')!
-      expect(within(section).getByRole('alert').textContent).toBe(`${kind} failed`)
+      // A child-page failure from the wire is quoted inside the one wrapper
+      // sentence; the child's own wording stays visible inside it.
+      expect(within(section).getByRole('alert').textContent).toBe(
+        zh.libraryErrorDetail.replace('{message}', `${kind} failed`),
+      )
       fireEvent.click(within(section).getByRole('button', { name: zh.libraryRetry }))
       expect(retryChild).toHaveBeenCalledWith(kind)
       fireEvent.click(within(section).getByRole('button', { name: zh.libraryPageNext }))

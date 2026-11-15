@@ -134,7 +134,7 @@ import { ZoteroComposerSlot } from './components/composer/ZoteroComposerButton.t
 import { isBibliographyPath } from './bibliography.ts'
 import { DeliverableZoteroAction } from './components/deliverables/DeliverableZoteroAction.tsx'
 import { DocumentOpenLibraryAction } from './components/document/DocumentOpenLibraryAction.tsx'
-import { ZoteroToast } from './components/ZoteroToast.tsx'
+import { ZoteroSurfaceToast, ZoteroToast } from './components/ZoteroToast.tsx'
 import { selectUrlOf } from './actions/open-zotero.ts'
 import { en, zh } from './locales.ts'
 
@@ -255,6 +255,27 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
         ),
       ),
     'dsh-zotero: protocol toast',
+  )
+  // Panel-raised notices live in the same overlay, not inside the panel that
+  // raised them: closing a parsed tab or the manager must not take the report
+  // of what it just did with it.
+  ctx.effect(
+    () =>
+      ctx.slots.inject('shell.overlay', () =>
+        ctx.slots.register(
+          {
+            name: 'shell.overlay',
+            id: 'zotero.surface-toast',
+            registrant: REGISTRANT,
+            inject: () => ({
+              hooks: { toast: client.surfaceNotice },
+              dismiss: client.dismissSurfaceNotice,
+            }),
+          },
+          ZoteroSurfaceToast,
+        ),
+      ),
+    'dsh-zotero: surface toast',
   )
   // Crash intake: the slot registry's own supervision seam, which the renderer
   // fires for every crashed entry (render throws and `inject` factory throws,
@@ -748,6 +769,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         // of the paper through the read tools.
         item: (request, signal) => ctx.remote.zotero.item(request, signal),
         parse: surfaces.parse,
+        notify: (text, tone) => client.notifySurface(text, tone),
       })
       const disposeType = ctx.sidebarRightTabs.register({
         id: PARSED_TAB_ID,
@@ -803,6 +825,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
             ),
           discarded: (sessionId, artifactId) =>
             surfaces.parsedDocuments.discarded(sessionId, artifactId),
+          notify: (text, tone) => client.notifySurface(text, tone),
         })
         const disposeType = ctx.sidebarRightTabs.register({
           id: PARSED_MANAGER_TAB_ID,

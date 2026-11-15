@@ -68,7 +68,7 @@ it('walks clamped library selector pages and rejects a stalled cursor', async ()
   await waitFor(() =>
     expect(result.current.libraries).toMatchObject({
       phase: 'error',
-      message: expect.stringContaining('stalled'),
+      message: 'libraryErrorListingStalled',
     }),
   )
 })

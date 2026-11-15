@@ -77,6 +77,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
         .map((entry) => entry.name),
     ).toEqual([
       'shell.overlay',
+      'shell.overlay',
       'tool.call.toolview',
       'shell.overlay',
       'shell.overlay',

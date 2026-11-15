@@ -191,8 +191,8 @@ graph LR
 - 请求纪律：探针返回前不发出任何面板请求；离线段不发请求；关闭面板后不再发起新请求。
 - 写入口：`writeEnabled` 且选中个人库时显示；仅当所属会话正在运行时才能提交。
 - 引用复制：动作行经 `zotero/export` 端点复制 CSL 引用、BibTeX 等格式，面板只取与 `zotero_export` 同源的渲染文本/引文（不含工具侧的逐条文档定位）；失败就地展示错误，不自动重试。
-- 提问：详情页「提问」向会话输入框插入一张引用卡片，卡片顺序与解析页解释卡一致（指令 → 文献事实 → 模型读取用的 ref，不携带选段）。条目带 PDF 附件时指令按 `parsedExplainPrompt` 的两段式写法要求模型先通读全文——`zotero_retrieve(mode="fulltext", source={kind:"ref", ref: 附件 ref}, start=0)` 按 `nextStart` 续读，产物优先（有解析版本读 Markdown）、索引回退，判断在工具端，客户端不探测 artifactId；随后跟「回答纪律」条目（对会话语言作答、引用原文措辞且不虚构页码节号、文中没有的答案直说）。无 PDF 附件时保持原行为（元数据 + 条目 ref，evidence 检索仍可用）。模型侧文案在每个字典里保持英文。
-- 已解析文档管理页（`zotero-parsed-manager`）：文献面板 header 的常驻按钮按会话打开，位置紧跟 `My Library`（窄屏与选择器同为 `order: 1`，DOM 序保证库选择器在前）。列表按 `listParsedDocuments` 的窗口增量加载：「显示更多」追加一页，最多 200 行。每行使用提交时抓取的 Markdown H1 命名；没有标题时回退到 artifactId 短码，并显示来源、解析时间、大小与计数。行采用扁平行：相邻行之间一条 0.5px 中性发丝线，选中与悬停只改背景填充；窄屏下元信息是唯一可收缩的部分，三个行内操作（打开/重新解析/删除）始终与元数据同行。页内用 Pill 组按状态收窄，并可按输入文本搜索。选择仅随筛选或搜索变化清空，「全选」作用于已加载的行。批量删除逐条发起请求；失败行保持选中并在汇总中报告；删除后按原窗口大小一次重读，不会停在空页。行按 `artifactId` 打开、重新解析或删除；删除先弹确认框，完成后刷新已打开的解析页。解析组件提供服务后才会显示按钮和标签页，URL 解析入口位于管理页。解析结果页（`zotero-parsed`）：资源地址只包含会话和附件 ref（URL 来源改用 `artifact` 段加 artifactId，由 host 在 `expandRequestTarget` 中还原具体来源），论文标题和条目 ref 存在标签页参数中。宿主 `ResourceProvider` / `useResource` 准备完整正文与图片并显示进度，准备完成后一次提交给 `MarkdownText`。刷新期间保持旧文档可读，成功后整体换代，失败时保留旧文档并显示错误。准备结束释放宿主 lease，Blob URL 随资源换代或最后一个 holder 释放而回收。选区动作使用宿主 `Menu`；「让模型解释」把整段请求作为一张宿主 QuoteNode 卡片插入输入框——开头是指令（要求模型从 `start=0` 起按 `nextStart` 连续调用 `zotero_retrieve(mode="fulltext", source=…)` 通读整篇文档再解释，`source` 由附件 ref 或 `artifactId` 定位，见 DN-6），中间是文献元数据与条目 ref，结尾是选段，文案固定英文；浏览器不再接触产物绝对路径。工具调用经 `FulltextEnhancer.lookup` / `lookupArtifact` 只读命中解析产物，并在文献轨迹中折叠为「全文读取窗口」事实（每条事实是一个窗口，不宣称整篇已读）；复制则消费打开菜单时保存的文本快照。
+- 提问：详情页「提问」向会话输入框插入一张引用卡片，卡片顺序与解析页解释卡一致（指令 → 文献事实 → 模型读取用的 ref，不携带选段）。条目带 PDF 附件时指令按 `parsedExplainPrompt` 的两段式写法要求模型先通读全文——以 `mode="fulltext"` 调用 `zotero_retrieve`（`source` 用附件 ref，`start=0`）并按 `nextStart` 续读，产物优先（有解析版本读 Markdown）、索引回退，判断在工具端，客户端不探测 artifactId；随后跟「回答纪律」条目（对会话语言作答、引用原文措辞且不虚构页码节号、文中没有的答案直说）。无 PDF 附件时保持原行为（元数据 + 条目 ref，evidence 检索仍可用）。模型侧文案在每个字典里保持英文。
+- 已解析文档管理页（`zotero-parsed-manager`）：文献面板 header 的常驻按钮按会话打开，位置紧跟 `My Library`（窄屏与选择器同为 `order: 1`，DOM 序保证库选择器在前）。列表按 `listParsedDocuments` 的窗口增量加载：「显示更多」追加一页，最多 200 行。每行使用提交时抓取的 Markdown H1 命名；没有标题时回退到 artifactId 短码，并显示来源、解析时间、大小与计数。行采用扁平行：相邻行之间一条 0.5px 中性发丝线，选中与悬停只改背景填充；窄屏下元信息是唯一可收缩的部分，三个行内操作（打开/重新解析/删除）始终与元数据同行。页内用 Pill 组按状态收窄，并可按输入文本搜索。选择仅随筛选或搜索变化清空，「全选」作用于已加载的行。批量删除逐条发起请求；失败行保持选中并在汇总中报告；删除后按原窗口大小一次重读，不会停在空页。行按 `artifactId` 打开、重新解析或删除；删除先弹确认框，完成后刷新已打开的解析页。解析组件提供服务后才会显示按钮和标签页，URL 解析入口位于管理页。解析结果页（`zotero-parsed`）：资源地址只包含会话和附件 ref（URL 来源改用 `artifact` 段加 artifactId，由 host 在 `expandRequestTarget` 中还原具体来源），论文标题和条目 ref 存在标签页参数中。宿主 `ResourceProvider` / `useResource` 准备完整正文与图片并显示进度，准备完成后一次提交给 `MarkdownText`。刷新期间保持旧文档可读，成功后整体换代，失败时保留旧文档并显示错误。准备结束释放宿主 lease，Blob URL 随资源换代或最后一个 holder 释放而回收。选区动作使用宿主 `Menu`；「让模型解释」把整段请求作为一张宿主 QuoteNode 卡片插入输入框——开头是指令（要求模型从 `start=0` 起按 `nextStart` 连续以 `mode="fulltext"` 调用 `zotero_retrieve` 通读整篇文档再解释，`source` 由附件 ref 或 `artifactId` 定位，见 DN-6），中间是文献元数据与条目 ref，结尾是选段，文案固定英文；浏览器不再接触产物绝对路径。工具调用经 `FulltextEnhancer.lookup` / `lookupArtifact` 只读命中解析产物，并在文献轨迹中折叠为「全文读取窗口」事实（每条事实是一个窗口，不宣称整篇已读）；复制则消费打开菜单时保存的文本快照。
 
 ### 工具卡片
 
@@ -229,7 +229,7 @@ graph LR
 
 插件维护容量 500 条的进程内诊断环形缓冲（`src/diagnostics.ts`），集中记录运行时错误、功能降级与渲染崩溃：
 
-- 记录来源：HTTP 请求、工具调用、Job 状态、配置变更、写门禁、Shell 拦截、连接探测与降级事件通过 `DiagnosticSink` 写入结构化条目；服务挂载随 fiber 生命周期的日志导出器，按名称前缀捕获插件子树的 `ctx.logger` 输出。
+- 记录来源：HTTP 请求、工具调用、Job 状态、配置变更、写门禁、Shell 直写检测、连接探测与降级事件通过 `DiagnosticSink` 写入结构化条目；服务挂载随 fiber 生命周期的日志导出器，按名称前缀捕获插件子树的 `ctx.logger` 输出。
 - 工具结果：进入分发的调用在结果发布时记录一条 `tool.result`，失败为 warn 并附带结果携带的稳定 `errorCode`，成功为 debug；`ms` 从进入 `tools/execute` 计到结果发布（含 post-execute 与终态化），未进入分发的拒绝或取消不含 `ms`。
 - 保留级别：默认不显示诊断面板；开启「诊断」后额外记录请求行与调用摘要，连续相同条目合并并递增 `count`，消息与详情字段均有长度上限。
 - 读取接口：`zotero/diagnostics` 端点按时间倒序返回快照（总数、截断标记、debug 开关）；前端诊断卡仅在开启诊断且面板可见时轮询。

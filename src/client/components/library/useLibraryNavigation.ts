@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
+import { LibraryFailure, laneFailureOf } from './library-errors.ts'
 import {
   collectionRowsOf,
   savedSearchRowsOf,
@@ -22,7 +23,6 @@ import {
   type SavedSearchRowView,
   type LibrarySelection,
 } from './library-model.ts'
-import { messageOf } from '../../error-text.ts'
 
 /** One navigation prefix: rows accumulated from offset 0 and the version they were read at. */
 export type NavigationPage<T> = LibraryLanePage<T> & { readonly libraryVersion: number }
@@ -174,14 +174,14 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
             const value = response.value
             const version = value.libraryVersion
             if (!Number.isSafeInteger(version) || version! < 0)
-              throw new Error('Navigation response lacks a valid library version.')
+              throw new LibraryFailure('libraryErrorVersion')
             // A prefix is one snapshot: every page reports the version the
             // first page did. A page read after the library moved would make
             // this prefix skip or duplicate rows across the seam, so the
             // whole prefix is read again at the new version instead of merged.
             // Only this lane restarts; other lanes are independent listings.
             if (page !== undefined && page.libraryVersion !== version) {
-              if (restarted) throw new Error('Library keeps changing. Reload this branch.')
+              if (restarted) throw new LibraryFailure('libraryErrorChanging')
               restarted = true
               // The settled plane answers by request shape, not by version, so
               // the restart would otherwise be served the prefix it is trying
@@ -196,8 +196,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
               ref === SAVED ? savedSearchRowsOf(value.items) : collectionRowsOf(value.items)
             for (const row of batch) {
               const identity = keyOf(row.ref)
-              if (seen.has(identity))
-                throw new Error('Navigation pagination is inconsistent. Reload this branch.')
+              if (seen.has(identity)) throw new LibraryFailure('libraryErrorPagination')
               seen.add(identity)
             }
             rows.push(...batch)
@@ -208,7 +207,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
               rows.length > value.total ||
               (value.nextOffset === undefined && rows.length !== value.total)
             )
-              throw new Error('Navigation pagination is inconsistent. Reload this branch.')
+              throw new LibraryFailure('libraryErrorPagination')
             page = {
               phase: 'ready',
               rows,
@@ -230,7 +229,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
           if (valid())
             publish(key, {
               phase: 'error',
-              message: messageOf(error),
+              message: laneFailureOf(error),
               previous: pageOf(key),
             })
         } finally {
@@ -328,13 +327,18 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
       await load()
       const root = pageOf('')
       if (!valid()) return
-      if (!root) throw new Error('Load navigation before locating the current scope.')
+      if (!root) throw new LibraryFailure('libraryErrorScopeMissing')
       if (selection.kind === 'savedSearch') {
         await load(SAVED)
         while (valid()) {
           const page = pageOf(SAVED)
           const savedLane = state.current.get(SAVED)
-          if (savedLane?.phase === 'error') throw new Error(savedLane.message)
+          if (savedLane?.phase === 'error') {
+            // The lane already worded its failure in the reader's language;
+            // showing it is the whole answer, not a reason to re-wrap it.
+            if (valid()) setLocateError(savedLane.message)
+            return
+          }
           const found = page?.rows.find((row) => keyOf(row.ref) === keyOf(selection.ref))
           if (found) {
             if (found.name !== selection.name) updateSelection({ ...selection, name: found.name })
@@ -342,7 +346,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
             return
           }
           if (page?.nextOffset === undefined)
-            throw new Error('Saved search no longer exists. Return to all items.')
+            throw new LibraryFailure('libraryErrorSavedSearchGone')
           await load(SAVED, page.rows.length + 1)
         }
         return
@@ -360,10 +364,10 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
           const page = pageOf(keyOf(parent))
           if (page?.rows.some((item) => keyOf(item.ref) === keyOf(row.ref))) break
           if (page && page.nextOffset === undefined)
-            throw new Error('Collection path changed. Reload navigation.')
+            throw new LibraryFailure('libraryErrorPathChanged')
           await load(parent, (page?.rows.length ?? 0) + 1)
           if (state.current.get(keyOf(parent))?.phase === 'error')
-            throw new Error('Cannot load the current collection path.')
+            throw new LibraryFailure('libraryErrorPathFailed')
         }
         if (!valid()) return
         if (parent !== undefined) {
@@ -388,7 +392,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
         setLocatedRef(target.ref)
       }
     } catch (error) {
-      if (valid()) setLocateError(messageOf(error))
+      if (valid()) setLocateError(laneFailureOf(error))
     }
   }, [active, selection, face, library, load, keyOf, setExpanded, updateSelection])
   const locateRef = useRef(locate)

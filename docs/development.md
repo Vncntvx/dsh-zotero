@@ -62,7 +62,7 @@ src/
   write-auth.ts         # Zotero 本地写入密钥获取与持久化
   write-http.ts         # 本地写入 HTTP 请求处理
   write-item-rules.ts   # 写入字段与更新规则（工具与写域共享）
-  shell-write-detector.ts # 直写本地 API 的 shell 命令拦截检测
+  shell-write-detector.ts # 直写本地 API 的 shell 命令检测（命中转审批，best-effort）
   remote.ts             # Web 端 Remote 服务
   typert.ts             # Typert 清单
   settings-namespace.ts # 设置命名空间常量

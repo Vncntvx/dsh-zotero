@@ -88,7 +88,7 @@ it('fails the branch when the library keeps changing under one prefix', async ()
   act(() => result.current.loadMoreTree(undefined))
   await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('error'))
   expect(result.current.treeLane(undefined)).toMatchObject({
-    message: 'Library keeps changing. Reload this branch.',
+    message: 'libraryErrorChanging',
   })
 })
 

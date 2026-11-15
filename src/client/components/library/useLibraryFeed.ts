@@ -45,7 +45,7 @@ import {
   sameLibrary,
 } from './library-model.ts'
 import { objectIdentity, scopeIdentity, scopeKeyOf } from './navigation-identity.ts'
-import { messageOf } from '../../error-text.ts'
+import { laneFailureOf } from './library-errors.ts'
 import { useLibraryChildFeed } from './useLibraryChildFeed.ts'
 import { useLibraryNavigation } from './useLibraryNavigation.ts'
 import {
@@ -317,7 +317,7 @@ export function useLibraryFeed(
       try {
         saved = readLibraryState(serverId, sessionId)
       } catch (error) {
-        setStorageError(messageOf(error))
+        setStorageError(laneFailureOf(error))
       }
     }
     if (memory) {
@@ -406,7 +406,7 @@ export function useLibraryFeed(
         try {
           writeLibraryState(ownerServerId, ownerSessionId, state)
         } catch (error) {
-          setStorageError(messageOf(error))
+          setStorageError(laneFailureOf(error))
         }
       }
     }
@@ -414,7 +414,7 @@ export function useLibraryFeed(
     try {
       writeLibraryState(serverId, sessionId, persistedState)
     } catch (error) {
-      setStorageError(messageOf(error))
+      setStorageError(laneFailureOf(error))
       return
     }
     lastPersisted.current = { serverId, serialized }
@@ -491,7 +491,7 @@ export function useLibraryFeed(
         const next = result.value.nextOffset
         if (next === undefined) break
         if (next <= cursor) {
-          setLibraries({ phase: 'error', message: 'The library listing stalled mid-page.' })
+          setLibraries({ phase: 'error', message: 'libraryErrorListingStalled' })
           return
         }
         cursor = next
@@ -499,7 +499,7 @@ export function useLibraryFeed(
       setLibraries({ phase: 'ready', options: libraryOptionsOf(rows) })
     })().catch((error: unknown) => {
       if (ticket !== seq.current.libraries) return
-      setLibraries({ phase: 'error', message: messageOf(error) })
+      setLibraries({ phase: 'error', message: laneFailureOf(error) })
     })
     return () => controller.abort()
   }, [active, face, refreshToken, libraryRetry])
@@ -543,7 +543,7 @@ export function useLibraryFeed(
       })
       .catch((error: unknown) => {
         if (ticket !== seq.current.list) return
-        setList({ phase: 'error', message: messageOf(error) })
+        setList({ phase: 'error', message: laneFailureOf(error) })
       })
     return () => controller.abort()
   }, [
@@ -607,7 +607,7 @@ export function useLibraryFeed(
       })
       .catch((error: unknown) => {
         if (ticket !== seq.current.inspector) return
-        setInspector({ phase: 'error', message: messageOf(error) })
+        setInspector({ phase: 'error', message: laneFailureOf(error) })
       })
     return () => controller.abort()
   }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren])
@@ -789,7 +789,7 @@ export function useLibraryFeed(
         setStorageError(undefined)
         return true
       } catch (error) {
-        setStorageError(messageOf(error))
+        setStorageError(laneFailureOf(error))
         return false
       }
     },

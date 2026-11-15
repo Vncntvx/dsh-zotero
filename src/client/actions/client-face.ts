@@ -21,6 +21,20 @@ export interface ZoteroProtocolNotice {
   readonly seq: number
 }
 
+/**
+ * One transient notice a panel raised, already worded by that panel.
+ *
+ * It lives on the face rather than in the panel because the notice outlives
+ * the surface that raised it: closing a parsed tab or the manager must not
+ * take the report of what it just did with it. The shell overlay owns
+ * placement; `seq` keys the toast so a repeat restarts its hold.
+ */
+export interface ZoteroSurfaceNotice {
+  readonly seq: number
+  readonly text: string
+  readonly tone?: 'success'
+}
+
 /** The shared browser face: Remote calls and the protocol notice. */
 export interface ZoteroClientFace {
   /**
@@ -38,6 +52,12 @@ export interface ZoteroClientFace {
   readonly protocolNotice: HostObservable<ZoteroProtocolNotice | null>
   /** Clear the shown protocol notice. */
   readonly dismissProtocolNotice: () => void
+  /** Current transient notice a panel raised; null while none shows. */
+  readonly surfaceNotice: HostObservable<ZoteroSurfaceNotice | null>
+  /** Raise one transient notice in the shell overlay, outside any panel. */
+  readonly notifySurface: (text: string, tone?: 'success') => void
+  /** Clear the shown surface notice. */
+  readonly dismissSurfaceNotice: () => void
 }
 
 /**
@@ -52,7 +72,9 @@ export interface ZoteroClientFace {
  */
 export function createZoteroClientFace(ctx: Context): ZoteroClientFace {
   const protocolNotice = createSnapshotStore<ZoteroProtocolNotice | null>(null)
+  const surfaceNotice = createSnapshotStore<ZoteroSurfaceNotice | null>(null)
   let noticeSeq = 0
+  let surfaceSeq = 0
 
   const reportClientError: ErrorReporter = (report: ZoteroClientErrorReport) =>
     ctx.remote.zotero.reportClientError(report)
@@ -75,6 +97,14 @@ export function createZoteroClientFace(ctx: Context): ZoteroClientFace {
     protocolNotice,
     dismissProtocolNotice: () => {
       protocolNotice.set(null)
+    },
+    surfaceNotice,
+    notifySurface: (text, tone) => {
+      surfaceSeq += 1
+      surfaceNotice.set({ seq: surfaceSeq, text, ...(tone === undefined ? {} : { tone }) })
+    },
+    dismissSurfaceNotice: () => {
+      surfaceNotice.set(null)
     },
   }
 }

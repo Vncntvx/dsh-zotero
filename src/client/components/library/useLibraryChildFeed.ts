@@ -5,7 +5,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { ZOTERO_CHILD_PAGE_ROWS } from '../../../constants.ts'
 import { pageOffsetOf } from './library-model.ts'
-import { messageOf } from '../../error-text.ts'
+import { laneFailureOf } from './library-errors.ts'
 import type { ChildKind, ChildLoadState, LibraryFeedFace } from './library-feed-types.ts'
 import type { LibraryItemState } from './library-model.ts'
 
@@ -65,7 +65,7 @@ export function useLibraryChildFeed(
           if (result.value.kind !== kind) {
             setChildStates((states) => ({
               ...states,
-              [kind]: { phase: 'error', message: 'The child page answered a different kind.' },
+              [kind]: { phase: 'error', message: 'libraryErrorChildKind' },
             }))
             return
           }
@@ -80,7 +80,7 @@ export function useLibraryChildFeed(
           if (current())
             setChildStates((states) => ({
               ...states,
-              [kind]: { phase: 'error', message: messageOf(error) },
+              [kind]: { phase: 'error', message: laneFailureOf(error) },
             }))
         })
     },

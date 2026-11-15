@@ -12,7 +12,13 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { EvidencePassage, SourceItem } from '../../../sources/model.js'
-import { emptyEvidenceNoteOf, sourceLabelKeyOf } from '../../evidence-labels.ts'
+import { fulltextKeyOf } from '../../../sources/ledger.js'
+import {
+  emptyEvidenceNoteOf,
+  fulltextFormatKeyOf,
+  fulltextSourceKeyOf,
+  sourceLabelKeyOf,
+} from '../../evidence-labels.ts'
 import { messageOf } from '../../error-text.ts'
 import { SourcePageControls } from './SourcePageControls.tsx'
 import type { SourcePager } from './useSourcePage.ts'
@@ -158,12 +164,15 @@ export function SourceEvidence({
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}
       {hasFulltextReads && (
         <div className={css.passages}>
-          {item.fulltextReads.map((read, index) => (
-            <div key={`${read.sourceLabel}-${read.start}-${index}`} className={css.passageCard}>
+          {item.fulltextReads.map((read) => (
+            // The dedup identity the trail itself uses: two windows of one
+            // document differ in their span (and possibly their coverage), so
+            // the key stays stable as the list grows and no index leaks in.
+            <div key={fulltextKeyOf(read)} className={css.passageCard} title={read.sourceLabel}>
               <p className={css.passageHeader}>
                 {t('fulltextReadCard', {
-                  source: read.sourceLabel,
-                  format: read.textFormat,
+                  source: t(fulltextSourceKeyOf(read.sourceKind)),
+                  format: t(fulltextFormatKeyOf(read.textFormat)),
                   start: read.start,
                   end: read.end,
                   total: read.totalChars,

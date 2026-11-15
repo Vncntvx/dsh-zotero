@@ -129,6 +129,15 @@ export type ZoteroLibraryPanelProps = PropsRuntime<'sidebar.right.pane.tab'> &
   InjectFace<ZoteroLibraryPanelFace> &
   PropsLocale<'zotero'>
 
+/**
+ * The host's refusal text when `openResource` reaches a right sidebar that has
+ * no session surface mounted (`@deepseek-ai/dsh-client-ui-sidebar-right`,
+ * `src/client/service.ts`: `throw new Error('sidebarRight: no session surface
+ * is mounted')`). Upstream ships no error code for that arm, so the message is
+ * the only discriminator; DN-9 records the check that keeps this honest.
+ */
+export const NO_SESSION_SURFACE_REFUSAL = 'no session surface is mounted'
+
 export function ZoteroLibraryPanel(props: ZoteroLibraryPanelProps) {
   const { t } = props
   const client = props.useZoteroClient()
@@ -351,7 +360,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     } catch (error) {
       // The harness refuses with this message when no session surface
       // is mounted; map it to the panel's hint. Other errors rethrow.
-      if (error instanceof Error && error.message.includes('no session surface is mounted')) {
+      if (error instanceof Error && error.message.includes(NO_SESSION_SURFACE_REFUSAL)) {
         throw new Error(t('libraryNoSessionForOpen'))
       }
       throw error

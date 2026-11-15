@@ -95,6 +95,17 @@
 - **验证**：`tests/unit/library-views.spec.ts` 断言 `authors`/`venue` 透传且空作者列表不落键；`tests/client/library/remote-contract-library.spec.ts` 断言严格 codec 接受这两个可选字段；`tests/client/library/use-item-type-labels.spec.tsx` 断言分页遍历、失败重试、非前进游标、卸载丢弃与三级解析顺序；`tests/client/library/library-panel.interaction.spec.tsx` 断言选中行的 `aria-current` 与友好类型名、期刊、结构化作者；`tests/client/library/library-tree.spec.tsx` 断言合集条目数角标与「未上报不显示」；`tests/client/library/library-inspector-layout.spec.tsx` 断言摘要窗口只在溢出时出现。
 - **后续处理**：若上游直接提供本地化类型名或结构化作者（如 wire 上的 `localizedItemType`），删掉客户端词典与 `/itemTypes` 遍历改为消费 wire；若改用累积加载，按 `LibraryLaneControls.tsx` 的 show-more + 已加载计数范式迁移，并同步 `library-storage.ts` 的窗口状态与 `docs/features`。
 
+### DN-9：上游「无会话面板」拒绝只是一句散文，客户端按子串匹配
+
+- **类型**：上游 workaround（缺失错误码）。
+- **状态**：生效中（2026-11-15，pin `0.2.2-rc.3`）。
+- **位置**：`src/client/components/library/ZoteroLibraryPanel.tsx` 的 `NO_SESSION_SURFACE_REFUSAL` 与 `openFile`；`tests/client/library/library-panel.reader.spec.tsx`。
+- **现象**：面板打开本地 PDF 走宿主右侧栏的 `openResource`。当本次会话没有挂载会话面时，上游 `@deepseek-ai/dsh-client-ui-sidebar-right` 的 `src/client/service.ts` 直接 `throw new Error('sidebarRight: no session surface is mounted')`：没有错误码，也没有可判别的错误类型。插件要把这个分支显示成自己的提示（`libraryNoSessionForOpen`），只能匹配这条消息文本。
+- **现做法**：子串提成 `NO_SESSION_SURFACE_REFUSAL` 常量，注释写明上游出处；spec 引用同一常量构造拒绝，不再复制第二份散文。其它 `openResource` 失败保持原消息（有独立用例）。匹配用 `includes`，因为上游在该句前还带 `sidebarRight: ` 前缀。
+- **触发条件**：每次 `npm run harness:pin` 后在 sibling 源码里复核该字符串：`rg "no session surface is mounted" ../deepseek-harness/packages/client/ui-sidebar-right/src`。
+- **验证**：`tests/client/library/library-panel.reader.spec.tsx`（该拒绝翻译成面板提示；外来拒绝保留原消息）。
+- **后续处理**：若上游为该分支提供错误码或错误类型，改为按 code 判定并删除子串常量与本条目。
+
 ## 升级复核
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。

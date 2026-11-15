@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ITEM_DETAIL, mountPanel, type SessionStub } from '../helpers/library-panel-harness.tsx'
 import { deferred } from '../../helpers/sync.js'
 import { createLibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
+import { NO_SESSION_SURFACE_REFUSAL } from '../../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import { zh } from '../../../src/client/locales.ts'
 
 beforeEach(() => {
@@ -77,7 +78,9 @@ describe('reading an attachment', () => {
   it('translates the no-on-screen-session refusal into the panel hint', async () => {
     const { face } = mountPanel({
       openResource: vi.fn(() => {
-        throw new Error('sidebarRight: no session surface is mounted')
+        // The exact shape the host throws; the panel matches this text because
+        // the refusal carries no error code (DN-9).
+        throw new Error(`sidebarRight: ${NO_SESSION_SURFACE_REFUSAL}`)
       }),
     })
     const row = await screen.findByText('FlashAttention-2')

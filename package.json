@@ -99,8 +99,10 @@
       "inject": [
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-remote-access",
         "@deepseek-ai/dsh-api-job-controller",
         "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-sidebar",

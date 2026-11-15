@@ -76,9 +76,10 @@ function world(
     },
     openParsed: vi.fn(),
     discarded: vi.fn(),
+    notify: vi.fn(),
   } as unknown as ParsedManagerTabProps
   render(<ParsedManagerTab {...props} />)
-  return { management, props }
+  return { management, props, notify: props.notify as ReturnType<typeof vi.fn> }
 }
 
 const confirmDiscard = () => {
@@ -137,12 +138,13 @@ describe('parsed document manager actions', () => {
   })
 
   it('reports an already-missing artifact instead of staying silent', async () => {
-    const { props } = world({
+    const { props, notify } = world({
       discard: { ok: true, value: { kind: 'missing', removedAliases: 0, removedReceipts: 0 } },
     })
     await screen.findByText(ID.slice(0, 8))
     confirmDiscard()
-    expect(await screen.findByText(en.parsedManagerMissing)).toBeDefined()
+    // The notice leaves through the shell overlay, so it survives this tab.
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(en.parsedManagerMissing, undefined))
     expect(props.discarded as ReturnType<typeof vi.fn>).not.toHaveBeenCalled()
   })
 

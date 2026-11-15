@@ -89,9 +89,17 @@ interface DocExample {
   readonly args: Record<string, unknown>
 }
 
-/** Quote bare object keys so a JS-style literal parses as JSON. */
+/**
+ * Quote bare object keys so a JS-style literal parses as JSON, in both
+ * spellings the docs print: `key: value` and `key=value`. The second spelling
+ * only appears inside nested objects (`source={kind="ref", …}`), so a scan that
+ * ignored it would skip the whole call as unparseable — the very example meant
+ * to teach the nested shape.
+ */
 function asJsonLiteral(source: string): string {
-  return source.replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')
+  return source
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*=\s*)/g, '$1"$2": ')
 }
 
 /**
@@ -261,6 +269,20 @@ function docDefaultOf(cell: string | undefined): unknown {
   }
 }
 
+describe('the doc-example literal reader', () => {
+  it('reads both object-key spellings the documents print', () => {
+    // `key: value` is the form the examples use after this round; `key=value`
+    // is the spelling a nested JavaScript-style object may still carry. One
+    // reading that only handled the first would drop those calls silently.
+    expect(asJsonLiteral('{kind: "ref", ref: "x"}')).toBe('{"kind": "ref", "ref": "x"}')
+    expect(asJsonLiteral('{kind="ref", ref="x"}')).toBe('{"kind": "ref", "ref": "x"}')
+    expect(JSON.parse(asJsonLiteral('{kind="ref", ref="zotero://user/0/item/ABCD1234"}'))).toEqual({
+      kind: 'ref',
+      ref: 'zotero://user/0/item/ABCD1234',
+    })
+  })
+})
+
 describe('documented tool calls match the tool schemas', () => {
   let ctx: Context
   const examples: DocExample[] = []
@@ -406,6 +428,24 @@ describe('documented tool calls match the tool schemas', () => {
         if (value === 'zotero://' || value.endsWith('/')) continue
         if (isRefString(value)) continue
         violations.push(`${file}:${lineAt(text, match.index)} ${value}`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('parses every call the documents print, so no example is skipped silently', () => {
+    // `examplesIn` skips an unparseable call on purpose (prose is not a call),
+    // which also means a real example with one bad byte would vanish from
+    // every check below. This walk counts the calls as printed.
+    const violations: string[] = []
+    for (const file of files) {
+      const text = readFileSync(new URL(file, REPO_ROOT), 'utf8')
+      for (const match of text.matchAll(/\b((?:zotero|scholarly)_[a-z_]+)\(/g)) {
+        const line = lineAt(text, match.index)
+        const parsed = examples.some(
+          (example) => example.file === file && example.call === match[1] && example.line === line,
+        )
+        if (!parsed) violations.push(`${file}:${line} ${match[1]} does not parse`)
       }
     }
     expect(violations).toEqual([])

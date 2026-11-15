@@ -111,9 +111,12 @@ describe('parsed document manager selection', () => {
       { sessionId: SESSION, artifactId: SECOND_ID },
       expect.any(AbortSignal),
     )
-    expect(
-      await screen.findByText(en.parsedManagerBatchDeleted.replace('{count}', '2')),
-    ).toBeDefined()
+    await vi.waitFor(() =>
+      expect(w.notify).toHaveBeenCalledWith(
+        en.parsedManagerBatchDeleted.replace('{count}', '2'),
+        'success',
+      ),
+    )
   })
 
   it('keeps a failed row selected and reports the partial batch', async () => {
@@ -125,11 +128,11 @@ describe('parsed document manager selection', () => {
     fireEvent.click(screen.getByRole('button', { name: en.parsedManagerSelectAll }))
     fireEvent.click(await screen.findByRole('button', { name: en.parsedManagerDeleteSelected }))
     fireEvent.click(screen.getAllByRole('button', { name: en.parsedManagerDeleteConfirm }).at(-1)!)
-    expect(
-      await screen.findByText(
+    await vi.waitFor(() =>
+      expect(w.notify).toHaveBeenCalledWith(
         en.parsedManagerBatchPartial.replace('{removed}', '1').replace('{failed}', '1'),
       ),
-    ).toBeDefined()
+    )
     // The survivor is the only row left, and it stays selected for a retry.
     expect((selectRow(SECOND_TITLE) as HTMLInputElement).checked).toBe(true)
     expect(screen.queryByText(TITLE)).toBeNull()

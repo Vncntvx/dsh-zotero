@@ -16,7 +16,7 @@ import type {
   PropsLocale,
   PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ZoteroProtocolNotice } from '../actions/client-face.ts'
+import type { ZoteroProtocolNotice, ZoteroSurfaceNotice } from '../actions/client-face.ts'
 
 /** Props of the `shell.overlay` entry: the notice hook, its dismissal, and copy. */
 export type ZoteroToastProps = PropsRuntime<'shell.overlay'> &
@@ -39,6 +39,36 @@ export function ZoteroToast({ useToast, dismiss, t }: ZoteroToastProps): ReactNo
       key={`zotero-protocol-${String(notice.seq)}`}
       text={t('openInZoteroFailed')}
       icon={<IconWarningOutlineRegular />}
+      onDone={dismiss}
+    />
+  )
+}
+
+/** Props of the panel-notice overlay entry: the notice hook and its dismissal. */
+export type ZoteroSurfaceToastProps = PropsRuntime<'shell.overlay'> &
+  InjectFace<{
+    hooks: { readonly toast: HostObservable<ZoteroSurfaceNotice | null> }
+    readonly dismiss: () => void
+  }>
+
+/**
+ * Render the notice a panel raised, or nothing.
+ *
+ * The entry lives in the shell overlay rather than inside the panel so the
+ * notice survives the panel: closing the parsed tab or the manager must not
+ * drop the report of what it just did. The text arrives already worded by the
+ * panel that raised it, in the reader's language.
+ * @param props - the notice hook and its dismissal.
+ * @returns the toast while a notice is set.
+ */
+export function ZoteroSurfaceToast({ useToast, dismiss }: ZoteroSurfaceToastProps): ReactNode {
+  const notice = useToast((current) => current)
+  if (notice === null) return null
+  return (
+    <Toast
+      key={`zotero-surface-${String(notice.seq)}`}
+      text={notice.text}
+      tone={notice.tone}
       onDone={dismiss}
     />
   )
