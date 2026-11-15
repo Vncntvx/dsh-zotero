@@ -51,15 +51,16 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ### 安装时的构建脚本批准
 
-本地语义排序运行时 `onnxruntime-web` 传递依赖 `protobufjs`，它的 `postinstall` 只检查版本方案、不产生构建产物。pnpm 11 会把「没有显式决定的依赖构建脚本」判为安装失败（`ERR_PNPM_IGNORED_BUILDS`），因此先在 profile 的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 写入批准，再重跑同一条 `add`：
+npm 包、GitHub `#release` 分支与本地 tarball 在 pnpm 10/11 上可直接安装。只有从 `main` 源码分支安装才会执行一次 `prepare` 构建，需要在 profile 的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 写入：
 
 ```yaml
 allowBuilds:
-  protobufjs: true # npm、GitHub #release 与本地 tarball 安装都需要
-  dsh-zotero: true # 仅从 GitHub main 源码分支安装时需要（prepare）
+  dsh-zotero: true # 仅 GitHub main 源码分支安装需要
 ```
 
-pnpm 10 不会因缺这项批准中断安装。
+### 本地语义检索的运行时
+
+本地语义检索的 WASM 运行时随插件一起发布（`assets/onnxruntime/<version>/`，MIT 许可，来源与 SHA-256 记录在 `provenance.json`）。启用前请在设置中下载所选嵌入模型。未下载模型时读取返回 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`；关闭语义检索后可使用 BM25。
 
 若需固定特定版本或 commit，可在链接后附加 hash：
 

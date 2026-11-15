@@ -104,9 +104,10 @@ npm run test:coverage        # Coverage gate check
 npm run harness:check        # Check the upstream Harness version pin and artifact consistency
 npm run harness:pin -- <ver> # Update every Harness dependency pin together
 npm run deps:check           # Query the registry for direct dependencies behind their latest release
-npm run verify:pack          # Validate the packed tarball contents
+npm run verify:pack          # Validate the packed tarball, including the packaged runtime's hashes and license
+npm run assets:runtime       # Regenerate the packaged semantic runtime from its dev dependency
 npm run smoke                # Production-stack smoke: call every read tool against a real Zotero inside a dsh profile
-npm run smoke:discovery      # Packed artifact → temporary profile (build approval recorded first) → dsh web boot probe
+npm run smoke:discovery      # Packed artifact → temporary profile (no build approval needed) → dsh web boot probe
 npm run release:branch       # Cut the publishable release branch (manifest-driven)
 npm run release:check        # Release gate: format, version pin, tests, types, coverage, build, pack
 npm run link:local-harness   # Link the @deepseek-ai/dsh-* dependencies to the sibling checkout

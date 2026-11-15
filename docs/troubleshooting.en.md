@@ -172,25 +172,25 @@ Note: diagnostic records stay in the current process memory and are cleared when
 
 - Symptom: an explicit parse or a semantic read returns a `ZOTERO_ENRICHMENT_*` code.
 - Cause and fix:
-  - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`: semantic search is on but the selected model is missing, corrupted, or its local inference runtime is unavailable. The read fails with an error, without a BM25 fallback; download, repair, or verify the model, or turn semantic search off to use the complete BM25 ranker.
-  - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`: the configured MinerU token credential reference cannot be resolved in `pro` precise mode; the read fails with an error, without a free or anonymous downgrade. Check the reference name and its value in the host credentials store.
+  - `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`: semantic search is on but the selected model is missing or corrupted, the packaged runtime files are missing, or inference failed. The read returns an error. Download, repair, or verify the model; reinstall the plugin when runtime files are missing; or turn semantic search off to use the complete BM25 ranker.
+  - `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`: the configured MinerU token credential reference cannot be resolved in `pro` precise mode; the read returns an error. Check the reference name and its value in the host credentials store.
   - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`: explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are missing; submit from a usable session and host environment.
   - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`: an operation id was replayed with a different target or settings snapshot; resubmit with a fresh operation id.
-  - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`: respectively a MinerU task failure, an archive validation failure, input over the API limit or not a PDF, an output-directory validation failure, and a model download that failed on every mirror. A failed parse does not switch mode or present locally extracted text as a successful parse.
+  - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`: respectively a MinerU task failure, an archive validation failure, input over the API limit or not a PDF, an output-directory validation failure, and a model download that failed on every mirror. A failed parse returns an error.
     The full error-code list is in the [tool reference · error codes](tools.en.md#error-codes); upload network and authorization boundaries are in the [product model](product-model.en.md).
 
-## 27. Installation fails with ERR_PNPM_IGNORED_BUILDS
+## 27. Installing from the main source branch fails with ERR_PNPM_IGNORED_BUILDS
 
-- Symptom: `dsh plugin --profile <profile> add` fails with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: protobufjs@…` and exit code 1; the package links, but the command reports failure.
-- Cause: the plugin depends on the local semantic-ranking runtime `onnxruntime-web`, which depends transitively on `protobufjs`, whose `postinstall` only checks its version scheme. From pnpm 11 on, a dependency build script with no explicit decision fails the whole install.
-- Fix: approve that script in the current profile's `pnpm-workspace.yaml`, then re-run the same `add`:
+- Symptom: `dsh plugin --profile <profile> add github:Vncntvx/dsh-zotero` (without `#release`) fails with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-zotero@…` and exit code 1; the package links, but the command reports failure.
+- Cause: the source branch carries no prebuilt `lib/`, so the plugin's own `prepare` script builds it during installation, and from pnpm 11 on a dependency build script with no explicit decision fails the whole install. The npm package, the `#release` branch, and a local tarball ship prebuilt artifacts and install without this error. The semantic-ranking WASM runtime also ships inside the package and needs no approval.
+- Fix: approve that one script in the current profile's `pnpm-workspace.yaml`, then re-run the same `add`:
 
   ```yaml
   allowBuilds:
-    protobufjs: true
+    dsh-zotero: true
   ```
 
-  This authorizes running that package's script at install time; `protobufjs`'s script produces no build output. Do not work around it by disabling pnpm's build-script policy.
+  This authorizes the package to run its own build script at install time; do it only for a source you trust, and pin the source link to a commit. The desktop client can also use "Allow these scripts and retry" on the failed install page. Do not work around it by disabling pnpm's build-script policy.
 
 ## 28. Scholarly retrieval fails behind a local fake-IP proxy
 

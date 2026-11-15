@@ -51,15 +51,16 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ### Build-script approval at install time
 
-The local semantic-ranking runtime, `onnxruntime-web`, depends transitively on `protobufjs`, whose `postinstall` only checks its version scheme and produces no build output. pnpm 11 fails an install whose dependency declares a build script it has no decision for (`ERR_PNPM_IGNORED_BUILDS`), so record the approval in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` and re-run the same `add`:
+The npm package, the GitHub `#release` branch, and a local tarball install without approval on pnpm 10 or pnpm 11. An install from the `main` source branch runs a `prepare` build and needs this entry in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
 
 ```yaml
 allowBuilds:
-  protobufjs: true # needed by npm, GitHub #release, and local tarball installs
-  dsh-zotero: true # needed only when installing from the GitHub main source branch (prepare)
+  dsh-zotero: true # needed only when installing from the GitHub main source branch
 ```
 
-pnpm 10 installs without this approval.
+### The runtime for local semantic search
+
+The WASM runtime behind local semantic search ships inside the plugin (`assets/onnxruntime/<version>/`, MIT-licensed, with its source and SHA-256 recorded in `provenance.json`). Before enabling the feature, download the embedding model in settings. A read without a model fails with `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`; turn semantic search off to use BM25.
 
 To pin a specific version or commit, append its hash to the link:
 

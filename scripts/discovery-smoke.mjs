@@ -5,12 +5,13 @@
  * `exports["./client"]`, tarball contents, and the ClientModuleRegistry)
  * without a browser.
  *
- * Steps: npm pack → temp profile → record its build approvals → `dsh plugin
- * --profile <name> add <tarball>` → `dsh web
- * --port 0` → read the boot token the CLI prints → exchange it for the page
- * cookie (instance auth gates the composition) → GET /
+ * Steps: npm pack → temp profile → `dsh plugin --profile <name> add <tarball>`
+ * → `dsh web --port 0` → read the boot token the CLI prints → exchange it for
+ * the page cookie (instance auth gates the composition) → GET /
  * → parse the `globalThis["__DSH_BOOT__"]` manifest → assert the dsh-zotero
  * → assert 200 and the __ModuleLoader__.load handoff → shutdown.
+ * The packed install needs no build approval: the dependency tree declares no
+ * install script, so the run proves exactly what a user gets.
  *
  * Usage: node scripts/discovery-smoke.mjs [--dsh <dsh-binary>] [--home <dir>]
  * @module scripts/discovery-smoke
@@ -24,7 +25,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { APPROVED_BUILD_SCRIPTS, missingApprovals, policyYaml } from './shared/build-approvals.mjs'
 import { resolveHarnessRoot } from './shared/harness-packages.mjs'
 import { chromium } from 'playwright'
 
@@ -196,51 +196,14 @@ async function pinDocumentsDirectory() {
 }
 
 /**
- * Initialize the profile before anything writes its pnpm policy. The harness
- * writes its own `pnpm-workspace.yaml` template (hoisted linker, no automatic
- * peers) only when the file is absent, so a policy written first would cost the
- * profile those defaults. `version-exemptions` is a DSH-owned command: it
- * initializes the profile without installing anything or touching the network.
+ * Initialize the profile. `version-exemptions` is a DSH-owned command: it
+ * initializes the profile without installing anything or touching the network,
+ * and the harness writes its own `pnpm-workspace.yaml` template (hoisted
+ * linker, no automatic peers) when the file is absent.
  */
 async function initializeProfile() {
   const init = dshCommand(['plugin', '--profile', PROFILE, 'version-exemptions'])
   await execFileAsync(init.command, init.args, { env: ENV })
-}
-
-/**
- * Record the build approvals pnpm requires for the packed dependency tree.
- * pnpm 11 fails a run whose dependency declares an install script it has no
- * decision for (`ERR_PNPM_IGNORED_BUILDS`); that decision lives in the profile's
- * `pnpm-workspace.yaml`, so the smoke writes the entries a user would.
- */
-async function approveBuildScripts() {
-  const policyPath = join(HOME, 'profiles', PROFILE, 'pnpm-workspace.yaml')
-  const existing = (() => {
-    try {
-      return readFileSync(policyPath, 'utf8')
-    } catch (error) {
-      if (error?.code === 'ENOENT') return undefined
-      throw error
-    }
-  })()
-  const missing = missingApprovals(existing)
-  if (missing.length === 0) {
-    console.log(`profile build approvals: already recorded (${APPROVED_BUILD_SCRIPTS.join(', ')})`)
-    return
-  }
-  if (existing !== undefined && /^allowBuilds:/m.test(existing)) {
-    // The harness or the user owns an approval policy here; a second
-    // `allowBuilds` key would be invalid YAML, and editing theirs would hide
-    // which decision this run needed.
-    throw new Error(
-      `${policyPath} already carries an allowBuilds policy; add ${missing.join(', ')} there and re-run`,
-    )
-  }
-  const policy =
-    existing === undefined ? policyYaml(missing) : `${existing.trimEnd()}\n\n${policyYaml(missing)}`
-  await mkdir(join(HOME, 'profiles', PROFILE), { recursive: true })
-  await writeFile(policyPath, policy)
-  console.log(`profile build approvals: ${missing.join(', ')}`)
 }
 
 async function main() {
@@ -249,7 +212,6 @@ async function main() {
   console.log(`home: ${HOME} (profile ${PROFILE})`)
 
   await initializeProfile()
-  await approveBuildScripts()
 
   const add = dshCommand(['plugin', '--profile', PROFILE, 'add', tarball])
   await execFileAsync(add.command, add.args, { env: ENV })

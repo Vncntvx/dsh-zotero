@@ -76,6 +76,17 @@
 - **验证**：`npm publish --dry-run` 全程通过，日志里同时出现 `archive-worker pack smoke ok` 与 `verify-pack ok`；单独 `npm run release:check` 仍通过。
 - **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「冒烟必须拿到真实 tarball」的断言。
 
+## DN-7：语义排序运行时打进包内，不做依赖
+
+- **类型**：兼容性 / 安装策略。
+- **状态**：生效中（2026-11-15，pnpm 11 `strictDepBuilds`）。
+- **位置**：`scripts/vendor-onnxruntime.mjs`、`src/enrichment/semantic/runtime.ts`、`package.json` 的 `files`/`build`/`devDependencies`、`scripts/build-prepare.mjs`、`scripts/verify-pack.mjs`、`scripts/shared/build-approvals.mjs`、`tests/unit/tooling/vendor-onnxruntime.spec.ts`。
+- **现象**：语义检索的 WASM 运行时 `onnxruntime-web` 传递依赖 `protobufjs`，后者带一个空操作的 `postinstall`。pnpm 11 默认开启 `strictDepBuilds`，依赖存在未决定的构建脚本时整次安装非零退出（`ERR_PNPM_IGNORED_BUILDS`）；桌面端插件安装随之回滚。1.1.0 首次把它作为运行时依赖发布，于是从 1.1.0 起插件在 pnpm 11 上无法安装。
+- **现做法**：运行时**不是依赖**，而是打进包内的构建资产：`scripts/vendor-onnxruntime.mjs` 从开发依赖 `onnxruntime-web@1.31.1` 复制 Node 入口、wasm 胶水与 wasm 二进制（压缩后约 3.8MB）到 `assets/onnxruntime/1.31.1/`，写 `provenance.json`（来源、字节数、SHA-256），并删除其它版本目录；`assets/onnxruntime/LICENSE` 固定携带 MIT 许可。`semantic/runtime.ts` 用绝对 `file://` URL 加载该入口，把 `env.wasm.wasmPaths` 指向同一目录（结尾必须带分隔符，运行时用字符串拼接文件名）。资产与 `lib/` 一样是生成产物（gitignore），`npm run build`、`scripts/build-prepare.mjs` 与 `npm run assets:runtime` 都会重建；`verify:pack` 校验哈希、许可与「三个资产文件确实进包」。`onnxruntime-common` 是唯一的正常依赖（无安装脚本、无自身依赖）。
+- **触发条件**：升级 `onnxruntime-web`（必须同步改 `SEMANTIC_RUNTIME_VERSION` 与 `devDependencies` 的精确版本，否则守卫 spec 直接失败）、新增任何运行时依赖、pnpm 主版本升级，或上游改变插件安装/构建批准策略时复核。
+- **验证**：`tests/unit/tooling/vendor-onnxruntime.spec.ts`（版本一致、文件清单一致、哈希与许可）、`tests/unit/enrichment-semantic-runtime.spec.ts`（加载路径、wasmPaths、缺文件 fail-closed）、`tests/unit/tooling/build-approvals.spec.ts` 与 `tests/unit/tooling/verify-pack.spec.ts`（闭包无安装脚本、打包路径齐全）。人工复核：用桌面运行时自带 pnpm 11.28.5 把打包产物装进干净 profile，应零批准通过；随后从安装位置 import 打包入口并对空文件调用 `InferenceSession.create`，应返回 wasm 侧的 `No graph was found in the protobuf`，证明 wasm 胶水与二进制确实被加载。
+- **后续处理**：若 pnpm 允许依赖自行声明或豁免构建脚本，或 `onnxruntime-web` 放宽 `protobufjs` 到 8.x（8.x 已无 `postinstall`），可把运行时改回 `dependencies` 并删除 vendor 脚本、包内资产与相关守卫；否则每次升级按 `assets:runtime` 重新生成并复核包体体积。
+
 ## 升级复核
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。

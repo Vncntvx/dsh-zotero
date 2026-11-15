@@ -155,7 +155,7 @@ graph LR
 
 `src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；构建侧的下载器直接导入该模块（Node 的类型剥离），不再保留镜像副本。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。
 
-`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序。
+`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。运行时 `onnxruntime-web` 不作为依赖：发布路径把 Node 入口、wasm 胶水与 wasm 二进制（约 3.8MB gzip）连同 MIT 许可与 SHA-256 记录写入包内 `assets/onnxruntime/<version>/`，`semantic/runtime.ts` 以绝对 URL 加载它并把 `env.wasm.wasmPaths` 指向该目录。插件安装的依赖闭包因此不带任何安装脚本，`npm run verify:pack` 同时核对资产存在、来源哈希与许可。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序。
 
 ## 文献库子组件 (`src/library/`)
 

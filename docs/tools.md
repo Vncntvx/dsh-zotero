@@ -763,60 +763,60 @@ zotero_batch_items(
 
 ## 错误码
 
-| 错误码                                     | 说明                                                                                           |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                                                                  |
-| `ZOTERO_API_DISABLED`                      | Zotero 运行中，但高级设置中未启用本地 API（403）                                               |
-| `ZOTERO_API_VERSION`                       | 本地 API 版本不受支持                                                                          |
-| `ZOTERO_NOT_IMPLEMENTED`                   | 本地 API 明确返回 501，端点或格式在本版本中未实现                                              |
-| `ZOTERO_SERVER_MISMATCH`                   | 引用的 Server ID 与当前运行的 Zotero 实例不匹配                                                |
-| `ZOTERO_NOT_FOUND`                         | 引用的条目、合集或保存搜索不存在                                                               |
-| `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）                                                    |
-| `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                                                                     |
-| `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                                                             |
-| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，分页参数（offset + revision）失效（刷新后重试）                    |
-| `ZOTERO_URL_PDF_DISABLED`                  | 文献面板未开启 URL PDF 阅读授权                                                                |
-| `ZOTERO_URL_PDF_BUSY`                      | 已有两个 URL PDF 下载在运行（文献面板端点）                                                    |
-| `ZOTERO_URL_PDF_NOT_URL`                   | 该附件不是 URL PDF（文献面板端点）                                                             |
-| `ZOTERO_URL_PDF_REDIRECT`                  | PDF 重定向次数超限、缺少 Location 或 HTTPS 降级（文献面板端点）                                |
-| `ZOTERO_URL_PDF_HTTP`                      | PDF 源站返回非成功状态（文献面板端点）                                                         |
-| `ZOTERO_URL_PDF_NOT_PDF`                   | 响应不是 PDF：媒体类型或文件头不符（文献面板端点）                                             |
-| `ZOTERO_URL_PDF_TIMEOUT`                   | PDF 下载超过 60 秒（文献面板端点）                                                             |
-| `ZOTERO_URL_PDF_FORBIDDEN_TARGET`          | PDF 地址未通过公网地址校验（本机、内网或私有地址）（文献面板端点）                             |
-| `ZOTERO_URL_PDF_TOO_LARGE`                 | PDF 超过 32 MiB 读取上限（文献面板端点）                                                       |
-| `ZOTERO_URL_PDF_NETWORK`                   | PDF 下载在传输层失败（不回显原始 URL）（文献面板端点）                                         |
-| `ZOTERO_FILE_MISSING`                      | 记录的本地附件文件在磁盘上不存在                                                               |
-| `ZOTERO_FILE_UNREADABLE`                   | 本地附件路径无法解析或文件不可读（`zotero_get` 的 `locations` 会把它降级为 `location.reason`） |
-| `ZOTERO_INVALID_REF`                       | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库                                        |
-| `ZOTERO_INVALID_ARGUMENT`                  | 参数违反领域约束规则                                                                           |
-| `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                                                           |
-| `ZOTERO_TIMEOUT`                           | 提供方请求超时                                                                                 |
-| `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                     |
-| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                         |
-| `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                   |
-| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析没有找到可读副本（细分原因在消息里；不会冒充本地全文缺失）                         |
-| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                   |
-| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）                                               |
-| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析（fail-closed，不降级免费/匿名）                   |
-| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | 主动解析需要会话所属 `ctx.jobs` 与会话控制器，但当前不可用                                     |
-| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | 同一操作 id 被以不同目标或配置快照重放                                                         |
-| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU 报告解析任务失败（附带其自身原因）                                                      |
-| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | 解析产物输出目录校验失败                                                                       |
-| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | MinerU 返回归档包结构或 zip 安全校验失败                                                       |
-| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | 文档超过所选接口的体积上限或不是 PDF                                                           |
-| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | 语义检索已开启，但模型缺失/损坏或本地推理运行时不可用（fail-closed，不回退 BM25）              |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                               |
-| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                     |
-| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                               |
-| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | 解析产物编号没有对应的已提交产物                                                               |
-| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | 解析产物清理失败或路径不安全                                                                   |
-| `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                     |
-| `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
-| `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |
-| `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                               |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）                                               |
-| `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改                                                  |
-| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                                                                     |
+| 错误码                                     | 说明                                                                                                |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                                                                       |
+| `ZOTERO_API_DISABLED`                      | Zotero 运行中，但高级设置中未启用本地 API（403）                                                    |
+| `ZOTERO_API_VERSION`                       | 本地 API 版本不受支持                                                                               |
+| `ZOTERO_NOT_IMPLEMENTED`                   | 本地 API 明确返回 501，端点或格式在本版本中未实现                                                   |
+| `ZOTERO_SERVER_MISMATCH`                   | 引用的 Server ID 与当前运行的 Zotero 实例不匹配                                                     |
+| `ZOTERO_NOT_FOUND`                         | 引用的条目、合集或保存搜索不存在                                                                    |
+| `ZOTERO_RANGE_UNSUPPORTED`                 | 服务端未保留所请求版本至今的历史记录（409）                                                         |
+| `ZOTERO_NO_ATTACHMENT`                     | 条目下不存在指定类型的附件                                                                          |
+| `ZOTERO_NO_FULLTEXT`                       | 附件未建立全文索引                                                                                  |
+| `ZOTERO_SOURCE_PAGE_STALE`                 | 文献轨迹翻页期间轨迹已变化，分页参数（offset + revision）失效（刷新后重试）                         |
+| `ZOTERO_URL_PDF_DISABLED`                  | 文献面板未开启 URL PDF 阅读授权                                                                     |
+| `ZOTERO_URL_PDF_BUSY`                      | 已有两个 URL PDF 下载在运行（文献面板端点）                                                         |
+| `ZOTERO_URL_PDF_NOT_URL`                   | 该附件不是 URL PDF（文献面板端点）                                                                  |
+| `ZOTERO_URL_PDF_REDIRECT`                  | PDF 重定向次数超限、缺少 Location 或 HTTPS 降级（文献面板端点）                                     |
+| `ZOTERO_URL_PDF_HTTP`                      | PDF 源站返回非成功状态（文献面板端点）                                                              |
+| `ZOTERO_URL_PDF_NOT_PDF`                   | 响应不是 PDF：媒体类型或文件头不符（文献面板端点）                                                  |
+| `ZOTERO_URL_PDF_TIMEOUT`                   | PDF 下载超过 60 秒（文献面板端点）                                                                  |
+| `ZOTERO_URL_PDF_FORBIDDEN_TARGET`          | PDF 地址未通过公网地址校验（本机、内网或私有地址）（文献面板端点）                                  |
+| `ZOTERO_URL_PDF_TOO_LARGE`                 | PDF 超过 32 MiB 读取上限（文献面板端点）                                                            |
+| `ZOTERO_URL_PDF_NETWORK`                   | PDF 下载在传输层失败（不回显原始 URL）（文献面板端点）                                              |
+| `ZOTERO_FILE_MISSING`                      | 记录的本地附件文件在磁盘上不存在                                                                    |
+| `ZOTERO_FILE_UNREADABLE`                   | 本地附件路径无法解析或文件不可读（`zotero_get` 的 `locations` 会把它降级为 `location.reason`）      |
+| `ZOTERO_INVALID_REF`                       | ref 格式不符合 `zotero://` 语法规范或引用了不受支持的库                                             |
+| `ZOTERO_INVALID_ARGUMENT`                  | 参数违反领域约束规则                                                                                |
+| `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                                                                |
+| `ZOTERO_TIMEOUT`                           | 提供方请求超时                                                                                      |
+| `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                          |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                              |
+| `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                        |
+| `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析没有找到可读副本（细分原因在消息里；不会冒充本地全文缺失）                              |
+| `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                        |
+| `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`   | 学术检索的凭据引用非法或没有值（不会降级为匿名）                                                    |
+| `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`  | MinerU 精准模式配置的 Token 凭据引用无法解析（fail-closed，不降级免费/匿名）                        |
+| `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`       | 主动解析需要会话所属 `ctx.jobs` 与会话控制器，但当前不可用                                          |
+| `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`     | 同一操作 id 被以不同目标或配置快照重放                                                              |
+| `ZOTERO_ENRICHMENT_TASK_FAILED`            | MinerU 报告解析任务失败（附带其自身原因）                                                           |
+| `ZOTERO_ENRICHMENT_OUTPUT_INVALID`         | 解析产物输出目录校验失败                                                                            |
+| `ZOTERO_ENRICHMENT_ARCHIVE_INVALID`        | MinerU 返回归档包结构或 zip 安全校验失败                                                            |
+| `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT`      | 文档超过所选接口的体积上限或不是 PDF                                                                |
+| `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`   | 语义检索已开启，但模型缺失/损坏、随包发布的推理运行时文件缺失或推理失败（fail-closed，不回退 BM25） |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`  | 本地语义模型在所有镜像源下载失败                                                                    |
+| `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT` | 本地语义模型下载超过总时限                                                                          |
+| `ZOTERO_ENRICHMENT_MODEL_DELETE_FAILED`    | 本地语义模型删除失败或路径不安全                                                                    |
+| `ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND`     | 解析产物编号没有对应的已提交产物                                                                    |
+| `ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED` | 解析产物清理失败或路径不安全                                                                        |
+| `ZOTERO_JOBS_LIMIT_REACHED`                | 解析端点：会话的后台解析任务数已达上限，需要先取回或取消一个未用任务再重试                          |
+| `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                                  |
+| `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                        |
+| `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                                    |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）                                                    |
+| `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改                                                       |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                                                                          |
 
 ---
 

@@ -9,11 +9,13 @@
  * and, in its cited working example, transpiles `src/` without project
  * references or typechecking. So this script only:
  *
- * 1. transpiles the Node half (`src/**` minus `src/client`) into `lib/` with
+ * 1. copies the pinned semantic runtime's build artifacts into `assets/`
+ *    (generated like `lib/`, never committed);
+ * 2. transpiles the Node half (`src/**` minus `src/client`) into `lib/` with
  *    esbuild, per file, keeping the emitted ESM specifiers exactly as written;
- * 2. emits the browser half through the real client build
+ * 3. emits the browser half through the real client build
  *    (`scripts/build-client.mjs`), whose loader-handoff self-check still runs;
- * 3. proves the entries a consumer loads are on disk.
+ * 4. proves the entries a consumer loads are on disk.
  *
  * Declarations are deliberately out of scope here: they come from
  * `npm run build` (`tsc`), which the publish path runs (`prepublishOnly` →
@@ -29,6 +31,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import { buildClientBundle } from './build-client.mjs'
+import { vendorRuntime } from './vendor-onnxruntime.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -66,6 +69,11 @@ function fullBuildOutputs() {
     join(root, 'lib', 'client.js'),
   ]
 }
+
+// The full-build check also requires generated assets because packed installs
+// depend on them alongside `lib/`.
+const vendored = await vendorRuntime()
+console.log(`vendored runtime: onnxruntime-web@${vendored.version}`)
 
 const FULL_BUILD_OUTPUTS = fullBuildOutputs()
 if (!process.argv.includes('--force') && FULL_BUILD_OUTPUTS.every((output) => existsSync(output))) {

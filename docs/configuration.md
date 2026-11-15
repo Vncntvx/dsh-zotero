@@ -207,7 +207,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 | `mode`                   | `free`               | `free` 使用免 Token 的 Agent 轻量解析接口（IP 限频、API 侧 ≤10 MB、≤20 页）；`pro` 使用精准解析接口（API 侧 ≤200 MB、≤200 页），需配置 Token（单用户每日可免费解析 5000 份文件，限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。页数与 API 字节上限由 MinerU 侧限制，客户端不预检页数                                                                                         |
 | `mineruTokenRef`         | `'MINERU_API_TOKEN'` | MinerU 精准接口 Token 的凭据引用名（默认插件专属 `MINERU_API_TOKEN`）；在 `pro` 模式下读取凭据存储中该引用名对应的 Token（Token 有效期为 3 个月）。表单默认使用该专属引用名，无需手动输入                                                                                                                                                                                           |
 | `outputDir`              | `''`                 | 解析产物目录的绝对路径（或以 `~/` 开头）；空串表示运行时解析默认位置 `~/.dsh/zotero-parsed`。相对路径在 Schema/表单保存时被拒绝                                                                                                                                                                                                                                                     |
-| `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型/推理不可用时读取明确失败，不回退 BM25                                                                                                                                                                                                                                                                                         |
+| `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型不可用时读取明确失败，不回退 BM25；模型需手动下载，WASM 运行时随包发布                                                                                                                                                                                                                                                         |
 | `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） |
 | `semanticDownloadSource` | `'hf-mirror'`        | 模型资源下载渠道：`hf-mirror`（国内镜像加速，推荐国内直连）、`huggingface`（Hugging Face 官方直连）                                                                                                                                                                                                                                                                                 |
 | `semanticModelDir`       | `''`                 | 下载模型的绝对存储目录（或以 `~/` 开头）；空串表示使用默认目录 `~/.dsh/models/`                                                                                                                                                                                                                                                                                                     |
@@ -232,7 +232,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ### 本地模型语义检索与下载
 
-ONNX 嵌入模型需手动下载后启用。模型通过语义化档位编号（Semantic Tiers）寻址，与物理模型版本解耦，配置不随模型升级改变：
+ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布（`assets/onnxruntime/<version>/`，含来源与 SHA-256 记录），无需另行安装，插件安装也不需要任何构建批准。缺少模型时语义检索按 fail-closed 处理。模型通过语义化档位编号（Semantic Tiers）寻址，与物理模型版本解耦，配置不随模型升级改变：
 
 - **可选语义档位与特点**：
   - `balanced` (通用平衡 · 当前对应 Qwen3-Embedding-0.6B 开源权重 · ~625 MB, 1024 维, 32K Token, Apache 2.0)：支持 100+ 语言、32K 上下文，面向中文为主或中英混合文献库，默认档位。

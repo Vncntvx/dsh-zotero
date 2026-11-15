@@ -2,10 +2,12 @@
  * The ONNX inference session for one local embedding model.
  *
  * The runtime is `onnxruntime-web` executing its WASM backend inside Node:
- * portable across platforms, no native addon, no install scripts. The module
- * is loaded lazily, the session is created once per model, and `dispose`
- * releases it. Inference metadata (pooling, normalization, dimension) comes
- * from the catalog entry the bundle was verified against.
+ * portable across platforms and no native addon. Its build artifacts ship
+ * inside this package (`./runtime.ts`), so nothing is installed on demand and
+ * the plugin's dependency closure stays free of install scripts. The session is
+ * created once per model, and `dispose` releases it. Inference metadata
+ * (pooling, normalization, dimension) comes from the catalog entry the bundle
+ * was verified against.
  *
  * Each batch is tokenized exactly once: one `TokenizedBatch` feeds both the
  * encoder inputs and the pooling masks. A caller `AbortSignal` is checked
@@ -19,6 +21,7 @@
 import { join } from 'node:path'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import { EMBED_BATCH_SIZE } from './batching.js'
+import { loadSemanticRuntime } from './runtime.js'
 import type { EmbeddingSide, EmbeddingTokenizer, TokenizedBatch } from './tokenizer.js'
 import { createEmbeddingTokenizer } from './tokenizer.js'
 import { l2NormalizeInPlace, poolTokenEmbeddings } from './tensor.js'
@@ -315,10 +318,9 @@ export function cacheSpecOf(
  * @param dir - the bundle directory (already verified on disk).
  */
 export async function openEmbedder(spec: SemanticModelEntry, dir: string): Promise<Embedder> {
-  const ort = await import('onnxruntime-web')
-  ort.env.wasm.numThreads = 1
-  ort.env.wasm.simd = true
-  ort.env.logLevel = 'error'
+  // The loader owns the runtime's environment (single thread, SIMD, log level)
+  // and points its wasm loader at the packaged assets.
+  const ort = await loadSemanticRuntime()
   const session = await ort.InferenceSession.create(join(dir, 'onnx', 'model_quantized.onnx'), {
     executionProviders: ['wasm'],
     graphOptimizationLevel: 'all',

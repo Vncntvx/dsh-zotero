@@ -20,3 +20,15 @@ export declare function expectedPaths(
   manifest: Record<string, unknown>,
   baseDir?: string,
 ): { paths: string[]; problems: string[] }
+
+/**
+ * The packages a consumer's install would have to decide a build script for,
+ * computed from the published runtime closure in the lockfile.
+ * @param manifest - the parsed `package.json`; only runtime `dependencies` count.
+ * @param lock - the parsed `package-lock.json`.
+ * @returns sorted `name@version` labels for closure packages that declare a script.
+ */
+export declare function installScriptsInRuntimeClosure(
+  manifest: Record<string, unknown>,
+  lock: Record<string, unknown>,
+): string[]

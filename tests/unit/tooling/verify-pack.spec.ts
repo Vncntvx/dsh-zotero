@@ -9,11 +9,15 @@
  * @module tests/unit/verify-pack
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { expectedPaths, packReportOf } from '../../../scripts/verify-pack.mjs'
+import {
+  expectedPaths,
+  installScriptsInRuntimeClosure,
+  packReportOf,
+} from '../../../scripts/verify-pack.mjs'
+import { withTempDir } from '../../helpers/temp-dir.ts'
 
 const REPORT = '[\n  {\n    "name": "dsh-zotero"\n  }\n]'
 
@@ -44,16 +48,6 @@ describe('packReportOf', () => {
     expect(() => packReportOf('')).toThrow(/printed no JSON report/)
   })
 })
-
-/** Run an assertion against a temporary directory cleaned at exit. */
-async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), 'verify-pack-'))
-  try {
-    await run(dir)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-}
 
 describe('expectedPaths', () => {
   it('enumerates the locale bundles the repository actually ships', () => {
@@ -160,5 +154,46 @@ describe('expectedPaths', () => {
       expect(paths).not.toContain('lib')
       expect(paths).not.toContain('locale')
     })
+  })
+})
+
+describe('installScriptsInRuntimeClosure', () => {
+  it('names every closure package that declares an install script', () => {
+    const lock = {
+      packages: {
+        '': {},
+        'node_modules/a': { version: '1.0.0', dependencies: { b: '^2' } },
+        'node_modules/b': { version: '2.0.0', hasInstallScript: true },
+        'node_modules/outside': { version: '3.0.0', hasInstallScript: true },
+      },
+    }
+    expect(installScriptsInRuntimeClosure({ dependencies: { a: '^1' } }, lock)).toEqual(['b@2.0.0'])
+  })
+
+  it('walks nested install paths and optional dependencies', () => {
+    const lock = {
+      packages: {
+        '': {},
+        'node_modules/a': { version: '1.0.0', dependencies: { b: '2.0.0' } },
+        'node_modules/a/node_modules/b': {
+          version: '2.0.0',
+          optionalDependencies: { c: '^3' },
+        },
+        'node_modules/a/node_modules/c': { version: '3.0.0', hasInstallScript: true },
+        'node_modules/c': { version: '3.0.0' },
+      },
+    }
+    expect(installScriptsInRuntimeClosure({ dependencies: { a: '^1' } }, lock)).toEqual(['c@3.0.0'])
+  })
+
+  it('answers nothing for a manifest without runtime dependencies', () => {
+    const lock = { packages: { 'node_modules/dev': { version: '1.0.0', hasInstallScript: true } } }
+    expect(installScriptsInRuntimeClosure({ devDependencies: { dev: '^1' } }, lock)).toEqual([])
+  })
+
+  it('skips a dependency the lockfile cannot resolve instead of guessing', () => {
+    expect(
+      installScriptsInRuntimeClosure({ dependencies: { ghost: '^1' } }, { packages: {} }),
+    ).toEqual([])
   })
 })

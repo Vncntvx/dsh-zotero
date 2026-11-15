@@ -16,11 +16,17 @@ import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
  * `icon`, `dsh.bundle.patch`), the same fields the market's entry and
  * display-meta checks read, so a change to the manifest cannot drift from
  * the check.
+ *
+ * A second, independent check reads the lockfile: no package in the published
+ * runtime closure may declare an install script, because pnpm 11 fails an
+ * install until the running profile approves each one. That check is what keeps
+ * an optional on-demand runtime from becoming a mandatory install decision.
  * @module scripts/verify-pack
  */
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { checkVendoredRuntime, packedRuntimePaths } from './vendor-onnxruntime.mjs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -58,9 +64,8 @@ function addExportPaths(paths, problems, key, value, baseDir) {
           ? readdirSync(targetDir).filter((entry) => entry.endsWith('.json'))
           : []
         if (bundles.length === 0) {
-          // The gate must not narrow itself: an absent or empty directory used
-          // to mean "nothing to assert", which is exactly the state a broken
-          // release ships.
+          // An absent or empty directory provides no files to verify, so fail the
+          // gate instead of treating it as a valid empty export.
           problems.push(
             `the manifest declares the locale export "${key}" but ${relative(baseDir, targetDir)}` +
               ' carries no *.json bundle — the tarball would ship no locale dictionaries',
@@ -69,9 +74,8 @@ function addExportPaths(paths, problems, key, value, baseDir) {
         const prefix = relDir === '.' ? '' : `${relDir}/`
         for (const entry of bundles) paths.add(`${prefix}${entry}`)
       } else {
-        // A non-locale wildcard must still resolve against the disk: the
-        // pattern's static part names a directory, and a rename or deletion
-        // on disk would ship an export that resolves to nothing.
+        // Resolve the static directory prefix so renames and deletions fail
+        // before packaging.
         if (!existsSync(targetDir)) {
           problems.push(
             `the manifest declares the wildcard export "${key}" but ${dir} does not exist` +
@@ -100,9 +104,7 @@ export function expectedPaths(manifest, baseDir = root) {
       if (typeof file !== 'string') continue
       const full = resolve(baseDir, file)
       if (!existsSync(full)) {
-        // Declared-but-absent is a broken release in the making, whatever the
-        // entry kind: a directory the tree dropped (or never had) must fail
-        // the gate, not silently ship less than the manifest promises.
+        // Every declared entry must exist before packaging.
         problems.push(`the manifest "files" entry "${file}" does not exist on disk`)
         continue
       }
@@ -151,11 +153,90 @@ export function packReportOf(stdout) {
   return lines.slice(start).join('\n')
 }
 
+/** Resolve one dependency from a lockfile entry the way Node walks up parents.
+ * @param packages - the lockfile's `packages` map, keyed by install path.
+ * @param fromPath - the entry path the dependency is asked from.
+ * @param name - the dependency name.
+ * @returns the resolved entry path, or undefined when the lock cannot answer.
+ */
+function lockedPathOf(packages, fromPath, name) {
+  let scope = fromPath
+  for (;;) {
+    const candidate = scope === '' ? `node_modules/${name}` : `${scope}/node_modules/${name}`
+    if (packages[candidate] !== undefined) return candidate
+    if (scope === '') return undefined
+    const cut = scope.lastIndexOf('node_modules/')
+    scope = cut <= 0 ? '' : scope.slice(0, cut - 1)
+  }
+}
+
+/**
+ * The packages a consumer's install would have to decide a build script for,
+ * computed from the published runtime closure in the lockfile.
+ *
+ * pnpm 11 fails an install while any dependency script has no decision, so one
+ * such package here makes every install of the plugin fail until the profile
+ * records an approval. The optional semantic runtime stays outside the closure
+ * for exactly that reason (`src/enrichment/semantic/runtime.ts`); this gate
+ * keeps a future runtime dependency from quietly putting a script back in.
+ * @param manifest - the parsed `package.json`; only runtime `dependencies` count.
+ * @param lock - the parsed `package-lock.json`.
+ * @returns sorted `name@version` labels for closure packages that declare a script.
+ */
+export function installScriptsInRuntimeClosure(manifest, lock) {
+  const packages = lock.packages ?? {}
+  const visited = new Set()
+  const scripts = new Set()
+  const visit = (fromPath, name) => {
+    const path = lockedPathOf(packages, fromPath, name)
+    if (path === undefined || visited.has(path)) return
+    visited.add(path)
+    const entry = packages[path]
+    if (entry.hasInstallScript === true) scripts.add(`${name}@${entry.version}`)
+    const children = { ...entry.dependencies, ...entry.optionalDependencies }
+    for (const child of Object.keys(children)) visit(path, child)
+  }
+  for (const name of Object.keys(manifest.dependencies ?? {})) visit('', name)
+  return [...scripts].sort()
+}
+
 /** Pack the package and prove every declared entry reached the tarball. */
 function verifyPack() {
   const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
-  const { paths: expected, problems } = expectedPaths(manifest)
-  expected.sort()
+  let lock
+  try {
+    lock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'))
+  } catch (error) {
+    // The dependency closure requires the lockfile for verification.
+    console.error(
+      `verify-pack: package-lock.json is unreadable: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    process.exitCode = 1
+    return
+  }
+  const scripted = installScriptsInRuntimeClosure(manifest, lock)
+  if (scripted.length > 0) {
+    console.error(
+      `verify-pack: the runtime dependency closure declares install scripts (${scripted.join(', ')}) —` +
+        " pnpm 11 fails every install until the profile approves them. Vendor that package's build" +
+        ' artifacts instead, as scripts/vendor-onnxruntime.mjs does for onnxruntime-web',
+    )
+    process.exitCode = 1
+    return
+  }
+  // Verify generated semantic runtime assets before packing.
+  try {
+    checkVendoredRuntime()
+  } catch (error) {
+    console.error(
+      `verify-pack: ${error instanceof Error ? error.message : String(error)} —` +
+        ' run `npm run assets:runtime` (the release path does), then retry',
+    )
+    process.exitCode = 1
+    return
+  }
+  const { paths, problems } = expectedPaths(manifest)
+  const expected = [...paths, ...packedRuntimePaths()].sort()
   if (problems.length > 0) {
     for (const problem of problems) console.error(`verify-pack: ${problem}`)
     process.exitCode = 1

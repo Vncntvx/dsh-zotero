@@ -48,6 +48,7 @@
   },
   "files": [
     "lib",
+    "assets/onnxruntime",
     "cordis.patch.yml",
     "docs/images/icon.png",
     "docs/plugin-detail.md",
@@ -57,7 +58,7 @@
     "README.en.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build": "node scripts/vendor-onnxruntime.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs",
     "build:client": "node scripts/build-client.mjs",
     "dev": "tsc -p tsconfig.json --watch",
     "dev:client": "node scripts/build-client.mjs --watch",
@@ -74,6 +75,8 @@
     "deps:check": "node scripts/deps-check.mjs",
     "assets:semantic": "node scripts/fetch-semantic-model.mjs",
     "assets:semantic:verify": "node scripts/fetch-semantic-model.mjs --verify-only",
+    "assets:runtime": "node scripts/vendor-onnxruntime.mjs",
+    "assets:runtime:verify": "node scripts/vendor-onnxruntime.mjs --check",
     "verify:pack": "node scripts/verify-pack.mjs",
     "prepare": "node scripts/build-prepare.mjs",
     "prepublishOnly": "npm run release:check",
@@ -180,7 +183,7 @@
     "mdast-util-math": "3.0.0",
     "micromark-extension-gfm": "3.0.0",
     "micromark-extension-math": "3.1.0",
-    "onnxruntime-web": "1.31.1",
+    "onnxruntime-common": "1.31.1",
     "undici": "8.12.4",
     "unpdf": "^2.1.0",
     "zod": "4.6.6"
@@ -289,6 +292,7 @@
     "micromark-util-sanitize-uri": "^2.0.1",
     "micromark-util-symbol": "^2.0.1",
     "micromark-util-types": "^2.0.2",
+    "onnxruntime-web": "1.31.1",
     "playwright": "1.65.0",
     "prettier": "^3.9.6",
     "react": "^18.2.0",

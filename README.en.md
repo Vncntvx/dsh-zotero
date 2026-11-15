@@ -79,7 +79,7 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 
 Start a new session after installation. Open the **dsh-zotero** detail page in the plugin manager; its configuration section carries the full configuration form.
 
-> Note: installing directly from the `main` source branch needs a local `prepare` build plus an `allowBuilds` entry for `dsh-zotero` in the profile's `pnpm-workspace.yaml`; the `#release` branch or the npm package skips that step. Separately, npm, `#release`, and local tarball installs need a one-time approval for the transitive `protobufjs` install script on pnpm 11 — see [Getting Started](docs/getting-started.en.md).
+> Note: installing directly from the `main` source branch needs a local `prepare` build plus an `allowBuilds` entry for `dsh-zotero` in the profile's `pnpm-workspace.yaml`; the `#release` branch or the npm package skips that step. The WASM runtime behind local semantic search ships inside the plugin, so nothing is installed on demand; download a model in settings — see [Getting Started](docs/getting-started.en.md).
 
 ## Prerequisites
 

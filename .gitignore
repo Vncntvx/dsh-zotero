@@ -41,3 +41,7 @@ coverage/
 
 # Opt-in model bundles: downloaded on demand by the user, never bundled into git or packages
 assets/semantic/models/*
+
+# Vendored semantic runtime: generated from the pinned dev dependency by
+# scripts/vendor-onnxruntime.mjs; its LICENSE and this directory stay tracked
+assets/onnxruntime/*/

@@ -1,14 +1,17 @@
 /**
- * The build scripts a profile must approve before this plugin installs from a
- * packed tarball or a registry. `onnxruntime-web` (local semantic ranking)
- * depends on `protobufjs`, whose `postinstall` only checks its version scheme;
- * pnpm 11 treats an undecided build script as a failure
- * (`ERR_PNPM_IGNORED_BUILDS`), so the install has to record the decision in the
- * profile's `pnpm-workspace.yaml`.
+ * The build approvals this plugin's published dependency tree requires: none.
  *
- * One list, three consumers: the discovery smoke seeds it, the tooling guard
- * spec keeps it equal to the production dependency tree, and the install docs
- * name it.
+ * The semantic runtime `onnxruntime-web` pulls `protobufjs`, whose
+ * `postinstall` is a no-op, and pnpm 11 fails an install while any dependency
+ * script has no decision (`ERR_PNPM_IGNORED_BUILDS`). The runtime is therefore
+ * not a dependency: the plugin ships its build artifacts inside the package
+ * (`scripts/vendor-onnxruntime.mjs`) and installs clean. This ledger stays
+ * empty so a future dependency that declares an install script fails the guard
+ * spec below instead of blocking every install until the profile approves it.
+ *
+ * One list, two consumers: the tooling guard spec keeps it equal to the
+ * production dependency tree, and the install docs name it (an empty list
+ * names nothing).
  * @module scripts/shared/build-approvals
  */
 
@@ -16,7 +19,7 @@
 const INSTALL_HOOKS = ['preinstall', 'install', 'postinstall']
 
 /** Every install script this plugin's dependency tree needs a decision for. */
-export const APPROVED_BUILD_SCRIPTS = Object.freeze(['protobufjs'])
+export const APPROVED_BUILD_SCRIPTS = Object.freeze([])
 
 /**
  * The install hooks a package manifest declares.
@@ -26,29 +29,6 @@ export const APPROVED_BUILD_SCRIPTS = Object.freeze(['protobufjs'])
 export function buildScriptHooksOf(manifest) {
   const scripts = manifest?.scripts ?? {}
   return INSTALL_HOOKS.filter((hook) => typeof scripts[hook] === 'string')
-}
-
-/**
- * The profile policy block that approves the given scripts.
- * @param names package names to approve
- * @returns the YAML block, newline-terminated
- */
-export function policyYaml(names = APPROVED_BUILD_SCRIPTS) {
-  return `allowBuilds:\n${names.map((name) => `  ${name}: true`).join('\n')}\n`
-}
-
-/**
- * Which approved scripts a profile policy still lacks.
- * @param text current `pnpm-workspace.yaml` content, or undefined when absent
- * @param names package names that must be approved
- * @returns the names with no `name: true` entry; every name when the text is absent
- */
-export function missingApprovals(text, names = APPROVED_BUILD_SCRIPTS) {
-  if (text === undefined) return [...names]
-  const approved = new Set(
-    [...text.matchAll(/^\s*([^\s#:]+):\s*true\s*$/gm)].map((match) => match[1]),
-  )
-  return names.filter((name) => !approved.has(name))
 }
 
 /**
