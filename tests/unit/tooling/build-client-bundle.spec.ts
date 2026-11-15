@@ -13,7 +13,10 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import {
+  assertLoaderApi,
   clientBuildPlugins,
+  CLIENT_LOADER_API,
+  LEGACY_STYLESHEET_MARKER,
   MAX_CLIENT_BUNDLE_BYTES,
   verifyBundle,
 } from '../../../scripts/build-client.mjs'
@@ -24,7 +27,9 @@ const GOOD_BUNDLE = `window.__ModuleLoader__.load({ id: 'dsh-zotero', factory: (
   require('react/jsx-runtime')
   require('@deepseek-ai/dsh-client-store')
   require('@deepseek-ai/dsh-client-ui-primitives')
-  return { apply() {}, inject: ['locale'] }
+  // The legacy handoff injects this tag; CLIENT_LOADER_API names it.
+  var cssTag = '${LEGACY_STYLESHEET_MARKER}'
+  return { apply() {}, inject: ['locale'], cssTag }
 } });`
 
 /** One fixture bundle on disk; `verifyBundle` reads a path, not a string. */
@@ -38,6 +43,23 @@ async function withBundle(source: string, run: (path: string) => Promise<void> |
     await rm(dir, { recursive: true, force: true })
   }
 }
+
+describe('the loader-API pairing', () => {
+  it('accepts the pinned legacy handoff the bundle actually produces', () => {
+    expect(CLIENT_LOADER_API).toBe('legacy-stylesheet-tag')
+    expect(() => assertLoaderApi(CLIENT_LOADER_API, GOOD_BUNDLE)).not.toThrow()
+  })
+
+  it('refuses the legacy tag once the constant names the meta handoff', () => {
+    expect(() => assertLoaderApi('meta-stylesheets', GOOD_BUNDLE)).toThrow(/meta-stylesheets/)
+  })
+
+  it('refuses a migrated bundle while the constant still names the legacy handoff', () => {
+    expect(() => assertLoaderApi('legacy-stylesheet-tag', 'export default 1')).toThrow(
+      /still names the legacy handoff/,
+    )
+  })
+})
 
 describe('verifyBundle', () => {
   it('accepts a handoff with the plugin id, external-only requires, and the apply face', async () => {
@@ -55,7 +77,8 @@ describe('verifyBundle', () => {
     render() { return this.props.children }
   }
   var probe = new SurfaceBoundary({ children: null })
-  return { apply() {}, inject: ['locale'], boundary: SurfaceBoundary, probed: probe !== undefined }
+  var cssTag = '${LEGACY_STYLESHEET_MARKER}'
+  return { apply() {}, inject: ['locale'], boundary: SurfaceBoundary, probed: probe !== undefined, cssTag }
 } });`
     await withBundle(boundaryBundle, (path) => {
       expect(() => verifyBundle(path)).not.toThrow()

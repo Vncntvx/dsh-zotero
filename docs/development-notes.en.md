@@ -106,6 +106,60 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Verification**: `tests/client/library/library-panel.reader.spec.tsx` (the refusal becomes the panel hint; a foreign refusal keeps its own message).
 - **Follow-up**: if upstream gives that branch an error code or error type, switch to matching the code and delete the constant and this entry.
 
+### DN-10: The client loader API and the `resultText` mirror stay at pin semantics
+
+- **Type**: version-drift preparation.
+- **Status**: in effect (2026-11-15, pin `0.2.2-rc.3`; upstream HEAD has moved, rc.3 has not).
+- **Location**: `CLIENT_LOADER_API`/`assertLoaderApi` and the `data-plugin-css` injection in `scripts/build-client.mjs`; `resultTextOf` in `src/sources/presenters.ts`.
+- **Behavior**: both mirrors are written against rc.3 while the sibling HEAD already changed.
+  - Module loader: this plugin injects its stylesheet as `<style data-plugin-css="dsh-zotero">` and hands off with `load({ id, factory })`; upstream HEAD moved to `load({ id, factory, meta: () => ({ stylesheets }) })` and removed the `data-plugin-css` handling. That change is not in the rc.3 tag.
+  - `resultText`: `resultTextOf` matches rc.3 (every part joined with `\n`). HEAD joins with `reduce` (no extra newline when a part already ends with one) and grew an optional `formatImage` argument.
+- **Current approach**: `CLIENT_LOADER_API` is this repository's single statement of which handoff the loader accepts, because the browser loader is a shell global, not an installable package — no local type can answer it. `assertLoaderApi` checks the produced bundle at build time against that constant: the constant naming `meta-stylesheets` while the bundle still injects the legacy tag, and the bundle dropping the tag while the constant still names the legacy form, both fail the build instead of silently losing styles or the handoff at runtime. The `resultTextOf` JSDoc now names the two differences from HEAD instead of claiming the semantics are copied exactly.
+- **Review trigger**: after every `npm run harness:pin`, re-check both upstream implementations (`packages/client/tsdown.client.ts`'s module registration and `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`'s `resultText`). When upstream ships `meta.stylesheets`, flip the constant, migrate the style injection, and raise the `engines.dsh` floor to a release that includes it, all in one change.
+- **Verification**: `tests/unit/tooling/build-client-bundle.spec.ts` covers three directions (legacy accepted, each drift refused); `tests/client/presenters.spec.ts` pins the current `resultText` behavior; `npm run build:client` and `npm run harness:check`.
+- **Follow-up**: when the migration lands, delete the `data-plugin-css` branch, `CLIENT_LOADER_API` and `assertLoaderApi`; if upstream ever exports `resultText` from `./client`, import it and delete the mirror.
+
+### DN-11: An artifactId read validates the artifact, never probes its source
+
+- **Type**: security/performance boundary.
+- **Status**: in effect (2026-11-15).
+- **Location**: `lookupArtifact`/`lookupArtifactFrom` in `src/enrichment/service.ts`; `resolveArtifactTarget` in `src/enrichment/artifact-target.ts`.
+- **Behavior**: `lookupArtifact` is the only entry for an opaque artifactId. It hits a read-through cache keyed by `(artifactId, contentFingerprint, parseGeneration, store.writes)`; on a miss it reads the source index and one `meta.json` to recover the concrete source and **never stats or HEADs that source**. The reason is that an artifactId addresses the local artifact, not "does the source still exist": a parsed URL document stays readable offline (the source check was paid at parse time), and deleting the local attachment does not invalidate the artifact. Reading by item ref (`lookup`) still keeps one stat/HEAD, because that path reads Zotero's index text.
+- **Review trigger**: when the artifact lifecycle changes (for example artifacts are reclaimed with their source), or when upstream asks an id-addressed read to verify source freshness too.
+- **Verification**: `tests/host/enrichment-service.spec.ts` asserts an artifactId hit issues no HEAD, an unknown id is a fault, and the answer carries the real source facts.
+- **Follow-up**: if the product decides a vanished source invalidates the artifact, add one budgeted probe in `resolveArtifactTarget` and turn this entry into a probe policy.
+
+### DN-12: Ranking-scope admission and model recycling
+
+- **Type**: resource lifecycle.
+- **Status**: in effect (2026-11-15).
+- **Location**: `src/enrichment/semantic/loader.ts`; `armSemanticIdleRecycle` in `src/enrichment/service.ts`.
+- **Behavior**: `retrieve` calls `ranker.admit()` before any source I/O, and the scope records the target and generation admitted. The load starts on that scope immediately rather than at the first `embed()`. A model switch after admission therefore cannot move that read onto another model, and an unmount cannot cut an accepted scope short: `dispose()` only closes new admission, and an admitted instance is released after `release()`. A resident model is released after `semanticIdleTimeoutMs` (default ten minutes) without requests and re-opened from disk by the next ranking; teardown clears the timer.
+- **Review trigger**: when the ranking interface's admission semantics, the model load transaction, or the idle-recycle configuration change.
+- **Verification**: `tests/unit/semantic-loader-lifecycle.spec.ts` (A→B transaction, failed B leaving A managed, an admitted scope surviving teardown, retire/reopen, idempotent dispose), `tests/host/enrichment-semantic-lifecycle.spec.ts`, `tests/unit/enrichment-config.spec.ts` (the idle field).
+- **Follow-up**: if upstream offers a primitive that binds a model generation per call, delete the local scope layer.
+
+### DN-13: Proxy routing and address pinning are mutually exclusive, and one undici copy serves everything
+
+- **Type**: security + dependency consistency.
+- **Status**: in effect (2026-11-15, `dsh-http-proxy` published).
+- **Location**: `egressRouteFor`/`publicFetch`/`createPinnedDispatcher` in `src/transport/connections.ts`, and the four external egress paths (MinerU, scholarly retrieval, URL PDF, model downloads).
+- **Behavior**: `proxyRouteFor(url)` decides one request's route: proxied uses the process-wide dispatcher the proxy package installs — **the proxy performs DNS, so no address pinning applies and the dispatcher is never closed (process-wide)**, while the lexical public-address gate still runs; only direct resolves addresses, pins the closed set and closes per attempt. The two cannot be combined: pinning binds the addresses this process resolved, and a proxy resolves again, so using both abandons check-then-connect. `pinned.dispatcher` is accepted only by the `fetch` from the undici copy in `connections.ts`; the runtime global `fetch` rejects it at the handler interface with `UND_ERR_INVALID_ARG`. `dsh-http-proxy` pins the same undici version as the root dependency, otherwise one dispatcher would cross two copies; the lockfile keeps them identical.
+- **Review trigger**: when the harness (proxy package version) is upgraded, when undici changes, or when a new external egress path is added; `npm run deps:check` and `tests/unit/tooling/harness-mirrored-deps.spec.ts` warn first.
+- **Verification**: `tests/host/*-proxy*`, `tests/scholarly/network.spec.ts`, `tests/scholarly/transport/fake-ip-policy.spec.ts` (the pinned dispatcher reaches the fetch init, fake-proxy and private addresses refused), and the fetch-ownership guard in `node scripts/test-lint.mjs`.
+- **Follow-up**: if upstream merges proxy routing and pinning into one API, delete the local `egressRouteFor`.
+
+### DN-14: `scrubbedParentEnv` adds the proxy variables back
+
+- **Type**: behavior change (a side effect of reusing upstream).
+- **Status**: in effect (2026-11-15).
+- **Location**: `scrubbedEnvironment` in `src/environment.ts`; the launcher child process in `src/local/terminal.ts`.
+- **Behavior**: the local scrub used to only subtract (drop credential-shaped names and `DSH_*`). Switching to `@deepseek-ai/dsh-subprocess`'s `scrubbedParentEnv()` subtracts the same names and additionally layers the host's proxy variables into the child environment.
+- **Current approach**: that is exactly what the launcher wants — the child must reach the network the way the host does, or a terminal in a proxied environment loses its network. An explicitly supplied environment (a test's synthetic map) still goes through the same rule without that layering, because that map is the environment the caller chose.
+- **Review trigger**: when the harness is upgraded (`SENSITIVE_ENV_PATTERN` / `scrubbedParentEnv` semantics change) or when the launcher needs to diverge from the host's network policy.
+- **Verification**: `tests/unit/environment.spec.ts` (WSL detection, process environment through upstream, an explicit environment without the proxy layering), `tests/host/terminal*.spec.ts`.
+- **Follow-up**: if upstream splits the proxy layering into an explicit switch, choose it per launcher need.
+
 ## Upgrade review
 
 Every harness pin change walks this page from the top: check whether upstream now provides the requested contract; if it does, migrate and retire the entry in the same change, because a capability that exists while the workaround remains is not an acceptable state. If it does not, update only the pin version and the review date, leaving the workaround untouched.

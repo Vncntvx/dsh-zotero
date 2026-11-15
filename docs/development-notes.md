@@ -106,6 +106,60 @@
 - **验证**：`tests/client/library/library-panel.reader.spec.tsx`（该拒绝翻译成面板提示；外来拒绝保留原消息）。
 - **后续处理**：若上游为该分支提供错误码或错误类型，改为按 code 判定并删除子串常量与本条目。
 
+### DN-10：客户端加载器 API 与 `resultText` 镜像停在 pin 语义
+
+- **类型**：版本漂移准备。
+- **状态**：生效中（2026-11-15，pin `0.2.2-rc.3`；上游 HEAD 已变，rc.3 未变）。
+- **位置**：`scripts/build-client.mjs` 的 `CLIENT_LOADER_API`/`assertLoaderApi` 与 `data-plugin-css` 注入；`src/sources/presenters.ts` 的 `resultTextOf`。
+- **现象**：两处镜像都对着 rc.3 的语义写死，而 sibling HEAD 已经改了。
+  - 模块加载器：本插件把样式文本注入 `<style data-plugin-css="dsh-zotero">`，并以 `load({ id, factory })` 交接；上游 HEAD 改为 `load({ id, factory, meta: () => ({ stylesheets }) })` 并移除 `data-plugin-css` 处理。该变更不在 rc.3 tag 内。
+  - `resultText`：`resultTextOf` 与 rc.3 一致（每个块以 `\n` 连接）。HEAD 改为 `reduce` 拼接（前段已以换行结尾时不再补），并新增可选 `formatImage` 参数。
+- **现做法**：`CLIENT_LOADER_API` 是本仓库对「加载器接受哪种交接」的唯一声明，因为浏览器加载器是壳层全局、不是可安装包，没有任何本地类型能回答这个问题。`assertLoaderApi` 在构建时按这个常量检查产物：常量指 `meta-stylesheets` 而产物仍注入旧标签、或产物不再注入而常量仍指旧形式，两种漂移都让构建失败，而不是在运行期静默丢样式或丢 handoff。`resultTextOf` 的 JSDoc 已写明与 HEAD 的两点差异，不再声称「语义完全复制」。
+- **触发条件**：每次 `npm run harness:pin` 后复核两处上游实现（`packages/client/tsdown.client.ts` 的模块注册、`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts` 的 `resultText`）。上游提供 `meta.stylesheets` 时，同一次改动里翻转常量、迁移样式注入、并把 `engines.dsh` 下界抬到包含该能力的版本。
+- **验证**：`tests/unit/tooling/build-client-bundle.spec.ts` 三个方向（旧形式通过、两种漂移各自失败）；`tests/client/presenters.spec.ts` 覆盖当前 `resultText` 行为；`npm run build:client`、`npm run harness:check`。
+- **后续处理**：迁移完成后删除 `data-plugin-css` 分支与 `CLIENT_LOADER_API`，把 `assertLoaderApi` 一起删掉；`resultText` 若上游从 `./client` 导出，改为值导入并删除镜像。
+
+### DN-11：artifactId 读取按产物自身校验，不探测来源
+
+- **类型**：安全/性能边界。
+- **状态**：生效中（2026-11-15）。
+- **位置**：`src/enrichment/service.ts` 的 `lookupArtifact`/`lookupArtifactFrom`，`src/enrichment/artifact-target.ts` 的 `resolveArtifactTarget`。
+- **要点**：`lookupArtifact` 是不透明 artifactId 的唯一入口。它按 `(artifactId, contentFingerprint, parseGeneration, store.writes)` 命中读穿缓存，未命中时只读源索引与 `meta.json` 解析出具体来源；**从不对来源做 stat 或 HEAD**。理由是 artifactId 指向的是本地产物本身，而不是「来源现在是否还在」：一份被解析过的 URL 文档允许在离线时继续读（解析时已经付过一次源校验），本地附件被删除也不会让产物失效。条目 ref 的读取（`lookup`）仍保留一次 stat/HEAD，因为那条路读的是 Zotero 的索引文本。
+- **触发条件**：产物生命周期规则变化（例如产物随来源删除而回收）、或上游要求「按 id 读」也做来源新鲜度校验时复核。
+- **验证**：`tests/host/enrichment-service.spec.ts` 断言 artifactId 命中不发 HEAD、未知 id 是 fault、响应里带真实来源事实。
+- **后续处理**：若产品改为「来源消失即产物失效」，在 `resolveArtifactTarget` 加一次带预算的探测，并把本条改成可探测策略。
+
+### DN-12：排名 scope 的准入与模型回收时机
+
+- **类型**：资源生命周期。
+- **状态**：生效中（2026-11-15）。
+- **位置**：`src/enrichment/semantic/loader.ts`、`src/enrichment/service.ts` 的 `armSemanticIdleRecycle`。
+- **要点**：`retrieve` 在做任何源 I/O 之前 `ranker.admit()`，`scope` 记录准入时刻的目标与代际；加载在该 scope 上立即开始，而不是等到第一次 `embed()`。因此准入后的模型切换不会把这次读取换到另一份模型上，卸载也不会中断已准入的 scope：`dispose()` 只关闭新准入，已准入的实例在 `release()` 后回收。常驻模型在 `semanticIdleTimeoutMs`（默认十分钟）无请求后释放，下一次排名从磁盘重开；卸载时定时器一并清除。
+- **触发条件**：排名接口的准入语义、模型装载事务、或空闲回收配置变化时复核。
+- **验证**：`tests/unit/semantic-loader-lifecycle.spec.ts`（A→B 事务、失败保留 A、准入后卸载仍可用、重试与重开、dispose 幂等）、`tests/host/enrichment-semantic-lifecycle.spec.ts`、`tests/unit/enrichment-config.spec.ts`（空闲字段）。
+- **后续处理**：若上游提供每次调用绑定模型代际的原语，可删掉本地的 scope 层。
+
+### DN-13：代理路由与地址钉住互斥，且全包只用一份 undici
+
+- **类型**：安全 + 依赖一致性。
+- **状态**：生效中（2026-11-15，`dsh-http-proxy` 已发布）。
+- **位置**：`src/transport/connections.ts` 的 `egressRouteFor`/`publicFetch`/`createPinnedDispatcher`，四个外部出口（MinerU、学术检索、URL PDF、模型下载）。
+- **要点**：`proxyRouteFor(url)` 决定一次请求的路由：proxied 走代理包安装的进程级 dispatcher —— **代理自己做 DNS，因此不钉地址、也永不 close（进程共享）**，但词法公网闸照跑；direct 才解析地址、钉住闭集并每次尝试 close。两者不能同时用：钉住的是本进程解析到的地址，代理会另解析一次，混用等于放弃 check-then-connect。`pinned.dispatcher` 只被 `connections.ts` 里那份 undici 的 `fetch` 接受；用运行时全局 `fetch` 会在 handler 接口处以 `UND_ERR_INVALID_ARG` 拒绝。`dsh-http-proxy` 钉的 undici 版本必须与根依赖一致（否则同一份 dispatcher 跨副本传递），锁文件里两者同版。
+- **触发条件**：升级 harness（代理包版本）、更换 undici、或新增外部出口时复核；`npm run deps:check` 与 `tests/unit/tooling/harness-mirrored-deps.spec.ts` 会先报警。
+- **验证**：`tests/host/*-proxy*`、`tests/scholarly/network.spec.ts`、`tests/scholarly/transport/fake-ip-policy.spec.ts`（钉住 dispatcher 进 fetch init、假代理与私网拒绝）、`scripts/verify-no-bare-dispatcher` 等价守卫（`node scripts/test-lint.mjs` 的 fetch 归属检查）。
+- **后续处理**：若上游把 proxy 与 pinning 合成一条 API，删除本地 `egressRouteFor`。
+
+### DN-14：`scrubbedParentEnv` 会补代理变量
+
+- **类型**：行为变更（复用上游的副作用）。
+- **状态**：生效中（2026-11-15）。
+- **位置**：`src/environment.ts` 的 `scrubbedEnvironment`，`src/local/terminal.ts`（launcher 子进程）。
+- **现象**：本地 scrub 以前只做减法（删凭据形状与 `DSH_*`）。改用 `@deepseek-ai/dsh-subprocess` 的 `scrubbedParentEnv()` 后，它在减法的同时把宿主代理变量补进子进程环境。
+- **现做法**：这正是 launcher 想要的行为 —— 子进程要像宿主一样联网，否则代理环境里的终端会丢网；显式传入的环境（测试合成表）仍走同一规则但不补代理，因为那张表是调用方选择的完整环境。
+- **触发条件**：升级 harness（`SENSITIVE_ENV_PATTERN`/`scrubbedParentEnv` 语义变化）或 launcher 需要与宿主网络策略分离时复核。
+- **验证**：`tests/unit/environment.spec.ts`（WSL 判定、进程环境走上游、显式环境不补代理）、`tests/host/terminal*.spec.ts`。
+- **后续处理**：若上游把「补代理」拆成显式开关，按 launcher 需要选择。
+
 ## 升级复核
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。

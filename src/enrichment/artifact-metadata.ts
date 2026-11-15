@@ -23,9 +23,110 @@ import {
 } from '../enrichment-preferences.js'
 import type {
   ZoteroArtifactMetadataView,
+  ZoteroAttachmentLocationView,
   ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
 } from '../contract.js'
+
+/**
+ * How long one resolved attachment stands. The badge is advisory: a row says
+ * its parsed artifact was fresh when probed, and the next probe after this
+ * window resolves the attachment again.
+ */
+const ATTACHMENT_RESOLUTION_TTL_MS = 30_000
+
+/** The most resolved attachments one cache holds; a visible page is smaller. */
+const ATTACHMENT_RESOLUTION_LIMIT = 256
+
+/**
+ * A bounded, time-scoped memo of resolved attachments, keyed by ref.
+ *
+ * One badge probe needs the attachment twice — once to validate the parse
+ * target and once to stat the file behind it — and two pages of one listing
+ * ("show more", or a re-render whose revision moved) repeat that work for rows
+ * whose attachment has not moved. Each entry is two loopback reads; the memo
+ * makes them one per ref per listing.
+ *
+ * The owner is the component: the service creates one and clears it on
+ * teardown, so no module-level state outlives the registration that filled it.
+ */
+export class AttachmentResolutionCache {
+  private readonly answers = new Map<
+    string,
+    { view: ZoteroAttachmentLocationView; expiresAt: number }
+  >()
+
+  /**
+   * @param limit - the most entries held; the oldest is evicted at the cap.
+   * @param ttlMs - how long one entry stands.
+   * @param now - the clock, injectable so a spec can age an entry.
+   */
+  constructor(
+    private readonly limit = ATTACHMENT_RESOLUTION_LIMIT,
+    private readonly ttlMs = ATTACHMENT_RESOLUTION_TTL_MS,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  /**
+   * The resolved attachment for one ref, if it is still fresh.
+   * @param ref - the attachment ref.
+   * @returns the view, or undefined when absent or stale.
+   */
+  get(ref: string): ZoteroAttachmentLocationView | undefined {
+    const entry = this.answers.get(ref)
+    if (entry === undefined) return undefined
+    if (entry.expiresAt <= this.now()) {
+      this.answers.delete(ref)
+      return undefined
+    }
+    // Touch: the most recently read entry is the last to be evicted.
+    this.answers.delete(ref)
+    this.answers.set(ref, entry)
+    return entry.view
+  }
+
+  /**
+   * Remember one resolution until its TTL runs out.
+   * @param ref - the attachment ref.
+   * @param view - what the core answered for it.
+   */
+  set(ref: string, view: ZoteroAttachmentLocationView): void {
+    this.answers.delete(ref)
+    if (this.answers.size >= this.limit) {
+      const oldest = this.answers.keys().next().value
+      if (oldest !== undefined) this.answers.delete(oldest)
+    }
+    this.answers.set(ref, { view, expiresAt: this.now() + this.ttlMs })
+  }
+
+  /** Drop every remembered resolution; called from the owner's teardown. */
+  clear(): void {
+    this.answers.clear()
+  }
+}
+
+/**
+ * The prober's resolver: the core is asked once per ref per TTL window, and
+ * the target validation and the source stat agree by construction because
+ * both read the same answer.
+ * @param resolve - the core's resolver.
+ * @param cache - the owner's memo; absent means every call resolves.
+ * @returns the resolver the probe should use.
+ */
+export function cachedAttachmentResolver(
+  resolve: ParseAttachmentResolver,
+  cache: AttachmentResolutionCache | undefined,
+): ParseAttachmentResolver {
+  if (cache === undefined) return resolve
+  return async (ref, signal) => {
+    signal?.throwIfAborted()
+    const remembered = cache.get(ref)
+    if (remembered !== undefined) return remembered
+    const view = await resolve(ref, signal)
+    cache.set(ref, view)
+    return view
+  }
+}
 
 export type MetadataResult =
   { readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }
@@ -37,6 +138,11 @@ export interface ArtifactMetadataDeps {
   readonly store: () => Promise<ParsedArtifactStore>
   readonly resolveAttachment: ParseAttachmentResolver
   readonly client: MineruClient
+  /**
+   * The owner's memo of resolved attachments. Absent means every call resolves
+   * the attachment itself, which is what a one-off inspect wants.
+   */
+  readonly resolutionCache?: AttachmentResolutionCache
 }
 
 /**
@@ -97,6 +203,7 @@ export async function probeAttachments(
   signal.throwIfAborted()
   const store = await deps.store()
   const index = await store.snapshot()
+  const resolve = cachedAttachmentResolver(deps.resolveAttachment, deps.resolutionCache)
   const results = await mapWithConcurrency(
     request.refs,
     8,
@@ -108,13 +215,13 @@ export async function probeAttachments(
         if (record === undefined) return { ref, state: 'missing' }
         const target = await resolveParseTarget(
           parseTargetOf({ kind: 'attachment', ref }),
-          deps.resolveAttachment,
+          resolve,
           perCall,
         )
         const stamp = await probeSource(
           target.input,
           ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
-          hostSourceBytesDeps(deps.resolveAttachment, deps.client),
+          hostSourceBytesDeps(resolve, deps.client),
           perCall,
         )
         if (!stampMatches(record.stamp, stamp)) return { ref, state: 'expired' }

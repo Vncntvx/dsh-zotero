@@ -142,19 +142,19 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ### 参数
 
-| 参数               | 类型     | 默认值     | 说明                                                                                                                                 |
-| ------------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`             | string   | `evidence` | 读取模式，缺省为 `evidence`。`evidence`：按 query 排序证据片段；`fulltext`：按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束） |
-| `ref`              | string   | —          | `evidence` 模式：文献条目 ref                                                                                                        |
-| `query`            | string   | —          | `evidence` 模式：排序关键词                                                                                                          |
-| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；逐措辞独立排序，段落取各措辞的最好成绩                           |
-| `sources`          | string[] | 全部 4 种  | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                                 |
-| `passages`         | integer  | `4`        | `evidence` 模式：返回段落数量上限（受 `maxEvidencePassages` 限制）                                                                   |
-| `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                  |
-| `attachmentRefs`   | string[] | —          | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                                   |
-| `source`           | object   | —          | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 `artifactId` 指定已解析产物            |
-| `start`            | integer  | `0`        | `fulltext` 模式：本次窗口的起始字符偏移                                                                                              |
-| `maxChars`         | integer  | —          | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                            |
+| 参数               | 类型     | 默认值     | 说明                                                                                                                                                                  |
+| ------------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | string   | `evidence` | 读取模式，缺省为 `evidence`。`evidence`：按 query 排序证据片段；`fulltext`：按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束）                                  |
+| `ref`              | string   | —          | `evidence` 模式：文献条目 ref                                                                                                                                         |
+| `query`            | string   | —          | `evidence` 模式：排序关键词                                                                                                                                           |
+| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；逐措辞独立排序，段落取各措辞的最好成绩                                                            |
+| `sources`          | string[] | 全部 4 种  | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                                                                  |
+| `passages`         | integer  | `4`        | `evidence` 模式：返回段落数量上限（受 `maxEvidencePassages` 限制）                                                                                                    |
+| `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                                                   |
+| `attachmentRefs`   | string[] | —          | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                                                                    |
+| `source`           | object   | —          | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 64 位小写十六进制 `artifactId` 指定已解析产物（格式不符按参数错误拒绝） |
+| `start`            | integer  | `0`        | `fulltext` 模式：本次窗口的起始字符偏移                                                                                                                               |
+| `maxChars`         | integer  | —          | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                                                             |
 
 ### 输出
 
@@ -167,7 +167,7 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 - 不可用或未建立索引的来源记入 `sourcesSkipped`；`noMatch` 不表示"该条目没有相关内容"；
 - 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 或 `comment`；语义命中的段落不标注字段（措辞无重合）；
 - 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`；
-- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 续读直到 `isTruncated` 为 `false`；窗口按字符精确切分，顺序拼接即完整文档（`inputTruncated` 为 `true` 时只覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 回退索引文本，`source.kind="artifactId"` 则明确失败（不伪造来源）。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄；未提供存储时仅窗口链可用。窗口默认尺寸下结果走内联交付，调低内联预算时可能落为 file 交付。读取永不触发解析任务、下载或上传。
+- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 续读直到 `isTruncated` 为 `false`；窗口按字符精确切分，顺序拼接即完整文档（`inputTruncated` 为 `true` 时只覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 回退索引文本，`source.kind="artifactId"` 则明确失败（不伪造来源）。解析产物窗口没有 `coverage`；索引文本窗口带 Zotero 自身的索引覆盖率。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄；未提供存储时仅窗口链可用。窗口默认尺寸下结果走内联交付，调低内联预算时可能落为 file 交付。读取永不触发解析任务、下载或上传。
 
 ### 示例
 

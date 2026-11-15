@@ -4,7 +4,11 @@ import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ParsedArtifactStore } from '../../src/enrichment/artifact-store.ts'
-import { probeAttachments, storedMetadata } from '../../src/enrichment/artifact-metadata.ts'
+import {
+  AttachmentResolutionCache,
+  probeAttachments,
+  storedMetadata,
+} from '../../src/enrichment/artifact-metadata.ts'
 import type { ArtifactMetadataDeps } from '../../src/enrichment/artifact-metadata.ts'
 import { MineruClient } from '../../src/enrichment/transport.ts'
 import { memoryFiles } from './support/enrichment-parse-domain.ts'
@@ -169,6 +173,55 @@ describe('batched attachment freshness probe', () => {
     )
     expect(result).toEqual({ kind: 'probed', results: [{ ref: REF, state: 'ready' }] })
     await world.cleanup()
+  })
+
+  it('resolves one attachment once across two pages of probes', async () => {
+    const world = await probedWorld()
+    const deps = { ...world.deps, resolutionCache: new AttachmentResolutionCache() }
+    for (const _page of [0, 1]) {
+      const result = await probeAttachments(
+        deps,
+        config,
+        { sessionId: 's1', op: 'probe', refs: [REF] },
+        SIGNAL,
+      )
+      expect(result.results[0]).toEqual({ ref: REF, state: 'ready' })
+    }
+    // One resolution serves both pages: without the memo one probe alone
+    // resolves twice (target validation and the stat's byte read).
+    expect(world.resolveAttachment).toHaveBeenCalledTimes(1)
+    await world.cleanup()
+  })
+
+  it('resolves again once the memo entry has expired', async () => {
+    let now = 0
+    const world = await probedWorld()
+    const deps = {
+      ...world.deps,
+      resolutionCache: new AttachmentResolutionCache(16, 1_000, () => now),
+    }
+    const probe = { sessionId: 's1', op: 'probe' as const, refs: [REF] }
+    await probeAttachments(deps, config, probe, SIGNAL)
+    now = 1_001
+    await probeAttachments(deps, config, probe, SIGNAL)
+    // The first window resolved once, the expired one resolved again.
+    expect(world.resolveAttachment).toHaveBeenCalledTimes(2)
+    await world.cleanup()
+  })
+
+  it('evicts the oldest resolution at the memo cap', () => {
+    const cache = new AttachmentResolutionCache(1)
+    const view = {
+      ref: REF,
+      title: 'Selected PDF',
+      contentType: 'application/pdf',
+      kind: 'file' as const,
+      path: '/private/zotero/attachment.pdf',
+    }
+    cache.set('ref-a', view)
+    cache.set('ref-b', view)
+    expect(cache.get('ref-a')).toBeUndefined()
+    expect(cache.get('ref-b')).toEqual(view)
   })
 
   it('marks a probed row expired when the source changed', async () => {

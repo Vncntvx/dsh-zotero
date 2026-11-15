@@ -113,7 +113,12 @@ import { resolveMineruToken } from './credentials.js'
 import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
 import type { ParsedArtifactMeta } from './types.js'
-import { probeAttachments, storedMetadata, type ArtifactMetadataDeps } from './artifact-metadata.js'
+import {
+  AttachmentResolutionCache,
+  probeAttachments,
+  storedMetadata,
+  type ArtifactMetadataDeps,
+} from './artifact-metadata.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
 import { clearVerifiedSnapshots } from './model-bundle-inspector.js'
@@ -383,6 +388,13 @@ export class EnrichmentService extends TypertRemoteService {
    */
   private readonly documents = new DocumentCache()
 
+  /**
+   * The badge-probe memo: one attachment resolution per ref per listing, so a
+   * second page does not resolve the rows the first page already asked about.
+   * Cleared on teardown with the other owned state.
+   */
+  private readonly attachmentResolutions = new AttachmentResolutionCache()
+
   /** Builds one loader per core-injection generation; tests inject a controlled one. */
   private readonly loaderFactory: () => SemanticEmbedderLoader
 
@@ -600,6 +612,9 @@ export class EnrichmentService extends TypertRemoteService {
       // by this registration; clear it so an unmounted row leaves no memory
       // behind for addresses it no longer serves.
       clearVerifiedSnapshots()
+      // The probe memo answers for the Zotero instance this registration was
+      // serving; an unmounted row keeps none of those answers.
+      this.attachmentResolutions.clear()
       const loader = this.loader
       this.loader = undefined
       if (loader !== undefined) await loader.dispose()
@@ -908,12 +923,17 @@ export class EnrichmentService extends TypertRemoteService {
     }
   }
 
-  /** One composition per accepted snapshot: the store and its source seams. */
+  /**
+   * One composition per accepted snapshot: the store and its source seams.
+   * The resolution memo is the component's, not the call's: it is what makes
+   * two pages of one listing resolve each ref once.
+   */
   private metadataDeps(config: EnrichmentPreferences): ArtifactMetadataDeps {
     return {
       store: async () => await this.storeFactory(config, false),
       resolveAttachment: this.resolveAttachment,
       client: this.client,
+      resolutionCache: this.attachmentResolutions,
     }
   }
 

@@ -211,12 +211,59 @@ function platformModuleTable() {
 }
 
 /**
+ * The module-loader API this bundle targets.
+ *
+ * The browser loader is a shell global, not an installed package: nothing in
+ * this repository can ask it which handoff shape it accepts. Upstream HEAD
+ * moves to `load({ id, factory, meta: () => ({ stylesheets }) })` and drops the
+ * `data-plugin-css` tag handling this bundle relies on; that change is not in
+ * the pinned release yet. So the API is a deliberate constant that
+ * `npm run harness:pin` must revisit (DN-10), and the build refuses the two
+ * halves drifting apart in either direction.
+ */
+export const CLIENT_LOADER_API = 'legacy-stylesheet-tag'
+
+/** The marker the legacy handoff injects; the meta API replaces it. */
+export const LEGACY_STYLESHEET_MARKER = 'data-plugin-css'
+
+/**
+ * Refuse a bundle built for the other loader API.
+ *
+ * A bundle still injecting the legacy tag against a loader that no longer
+ * handles it leaves the styles unretained after a disable; the meta shape
+ * against the pinned loader registers a handoff the shell ignores. Either mix
+ * is silent at runtime, so it fails the build instead.
+ * @param api - the constant above.
+ * @param source - the produced bundle.
+ * @returns void; throws when the two disagree.
+ */
+export function assertLoaderApi(api, source) {
+  const legacy = source.includes(LEGACY_STYLESHEET_MARKER)
+  if (api === 'meta-stylesheets' && legacy) {
+    throw new Error(
+      `client bundle still injects a ${LEGACY_STYLESHEET_MARKER} tag — ` +
+        'CLIENT_LOADER_API names the meta-stylesheets handoff, so the CSS injection must move into ' +
+        'load({ meta: () => ({ stylesheets }) }) in the same change (DN-10)',
+    )
+  }
+  if (api === 'legacy-stylesheet-tag' && !legacy) {
+    throw new Error(
+      `client bundle no longer injects a ${LEGACY_STYLESHEET_MARKER} tag but CLIENT_LOADER_API still ` +
+        'names the legacy handoff — flip the constant (and migrate the CSS injection) together',
+    )
+  }
+}
+
+/**
  * Artifact + handoff verification. Runs on every successful build (including
  * watch) through the verify plugin below.
  * @returns void; throws on a failed handoff or host-schema artifact marker.
  */
 export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
   const source = readFileSync(bundlePath, 'utf8')
+  // The loader-API pairing comes before any evaluation: a handoff the shell
+  // cannot read is not worth executing.
+  assertLoaderApi(CLIENT_LOADER_API, source)
   // The byte ceiling comes first: an oversize bundle fails the build before
   // any evaluation, so a size regression is reported as a size regression.
   const bytes = Buffer.byteLength(source, 'utf8')

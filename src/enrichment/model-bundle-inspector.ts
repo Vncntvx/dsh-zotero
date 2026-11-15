@@ -27,13 +27,13 @@ import {
   READ_CHUNK_BYTES,
 } from './model-manifest.js'
 import type {
-  BundleFileIdentity,
   BundleInspection,
   BundlePathSnapshot,
   BundleSnapshot,
   ModelBundleInspectorPort,
   ModelBundleTarget,
 } from './model-installation.js'
+import { identityOf } from './model-fs.js'
 
 interface VerifiedSnapshot {
   readonly catalogFingerprint: string
@@ -70,22 +70,6 @@ function rememberVerified(cacheKey: string, value: VerifiedSnapshot): void {
  */
 export function clearVerifiedSnapshots(): void {
   verifiedSnapshots.clear()
-}
-
-function identityOf(info: {
-  readonly dev: number
-  readonly ino: number
-  readonly size: number
-  readonly mtimeMs: number
-  readonly ctimeMs: number
-}): BundleFileIdentity {
-  return {
-    dev: info.dev,
-    ino: info.ino,
-    size: info.size,
-    mtimeMs: info.mtimeMs,
-    ctimeMs: info.ctimeMs,
-  }
 }
 
 function catalogFiles(

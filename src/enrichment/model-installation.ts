@@ -33,6 +33,7 @@ import {
   READ_CHUNK_BYTES,
   unsafeRelativePathReason,
 } from './model-manifest.js'
+import { identityOf, lstatOrUndefined } from './model-fs.js'
 
 const LOCK_WAIT_MS = 60_000
 
@@ -56,13 +57,8 @@ export interface ModelInstallationFile {
   readonly sha256: string
 }
 
-export interface BundleFileIdentity {
-  readonly dev: number
-  readonly ino: number
-  readonly size: number
-  readonly mtimeMs: number
-  readonly ctimeMs: number
-}
+export type { BundleFileIdentity } from './model-fs.js'
+import type { BundleFileIdentity } from './model-fs.js'
 
 export interface BundlePathSnapshot {
   readonly relativePath: string
@@ -156,22 +152,6 @@ function check(signal: AbortSignal | undefined): void {
   signal?.throwIfAborted()
 }
 
-function identityOf(info: {
-  readonly dev: number
-  readonly ino: number
-  readonly size: number
-  readonly mtimeMs: number
-  readonly ctimeMs: number
-}): BundleFileIdentity {
-  return {
-    dev: info.dev,
-    ino: info.ino,
-    size: info.size,
-    mtimeMs: info.mtimeMs,
-    ctimeMs: info.ctimeMs,
-  }
-}
-
 function sameIdentity(a: BundleFileIdentity, b: BundleFileIdentity): boolean {
   return (
     a.dev === b.dev &&
@@ -180,15 +160,6 @@ function sameIdentity(a: BundleFileIdentity, b: BundleFileIdentity): boolean {
     a.mtimeMs === b.mtimeMs &&
     a.ctimeMs === b.ctimeMs
   )
-}
-
-async function lstatOrUndefined(path: string) {
-  try {
-    return await lstat(path)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw error
-  }
 }
 
 /** Reject symlinks and non-directories, including after a racing creation. */

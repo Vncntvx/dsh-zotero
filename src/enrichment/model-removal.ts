@@ -9,13 +9,14 @@
  * @module dsh-zotero/enrichment/model-removal
  */
 
-import { lstat, realpath, rmdir, unlink } from 'node:fs/promises'
+import { realpath, rmdir, unlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import { assertModelLockPath, safeModelRelativePath } from './model-installation.js'
 import { MANIFEST_PATH, SAFE_SEGMENT } from './model-manifest.js'
+import { lstatOrUndefined } from './model-fs.js'
 
 const LOCK_WAIT_MS = 60_000
 
@@ -48,15 +49,6 @@ export interface RemoveModelBundleResult {
 
 function unsafe(reason: string): never {
   throw new ModelRemovalError(`The model removal path is unsafe: ${reason}`)
-}
-
-async function lstatOrUndefined(path: string) {
-  try {
-    return await lstat(path)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw error
-  }
 }
 
 function isMissingOrNotEmpty(error: unknown): boolean {
