@@ -105,9 +105,7 @@ describe('the egress route with an installed proxy policy', () => {
     })
     const http = createScholarlyHttp({
       fetchImpl: fetchImpl as unknown as (url: string, init?: RequestInit) => Promise<Response>,
-      publicAccess: stubPublicAccessWith({
-        resolver: resolverOf([{ address: '93.184.216.34', family: 4 }]),
-      }),
+      publicAccess: stubPublicAccessWith(resolverOf([{ address: '93.184.216.34', family: 4 }])),
     })
     // A private address is refused by the lexical gate even though a proxy
     // would be the one performing the DNS.
@@ -145,9 +143,7 @@ describe('the egress route with an installed proxy policy', () => {
     const { publicFetch } = await import('../../../src/transport/connections.js')
     const http = createScholarlyHttp({
       fetchImpl: publicFetch as unknown as (url: string, init?: RequestInit) => Promise<Response>,
-      publicAccess: stubPublicAccessWith({
-        resolver: resolverOf([{ address: '93.184.216.34', family: 4 }]),
-      }),
+      publicAccess: stubPublicAccessWith(resolverOf([{ address: '93.184.216.34', family: 4 }])),
     })
     await expect(http.text(WORKS_URL)).rejects.toThrow()
     // The transport retries the transport failure, so every attempt reaches

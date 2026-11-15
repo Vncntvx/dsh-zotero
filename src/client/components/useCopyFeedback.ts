@@ -65,7 +65,7 @@ export function useCopyFeedback(subjectKey?: unknown, contentKey?: unknown): Cop
   // Monotonic click identity: only the newest attempt may settle the lane, and
   // a reset or unmount invalidates every attempt that started before it.
   const epoch = useRef(0)
-  const timer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
+  const timer = useRef<number | undefined>(undefined)
   // The latest reported phase, read by the content effect without subscribing
   // it to every transition of the lane. Synced after commit, never during a
   // render that React may discard.

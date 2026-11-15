@@ -147,7 +147,7 @@ describe('complete parsed-document delivery', () => {
       )
       const opened = read.mock.calls.find(([request]) => request.op === 'open')
       expect(opened).toBeDefined()
-      expect(opened![0].requestId).toMatch(
+      expect(opened![0].op === 'open' ? opened![0].requestId : '').toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       )
     } finally {

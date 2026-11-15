@@ -137,17 +137,25 @@ interface SourceItemLike {
  * @param rows - the row list to collect.
  * @returns the collected rows.
  */
-export function appendedSourceRows<K extends 'searches' | 'evidence' | 'exports'>(
+export function appendedSourceRows(
   pages: readonly ZoteroSourcePageResultView[],
-  rows: K,
-): SourceItem[K] {
+  rows: 'searches' | 'evidence' | 'exports' | 'fulltext',
+): unknown[] {
   const collected: unknown[] = []
   for (const page of pages) {
     const item = page.workspace.sources[0]
     if (item === undefined) continue
-    collected.push(...(item[rows] as readonly unknown[]))
+    const list: readonly unknown[] =
+      rows === 'searches'
+        ? item.searches
+        : rows === 'evidence'
+          ? item.evidence
+          : rows === 'exports'
+            ? item.exports
+            : item.fulltextReads
+    collected.push(...list)
   }
-  return collected as SourceItem[K]
+  return collected
 }
 
 /** The workspace view: toolbar, lens bar, and the master-detail surface. */
@@ -222,6 +230,13 @@ export function ZoteroWorkspaceView({
     total: selectedItem?.searchesTotal ?? 0,
     enabled: (selectedItem?.searchesTotal ?? 0) > (selectedItem?.searches.length ?? 0),
   })
+  const fulltextPager = useSourcePage(sourcePage, {
+    sessionId,
+    target: { kind: 'source', key: selectedKey ?? '', rows: 'fulltext' },
+    offset: selectedItem?.fulltextReads.length ?? 0,
+    total: selectedItem?.fulltextReadsTotal ?? 0,
+    enabled: (selectedItem?.fulltextReadsTotal ?? 0) > (selectedItem?.fulltextReads.length ?? 0),
+  })
   const sessionExportsPager = useSourcePage(sourcePage, {
     sessionId,
     target: { kind: 'session', rows: 'exports' },
@@ -257,8 +272,18 @@ export function ZoteroWorkspaceView({
         ...selectedItem.searches,
         ...appendedSourceRows(searchesPager.pages, 'searches'),
       ] as SourceItem['searches'],
+      fulltextReads: [
+        ...selectedItem.fulltextReads,
+        ...appendedSourceRows(fulltextPager.pages, 'fulltext'),
+      ] as SourceItem['fulltextReads'],
     }
-  }, [evidencePager.pages, searchesPager.pages, selectedItem, sourceExportsPager.pages])
+  }, [
+    evidencePager.pages,
+    searchesPager.pages,
+    fulltextPager.pages,
+    selectedItem,
+    sourceExportsPager.pages,
+  ])
   const pagedWorkspace = useMemo(
     () => ({
       ...workspace,
@@ -377,6 +402,7 @@ export function ZoteroWorkspaceView({
             openPdf={openPdf}
             evidencePager={evidencePager}
             exportsPager={sourceExportsPager}
+            fulltextPager={fulltextPager}
             t={t}
           />
           <aside className={css.auditSidebar}>

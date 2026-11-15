@@ -1150,6 +1150,22 @@ export class SourceWorkspaceIndex {
         const draft = this.draftOf(ref, seq)
         this.countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
+          // An artifactId read has no Zotero identity: the resolved handle is
+          // the trail key, so the row's title is the window's safe source
+          // label (an attachment ref or URL origin) instead of the hex id.
+          const view = retrieveMetaOf(meta)
+          const source = valueArg(args, 'source')
+          const artifactId =
+            typeof source === 'object' && source !== null && !Array.isArray(source)
+              ? (source as Record<string, unknown>)['artifactId']
+              : undefined
+          if (
+            view.kind === 'fulltext' &&
+            typeof artifactId === 'string' &&
+            normalizeRefKey(ref) === normalizeRefKey(artifactId)
+          ) {
+            draft.title = view.fulltextRead.sourceLabel
+          }
           this.pushEvidence(draft, meta, block.callId, seq)
         }
         break

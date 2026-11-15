@@ -35,6 +35,7 @@ interface SourceInspectorProps {
   readonly openProtocol?: (url: string) => Promise<boolean>
   /** The pager that appends the passages behind the feed's head. */
   readonly evidencePager?: SourcePager
+  readonly fulltextPager?: SourcePager
   /** The pager that appends the export records behind the list's head. */
   readonly exportsPager?: SourcePager
   /** Open one URL attachment's PDF into the right reader; absent keeps the fallback. */
@@ -53,6 +54,7 @@ export function SourceInspector({
   resolveAttachment,
   openProtocol,
   evidencePager,
+  fulltextPager,
   exportsPager,
   openPdf,
 }: SourceInspectorProps) {
@@ -210,6 +212,7 @@ export function SourceInspector({
             resolveAttachment={resolveAttachment}
             openPdf={openPdf}
             pager={evidencePager}
+            fulltextPager={fulltextPager}
           />
         </div>
 

@@ -419,7 +419,7 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Gather ranked evidence passages for one item across the requested
-   * sources, or read one complete document in windows under `mode:"fulltext"`.
+   * sources, or read one document (bounded by maxFulltextChars) in windows under `mode:"fulltext"`.
    * The spill sink, when present, is offered to the fulltext-mode read so a
    * long document can be persisted under one handle.
    */

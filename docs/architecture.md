@@ -117,7 +117,7 @@ graph LR
 
 ### 只读产物接缝
 
-核心 `ZoteroService` 保留两个来自 `src/local/` 的纯接口槽。`FulltextEnhancer`（`fulltext-enhancer.ts`）只暴露 `lookup`，不表达 `enhance`、原始文档字节或上传操作；`EvidenceRanker`（`evidence-ranker.ts`）在空槽时使用核心完整的 BM25 排序器。组件经 `ctx.inject(['zotero'])` 装入并在卸载时撤槽，依赖方向始终是 enrichment → core。MinerU 传输、主机表、凭据、产物存储、源索引、嵌入运行时与模型下载均归 enrichment 所有。
+核心 `ZoteroService` 保留两个来自 `src/local/` 的纯接口槽。`FulltextEnhancer`（`fulltext-enhancer.ts`）暴露只读的 `lookup` 与 `lookupArtifact`，不表达 `enhance`、原始文档字节或上传操作；`EvidenceRanker`（`evidence-ranker.ts`）在空槽时使用核心完整的 BM25 排序器。组件经 `ctx.inject(['zotero'])` 装入并在卸载时撤槽，依赖方向始终是 enrichment → core。MinerU 传输、主机表、凭据、产物存储、源索引、嵌入运行时与模型下载均归 enrichment 所有。
 
 `zotero_retrieve` 的 `best`、`specified`、`allIndexed` PDF 路径与 `scholarly_read` 的 PDF 分支只查询同一来源、仍有效的 Markdown。命中时优先使用，包括有效短文档；正常未命中时，本地读取 Zotero `/fulltext`，学术读取沿已有授权下载 PDF 后执行 `extractPdfText()`。摘要、笔记和批注保持各自来源。已有且有效的产物始终可读取。不存在或源戳变化属于正常未命中；权限、I/O、协议损坏等故障须明确报告，不能吞成未命中。
 

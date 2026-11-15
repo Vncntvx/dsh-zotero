@@ -101,8 +101,18 @@ export async function readSourcePage(
     if (item === undefined)
       throw new ZoteroError('The requested source is not in this session.', 'ZOTERO_NOT_FOUND')
     const rows = target.rows
-    total = item[rows].length
-    sources = [{ ...windowedItem(item), [rows]: item[rows].slice(offset, offset + limit) }]
+    const list: readonly unknown[] =
+      rows === 'searches'
+        ? item.searches
+        : rows === 'evidence'
+          ? item.evidence
+          : rows === 'exports'
+            ? item.exports
+            : item.fulltextReads
+    total = list.length
+    sources = [
+      { ...windowedItem(item), [rows]: list.slice(offset, offset + limit) },
+    ] as SourceItem[]
   } else {
     total = full.exports.length
     exports = full.exports.slice(offset, offset + limit)

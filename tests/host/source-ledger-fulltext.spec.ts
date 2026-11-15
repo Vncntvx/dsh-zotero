@@ -65,7 +65,12 @@ function fulltextState(meta: Record<string, unknown>): SourceLedgerState {
 
 describe('fulltext reads in the literature trail', () => {
   it('folds one fulltext window as a fulltextRead fact, not an evidence passage', () => {
-    const meta = projectRetrieveMeta(fulltextResult(), [])
+    const meta = projectRetrieveMeta(fulltextResult(), [
+      'annotation',
+      'note',
+      'abstract',
+      'fulltext',
+    ])
     const workspace = workspaceOf(fulltextState(meta as unknown as Record<string, unknown>))
     expect(workspace.sources).toHaveLength(1)
     const source = workspace.sources[0]!
@@ -102,17 +107,24 @@ describe('fulltext reads in the literature trail', () => {
       }),
       event('tool/result', {
         message: { toolCallId: 'artifact-read', content: [] },
-        meta: projectRetrieveMeta(fulltextResult(), []),
+        meta: projectRetrieveMeta(fulltextResult(), ['annotation', 'note', 'abstract', 'fulltext']),
       }),
     ])
     const workspace = workspaceOf(state)
     expect(workspace.sources[0]!.ref).toBe(artifactId)
+    // The row's title is the window's safe source label, not the hex id.
+    expect(workspace.sources[0]!.title).toBe(REF)
     expect(workspace.sources[0]!.fulltextReads).toHaveLength(1)
     expect(sourceWorkspaceSchema.safeParse(workspace).success).toBe(true)
   })
 
   it('keeps the workspace wire view valid for a fulltext-only item', () => {
-    const meta = projectRetrieveMeta(fulltextResult(), [])
+    const meta = projectRetrieveMeta(fulltextResult(), [
+      'annotation',
+      'note',
+      'abstract',
+      'fulltext',
+    ])
     const parsed = sourceWorkspaceSchema.safeParse(
       workspaceOf(fulltextState(meta as unknown as Record<string, unknown>)),
     )
@@ -120,7 +132,12 @@ describe('fulltext reads in the literature trail', () => {
   })
 
   it('merges repeated identical windows under one fact with both call ids', () => {
-    const meta = projectRetrieveMeta(fulltextResult(), []) as unknown as Record<string, unknown>
+    const meta = projectRetrieveMeta(fulltextResult(), [
+      'annotation',
+      'note',
+      'abstract',
+      'fulltext',
+    ]) as unknown as Record<string, unknown>
     const state = [
       event('tool/call', {
         callId: 'w1',
@@ -141,7 +158,10 @@ describe('fulltext reads in the literature trail', () => {
   })
 
   it('does not fold a malformed fulltextRead fact', () => {
-    const meta = { ...projectRetrieveMeta(fulltextResult(), []), fulltextRead: { nope: true } }
+    const meta = {
+      ...projectRetrieveMeta(fulltextResult(), ['annotation', 'note', 'abstract', 'fulltext']),
+      fulltextRead: { nope: true },
+    }
     const workspace = workspaceOf(fulltextState(meta as unknown as Record<string, unknown>))
     expect(workspace.sources[0]!.fulltextReads).toEqual([])
   })

@@ -28,7 +28,15 @@ function fulltextResult(): ZoteroFulltextRetrieveResult {
 
 describe('fulltext projection', () => {
   it('projects a fulltext window as its own fact without carrying the text', () => {
-    const meta = projectRetrieveMeta(fulltextResult(), [])
+    // The tool always enters the projector with the full requested-source
+    // list (args.sources ?? ALL_SOURCES); the fulltext arm ignores it, so the
+    // projection must stay evidence-free even under the production shape.
+    const meta = projectRetrieveMeta(fulltextResult(), [
+      'annotation',
+      'note',
+      'abstract',
+      'fulltext',
+    ])
     if (meta.mode !== 'fulltext') throw new Error('expected a fulltext projection')
     expect(meta.fulltextRead).toEqual({
       sourceKind: 'url',

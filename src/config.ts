@@ -427,6 +427,16 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertPositiveInteger('writeNoteMaxChars', plain.writeNoteMaxChars)
   assertPositiveInteger('writeListMaxItems', plain.writeListMaxItems)
   assertPositiveInteger('writeAuthorizeDeadlineMs', plain.writeAuthorizeDeadlineMs)
+  // Window bound: a window this wide cannot stay inline at the default budget
+  // and always falls to file delivery, defeating the windowed read. The
+  // inline-budget pairing itself is a delivery property, not a validity rule:
+  // a caller that lowers maxInlineResultBytes governs delivery per call, so
+  // it is not refused here.
+  if (plain.fulltextWindowChars > 64_000) {
+    throw new Error(
+      `fulltextWindowChars (${plain.fulltextWindowChars}) exceeds the 64_000-character window bound`,
+    )
+  }
   // Every field above proved its type (schema application rejects mistyped
   // input; the asserts reject out-of-range values), so the spread is a
   // ResolvedConfig once the normalized URL is set.

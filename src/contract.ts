@@ -445,7 +445,7 @@ export type ZoteroSourcePageTarget =
   | {
       readonly kind: 'source'
       readonly key: string
-      readonly rows: 'searches' | 'evidence' | 'exports'
+      readonly rows: 'searches' | 'evidence' | 'exports' | 'fulltext'
     }
   | { readonly kind: 'session'; readonly rows: 'exports' }
 

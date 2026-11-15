@@ -163,6 +163,15 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ provider: '' })).toThrowError(/provider/)
     expect(() => resolveConfig({ defaultStyle: '  ' })).toThrowError(/defaultStyle/)
   })
+
+  it('rejects a fulltext window past the absolute window bound', () => {
+    // A window this wide cannot stay inline even at generous budgets; the
+    // inline-budget pairing itself stays a delivery property, not a validity
+    // rule (lowering the budget governs delivery per call).
+    expect(() => resolveConfig({ fulltextWindowChars: 70_000 })).toThrowError(/fulltextWindowChars/)
+    expect(resolveConfig({ fulltextWindowChars: 12_000 })).toBeTruthy()
+    expect(resolveConfig({ fulltextWindowChars: 30_000, maxInlineResultBytes: 20_000 })).toBeTruthy()
+  })
 })
 
 describe('readResolvedConfig', () => {

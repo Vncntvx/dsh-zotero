@@ -285,7 +285,7 @@ export const zoteroSourcePageTargetSchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('source'),
       key: z.string().min(1),
-      rows: z.enum(['searches', 'evidence', 'exports']),
+      rows: z.enum(['searches', 'evidence', 'exports', 'fulltext']),
     })
     .strict(),
   z.object({ kind: z.literal('session'), rows: z.literal('exports') }).strict(),
@@ -328,7 +328,8 @@ export const zoteroSourcePageResultSchema = z
         (item) =>
           item.searches.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
           item.evidence.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
-          item.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
+          item.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+          item.fulltextReads.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
       ),
     { message: 'Source pages must remain bounded.' },
   ) satisfies z.ZodType<ZoteroSourcePageResultView>

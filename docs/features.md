@@ -102,7 +102,7 @@ DSH 内建的「轨迹」标签显示工具调用的执行过程。文献轨迹�
 文档解析由 `dsh-zotero/enrichment` 组件提供，随包发布，默认关闭。组件支持主动解析 PDF、已有 Markdown 产物复用，以及本地语义排序与模型管理。用户可在文献面板中针对指定的 Zotero PDF 附件或公开 PDF URL 提交解析任务；首次启用时客户端会显示外发解析提醒。
 
 - `free` 使用轻量接口（≤10 MB、≤20 页，免 Token），`pro` 使用精准接口（≤200 MB、≤200 页，需 Token）；接口模式与 Token 独立配置。解析失败时直接返回错误信息。
-- `zotero_retrieve` 与 `scholarly_read` 通过核心 `FulltextEnhancer.lookup` 查询对应来源的有效 Markdown 产物并优先使用；未命中或源文件变更时，分别回退至 Zotero `/fulltext` 与学术 PDF 本地抽取。
+- `zotero_retrieve` 与 `scholarly_read` 通过核心只读的 `FulltextEnhancer.lookup`（按来源）与 `lookupArtifact`（按产物 id）查询有效 Markdown 产物并优先使用；未命中或源文件变更时，分别回退至 Zotero `/fulltext` 与学术 PDF 本地抽取。
 - 解析后的 Markdown 存储在 `<outputDir>/<sha256>/`，Markdown 引用的插图按原文件名存放在同目录的 `images/` 下。本地附件按大小、修改时间与内容指纹缓存；URL 来源通过 HEAD 请求校验 ETag 或 Last-Modified。源索引命中时直接复用既有产物。
 - 解析成功且产物仍有效时，条目动作行中的「解析此 PDF」变为「阅读 Markdown」。点击后在右侧边栏打开以论文标题命名的解析结果标签页，显示准备进度；全文与全部产物插图准备完成后一次呈现，并提供完整 Markdown 的复制和下载。刷新失败时保留上一份完整结果。条目带多个 PDF 时，「阅读 PDF」和解析动作共用选择框，并为每个 PDF 标注状态：已有产物的 PDF 打开解析结果，其余提交对应附件的解析。在正文里选中一段，选段旁会浮出小菜单：「让模型解释」把选段、论文标题/作者/来源/DOI 和条目 ref 一并写进当前会话草稿，模型可据此取全文做整体判断；「复制选中内容」写入剪贴板。附件列表仅展示附件。
 - 输出目录支持绝对路径或 `~/`；相对路径在保存时拒绝，目录不可用时解析返回 `ZOTERO_ENRICHMENT_OUTPUT_INVALID`。

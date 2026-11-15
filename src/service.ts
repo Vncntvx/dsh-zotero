@@ -868,7 +868,7 @@ export class ZoteroService extends Service {
 
   /**
    * Gather ranked evidence passages for one item across the requested sources,
-   * or read one complete document in windows under `mode:"fulltext"`.
+   * or read one document (bounded by maxFulltextChars) in windows under `mode:"fulltext"`.
    * @param request - the mode, the item ref or fulltext source, and its bounds.
    * @param signal - caller cancellation; forwarded to the provider.
    * @param spill - optional whole-document spill for fulltext-mode reads.

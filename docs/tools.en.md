@@ -138,13 +138,13 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
-Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one complete document in source-order character windows, without ranking or chunking; parsed Markdown is preferred and Zotero index text is the explicit fallback.
+Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one document (bounded by `maxFulltextChars`) in source-order character windows, without ranking or chunking; parsed Markdown is preferred and Zotero index text is the explicit fallback.
 
 ### Parameters
 
 | Parameter          | Type     | Default    | Description                                                                                                                                                  |
 | ------------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence`: rank passages against query; `fulltext`: read one complete document in paged character windows              |
+| `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence`: rank passages against query; `fulltext`: read one document in paged character windows                       |
 | `ref`              | string   | none       | `evidence` mode: item ref                                                                                                                                    |
 | `query`            | string   | none       | `evidence` mode: ranking keywords                                                                                                                            |
 | `queryVariants`    | string[] | none       | `evidence` mode: other phrasings of the same question (synonyms, field terminology), at most 4; each is ranked separately and a passage keeps its best score |

@@ -39,6 +39,8 @@ interface SourceEvidenceProps {
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   /** The pager that appends the passages behind the feed's head. */
   readonly pager?: SourcePager
+  /** The pager that appends the fulltext windows behind the head. */
+  readonly fulltextPager?: SourcePager
 }
 
 interface PassageCardProps {
@@ -138,6 +140,7 @@ export function SourceEvidence({
   openPdf,
   resolveAttachment,
   pager,
+  fulltextPager,
 }: SourceEvidenceProps) {
   const hasFulltextReads = item.fulltextReads.length > 0
   if (item.retrievalFacts === undefined && !hasFulltextReads) {
@@ -168,14 +171,22 @@ export function SourceEvidence({
               </p>
               {read.isTruncated && <p className={css.note}>{t('fulltextReadWindowed')}</p>}
               {read.inputTruncated && <p className={css.note}>{t('fulltextReadBounded')}</p>}
+              {read.coverage !== undefined && (
+                <p className={css.note}>
+                  {read.coverage.complete
+                    ? t('fulltextCoverageComplete')
+                    : t('fulltextCoverageIndexed', {
+                        indexed: read.coverage.indexedChars ?? 0,
+                        total: read.coverage.totalChars ?? 0,
+                      })}
+                </p>
+              )}
             </div>
           ))}
         </div>
       )}
-      {item.fulltextReadsTotal > item.fulltextReads.length && (
-        <p className={css.note}>
-          {t('fulltextReadsOmittedNote', { count: item.fulltextReadsTotal })}
-        </p>
+      {fulltextPager !== undefined && (
+        <SourcePageControls pager={fulltextPager} label={t('fulltextReadsTitle')} t={t} />
       )}
       {item.evidence.length === 0 ? (
         hasFulltextReads ? null : (

@@ -70,8 +70,10 @@ afterEach(async () => {
   await lane.teardown()
 })
 
-function installEnhancer(text: string): void {
-  lane.ctx.zotero.setFulltextEnhancer(enhancer(text))
+function installEnhancer(text: string): FulltextEnhancer {
+  const installed = enhancer(text)
+  lane.ctx.zotero.setFulltextEnhancer(installed)
+  return installed
 }
 
 describe('mode exclusivity', () => {
@@ -128,6 +130,20 @@ describe('mode exclusivity', () => {
         RETRIEVE_SOURCE_REQUIRED_MESSAGE,
       )
     }
+  })
+
+  it('rejects a malformed artifactId as an invalid argument before any lookup', async () => {
+    const enhancer = installEnhancer(MARKDOWN)
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'artifactId', artifactId: 'NOT-HEX' },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect((result.content[0] as { text: string }).text).toContain('64-character')
+    // The doomed lookup never reached the provider.
+    expect(enhancer.lookupArtifact).not.toHaveBeenCalled()
+    expect(enhancer.lookup).not.toHaveBeenCalled()
   })
 
   it('requires ref and query in evidence mode', async () => {

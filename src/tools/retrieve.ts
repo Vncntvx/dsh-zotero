@@ -21,6 +21,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
+import { ZOTERO_ARTIFACT_ID_PATTERN } from '../contract.js'
 import { invalidArgs } from '../errors.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { queryVariantsOf } from './query-variants.js'
@@ -107,11 +108,11 @@ const RETRIEVE_PARAMETERS = {
   start: {
     type: 'integer',
     default: 0,
-    description: 'Fulltext mode: window start offset; continue with nextStart.',
+    description: 'Fulltext mode: window start; continue with nextStart.',
   },
   maxChars: {
     type: 'integer',
-    description: 'Fulltext mode: characters per window, bounded by fulltextWindowChars.',
+    description: 'Fulltext mode: window characters, bounded by fulltextWindowChars.',
   },
 } as const
 
@@ -305,8 +306,13 @@ function fulltextSourceOf(args: RetrieveArgs): import('../types.js').ZoteroFullt
     source?.kind === 'artifactId' &&
     typeof source.artifactId === 'string' &&
     source.ref === undefined
-  )
+  ) {
+    // A malformed id is the caller's argument mistake, not a missing artifact:
+    // shape is checked here so the provider never sees a doomed lookup.
+    if (!ZOTERO_ARTIFACT_ID_PATTERN.test(source.artifactId))
+      invalidArgs('artifactId must be a 64-character lowercase hex string.')
     return { kind: 'artifactId', artifactId: source.artifactId }
+  }
   invalidArgs(RETRIEVE_SOURCE_REQUIRED_MESSAGE)
 }
 
@@ -684,7 +690,7 @@ export function registerRetrieveTool(
         name: 'zotero_retrieve',
         description: [
           'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote it as containing the terms), hybrid = both; matchedFields names text or comment, and truncated/sourcesSkipped/noMatch are honest signals.',
-          'mode="fulltext": read one complete document in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; each window fits inline delivery; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
+          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; each window is sized to fit inline delivery; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
           'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, a specified attachment must provably be this item\u2019s child; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and character budget (a passage charges its text and any annotation comment), and a truncated flag signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,
