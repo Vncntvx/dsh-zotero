@@ -4,7 +4,7 @@
  * @module tests/unit/semantic-loader-lifecycle
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -221,17 +221,17 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     expect(disposed).toEqual(['a'])
   })
 
-  it('reports semantic-unavailable when teardown lands before the open starts', async () => {
+  it('lets a scope admitted before teardown use its model, then disposes it on release', async () => {
     const disposed: string[] = []
     const loader = new SemanticEmbedderLoader({ open: async () => embedderOf(disposed, 'a') })
     const scope = loader.scope(target('a'))
     await loader.dispose()
-    await expect(scope.embedder()).rejects.toMatchObject({
-      code: 'ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE',
-    })
-    scope.release()
-    await Promise.resolve()
+    // Teardown closes admission, not the work already admitted: this scope was
+    // accepted while the component lived, and its fixed model must serve it.
+    await expect(scope.embedder()).resolves.toBeDefined()
     expect(disposed).toEqual([])
+    scope.release()
+    await vi.waitFor(() => expect(disposed).toEqual(['a']))
   })
 })
 

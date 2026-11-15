@@ -7,9 +7,9 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 - 核心 `zotero` 命名空间：`src/config.ts`，38 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
-- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，8 个字段。
+- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，9 个字段。
 
-四组合计 66 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 67 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -22,7 +22,7 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 | 检索提取 | `zotero`            | 14     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars`、`fulltextWindowChars` |
 | 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                                                  |
 | 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                                                 |
-| 文档解析 | `enrichment`        | 8      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`；部署限额：`artifactReader`                                                                                                                                             |
+| 文档解析 | `enrichment`        | 9      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`、`semanticIdleTimeoutMs`；部署限额：`artifactReader`                                                                                                                    |
 | 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                                                  |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
@@ -212,6 +212,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 | `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） |
 | `semanticDownloadSource` | `'hf-mirror'`        | 模型资源下载渠道：`hf-mirror`（国内镜像加速，推荐国内直连）、`huggingface`（Hugging Face 官方直连）                                                                                                                                                                                                                                                                                 |
 | `semanticModelDir`       | `''`                 | 下载模型的绝对存储目录（或以 `~/` 开头）；空串表示使用默认目录 `~/.dsh/models/`                                                                                                                                                                                                                                                                                                     |
+| `semanticIdleTimeoutMs`  | `600000`             | 常驻嵌入模型的空闲回收毫秒数：该时长内没有新的排序准入时释放模型实例，下次排序从磁盘重新打开；`0` 表示直到卸载前一直常驻                                                                                                                                                                                                                                                            |
 | `artifactReader`         | 见下表               | 完整图文准备、读取快照和 ZIP Worker 的部署限额；在 profile 配置中设置                                                                                                                                                                                                                                                                                                               |
 
 `artifactReader` 的各值必须为正整数。新值用于后续准入，已准入的快照保持原配置。

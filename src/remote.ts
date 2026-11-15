@@ -191,6 +191,10 @@ export async function executeOpenProtocol(
     }
     return { success: true }
   } catch (error) {
+    // A cancelled open is the caller's own verdict, not a protocol failure:
+    // remapping it to protocol-failed would report "the launcher failed" for
+    // a request the user or the host cancelled.
+    if (signal?.aborted) throw signal.reason ?? error
     throw protocolFailure(url, errorMessageOf(error), error)
   }
 }

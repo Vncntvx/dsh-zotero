@@ -49,6 +49,12 @@ export interface EnrichmentPreferences {
   readonly semanticDownloadSource: SemanticDownloadSource
   /** Optional custom directory for downloaded models; empty uses default assets directory. */
   readonly semanticModelDir: string
+  /**
+   * Idle milliseconds after which a resident embedding model is released.
+   * The next admission re-opens it from disk. `0` keeps the model resident
+   * until teardown.
+   */
+  readonly semanticIdleTimeoutMs: number
 }
 
 export type EnrichmentPreferenceKey = keyof EnrichmentPreferences
@@ -62,6 +68,7 @@ export const ENRICHMENT_DEFAULTS: EnrichmentPreferences = Object.freeze({
   semanticModel: DEFAULT_SEMANTIC_MODEL,
   semanticDownloadSource: DEFAULT_SEMANTIC_DOWNLOAD_SOURCE,
   semanticModelDir: '',
+  semanticIdleTimeoutMs: 10 * 60_000,
 })
 
 export const ENRICHMENT_PREFERENCE_KEYS = Object.keys(
@@ -102,6 +109,8 @@ export function enrichmentPreferencesOf(
     semanticDownloadSource: (value) =>
       (SEMANTIC_DOWNLOAD_SOURCES as readonly unknown[]).includes(value),
     semanticModelDir: (value) => typeof value === 'string',
+    semanticIdleTimeoutMs: (value) =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value >= 0,
   }
   for (const key of ENRICHMENT_PREFERENCE_KEYS) {
     if (!validators[key](values[key])) {

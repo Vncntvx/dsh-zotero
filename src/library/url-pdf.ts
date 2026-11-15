@@ -46,6 +46,16 @@ export class UrlPdfReader {
     for (const controller of this.running)
       controller.abort(failure('DISABLED', 'URL PDF reading permission was revoked.'))
   }
+  /**
+   * Stop every in-flight download because the capability itself is going
+   * away (the plugin unmounted). The read's own catch treats an aborted
+   * controller as the caller's verdict and rethrows this reason, so teardown
+   * does not wait out a download's remaining deadline.
+   */
+  dispose(): void {
+    for (const controller of this.running)
+      controller.abort(new DOMException('URL PDF reading was disposed', 'AbortError'))
+  }
   async read(
     attachment: ZoteroAttachmentLocationView,
     signal: AbortSignal,
@@ -137,8 +147,9 @@ export class UrlPdfReader {
           }
         } finally {
           // The proxy route's dispatcher is process-wide and shared; only the
-          // pinned per-attempt agent is closed here.
-          await connection?.close()
+          // pinned per-attempt agent is closed here. A close rejection must
+          // not replace a successful read or the original failure.
+          await connection?.close().catch(() => undefined)
         }
       }
       throw failure('REDIRECT', 'PDF redirect limit exceeded.')

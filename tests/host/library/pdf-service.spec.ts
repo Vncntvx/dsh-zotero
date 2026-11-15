@@ -110,21 +110,29 @@ it('rechecks permission after staging instead of exposing bytes after revocation
   })
   await expect(stat(mapping.mock.calls[0]![0])).rejects.toMatchObject({ code: 'ENOENT' })
 })
-it('lets a foreground download settle before plugin disposal removes its file', async () => {
+it('aborts an in-flight download on plugin disposal instead of waiting out its deadline', async () => {
   const { service, ctx } = await boot()
   const started = deferred<void>()
-  const response = deferred<Response>()
-  publicFetchMock.mockImplementation(async () => {
+  const aborted = deferred<unknown>()
+  publicFetchMock.mockImplementation(async (_url, init) => {
     started.resolve()
-    return response.promise
+    return await new Promise<Response>((_resolve, reject) =>
+      init?.signal?.addEventListener(
+        'abort',
+        () => {
+          aborted.resolve(init.signal?.reason)
+          reject(init.signal?.reason)
+        },
+        { once: true },
+      ),
+    )
   })
   const reading = service.readUrlPdf({ ref }, new AbortController().signal)
   await started.promise
-  const disposed = ctx.fiber.dispose()
-  response.resolve(
-    new Response('%PDF-1.7\nbody', { headers: { 'content-type': 'application/pdf' } }),
-  )
-  const result = await reading
-  await disposed
-  await expect(stat(result.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  // Teardown owns the capability the download used: the in-flight request is
+  // cancelled now (not left to its 60-second deadline), and its rejection is
+  // the disposal reason rather than a mapped network failure.
+  await ctx.fiber.dispose()
+  const reason = await aborted.promise
+  await expect(reading).rejects.toBe(reason)
 })

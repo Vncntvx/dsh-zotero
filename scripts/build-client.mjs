@@ -65,6 +65,16 @@ const PLUGIN_MANIFEST = (() => {
  */
 const PLUGIN_ID = PLUGIN_MANIFEST.name
 
+/**
+ * The client bundle's byte ceiling: the whole browser half ships as one file
+ * the host loads on every boot, so its growth is a real startup and install
+ * cost. The current bundle sits near 656 KB; the ceiling allows ~10% of
+ * headroom before a release fails, which turns an accidental dependency
+ * balloon (an inlined library, a duplicated copy) into a build error instead
+ * of a quiet regression. Raise it deliberately with a measured reason.
+ */
+export const MAX_CLIENT_BUNDLE_BYTES = 704 * 1024
+
 /** The package version the bundle carries; `unknown` on an unreadable value. */
 function buildVersionOf() {
   if (typeof PLUGIN_MANIFEST.version === 'string' && PLUGIN_MANIFEST.version !== '') {
@@ -207,6 +217,16 @@ function platformModuleTable() {
  */
 export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
   const source = readFileSync(bundlePath, 'utf8')
+  // The byte ceiling comes first: an oversize bundle fails the build before
+  // any evaluation, so a size regression is reported as a size regression.
+  const bytes = Buffer.byteLength(source, 'utf8')
+  if (bytes > MAX_CLIENT_BUNDLE_BYTES) {
+    throw new Error(
+      `client bundle is ${bytes} bytes, over the ${MAX_CLIENT_BUNDLE_BYTES}-byte ceiling — ` +
+        'a new runtime dependency or a duplicated module likely grew it; ' +
+        'keep host-only code out of the browser graph or raise the ceiling with a measured reason',
+    )
+  }
   let handoff
   const window = {
     __ModuleLoader__: {

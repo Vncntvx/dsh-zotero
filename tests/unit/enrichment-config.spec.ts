@@ -26,6 +26,7 @@ describe('resolveEnrichmentConfig', () => {
       semanticModel: 'balanced',
       semanticDownloadSource: 'hf-mirror',
       semanticModelDir: '',
+      semanticIdleTimeoutMs: 600_000,
     })
   })
 
@@ -49,6 +50,7 @@ describe('resolveEnrichmentConfig', () => {
       semanticModel: 'lightweight',
       semanticDownloadSource: 'huggingface',
       semanticModelDir: '/models',
+      semanticIdleTimeoutMs: 600_000,
     })
   })
 

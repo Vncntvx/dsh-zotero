@@ -381,7 +381,8 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         release = await gate.acquire(d.signal)
       } catch (error) {
         releaseProbe(hostname)
-        await pinned?.close()
+        // A close rejection must not replace the admission error.
+        await pinned?.close().catch(() => undefined)
         if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         throw error
       }
@@ -511,11 +512,17 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         }
         retryDelayMs = 1_000 * Math.pow(2, attempt)
       } finally {
-        release()
         // The pinned agent served exactly this attempt's connection; its
         // response body (success, cancelled, or failed) is already settled by
-        // the time this finally runs, so the pool can close here.
-        await pinned?.close()
+        // the time this finally runs, so the pool can close here. A failed
+        // gate release must not skip that close, and a close rejection must
+        // not replace the response or the original error.
+        try {
+          release()
+        } catch {
+          /* The probe release below still runs; the attempt outcome stands. */
+        }
+        await pinned?.close().catch(() => undefined)
         if (callerAborted(reqOptions.signal)) releaseProbe(hostname)
       }
       if (callerAborted(reqOptions.signal)) {

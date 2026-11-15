@@ -116,6 +116,7 @@ import type { ParsedArtifactMeta } from './types.js'
 import { probeAttachments, storedMetadata, type ArtifactMetadataDeps } from './artifact-metadata.js'
 import { resolveSemanticModelDir } from './model-dir.js'
 import { ModelDownloadManager } from './model-downloader.js'
+import { clearVerifiedSnapshots } from './model-bundle-inspector.js'
 import {
   SemanticEmbedderLoader,
   semanticTargetOf,
@@ -351,6 +352,30 @@ export class EnrichmentService extends TypertRemoteService {
   /** One bounded vector cache per model identity, ref-counted by admitted scopes. */
   private vectorCache: CacheGeneration | undefined
 
+  /** The pending idle recycle for the resident model, restarted per admission. */
+  private semanticIdleTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
+   * Restart the idle-recycle clock for the resident model. `retire()` marks
+   * the instance retiring rather than disposing it: a ranking still holding
+   * this scope keeps its model until it releases, exactly as the loader
+   * documents, while the next admission opens a fresh instance.
+   */
+  private armSemanticIdleRecycle(
+    idleTimeoutMs: number,
+    loader: SemanticEmbedderLoader,
+    target: SemanticModelTarget,
+  ): void {
+    clearTimeout(this.semanticIdleTimer)
+    this.semanticIdleTimer = undefined
+    if (idleTimeoutMs <= 0) return
+    this.semanticIdleTimer = setTimeout(() => {
+      this.semanticIdleTimer = undefined
+      loader.retire(target)
+    }, idleTimeoutMs)
+    this.semanticIdleTimer.unref?.()
+  }
+
   /**
    * The whole-document read-through cache behind `zotero_retrieve
    * mode:"fulltext"`: one lookup per window would otherwise re-read
@@ -484,6 +509,10 @@ export class EnrichmentService extends TypertRemoteService {
       // Admission fixes the model generation first: a closed loader throws here,
       // before this call can create a cache generation nobody would release.
       const loaderScope = loader.scope(target)
+      // Every admitted scope restarts the idle clock: once no ranking has run
+      // for the configured interval, the resident model is released and the
+      // next admission re-opens it from disk. `0` opts out of recycling.
+      this.armSemanticIdleRecycle(cfg.semanticIdleTimeoutMs, loader, target)
       // The vector cache is bound to the physical model identity: a different
       // revision or inference contract must not reuse another tier's vectors.
       const identity = vectorCacheIdentityOf(spec)
@@ -554,10 +583,23 @@ export class EnrichmentService extends TypertRemoteService {
     // The component-level teardown: abort every owned download and release
     // the resident embedder and the vector cache, whether or not the core is
     // composed. Accepted scopes drain on their own release, exactly as the
-    // loader documents.
+    // loader documents. The owned workers are allSettled so a failing one
+    // cannot skip the model and cache release: those hold real resources
+    // (an ONNX session, vectors) and outlive any single job's cleanup.
     ctx.effect(() => async () => {
-      await Promise.all([this.parsing.dispose(), this.downloads.dispose()])
+      const settled = await Promise.allSettled([this.parsing.dispose(), this.downloads.dispose()])
+      for (const outcome of settled) {
+        if (outcome.status === 'rejected')
+          ctx.logger?.warn?.(`enrichment teardown: ${errorMessageOf(outcome.reason)}`)
+      }
       this.retireActiveCache()
+      // The idle recycle must not outlive the registration it was armed by.
+      clearTimeout(this.semanticIdleTimer)
+      this.semanticIdleTimer = undefined
+      // The bundle inspector's verification memo is process-wide state filled
+      // by this registration; clear it so an unmounted row leaves no memory
+      // behind for addresses it no longer serves.
+      clearVerifiedSnapshots()
       const loader = this.loader
       this.loader = undefined
       if (loader !== undefined) await loader.dispose()

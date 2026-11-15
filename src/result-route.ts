@@ -7,6 +7,7 @@ import type { ResultDelivery } from './result-delivery.js'
 import { isFileAttachmentRef } from './result-delivery.js'
 import { announcedReceipt, attachmentIdOf } from './result-receipt.js'
 import { asRecord, parseNonNegativeSafeInteger } from './json.js'
+import { errnoCodeOf, errorMessageOf } from './errors.js'
 
 export async function readResult(
   ctx: Context,
@@ -74,9 +75,16 @@ export async function readResult(
     return new Response(stream, {
       headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
     })
-  } catch {
+  } catch (error) {
     request.signal.throwIfAborted()
-    return new Response('Result unavailable', { status: 404 })
+    // A vanished file is a permanent 404; anything else (a permission error,
+    // a storage failure) is the server's problem and must not be reported as
+    // "the result no longer exists" — the browser would drop the handle.
+    const code = errnoCodeOf(error)
+    if (code === 'ENOENT' || code === 'ENOTDIR')
+      return new Response('Result file not found', { status: 404 })
+    ctx.logger?.warn?.(`zotero result route failed: ${errorMessageOf(error)}`)
+    return new Response('Result unavailable', { status: 500 })
   }
 }
 

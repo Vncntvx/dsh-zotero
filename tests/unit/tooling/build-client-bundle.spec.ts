@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
-import { clientBuildPlugins, verifyBundle } from '../../../scripts/build-client.mjs'
+import {
+  clientBuildPlugins,
+  MAX_CLIENT_BUNDLE_BYTES,
+  verifyBundle,
+} from '../../../scripts/build-client.mjs'
 
 /** A valid loader-handoff bundle: platform-module requires, the plugin face. */
 const GOOD_BUNDLE = `window.__ModuleLoader__.load({ id: 'dsh-zotero', factory: (require) => {
@@ -79,6 +83,14 @@ describe('verifyBundle', () => {
   it('rejects host-schema runtime text that shipped without a graph edge', async () => {
     await withBundle(`${GOOD_BUNDLE}\n// pasted codec: node_modules/schemastery`, (path) => {
       expect(() => verifyBundle(path)).toThrow(/host-schema marker/)
+    })
+  })
+
+  it('rejects a bundle over the byte ceiling before evaluating it', async () => {
+    // One byte over the ceiling: the failure names the size, not the handoff.
+    const oversized = `${GOOD_BUNDLE}\n//${'x'.repeat(MAX_CLIENT_BUNDLE_BYTES)}`
+    await withBundle(oversized, (path) => {
+      expect(() => verifyBundle(path)).toThrow(/over the \d+-byte ceiling/)
     })
   })
 })

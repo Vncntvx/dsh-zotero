@@ -373,6 +373,8 @@ export class EnrichmentParseJobs {
   private readonly shared = new Map<string, SharedGeneration>()
   private readonly tails = new Map<string, Promise<void>>()
   private readonly generations = new Map<string, string>()
+  /** Live completion-notice cadences; teardown clears every one of them. */
+  private readonly noticeCadences = new Set<ReturnType<typeof setInterval>>()
 
   constructor(
     private readonly ctx: Context,
@@ -791,6 +793,7 @@ export class EnrichmentParseJobs {
     const stop = (): void => {
       if (cadence === undefined) return
       clearInterval(cadence)
+      this.noticeCadences.delete(cadence)
       cadence = undefined
     }
     const watch = async (): Promise<void> => {
@@ -804,6 +807,7 @@ export class EnrichmentParseJobs {
       }
     }
     cadence = setInterval(() => void watch(), PARSE_NOTICE_REARM_MS)
+    this.noticeCadences.add(cadence)
     void watch()
   }
 
@@ -1016,6 +1020,11 @@ export class EnrichmentParseJobs {
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.closed = true
+    // Every completion-notice cadence stops now: a pending registry wait can
+    // outlive admission, and a timer that keeps re-arming after teardown
+    // would keep the process alive with nothing left to announce.
+    for (const cadence of this.noticeCadences) clearInterval(cadence)
+    this.noticeCadences.clear()
     for (const operation of this.owned) {
       if (operation.record.state.kind !== 'pending') continue
       operation.cancel()

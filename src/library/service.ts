@@ -91,6 +91,10 @@ export class ZoteroLibraryService extends TypertRemoteService {
     })
     ctx.on('loader/volatile-update', () => this.urlPdf.revoke())
     ctx.effect(() => async () => {
+      // Unmounting the row removes the capability the download was granted
+      // under: an in-flight URL PDF read is aborted now and settles as the
+      // caller's cancellation, not left to its 60-second deadline.
+      this.urlPdf.dispose()
       await Promise.allSettled([...this.reading])
       await this.pdfFiles.dispose()
     })

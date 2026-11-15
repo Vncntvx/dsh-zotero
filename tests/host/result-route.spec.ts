@@ -115,10 +115,14 @@ it('reads the persisted receipt of an original background acknowledgement', asyn
     data: { format: 'csv' },
   })
 })
-it('reports missing events as unavailable and propagates cancellation', async () => {
+it('reports a vanished event as 404 and a storage failure as 500, and propagates cancellation', async () => {
   const { ctx, readEvent, delivery, request } = await setup()
-  readEvent.mockRejectedValue(new Error('not found'))
+  // A missing event is permanent: the client drops the handle.
+  readEvent.mockRejectedValue(Object.assign(new Error('gone'), { code: 'ENOENT' }))
   expect((await readResult(ctx, delivery, request())).status).toBe(404)
+  // Any other failure is the server's problem: 500, never "no longer exists".
+  readEvent.mockRejectedValue(Object.assign(new Error('locked'), { code: 'EACCES' }))
+  expect((await readResult(ctx, delivery, request())).status).toBe(500)
   const controller = new AbortController()
   controller.abort(new Error('cancelled'))
   await expect(

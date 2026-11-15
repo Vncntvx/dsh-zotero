@@ -80,6 +80,14 @@ export const EnrichmentConfigSchema = Schema.object({
       'Optional custom directory for downloaded semantic models; empty uses the default directory (~/.dsh/models).',
     )
     .volatile(),
+  semanticIdleTimeoutMs: Schema.number()
+    .step(1)
+    .min(0)
+    .default(ENRICHMENT_DEFAULTS.semanticIdleTimeoutMs)
+    .description(
+      'Idle milliseconds after which a resident embedding model is released; the next ranking re-opens it from disk. 0 keeps it resident until unmount.',
+    )
+    .volatile(),
 })
 
 /** Project one live config section into the plain values the enhancer reads. */

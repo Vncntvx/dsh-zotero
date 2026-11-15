@@ -41,8 +41,36 @@ interface VerifiedSnapshot {
 }
 
 /** One per-process coalescing entry. Polling reuses a successful hash only
- * while the on-disk identity and the catalog record are unchanged. */
+ * while the on-disk identity and the catalog record are unchanged. The entry
+ * set is capped at {@link VERIFIED_SNAPSHOT_LIMIT} and cleared by the owning
+ * component's teardown, so no address seen once keeps memory for the life of
+ * the process. */
 const verifiedSnapshots = new Map<string, VerifiedSnapshot>()
+
+/**
+ * The entry ceiling. One installed tier per catalog entry and a handful of
+ * configured dirs are the real cardinality; the cap exists so a stream of
+ * distinct targets cannot grow the map without bound.
+ */
+const VERIFIED_SNAPSHOT_LIMIT = 16
+
+/** Remember one verified snapshot, evicting the oldest entry at the cap. */
+function rememberVerified(cacheKey: string, value: VerifiedSnapshot): void {
+  verifiedSnapshots.delete(cacheKey)
+  if (verifiedSnapshots.size >= VERIFIED_SNAPSHOT_LIMIT) {
+    const oldest = verifiedSnapshots.keys().next().value
+    if (oldest !== undefined) verifiedSnapshots.delete(oldest)
+  }
+  verifiedSnapshots.set(cacheKey, value)
+}
+
+/**
+ * Drop every verified snapshot. Called from the owning component's teardown,
+ * so the module-level memo does not outlive the registration that filled it.
+ */
+export function clearVerifiedSnapshots(): void {
+  verifiedSnapshots.clear()
+}
 
 function identityOf(info: {
   readonly dev: number
@@ -307,7 +335,7 @@ export function createBundleInspector(): BundleInspector {
           'the model bundle failed validation')
         : undefined
     if (allValid)
-      verifiedSnapshots.set(cacheKey, {
+      rememberVerified(cacheKey, {
         catalogFingerprint: current.catalogFingerprint,
         identityFingerprint: current.identityFingerprint,
       })

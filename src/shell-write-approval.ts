@@ -12,9 +12,12 @@ export function installShellWriteApproval(
   config: () => ResolvedConfig,
   diagnostics: DiagnosticsRecorder,
 ): void {
+  // The alias cache lives with the registration: it dies with the fiber and
+  // never accumulates addresses across plugin lifetimes.
+  const aliases = new Map<string, readonly string[]>()
   ctx.on('tools/pre-execute', (execution, next) => {
     if (!SHELL_TOOL_NAMES.has(execution.name)) return next()
-    const attempt = detectShellWrite(config(), execution)
+    const attempt = detectShellWrite(config(), execution, aliases)
     if (attempt === undefined) return next()
     diagnostics.sink.warn('shell.intercepted', attempt.reason, { tool: execution.name })
     return Promise.resolve({

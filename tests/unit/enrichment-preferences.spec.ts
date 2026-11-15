@@ -25,6 +25,7 @@ describe('enrichment preferences', () => {
       semanticModel: 'balanced',
       semanticDownloadSource: 'hf-mirror',
       semanticModelDir: '',
+      semanticIdleTimeoutMs: 600_000,
     })
     expect(ENRICHMENT_MODE_CHOICES).toEqual(['free', 'pro'])
     expect(ENRICHMENT_PREFERENCE_KEYS).toEqual([
@@ -36,6 +37,7 @@ describe('enrichment preferences', () => {
       'semanticModel',
       'semanticDownloadSource',
       'semanticModelDir',
+      'semanticIdleTimeoutMs',
     ])
   })
 

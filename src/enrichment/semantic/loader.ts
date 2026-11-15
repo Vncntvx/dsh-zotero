@@ -121,6 +121,8 @@ export class SemanticEmbedderLoader {
   private closed = false
   private generation = 0
   private nextId = 1
+  /** The latched one-time close; every `dispose()` call awaits this. */
+  private disposal: Promise<void> | undefined
   /** Serialized switch queue: one load admitted at a time. */
   private switchQueue: Promise<unknown> = Promise.resolve()
   private readonly disposals = new Set<Promise<void>>()
@@ -206,9 +208,12 @@ export class SemanticEmbedderLoader {
   private beginLoad(target: SemanticModelTarget): Managed {
     const id = this.nextId++
     const key = keyOf(target)
-    // The open call starts only after any previous switch has settled.
+    // The open call starts only after any previous switch has settled. A load
+    // that was admitted before teardown still runs: the scope waiting on it
+    // was accepted while the component lived, and the loader's contract is
+    // that accepted scopes drain with their fixed model. Teardown closes
+    // admission (see `scope`), not the work already admitted.
     const load = this.switchQueue.then(async () => {
-      if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
       // A user-configured root is validated with the same policy the downloader
       // applies, so an unvalidated alias or `..` never reaches the reader.
       const resolved = await safeTargetOf(target).catch((error: unknown) => {
@@ -288,8 +293,20 @@ export class SemanticEmbedderLoader {
     void disposal.finally(() => this.disposals.delete(disposal))
   }
 
-  /** Unset the slot, close admission and let accepted scopes drain. */
-  async dispose(): Promise<void> {
+  /**
+   * Unset the slot, close admission and let accepted scopes drain.
+   *
+   * The disposal is latched: `dispose()` may be reached from a switch (the
+   * previous instance), from the component teardown, and from a re-injection
+   * of the zotero slot; all of them await the same one-time close, so an
+   * embedder session is never disposed twice or left half-closed.
+   */
+  dispose(): Promise<void> {
+    this.disposal ??= this.disposeOnce()
+    return this.disposal
+  }
+
+  private async disposeOnce(): Promise<void> {
     this.closed = true
     this.generation += 1
     const all = new Set<Managed>()

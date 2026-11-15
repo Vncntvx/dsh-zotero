@@ -6,7 +6,7 @@ import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import { streamSessionLogZip } from '@deepseek-ai/dsh-session-log-export'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,4 +95,55 @@ it('reopens persisted results after a host restart and streams the same file int
   const saved = Object.entries(files).find(([path]) => path.startsWith('files/'))
   expect(saved).toBeDefined()
   expect(JSON.parse(new TextDecoder().decode(saved![1])).data.text).toBe(text)
+})
+
+it('reports a vanished result file as 404 and a storage failure as 500', async () => {
+  root = await mkdtemp(join(tmpdir(), 'zotero-result-route-'))
+  const world = await boot()
+  const text = 'x'.repeat(20_000)
+  const exec = {
+    name: 'zotero_export',
+    callId: 'call',
+    arguments: { format: 'ris' },
+    agent: { session: { header: { id: 'origin' } } },
+  } as unknown as ToolExecution
+  const receipt = await world.delivery.prepare(
+    exec,
+    { format: 'ris', text },
+    () => [{ type: 'text', text }],
+    new AbortController().signal,
+    'job',
+  )
+  if (receipt.delivery !== 'file') throw new Error('not stored')
+  const event = {
+    type: 'tool/result',
+    seq: 2,
+    time: 1,
+    data: { message: { toolCallId: 'call', content: renderDelivered(receipt, () => []) } },
+  }
+  const request = () =>
+    new Request('http://localhost/api/zotero/result?sessionId=fork&seq=2&index=0')
+  const failing = (code: string) => ({
+    sessionQuery: { readEvent: async () => ({ target: event }) },
+    attachments: {
+      readFileStream: () => {
+        // A synchronous open failure reaches the route's own catch; a lazy
+        // read failure would surface on the response body instead.
+        throw Object.assign(new Error(code), { code })
+      },
+    },
+    logger: { warn: vi.fn() },
+  })
+
+  // A vanished file is a permanent 404: the client should drop the handle.
+  const missing = failing('ENOENT')
+  await expect(readResult(missing as never, world.delivery, request())).resolves.toMatchObject({
+    status: 404,
+  })
+  // A permission or storage failure is the server's problem: 500 plus a log
+  // line, never "the result no longer exists".
+  const denied = failing('EACCES')
+  const response = await readResult(denied as never, world.delivery, request())
+  expect(response.status).toBe(500)
+  expect(denied.logger.warn).toHaveBeenCalledOnce()
 })

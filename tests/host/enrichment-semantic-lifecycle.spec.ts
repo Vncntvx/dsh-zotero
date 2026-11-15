@@ -287,3 +287,52 @@ describe('the loader belongs to one core injection', () => {
     expect(() => admitScope(service.liveEvidenceRanker)).toThrow(/no model loader is installed/)
   })
 })
+
+describe('the resident model idles out of memory', () => {
+  it('releases the model after the configured idle interval and re-opens it on demand', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service, ready, disposed, opened } = world()
+      await ready
+      const ranker = service.liveEvidenceRanker
+      const first = admitScope(ranker)
+      await ranker.rank({ ...request, scope: first.handle })
+      first.release()
+      expect(opened).toEqual(['lightweight'])
+
+      // Idle under the default ten minutes keeps the model resident.
+      await vi.advanceTimersByTimeAsync(9 * 60_000)
+      expect(disposed).toEqual([])
+      // One more minute of silence releases it; the embedding session is gone.
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(disposed).toEqual(['lightweight'])
+
+      // The next admission re-opens the model from disk instead of failing.
+      const second = admitScope(ranker)
+      await ranker.rank({ ...request, scope: second.handle })
+      second.release()
+      expect(opened).toEqual(['lightweight', 'lightweight'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('one loader closes once', () => {
+  it('latches disposal so concurrent teardown paths share one close', async () => {
+    const disposed: string[] = []
+    const loader = new SemanticEmbedderLoader({
+      open: async (target) => scriptedEmbedder(target.spec.dimension, disposed, target.spec.key),
+    })
+    const scope = loader.scope({
+      spec: { key: 'lightweight', dimension: 4 },
+      dir: '/models/lightweight',
+    } as never)
+    await scope.embedder()
+    scope.release()
+    // Two owners (the component teardown and a re-injected generation) call
+    // dispose: the embedder's one-time close must run exactly once.
+    await Promise.all([loader.dispose(), loader.dispose()])
+    expect(disposed).toEqual(['lightweight'])
+  })
+})

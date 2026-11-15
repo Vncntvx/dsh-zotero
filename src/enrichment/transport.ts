@@ -310,8 +310,9 @@ export class MineruClient {
         return { status: response.status, bytes, headers: response.headers, finalUrl: parsed.href }
       } finally {
         // The proxy route's dispatcher is process-wide and shared; only the
-        // pinned per-attempt agent is closed here.
-        await connection?.close()
+        // pinned per-attempt agent is closed here. A close rejection must not
+        // replace the response or the original failure.
+        await connection?.close().catch(() => undefined)
       }
     }
     throw new MineruHttpError(310, new URL(currentUrl).hostname)

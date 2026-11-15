@@ -508,6 +508,21 @@ describe('the zotero openProtocol endpoint', () => {
     expect(script).toContain('UseShellExecute = $true')
   })
 
+  it('drops undefined entries from a caller-supplied environment', async () => {
+    const launcher = vi.fn<ProtocolLauncher>(async () => {})
+    const url = 'zotero://select/library/items/ABC12345'
+    expect(
+      await executeOpenProtocol(url, {
+        platform: 'linux',
+        launcher,
+        env: { PATH: '/usr/bin', HOLE: undefined, DSH_SECRET: 'internal' },
+      }),
+    ).toEqual({ success: true })
+    const [, , options] = launcher.mock.calls[0]!
+    expect(options.env).toEqual({ PATH: '/usr/bin' })
+    expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
+  })
+
   it('surfaces launcher failure when powershell.exe fails in WSL', async () => {
     const launcher = vi.fn<ProtocolLauncher>(async (cmd) => {
       if (cmd === 'powershell.exe') throw new Error('powershell failed')
@@ -555,20 +570,22 @@ describe('the zotero openProtocol endpoint', () => {
     expect(failure.cause).toBeInstanceOf(Error)
   })
 
-  it('rejects cancellation before dispatch', async () => {
+  it('rejects cancellation before dispatch with the caller reason, not a protocol failure', async () => {
     const controller = new AbortController()
-    controller.abort()
+    const reason = new Error('caller cancelled the open')
+    controller.abort(reason)
     const launcher = vi.fn<ProtocolLauncher>(async () => {})
     const url = 'zotero://select/'
-    const failure = await rejectionOf(url, {
-      platform: 'linux',
-      launcher,
-      signal: controller.signal,
-    })
-    expect(failure).toMatchObject({
-      code: 'zotero/protocol-failed',
-      details: { url, reason: expect.any(String) },
-    })
+    // A cancelled open is the caller's own verdict: reporting it as
+    // protocol-failed would claim the launcher failed for a request that
+    // never ran.
+    await expect(
+      executeOpenProtocol(url, {
+        platform: 'linux',
+        launcher,
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason)
     expect(launcher).not.toHaveBeenCalled()
   })
 })

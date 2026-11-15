@@ -125,3 +125,24 @@ describe('explicit parsing completion notice', () => {
     expect(waits.mock.calls.length).toBe(calls)
   })
 })
+
+describe('the completion-notice cadence', () => {
+  it('clears its interval on teardown instead of re-arming past it', async () => {
+    vi.useFakeTimers()
+    fixture = await parseJobsFixture({
+      execute: async () => {
+        throw new Error('parse failed')
+      },
+    })
+    const { settled, unsubscribe } = nextSettlement(fixture)
+    await fixture.helper.startDocumentParse(parseRequest(), parseSignal())
+    await settled
+    unsubscribe()
+    // Teardown stops admission synchronously; a cadence still armed here
+    // would keep re-arming with nothing left to announce.
+    const jobs = fixture.helper
+    fixture = undefined
+    await jobs.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})

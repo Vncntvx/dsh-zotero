@@ -282,26 +282,30 @@ const WRITE_SHAPES: readonly WriteShape[] = [
   },
 ]
 
-/** One-slot-per-baseUrl cache of the configured address's host:port spellings. */
-const aliasCache = new Map<string, readonly string[]>()
-
-/**
- * The loopback spellings of the configured local API address. The config pins
- * a loopback hostname to an IP literal, so the aliases carry every equivalent
- * spelling a command might use. Memoized by the `baseUrl` string, whose value
- * only moves when the Loader volatile entry is rebuilt.
+/** The loopback spellings of the configured local API address.
+ *
+ * The cache belongs to the caller that owns the detector's lifetime (the
+ * plugin fiber), never to this module: a process that mounts and unmounts
+ * plugins must not accumulate spelling sets for addresses it no longer uses.
  * @param baseUrl - the resolved `baseUrl`.
+ * @param cache - the owner's one-entry alias cache.
  * @returns the `host:port` spellings to match.
  */
-function authorityAliases(baseUrl: string): readonly string[] {
-  const cached = aliasCache.get(baseUrl)
+function authorityAliases(
+  baseUrl: string,
+  cache: Map<string, readonly string[]>,
+): readonly string[] {
+  const cached = cache.get(baseUrl)
   if (cached !== undefined) return cached
   // `baseUrl` arrives from ResolvedConfig, which resolveConfig has already
   // proven parseable; an unparseable value must fail loudly here, not blind
   // the address-anchored shapes by silently matching nothing.
   const port = new URL(baseUrl).port
   const aliases = port !== '' ? [...LOOPBACK_HOSTNAMES].map((host) => `${host}:${port}`) : []
-  aliasCache.set(baseUrl, aliases)
+  // One live baseUrl at a time: a rebuilt config starts a fresh entry and
+  // drops the previous spelling set.
+  cache.clear()
+  cache.set(baseUrl, aliases)
   return aliases
 }
 
@@ -353,20 +357,22 @@ function displayReasonOf(label: ShapeLabel): { en: string; zh: string } {
  * non-string commands, and every read-only shape answer `undefined`.
  * @param config - the live config fields the rule reads.
  * @param execution - the call about to run; only its name and arguments are read.
+ * @param aliases - the owner's alias cache; a caller without one recomputes.
  * @returns the detected attempt, or `undefined` to leave the call alone.
  */
 export function detectShellWrite(
   config: Pick<ResolvedConfig, 'baseUrl'>,
   execution: Pick<ToolExecution, 'name' | 'arguments'>,
+  aliases: Map<string, readonly string[]> = new Map(),
 ): ShellWriteAttempt | undefined {
   const text = commandTextOf(execution)
   if (text === undefined) return undefined
-  const aliases = authorityAliases(config.baseUrl)
+  const authority = authorityAliases(config.baseUrl, aliases)
   // Every shape walks the same split; segment once here so five shapes do
   // not re-split the same command five times on this pre-execute hot path.
   const segments = segmentsOf(text)
   for (const shape of WRITE_SHAPES) {
-    if (shape.test(segments, aliases)) {
+    if (shape.test(segments, authority)) {
       return { reason: reasonOf(shape.label.en), displayReason: displayReasonOf(shape.label) }
     }
   }
