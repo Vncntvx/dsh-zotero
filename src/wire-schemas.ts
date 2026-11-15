@@ -504,7 +504,6 @@ export const zoteroLibrarySearchRequestSchema = z
     scope: zoteroLibrarySearchScopeSchema,
     library: zoteroLibrarySchema.optional(),
     q: z.string().optional(),
-    mode: z.enum(['metadata', 'everything']).optional(),
     sort: zoteroLibrarySortSchema,
     direction: z.enum(['asc', 'desc']),
     offset: z.number().int().nonnegative(),

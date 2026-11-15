@@ -28,7 +28,6 @@ import {
   type LibraryListQuery,
   type LibraryFilters,
   type LibraryListState,
-  type LibrarySearchMode,
   type LibrarySelection,
   type LibraryItemState,
   type LibraryPane,
@@ -94,8 +93,6 @@ export interface LibraryFeed {
   readonly setQ: (q: string) => void
   readonly filters: LibraryFilters
   readonly setFilters: (filters: LibraryFilters) => void
-  readonly mode: LibrarySearchMode
-  readonly setMode: (mode: LibrarySearchMode) => void
   readonly sort: (typeof LIBRARY_SORTS)[number]
   readonly direction: 'asc' | 'desc'
   readonly setSort: (sort: (typeof LIBRARY_SORTS)[number], direction: 'asc' | 'desc') => void
@@ -158,7 +155,6 @@ export function useLibraryFeed(
   const [q, setQRaw] = useState('')
   const [filters, setFiltersRaw] = useState<LibraryFilters>({})
   const [debouncedQ, setDebouncedQ] = useState('')
-  const [mode, setModeRaw] = useState<LibrarySearchMode>('metadata')
   const [sort, setSortRaw] = useState<(typeof LIBRARY_SORTS)[number]>('dateModified')
   const [direction, setDirectionRaw] = useState<'asc' | 'desc'>('desc')
   const [offset, setOffset] = useState(0)
@@ -187,7 +183,6 @@ export function useLibraryFeed(
         currentLibrary,
         scopeIdentity(selection, serverId),
         debouncedQ,
-        mode,
         sort,
         direction,
         offset,
@@ -200,7 +195,6 @@ export function useLibraryFeed(
       currentLibrary,
       selection,
       debouncedQ,
-      mode,
       sort,
       direction,
       offset,
@@ -280,7 +274,7 @@ export function useLibraryFeed(
     (
       library: SupportedLocalLibrary,
       restored?: LibraryStoredState,
-      keep?: Pick<LibraryFeed, 'mode' | 'sort' | 'direction'>,
+      keep?: Pick<LibraryFeed, 'sort' | 'direction'>,
     ): void => {
       seq.current.list += 1
       setPrefixes(restored?.prefixes ?? {})
@@ -288,7 +282,6 @@ export function useLibraryFeed(
       setSelection(restored?.selection ?? { kind: 'library' })
       setQRaw(restored?.q ?? '')
       setDebouncedQ(restored?.q ?? '')
-      setModeRaw(restored?.mode ?? keep?.mode ?? 'metadata')
       setSortRaw(restored?.sort ?? keep?.sort ?? 'dateModified')
       setDirectionRaw(restored?.direction ?? keep?.direction ?? 'desc')
       setFiltersRaw(restored?.filters ?? {})
@@ -370,12 +363,11 @@ export function useLibraryFeed(
     )
       return
     const persistedState: LibraryStoredState = {
-      version: 3,
+      version: 4,
       prefixes: navigation.prefixes,
       library: currentLibrary,
       selection,
       q,
-      mode,
       sort,
       direction,
       offset,
@@ -441,7 +433,6 @@ export function useLibraryFeed(
     currentLibrary,
     selection,
     debouncedQ,
-    mode,
     sort,
     direction,
     offset,
@@ -537,7 +528,6 @@ export function useLibraryFeed(
       selection,
       library: currentLibrary,
       q,
-      mode,
       sort,
       direction,
       offset,
@@ -563,7 +553,6 @@ export function useLibraryFeed(
     currentLibrary,
     q,
     debouncedQ,
-    mode,
     sort,
     direction,
     offset,
@@ -668,11 +657,11 @@ export function useLibraryFeed(
   const selectLibrary = useCallback(
     (library: SupportedLocalLibrary): void => {
       if (sameLibrary(library, currentLibrary)) return
-      // Switching library keeps how the reader reads: the mode and sort are
-      // about the list, not the library that list belongs to.
-      resetLibraryState(library, undefined, { mode, sort, direction })
+      // Switching library keeps how the reader reads: the sort is about the
+      // list, not the library that list belongs to.
+      resetLibraryState(library, undefined, { sort, direction })
     },
-    [resetLibraryState, currentLibrary, mode, sort, direction],
+    [resetLibraryState, currentLibrary, sort, direction],
   )
 
   const selectScope = useCallback(
@@ -711,14 +700,6 @@ export function useLibraryFeed(
       setNarrowPaneState(pane)
     },
     [rewindList, selection, serverId, flatTree, setBranchOpen, preferences.scopeChangeBehavior],
-  )
-
-  const setMode = useCallback(
-    (next: LibrarySearchMode): void => {
-      setModeRaw(next)
-      rewindList()
-    },
-    [rewindList],
   )
 
   const setSort = useCallback(
@@ -846,8 +827,6 @@ export function useLibraryFeed(
     setQ,
     filters,
     setFilters,
-    mode,
-    setMode,
     sort,
     direction,
     setSort,

@@ -11,13 +11,12 @@ beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 it('renders active-filter empty results distinctly and keeps clear filters visible', async () => {
   writeLibraryState('S1', 's1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
     filters: { tags: ['read'], yearFrom: 2020 },
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -60,7 +59,7 @@ it('lets the user explicitly leave a missing collection for all items', async ()
 
 it('keeps the restored name visible while its fresh collection path is pending', async () => {
   writeLibraryState('S1', 's1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: {
@@ -70,7 +69,6 @@ it('keeps the restored name visible while its fresh collection path is pending',
     },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,

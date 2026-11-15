@@ -473,7 +473,7 @@ const PARITY_CASES: readonly ParityCase[] = [
         tags: [],
         collections: [],
         children: { total: 0 },
-        version: 3,
+        version: 4,
       },
       {
         ref: 'r',

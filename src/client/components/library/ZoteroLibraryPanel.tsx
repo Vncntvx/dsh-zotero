@@ -28,6 +28,7 @@ import {
   Button,
   IconChevronDownOutlineRegular,
   IconChevronsUpDownOutlineMedium,
+  IconDeliverDocRegular,
   IconEllipsisOutlineMedium,
   IconRefreshOutlineMedium,
   IconSearchOutlineMedium,
@@ -161,6 +162,15 @@ const SORT_LABELS = {
   date: 'librarySortDate',
   title: 'librarySortTitle',
   creator: 'librarySortCreator',
+} as const satisfies Record<(typeof LIBRARY_SORTS)[number], ZoteroLocaleKey>
+
+/** The compact spelling each field uses in a narrow toolbar. */
+const SORT_SHORT_LABELS = {
+  dateModified: 'librarySortShortDateModified',
+  dateAdded: 'librarySortShortDateAdded',
+  date: 'librarySortShortDate',
+  title: 'librarySortShortTitle',
+  creator: 'librarySortShortCreator',
 } as const satisfies Record<(typeof LIBRARY_SORTS)[number], ZoteroLocaleKey>
 
 /** The single value encoding shared by the options and the controlled value. */
@@ -399,32 +409,22 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     feed.selectItem(ref)
   }
 
+  // Diagnostics are read-only facts, so the menu renders them as heading rows.
   const diagnosticMenuItems: MenuEntry[] = useMemo(() => {
     const data = probeState.data
     const items: MenuEntry[] = []
+    const heading = (id: string, text: string): MenuEntry => ({ type: 'label', id, text })
     if (data?.serverId !== undefined) {
-      items.push({ id: 'server', label: `${t('serverIdLabel')} ${data.serverId}`, disabled: true })
+      items.push(heading('server', `${t('serverIdLabel')} ${data.serverId}`))
     }
     if (data?.zoteroVersion !== undefined) {
-      items.push({
-        id: 'zoteroVer',
-        label: `${t('zoteroVersionLabel')} ${data.zoteroVersion}`,
-        disabled: true,
-      })
+      items.push(heading('zoteroVer', `${t('zoteroVersionLabel')} ${data.zoteroVersion}`))
     }
     if (data?.apiVersion !== undefined) {
-      items.push({
-        id: 'apiVer',
-        label: `${t('apiVersionLabel')} ${data.apiVersion}`,
-        disabled: true,
-      })
+      items.push(heading('apiVer', `${t('apiVersionLabel')} ${data.apiVersion}`))
     }
     if (data?.write !== undefined) {
-      items.push({
-        id: 'write',
-        label: `${t('writeLabel')} ${writeStatusLabel(data.write, t)}`,
-        disabled: true,
-      })
+      items.push(heading('write', `${t('writeLabel')} ${writeStatusLabel(data.write, t)}`))
     }
     return items
   }, [probeState.data, t])
@@ -433,8 +433,13 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     <LibraryPreferencesContext.Provider value={{ ...accepted, memory }}>
       <div className={css.panel}>
         {cleanupError && <p role="alert">{t('libraryPositionError', { message: cleanupError })}</p>}
-        {/* Streamlined Responsive Header */}
+        {/* Two rows: the query the reader is asking, then the surface's own
+         * actions. The hairline keeps this header distinct from the list. */}
         <header className={css.toolbar}>
+          {/* One row, like the Host's own pane headers: library identity and
+           * the manager entry anchor the left, the search fills the middle,
+           * and sort plus connection state anchor the right. The hairline
+           * below separates the header from the workspace. */}
           <div className={css.librarySelectWrap}>
             <LibrarySelect
               t={t}
@@ -443,6 +448,22 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               onSelect={feed.selectLibrary}
             />
           </div>
+
+          {enrichmentMounted && props.openParsedManager !== undefined && (
+            <div className={css.parsedManagerWrap}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('libraryParsedManager')}
+                title={t('libraryParsedManager')}
+                onClick={props.openParsedManager}
+                disabled={sessionRemoved}
+              >
+                <IconDeliverDocRegular size={14} className={css.parsedManagerIcon} />
+                <span className={css.parsedManagerLabel}>{t('libraryParsedManager')}</span>
+              </Button>
+            </div>
+          )}
 
           <Input
             className={css.searchInputWrap}
@@ -454,19 +475,6 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             aria-label={t('librarySearchPlaceholder')}
           />
 
-          <div className={css.searchModeWrap}>
-            <SegmentedControl
-              id="zotero-search-mode"
-              label={t('librarySearchModeLabel')}
-              value={feed.mode}
-              onChange={feed.setMode}
-              options={[
-                { value: 'metadata', label: t('librarySearchModeMetadata') },
-                { value: 'everything', label: t('librarySearchModeEverything') },
-              ]}
-            />
-          </div>
-
           <div className={css.sortSelectWrap}>
             <SortSelect
               t={t}
@@ -475,20 +483,6 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               onSelect={(sort, direction) => feed.setSort(sort, direction)}
             />
           </div>
-
-          {enrichmentMounted && props.openParsedManager !== undefined && (
-            <div className={css.parsedManagerWrap}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={props.openParsedManager}
-                disabled={sessionRemoved}
-              >
-                {t('libraryParsedManager')}
-              </Button>
-            </div>
-          )}
-          <span className={css.spacer} />
 
           <div className={css.statusGroup}>
             <StateDot state={probeState.loading ? 'ongoing' : connected ? 'done' : 'error'} />
@@ -538,8 +532,6 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               />
             </Tooltip>
           </div>
-
-          <div className={css.toolbarBreak} aria-hidden="true" />
         </header>
 
         {/* An answered-but-offline probe (or a failed one) replaces the whole
@@ -626,19 +618,11 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   enabled={connected}
                 />
 
-                {feed.mode === 'everything' && (
-                  <div className={clsx(css.caption, css.everywhereHint)}>
-                    <IconSearchOutlineMedium className={css.hintIcon} />
-                    <span>{t('libraryEverythingHint')}</span>
-                  </div>
-                )}
-
                 <LibraryItemList
                   scrollKey={JSON.stringify([
                     'list',
                     feed.scopeKey,
                     feed.q,
-                    feed.mode,
                     feed.sort,
                     feed.direction,
                     feed.filters,
@@ -806,6 +790,14 @@ function LibrarySelect({
   )
 }
 
+function formatSortLabel(
+  sort: (typeof LIBRARY_SORTS)[number],
+  direction: 'asc' | 'desc',
+  t: PropsLocale<'zotero'>['t'],
+): string {
+  return `${t(SORT_LABELS[sort])} · ${direction === 'asc' ? t('librarySortAsc') : t('librarySortDesc')}`
+}
+
 function SortSelect({
   t,
   sort,
@@ -819,16 +811,19 @@ function SortSelect({
 }) {
   const [open, setOpen] = useState(false)
   const currentValue = sortValueOf(sort, direction)
-  const currentLabel = `${t(SORT_LABELS[sort])} · ${direction === 'asc' ? t('librarySortAsc') : t('librarySortDesc')}`
+  const currentLabel = formatSortLabel(sort, direction, t)
+  // A narrow panel keeps a compact but still worded form: the direction becomes
+  // an arrow so the control never collapses to a bare icon.
+  const compactLabel = `${t(SORT_SHORT_LABELS[sort])} ${direction === 'asc' ? '↑' : '↓'}`
 
-  const items: MenuEntry[] = SORT_OPTIONS.map((option) => {
-    const val = sortValueOf(option.sort, option.direction)
-    const label = `${t(SORT_LABELS[option.sort])} · ${option.direction === 'asc' ? t('librarySortAsc') : t('librarySortDesc')}`
-    return {
-      id: val,
-      label,
-    }
-  })
+  const items: MenuEntry[] = useMemo(
+    () =>
+      SORT_OPTIONS.map((option) => ({
+        id: sortValueOf(option.sort, option.direction),
+        label: formatSortLabel(option.sort, option.direction, t),
+      })),
+    [t],
+  )
 
   return (
     <Menu
@@ -851,6 +846,7 @@ function SortSelect({
           >
             <IconChevronsUpDownOutlineMedium size={14} className={css.sortIcon} />
             <span className={css.sortLabel}>{currentLabel}</span>
+            <span className={css.sortLabelCompact}>{compactLabel}</span>
           </Button>
         </Tooltip>
       }

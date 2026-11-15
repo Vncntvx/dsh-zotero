@@ -51,7 +51,6 @@ describe('listRequestOf', () => {
         selection: { kind: 'library' },
         library: { type: 'user', id: 0 },
         q: '',
-        mode: 'metadata',
         sort: 'dateModified',
         direction: 'desc',
         offset: 0,
@@ -59,7 +58,6 @@ describe('listRequestOf', () => {
     ).toEqual({
       scope: { kind: 'library' },
       library: { type: 'user', id: 0 },
-      mode: 'metadata',
       sort: 'dateModified',
       direction: 'desc',
       offset: 0,
@@ -80,7 +78,6 @@ describe('listRequestOf', () => {
       q: 'flash',
       scope: { kind: 'collection', refOrName: 'r' },
       library: { type: 'group', id: 5 },
-      mode: 'everything',
       sort: 'title',
       direction: 'asc',
       offset: 50,

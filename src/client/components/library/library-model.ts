@@ -74,9 +74,6 @@ export function pdfAttachmentsOf(detail: ZoteroItemDetailView): ZoteroAttachment
 /** The sort fields the panel offers, in toolbar order. */
 export const LIBRARY_SORTS = ZOTERO_SORT_FIELDS
 
-/** The search modes the panel's toggle switches between. */
-export type LibrarySearchMode = 'metadata' | 'everything'
-
 /**
  * What the item list currently lists. The wire scope is derived from it; the
  * selection carries the display facts (the collection or search name) the
@@ -108,7 +105,6 @@ export interface LibraryListQuery {
   readonly selection: LibrarySelection
   readonly library: SupportedLocalLibrary
   readonly q: string
-  readonly mode: LibrarySearchMode
   readonly sort: ZoteroLibrarySortField
   readonly direction: 'asc' | 'desc'
   readonly offset: number
@@ -127,7 +123,6 @@ export function listRequestOf(query: LibraryListQuery): ZoteroLibrarySearchReque
     scope: scopeViewOf(query.selection),
     library: query.library,
     ...(query.q !== '' ? { q: query.q } : {}),
-    mode: query.mode,
     sort: query.sort,
     direction: query.direction,
     offset: query.offset,

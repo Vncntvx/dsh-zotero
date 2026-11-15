@@ -137,12 +137,11 @@ it('restores selected child pagination after a new browser tab occurrence', asyn
   const face = first.face
   first.unmount()
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
-    mode: 'metadata',
     sort: 'dateModified',
     direction: 'desc',
     offset: 0,
@@ -165,14 +164,28 @@ it('restores selected child pagination after a new browser tab occurrence', asyn
   )
   expect(memory.scroll.list).toBe(50)
 })
-it('shows a corrupt stored position until the user explicitly resets it', async () => {
+it('drops a corrupt stored position quietly and starts from the defaults', async () => {
   localStorage.setItem(libraryStorageKey('S1', 'session-1'), '{broken')
   const { result } = setupLibraryFeed()
-  await waitFor(() => expect(result.current.storageError).toBeTruthy())
-  expect(localStorage.getItem(libraryStorageKey('S1', 'session-1'))).toBe('{broken')
-  act(() => result.current.clearPosition())
-  await waitFor(() => expect(result.current.storageError).toBeUndefined())
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  expect(result.current.storageError).toBeUndefined()
+  expect(result.current.q).toBe('')
+  expect(result.current.sort).toBe('dateModified')
+  // The next persist overwrites the unusable bytes with a real record.
+  expect(() =>
+    JSON.parse(localStorage.getItem(libraryStorageKey('S1', 'session-1'))!),
+  ).not.toThrow()
   expect(readLibraryState('S1', 'session-1')?.q).toBe('')
+})
+it('drops a stored position whose shape an older client left behind', async () => {
+  localStorage.setItem(
+    libraryStorageKey('S1', 'session-1'),
+    JSON.stringify({ version: 4, nonsense: true }),
+  )
+  const { result } = setupLibraryFeed()
+  await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+  expect(result.current.storageError).toBeUndefined()
+  expect(result.current.q).toBe('')
 })
 it('reports browser write failure instead of claiming that the position was saved', async () => {
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

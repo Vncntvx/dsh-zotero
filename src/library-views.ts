@@ -175,7 +175,9 @@ export function searchRequestOf(view: ZoteroLibrarySearchRequestView): ZoteroSea
     scope: view.scope,
     ...(view.library !== undefined ? { library: view.library } : {}),
     ...(view.q !== undefined && view.q !== '' ? { query: view.q } : {}),
-    mode: view.mode ?? 'metadata',
+    // The panel searches titles, creators and years; only the model tool
+    // selects the wider full-text mode.
+    mode: 'metadata',
     sort: view.sort,
     direction: view.direction,
     offset: view.offset,

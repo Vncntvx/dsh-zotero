@@ -49,6 +49,7 @@ export function LibraryFilters({
   const [retry, setRetry] = useState(0)
 
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
+  const [attachmentOpen, setAttachmentOpen] = useState(false)
 
   // Year draft: the inputs own the text, the filter value only moves on
   // commit (debounce, blur, or Enter).
@@ -117,16 +118,6 @@ export function LibraryFilters({
     value.yearFrom !== undefined ||
     value.yearTo !== undefined,
   )
-
-  const toggleAttachment = () => {
-    if (value.hasAttachment === undefined) {
-      change({ ...value, hasAttachment: true })
-    } else if (value.hasAttachment === true) {
-      change({ ...value, hasAttachment: false })
-    } else {
-      change({ ...value, hasAttachment: undefined })
-    }
-  }
 
   const toggleTagMatch = () => {
     change({ ...value, tagMatch: value.tagMatch === 'any' ? 'all' : 'any' })
@@ -264,19 +255,51 @@ export function LibraryFilters({
         </Pill>
       )}
 
-      {/* Attachment Filter Pill */}
-      <Pill active={value.hasAttachment !== undefined} onClick={toggleAttachment}>
-        {value.hasAttachment === undefined
-          ? t('libraryAttachmentFilter')
-          : value.hasAttachment
-            ? t('libraryHasAttachment')
-            : t('libraryNoAttachment')}
-      </Pill>
+      {/* Attachment Filter: the three options use the same menu pattern as the
+       * other pickers. */}
+      <Menu
+        open={attachmentOpen}
+        anchor={
+          <Pill
+            active={value.hasAttachment !== undefined}
+            onClick={() => setAttachmentOpen(!attachmentOpen)}
+            aria-label={t('libraryAttachmentFilter')}
+          >
+            <span>
+              {value.hasAttachment === undefined
+                ? t('libraryAttachmentFilter')
+                : value.hasAttachment
+                  ? t('libraryHasAttachment')
+                  : t('libraryNoAttachment')}
+            </span>
+            <IconChevronDownOutlineMedium className={css.chevronIcon} />
+          </Pill>
+        }
+        items={[
+          { id: 'all', label: t('libraryAttachmentFilter') },
+          { id: 'with', label: t('libraryHasAttachment') },
+          { id: 'without', label: t('libraryNoAttachment') },
+        ]}
+        selectedIds={[
+          value.hasAttachment === undefined ? 'all' : value.hasAttachment ? 'with' : 'without',
+        ]}
+        onSelect={(id) => {
+          change({
+            ...value,
+            hasAttachment: id === 'with' ? true : id === 'without' ? false : undefined,
+          })
+          setAttachmentOpen(false)
+        }}
+        onClose={() => setAttachmentOpen(false)}
+        portal
+        align="start"
+      />
 
-      {/* Year Range Pill / Inputs */}
+      {/* Year Range Pill / Inputs: the pill discloses the input row. */}
       <Pill
         active={yearOpen || value.yearFrom !== undefined || value.yearTo !== undefined}
         onClick={openYear}
+        aria-label={t('libraryYearLabel')}
       >
         <span>{t('libraryYearLabel')}</span>
         {(value.yearFrom !== undefined || value.yearTo !== undefined) && (
@@ -284,6 +307,7 @@ export function LibraryFilters({
             {value.yearFrom ?? ''}-{value.yearTo ?? ''}
           </span>
         )}
+        <IconChevronDownOutlineMedium className={css.chevronIcon} />
       </Pill>
 
       {yearOpen && (

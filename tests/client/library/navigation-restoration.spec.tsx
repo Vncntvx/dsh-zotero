@@ -24,13 +24,12 @@ const child: ZoteroCollectionRowView = {
   depth: 1,
 }
 const saved = {
-  version: 3 as const,
+  version: 4 as const,
   prefixes: {},
   library: { type: 'user' as const, id: 0 as const },
   selection: { kind: 'library' as const },
   q: '',
   filters: {},
-  mode: 'metadata' as const,
   sort: 'title' as const,
   direction: 'asc' as const,
   offset: 0,

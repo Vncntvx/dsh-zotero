@@ -124,13 +124,16 @@ describe('library filter controls', () => {
     expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ tags: ['beta'] }))
   })
 
-  it('cycles attachment presence and clears every filter', () => {
+  it('picks attachment presence from a three-option menu and clears every filter', () => {
     const { change } = mountFilters()
     click(zh.libraryAttachmentFilter)
+    fireEvent.click(within(screen.getByRole('menu')).getByText(zh.libraryHasAttachment))
     expect(change).toHaveBeenLastCalledWith({ hasAttachment: true })
-    click(zh.libraryHasAttachment)
+    click(zh.libraryAttachmentFilter)
+    fireEvent.click(within(screen.getByRole('menu')).getByText(zh.libraryNoAttachment))
     expect(change).toHaveBeenLastCalledWith({ hasAttachment: false })
-    click(zh.libraryNoAttachment)
+    click(zh.libraryAttachmentFilter)
+    fireEvent.click(within(screen.getByRole('menu')).getByText(zh.libraryAttachmentFilter))
     expect(change).toHaveBeenLastCalledWith({ hasAttachment: undefined })
     click(zh.libraryYearLabel)
     fireEvent.blur(editYear('from', '2020'))

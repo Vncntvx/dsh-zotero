@@ -45,12 +45,11 @@ describe('list and inspector lifetime', () => {
 describe('instance preferences', () => {
   it('reports invalid cross-instance and wrong-kind references in stored browsing state', () => {
     writeLibraryState('S1', 'session-1', {
-      version: 3,
+      version: 4,
       prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'publications' },
       q: '',
-      mode: 'metadata',
       sort: 'title',
       direction: 'asc',
       offset: 50,
@@ -71,12 +70,11 @@ describe('instance preferences', () => {
     'restores the saved-search selection and page for %s',
     (ref) => {
       writeLibraryState('S1', 'session-1', {
-        version: 3,
+        version: 4,
         prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'savedSearch', ref, name: 'Unread' },
         q: '',
-        mode: 'metadata',
         sort: 'title',
         direction: 'asc',
         offset: 50,
@@ -90,22 +88,21 @@ describe('instance preferences', () => {
     },
   )
 
-  it('reports corrupt storage and write failures to its caller', () => {
+  it('discards unusable stored records quietly but reports write failures to its caller', () => {
     localStorage.setItem(libraryStorageKey('S1', 'session-1'), '{broken')
-    expect(() => readLibraryState('S1', 'session-1')).toThrow()
-    localStorage.setItem(libraryStorageKey('S1', 'session-1'), JSON.stringify({ version: 3 }))
-    expect(() => readLibraryState('S1', 'session-1')).toThrow()
+    expect(readLibraryState('S1', 'session-1')).toBeUndefined()
+    localStorage.setItem(libraryStorageKey('S1', 'session-1'), JSON.stringify({ version: 4 }))
+    expect(readLibraryState('S1', 'session-1')).toBeUndefined()
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota')
     })
     expect(() =>
       writeLibraryState('S1', 'session-1', {
-        version: 3,
+        version: 4,
         prefixes: {},
         library: { type: 'user', id: 0 },
         selection: { kind: 'library' },
         q: '',
-        mode: 'metadata',
         sort: 'title',
         direction: 'asc',
         offset: 0,
@@ -118,12 +115,11 @@ describe('instance preferences', () => {
 
   it('restores a confirmed instance and isolates another instance', async () => {
     writeLibraryState('S1', 'session-1', {
-      version: 3,
+      version: 4,
       prefixes: {},
       library: { type: 'group', id: 123 },
       selection: { kind: 'library' },
       q: 'saved',
-      mode: 'everything',
       sort: 'title',
       direction: 'asc',
       offset: 50,
@@ -149,7 +145,7 @@ describe('instance preferences', () => {
 
   it('preserves a missing restored scope and exposes its error', async () => {
     writeLibraryState('S1', 'session-1', {
-      version: 3,
+      version: 4,
       prefixes: {},
       library: { type: 'user', id: 0 },
       selection: {
@@ -158,7 +154,6 @@ describe('instance preferences', () => {
         name: 'gone',
       },
       q: '',
-      mode: 'metadata',
       sort: 'title',
       direction: 'asc',
       offset: 50,

@@ -278,12 +278,18 @@ const cssModulesPlugin = {
         .replaceAll('${', '\\${')
       const contents = [
         'const style = `' + style + '`;',
-        `if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css="${id}"]')) {`,
-        "  const tag = document.createElement('style');",
-        `  tag.setAttribute('data-plugin-css', ${JSON.stringify(id)});`,
-        '  tag.textContent = style;',
-        '  document.head.appendChild(tag);',
-        '}',
+        `if (typeof document !== 'undefined') {`,
+        //  Repaint an existing tag because the content-hashed class names may
+        //  have changed between bundle executions.
+        `  const tag = document.querySelector('style[data-plugin-css="${id}"]');`,
+        `  if (tag !== null) tag.textContent = style;`,
+        `  else {`,
+        `    const fresh = document.createElement('style');`,
+        `    fresh.setAttribute('data-plugin-css', ${JSON.stringify(id)});`,
+        `    fresh.textContent = style;`,
+        `    document.head.appendChild(fresh);`,
+        `  }`,
+        `}`,
         `export default ${JSON.stringify(names)};`,
       ].join('\n')
       return { contents, loader: 'js' }

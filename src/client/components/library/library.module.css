@@ -25,14 +25,18 @@
 
 /* ── Toolbar ──────────────────────────────────────────────────────────── */
 
+/* One row, like the Host's own pane headers: library identity and the manager
+ * entry on the left, the search filling the middle, sort and connection state
+ * on the right. The hairline separates the header from the content. */
 .toolbar {
   flex: none;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 6px;
-  min-height: 38px;
-  padding: 4px 8px 4px 12px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 6px 8px 6px 12px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
   background: var(--dsw-alias-bg-layer-1);
   box-sizing: border-box;
@@ -43,12 +47,19 @@
   min-width: 0;
 }
 
+/* The manager entry is a navigation action, not a picker: it renders as the
+ * quiet ghost family so the bordered pickers stay the anchors of the row. */
 .parsedManagerWrap {
   flex: none;
 }
 
-.searchModeWrap {
+.parsedManagerIcon {
   flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.parsedManagerLabel {
+  white-space: nowrap;
 }
 
 .sortSelectWrap {
@@ -63,12 +74,11 @@
   flex: none;
 }
 
-.toolbarBreak {
-  display: none;
-}
-
-/* The library/sort pickers are the host Button; this caps their label width. */
+/* The library/sort pickers are the host Button. It fills its wrap so a
+ * shrunken wrap drags the button with it — an auto-width button would keep
+ * painting at full width across its neighbour — and the cap bounds the label. */
 .selectorSeat {
+  width: 100%;
   max-width: 220px;
 }
 
@@ -100,16 +110,29 @@
   white-space: nowrap;
 }
 
+/* The narrow toolbar swaps the full "field · direction" for this compact form;
+ * both stay in the DOM so the compact text is stable and testable. */
+.sortLabelCompact {
+  display: none;
+  flex: none;
+  white-space: nowrap;
+}
+
 .searchInputWrap {
   flex: 1 1 140px;
-  min-width: 80px;
-  max-width: 320px;
+  min-width: 96px;
   height: 28px;
   box-sizing: border-box;
 }
 
 .searchInputWrap input {
   font: var(--dsw-font-xxs-12);
+}
+
+/* The host's own placeholder tone is the dimmest label; on a working surface
+ * the hint must stay readable, so it rides one step up. */
+.searchInputWrap input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .searchIcon {
@@ -134,30 +157,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.spacer {
-  flex: 1 1 auto;
-}
-
 /* The refresh/diagnostics triggers are the host IconButton. */
 .actionIcon {
   width: 15px;
   height: 15px;
-}
-
-/* The everything-mode and no-session notes: quiet caption lines, no chip. */
-.everywhereHint {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 0;
-}
-
-.hintIcon {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  color: var(--dsw-alias-label-tertiary);
 }
 
 /* ── Offline note ─────────────────────────────────────────────────────── */
@@ -1535,9 +1538,10 @@
 }
 
 /* Container queries: anonymous queries evaluate against the nearest ancestor container (.panel). */
-@container (max-width: 640px) {
-  /* The lamp dot carries the state on a narrow toolbar; the full text lives
-   * in the diagnostics menu and in the offline note. */
+@container (max-width: 680px) {
+  /* The full labels (sort field, connection text, manager wording) fit one
+   * row only above 680px; below it the lamp dot carries the state, the sort
+   * rides its compact wording, and the search takes the remaining width. */
   .statusText {
     display: none;
   }
@@ -1546,66 +1550,25 @@
     display: none;
   }
 
+  /* The control keeps working words at this width instead of a bare glyph. */
+  .sortLabelCompact {
+    display: inline;
+  }
+
   .searchInputWrap {
-    max-width: none;
     flex-basis: 100px;
   }
 }
 
 @container (max-width: 520px) {
   .librarySelectWrap {
-    order: 1;
     max-width: 140px;
   }
 
-  /* Shares the selector's order so DOM order keeps My Library first. */
-  .parsedManagerWrap {
-    order: 1;
-  }
-
-  .spacer {
-    order: 2;
-    flex: 1 1 auto;
-  }
-
-  .statusGroup {
-    order: 3;
-  }
-
-  .diagnosticsWrap {
-    order: 4;
-  }
-
-  .refreshWrap {
-    order: 5;
-  }
-
-  .toolbarBreak {
-    display: block;
-    order: 6;
-    flex-basis: 100%;
-    width: 100%;
-    height: 0;
-    margin: 0;
-  }
-
-  .searchInputWrap {
-    order: 7;
-    flex: 1 1 80px;
-    min-width: 80px;
-  }
-
-  .searchModeWrap {
-    order: 8;
-  }
-
-  .sortSelectWrap {
-    order: 9;
-  }
-
-  .toolbar {
-    gap: 4px 6px;
-    padding: 4px 8px;
+  /* The manager entry drops to its icon from here down: the freed width keeps
+   * the whole row on one line, the search included. */
+  .parsedManagerLabel {
+    display: none;
   }
 
   .filterRail {
@@ -1621,6 +1584,13 @@
   .toolbar {
     padding: 4px 6px;
     gap: 4px;
+  }
+
+  /* The search keeps its inline seat down to the smallest width: it flexes
+   * from a 72px floor instead of reflowing onto its own line. */
+  .searchInputWrap {
+    min-width: 72px;
+    flex-basis: 72px;
   }
 
   .narrowNavWrap {
@@ -1650,14 +1620,40 @@
   }
 }
 
-@container (max-width: 360px) {
-  .librarySelectWrap {
-    max-width: 110px;
+@container (max-width: 400px) {
+  /* The diagnostics facts (server id, versions) and the sort glyph give way to
+   * the search seat; the sort keeps its compact wording, the diagnostics stay
+   * available at any wider step, and the offline note carries the diagnosis. */
+  .diagnosticsWrap {
+    display: none;
   }
 
-  .paginator {
-    flex-wrap: wrap;
-    gap: 4px;
+  .sortIcon {
+    display: none;
+  }
+}
+
+@container (max-width: 340px) {
+  .librarySelectWrap {
+    max-width: 68px;
+  }
+}
+
+@container (max-width: 320px) {
+  /* The floor below the dock's comfortable range: the lamp gives way (the
+   * offline note carries the state) and the selector truncates to its mark,
+   * so the manager entry, the search, and the sort wording all keep seats. */
+  .statusGroup {
+    display: none;
+  }
+
+  .librarySelectWrap {
+    max-width: 56px;
+  }
+
+  .searchInputWrap {
+    min-width: 56px;
+    flex-basis: 56px;
   }
 }
 

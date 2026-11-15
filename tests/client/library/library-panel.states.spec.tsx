@@ -475,12 +475,4 @@ describe('lane states', () => {
     expect(await screen.findByText(zh.libraryWriteNeedsSession)).toBeTruthy()
     expect(await screen.findByText('FlashAttention-2')).toBeTruthy()
   })
-
-  it('shows the full-text hint only while the everything mode is on', async () => {
-    const { view } = mountPanel()
-    await screen.findByText('FlashAttention-2')
-    expect(view.queryByText(zh.libraryEverythingHint)).toBeNull()
-    view.getByRole('tab', { name: zh.librarySearchModeEverything }).click()
-    expect(await screen.findByText(zh.libraryEverythingHint)).toBeTruthy()
-  })
 })

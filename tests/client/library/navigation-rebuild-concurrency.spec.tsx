@@ -23,7 +23,7 @@ import { deferred } from '../../helpers/sync.ts'
 beforeEach(() => {
   localStorage.clear()
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: {
@@ -33,7 +33,6 @@ beforeEach(() => {
     },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -88,13 +87,12 @@ describe('navigation rebuild concurrency', () => {
   it('restarts a version-changed root prefix without failing the concurrent saved lane', async () => {
     localStorage.clear()
     writeLibraryState('S1', 'session-1', {
-      version: 3,
+      version: 4,
       prefixes: { '': 2 },
       library: { type: 'user', id: 0 },
       selection: { kind: 'library' },
       q: '',
       filters: {},
-      mode: 'metadata',
       sort: 'title',
       direction: 'asc',
       offset: 0,

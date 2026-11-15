@@ -64,12 +64,11 @@ it('starts all-items only for a new tab and retains the same occurrence across b
   const signal = new AbortController()
   const preferences = { ...LIBRARY_DEFAULTS, reopenBehavior: 'allItems' as const }
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'group', id: 123 },
     selection: { kind: 'library' },
     q: 'old',
-    mode: 'everything',
     sort: 'title',
     direction: 'asc',
     offset: 50,
@@ -84,12 +83,13 @@ it('starts all-items only for a new tab and retains the same occurrence across b
   expect(first.result.current.q).toBe('')
   expect(first.result.current.sort).toBe('dateModified')
   act(() => {
-    first.result.current.setMode('everything')
+    first.result.current.setSort('title', 'asc')
     first.result.current.setFilters({ tags: ['kept'] })
   })
   first.unmount()
   const second = mount()
-  await waitFor(() => expect(second.result.current.mode).toBe('everything'))
+  await waitFor(() => expect(second.result.current.sort).toBe('title'))
+  expect(second.result.current.direction).toBe('asc')
   expect(second.result.current.filters).toEqual({ tags: ['kept'] })
   second.unmount()
   signal.abort()

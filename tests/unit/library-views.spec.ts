@@ -266,20 +266,21 @@ describe('searchRequestOf', () => {
     expect(searchOptionsOf(base)).toEqual({ includeSupplemental: false })
   })
 
-  it('carries library, a non-blank q, the explicit mode, and itemLevel when present', () => {
+  it('carries library, a non-blank q and itemLevel, always in metadata mode', () => {
     expect(
       searchRequestOf({
         ...base,
         library: { type: 'group', id: 3 },
         q: 'flash',
-        mode: 'everything',
         itemLevel: 'all',
       }),
     ).toEqual({
       scope: { kind: 'library' },
       library: { type: 'group', id: 3 },
       query: 'flash',
-      mode: 'everything',
+      // The panel searches titles, creators and years; full text belongs to
+      // the model-facing search tool alone.
+      mode: 'metadata',
       sort: 'title',
       direction: 'asc',
       offset: 0,
@@ -291,7 +292,6 @@ describe('searchRequestOf', () => {
         ...base,
         library: { type: 'group', id: 3 },
         q: 'flash',
-        mode: 'everything',
         itemLevel: 'all',
       }),
     ).toEqual({ includeSupplemental: false })

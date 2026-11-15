@@ -24,12 +24,11 @@ import { deferred } from '../../helpers/sync.ts'
 
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -112,7 +111,7 @@ describe('library state persistence', () => {
     await waitFor(() => expect(readLibraryState('S1', 'session-1')?.sort).toBe('title'))
     expect(writes).toHaveBeenCalledTimes(2)
     expect(readLibraryState('S1', 'session-1')).toMatchObject({
-      version: 3,
+      version: 4,
       sort: 'title',
       direction: 'asc',
       narrowPane: 'inspector',

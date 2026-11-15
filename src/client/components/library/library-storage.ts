@@ -40,11 +40,10 @@ const selection = z.discriminatedUnion('kind', [
 
 export const libraryStoredStateSchema = z
   .object({
-    version: z.literal(3),
+    version: z.literal(4),
     library: zoteroLibrarySchema,
     selection,
     q: z.string(),
-    mode: z.enum(['metadata', 'everything']),
     sort: zoteroLibrarySortSchema,
     direction: z.enum(['asc', 'desc']),
     offset: z.number().int().nonnegative(),
@@ -68,7 +67,7 @@ export const libraryStoredStateSchema = z
 export type LibraryStoredState = z.infer<typeof libraryStoredStateSchema>
 
 export const libraryStorageKey = (serverId: string, sessionId: string) =>
-  `dsh-zotero:library:3:${encodeURIComponent(serverId)}:${encodeURIComponent(sessionId)}`
+  `dsh-zotero:library:4:${encodeURIComponent(serverId)}:${encodeURIComponent(sessionId)}`
 
 /** The selection arms that carry a ref needing a library/instance check. */
 function isRefScope(
@@ -103,35 +102,50 @@ export function readLibraryState(
   serverId: string,
   sessionId: string,
 ): LibraryStoredState | undefined {
+  let raw: string | null
   try {
-    const raw = localStorage.getItem(libraryStorageKey(serverId, sessionId))
-    if (raw === null) return undefined
-    const saved = libraryStoredStateSchema.parse(JSON.parse(raw))
-    const validSelection = isRefScope(saved.selection)
-      ? sameInstanceRef(
-          saved.selection.ref,
-          saved.selection.kind === 'savedSearch' ? 'search' : 'collection',
-          saved,
-          serverId,
-        )
-      : saved.selection.kind !== 'publications' || publicationsAllowed(saved.library)
-    const validSelectedRef =
-      saved.selectedRef !== undefined && sameInstanceRef(saved.selectedRef, 'item', saved, serverId)
-        ? saved.selectedRef
-        : undefined
-    if (
-      !validSelection ||
-      (saved.selectedRef !== undefined && !validSelectedRef) ||
-      saved.expanded.some((ref) => !sameInstanceRef(ref, 'collection', saved, serverId))
-    ) {
-      throw new Error(
-        'Stored browsing position contains a reference outside its Zotero instance or library. Reset this conversation’s browsing position to continue.',
-      )
-    }
-    return saved
+    raw = localStorage.getItem(libraryStorageKey(serverId, sessionId))
   } catch (error) {
+    // The store itself is unavailable (quota, privacy mode): surface it.
     throw new Error(messageOf(error))
   }
+  if (raw === null) return undefined
+  // A record the parser or schema refuses is a leftover from an older client
+  // or damaged bytes. The position is a convenience, so it is dropped quietly
+  // and the next persist overwrites the key — a banner for it would block the
+  // panel on data this client can never use. Only the cross-instance conflict
+  // below is a real state conflict worth a visible notice.
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return undefined
+  }
+  const result = libraryStoredStateSchema.safeParse(parsed)
+  if (!result.success) return undefined
+  const saved = result.data
+  const validSelection = isRefScope(saved.selection)
+    ? sameInstanceRef(
+        saved.selection.ref,
+        saved.selection.kind === 'savedSearch' ? 'search' : 'collection',
+        saved,
+        serverId,
+      )
+    : saved.selection.kind !== 'publications' || publicationsAllowed(saved.library)
+  const validSelectedRef =
+    saved.selectedRef !== undefined && sameInstanceRef(saved.selectedRef, 'item', saved, serverId)
+      ? saved.selectedRef
+      : undefined
+  if (
+    !validSelection ||
+    (saved.selectedRef !== undefined && !validSelectedRef) ||
+    saved.expanded.some((ref) => !sameInstanceRef(ref, 'collection', saved, serverId))
+  ) {
+    throw new Error(
+      'Stored browsing position contains a reference outside its Zotero instance or library. Reset this conversation’s browsing position to continue.',
+    )
+  }
+  return saved
 }
 
 export function writeLibraryState(
@@ -155,7 +169,8 @@ export function clearLibraryState(serverId: string, sessionId: string): void {
 export function clearLibraryConversationState(sessionId: string): void {
   const suffix = `:${encodeURIComponent(sessionId)}`
   const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
-  for (const key of keys)
-    if (key?.startsWith('dsh-zotero:library:3:') && key.endsWith(suffix))
-      localStorage.removeItem(key)
+  for (const key of keys) {
+    if (key === null || !key.startsWith('dsh-zotero:library:') || !key.endsWith(suffix)) continue
+    localStorage.removeItem(key)
+  }
 }

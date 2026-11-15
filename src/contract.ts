@@ -997,8 +997,6 @@ export interface ZoteroLibrarySearchRequestView {
   /** Library for library/trash scopes and name resolution; omitted defaults to user/0. */
   readonly library?: SupportedLocalLibrary
   readonly q?: string
-  /** Search mode; omitted defaults to `metadata` on the host side. */
-  readonly mode?: 'metadata' | 'everything'
   readonly sort: ZoteroLibrarySortField
   readonly direction: 'asc' | 'desc'
   readonly offset: number

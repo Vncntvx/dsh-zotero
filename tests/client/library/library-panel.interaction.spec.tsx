@@ -192,13 +192,17 @@ describe('the toolbar rewinds to the first page on change', () => {
         expect.anything(),
       )
     })
-    // A mode toggle rewinds to page zero rather than reloading page two.
+    // A sort change rewinds to page zero rather than reloading page two.
     act(() => {
-      screen.getByRole('tab', { name: zh.librarySearchModeEverything }).click()
+      screen.getByLabelText(zh.librarySortLabel).click()
+    })
+    const ascendingTitle = await screen.findByText(`${zh.librarySortTitle} · ${zh.librarySortAsc}`)
+    act(() => {
+      ascendingTitle.click()
     })
     await waitFor(() => {
       expect(face.search).toHaveBeenLastCalledWith(
-        expect.objectContaining({ offset: 0, mode: 'everything' }),
+        expect.objectContaining({ offset: 0, sort: 'title', direction: 'asc' }),
         expect.anything(),
       )
     })
@@ -221,6 +225,9 @@ describe('the toolbar rewinds to the first page on change', () => {
         expect.anything(),
       )
     })
+    // The narrow-panel form words the same choice, so the control still reads
+    // as sorting instead of collapsing to a bare glyph.
+    expect(screen.getByText(`${zh.librarySortShortTitle} ↑`)).toBeDefined()
   })
 
   it('only presents declared sort and library options', async () => {
@@ -438,9 +445,9 @@ describe('a rejecting wire face surfaces its lane error, then recovers', () => {
       }),
     })
     expect(await screen.findByText('search blew up')).toBeTruthy()
-    // The paginator hides on error, so recovery goes through a toolbar change.
+    // Recovery goes through a refresh, which re-issues the same page.
     act(() => {
-      screen.getByRole('tab', { name: zh.librarySearchModeEverything }).click()
+      screen.getByRole('button', { name: zh.refresh }).click()
     })
     expect(await screen.findByText('FlashAttention-2')).toBeTruthy()
   })

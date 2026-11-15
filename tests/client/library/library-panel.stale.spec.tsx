@@ -48,9 +48,9 @@ describe('a stale answer never overwrites a newer one', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    // A second toolbar change answers while the first page is still out.
+    // A second request answers while the first page is still out.
     act(() => {
-      screen.getByRole('tab', { name: zh.librarySearchModeEverything }).click()
+      screen.getByRole('button', { name: zh.refresh }).click()
     })
     await screen.findByText('FlashAttention-2')
     expect(screen.getByText('第 1–2 条，共 77 条')).toBeTruthy()

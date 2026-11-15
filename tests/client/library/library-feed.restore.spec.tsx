@@ -19,12 +19,11 @@ const SELECTED = 'zotero://user/0/item/ITEM0001?server=S1'
 /** The durable record with everything at its default but the view pins. */
 function stored(overrides: Partial<LibraryStoredState> = {}): LibraryStoredState {
   return {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'library' },
     q: '',
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -120,16 +119,11 @@ describe('restored view pins', () => {
 
 describe('library switch', () => {
   it('keeps the reading preferences the reader chose', async () => {
-    writeLibraryState(
-      'S1',
-      'session-1',
-      stored({ mode: 'everything', sort: 'title', direction: 'asc' }),
-    )
+    writeLibraryState('S1', 'session-1', stored({ sort: 'title', direction: 'asc' }))
     const { result } = setup()
-    await waitFor(() => expect(result.current.mode).toBe('everything'))
+    await waitFor(() => expect(result.current.sort).toBe('title'))
     act(() => result.current.selectLibrary({ type: 'group', id: 123 }))
     expect(result.current.currentLibrary).toEqual({ type: 'group', id: 123 })
-    expect(result.current.mode).toBe('everything')
     expect(result.current.sort).toBe('title')
     expect(result.current.direction).toBe('asc')
   })

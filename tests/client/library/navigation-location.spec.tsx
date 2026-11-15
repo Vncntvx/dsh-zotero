@@ -36,13 +36,12 @@ function store(
   },
 ) {
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection,
     q: 'retained',
     filters: { tags: ['read'] },
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -154,13 +153,12 @@ it('rejects an old filter editor callback after switching scope', async () => {
 it('finds a saved search on a later page and refreshes its current name', async () => {
   const searchRef = 'zotero://user/0/search/SEARCH02'
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: searchRef, name: 'Old' },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -197,13 +195,12 @@ it('finds a saved search on a later page and refreshes its current name', async 
 it('does not reread the list when a saved search already carries its served name', async () => {
   const searchRef = 'zotero://user/0/search/SEARCH01'
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: searchRef, name: 'Unread' },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -216,13 +213,12 @@ it('does not reread the list when a saved search already carries its served name
 })
 it('reports a removed saved search after exhausting its listing', async () => {
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/MISSING1', name: 'Missing' },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -275,13 +271,12 @@ it('shows a navigation failure before attempting a restored path', async () => {
 })
 it('shows a saved-search listing failure during restored location', async () => {
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref: 'zotero://user/0/search/SEARCH01', name: 'Unread' },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
@@ -300,13 +295,12 @@ it('shows a saved-search listing failure during restored location', async () => 
 it('walks more than two saved-search pages to reveal the restored search', async () => {
   const ref = 'zotero://user/0/search/SEARCH03'
   writeLibraryState('S1', 'session-1', {
-    version: 3,
+    version: 4,
     prefixes: {},
     library: { type: 'user', id: 0 },
     selection: { kind: 'savedSearch', ref, name: 'Third' },
     q: '',
     filters: {},
-    mode: 'metadata',
     sort: 'title',
     direction: 'asc',
     offset: 0,
