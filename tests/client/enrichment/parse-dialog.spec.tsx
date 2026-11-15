@@ -315,6 +315,7 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
             artifactId: 'artifact-9',
             fingerprint: 'sha256-9',
             characterCount: 12,
+            documentPath: '/root/artifact-9/full.md',
           },
         }),
       },

@@ -7,7 +7,7 @@ import {
   ParsedDocumentTab,
   ParsedDocumentTitle,
 } from '../../../src/client/components/library/ParsedDocumentTab.tsx'
-import { documentRead, parsedRuntime, composer } from './support/parsed-document.tsx'
+import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
@@ -83,6 +83,22 @@ it('cites item metadata and its reference in an explanation', async () => {
   expect(item).toHaveBeenCalledWith({ ref: ITEM_DETAIL.ref, include: [] }, expect.any(AbortSignal))
   expect(actions.insertQuote.mock.calls[0]![0]).toContain(ITEM_DETAIL.ref)
   expect(actions.insertQuote.mock.calls[0]![0]).toContain('DOI: 10.0/example')
+})
+
+it('points the model at the parsed Markdown file and requires reading it first', async () => {
+  const actions = composer()
+  await fixture({ actions })
+  select()
+  fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
+  await tick()
+  const draft = actions.insertQuote.mock.calls[0]![0] as string
+  // The locator is the artifact's own file; the instruction asks for the whole
+  // paper, no placeholder survives interpolation, and the excerpt closes the
+  // single card.
+  expect(draft).toContain(METADATA.documentPath)
+  expect(draft).not.toContain('{path}')
+  expect(draft).toContain(mockT('parsedExplainPrompt').split('\n')[0])
+  expect(draft.endsWith('\n\nPassage')).toBe(true)
 })
 
 it.each(['remote', 'throw', 'plain'] as const)(

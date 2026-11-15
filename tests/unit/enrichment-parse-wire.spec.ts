@@ -69,6 +69,7 @@ const READY_ARTIFACT = {
   artifactId: RECEIPT.artifactId,
   fingerprint: RECEIPT.fingerprint,
   characterCount: RECEIPT.characterCount,
+  documentPath: `/root/${RECEIPT.artifactId}/full.md`,
 } as const
 const START_RESULT = {
   operationId: OPERATION_ID,

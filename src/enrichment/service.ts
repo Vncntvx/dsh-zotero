@@ -742,6 +742,7 @@ export class EnrichmentService extends TypertRemoteService {
         fingerprint: meta.contentFingerprint,
         characterCount: meta.characterCount,
         images: meta.images ?? [],
+        documentPath: store.documentPath(record.cacheKey),
         ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
       },
       markdownBytes: meta.markdownBytes,

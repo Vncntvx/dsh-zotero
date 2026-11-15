@@ -92,8 +92,9 @@ export const en = {
   parsedPreparing:
     'Preparing document: {pages}/{totalPages} text blocks · {images}/{totalImages} figures',
   parsedExplain: 'Explain',
+  // Model-facing copy stays English in every dictionary.
   parsedExplainPrompt:
-    'Explain this passage in the context of the whole paper, and say what it does for its argument.',
+    'Read this paper’s parsed Markdown in full before answering.\n\nParsed Markdown: {path}\n\nThen explain the quoted passage below: what it means in the paper, and what it does for the argument.',
   parsedCopySelection: 'Copy selection',
   parsedSelectionMenu: 'Actions for the selection',
   parsedUnavailable: 'This parsed result is unavailable. Parse the PDF again.',
@@ -1025,7 +1026,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   parsedErrorIncomplete: '解析文档不完整，请重新读取。',
   parsedPreparing: '正在准备文档：正文 {pages}/{totalPages} 块 · 图片 {images}/{totalImages} 张',
   parsedExplain: '让模型解释',
-  parsedExplainPrompt: '请结合整篇论文解释下面这段内容，并说明它在论文论证中的作用。',
+  // 模型侧文案在每个字典里保持英文。
+  parsedExplainPrompt:
+    'Read this paper’s parsed Markdown in full before answering.\n\nParsed Markdown: {path}\n\nThen explain the quoted passage below: what it means in the paper, and what it does for the argument.',
   parsedCopySelection: '复制选中内容',
   parsedSelectionMenu: '选中内容的操作',
   parsedUnavailable: '解析结果不可用，请重新解析这个 PDF。',

@@ -76,6 +76,16 @@
 - **验证**：`npm publish --dry-run` 全程通过，日志里同时出现 `archive-worker pack smoke ok` 与 `verify-pack ok`；单独 `npm run release:check` 仍通过。
 - **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「冒烟必须拿到真实 tarball」的断言。
 
+## DN-6：选段解释草稿携带产物 Markdown 的宿主路径
+
+- **类型**：安全边界 / 其他开发约束。
+- **状态**：生效中（2026-11-15）。
+- **位置**：`artifact-store.ts` 的 `documentPath`、`artifact-metadata.ts` 的 `storedMetadata`、`service.ts` 的 display candidate、`contract.ts` 的 `ZoteroArtifactMetadataView.documentPath`、`ParsedDocumentTab.tsx` 的 `explain` 与 `parsedExplainPrompt`。
+- **要点**：解析结果页选中一段文本点「让模型解释」时，整段请求作为**一张** `insertQuote` 卡片插入输入框：开头是指令（给出该产物 Markdown 的**绝对路径** `<outputDir>/<cacheKey>/full.md`，并要求模型先通读该文件再解释），随后是文献元数据与条目 ref，最后是被解释的选段。宿主把 quote 定义为「被引用的原文」，严格说指令不该出现在 quote 里；本插件把两者放进同一张卡片，是为了让输入框只出现一个可整体删除的块——拆成 `insertText` + `insertQuote` 会在气泡上方留下散落的纯文本（实测过的回退）。路径是唯一能读到整篇论文的定位：`zotero_retrieve` 只返回排序片段，URL 来源的产物也没有条目 ref。文案固定英文（模型侧文案，两个字典同值），不随界面语言切换。路径经 wire 到客户端是刻意的（草稿由浏览器拼装），但界面不渲染它；除该字段外，产物路径仍不出现在任何回执或显示文本里。
+- **触发条件**：产物目录改为远端或沙箱不可读、`documentPath` 从 metadata 视图移除、宿主 `InputActions` 的 `insertText`/`insertQuote` 语义变化，或宿主提供「指令卡片」类容器时，重新验证模型确实读到整篇 Markdown、且输入框仍只有一个可删除块。
+- **验证**：`tests/host/enrichment-artifact-metadata.spec.ts` 断言路径拼装；`tests/client/library/parsed-document-details.spec.tsx` 与 `parsed-document-selection.spec.tsx` 断言 `insertQuote` 收到含路径与选段的整段（无残留 `{path}`）、未调用 `insertText`，并覆盖插入被拒的失败路径。
+- **后续处理**：若能给模型一个按 artifactId 读产物的工具（或让读工具接受 artifactId），把草稿改为该定位并删除 `documentPath` 字段，浏览器不再接触宿主路径。
+
 ## DN-7：语义排序运行时打进包内，不做依赖
 
 - **类型**：兼容性 / 安装策略。

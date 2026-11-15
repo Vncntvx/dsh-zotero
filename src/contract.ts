@@ -606,6 +606,8 @@ export interface ZoteroArtifactMetadataView {
   readonly characterCount: number
   readonly pageCount?: number
   readonly images: readonly ZoteroArtifactImageView[]
+  /** Absolute path of this artifact's Markdown, the file a reader re-reads. */
+  readonly documentPath: string
   /** The Markdown H1 captured at commit time, present for newer artifacts. */
   readonly title?: string
 }

@@ -76,6 +76,16 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Verification**: `npm publish --dry-run` completes, and its log carries both `archive-worker pack smoke ok` and `verify-pack ok`; a standalone `npm run release:check` still passes.
 - **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup but keep the assertion that the smoke needs a real tarball.
 
+## DN-6: The explain draft carries the artifact's Markdown path
+
+- **Type**: security boundary / other development constraint.
+- **Status**: active (2026-11-15).
+- **Location**: `documentPath` in `artifact-store.ts`, `storedMetadata` in `artifact-metadata.ts`, the display candidate in `service.ts`, `ZoteroArtifactMetadataView.documentPath` in `contract.ts`, and `explain` / `parsedExplainPrompt` in `ParsedDocumentTab.tsx`.
+- **Behavior**: selecting a passage in the parsed result and choosing “Explain” inserts the whole request as **one** `insertQuote` card: it opens with the instruction — naming the artifact's **absolute Markdown path** (`<outputDir>/<cacheKey>/full.md`) and requiring a full read before answering — then the item metadata and ref, and closes with the passage under discussion. The Host defines a quote as quoted source, so strictly the instruction does not belong inside one; this plugin keeps both in a single card so the composer holds one removable block — splitting into `insertText` + `insertQuote` leaves loose plain text above the bubble (a change that was tried and reverted). The path is the only locator that reaches the whole paper: `zotero_retrieve` returns ranked passages only, and URL-sourced artifacts have no item ref. The copy is fixed English (model-facing copy, identical in both dictionaries) and does not follow the UI language. The path crosses the wire because the browser composes the draft, but no surface renders it; apart from this field, artifact paths stay out of receipts and display text.
+- **Review trigger**: revisit when artifacts move to a remote or sandboxed store, when `documentPath` leaves the metadata view, when the Host's `insertText` / `insertQuote` semantics change, or when the Host offers an instruction-card container. Verify then that the model still reaches the whole Markdown and the composer still holds one removable block.
+- **Verification**: `tests/host/enrichment-artifact-metadata.spec.ts` asserts the path assembly; `tests/client/library/parsed-document-details.spec.tsx` and `parsed-document-selection.spec.tsx` assert `insertQuote` receives the whole request (path included, no leftover `{path}`), that `insertText` is not used, and that a refused insertion reports the failure.
+- **Follow-up**: if the model gains a tool that reads an artifact by id (or an existing reader accepts an artifactId), switch the draft to that locator and drop `documentPath`, so the browser never sees a host path.
+
 ## DN-7: The semantic-ranking runtime ships inside the package, never as a dependency
 
 - **Type**: Compatibility / install policy.

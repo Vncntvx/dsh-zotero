@@ -38,6 +38,7 @@ export const METADATA = {
   characterCount: 0,
   images: [],
   pageCount: 18,
+  documentPath: `/tmp/zotero-parsed/${'b'.repeat(64)}/full.md`,
 }
 
 export function documentRead(
@@ -120,11 +121,13 @@ export function composer() {
   return {
     insertQuote: vi.fn(() => true),
     persistDraft: vi.fn(),
-    captureInsertion: vi.fn(),
-    insertText: vi.fn(),
+    /** A collapsed insertion point at the document start. */
+    captureInsertion: vi.fn(() => ({ start: 0, end: 0, draftRev: 0 })),
+    insertText: vi.fn(() => true),
     setDraft: vi.fn(),
   } as unknown as InputActions & {
     insertQuote: ReturnType<typeof vi.fn>
+    insertText: ReturnType<typeof vi.fn>
     persistDraft: ReturnType<typeof vi.fn>
   }
 }

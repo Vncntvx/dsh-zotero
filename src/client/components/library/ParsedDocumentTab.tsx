@@ -462,18 +462,23 @@ function ParsedDocumentView(
         setInsertError(result.error.message)
         return
       }
-      const instruction = [
-        t('parsedExplainPrompt'),
-        selection.text,
+      const draft = [
+        // Give the model the parsed Markdown path so it can read the full paper.
+        t('parsedExplainPrompt', { path: document!.metadata.documentPath }),
         result?.ok ? itemInfoTextOf(result.value) : displayTitle,
         target.item ?? '',
+        // Keep the excerpt at the end, after the instruction and metadata.
+        selection.text,
       ]
         .filter(Boolean)
         .join('\n\n')
-      if (inputActions.insertQuote(instruction)) {
-        inputActions.persistDraft()
-        setInsertError(undefined)
-      } else setInsertError(t('libraryInsertFailed'))
+      // Keep the request in the Host's single removable quote card.
+      if (!inputActions.insertQuote(draft)) {
+        setInsertError(t('libraryInsertFailed'))
+        return
+      }
+      inputActions.persistDraft()
+      setInsertError(undefined)
     } catch (error) {
       if (!signal.aborted) setInsertError(error instanceof Error ? error.message : String(error))
     }
