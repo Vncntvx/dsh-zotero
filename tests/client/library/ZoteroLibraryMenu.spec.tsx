@@ -4,7 +4,7 @@
  * @module tests/client/library/ZoteroLibraryMenu
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroLibraryMenu } from '../../../src/client/components/library/ZoteroLibraryMenu.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
@@ -74,5 +74,58 @@ describe('ZoteroLibraryMenu', () => {
     fireEvent.click(openBtn)
     expect(handleDismiss).toHaveBeenCalledTimes(1)
     expect(openProtocol).toHaveBeenCalledWith('zotero://select/')
+  })
+
+  it('clears the stored position for this session and dismisses the menu', async () => {
+    const handleClear = vi.fn(async () => {})
+    const handleDismiss = vi.fn()
+    render(
+      <ZoteroLibraryMenu
+        tab={{ kind: 'zotero-library', id: 'tab-1' }}
+        sessionId="session-1"
+        t={t}
+        onClear={handleClear}
+        dismiss={handleDismiss}
+        useZoteroClient={useZoteroClient}
+      />,
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: mockT('libraryClearPosition') }))
+    await waitFor(() => expect(handleDismiss).toHaveBeenCalledTimes(1))
+    expect(handleClear).toHaveBeenCalledWith('session-1', 'tab-1')
+  })
+
+  it('leaves a tab without a session alone when clear is chosen', async () => {
+    const handleClear = vi.fn(async () => {})
+    const handleDismiss = vi.fn()
+    render(
+      <ZoteroLibraryMenu
+        tab={{ kind: 'zotero-library', id: 'tab-1' }}
+        t={t}
+        onClear={handleClear}
+        dismiss={handleDismiss}
+        useZoteroClient={useZoteroClient}
+      />,
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: mockT('libraryClearPosition') }))
+    await Promise.resolve()
+    expect(handleClear).not.toHaveBeenCalled()
+    expect(handleDismiss).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('reports a clear rejection that is not an Error by its string form', async () => {
+    const handleClear = vi.fn(() => Promise.reject('storage unavailable'))
+    render(
+      <ZoteroLibraryMenu
+        tab={{ kind: 'zotero-library', id: 'tab-1' }}
+        sessionId="session-1"
+        t={t}
+        onClear={handleClear}
+        dismiss={vi.fn()}
+        useZoteroClient={useZoteroClient}
+      />,
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: mockT('libraryClearPosition') }))
+    expect((await screen.findByRole('alert')).textContent).toContain('storage unavailable')
   })
 })

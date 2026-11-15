@@ -252,4 +252,119 @@ describe('embedderOf', () => {
     const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
     await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/shorter than its declared shape/)
   })
+
+  it('accepts pooled encoders and drives the pooled output name', async () => {
+    const port: SessionPort = {
+      inputNames: ['input_ids', 'attention_mask'],
+      outputNames: ['sentence_embedding'],
+      async run() {
+        return {
+          sentence_embedding: { dims: [1, 2], data: new Float32Array([3, 4]) },
+        }
+      },
+      release: async () => {},
+    }
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    const vectors = await embedder.embed(['a'], 'query')
+    expect(vectors).toHaveLength(1)
+    expect(vectors[0]![0]).toBeCloseTo(0.6, 6)
+    expect(vectors[0]![1]).toBeCloseTo(0.8, 6)
+  })
+
+  it('skips optional feed tensors the session does not declare', async () => {
+    const output: SessionTensor = { dims: [1, 1, 2], data: new Float32Array([3, 4]) }
+    // Only input_ids is declared: no attention mask, no token types, no positions.
+    const { port, feedsSeen } = portOf([output], { inputs: ['input_ids'] })
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await embedder.embed(['a'], 'query')
+    const feeds = feedsSeen[0]!
+    expect(feeds.input_ids).toBeDefined()
+    expect(feeds.attention_mask).toBeUndefined()
+    expect(feeds.token_type_ids).toBeUndefined()
+    expect(feeds.position_ids).toBeUndefined()
+  })
+
+  it('leaves hidden-state vectors unnormalized when the catalog says so', async () => {
+    const specNoNormalize = { ...spec, normalize: false }
+    const output: SessionTensor = { dims: [1, 1, 2], data: new Float32Array([3, 4]) }
+    const { port } = portOf([output])
+    const tokenizerAdapter = embeddingTokenizerOf(
+      tokenizer,
+      { pad_token: '<|endoftext|>' },
+      specNoNormalize,
+    )
+    const embedder = embedderOf(specNoNormalize, tokenizerAdapter, port, int64Tensor)
+    const vectors = await embedder.embed(['a'], 'query')
+    expect(vectors[0]![0]).toBe(3)
+    expect(vectors[0]![1]).toBe(4)
+  })
+
+  it('rejects a hidden output whose rank is not 3', async () => {
+    const { port } = portOf([{ dims: [2], data: new Float32Array([1, 2]) }])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/rank 1; expected 3/)
+  })
+
+  it('rejects a hidden output whose width disagrees with the catalog', async () => {
+    const { port } = portOf([{ dims: [1, 1, 4], data: new Float32Array(4) }])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(
+      /hidden width 4 does not match catalog dimension 2/,
+    )
+  })
+
+  it('rejects a hidden output whose rows or sequence disagree with the batch', async () => {
+    const { port } = portOf([{ dims: [1, 2, 2], data: new Float32Array(4) }])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    // seq 2 against a 1-token batch.
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(/for a batch of 1 × 1/)
+  })
+
+  it('rejects a pooled output whose dims disagree with the batch and catalog', async () => {
+    const port: SessionPort = {
+      inputNames: ['input_ids'],
+      outputNames: ['sentence_embedding'],
+      async run() {
+        return { sentence_embedding: { dims: [2, 2], data: new Float32Array(8) } }
+      },
+      release: async () => {},
+    }
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(
+      /encoder returned dims \[2, 2\]; expected \[1, 2\]/,
+    )
+  })
+
+  it('refuses to answer when the encoder dropped its declared output', async () => {
+    const port: SessionPort = {
+      inputNames: ['input_ids'],
+      outputNames: ['sentence_embedding'],
+      async run() {
+        return {}
+      },
+      release: async () => {},
+    }
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(
+      /encoder produced no sentence_embedding output/,
+    )
+  })
+
+  it('rejects a non-float32 encoder output', async () => {
+    const { port } = portOf([
+      { dims: [1, 1, 2], data: new BigInt64Array([1n, 2n]) as unknown as Float32Array },
+    ])
+    const tokenizerAdapter = embeddingTokenizerOf(tokenizer, { pad_token: '<|endoftext|>' }, spec)
+    const embedder = embedderOf(spec, tokenizerAdapter, port, int64Tensor)
+    await expect(embedder.embed(['a'], 'query')).rejects.toThrow(
+      /encoder output is not a float32 tensor/,
+    )
+  })
 })

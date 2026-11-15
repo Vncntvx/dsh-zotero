@@ -5,7 +5,7 @@ import { expandRequestTarget, resolveArtifactTarget } from '../../src/enrichment
 import { memoryFiles } from './support/enrichment-parse-domain.ts'
 import { ARTIFACT, CACHE_KEY, SOURCE_RECORD } from './support/enrichment-artifacts.ts'
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
-import { attachmentRef } from '../helpers/server/keys.ts'
+import { attachmentRef, itemRef } from '../helpers/server/keys.ts'
 import { artifactIdOf, type ArtifactId } from '../../src/contract.ts'
 
 const URL = 'https://papers.example.org/a.pdf?token=secret'
@@ -65,6 +65,23 @@ describe('artifact target expansion', () => {
         code: 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND',
       },
     )
+  })
+
+  it('rejects a zotero identity that no longer names an attachment', async () => {
+    // The store's meta schema refuses a non-attachment zotero identity at
+    // commit time, so the resolver's own guard only fires for a value that
+    // bypassed it (a cast, a replayed wire frame); a read-only stub supplies
+    // that shape.
+    const store = {
+      metaFor: async () => ({
+        meta: { ...ARTIFACT.meta, identity: itemRef() },
+        committedAt: 0,
+      }),
+      snapshot: async () => ({ sources: {} }),
+    } as unknown as ParsedArtifactStore
+    await expect(resolveArtifactTarget(CACHE_KEY, store)).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND',
+    })
   })
 
   it('rejects a URL artifact with no recoverable source', async () => {

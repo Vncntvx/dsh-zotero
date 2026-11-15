@@ -48,6 +48,18 @@ describe('loadSemanticRuntime', () => {
     expect(runtime.env.logLevel).toBe('error')
   })
 
+  it('keeps one separator when the directory already ends with one', async () => {
+    await withTempDir(async (dir) => {
+      for (const file of SEMANTIC_RUNTIME_FILES) await writeFile(join(dir, file), '', 'utf8')
+      const withSeparator = `${dir}${sep}`
+      const runtime = (await loadSemanticRuntime(
+        withSeparator,
+        async () => fakeRuntime() as never,
+      )) as never as { env: { wasm: { wasmPaths: string } } }
+      expect(runtime.env.wasm.wasmPaths).toBe(withSeparator)
+    })
+  })
+
   it('fails closed naming every file a broken package lost', async () => {
     await withTempDir(async (dir) => {
       await writeFile(join(dir, 'ort.node.min.mjs'), '', 'utf8')

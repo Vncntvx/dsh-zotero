@@ -384,7 +384,13 @@ export async function downloadPinnedFile(
         let writeFailure: unknown
         const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
         try {
-          await pipeline(body, counting, await fs.openExclusive(tmp))
+          // The attempt's own signal owns the teardown: without it, a body that
+          // goes silent (the exact case the stall watchdog exists for) leaves
+          // the pipeline waiting on a socket nothing will end — the watchdog's
+          // abort fired, but nothing told the stream. The fused attempt signal
+          // carries both the stall abort and the whole-file deadline into the
+          // transfer itself.
+          await pipeline(body, counting, await fs.openExclusive(tmp), { signal: attempt })
         } catch (error) {
           writeFailure = error
         }

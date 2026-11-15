@@ -324,6 +324,30 @@ describe('projectGetMeta', () => {
     expect(meta.annotationsPreview[1]!.pageLabel).toBeUndefined()
   })
 
+  it("keeps a child page's paging facts so a partial slice never reads as complete", () => {
+    const meta = projectGetMeta(
+      getDetail({
+        notes: {
+          completeness: 'page',
+          total: 120,
+          returned: 50,
+          offset: 50,
+          limit: 50,
+          nextOffset: 100,
+          items: [],
+        },
+      }),
+    )
+    expect(meta.notes).toEqual({
+      completeness: 'page',
+      total: 120,
+      returned: 50,
+      offset: 50,
+      limit: 50,
+      nextOffset: 100,
+    })
+  })
+
   it('omits child facts the call did not request', () => {
     const meta = projectGetMeta(
       getDetail({

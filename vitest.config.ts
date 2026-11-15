@@ -86,11 +86,15 @@ export default defineConfig({
         // The library component had no floor of its own, so the layers around
         // it answered for it while its reading-file store sat near two thirds
         // statement coverage. The behaviour specs for the abandoned-directory
-        // reap, the open-file cap and the disposal race were added first; this
-        // floor is set just under what they measure — 97.56 / 100 / 100 /
-        // 97.47. Branches and functions sit at 100 in that measurement, so
-        // those two floors are 99: a floor never sits on its own measurement.
-        'src/library/**': { statements: 97.4, branches: 99, functions: 99, lines: 97.4 },
+        // reap, the open-file cap and the disposal race were added first.
+        //
+        // Measured after them: 96.88 / 89.58 / 100 / 98.51. The first attempt
+        // at this floor read a hand-computed 97.56 / 100 / 100 / 97.47 and
+        // failed its own gate; the branch figure there counted branch
+        // locations with any arm hit instead of arms, and the statement figure
+        // came from a run before the suite settled. The numbers above are the
+        // coverage report's own.
+        'src/library/**': { statements: 96.6, branches: 89, functions: 99, lines: 98 },
         // Component layer ratchets include both SourcesTab and the global Library components.
         // The parsed-document manager surface (lease-free tab title, batched
         // badge probes, manager actions) added branch-heavy client code whose

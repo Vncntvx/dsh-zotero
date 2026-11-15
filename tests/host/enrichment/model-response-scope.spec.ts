@@ -12,7 +12,12 @@ import {
   type DownloadClientDeps,
   type FetchLike,
 } from '../../../src/enrichment/model-download-client.ts'
-import { modelClient, modelResponse, tinyModel } from '../../helpers/semantic-model-bundle.ts'
+import {
+  modelBytes,
+  modelClient,
+  modelResponse,
+  tinyModel,
+} from '../../helpers/semantic-model-bundle.ts'
 import { deferred } from '../../helpers/sync.ts'
 import { createModelSandbox } from './support/model-sandbox.ts'
 
@@ -243,4 +248,83 @@ describe('model response consumption scope', () => {
 
     expect(released[0]).toBe(true)
   })
+
+  it('aborts a mirror that stops sending and falls through to the next source', async () => {
+    const dir = await tempRoot()
+    let requests = 0
+    // A real undici agent errors an in-flight body when its dispatcher closes,
+    // and that error is what unwinds the pipeline; the scripted body needs the
+    // same contract, so the close arms the silent body to error.
+    let pending: ((error: unknown) => void) | undefined
+    const fetch: FetchLike = async (url) => {
+      requests += 1
+      if (requests === 1) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          body: new ReadableStream({
+            start(controller) {
+              pending = (error) => controller.error(error)
+            },
+          }),
+        }
+      }
+      return modelResponse(url)
+    }
+    const dispatcher = () => ({
+      dispatcher: {},
+      close: async () => {
+        pending?.(new Error('the connection released under a silent body'))
+      },
+    })
+    const result = await downloadPinnedFile({
+      model: tinyModel,
+      file: tinyModel.files[0]!,
+      dir,
+      sources: ['hf-mirror', 'huggingface'],
+      stallMs: 20,
+      deps: { ...modelClient(fetch), dispatcher },
+    })
+    expect(result.source).toBe('huggingface')
+    expect(requests).toBe(2)
+    expect(await readFile(join(dir, tinyModel.files[0]!.path))).toEqual(modelBytes['config.json'])
+  }, 10_000)
+
+  it('reports the budget deadline as this layer timeout and skips the remaining mirrors', async () => {
+    const dir = await tempRoot()
+    let requests = 0
+    let pending: ((error: unknown) => void) | undefined
+    const fetch: FetchLike = async () => {
+      requests += 1
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: new ReadableStream({
+          start(controller) {
+            pending = (error) => controller.error(error)
+          },
+        }),
+      }
+    }
+    const dispatcher = () => ({
+      dispatcher: {},
+      close: async () => {
+        pending?.(new Error('the connection released under a silent body'))
+      },
+    })
+    await expect(
+      downloadPinnedFile({
+        model: tinyModel,
+        file: tinyModel.files[0]!,
+        dir,
+        sources: ['hf-mirror', 'huggingface'],
+        timeoutMs: 20,
+        deps: { ...modelClient(fetch), dispatcher },
+      }),
+    ).rejects.toMatchObject({ code: 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_TIMEOUT' })
+    // One budget across the whole file: the second mirror is never admitted.
+    expect(requests).toBe(1)
+  }, 10_000)
 })

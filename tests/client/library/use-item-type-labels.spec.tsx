@@ -105,6 +105,17 @@ describe('useItemTypeVocabulary', () => {
     expect(result.current.rows).toEqual([])
   })
 
+  it('drops a rejection that arrives after unmount', async () => {
+    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+    const browse = vi.fn(() => pending.promise)
+    const face = faceOf(browse)
+    const { result, unmount } = renderHook(() => useItemTypeVocabulary(face, mockT, true))
+    unmount()
+    await act(async () => pending.reject(new Error('wire closed')))
+    expect(result.current.rows).toEqual([])
+    expect(result.current.error).toBeUndefined()
+  })
+
   it('makes no request while disabled', () => {
     const browse = vi.fn<LibraryFeedFace['browse']>()
     const face = faceOf(browse)

@@ -518,9 +518,9 @@ describe('the zotero openProtocol endpoint', () => {
         env: { PATH: '/usr/bin', HOLE: undefined, DSH_SECRET: 'internal' },
       }),
     ).toEqual({ success: true })
-    const [, , options] = launcher.mock.calls[0]!
+    const [, args, options] = launcher.mock.calls[0]!
+    expect(args).toEqual([url])
     expect(options.env).toEqual({ PATH: '/usr/bin' })
-    expect(options.env?.DSH_ZOTERO_PROTOCOL_URL).toBe(url)
   })
 
   it('surfaces launcher failure when powershell.exe fails in WSL', async () => {

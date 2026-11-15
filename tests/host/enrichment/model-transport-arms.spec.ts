@@ -8,7 +8,8 @@ import { createHash } from 'node:crypto'
 import { readFile, symlink, writeFile } from 'node:fs/promises'
 
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import {
   hostDownloadFsDeps,
   downloadPinnedFile,
@@ -25,7 +26,30 @@ const sandbox = createModelSandbox('dsh-transport-arms-')
 async function tempRoot(): Promise<string> {
   return await sandbox.root()
 }
+
+/** Proxy variables the harness policy reads, restored after every test. */
+const proxyEnvNames = [
+  'http_proxy',
+  'HTTP_PROXY',
+  'https_proxy',
+  'HTTPS_PROXY',
+  'no_proxy',
+  'NO_PROXY',
+  'all_proxy',
+  'ALL_PROXY',
+  'NODE_USE_ENV_PROXY',
+] as const
+const proxyEnvSnapshot: Record<string, string | undefined> = {}
+const installedDisposers: Array<() => Promise<void>> = []
+
 afterEach(async () => {
+  for (const dispose of installedDisposers.splice(0)) await dispose()
+  for (const name of proxyEnvNames) {
+    const value = proxyEnvSnapshot[name]
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+    delete proxyEnvSnapshot[name]
+  }
   await sandbox.settle()
 })
 
@@ -307,5 +331,58 @@ describe('downloadPinnedFile source and redirect arms', () => {
         sources: [],
       }),
     ).rejects.toThrow(/every mirror failed for config.json/)
+  })
+
+  it('sends a proxied egress through the route dispatcher without pinning addresses', async () => {
+    const root = await tempRoot()
+    const bytes = Buffer.from('alpha')
+    // A proxied route skips the DNS seam entirely: the proxy performs it. The
+    // policy dispatcher is shared and must never be closed by the transfer.
+    const resolver = vi.fn(async () => {
+      throw new Error('a proxied download must not resolve addresses')
+    })
+    const dispatcher = vi.fn(() => {
+      throw new Error('a proxied download must not build a pinned dispatcher')
+    })
+    const fetch: FetchLike = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(handle) {
+          handle.enqueue(new Uint8Array(bytes))
+          handle.close()
+        },
+      }),
+    })
+    for (const name of proxyEnvNames) proxyEnvSnapshot[name] = process.env[name]
+    process.env.HTTPS_PROXY = 'http://127.0.0.1:9/'
+    installedDisposers.push(
+      await installProxyFromEnvironment(
+        {
+          get: (name) =>
+            process.env[name] === undefined ? undefined : { value: process.env[name] },
+        },
+        () => undefined,
+      ),
+    )
+    const result = await downloadPinnedFile({
+      model: spec(),
+      file: {
+        path: 'config.json',
+        bytes: 5,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      },
+      dir: root,
+      sources: ['hf-mirror'],
+      deps: {
+        fetch,
+        resolver: resolver as unknown as DownloadClientDeps['resolver'],
+        dispatcher: dispatcher as unknown as DownloadClientDeps['dispatcher'],
+      },
+    })
+    expect(result.source).toBe('hf-mirror')
+    expect(resolver).not.toHaveBeenCalled()
+    expect(dispatcher).not.toHaveBeenCalled()
   })
 })

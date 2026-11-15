@@ -91,6 +91,39 @@ describe('archive Worker', () => {
     }
   })
 
+  it('reports a worker that throws before any message as a task failure', async () => {
+    const processor = new ArchiveProcessor(
+      undefined,
+      () =>
+        new Worker("throw new Error('worker blew up during boot')", { eval: true, execArgv: [] }),
+    )
+    await expect(processor.extract(archive(), new AbortController().signal)).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_TASK_FAILED',
+      message: expect.stringContaining('worker blew up during boot'),
+    })
+  })
+
+  it('reports an abrupt exit without a message as a task failure', async () => {
+    const processor = new ArchiveProcessor(
+      undefined,
+      () => new Worker('process.exit(3)', { eval: true, execArgv: [] }),
+    )
+    await expect(processor.extract(archive(), new AbortController().signal)).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_TASK_FAILED',
+      message: expect.stringContaining('exited without a result (3)'),
+    })
+  })
+
+  it('refuses an archive past the total size ceiling before spawning a worker', async () => {
+    const processor = new ArchiveProcessor(undefined, () => {
+      throw new Error('no worker may be spawned past the ceiling')
+    })
+    const oversized = { byteLength: 256 * 1024 * 1024 + 1 } as unknown as Uint8Array
+    await expect(processor.extract(oversized, new AbortController().signal)).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_ARCHIVE_INVALID',
+    })
+  })
+
   it('never spawns after prior cancellation and preserves spawn failures', async () => {
     const factory = vi.fn<ArchiveWorkerFactory>(() => {
       throw new Error('spawn refused')

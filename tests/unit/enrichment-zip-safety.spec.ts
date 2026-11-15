@@ -7,7 +7,7 @@
 
 import { zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { extractParsedFiles } from '../../src/enrichment/zip.ts'
+import { extractParsedFiles, ZIP_MAX_ARCHIVE_BYTES } from '../../src/enrichment/zip.ts'
 import { ZOTERO_ENRICHMENT_ARCHIVE_INVALID } from '../../src/errors.ts'
 
 const encoder = new TextEncoder()
@@ -150,6 +150,28 @@ describe('extractParsedFiles', () => {
     huge.set(encoder.encode('# big'))
     expect(() => extractParsedFiles(zipSync({ 'full.md': huge }, { level: 0 }))).toThrow(
       /unsafe|excessive/,
+    )
+  })
+
+  it('skips a directory entry instead of reading it as a wanted file', () => {
+    const archive = zipSync({
+      'result/': new Uint8Array(0),
+      'result/full.md': encoder.encode('# Nested body'),
+    })
+    expect(extractParsedFiles(archive)).toEqual({ markdown: '# Nested body', images: [] })
+  })
+
+  it('refuses an archive over the total size ceiling before reading a byte', () => {
+    // The ceiling is the first thing read, so the length alone decides it; the
+    // 256 MiB it names would only slow the suite down if it were allocated.
+    const oversized = { byteLength: ZIP_MAX_ARCHIVE_BYTES + 1 } as unknown as Uint8Array
+    expect(() => extractParsedFiles(oversized)).toThrow(/size ceiling/)
+  })
+
+  it('refuses a document that references more figures than the ceiling', () => {
+    const references = Array.from({ length: 513 }, (_, i) => `![](images/page_${i}.png)`)
+    expect(() => extractParsedFiles(archiveOf({ 'full.md': references.join('\n\n') }))).toThrow(
+      /excessive figures/,
     )
   })
 
