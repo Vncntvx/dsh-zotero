@@ -28,11 +28,15 @@ import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-me
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { assertIntInRange, assertNonEmptyList, REF_ARG_HINT } from './validate.js'
+import { trySpillToolOutput } from '../spill.js'
+import type { FulltextSpillSink } from '../local/retrieve-fulltext.js'
 import type { ZoteroService } from '../service.js'
 import type {
+  ZoteroCoverage,
   ZoteroEvidenceField,
   ZoteroEvidenceSource,
   ZoteroObjectRef,
+  ZoteroRetrieveAttachment,
   ZoteroRetrieveRequest,
 } from '../types.js'
 import type { EvidenceMatchKind } from '../evidence-item.js'
@@ -41,44 +45,74 @@ const ALL_SOURCES: ZoteroEvidenceSource[] = ['annotation', 'note', 'abstract', '
 
 const DEFAULT_PASSAGES = 4
 
+/** What one spill save reports back to the read; undefined when no store exists. */
+type FulltextSpillSinkResult = Awaited<ReturnType<FulltextSpillSink>>
+
 const RETRIEVE_PARAMETERS = {
+  mode: {
+    type: 'string',
+    enum: ['evidence', 'fulltext'],
+    required: true,
+    description:
+      'evidence: rank passages against query. fulltext: read one complete document in paged windows.',
+  },
   ref: {
     type: 'string',
-    required: true,
-    description: `A ${REF_ARG_HINT} ref from zotero_search or zotero_get.`,
+    description: `Evidence mode: a ${REF_ARG_HINT} item ref from zotero_search or zotero_get.`,
   },
   query: {
     type: 'string',
-    required: true,
-    description: 'Terms the evidence passages are ranked against.',
+    description: 'Evidence mode: ranking terms.',
   },
   queryVariants: {
     type: 'array',
     items: { type: 'string' },
-    description: `Extra phrasings of the same question (synonyms, field terminology), at most ${ZOTERO_MAX_QUERY_VARIANTS}; each is a separate scoring pass, and the best score per passage wins.`,
+    description: `Evidence mode: extra phrasings (at most ${ZOTERO_MAX_QUERY_VARIANTS}); best score per passage wins.`,
   },
   sources: {
     type: 'array',
     items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
     default: ALL_SOURCES,
-    description: 'Sources to gather (default all); unavailable sources appear in sourcesSkipped.',
+    description: 'Evidence mode: sources to gather; unavailable ones appear in sourcesSkipped.',
   },
   passages: {
     type: 'integer',
     default: DEFAULT_PASSAGES,
-    description: 'Passage cap, bounded by maxEvidencePassages.',
+    description: 'Evidence mode: passage cap (maxEvidencePassages).',
   },
   attachmentPolicy: {
     type: 'string',
     enum: ['best', 'allIndexed', 'specified'],
     default: 'best',
-    description: 'Full-text source: best (default), allIndexed PDFs, or specified attachmentRefs.',
+    description: 'Evidence mode: best, allIndexed, or specified attachmentRefs.',
   },
   attachmentRefs: {
     type: 'array',
     items: { type: 'string' },
+    description: 'Evidence mode, specified: same-library refs; repeats read once, capped.',
+  },
+  source: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      kind: { type: 'string', enum: ['ref', 'artifactId'], required: true },
+      ref: { type: 'string', description: 'A zotero:// attachment ref, for kind="ref".' },
+      artifactId: {
+        type: 'string',
+        description: 'An opaque parsed-artifact id, for kind="artifactId".',
+      },
+    },
     description:
-      'For specified: attachment refs belonging to ref in the same library and instance; repeats read once, bounded by retrieveAttachmentCap.',
+      'Fulltext mode: exactly one source. kind="ref" reads a Zotero attachment by ref; kind="artifactId" reads a stored parsed artifact, including URL-sourced documents.',
+  },
+  start: {
+    type: 'integer',
+    default: 0,
+    description: 'Fulltext mode: window start offset; continue with nextStart.',
+  },
+  maxChars: {
+    type: 'integer',
+    description: 'Fulltext mode: characters per window, bounded by fulltextWindowChars.',
   },
 } as const
 
@@ -155,10 +189,41 @@ const RETRIEVE_ATTACHMENT_RECORD = {
   },
 } as const
 
-const RETRIEVE_OUTPUT_SCHEMA = {
+const FULLTEXT_READ_RECORD = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    sourceKind: { type: 'string', enum: ['attachment', 'url'], required: true },
+    sourceLabel: { type: 'string', required: true },
+    textFormat: { type: 'string', enum: ['markdown', 'text'], required: true },
+    artifact: ARTIFACT_RECORD,
+    coverage: COVERAGE_RECORD,
+    totalChars: { type: 'integer', required: true },
+    inputTruncated: { type: 'boolean', required: true },
+    start: { type: 'integer', required: true },
+    end: { type: 'integer', required: true },
+    text: { type: 'string', required: true },
+    isTruncated: { type: 'boolean', required: true },
+    nextStart: { type: 'integer' },
+    attachmentRef: { type: 'string' },
+    spillRef: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        locator: { type: 'string', required: true },
+        bytes: { type: 'integer', required: true },
+        retrievalHint: { type: 'string', required: true },
+      },
+    },
+  },
+} as const
+
+/** The evidence-mode arm: ranked passages plus the facts that bound them. */
+const EVIDENCE_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    mode: { type: 'string', const: 'evidence', required: true },
     ref: { type: 'string', required: true },
     attachmentRef: { type: 'string' },
     attachmentContentType: { type: 'string' },
@@ -179,6 +244,20 @@ const RETRIEVE_OUTPUT_SCHEMA = {
   },
 } as const
 
+/** The fulltext-mode arm: one window, and nothing evidence-shaped. */
+const FULLTEXT_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    mode: { type: 'string', const: 'fulltext', required: true },
+    fulltext: { ...FULLTEXT_READ_RECORD, required: true },
+  },
+} as const
+
+const RETRIEVE_OUTPUT_SCHEMA = {
+  oneOf: [EVIDENCE_OUTPUT_SCHEMA, FULLTEXT_OUTPUT_SCHEMA],
+} as const
+
 type RetrieveOutput = InferValue<typeof RETRIEVE_OUTPUT_SCHEMA>
 
 /** The model-facing messages the retrieve argument rules throw. */
@@ -189,6 +268,13 @@ export const RETRIEVE_SPECIFIED_EMPTY_MESSAGE =
   'attachmentPolicy "specified" requires at least one attachmentRef'
 export const RETRIEVE_SPECIFIED_ONLY_MESSAGE =
   'attachmentRefs is only valid with attachmentPolicy="specified"'
+export const RETRIEVE_MODE_MIXED_MESSAGE =
+  'Evidence-only parameters (ref, query, queryVariants, sources, passages, attachmentPolicy, attachmentRefs) cannot be used with mode="fulltext"; fulltext-only parameters (source, start, maxChars) cannot be used with mode="evidence".'
+export const RETRIEVE_SOURCE_REQUIRED_MESSAGE =
+  'mode="fulltext" requires source with exactly one of ref or artifactId.'
+export const RETRIEVE_MAX_CHARS_MESSAGE =
+  'maxChars must be a positive integer no greater than fulltextWindowChars.'
+export const RETRIEVE_EVIDENCE_REQUIRED_MESSAGE = 'mode="evidence" requires ref and query.'
 
 /**
  * The message for an attachmentRef outside the item's own library: the ref's
@@ -207,7 +293,52 @@ export function attachmentRefsOverCapMessage(count: number, cap: number): string
   return `attachmentRefs lists ${count} attachments; at most ${cap} can enter one ranking; split the work across calls`
 }
 
+/**
+ * Narrow the model-facing source object to the domain's discriminated form.
+ * The wire schema admits two property pairs; exactly one must be present, so
+ * the branch that validates also narrows.
+ */
+function fulltextSourceOf(args: RetrieveArgs): import('../types.js').ZoteroFulltextSource {
+  const source = args.source
+  if (source?.kind === 'ref' && typeof source.ref === 'string' && source.artifactId === undefined)
+    return { kind: 'ref', ref: source.ref }
+  if (
+    source?.kind === 'artifactId' &&
+    typeof source.artifactId === 'string' &&
+    source.ref === undefined
+  )
+    return { kind: 'artifactId', artifactId: source.artifactId }
+  invalidArgs(RETRIEVE_SOURCE_REQUIRED_MESSAGE)
+}
+
 function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetrieveRequest {
+  if (args.mode === 'fulltext') {
+    if (
+      args.ref !== undefined ||
+      args.query !== undefined ||
+      args.queryVariants !== undefined ||
+      args.sources !== undefined ||
+      args.passages !== undefined ||
+      args.attachmentPolicy !== undefined ||
+      args.attachmentRefs !== undefined
+    )
+      invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
+    const start = args.start ?? 0
+    if (!Number.isInteger(start) || start < 0) invalidArgs('start must be a non-negative integer.')
+    const maxChars = args.maxChars ?? config.fulltextWindowChars
+    if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > config.fulltextWindowChars)
+      invalidArgs(RETRIEVE_MAX_CHARS_MESSAGE)
+    return {
+      mode: 'fulltext',
+      source: fulltextSourceOf(args),
+      start,
+      maxChars,
+    }
+  }
+  if (args.source !== undefined || args.start !== undefined || args.maxChars !== undefined)
+    invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
+  if (typeof args.ref !== 'string' || typeof args.query !== 'string')
+    invalidArgs(RETRIEVE_EVIDENCE_REQUIRED_MESSAGE)
   const query = args.query.trim()
   if (query === '') invalidArgs(RETRIEVE_QUERY_EMPTY_MESSAGE)
   const queryVariants = queryVariantsOf(args.queryVariants)
@@ -246,6 +377,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
     invalidArgs(RETRIEVE_SPECIFIED_ONLY_MESSAGE)
   }
   return {
+    mode: 'evidence',
     ref,
     query,
     ...(queryVariants === undefined ? {} : { queryVariants }),
@@ -325,7 +457,7 @@ export function silentAttachmentsMessage(silent: number, total: number): string 
 }
 
 /** One full-text source's own facts: what it is, what it gave, what it could not. */
-function attachmentSourceLine(source: NonNullable<RetrieveOutput['attachments']>[number]): string {
+function attachmentSourceLine(source: ZoteroRetrieveAttachment): string {
   const type = source.contentType === undefined ? '' : ` (${source.contentType})`
   if (source.status === 'unindexed') {
     return `${source.ref}${type}: ${ATTACHMENT_UNINDEXED_NOTE}`
@@ -390,7 +522,43 @@ export const NO_SOURCES_REMEDY =
 export const NO_CONTENT_TERMS_MESSAGE =
   'The query carried no content words (\u201cthe\u201d, \u201cof\u201d and the like are dropped before scoring), so there was nothing to match; ask with the subject\u2019s own terms.'
 
+export const FULLTEXT_TRUNCATED_REMEDY =
+  'Continue with start=nextStart until isTruncated is false; concatenate the windows in order to obtain the complete document.'
+export const FULLTEXT_INPUT_TRUNCATED_REMEDY =
+  'The document exceeded maxFulltextChars; the windows above cover only its first bounded portion.'
+export const FULLTEXT_SPILL_NOTE =
+  'The whole bounded document is also saved in spill storage; read it through that handle instead of walking every window.'
+
+/** One line describing Zotero's own indexing coverage of a full-text source. */
+function coverageLineOf(coverage: ZoteroCoverage): string {
+  const chars =
+    coverage.indexedChars === undefined
+      ? ''
+      : `${coverage.indexedChars}/${coverage.totalChars ?? '?'} chars`
+  const pages =
+    coverage.indexedPages === undefined
+      ? ''
+      : `, ${coverage.indexedPages}/${coverage.totalPages ?? '?'} pages`
+  return `Indexing coverage: ${chars}${pages}${coverage.complete ? ' (complete)' : ''}`
+}
+
 export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): ContentBlock[] {
+  if (value.mode === 'fulltext') {
+    const read = value.fulltext
+    const header = [
+      `Full text of ${read.sourceLabel} (${read.textFormat}; ${read.sourceKind} source)`,
+      `Characters ${read.start}–${read.end} of ${read.totalChars}; isTruncated: ${read.isTruncated}.`,
+      read.inputTruncated ? FULLTEXT_INPUT_TRUNCATED_REMEDY : '',
+      read.isTruncated ? `${FULLTEXT_TRUNCATED_REMEDY} (nextStart=${read.nextStart})` : '',
+      read.coverage === undefined ? '' : coverageLineOf(read.coverage),
+      read.spillRef === undefined
+        ? ''
+        : `Full document spill: ${read.spillRef.locator} (${read.spillRef.bytes} bytes). ${read.spillRef.retrievalHint} ${FULLTEXT_SPILL_NOTE}`,
+    ].filter((line) => line !== '')
+    // The blank line separates the header from the document text and must
+    // survive the empty-line filter above.
+    return [{ type: 'text', text: `${header.join('\n')}\n\n${read.text}` }]
+  }
   const lines = [
     `Evidence for ${value.ref} (${value.evidence.length} passage${value.evidence.length === 1 ? '' : 's'})`,
   ]
@@ -426,16 +594,7 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
     lines.push(`Full text: ${value.attachmentRef}${type}`)
   }
   if (value.coverage !== undefined) {
-    const coverage = value.coverage
-    const chars =
-      coverage.indexedChars === undefined
-        ? ''
-        : `${coverage.indexedChars}/${coverage.totalChars ?? '?'} chars`
-    const pages =
-      coverage.indexedPages === undefined
-        ? ''
-        : `, ${coverage.indexedPages}/${coverage.totalPages ?? '?'} pages`
-    lines.push(`Indexing coverage: ${chars}${pages}${coverage.complete ? ' (complete)' : ''}`)
+    lines.push(coverageLineOf(value.coverage))
   }
   if (value.attachments !== undefined) {
     const total = value.attachments.length
@@ -478,9 +637,9 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
 
 /**
  * The completed retrieve card: the evidence passage count plus whether the
- * budget cut the list. `meta` is absent on nested code dispatch or malformed
- * replay records, and a failed call keeps the raw error content; both fall
- * back to the generic card.
+ * budget cut the list, or one fulltext window's span. `meta` is absent on
+ * nested code dispatch or malformed replay records, and a failed call keeps
+ * the raw error content; both fall back to the generic card.
  */
 function presentRetrieveResult(
   _args: RetrieveArgs,
@@ -488,6 +647,18 @@ function presentRetrieveResult(
 ): ToolResultView | undefined {
   const record = metaRecordOf(result)
   if (record === undefined) return undefined
+  if (record.mode === 'fulltext') {
+    const read = record.fulltextRead
+    if (typeof read !== 'object' || read === null) return undefined
+    const { start, end, totalChars } = read as Record<string, unknown>
+    // A card that cannot state the span says nothing rather than inventing 0s.
+    if (typeof start !== 'number' || typeof end !== 'number' || typeof totalChars !== 'number')
+      return undefined
+    return {
+      card: 'generic',
+      title: `Zotero full text: characters ${start}–${end} of ${totalChars}`,
+    }
+  }
   if (typeof record.count !== 'number') return undefined
   const truncated = record.truncated === true ? ' (truncated)' : ''
   return { card: 'generic', title: `Zotero evidence: ${record.count} passages${truncated}` }
@@ -510,16 +681,9 @@ export function registerRetrieveTool(
       defineTool({
         name: 'zotero_retrieve',
         description: [
-          'Gather evidence passages for one Zotero item and rank them against a query.',
-          "Sources: annotations (with Zotero's own page labels), notes, the abstract, and ranked full-text chunks.",
-          "An annotation ranks on its highlight and its reader comment together, and matchedFields names which of the two carried the query terms; a hit found only in the comment is the annotator's view, not the paper's text.",
-          'matchKind: lexical = the passage\u2019s own text carries the query\u2019s words, semantic = only the meaning matched (never quote it as containing them), hybrid = both.',
-          'queryVariants: extra phrasings of the same question; the best score per passage wins.',
-          'A note item contributes its own body; child notes contribute every chunk of their full text (chunkIndex/chunkCount locate each passage).',
-          "attachmentPolicy picks the fulltext sources: best (default, Zotero's chosen PDF), allIndexed (every PDF child, use when a work has several files), or specified via attachmentRefs; a specified attachment must provably be this item's own child.",
-          'Unavailable sources are skipped and listed in sourcesSkipped instead of failing the call.',
-          'An empty list (noMatch) means this query matched nothing on the routes reported in rankedRoutes; it is never evidence the item is silent on the subject.',
-          'Results are capped by passage count and character budget: a passage charges its text and, for an annotation, its comment; a truncated flag signals omitted evidence.',
+          'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote it as containing the terms), hybrid = both; matchedFields names text or comment, and truncated/sourcesSkipped/noMatch are honest signals.',
+          'mode="fulltext": read one complete document in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; each window fits inline delivery; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
+          'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, a specified attachment must provably be this item\u2019s child; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and character budget (a passage charges its text and any annotation comment), and a truncated flag signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,
         output: {
@@ -533,13 +697,34 @@ export function registerRetrieveTool(
         presentCall: (args) => ({
           card: 'generic',
           kind: 'search',
-          title: 'Retrieve Zotero evidence',
-          rawInput: args.query,
+          title: args.mode === 'fulltext' ? 'Read Zotero full text' : 'Retrieve Zotero evidence',
+          rawInput:
+            args.mode === 'fulltext'
+              ? (args.source?.ref ?? args.source?.artifactId ?? '')
+              : args.query,
         }),
         presentResult: presentRetrieveResult,
         isConcurrencySafe: () => true,
         async execute(args, exec) {
-          return await service.retrieve(buildRequest(args, service.config), exec.signal)
+          const request = buildRequest(args, service.config)
+          if (request.mode === 'fulltext') {
+            // A fulltext read persists the whole bounded document once, so the
+            // model can read it through one handle instead of every window.
+            // The sink is the host spill store's; without one the chain is the
+            // only path and the result simply carries no spillRef.
+            const spill = async (text: string): Promise<FulltextSpillSinkResult | undefined> => {
+              const ref = await trySpillToolOutput(ctx, exec, `${exec.name}-fulltext.md`, text)
+              return ref === undefined
+                ? undefined
+                : {
+                    locator: String(ref.locator),
+                    bytes: ref.bytes,
+                    retrievalHint: ref.retrievalHint,
+                  }
+            }
+            return await service.retrieve(request, exec.signal, spill)
+          }
+          return await service.retrieve(request, exec.signal)
         },
       }),
     ),

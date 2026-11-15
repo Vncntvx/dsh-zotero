@@ -24,6 +24,7 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
     operations: { running: 0, failed: 0, stopped: 0 },
     searches: [] as SourceItem['searches'],
     evidence: [] as SourceItem['evidence'],
+    fulltextReads: [] as SourceItem['fulltextReads'],
     exports: [] as SourceItem['exports'],
     firstSeenAt: 1,
     lastTouchedAt: 1,
@@ -31,19 +32,14 @@ export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
   }
   return {
     ...base,
-    // The totals mirror the lists unless a scenario pins them itself, the
-    // same invariant the workspace builder upholds.
     searchesTotal: base.searches.length,
     evidenceTotal: base.evidence.length,
+    fulltextReadsTotal: base.fulltextReads.length,
     exportsTotal: base.exports.length,
     ...Object.fromEntries(
-      (
-        [
-          ['searchesTotal', overrides.searchesTotal],
-          ['evidenceTotal', overrides.evidenceTotal],
-          ['exportsTotal', overrides.exportsTotal],
-        ] as const
-      ).filter(([, value]) => value !== undefined),
+      (['searchesTotal', 'evidenceTotal', 'fulltextReadsTotal', 'exportsTotal'] as const)
+        .map((key) => [key, overrides[key]] as const)
+        .filter(([, value]) => value !== undefined),
     ),
   } as SourceItem
 }

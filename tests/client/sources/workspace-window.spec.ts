@@ -85,6 +85,36 @@ describe('buildSourceWorkspace windows', () => {
     expect(workspace.evidencePassageTotal).toBe(ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS + 5)
   })
 
+  it('caps fulltext windows and keeps the exact window total', () => {
+    const attachment = 'zotero://user/0/attachment/EFGH5678'
+    const blocks = Array.from({ length: ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS + 5 }, (_, i) =>
+      block(
+        `f${i}`,
+        i + 1,
+        'zotero_retrieve',
+        { mode: 'fulltext', source: { kind: 'ref', ref: attachment }, start: i * 12_000 },
+        {
+          meta: {
+            fulltextRead: {
+              sourceKind: 'attachment',
+              sourceLabel: attachment,
+              textFormat: 'markdown',
+              totalChars: 1_000_000,
+              inputTruncated: false,
+              start: i * 12_000,
+              end: i * 12_000 + 12_000,
+              isTruncated: true,
+              attachmentRef: attachment,
+            },
+          },
+        },
+      ),
+    )
+    const workspace = buildSourceWorkspace(blocks)
+    expect(workspace.sources[0]!.fulltextReads).toHaveLength(ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS)
+    expect(workspace.sources[0]!.fulltextReadsTotal).toBe(ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS + 5)
+  })
+
   it('caps exports and keeps the session-wide ref count exact', () => {
     const blocks = Array.from({ length: ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS + 10 }, (_, i) =>
       block(

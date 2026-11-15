@@ -84,7 +84,7 @@ const evidencePassageSchema = z
     (value) =>
       (value.start === undefined && value.end === undefined) ||
       (value.start !== undefined && value.end !== undefined && value.end >= value.start),
-    { message: 'Fulltext offsets must be a complete [start, end) pair' },
+    { message: 'Fulltext offsets must include both start and end' },
   )
   .refine(
     (value) =>
@@ -95,6 +95,28 @@ const evidencePassageSchema = z
         value.end === undefined),
     { message: 'Only fulltext evidence carries artifact and offset facts' },
   )
+  .refine((value) => value.artifact === undefined || value.textFormat === 'markdown', {
+    message: 'An artifact identifies Markdown fulltext',
+  })
+
+const fulltextReadSchema = z
+  .object({
+    sourceKind: z.enum(['attachment', 'url']),
+    sourceLabel: z.string(),
+    textFormat: z.enum(['markdown', 'text']),
+    artifact: artifactProvenanceSchema.optional(),
+    totalChars: z.number().int().nonnegative(),
+    inputTruncated: z.boolean(),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+    isTruncated: z.boolean(),
+    attachmentRef: z.string().optional(),
+    callIds: z.array(z.string()),
+  })
+  .strict()
+  .refine((value) => value.end >= value.start, {
+    message: 'A fulltext window end must be at or after its start',
+  })
   .refine((value) => value.artifact === undefined || value.textFormat === 'markdown', {
     message: 'An artifact identifies Markdown fulltext',
   })
@@ -199,6 +221,8 @@ export const sourceItemSchema = z
     searchesTotal: z.number().int().nonnegative(),
     evidence: z.array(evidencePassageSchema),
     evidenceTotal: z.number().int().nonnegative(),
+    fulltextReads: z.array(fulltextReadSchema),
+    fulltextReadsTotal: z.number().int().nonnegative(),
     bestAttachment: attachmentHintSchema.optional(),
     attachment: attachmentSchema.optional(),
     retrievalFacts: retrievalFactsSchema.optional(),

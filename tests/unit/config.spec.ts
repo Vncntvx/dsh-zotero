@@ -21,6 +21,7 @@ describe('resolveConfig', () => {
       maxAttachmentRecords: 50,
       fulltextChunkWords: 200,
       maxFulltextChars: 250_000,
+      fulltextWindowChars: 12_000,
       retrieveAttachmentCap: 16,
       graphConcurrency: 4,
       maxResponseBytes: 16 * 1024 * 1024,
@@ -145,6 +146,7 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ maxAnnotationRecords: -2 })).toThrowError(/maxAnnotationRecords/)
     expect(() => resolveConfig({ maxAttachmentRecords: 0 })).toThrowError(/maxAttachmentRecords/)
     expect(() => resolveConfig({ fulltextChunkWords: 0 })).toThrowError(/fulltextChunkWords/)
+    expect(() => resolveConfig({ fulltextWindowChars: 0 })).toThrowError(/fulltextWindowChars/)
     expect(() => resolveConfig({ maxInFlightRequests: 0 })).toThrowError(/maxInFlightRequests/)
     expect(() => resolveConfig({ searchConcurrency: 1.5 })).toThrowError(/searchConcurrency/)
     expect(() => resolveConfig({ graphConcurrency: -1 })).toThrowError(/graphConcurrency/)

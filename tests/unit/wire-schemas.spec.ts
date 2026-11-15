@@ -91,6 +91,8 @@ describe('the panel wire schemas derive from the domain constants', () => {
       searches: [],
       searchesTotal: 0,
       evidence: [],
+      fulltextReads: [],
+      fulltextReadsTotal: 0,
       evidenceTotal: 0,
       exports: [],
       exportsTotal: 0,

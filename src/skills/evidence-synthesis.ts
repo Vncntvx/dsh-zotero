@@ -58,6 +58,7 @@ export const evidenceSynthesis: ResearchSop = {
     {
       tool: 'zotero_retrieve',
       args: {
+        mode: 'evidence',
         ref: EXAMPLE_REF,
         query: 'dataset sample size baseline accuracy limitations',
         sources: ['annotation', 'fulltext'],

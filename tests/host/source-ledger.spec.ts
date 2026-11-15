@@ -20,6 +20,16 @@ import { createSourceLedgerProjection } from '../../src/session-projection/sourc
 import { projectRetrieveMeta } from '../../src/presentation-meta.js'
 import type { FulltextArtifactProvenance } from '../../src/local/fulltext-enhancer.js'
 
+/** Project an evidence result and narrow to its arm; these cases are all evidence. */
+function evidenceProjection(
+  value: import('../../src/types.js').ZoteroEvidenceRetrieveResult,
+  sources: readonly import('../../src/types.js').ZoteroEvidenceSource[] = [],
+) {
+  const meta = projectRetrieveMeta(value, sources)
+  if (meta.mode !== 'evidence') throw new Error('expected an evidence projection')
+  return meta
+}
+
 let seq = 0
 
 /** One committed event as the fold reads it. */
@@ -185,8 +195,9 @@ describe('the host literature-trail fold', () => {
   })
 
   it('keeps absent source offsets absent through presentation and replay', () => {
-    const meta = projectRetrieveMeta(
+    const meta = evidenceProjection(
       {
+        mode: 'evidence',
         ref: REF,
         evidence: [
           {
@@ -238,6 +249,7 @@ describe('the host literature-trail fold', () => {
     'omits fulltext artifact and offset fields from a projected or replayed %s',
     (source) => {
       const canonical = {
+        mode: 'evidence' as const,
         ref: REF,
         evidence: [
           {
@@ -255,7 +267,7 @@ describe('the host literature-trail fold', () => {
         truncated: false,
         queryTerms: ['attention'],
       }
-      const projected = projectRetrieveMeta(canonical, [source]).items[0]!
+      const projected = evidenceProjection(canonical, [source]).items[0]!
       const workspace = sourceWorkspaceSchema.parse(
         workspaceOf(retrieveState([{ ...FULLTEXT_ITEM, source, start: 1, end: 10 }])),
       )

@@ -17,7 +17,7 @@ import { cacheKeyOf, type parseOnce } from '../../src/enrichment/parse-once.ts'
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
 import { MineruClient } from '../../src/enrichment/transport.ts'
 import type { ParsedArtifact } from '../../src/enrichment/types.ts'
-import type { ZoteroRetrieveResult } from '../../src/types.ts'
+import type { ZoteroEvidenceRetrieveResult } from '../../src/types.ts'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
 import { requestLines } from '../helpers/server/assert.ts'
 import { attachment, paperItem } from '../helpers/server/objects.ts'
@@ -132,9 +132,10 @@ async function seedArtifact(store: ParsedArtifactStore): Promise<ParsedArtifact>
   return artifact
 }
 
-async function read(host: HostLane): Promise<ZoteroRetrieveResult> {
+async function read(host: HostLane): Promise<ZoteroEvidenceRetrieveResult> {
   const result = expectValue(
     await host.runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: `zotero://user/0/item/${ITEM_KEY}`,
       query: 'tiling',
       sources: ['fulltext'],
@@ -142,7 +143,7 @@ async function read(host: HostLane): Promise<ZoteroRetrieveResult> {
     }),
     'zotero_retrieve',
   )
-  return result.value as unknown as ZoteroRetrieveResult
+  return result.value as unknown as ZoteroEvidenceRetrieveResult
 }
 
 describe('cached enrichment through a real ZoteroService', () => {

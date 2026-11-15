@@ -98,7 +98,7 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
   ```
 - **定位原文段落**：深入追问论文细节，Agent 从本地 PDF 全文与批注中提取相关段落，并附带原始页码标注。
   ```text
-  Agent → zotero_retrieve(ref: "zotero://user/0/item/ABCD1234", query: "methodology", sources: ["annotation", "fulltext"])
+  Agent → zotero_retrieve(mode: "evidence", ref: "zotero://user/0/item/ABCD1234", query: "methodology", sources: ["annotation", "fulltext"])
   ```
 - **生成标准引用**：要求格式化输出时，Agent 直接生成 BibTeX 条目或指定样式的 CSL 引用。
   ```text

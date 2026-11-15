@@ -69,6 +69,7 @@ const FIELD_SPECS = [
   { key: 'maxAttachmentRecords', kind: 'number', group: 'groupSearchEvidence' },
   { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearchEvidence' },
   { key: 'maxFulltextChars', kind: 'number', group: 'groupSearchEvidence' },
+  { key: 'fulltextWindowChars', kind: 'number', group: 'groupSearchEvidence' },
   { key: 'maxInlineResultTokens', kind: 'number', group: 'groupOutput' },
   { key: 'maxInlineResultBytes', kind: 'number', group: 'groupOutput' },
   { key: 'maxResponseBytes', kind: 'number', group: 'groupOutput' },

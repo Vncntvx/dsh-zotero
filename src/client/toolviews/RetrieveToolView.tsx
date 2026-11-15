@@ -30,27 +30,36 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
       const errSummary = errorSummaryOf(block, raw)
       const meta = metaOf(block)
       const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
+      const evidenceView = retrieveView?.kind === 'evidence' ? retrieveView : null
+      const fulltextView = retrieveView?.kind === 'fulltext' ? retrieveView : null
 
       let sum = ''
       if (isToolRunning(block)) {
         sum = t('toolRetrieveRunning')
-      } else if (retrieveView?.items !== null && retrieveView?.items !== undefined) {
+      } else if (fulltextView !== null) {
+        sum = t('toolSummaryFulltextWindow', {
+          start: fulltextView.fulltextRead.start,
+          end: fulltextView.fulltextRead.end,
+          total: fulltextView.fulltextRead.totalChars,
+        })
+      } else if (evidenceView?.items !== null && evidenceView?.items !== undefined) {
         // `items` is the bounded page the card draws, capped at four regardless of
         // `maxEvidencePassages`; `count` is the call's own total. Counting rows
         // would report "4 passages" over a body listing 4 of 20, the same
         // bounded-listing mistake the search card had.
-        sum = t('toolSummaryEvidence', { count: retrieveView.count ?? retrieveView.items.length })
+        sum = t('toolSummaryEvidence', { count: evidenceView.count ?? evidenceView.items.length })
       } else {
         sum = t('toolTitleRetrieve')
       }
 
-      const covLine = retrieveView?.coverage ? coverageLineOf(retrieveView.coverage, t) : null
+      const coverage = evidenceView?.coverage ?? fulltextView?.fulltextRead.coverage
+      const covLine = coverage ? coverageLineOf(coverage, t) : null
       // Passages the call found but the projection could not carry. The card
       // cannot show them, and a reader who sees "20 passages" above four rows
       // deserves to be told the four are all the card kept.
-      const shown = retrieveView?.items?.length ?? 0
+      const shown = evidenceView?.items?.length ?? 0
       const omitted =
-        retrieveView?.count != null && retrieveView.count > shown ? retrieveView.count - shown : 0
+        evidenceView?.count != null && evidenceView.count > shown ? evidenceView.count - shown : 0
       const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
 
       return {
@@ -60,10 +69,10 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
         icon: <IconBrowseOutlineRegular size={14} />,
         summary: sum,
         errorSummary: errSummary,
-        items: retrieveView?.items ?? [],
+        items: evidenceView?.items ?? [],
         coverageLine: covLine,
         omittedNote,
-        detailOmitted: retrieveView?.detailOmitted === true,
+        detailOmitted: evidenceView?.detailOmitted === true,
         rawText: raw,
       }
     }, [block, t])

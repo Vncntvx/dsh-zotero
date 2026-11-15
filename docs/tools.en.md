@@ -138,23 +138,27 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
-Extract query-relevant passages from a single paper's multiple sources and rank them: the core uses lexical BM25; with the enrichment component's local semantic ranking on, ranking fuses a lexical and a semantic route by RRF, and each passage is labeled with `matchKind`.
+Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one complete document in source-order character windows, without ranking or chunking; parsed Markdown is preferred and Zotero index text is the explicit fallback.
 
 ### Parameters
 
-| Parameter          | Type     | Default  | Description                                                                                                                                                                                               |
-| ------------------ | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ref`              | string   | none     | Item ref (required)                                                                                                                                                                                       |
-| `query`            | string   | none     | Ranking keywords (required)                                                                                                                                                                               |
-| `queryVariants`    | string[] | none     | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused because each phrasing is a full scoring pass. Each is ranked separately and a passage keeps its best score |
-| `sources`          | string[] | all 4    | Retrieval sources: `annotation`, `note`, `abstract`, `fulltext`                                                                                                                                           |
-| `passages`         | integer  | `4`      | Passage cap (bounded by `maxEvidencePassages`, default 4)                                                                                                                                                 |
-| `attachmentPolicy` | string   | `"best"` | Full-text attachment policy: `best`, `allIndexed`, `specified`                                                                                                                                            |
-| `attachmentRefs`   | string[] | none     | Attachment refs when `attachmentPolicy="specified"`                                                                                                                                                       |
+| Parameter          | Type     | Default  | Description                                                                                                                                                  |
+| ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`             | string   | none     | Required. `evidence`: rank passages against query; `fulltext`: read one complete document in paged character windows                                         |
+| `ref`              | string   | none     | `evidence` mode: item ref                                                                                                                                    |
+| `query`            | string   | none     | `evidence` mode: ranking keywords                                                                                                                            |
+| `queryVariants`    | string[] | none     | `evidence` mode: other phrasings of the same question (synonyms, field terminology), at most 4; each is ranked separately and a passage keeps its best score |
+| `sources`          | string[] | all 4    | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                              |
+| `passages`         | integer  | `4`      | `evidence` mode: passage cap (bounded by `maxEvidencePassages`)                                                                                              |
+| `attachmentPolicy` | string   | `"best"` | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                               |
+| `attachmentRefs`   | string[] | none     | `evidence` mode, for `attachmentPolicy="specified"`: attachment refs                                                                                         |
+| `source`           | object   | none     | `fulltext` mode: exactly one source. `kind="ref"` selects a Zotero attachment by `ref`; `kind="artifactId"` selects a stored parsed artifact                 |
+| `start`            | integer  | `0`      | `fulltext` mode: character offset of this window                                                                                                             |
+| `maxChars`         | integer  | none     | `fulltext` mode: characters per window, defaulting to and bounded by `fulltextWindowChars`                                                                   |
 
 ### Output
 
-The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`, `coverage` (full-text coverage), `attachments` (retrieval status per attachment), `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms` (folded terms the lexical route scored), `rankedRoutes` (routes that ran: `lexical`, plus `semantic` when enabled), and `noMatch` (reason the answer is empty: `no-overlap`, a corpus existed but nothing hit; `no-sources`, no rankable corpus).
+The returned structure contains `mode`. `evidence` mode carries `ref`, `attachmentRef`, `attachmentContentType`, `coverage`, `attachments`, `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms`, `rankedRoutes`, and `noMatch`. `fulltext` mode carries only `mode` and `fulltext` (`sourceKind`, `sourceLabel`, `textFormat`, `artifact`, `coverage`, `totalChars`, `inputTruncated`, `start`, `end`, `text`, `isTruncated`, `nextStart`, `attachmentRef`, `spillRef`). It carries no evidence-side field at all: no `ref`, `evidence`, `truncated`, `sourcesSkipped`, `queryTerms`, `noMatch`, or `rankedRoutes`.
 
 ### Notes
 
@@ -162,12 +166,14 @@ The returned structure contains `ref`, `attachmentRef`, `attachmentContentType`,
 - Only `annotation` sources carry a page label (`pageLabel`); full-text passages give no page numbers;
 - Unavailable or unindexed sources are recorded in `sourcesSkipped`; `noMatch` does not mean the item has nothing on the subject;
 - Annotation content ranks the highlighted text and the user comment together, and `matchedFields` marks whether the match came from `text` or `comment`; a semantic hit names no field (the wording does not overlap);
-- Under the multi-attachment policies, unindexed attachments are marked `unindexed` and attachments that were not read are marked `unread`.
+- Under the multi-attachment policies, unindexed attachments are marked `unindexed` and attachments that were not read are marked `unread`;
+- In `fulltext` mode, start at `start=0` and follow `nextStart` until `isTruncated` is false; windows are exact character slices, so concatenating them in order yields the complete document. `textFormat` `markdown` comes from a parsed artifact, `text` from Zotero's index. `inputTruncated: true` means the document was cut to `maxFulltextChars`, so the windows cover only that bounded portion. When a `source.kind="ref"` read misses a parsed artifact it falls back to Zotero index text; a `source.kind="artifactId"` miss fails explicitly instead of inventing a source. On a long document with more windows to come, the first window also carries `spillRef` (`locator`, `bytes`, `retrievalHint`) when the host provides spill storage: a one-handle copy of the whole bounded text; without a store only the window chain is available. Windows are sized under the inline delivery budget by default; a lowered inline budget can still force file delivery. A read never starts a parse, download, or upload.
 
 ### Example
 
 ```text
-zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
+zotero_retrieve(mode="evidence", ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
+zotero_retrieve(mode="fulltext", source={kind="ref", ref="zotero://user/0/attachment/EFGH5678"}, start=0)
 ```
 
 ---

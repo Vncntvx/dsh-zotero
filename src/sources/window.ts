@@ -18,8 +18,16 @@ export function windowedItem(item: SourceItem): SourceItem {
   const searches = item.searches.length > rowCap ? item.searches.slice(0, rowCap) : item.searches
   const evidence = item.evidence.length > rowCap ? item.evidence.slice(0, rowCap) : item.evidence
   const exports = item.exports.length > rowCap ? item.exports.slice(0, rowCap) : item.exports
-  if (searches === item.searches && evidence === item.evidence && exports === item.exports) {
+  // Windows of one long read are the list most likely to grow past the cap.
+  const fulltextReads =
+    item.fulltextReads.length > rowCap ? item.fulltextReads.slice(0, rowCap) : item.fulltextReads
+  if (
+    searches === item.searches &&
+    evidence === item.evidence &&
+    exports === item.exports &&
+    fulltextReads === item.fulltextReads
+  ) {
     return item
   }
-  return { ...item, searches, evidence, exports }
+  return { ...item, searches, evidence, exports, fulltextReads }
 }

@@ -239,6 +239,7 @@ describe('cached enrichment attachment selection', () => {
     const enhancer = enhancerOf(async () => cached('short'))
     const result = await providerOf(server, enhancer).retrieve({
       ...fulltextRequest('best'),
+      mode: 'evidence',
       query: 'short',
     })
 
@@ -253,6 +254,7 @@ describe('cached enrichment attachment selection', () => {
     const enhancer = enhancerOf(async () => cached('cached attention evidence'))
     const result = await providerOf(server, enhancer).retrieve({
       ...fulltextRequest('best'),
+      mode: 'evidence',
       sources: ['annotation', 'note', 'abstract', 'fulltext'],
       query: 'attention tiling',
       passages: 8,

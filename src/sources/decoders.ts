@@ -11,11 +11,16 @@
  * @module dsh-zotero/sources/decoders
  */
 
-import { evidenceItemsOf } from './presenters.js'
-import { boolField, isRecord, numberField, stringField } from '../json.js'
+import { artifactOf, evidenceItemsOf } from './presenters.js'
+import { boolField, isNonNegativeSafeInteger, isRecord, numberField, stringField } from '../json.js'
 import type { EvidenceItem } from '../evidence-item.js'
 import { browseRowOf, isBrowseKind, type BrowseRow } from '../browse-rows.js'
-import type { SourceAvailabilityEntry, SourceCoverage, SupportedLocalLibrary } from './model.js'
+import type {
+  FulltextRead,
+  SourceAvailabilityEntry,
+  SourceCoverage,
+  SupportedLocalLibrary,
+} from './model.js'
 import type { ZoteroResolvedScope } from '../contract.js'
 
 /** One decoded search row (with Zotero's attachment selection when present). */
@@ -154,8 +159,9 @@ function childPreviewsOf(value: unknown): ChildPreviewView[] {
   return rows
 }
 
-/** The retrieve projection view; `items === null` means malformed. */
-interface RetrieveMetaView {
+/** The evidence projection view; `items === null` means malformed. */
+interface EvidenceRetrieveMetaView {
+  readonly kind: 'evidence'
   readonly items: readonly EvidenceItem[] | null
   readonly count: number | null
   readonly truncated: boolean | null
@@ -165,6 +171,59 @@ interface RetrieveMetaView {
   readonly sourceAvailability: Readonly<Record<string, SourceAvailabilityEntry>>
   /** True when the meta budget dropped the detail rows behind these facts. */
   readonly detailOmitted: boolean
+}
+
+/** The fulltext projection view: one decoded window fact, or malformed. */
+type FulltextRetrieveMetaView =
+  | { readonly kind: 'fulltext'; readonly fulltextRead: Omit<FulltextRead, 'callIds'> }
+  | { readonly kind: 'malformed' }
+
+type RetrieveMetaView = EvidenceRetrieveMetaView | FulltextRetrieveMetaView
+
+/** Decode the compact fulltext-window fact a fulltext-mode retrieve projects. */
+function fulltextReadOf(value: unknown): Omit<FulltextRead, 'callIds'> | null {
+  if (!isRecord(value)) return null
+  const sourceKind = value['sourceKind']
+  const textFormat = value['textFormat']
+  if (sourceKind !== 'attachment' && sourceKind !== 'url') return null
+  if (textFormat !== 'markdown' && textFormat !== 'text') return null
+  const sourceLabel = stringField(value, 'sourceLabel')
+  const totalChars = countField(value, 'totalChars')
+  const start = countField(value, 'start')
+  const end = countField(value, 'end')
+  const inputTruncated = boolField(value, 'inputTruncated')
+  const isTruncated = boolField(value, 'isTruncated')
+  if (
+    sourceLabel === undefined ||
+    totalChars === undefined ||
+    start === undefined ||
+    end === undefined ||
+    inputTruncated === undefined ||
+    isTruncated === undefined
+  )
+    return null
+  const artifact = artifactOf(value['artifact'])
+  const coverage = decodeCoverage(value['coverage'])
+  const attachmentRef = stringField(value, 'attachmentRef')
+  return {
+    sourceKind,
+    sourceLabel,
+    textFormat,
+    ...(artifact === undefined ? {} : { artifact }),
+    ...(coverage === null ? {} : { coverage }),
+    totalChars,
+    inputTruncated,
+    start,
+    end,
+    isTruncated,
+    ...(attachmentRef === undefined ? {} : { attachmentRef }),
+  }
+}
+
+/** A character-count fact: integer, non-negative, and safe. */
+function countField(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key]
+  return isNonNegativeSafeInteger(value) ? value : undefined
 }
 
 /** The attachment projection view; a null field is absent or malformed. */
@@ -389,9 +448,21 @@ function decodeCoverage(value: unknown): SourceCoverage | null {
   }
 }
 
+/**
+ * Decode one retrieve projection into its mode's view. The mode is explicit on
+ * current metas; a meta without it predates the fulltext arm and was always
+ * evidence, and a stray `fulltextRead` without a mode is still a window fact
+ * written by an intermediate build, so the fact itself decides.
+ */
 export function retrieveMetaOf(meta: Record<string, unknown>): RetrieveMetaView {
+  const mode = stringField(meta, 'mode')
+  if (mode === 'fulltext' || (mode === undefined && meta['fulltextRead'] !== undefined)) {
+    const read = fulltextReadOf(meta['fulltextRead'])
+    return read === null ? { kind: 'malformed' } : { kind: 'fulltext', fulltextRead: read }
+  }
   const truncated = boolField(meta, 'truncated')
   return {
+    kind: 'evidence',
     items: evidenceItemsOf(meta),
     count: numberField(meta, 'count') ?? null,
     truncated: truncated === undefined ? null : truncated,

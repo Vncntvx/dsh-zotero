@@ -138,23 +138,27 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
-从单篇文献的多数据源中提取与查询相关的原文片段并排序：核心使用词面 BM25；启用文档解析组件的本地语义检索后，排序经词面+语义双路线 RRF 融合，每段结果标注 `matchKind`。
+两个互斥模式：`evidence` 从单篇文献的多数据源提取与查询相关的原文片段并排序（核心词面 BM25；启用文档解析组件的本地语义检索后经词面+语义双路线 RRF 融合，每段标注 `matchKind`）；`fulltext` 按字符窗口顺序读取整篇文档，不排序、不切块，解析 Markdown 命中时优先使用，未命中回退 Zotero 索引文本。
 
 ### 参数
 
-| 参数               | 类型     | 默认值    | 说明                                                                                                                              |
-| ------------------ | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `ref`              | string   | —         | 文献条目 ref（必填）                                                                                                              |
-| `query`            | string   | —         | 排序关键词（必填）                                                                                                                |
-| `queryVariants`    | string[] | —         | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错，因为每个措辞都是一次完整评分。逐措辞独立排序，段落取各措辞的最好成绩 |
-| `sources`          | string[] | 全部 4 种 | 检索源：`annotation`、`note`、`abstract`、`fulltext`                                                                              |
-| `passages`         | integer  | `4`       | 返回段落数量上限（受 `maxEvidencePassages` 限制，默认 4）                                                                         |
-| `attachmentPolicy` | string   | `"best"`  | 全文附件选取策略：`best`、`allIndexed`、`specified`                                                                               |
-| `attachmentRefs`   | string[] | —         | 当 `attachmentPolicy="specified"` 时指定的附件 ref 列表                                                                           |
+| 参数               | 类型     | 默认值    | 说明                                                                                                                      |
+| ------------------ | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | string   | —         | 必填。`evidence`：按 query 排序证据片段；`fulltext`：按字符窗口顺序读取整篇文档                                           |
+| `ref`              | string   | —         | `evidence` 模式：文献条目 ref                                                                                             |
+| `query`            | string   | —         | `evidence` 模式：排序关键词                                                                                               |
+| `queryVariants`    | string[] | —         | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；逐措辞独立排序，段落取各措辞的最好成绩                |
+| `sources`          | string[] | 全部 4 种 | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                      |
+| `passages`         | integer  | `4`       | `evidence` 模式：返回段落数量上限（受 `maxEvidencePassages` 限制）                                                        |
+| `attachmentPolicy` | string   | `"best"`  | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                       |
+| `attachmentRefs`   | string[] | —         | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                        |
+| `source`           | object   | —         | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 `artifactId` 指定已解析产物 |
+| `start`            | integer  | `0`       | `fulltext` 模式：本次窗口的起始字符偏移                                                                                   |
+| `maxChars`         | integer  | —         | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                 |
 
 ### 输出
 
-返回结构包含：`ref`、`attachmentRef`、`attachmentContentType`、`coverage`（全文覆盖信息）、`attachments`（各附件检索状态）、`evidence`（段落列表，每项包含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`（词面路线实际计分的折叠词项）、`rankedRoutes`（实际运行的路线：`lexical`，启用语义后含 `semantic`）、`noMatch`（空结果成因：`no-overlap` 有语料无命中；`no-sources` 无可排序语料）。
+返回结构包含：`mode`；`evidence` 模式含 `ref`、`attachmentRef`、`attachmentContentType`、`coverage`、`attachments`、`evidence`（段落列表，每项含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`、`rankedRoutes`、`noMatch`；`fulltext` 模式只含 `mode` 与 `fulltext`（`sourceKind`、`sourceLabel`、`textFormat`、`artifact`、`coverage`、`totalChars`、`inputTruncated`、`start`、`end`、`text`、`isTruncated`、`nextStart`、`attachmentRef`、`spillRef`），不携带任何 evidence 侧字段（无 `ref`、`evidence`、`truncated`、`sourcesSkipped`、`queryTerms`、`noMatch`、`rankedRoutes`）。
 
 ### 说明
 
@@ -162,12 +166,14 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 - 仅 `annotation` 来源包含页码标签（`pageLabel`）；全文段落不提供页码；
 - 不可用或未建立索引的来源记入 `sourcesSkipped`；`noMatch` 不表示"该条目没有相关内容"；
 - 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 或 `comment`；语义命中的段落不标注字段（措辞无重合）；
-- 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`。
+- 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`；
+- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 续读直到 `isTruncated` 为 `false`；窗口按字符精确切分，顺序拼接即完整文档（`inputTruncated` 为 `true` 时只覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 回退索引文本，`source.kind="artifactId"` 则明确失败（不伪造来源）。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄；未提供存储时仅窗口链可用。窗口默认尺寸下结果走内联交付，调低内联预算时可能落为 file 交付。读取永不触发解析任务、下载或上传。
 
 ### 示例
 
 ```text
-zotero_retrieve(ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
+zotero_retrieve(mode="evidence", ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
+zotero_retrieve(mode="fulltext", source={kind="ref", ref="zotero://user/0/attachment/EFGH5678"}, start=0)
 ```
 
 ---

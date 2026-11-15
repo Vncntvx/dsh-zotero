@@ -11,8 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 
-/** Default threshold (character count) above which tool outputs are considered oversized. */
-export const DEFAULT_SPILL_CHAR_THRESHOLD = 16_000
+export { DEFAULT_SPILL_CHAR_THRESHOLD } from './constants.js'
 
 /**
  * Opportunistically spills a large tool result to `ctx.spillStore`.

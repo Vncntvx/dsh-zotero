@@ -17,7 +17,7 @@ import { parseRef } from '../../src/refs.js'
 import type {
   ZoteroExportRequest,
   ZoteroGetRequest,
-  ZoteroRetrieveRequest,
+  ZoteroEvidenceRetrieveRequest,
   ZoteroSearchOptions,
   ZoteroSearchRequest,
 } from '../../src/types.js'
@@ -95,9 +95,10 @@ export function getRequest(
 
 /** A retrieve request for the fixture item ABCD1234 with every source. */
 export function retrieveRequest(
-  overrides: Partial<ZoteroRetrieveRequest> = {},
-): ZoteroRetrieveRequest {
+  overrides: Partial<ZoteroEvidenceRetrieveRequest> = {},
+): ZoteroEvidenceRetrieveRequest {
   return {
+    mode: 'evidence',
     ref: parseRef('zotero://user/0/item/ABCD1234'),
     query: 'flash attention',
     sources: ['annotation', 'note', 'abstract', 'fulltext'],

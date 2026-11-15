@@ -1,6 +1,6 @@
 /**
- * The core-owned, read-only artifact seam. Enrichment may fill this slot;
- * ordinary readers cannot acquire document bytes or submit parsing work.
+ * The core-owned, read-only artifact seam. Enrichment fills this slot with
+ * committed parsed artifacts for ordinary readers.
  * @module dsh-zotero/local/fulltext-enhancer
  */
 
@@ -34,17 +34,28 @@ export type FulltextLookupResult =
       readonly format: 'markdown'
       readonly source: string
       readonly provenance: FulltextArtifactProvenance
+      /**
+       * The stored source this artifact belongs to. An artifactId read needs
+       * these facts because the handle itself says nothing about the source.
+       */
+      readonly sourceKind?: 'attachment' | 'url'
+      /** Safe display label: a canonical attachment ref or a URL origin. */
+      readonly sourceLabel?: string
+      /** The Zotero attachment behind this artifact, when the source is local. */
+      readonly attachmentRef?: string
       readonly pageCount?: number
     }
   | { readonly kind: 'miss'; readonly reason: 'absent' | 'expired' }
   | { readonly kind: 'fault'; readonly error: Error }
 
 /**
- * A lookup may stat an attachment or revalidate an indexed URL with one
- * token-free HEAD. It never downloads a document or creates/resumes a task.
+ * Looks up a committed artifact after checking an attachment with `stat` or
+ * revalidating an indexed URL with one token-free `HEAD`.
  */
 export interface FulltextEnhancer {
   lookup(input: FulltextEnhancerInput, signal?: AbortSignal): Promise<FulltextLookupResult>
+  /** Reads one stored artifact by opaque id. */
+  lookupArtifact?(artifactId: string, signal?: AbortSignal): Promise<FulltextLookupResult>
 }
 
 /**

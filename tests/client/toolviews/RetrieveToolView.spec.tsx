@@ -496,6 +496,44 @@ describe('RetrieveToolView', () => {
     expect(screen.getAllByText(zh.toolTitleRetrieve).length).toBeGreaterThanOrEqual(1)
   })
 
+  it('summarises a fulltext window from the decoupled arm', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_retrieve',
+        argsRaw: JSON.stringify({
+          mode: 'fulltext',
+          source: { kind: 'ref', ref: 'zotero://user/0/attachment/EFGH5678' },
+          start: 0,
+        }),
+      },
+      meta: {
+        mode: 'fulltext',
+        fulltextRead: {
+          sourceKind: 'attachment',
+          sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+          textFormat: 'markdown',
+          totalChars: 40_000,
+          inputTruncated: false,
+          start: 0,
+          end: 12_000,
+          isTruncated: true,
+          attachmentRef: 'zotero://user/0/attachment/EFGH5678',
+        },
+      },
+    })
+
+    renderView({
+      callId: 'c1',
+      toolName: 'zotero_retrieve',
+      phase: 'result',
+      block,
+      useDisclosure: mockUseDisclosure(true),
+      t: mockT,
+    })
+
+    expect(document.body.textContent).toContain('读取第 0–12000 字符，共 40000 字符')
+  })
+
   it('handles malformed argsRaw where argsOf returns null', () => {
     const block = settled({
       call: {

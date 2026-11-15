@@ -462,9 +462,15 @@ function ParsedDocumentView(
         setInsertError(result.error.message)
         return
       }
+      // Address the exact parsed document the tab shows. A Zotero attachment
+      // ref or an opaque artifact id both resolve through the same retrieve
+      // mode; URL-sourced documents have no ref and use artifactId.
+      const source =
+        target.artifactId !== undefined
+          ? { kind: 'artifactId', artifactId: target.artifactId }
+          : { kind: 'ref', ref: target.ref }
       const draft = [
-        // Give the model the parsed Markdown path so it can read the full paper.
-        t('parsedExplainPrompt', { path: document!.metadata.documentPath }),
+        t('parsedExplainPrompt', { source: JSON.stringify(source) }),
         result?.ok ? itemInfoTextOf(result.value) : displayTitle,
         target.item ?? '',
         // Keep the excerpt at the end, after the instruction and metadata.

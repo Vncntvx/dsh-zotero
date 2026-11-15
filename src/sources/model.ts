@@ -119,6 +119,27 @@ export interface EvidencePassage extends Pick<
   readonly callIds: readonly string[]
 }
 
+/**
+ * One window of a complete-document read, folded as its own trail fact. It
+ * never carries the text itself: the tool result holds the text, the trail
+ * holds what the session proved was read and where.
+ */
+export interface FulltextRead {
+  readonly sourceKind: 'attachment' | 'url'
+  readonly sourceLabel: string
+  readonly textFormat: 'markdown' | 'text'
+  readonly artifact?: EvidenceItem['artifact']
+  /** Zotero's own indexing coverage; absent for parsed artifacts. */
+  readonly coverage?: SourceCoverage
+  readonly totalChars: number
+  readonly inputTruncated: boolean
+  readonly start: number
+  readonly end: number
+  readonly isTruncated: boolean
+  readonly attachmentRef?: string
+  readonly callIds: readonly string[]
+}
+
 /** Zotero's attachment selection hint (search/get facts); no resolved location. */
 interface AttachmentHint {
   readonly ref?: string
@@ -247,6 +268,10 @@ export interface SourceItem {
    * windowed by the workspace caps.
    */
   readonly evidenceTotal: number
+  /** Complete-document windows read through `zotero_retrieve mode="fulltext"`. */
+  readonly fulltextReads: readonly FulltextRead[]
+  /** The item's total fulltext windows, exact even when the list is windowed. */
+  readonly fulltextReadsTotal: number
   /** Zotero's attachment selection (search/get facts); never a resolved location. */
   readonly bestAttachment?: AttachmentHint
   /** The resolved location from a successful zotero_get location request. */

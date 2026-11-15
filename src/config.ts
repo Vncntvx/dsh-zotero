@@ -18,6 +18,7 @@ import {
   DEFAULT_MAX_RESPONSE_BYTES,
   LOCAL_PROVIDER_ID,
   ZOTERO_FULLTEXT_CHUNK_WORDS,
+  ZOTERO_FULLTEXT_WINDOW_CHARS,
   ZOTERO_MAX_EVIDENCE_CHARS,
 } from './constants.js'
 
@@ -60,8 +61,10 @@ export interface Config {
   maxAttachmentRecords?: Volatile<number>
   /** Word count of each full-text passage entering evidence ranking. */
   fulltextChunkWords?: Volatile<number>
-  /** Character bound for full text accepted into `zotero_retrieve` ranking. */
+  /** Character bound for full text: the evidence ranking budget and the fulltext-mode document bound. */
   maxFulltextChars?: Volatile<number>
+  /** Characters in one `zotero_retrieve` fulltext window. */
+  fulltextWindowChars?: Volatile<number>
   /**
    * Upper bound for attachments one `zotero_retrieve` call ranks full text
    * from: each member costs a metadata read and a full-text read and all of
@@ -160,6 +163,11 @@ export const Config = Schema.object({
     .min(1)
     .volatile(),
   maxFulltextChars: Schema.number().default(250_000).step(1).min(1).volatile(),
+  fulltextWindowChars: Schema.number()
+    .default(ZOTERO_FULLTEXT_WINDOW_CHARS)
+    .step(1)
+    .min(1)
+    .volatile(),
   retrieveAttachmentCap: Schema.number().default(16).step(1).min(1).volatile(),
   graphConcurrency: Schema.number().default(4).step(1).min(1).volatile(),
   maxResponseBytes: Schema.number().default(DEFAULT_MAX_RESPONSE_BYTES).step(1).min(1).volatile(),
@@ -200,6 +208,7 @@ export interface ResolvedConfig {
   readonly maxAttachmentRecords: number
   readonly fulltextChunkWords: number
   readonly maxFulltextChars: number
+  readonly fulltextWindowChars: number
   readonly retrieveAttachmentCap: number
   readonly graphConcurrency: number
   readonly maxResponseBytes: number
@@ -405,6 +414,7 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertPositiveInteger('maxAttachmentRecords', plain.maxAttachmentRecords)
   assertPositiveInteger('fulltextChunkWords', plain.fulltextChunkWords)
   assertPositiveInteger('maxFulltextChars', plain.maxFulltextChars)
+  assertPositiveInteger('fulltextWindowChars', plain.fulltextWindowChars)
   assertPositiveInteger('retrieveAttachmentCap', plain.retrieveAttachmentCap)
   assertPositiveInteger('graphConcurrency', plain.graphConcurrency)
   assertPositiveInteger('maxResponseBytes', plain.maxResponseBytes)

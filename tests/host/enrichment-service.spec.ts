@@ -57,7 +57,7 @@ describe('EnrichmentService composition', () => {
     })
     expect(setFulltextEnhancer).toHaveBeenCalledWith(service.enhancer)
     expect(setEvidenceRanker).toHaveBeenCalledWith(service.liveEvidenceRanker)
-    expect(Object.keys(service.enhancer)).toEqual(['lookup'])
+    expect(Object.keys(service.enhancer)).toEqual(['lookup', 'lookupArtifact'])
     await world.ctx.fiber.dispose()
     expect(setFulltextEnhancer).toHaveBeenLastCalledWith(undefined)
     expect(setEvidenceRanker).toHaveBeenLastCalledWith(undefined)
@@ -86,6 +86,8 @@ describe('EnrichmentService artifact lookup', () => {
       text: MARKDOWN,
       format: 'markdown',
       source: 'MinerU (pro)',
+      sourceKind: 'url',
+      sourceLabel: 'https://example.org/…',
       pageCount: 3,
       provenance: parsed.provenance,
     })
@@ -162,5 +164,32 @@ describe('EnrichmentService artifact lookup', () => {
       error: { code: ZOTERO_ENRICHMENT_OUTPUT_INVALID },
     })
     expect(world.fetch).not.toHaveBeenCalled()
+  })
+
+  it('resolves an opaque artifact id back to the stored document read-only', async () => {
+    const world = domain()
+    const parsed = await parseDocument(URL_INPUT, world.deps)
+    const { service, parse } = reader(world)
+    world.fetch.mockClear()
+    await expect(service.enhancer.lookupArtifact?.(parsed.provenance.artifactId)).resolves.toEqual({
+      kind: 'hit',
+      text: MARKDOWN,
+      format: 'markdown',
+      source: 'MinerU (free)',
+      sourceKind: 'url',
+      sourceLabel: 'https://example.org/…',
+      provenance: parsed.provenance,
+    })
+    expect(world.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['HEAD'])
+    expect(parse).not.toHaveBeenCalled()
+  })
+
+  it('reports an unknown artifact id as a fault without probing or parsing', async () => {
+    const world = domain()
+    const { service, parse } = reader(world)
+    const result = await service.enhancer.lookupArtifact?.('f'.repeat(64))
+    expect(result?.kind).toBe('fault')
+    expect(world.fetch).not.toHaveBeenCalled()
+    expect(parse).not.toHaveBeenCalled()
   })
 })

@@ -27,7 +27,6 @@ export async function artifactReadsFixture(text = '# Snapshot', imageCount = 1) 
       mediaType: 'image/png' as const,
       bytes: 4,
     })),
-    documentPath: `/root/${'b'.repeat(64)}/full.md`,
   }
   const candidate: DisplayArtifactCandidate = {
     metadata,

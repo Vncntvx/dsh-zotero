@@ -49,6 +49,7 @@ import { exportMetaOf, type ExportMetaView } from './export-decoder.js'
 import type {
   EvidencePassage,
   ExportArtifact,
+  FulltextRead,
   SearchOccurrence,
   SourceAttachment,
   SourceItem,
@@ -132,6 +133,7 @@ interface ItemDraft {
   readonly facts: DraftFacts
   readonly operations: DraftOperations
   readonly evidence: Map<string, EvidenceDraft>
+  readonly fulltextReads: FulltextRead[]
   bestAttachment?: SourceItem['bestAttachment']
   attachment?: SourceAttachment
   retrievalFacts?: SourceRetrievalFacts
@@ -272,7 +274,18 @@ function resolvedToSourceScope(scope: ZoteroResolvedScope): SourceScope {
 /** The ref argument of one ref-carrying call; null when absent or unusable. */
 function refArgOf(args: ArgsView): string | null {
   const ref = textArg(args, 'ref')
-  return ref === undefined || ref === '' ? null : ref
+  if (ref !== undefined && ref !== '') return ref
+  // A fulltext read addresses one document through source, not through an
+  // item ref. Its attachment ref or opaque artifact id is the trail key.
+  const source = args.value('source')
+  if (source !== undefined && typeof source === 'object' && source !== null) {
+    const record = source as Record<string, unknown>
+    for (const key of ['ref', 'artifactId']) {
+      const value = record[key]
+      if (typeof value === 'string' && value !== '') return value
+    }
+  }
+  return null
 }
 
 /**
@@ -320,6 +333,61 @@ function evidenceKeyOf(item: import('../evidence-item.js').EvidenceItem): string
           artifact.fingerprint,
           artifact.sourceId,
           artifact.generation,
+        ],
+  ])
+}
+
+/**
+ * The dedup identity of one fulltext window: every fact the row presents,
+ * so a re-read of the same window merges and a differently bounded read does
+ * not. `callIds` is the merge accumulator, not part of the identity.
+ */
+function fulltextReadKeyOf(
+  read: Pick<
+    FulltextRead,
+    | 'sourceKind'
+    | 'sourceLabel'
+    | 'textFormat'
+    | 'artifact'
+    | 'coverage'
+    | 'totalChars'
+    | 'inputTruncated'
+    | 'start'
+    | 'end'
+    | 'isTruncated'
+    | 'attachmentRef'
+  >,
+): string {
+  const artifact = read.artifact
+  const coverage = read.coverage
+  return JSON.stringify([
+    read.sourceKind,
+    read.sourceLabel,
+    read.textFormat,
+    read.totalChars,
+    read.inputTruncated,
+    read.start,
+    read.end,
+    read.isTruncated,
+    read.attachmentRef ?? null,
+    artifact === undefined
+      ? null
+      : [
+          artifact.parser,
+          artifact.mode,
+          artifact.artifactId,
+          artifact.fingerprint,
+          artifact.sourceId,
+          artifact.generation,
+        ],
+    coverage === undefined
+      ? null
+      : [
+          coverage.indexedPages,
+          coverage.totalPages,
+          coverage.indexedChars,
+          coverage.totalChars,
+          coverage.complete,
         ],
   ])
 }
@@ -385,6 +453,8 @@ function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): So
     searchesTotal: searches.length,
     evidence,
     evidenceTotal: evidence.length,
+    fulltextReads: draft.fulltextReads.map((read) => ({ ...read, callIds: [...read.callIds] })),
+    fulltextReadsTotal: draft.fulltextReads.length,
     ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
     ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
     ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
@@ -765,6 +835,7 @@ export class SourceWorkspaceIndex {
         facts: { reportedEvidenceCount: 0 },
         operations: emptyOperations(),
         evidence: new Map(),
+        fulltextReads: [],
         exports: [],
         exportedCallIds: new Set(),
         successfulRetrieveCallIds: new Set(),
@@ -821,6 +892,26 @@ export class SourceWorkspaceIndex {
     seq: number,
   ): void {
     const view = retrieveMetaOf(meta)
+    if (view.kind === 'malformed') return
+    // A fulltext window is its own fact: the trail records that a document was
+    // read through this window, not a ranked evidence passage. The mode is
+    // decoupled from the evidence side, so it adds no availability, count,
+    // budget flag, or evidence-run count.
+    if (view.kind === 'fulltext') {
+      const read = view.fulltextRead
+      const key = fulltextReadKeyOf(read)
+      const existing = draft.fulltextReads.findIndex((entry) => fulltextReadKeyOf(entry) === key)
+      if (existing === -1) {
+        draft.fulltextReads.push({ ...read, callIds: [callId] })
+      } else {
+        const previous = draft.fulltextReads[existing]!
+        draft.fulltextReads[existing] = {
+          ...previous,
+          callIds: [...previous.callIds, callId],
+        }
+      }
+      return
+    }
     // A recognized projection always carries `count` (the byte budget may
     // drop `items` alone); only a fully unusable meta yields no facts.
     if (view.items === null && view.count === null) return

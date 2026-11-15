@@ -1160,7 +1160,6 @@ const artifactMetadata = z.object({
   characterCount: z.number().int().nonnegative(),
   pageCount: z.number().int().positive().optional(),
   images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
-  documentPath: z.string().min(1).max(4096),
   title: z.string().max(2048).optional(),
 })
 const artifactPage = z

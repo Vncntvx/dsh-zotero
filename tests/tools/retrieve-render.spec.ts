@@ -382,3 +382,65 @@ describe('zotero_retrieve render', () => {
     expect(text).not.toContain(SEMANTIC_ONLY_NOTE)
   })
 })
+
+describe('zotero_retrieve fulltext render', () => {
+  const render = (value: Record<string, unknown>): string =>
+    (renderRetrieve({} as never, value as never)[0] as { text: string }).text
+  const read = {
+    sourceKind: 'attachment',
+    sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+    textFormat: 'markdown',
+    totalChars: 40_000,
+    inputTruncated: false,
+    start: 0,
+    end: 12_000,
+    text: 'window body',
+    isTruncated: true,
+    nextStart: 12_000,
+  }
+  const value = (overrides: Record<string, unknown> = {}) => ({
+    mode: 'fulltext',
+    ref: 'zotero://user/0/item/ABCD1234',
+    evidence: [],
+    truncated: true,
+    sourcesSkipped: [],
+    queryTerms: [],
+    fulltext: { ...read, ...overrides },
+  })
+
+  it('renders a windowed read with the continuation instruction', () => {
+    const text = render(value() as never)
+    expect(text).toContain(
+      'Full text of zotero://user/0/attachment/EFGH5678 (markdown; attachment source)',
+    )
+    expect(text).toContain('nextStart=12000')
+    expect(text).toContain('window body')
+  })
+
+  it('omits the continuation line on the final window', () => {
+    const text = render(
+      value({ isTruncated: false, nextStart: undefined, start: 28_000, end: 40_000 }) as never,
+    )
+    expect(text).toContain('isTruncated: false')
+    expect(text).not.toContain('nextStart')
+  })
+
+  it('names the input bound when the whole document was cut', () => {
+    const text = render(value({ inputTruncated: true }) as never)
+    expect(text).toContain('The document exceeded maxFulltextChars')
+  })
+
+  it('names the spill handle when the read offers one', () => {
+    const text = render(
+      value({
+        spillRef: {
+          locator: 'spill://session/full.md',
+          bytes: 40_000,
+          retrievalHint: 'Read it from spill storage.',
+        },
+      }) as never,
+    )
+    expect(text).toContain('Full document spill: spill://session/full.md (40000 bytes).')
+    expect(text).toContain('Read it from spill storage.')
+  })
+})

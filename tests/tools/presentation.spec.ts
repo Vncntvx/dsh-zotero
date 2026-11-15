@@ -55,6 +55,7 @@ describe('tool presentation', () => {
     })
     expect(
       definition('zotero_retrieve').presentCall!({
+        mode: 'evidence',
         ref: 'zotero://user/0/item/ABCD1234',
         query: 'tiling',
       }),
@@ -189,7 +190,7 @@ describe('tool presentation', () => {
     ],
     [
       'zotero_retrieve',
-      { ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' },
+      { mode: 'evidence', ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' },
       { count: 4, truncated: true },
       'Zotero evidence: 4 passages (truncated)',
     ],
@@ -274,7 +275,7 @@ describe('tool presentation', () => {
     })
     const argsFor: Record<string, Record<string, unknown>> = {
       zotero_get: { ref: 'zotero://user/0/item/ABCD1234' },
-      zotero_retrieve: { ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' },
+      zotero_retrieve: { mode: 'evidence', ref: 'zotero://user/0/item/ABCD1234', query: 'tiling' },
       zotero_export: { refs: ['zotero://user/0/item/ABCD1234'], format: 'citation' },
       zotero_browse: { kind: 'tags' },
       zotero_changes: {},

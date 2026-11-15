@@ -15,6 +15,7 @@ import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../err
 import { chunkText, tokenize, type EvidenceChunk } from '../evidence.js'
 import { queryTermsAcross } from './evidence-ranker.js'
 import { asRecord, asString } from '../json.js'
+import { DEFAULT_SPILL_CHAR_THRESHOLD } from '../constants.js'
 import { selectAttachments, bestAttachmentFromLinks } from '../attachments.js'
 import {
   formatRef,
@@ -35,8 +36,10 @@ import {
   attachmentFactOf,
   chunkFulltext,
   fetchFulltext,
+  fulltextWindowOf,
   isPdfCandidate,
   normalizeCoverage,
+  readFulltextDocument,
   readFulltextSources,
   lookupParsedFulltext,
   type FulltextDeps,
@@ -50,6 +53,11 @@ import type {
   ZoteroEvidenceSource,
   ZoteroObjectRef,
   ZoteroRetrieveAttachment,
+  ZoteroEvidenceRetrieveRequest,
+  ZoteroEvidenceRetrieveResult,
+  ZoteroFulltextRead,
+  ZoteroFulltextRetrieveRequest,
+  ZoteroFulltextRetrieveResult,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
 } from '../types.js'
@@ -100,7 +108,10 @@ interface RetrievePassage extends Pick<
 }
 
 /** What one fulltext policy arm contributed; `skippedFulltext` reports the source's absence. */
-interface FulltextPolicyOutcome extends Pick<ZoteroRetrieveResult, 'textFormat' | 'artifact'> {
+interface FulltextPolicyOutcome extends Pick<
+  ZoteroEvidenceRetrieveResult,
+  'textFormat' | 'artifact'
+> {
   readonly skippedFulltext: boolean
   readonly fulltextWasCut: boolean
   readonly attachmentRef?: string
@@ -155,8 +166,8 @@ async function readBestFulltext(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
-  let textFormat: ZoteroRetrieveResult['textFormat']
-  let artifact: ZoteroRetrieveResult['artifact']
+  let textFormat: ZoteroEvidenceRetrieveResult['textFormat']
+  let artifact: ZoteroEvidenceRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachmentKey = bestFulltextKey
   // The link arm reports Zotero's own type (possibly empty); the child
@@ -261,8 +272,8 @@ async function readMultiAttachmentFulltext(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
-  let textFormat: ZoteroRetrieveResult['textFormat']
-  let artifact: ZoteroRetrieveResult['artifact']
+  let textFormat: ZoteroEvidenceRetrieveResult['textFormat']
+  let artifact: ZoteroEvidenceRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachments: ZoteroRetrieveAttachment[] | undefined
   let candidates: { key: string; contentType?: string }[]
@@ -399,11 +410,27 @@ async function readMultiAttachmentFulltext(
   }
 }
 
+export function retrieve(
+  deps: FulltextDeps,
+  request: ZoteroEvidenceRetrieveRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroEvidenceRetrieveResult>
+export function retrieve(
+  deps: FulltextDeps,
+  request: ZoteroFulltextRetrieveRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroFulltextRetrieveResult>
+export function retrieve(
+  deps: FulltextDeps,
+  request: ZoteroRetrieveRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroRetrieveResult>
 export async function retrieve(
   deps: FulltextDeps,
   request: ZoteroRetrieveRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroRetrieveResult> {
+  if (request.mode === 'fulltext') return await readFulltextMode(deps, request, signal)
   // Admit the ranking scope before any source I/O so an accepted request keeps
   // its committed model/config generation for its whole lifetime.
   const scope = deps.ranker.admit?.()
@@ -414,12 +441,46 @@ export async function retrieve(
   }
 }
 
+/**
+ * `mode:"fulltext"` reads one document in source order instead of ranking
+ * passages. Each call returns one character window of the whole document,
+ * which is itself bounded by `maxFulltextChars`; the window size is `maxChars`
+ * and the chain continues with `nextStart`. The first window of a long
+ * document also names a spill copy of the whole bounded text, so a caller that
+ * wants every character in one handle can read that instead of walking.
+ */
+async function readFulltextMode(
+  deps: FulltextDeps,
+  request: ZoteroFulltextRetrieveRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroFulltextRetrieveResult> {
+  const document = await readFulltextDocument(deps, request.source, signal)
+  const { read, boundedText } = fulltextWindowOf(
+    document,
+    request.start,
+    request.maxChars,
+    deps.limits.maxFulltextChars,
+  )
+  // One spill per read: only the first window pays for it, and only when
+  // another window follows and the bounded document is long enough that a
+  // single handle beats the chain.
+  const spillRef =
+    request.start === 0 &&
+    read.isTruncated &&
+    deps.spill !== undefined &&
+    boundedText.length > DEFAULT_SPILL_CHAR_THRESHOLD
+      ? await deps.spill(boundedText)
+      : undefined
+  const fulltext: ZoteroFulltextRead = spillRef === undefined ? read : { ...read, spillRef }
+  return { mode: 'fulltext', fulltext }
+}
+
 async function retrieveWithScope(
   deps: FulltextDeps,
-  request: ZoteroRetrieveRequest,
+  request: ZoteroEvidenceRetrieveRequest,
   scope: symbol | undefined,
   signal?: AbortSignal,
-): Promise<ZoteroRetrieveResult> {
+): Promise<ZoteroEvidenceRetrieveResult> {
   const policy = request.attachmentPolicy ?? 'best'
   if (policy === 'specified' && (request.attachmentRefs?.length ?? 0) === 0) {
     throw new ZoteroError(
@@ -479,8 +540,8 @@ async function retrieveWithScope(
   let fulltextWasCut = false
   let attachmentRef: string | undefined
   let attachmentContentType: string | undefined
-  let textFormat: ZoteroRetrieveResult['textFormat']
-  let artifact: ZoteroRetrieveResult['artifact']
+  let textFormat: ZoteroEvidenceRetrieveResult['textFormat']
+  let artifact: ZoteroEvidenceRetrieveResult['artifact']
   let coverage: ZoteroCoverage | undefined
   let attachments: ZoteroRetrieveAttachment[] | undefined
   const passages: RetrievePassage[] = []
@@ -647,6 +708,7 @@ async function retrieveWithScope(
     (a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b),
   )
   return {
+    mode: 'evidence',
     ref: refStringFor(ref.library as SupportedLocalLibrary, 'item', ref.key, serverId),
     ...(attachmentRef !== undefined ? { attachmentRef } : {}),
     ...(attachmentContentType !== undefined ? { attachmentContentType } : {}),

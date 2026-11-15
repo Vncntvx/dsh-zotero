@@ -52,6 +52,7 @@ export const paperDigest: ResearchSop = {
     {
       tool: 'zotero_retrieve',
       args: {
+        mode: 'evidence',
         ref: EXAMPLE_REF,
         query: 'core method baseline dataset limitations',
         sources: ['annotation', 'fulltext'],

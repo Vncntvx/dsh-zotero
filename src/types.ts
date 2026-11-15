@@ -465,7 +465,53 @@ export type ZoteroEvidenceSource = EvidenceSource
  */
 export type ZoteroAttachmentPolicy = 'best' | 'allIndexed' | 'specified'
 
-export interface ZoteroRetrieveRequest {
+/** The two mutually exclusive `zotero_retrieve` modes. */
+export type ZoteroRetrieveMode = 'evidence' | 'fulltext'
+
+/** A full-text source identified by a Zotero attachment ref or opaque artifact id. */
+export type ZoteroFulltextSource =
+  | { readonly kind: 'ref'; readonly ref: string }
+  | { readonly kind: 'artifactId'; readonly artifactId: string }
+
+/** One bounded window of a document's complete text in source order. */
+export interface ZoteroFulltextRead {
+  /** The kind of source the window was read from. */
+  sourceKind: 'attachment' | 'url'
+  /** Display label using an attachment ref or URL origin. */
+  sourceLabel: string
+  textFormat: ZoteroFulltextFormat
+  /** Exact parsed artifact used by a parsed-source hit; absent for Zotero index text. */
+  artifact?: ZoteroArtifactProvenance
+  /** Zotero's own indexing coverage; absent for parsed artifacts. */
+  coverage?: ZoteroCoverage
+  /** Total characters in the bounded document. */
+  totalChars: number
+  /** Whether `maxFulltextChars` cut the document before windowing. */
+  inputTruncated: boolean
+  /** Character span [start, end) of this window in the bounded document. */
+  start: number
+  end: number
+  text: string
+  /** Whether another window follows; continue with `nextStart`. */
+  isTruncated: boolean
+  nextStart?: number
+  /** Zotero attachment ref behind this read, when one is known. */
+  attachmentRef?: string
+  /**
+   * A one-handle copy of the whole bounded document in the host spill store,
+   * present on the first window of a long read when a store is available.
+   */
+  spillRef?: { readonly locator: string; readonly bytes: number; readonly retrievalHint: string }
+}
+
+interface ZoteroRetrieveRequestBase {
+  /** Which mode produced this request. */
+  mode: ZoteroRetrieveMode
+}
+
+export interface ZoteroEvidenceRetrieveRequest extends ZoteroRetrieveRequestBase {
+  mode: 'evidence'
+  /** The item ref whose sources enter ranking. */
   ref: ZoteroObjectRef
   query: string
   /**
@@ -480,6 +526,18 @@ export interface ZoteroRetrieveRequest {
   /** Required for `attachmentPolicy:"specified"`: attachment refs of the same library. */
   attachmentRefs?: ZoteroObjectRef[]
 }
+
+export interface ZoteroFulltextRetrieveRequest extends ZoteroRetrieveRequestBase {
+  mode: 'fulltext'
+  /** The document to read: a Zotero attachment ref or an opaque artifact id. */
+  source: ZoteroFulltextSource
+  /** Character offset of the first window. */
+  start: number
+  /** Maximum characters in one window. */
+  maxChars: number
+}
+
+export type ZoteroRetrieveRequest = ZoteroEvidenceRetrieveRequest | ZoteroFulltextRetrieveRequest
 
 /**
  * A ranked field of an evidence passage. Only an annotation has two: the
@@ -570,7 +628,9 @@ export interface ZoteroCoverage {
   complete: boolean
 }
 
-export interface ZoteroRetrieveResult {
+/** The evidence-mode result: ranked passages plus the facts that bound them. */
+export interface ZoteroEvidenceRetrieveResult {
+  mode: 'evidence'
   ref: string
   /**
    * The attachment behind the fulltext evidence when exactly one attachment
@@ -617,6 +677,19 @@ export interface ZoteroRetrieveResult {
    */
   rankedRoutes?: ('lexical' | 'semantic')[]
 }
+
+/**
+ * The fulltext-mode result: one bounded window of a complete document. It
+ * carries no evidence-shaped fields: this mode never ranks, never skips a
+ * source, and its window bound is `fulltext`'s own fact.
+ */
+export interface ZoteroFulltextRetrieveResult {
+  mode: 'fulltext'
+  fulltext: ZoteroFulltextRead
+}
+
+/** One retrieval outcome, discriminated by the mode that produced it. */
+export type ZoteroRetrieveResult = ZoteroEvidenceRetrieveResult | ZoteroFulltextRetrieveResult
 
 export type ZoteroAttachmentLocation =
   | {
@@ -1588,12 +1661,23 @@ export interface ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroAttachmentLocation>
   /**
-   * Gather ranked evidence passages for one item.
-   * @param request - the item ref, ranking query, sources, and passage cap.
+   * Gather ranked evidence passages for one item, or read one complete
+   * document in windows under `mode:"fulltext"`. The result arm follows the
+   * request's mode.
+   * @param request - the mode, the item ref or fulltext source, and its bounds.
    * @param signal - caller cancellation; forwarded to the transport.
-   * @returns the bounded ranked evidence with a truncation flag.
+   * @param spill - optional whole-document spill for fulltext-mode reads.
+   * @returns the bounded ranked evidence or one fulltext window.
    */
-  retrieve?(request: ZoteroRetrieveRequest, signal?: AbortSignal): Promise<ZoteroRetrieveResult>
+  retrieve?(
+    request: ZoteroEvidenceRetrieveRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroEvidenceRetrieveResult>
+  retrieve?(
+    request: ZoteroFulltextRetrieveRequest,
+    signal?: AbortSignal,
+    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
+  ): Promise<ZoteroFulltextRetrieveResult>
   /**
    * Export citations or formatted output for the requested items.
    * @param request - the item refs, format, and optional style/locale.

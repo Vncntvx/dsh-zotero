@@ -42,7 +42,6 @@ const READY = {
   artifactId: 'b'.repeat(64),
   fingerprint: 'c'.repeat(64),
   characterCount: 32,
-  documentPath: `/root/${'b'.repeat(64)}/full.md`,
 }
 
 function readerOf(pages: (offset: number) => RemoteResult<ZoteroDocumentArtifactResultView>) {

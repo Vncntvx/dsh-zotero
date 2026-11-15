@@ -30,6 +30,7 @@ describe('SourceEvidence helpers', () => {
     expect(retrievalSummaryLineOf(itemWithoutSummary, t)).toBe('')
 
     const itemNormal = sourceOf({
+      fulltextReads: [],
       evidenceTotal: 5,
       facts: { reportedEvidenceCount: 7 },
       retrievalSummary: {
@@ -44,6 +45,7 @@ describe('SourceEvidence helpers', () => {
     expect(lineNormal).not.toContain(t('budgetLimitedNote'))
 
     const itemTruncated = sourceOf({
+      fulltextReads: [],
       evidenceTotal: 5,
       facts: { reportedEvidenceCount: 7 },
       retrievalSummary: {
@@ -94,6 +96,7 @@ describe('SourceEvidence component', () => {
         truncated: false,
         sourceAvailability: {},
       },
+      fulltextReads: [],
       evidenceTotal: 3,
       evidence: [
         passageOf({
@@ -340,6 +343,28 @@ describe('SourceEvidence component', () => {
       fireEvent.click(screen.getByRole('button', { name: t('jumpToPageInSidebar') }))
     })
     expect(screen.getByRole('alert').textContent).toContain(t('libraryPdfReaderUnavailable'))
+  })
+
+  it('renders a fulltext-read card instead of an empty evidence note', () => {
+    const item = sourceOf({
+      fulltextReads: [
+        {
+          sourceKind: 'attachment' as const,
+          sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+          textFormat: 'markdown' as const,
+          totalChars: 40_000,
+          inputTruncated: false,
+          start: 0,
+          end: 12_000,
+          isTruncated: true,
+          callIds: ['fulltext-read'],
+        },
+      ],
+    })
+    render(<SourceEvidence item={item} t={t} />)
+    expect(screen.getByText(/已读取/)).toBeDefined()
+    expect(screen.getByText(t('fulltextReadWindowed'))).toBeDefined()
+    expect(screen.queryByText(t('evidenceNotRetrieved'))).toBeNull()
   })
 
   it('renders page controls when a pager is provided', () => {

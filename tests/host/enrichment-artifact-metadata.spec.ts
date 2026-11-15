@@ -62,9 +62,9 @@ describe('stored parsed artifact metadata', () => {
     expect(result.metadata.artifactId).toBe(CACHE_KEY)
     expect(result.metadata.title).toBe('Parsed body')
     expect(result.metadata.targetLabel).toBe(ARTIFACT.meta.identity)
-    // The locator an explanation hands the model points at the artifact's own
-    // Markdown, which is the file every full read goes through.
-    expect(result.metadata.documentPath.endsWith(`/${CACHE_KEY}/full.md`)).toBe(true)
+    // Full reads go through zotero_retrieve mode="fulltext"; the wire never
+    // exposes an absolute artifact path to the browser.
+    expect(JSON.stringify(result.metadata)).not.toContain('full.md')
   })
 
   it('answers metadata by attachment ref without resolving the attachment', async () => {

@@ -204,6 +204,26 @@ describe('the write policy prompt section', () => {
     await on.teardown()
   })
 
+  it('states the fulltext guidance only on steps that admit zotero_retrieve', async () => {
+    const on = await setupHostLane({ writeEnabled: true })
+    const agent = {}
+    const searchOnly = policyOf(
+      await on.ctx.systemPrompt.assemble({
+        toolSet: admitted(on, agent, ['zotero_search']),
+        scope: agent,
+      }),
+    )
+    expect(searchOnly).not.toContain('mode="fulltext"')
+    const withRetrieve = policyOf(
+      await on.ctx.systemPrompt.assemble({
+        toolSet: admitted(on, agent, ['zotero_retrieve']),
+        scope: agent,
+      }),
+    )
+    expect(withRetrieve).toContain('mode="fulltext"')
+    await on.teardown()
+  })
+
   it('omits the read route for a browse-only step', async () => {
     const on = await setupHostLane({ writeEnabled: true })
     const agent = {}

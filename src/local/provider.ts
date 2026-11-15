@@ -115,6 +115,10 @@ import type {
   ZoteroObjectRef,
   ZoteroProgressEvent,
   ZoteroProvider,
+  ZoteroEvidenceRetrieveRequest,
+  ZoteroEvidenceRetrieveResult,
+  ZoteroFulltextRetrieveRequest,
+  ZoteroFulltextRetrieveResult,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
   ZoteroSearchOptions,
@@ -415,13 +419,26 @@ export class LocalApiProvider implements ZoteroProvider {
 
   /**
    * Gather ranked evidence passages for one item across the requested
-   * sources. The domain logic lives in `local/retrieve`; this is the seam.
+   * sources, or read one complete document in windows under `mode:"fulltext"`.
+   * The spill sink, when present, is offered to the fulltext-mode read so a
+   * long document can be persisted under one handle.
    */
+  retrieve(
+    request: ZoteroEvidenceRetrieveRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroEvidenceRetrieveResult>
+  retrieve(
+    request: ZoteroFulltextRetrieveRequest,
+    signal?: AbortSignal,
+    spill?: import('./retrieve-fulltext.js').FulltextSpillSink,
+  ): Promise<ZoteroFulltextRetrieveResult>
   async retrieve(
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
+    spill?: import('./retrieve-fulltext.js').FulltextSpillSink,
   ): Promise<ZoteroRetrieveResult> {
-    return retrieveDomain(this.deps(), request, signal)
+    const deps = this.deps()
+    return retrieveDomain(spill === undefined ? deps : { ...deps, spill }, request, signal)
   }
 
   /**

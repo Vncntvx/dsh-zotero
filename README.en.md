@@ -98,7 +98,7 @@ Ask questions about your research topics directly in chat. The agent automatical
   ```
 - **Locate original passages**: Ask deeper questions about paper details; the agent extracts relevant passages from local PDF full text and annotations, with original page numbers attached.
   ```text
-  Agent → zotero_retrieve(ref: "zotero://user/0/item/ABCD1234", query: "methodology", sources: ["annotation", "fulltext"])
+  Agent → zotero_retrieve(mode: "evidence", ref: "zotero://user/0/item/ABCD1234", query: "methodology", sources: ["annotation", "fulltext"])
   ```
 - **Generate formatted citations**: Ask for formatted outputs; the agent generates BibTeX entries or CSL citations in your requested style.
   ```text

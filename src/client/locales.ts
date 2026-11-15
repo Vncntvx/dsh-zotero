@@ -107,7 +107,7 @@ export const en = {
   parsedExplain: 'Explain',
   // Model-facing copy stays English in every dictionary.
   parsedExplainPrompt:
-    'Read this paper’s parsed Markdown in full before answering.\n\nParsed Markdown: {path}\n\nThen explain the quoted passage below: what it means in the paper, and what it does for the argument.',
+    'Explain request (not part of the paper): read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: 'Copy selection',
   parsedSelectionMenu: 'Actions for the selection',
   parsedUnavailable: 'This parsed result is unavailable. Parse the PDF again.',
@@ -467,6 +467,8 @@ export const en = {
   fulltextChunkWordsHint: 'Word count of each full-text chunk entering passage ranking.',
   maxFulltextChars: 'Full-text character bound',
   maxFulltextCharsHint: 'Most full-text characters considered when ranking passages.',
+  fulltextWindowChars: 'Full-text window characters',
+  fulltextWindowCharsHint: 'Characters returned in one fulltext-mode window.',
   retrieveAttachmentCap: 'Attachment cap per retrieval',
   retrieveAttachmentCapHint: 'Most attachments one retrieval ranks full text from.',
   graphConcurrency: 'Retrieve concurrency',
@@ -623,6 +625,11 @@ export const en = {
   sourcesOmittedNote:
     "The earliest {count} sources are counted; this list shows the session's first entries.",
   evidenceOmittedNote: 'The full trail holds {count} passages for this item; the first are listed.',
+  fulltextReadCard:
+    'Read the {format} document from {source}: characters {start}–{end} of {total}.',
+  fulltextReadWindowed: 'More windows follow in this document read.',
+  fulltextReadBounded: 'The document reached the configured full-text character bound.',
+  fulltextReadsOmittedNote: 'This item has {count} fulltext windows; the first are listed.',
   exportsOmittedNote: 'The full trail holds {count} exports; the first are listed.',
   detailOmittedNote:
     'The card outgrew its byte budget, so its detail rows were omitted; the complete data stays in the result.',
@@ -802,6 +809,7 @@ export const en = {
   toolSummaryFound: 'found {count} items',
   toolSummaryFoundWithNotes: 'found {count} items (+{notes} notes)',
   toolSummaryEvidence: 'extracted {count} passages',
+  toolSummaryFulltextWindow: 'read characters {start}–{end} of {total}',
   toolSummaryExport: 'exported {format} ({count} items)',
   toolSummaryItem: '{title} ({year})',
   toolSummaryCreateNote: 'Created note "{title}"',
@@ -1060,7 +1068,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   parsedExplain: '让模型解释',
   // 模型侧文案在每个字典里保持英文。
   parsedExplainPrompt:
-    'Read this paper’s parsed Markdown in full before answering.\n\nParsed Markdown: {path}\n\nThen explain the quoted passage below: what it means in the paper, and what it does for the argument.',
+    'Explain request (not part of the paper): read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: '复制选中内容',
   parsedSelectionMenu: '选中内容的操作',
   parsedUnavailable: '解析结果不可用，请重新解析这个 PDF。',
@@ -1388,6 +1396,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   fulltextChunkWordsHint: '全文按词数分块后参与相关片段排序。',
   maxFulltextChars: '全文字符上限',
   maxFulltextCharsHint: '参与相关片段排序的全文最多字数。',
+  fulltextWindowChars: '全文窗口字符数',
+  fulltextWindowCharsHint: '全文读取模式每次返回的字符数。',
   retrieveAttachmentCap: '单次取文附件上限',
   retrieveAttachmentCapHint: '单次取文最多参与全文排序的附件数。',
   graphConcurrency: '取文并发数',
@@ -1533,6 +1543,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   omittedRowsNote: '另有 {count} 条检索结果未逐条列出。',
   sourcesOmittedNote: '共计入账 {count} 个来源；此处按会话顺序列出开头部分。',
   evidenceOmittedNote: '该文献的完整轨迹共 {count} 条段落；此处列出开头部分。',
+  fulltextReadCard: '已读取 {source} 的 {format} 文档：第 {start}–{end} 字符，共 {total} 字符。',
+  fulltextReadWindowed: '这是文档读取中的一个窗口，后续还有窗口。',
+  fulltextReadBounded: '文档达到配置的全文字符上限。',
+  fulltextReadsOmittedNote: '该文献共有 {count} 个全文窗口；此处列出开头部分。',
   exportsOmittedNote: '完整轨迹共 {count} 次导出；此处列出开头部分。',
   detailOmittedNote: '结果超出卡片的字节预算，明细已省略；完整数据保留在原始结果中。',
   noSources: '本会话还没有 Zotero 文献。',
@@ -1709,6 +1723,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryFound: '找到 {count} 篇文献',
   toolSummaryFoundWithNotes: '找到 {count} 篇文献 (+{notes} 条笔记)',
   toolSummaryEvidence: '提取 {count} 条原文片段',
+  toolSummaryFulltextWindow: '读取第 {start}–{end} 字符，共 {total} 字符',
   toolSummaryExport: '导出 {format} ({count} 篇)',
   toolSummaryItem: '{title} ({year})',
   toolSummaryCreateNote: '已创建笔记 "{title}"',

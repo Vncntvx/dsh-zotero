@@ -173,7 +173,6 @@ describe('the item PDF actions', () => {
           artifactId: 'b'.repeat(64),
           fingerprint: 'c'.repeat(64),
           characterCount: 12,
-          documentPath: `/root/${'b'.repeat(64)}/full.md`,
         },
       }
     })

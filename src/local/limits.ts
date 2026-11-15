@@ -25,7 +25,7 @@ export interface LocalApiLimits {
   readonly maxEvidenceChars: number
   /** Upper bound for the number of evidence passages. */
   readonly maxEvidencePassages: number
-  /** Character bound for full text accepted into evidence ranking. */
+  /** Character bound for full text accepted into evidence ranking and fulltext reads. */
   readonly maxFulltextChars: number
   /** Provider hard limit for export output; never mid-truncated. */
   readonly maxExportChars: number

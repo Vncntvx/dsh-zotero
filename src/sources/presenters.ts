@@ -218,7 +218,7 @@ function fulltextFactsOf(
 }
 
 /** Every artifact identity field is needed to attribute a replayed passage. */
-function artifactOf(value: unknown): EvidenceItem['artifact'] {
+export function artifactOf(value: unknown): EvidenceItem['artifact'] {
   if (!isRecord(value)) return undefined
   const { parser, mode, artifactId, fingerprint, sourceId, generation } = value
   if (

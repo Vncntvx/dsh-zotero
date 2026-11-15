@@ -62,6 +62,7 @@ export const manuscriptReferenceAudit: ResearchSop = {
     {
       tool: 'zotero_retrieve',
       args: {
+        mode: 'evidence',
         ref: EXAMPLE_REF,
         query: 'the specific draft claim and its limitation',
         sources: ['annotation', 'fulltext'],

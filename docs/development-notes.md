@@ -76,16 +76,6 @@
 - **验证**：`npm publish --dry-run` 全程通过，日志里同时出现 `archive-worker pack smoke ok` 与 `verify-pack ok`；单独 `npm run release:check` 仍通过。
 - **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「冒烟必须拿到真实 tarball」的断言。
 
-## DN-6：选段解释草稿携带产物 Markdown 的宿主路径
-
-- **类型**：安全边界 / 其他开发约束。
-- **状态**：生效中（2026-11-15）。
-- **位置**：`artifact-store.ts` 的 `documentPath`、`artifact-metadata.ts` 的 `storedMetadata`、`service.ts` 的 display candidate、`contract.ts` 的 `ZoteroArtifactMetadataView.documentPath`、`ParsedDocumentTab.tsx` 的 `explain` 与 `parsedExplainPrompt`。
-- **要点**：解析结果页选中一段文本点「让模型解释」时，整段请求作为**一张** `insertQuote` 卡片插入输入框：开头是指令（给出该产物 Markdown 的**绝对路径** `<outputDir>/<cacheKey>/full.md`，并要求模型先通读该文件再解释），随后是文献元数据与条目 ref，最后是被解释的选段。宿主把 quote 定义为「被引用的原文」，严格说指令不该出现在 quote 里；本插件把两者放进同一张卡片，是为了让输入框只出现一个可整体删除的块——拆成 `insertText` + `insertQuote` 会在气泡上方留下散落的纯文本（实测过的回退）。路径是唯一能读到整篇论文的定位：`zotero_retrieve` 只返回排序片段，URL 来源的产物也没有条目 ref。文案固定英文（模型侧文案，两个字典同值），不随界面语言切换。路径经 wire 到客户端是刻意的（草稿由浏览器拼装），但界面不渲染它；除该字段外，产物路径仍不出现在任何回执或显示文本里。
-- **触发条件**：产物目录改为远端或沙箱不可读、`documentPath` 从 metadata 视图移除、宿主 `InputActions` 的 `insertText`/`insertQuote` 语义变化，或宿主提供「指令卡片」类容器时，重新验证模型确实读到整篇 Markdown、且输入框仍只有一个可删除块。
-- **验证**：`tests/host/enrichment-artifact-metadata.spec.ts` 断言路径拼装；`tests/client/library/parsed-document-details.spec.tsx` 与 `parsed-document-selection.spec.tsx` 断言 `insertQuote` 收到含路径与选段的整段（无残留 `{path}`）、未调用 `insertText`，并覆盖插入被拒的失败路径。
-- **后续处理**：若能给模型一个按 artifactId 读产物的工具（或让读工具接受 artifactId），把草稿改为该定位并删除 `documentPath` 字段，浏览器不再接触宿主路径。
-
 ## DN-7：语义排序运行时打进包内，不做依赖
 
 - **类型**：兼容性 / 安装策略。
@@ -103,4 +93,14 @@
 
 ## 已退役条目
 
-目前没有。退役条目保留标题、退役时间和替代机制，便于回溯为什么曾经这样做。
+退役条目保留原标题、退役时间与替代机制，便于回溯为什么曾经这样做。
+
+### DN-6：选段解释草稿携带产物 Markdown 的宿主路径
+
+- **类型**：安全边界 / 其他开发约束。
+- **状态**：已退役（2026-11-15，本次改动起生效）。
+- **位置**：`ParsedDocumentTab.tsx` 的 `explain` 与 `parsedExplainPrompt`、`parsed-tab.ts` 的地址、`tools/retrieve.ts` 的 `mode="fulltext"`、`local/retrieve.ts` 的窗口分支、`enrichment/service.ts` 的 `lookupArtifact`。
+- **要点**：原实现把产物 Markdown 的**绝对路径** `<outputDir>/<cacheKey>/full.md` 经 wire 交给浏览器，让解释草稿要求模型先读该文件再解释选段；`zotero_retrieve` 当时只返回排序片段、URL 来源产物也没有条目 ref，路径是唯一能通读整篇论文的定位。现 `zotero_retrieve` 的 `mode="fulltext"` 可按 `source`（附件 ref 或 `artifactId`）分页窗口读取完整文档，且窗口默认尺寸小于内联交付预算（调低 `maxInlineResultBytes`/`maxInlineResultTokens` 时可能落为 file 交付）；解释草稿改为要求模型从 `start=0` 起按 `nextStart` 连续调用该工具直到 `isTruncated` 为 `false`，再解释选段。`documentPath` 已从 wire、metadata 视图与 store 删除，浏览器不再接触宿主路径；整段请求仍是**一张** `insertQuote` 卡片（拆成 `insertText` + `insertQuote` 会在气泡上方留下散落纯文本，实测过的回退），模型侧文案固定英文、两个字典同值，并写明写作规格：用对话语言回答、一句话释义先行、术语首现解释、区分论文主张与自身解读、读取失败时如实说明。整篇读取经 `FulltextEnhancer.lookup` / `lookupArtifact` 只读命中产物，永不触发解析、下载或上传；工具调用由轨迹投影为独立的「全文读取窗口」事实（每条事实是一个窗口，不宣称整篇已读）。长文档的首窗口在宿主提供 spill 存储时会带 `spillRef`，给出整篇有界文本的一次性句柄；窗口链不依赖它也能读完，缺存储时结果不带该字段。每个窗口是一次独立调用：同一文档的 W 个窗口各自做一次源校验与整篇读取（无跨调用缓存，保持无状态与代际安全）；若该成本成为问题，应在增强侧加按代际失效的文档缓存，而不是在 core 里缓存。
+- **触发条件**：`zotero_retrieve` 的 fulltext 模式或 `lookupArtifact` 语义变化、宿主 `InputActions` 的 `insertText`/`insertQuote` 语义变化、宿主提供「指令卡片」类容器、或全文窗口改为 file 交付时，重新验证模型确实读到整篇文档、输入框仍只有一个可删除块，且轨迹仍记录该次窗口读取。
+- **验证**：`tests/tools/retrieve-fulltext.spec.ts` 断言窗口内联交付与模式互斥；`tests/local/retrieve/retrieve-fulltext.spec.ts` 断言窗口无损拼接、artifactId 寻址、miss/fault 与截断；`tests/host/source-ledger-fulltext.spec.ts` 断言轨迹事实；`tests/client/library/parsed-document-details.spec.tsx` 与 `parsed-document-selection.spec.tsx` 断言草稿含 `mode="fulltext"` 与 `source`、无路径与残留占位、未调用 `insertText`；`tests/host/enrichment-artifact-metadata.spec.ts` 断言 wire 不再含 `full.md`。
+- **后续处理**：退役说明——原「若模型获得按 artifactId 读产物的工具则删除 `documentPath`」已由本次改动兑现；若宿主改为不允许模型发起工具调用，需要重审「草稿指示模型调用」这一入口，并同步轨迹可见性验收。

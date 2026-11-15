@@ -17,6 +17,7 @@ import { formatCreatorsList } from './creators.js'
 import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroArtifactProvenance,
   ZoteroCoverage,
   ZoteroEvidenceField,
   ZoteroEvidenceSource,
@@ -163,7 +164,25 @@ interface ZoteroSourceAvailabilityView {
   readonly unavailable: boolean
 }
 
-interface ZoteroRetrievePresentationMeta {
+/** Provenance and bounds for one fulltext-mode window in the literature trail. */
+export interface ZoteroFulltextReadFact {
+  readonly sourceKind: 'attachment' | 'url'
+  readonly sourceLabel: string
+  readonly textFormat: 'markdown' | 'text'
+  readonly artifact?: ZoteroArtifactProvenance
+  /** Zotero's own indexing coverage; absent for parsed artifacts. */
+  readonly coverage?: ZoteroCoverage
+  readonly totalChars: number
+  readonly inputTruncated: boolean
+  readonly start: number
+  readonly end: number
+  readonly isTruncated: boolean
+  readonly attachmentRef?: string
+}
+
+/** The evidence-mode card facts: ranked passages and their bounds. */
+interface ZoteroEvidenceRetrievePresentationMeta {
+  readonly mode: 'evidence'
   readonly count: number
   readonly sources: ZoteroEvidenceSource[]
   readonly truncated: boolean
@@ -178,6 +197,15 @@ interface ZoteroRetrievePresentationMeta {
   /** Per-source availability facts, keyed by the requested source names. */
   readonly sourceAvailability: Record<string, ZoteroSourceAvailabilityView>
 }
+
+/** The fulltext-mode card facts: one window, and nothing evidence-shaped. */
+interface ZoteroFulltextRetrievePresentationMeta {
+  readonly mode: 'fulltext'
+  readonly fulltextRead: ZoteroFulltextReadFact
+}
+
+type ZoteroRetrievePresentationMeta =
+  ZoteroEvidenceRetrievePresentationMeta | ZoteroFulltextRetrievePresentationMeta
 
 /** The canonical retrieve output the projector reads. */
 type RetrieveProjectionInput = ZoteroRetrieveResult
@@ -442,20 +470,40 @@ export function projectMatchReferencesMeta(value: ZoteroMatchReferencesResult): 
 }
 
 /**
- * Project one retrieval result into card-sized evidence facts. Fulltext
- * passages never carry page locators, so the projection copies what the
- * canonical record owns and nothing more. The per-source availability facts
- * come from the canonical result alone: `requested` is the caller's source
- * list, `unavailable` the skipped list, `returnedPassages` the evidence count
- * per source.
+ * Project one retrieval result into card-sized facts, one arm per mode. The
+ * evidence arm copies passages and derives per-source availability from the
+ * canonical result alone (`requested` is the caller's source list,
+ * `unavailable` the skipped list, `returnedPassages` the evidence count per
+ * source). The fulltext arm carries only the window fact: that mode has no
+ * evidence sources, no passage budget, and no query, so none of those keys
+ * exist on it.
  * @param value - the canonical retrieval result.
- * @param requestedSources - the sources the call asked for.
- * @returns the bounded projection.
+ * @param requestedSources - the evidence sources the call asked for.
+ * @returns the bounded projection for the result's mode.
  */
 export function projectRetrieveMeta(
   value: RetrieveProjectionInput,
   requestedSources: readonly ZoteroEvidenceSource[],
 ): ZoteroRetrievePresentationMeta {
+  if (value.mode === 'fulltext') {
+    const read = value.fulltext
+    return {
+      mode: 'fulltext',
+      fulltextRead: {
+        sourceKind: read.sourceKind,
+        sourceLabel: read.sourceLabel,
+        textFormat: read.textFormat,
+        ...(read.artifact === undefined ? {} : { artifact: read.artifact }),
+        ...(read.coverage === undefined ? {} : { coverage: read.coverage }),
+        totalChars: read.totalChars,
+        inputTruncated: read.inputTruncated,
+        start: read.start,
+        end: read.end,
+        isTruncated: read.isTruncated,
+        ...(read.attachmentRef === undefined ? {} : { attachmentRef: read.attachmentRef }),
+      },
+    }
+  }
   const items = value.evidence.slice(0, MAX_PRESENTATION_EVIDENCE_PASSAGES).map((entry) => {
     const preview = truncateChars(entry.text, MAX_PRESENTATION_EVIDENCE_CHARS)
     return {
@@ -490,6 +538,7 @@ export function projectRetrieveMeta(
     }
   }
   return {
+    mode: 'evidence',
     count: value.evidence.length,
     sources: sourcesOf(value.evidence),
     truncated: value.truncated,

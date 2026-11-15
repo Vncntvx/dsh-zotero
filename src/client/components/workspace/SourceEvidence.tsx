@@ -139,7 +139,8 @@ export function SourceEvidence({
   resolveAttachment,
   pager,
 }: SourceEvidenceProps) {
-  if (item.retrievalFacts === undefined) {
+  const hasFulltextReads = item.fulltextReads.length > 0
+  if (item.retrievalFacts === undefined && !hasFulltextReads) {
     return (
       <div className={css.panel}>
         <p className={css.note}>{t('evidenceNotRetrieved')}</p>
@@ -152,8 +153,34 @@ export function SourceEvidence({
   return (
     <div className={css.panel}>
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}
+      {hasFulltextReads && (
+        <div className={css.passages}>
+          {item.fulltextReads.map((read, index) => (
+            <div key={`${read.sourceLabel}-${read.start}-${index}`} className={css.passageCard}>
+              <p className={css.passageHeader}>
+                {t('fulltextReadCard', {
+                  source: read.sourceLabel,
+                  format: read.textFormat,
+                  start: read.start,
+                  end: read.end,
+                  total: read.totalChars,
+                })}
+              </p>
+              {read.isTruncated && <p className={css.note}>{t('fulltextReadWindowed')}</p>}
+              {read.inputTruncated && <p className={css.note}>{t('fulltextReadBounded')}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+      {item.fulltextReadsTotal > item.fulltextReads.length && (
+        <p className={css.note}>
+          {t('fulltextReadsOmittedNote', { count: item.fulltextReadsTotal })}
+        </p>
+      )}
       {item.evidence.length === 0 ? (
-        <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
+        hasFulltextReads ? null : (
+          <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
+        )
       ) : (
         <div className={css.passages}>
           {item.evidence.map((passage, index) => (

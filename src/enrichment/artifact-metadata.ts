@@ -76,7 +76,6 @@ export async function storedMetadata(
       fingerprint: meta.contentFingerprint,
       characterCount: meta.characterCount,
       images: meta.images ?? [],
-      documentPath: store.documentPath(cacheKey),
       ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
       ...(meta.title !== undefined ? { title: meta.title } : {}),
     },

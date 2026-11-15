@@ -215,6 +215,7 @@ describe('retrieve ranking', () => {
     expect((await provider.retrieve(base)).evidence).toEqual([])
     const withVariant = await provider.retrieve({
       ...base,
+      mode: 'evidence',
       queryVariants: ['perceived legitimacy'],
     })
     expect(withVariant.evidence).toHaveLength(1)

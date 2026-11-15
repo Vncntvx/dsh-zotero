@@ -124,6 +124,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       return
     }
     const result = await provider.retrieve({
+      mode: 'evidence',
       ref: parseRef(firstItemRef),
       query: 'a',
       sources: ['abstract'],
@@ -169,6 +170,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     const attempt = async (item: { ref: string }, attachment: { attachmentRef: string }) => {
       try {
         return await provider.retrieve({
+          mode: 'evidence',
           ref: parseRef(item.ref),
           query: 'the',
           sources: ['fulltext'],
@@ -216,6 +218,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       return
     }
     const result = await provider.retrieve({
+      mode: 'evidence',
       ref: parseRef(withAttachment.ref),
       query: 'the',
       sources: ['fulltext'],
@@ -378,6 +381,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       annotationRow.data?.annotationText?.slice(0, 20) ||
       ''
     const retrieved = await provider.retrieve({
+      mode: 'evidence',
       ref: parseRef(`zotero://user/0/item/${itemKey}`),
       query: query === '' ? 'a' : query,
       sources: ['annotation'],

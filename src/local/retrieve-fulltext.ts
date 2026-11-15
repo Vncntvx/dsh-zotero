@@ -3,9 +3,22 @@
  */
 
 import { mapWithConcurrency } from '../concurrency.js'
-import { isNotFoundError, NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
+import {
+  isNotFoundError,
+  NO_FULLTEXT_MESSAGE,
+  ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+  ZOTERO_NO_FULLTEXT,
+  ZoteroError,
+} from '../errors.js'
 import { chunkText, type EvidenceChunk } from '../evidence.js'
-import { libraryPrefix, refStringFor } from '../refs.js'
+import {
+  formatRef,
+  libraryPrefix,
+  parseSupportedRef,
+  refStringFor,
+  requireSupportedLocalRef,
+} from '../refs.js'
 import { truncateText } from '../normalize-context.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
@@ -17,6 +30,19 @@ import {
   type FulltextLookupResult,
 } from './fulltext-enhancer.js'
 import type { EvidenceRanker } from './evidence-ranker.js'
+
+/**
+ * Persist one bounded whole document so a model can read it through a single
+ * handle instead of walking every window. The tool layer supplies it from the
+ * host spill store; the domain only decides when a document is large enough
+ * to be worth one. Returning undefined means no store was available, which
+ * leaves the window chain as the only read path.
+ */
+export type FulltextSpillSink = (
+  text: string,
+) => Promise<
+  { readonly locator: string; readonly bytes: number; readonly retrievalHint: string } | undefined
+>
 
 /**
  * The full-text deps. `enhancer` is the optional document-enrichment slot the
@@ -32,6 +58,8 @@ export interface FulltextDeps {
   readonly enhancer?: FulltextEnhancer
   readonly sink?: DiagnosticSink
   readonly ranker: EvidenceRanker
+  /** Optional whole-document spill for fulltext-mode reads. */
+  readonly spill?: FulltextSpillSink
 }
 
 /**
@@ -50,8 +78,128 @@ export async function lookupParsedFulltext(
   return undefined
 }
 
-/** Only PDF candidates are offered to the parser; known non-PDF types skip it. */
+/** Identifies sources eligible for PDF parsing. */
 export const isPdfCandidate = isPdfCandidateContentType
+
+/**
+ * The complete text of one document and the provenance of its source.
+ * Parsed artifacts provide MinerU Markdown; indexed attachments provide
+ * Zotero's text and coverage facts.
+ */
+export interface FulltextDocument {
+  readonly text: string
+  readonly textFormat: 'markdown' | 'text'
+  readonly sourceKind: 'attachment' | 'url'
+  /** Display label using an attachment ref or URL origin. */
+  readonly sourceLabel: string
+  readonly artifact?: Extract<FulltextLookupResult, { kind: 'hit' }>['provenance']
+  readonly coverage?: import('../types.js').ZoteroCoverage
+  readonly attachmentRef?: string
+}
+
+/** Read one document's complete text in source order. */
+export async function readFulltextDocument(
+  deps: FulltextDeps,
+  source: import('../types.js').ZoteroFulltextSource,
+  signal: AbortSignal | undefined,
+): Promise<FulltextDocument> {
+  if (source.kind === 'artifactId') {
+    const outcome = deps.enhancer?.lookupArtifact
+      ? await deps.enhancer.lookupArtifact(source.artifactId, signal)
+      : undefined
+    if (outcome === undefined) {
+      throw new ZoteroError(
+        'Reading a parsed artifact requires the dsh-zotero/enrichment component.',
+        ZOTERO_CAPABILITY_UNAVAILABLE,
+      )
+    }
+    if (outcome.kind === 'fault') throw outcome.error
+    if (outcome.kind === 'miss') {
+      throw new ZoteroError(
+        'The parsed artifact is not available.',
+        ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+      )
+    }
+    return {
+      text: outcome.text,
+      textFormat: outcome.format,
+      sourceKind: outcome.sourceKind ?? 'url',
+      sourceLabel: outcome.sourceLabel ?? `artifact ${source.artifactId.slice(0, 8)}…`,
+      artifact: outcome.provenance,
+      ...(outcome.attachmentRef === undefined ? {} : { attachmentRef: outcome.attachmentRef }),
+    }
+  }
+  const ref = requireSupportedLocalRef(parseSupportedRef(source.ref, ['attachment']))
+  const attachmentRef = formatRef(ref)
+  const input: FulltextEnhancerInput = {
+    key: attachmentRef,
+    source: { kind: 'local', attachmentRef },
+  }
+  const parsed = await lookupParsedFulltext(deps, input, signal)
+  if (parsed !== undefined) {
+    return {
+      text: parsed.text,
+      textFormat: parsed.format,
+      sourceKind: parsed.sourceKind ?? 'attachment',
+      sourceLabel: parsed.sourceLabel ?? attachmentRef,
+      artifact: parsed.provenance,
+      ...(parsed.attachmentRef === undefined
+        ? { attachmentRef }
+        : { attachmentRef: parsed.attachmentRef }),
+    }
+  }
+  const payload = await fetchFulltext(
+    deps,
+    ref.key,
+    ref.library as import('../types.js').SupportedLocalLibrary,
+    ref.serverId,
+    signal,
+  )
+  const content = typeof payload.content === 'string' ? payload.content : ''
+  return {
+    text: content,
+    textFormat: 'text',
+    sourceKind: 'attachment',
+    sourceLabel: attachmentRef,
+    coverage: normalizeCoverage(payload),
+    attachmentRef,
+  }
+}
+
+/**
+ * Apply the call's input bound, then take one exact character window.
+ * Character slicing keeps consecutive windows losslessly joinable through
+ * `nextStart`. The bounded whole text rides out with the window so the caller
+ * can offer a one-handle copy without re-truncating.
+ */
+export function fulltextWindowOf(
+  document: FulltextDocument,
+  start: number,
+  maxChars: number,
+  maxFulltextChars: number,
+): { readonly read: import('../types.js').ZoteroFulltextRead; readonly boundedText: string } {
+  const bounded = truncateText(document.text, maxFulltextChars)
+  const totalChars = bounded.text.length
+  const offset = Math.min(Math.max(0, Math.floor(start)), totalChars)
+  const end = Math.min(totalChars, offset + Math.max(1, Math.floor(maxChars)))
+  const isTruncated = end < totalChars
+  const read: import('../types.js').ZoteroFulltextRead = {
+    sourceKind: document.sourceKind,
+    sourceLabel: document.sourceLabel,
+    textFormat: document.textFormat,
+    ...(document.artifact === undefined ? {} : { artifact: document.artifact }),
+    ...(document.coverage === undefined ? {} : { coverage: document.coverage }),
+    totalChars,
+    inputTruncated: bounded.truncated,
+    start: offset,
+    end,
+    text: bounded.text.slice(offset, end),
+    isTruncated,
+    ...(isTruncated ? { nextStart: end } : {}),
+    ...(document.attachmentRef === undefined ? {} : { attachmentRef: document.attachmentRef }),
+  }
+  return { read, boundedText: bounded.text }
+}
 import type {
   SupportedLocalLibrary,
   ZoteroCoverage,

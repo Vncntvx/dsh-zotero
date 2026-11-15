@@ -112,6 +112,7 @@ describe('zotero_retrieve tool', () => {
     )
     const result = expectValue(
       await runTool('zotero_retrieve', {
+        mode: 'evidence',
         ref: 'zotero://user/0/item/ABCD1234',
         query: 'flash attention',
         passages: 3,
@@ -155,6 +156,7 @@ describe('zotero_retrieve tool', () => {
       },
     })
     const args = {
+      mode: 'evidence',
       ref: itemRef(ITEM_KEY),
       query: 'attention',
       sources: ['fulltext'],
@@ -241,6 +243,7 @@ describe('zotero_retrieve tool', () => {
 
   it('rejects empty queries and out-of-range passage counts before any request', async () => {
     const empty = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: '   ',
     })
@@ -249,6 +252,7 @@ describe('zotero_retrieve tool', () => {
     expect((empty.content[0] as { text: string }).text).toContain(RETRIEVE_QUERY_EMPTY_MESSAGE)
 
     const tooMany = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       passages: 5,
@@ -266,6 +270,7 @@ describe('zotero_retrieve tool', () => {
     const cases: [Record<string, unknown>, string][] = [
       [
         {
+          mode: 'evidence',
           ref: 'zotero://user/0/item/ABCD1234',
           query: 'x',
           attachmentPolicy: 'specified',
@@ -274,6 +279,7 @@ describe('zotero_retrieve tool', () => {
       ],
       [
         {
+          mode: 'evidence',
           ref: 'zotero://user/0/item/ABCD1234',
           query: 'x',
           attachmentRefs: ['zotero://user/0/attachment/WXYZ6789'],
@@ -282,6 +288,7 @@ describe('zotero_retrieve tool', () => {
       ],
       [
         {
+          mode: 'evidence',
           ref: 'zotero://group/7/item/ABCD1234',
           query: 'x',
           attachmentPolicy: 'specified',
@@ -291,6 +298,7 @@ describe('zotero_retrieve tool', () => {
       ],
       [
         {
+          mode: 'evidence',
           ref: 'zotero://user/0/item/ABCD1234',
           query: 'x',
           attachmentPolicy: 'specified',
@@ -313,6 +321,7 @@ describe('zotero_retrieve tool', () => {
       `zotero://user/0/attachment/A${String(index).padStart(7, '0')}`
     // Seventeen distinct attachments are more than one ranking may hold.
     const overCap = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       attachmentPolicy: 'specified',
@@ -328,6 +337,7 @@ describe('zotero_retrieve tool', () => {
     // The same attachment repeated is one attachment, not a list over the cap:
     // the call proceeds to the API, where the unscripted mock answers 404.
     const repeated = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       attachmentPolicy: 'specified',
@@ -342,6 +352,7 @@ describe('zotero_retrieve tool', () => {
 
   it('rejects an empty sources list', async () => {
     const result = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       sources: [],
@@ -354,6 +365,7 @@ describe('zotero_retrieve tool', () => {
 
   it('bounds the paraphrase list and refuses a blank one', async () => {
     const overCap = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       queryVariants: ['a', 'b', 'c', 'd', 'e'],
@@ -365,6 +377,7 @@ describe('zotero_retrieve tool', () => {
     )
 
     const blank = await runTool('zotero_retrieve', {
+      mode: 'evidence',
       ref: 'zotero://user/0/item/ABCD1234',
       query: 'x',
       queryVariants: ['  '],
@@ -377,7 +390,7 @@ describe('zotero_retrieve tool', () => {
   })
 
   it('rejects malformed refs before any request', async () => {
-    const result = await runTool('zotero_retrieve', { ref: 'nope', query: 'x' })
+    const result = await runTool('zotero_retrieve', { mode: 'evidence', ref: 'nope', query: 'x' })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
     expect((result.content[0] as { text: string }).text).toContain(invalidRefMessage('nope'))
@@ -386,9 +399,11 @@ describe('zotero_retrieve tool', () => {
 
   it('declares itself concurrency-safe for valid arguments', () => {
     expect(
-      lane
-        .tool('zotero_retrieve')!
-        .isConcurrencySafe?.({ ref: 'zotero://user/0/item/ABCD1234', query: 'x' }),
+      lane.tool('zotero_retrieve')!.isConcurrencySafe?.({
+        mode: 'evidence',
+        ref: 'zotero://user/0/item/ABCD1234',
+        query: 'x',
+      }),
     ).toBe(true)
   })
 })

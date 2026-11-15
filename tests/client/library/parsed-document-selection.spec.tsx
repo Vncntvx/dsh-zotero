@@ -2,7 +2,7 @@
 /** Host Menu interaction over a snapshot of the user's passage. */
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
+import { documentRead, parsedRuntime, composer, REF } from './support/parsed-document.tsx'
 import {
   computeSelectionAnchor,
   extractSelectionMarkdown,
@@ -68,7 +68,7 @@ describe('parsed passage menu', () => {
     // One card: the instruction asks about the excerpt that closes it, so the
     // composer keeps a single removable block instead of loose text.
     expect(actions.insertQuote).toHaveBeenCalledWith(
-      `${mockT('parsedExplainPrompt', { path: METADATA.documentPath })}\n\nPaper\n\nSelected passage`,
+      `${mockT('parsedExplainPrompt', { source: JSON.stringify({ kind: 'ref', ref: REF }) })}\n\nPaper\n\nSelected passage`,
     )
     expect(actions.insertText).not.toHaveBeenCalled()
     expect(actions.persistDraft).toHaveBeenCalledOnce()

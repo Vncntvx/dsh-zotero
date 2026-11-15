@@ -7,7 +7,7 @@ import {
   ParsedDocumentTab,
   ParsedDocumentTitle,
 } from '../../../src/client/components/library/ParsedDocumentTab.tsx'
-import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
+import { documentRead, parsedRuntime, composer, REF } from './support/parsed-document.tsx'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
@@ -85,20 +85,39 @@ it('cites item metadata and its reference in an explanation', async () => {
   expect(actions.insertQuote.mock.calls[0]![0]).toContain('DOI: 10.0/example')
 })
 
-it('points the model at the parsed Markdown file and requires reading it first', async () => {
+it('instructs the model to read the full document through zotero_retrieve', async () => {
   const actions = composer()
   await fixture({ actions })
   select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()
   const draft = actions.insertQuote.mock.calls[0]![0] as string
-  // The locator is the artifact's own file; the instruction asks for the whole
-  // paper, no placeholder survives interpolation, and the excerpt closes the
-  // single card.
-  expect(draft).toContain(METADATA.documentPath)
-  expect(draft).not.toContain('{path}')
-  expect(draft).toContain(mockT('parsedExplainPrompt').split('\n')[0])
+  // The instruction names the exact tool call and source; no local path
+  // or uninterpolated placeholder survives, and the excerpt closes the card.
+  expect(draft).toContain('mode="fulltext"')
+  expect(draft).toContain(JSON.stringify({ kind: 'ref', ref: REF }))
+  expect(draft).not.toContain('{source}')
+  expect(draft).not.toContain('/full.md')
+  expect(draft).toContain(
+    'Explain request (not part of the paper): read the paper’s complete parsed document before answering.',
+  )
   expect(draft.endsWith('\n\nPassage')).toBe(true)
+})
+
+it('addresses a URL-sourced document by artifact id in the explanation', async () => {
+  const actions = composer()
+  const artifactId = 'e'.repeat(64)
+  await fixture({
+    actions,
+    address: `dsh-resource://zotero-parsed/artifact/parsed-session/${artifactId}`,
+  })
+  select()
+  fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
+  await tick()
+  const draft = actions.insertQuote.mock.calls[0]![0] as string
+  expect(draft).toContain(JSON.stringify({ kind: 'artifactId', artifactId }))
+  expect(draft).not.toContain('"kind":"ref"')
+  expect(draft).not.toContain('/full.md')
 })
 
 it.each(['remote', 'throw', 'plain'] as const)(

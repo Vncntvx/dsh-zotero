@@ -298,6 +298,13 @@ describe('getMetaOf', () => {
 })
 
 describe('retrieveMetaOf', () => {
+  /** Narrow the evidence arm; the cases below are all evidence metas. */
+  function evidenceViewOf(meta: Record<string, unknown>) {
+    const view = retrieveMetaOf(meta)
+    if (view.kind !== 'evidence') throw new Error('expected an evidence view')
+    return view
+  }
+
   const ITEM = {
     source: 'annotation',
     sourceRef: 'zotero://user/0/annotation/ANN1',
@@ -308,7 +315,7 @@ describe('retrieveMetaOf', () => {
   }
 
   it('reads the availability facts, attachment ref, and coverage', () => {
-    const meta = retrieveMetaOf({
+    const meta = evidenceViewOf({
       count: 1,
       sources: ['annotation'],
       truncated: true,
@@ -332,7 +339,7 @@ describe('retrieveMetaOf', () => {
   })
 
   it('drops malformed availability entries and coverage', () => {
-    const meta = retrieveMetaOf({
+    const meta = evidenceViewOf({
       items: [],
       sourceAvailability: { annotation: { requested: true }, note: 'x' },
       coverage: { indexedPages: 1 },
@@ -343,7 +350,7 @@ describe('retrieveMetaOf', () => {
   })
 
   it('reads a chars-axis coverage', () => {
-    const meta = retrieveMetaOf({
+    const meta = evidenceViewOf({
       items: [],
       coverage: { indexedChars: 100, totalChars: 200, complete: true },
     })
@@ -351,7 +358,7 @@ describe('retrieveMetaOf', () => {
   })
 
   it('degrades malformed items to null', () => {
-    const meta = retrieveMetaOf({ items: [{ source: 'annotation' }] })
+    const meta = evidenceViewOf({ items: [{ source: 'annotation' }] })
     expect(meta.items).toBeNull()
   })
 })

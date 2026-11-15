@@ -7,9 +7,9 @@ import {
 /**
  * Cordis Service plugin providing `ctx.enrichment`.
  *
- * The component registers no model tools, prompt section, or skill. Ordinary
- * read tools consume committed artifacts through a read-only FulltextEnhancer.
- * Explicit enrichment jobs own document acquisition and MinerU submission.
+ * The component exposes committed artifacts through a read-only
+ * FulltextEnhancer. Explicit enrichment jobs acquire documents and submit them
+ * to MinerU.
  *
  * **Dependency direction.** enrichment → core. The core defines the pure
  * `FulltextEnhancer` type and holds an optional slot; enrichment imports that
@@ -93,6 +93,7 @@ import { MineruClient } from './transport.js'
 import { hostSourceBytesDeps, probeSource } from './source-bytes.js'
 import { resolveOutputDir } from './output-dir.js'
 import { ParsedArtifactStore, type SourceIndexRecord } from './artifact-store.js'
+import { resolveArtifactTarget } from './artifact-target.js'
 import { ParseFlight, type parseOnce } from './parse-once.js'
 import { parseDocument } from './parse-document.js'
 import {
@@ -430,6 +431,7 @@ export class EnrichmentService extends TypertRemoteService {
 
     this.enhancer = {
       lookup: async (input, signal) => await this.lookup(input, signal),
+      lookupArtifact: async (artifactId, signal) => await this.lookupArtifact(artifactId, signal),
     }
 
     // This component ships its own settings page; the schema-generated page
@@ -742,7 +744,6 @@ export class EnrichmentService extends TypertRemoteService {
         fingerprint: meta.contentFingerprint,
         characterCount: meta.characterCount,
         images: meta.images ?? [],
-        documentPath: store.documentPath(record.cacheKey),
         ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
       },
       markdownBytes: meta.markdownBytes,
@@ -774,52 +775,122 @@ export class EnrichmentService extends TypertRemoteService {
     try {
       const cfg = snapshot ?? resolveEnrichmentConfig(this.config)
       if (!isPdfCandidateContentType(input.contentType)) return { kind: 'miss', reason: 'absent' }
-      signal?.throwIfAborted()
       const store = await this.storeFactory(cfg, false)
-      signal?.throwIfAborted()
-      const identity = canonicalSourceIdentityOf(input.key)
-      const sourceIdentity = canonicalSourceIdentityOf(
-        input.source.kind === 'url' ? input.source.url : input.source.attachmentRef,
-      )
-      if (identity !== sourceIdentity) throw new Error('The parsed source identity is inconsistent')
-      const sourceKey = sourceKeyOf(identity)
-      const candidate = await store.sourceRecord(sourceKey)
-      signal?.throwIfAborted()
-      if (candidate === undefined) return { kind: 'miss', reason: 'absent' }
-      const stamp = await probeSource(
-        input,
-        ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
-        hostSourceBytesDeps(this.resolveAttachment, this.client),
-        signal,
-      )
-      signal?.throwIfAborted()
-      if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
-      const artifact = await store.artifactFor(candidate)
-      signal?.throwIfAborted()
-      if (artifact === undefined) return { kind: 'miss', reason: 'expired' }
-      if (artifact.markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
-      return {
-        kind: 'hit',
-        text: artifact.markdown,
-        format: 'markdown',
-        source: `MinerU (${artifact.meta.mode})`,
-        provenance: {
-          parser: 'mineru',
-          mode: artifact.meta.mode,
-          artifactId: candidate.cacheKey,
-          fingerprint: artifact.meta.contentFingerprint,
-          sourceId: artifact.meta.sourceId,
-          generation: artifact.meta.generation,
-        },
-        ...(artifact.meta.pageCount !== undefined ? { pageCount: artifact.meta.pageCount } : {}),
-      }
+      return await this.lookupSource(input, store, signal)
     } catch (error) {
-      if (signal?.aborted) throw signal.reason ?? error
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-        return { kind: 'miss', reason: 'expired' }
-      return { kind: 'fault', error: parsingErrorOf(error) }
+      return lookupFailureOf(error, signal)
     }
   }
+
+  /**
+   * Resolve an opaque artifact id back into its stored source, then read it
+   * through the same read-only arm. The browser never holds a complete URL or
+   * absolute path; the host reconstructs the target from the source index.
+   */
+  private async lookupArtifact(
+    artifactId: string,
+    signal?: AbortSignal,
+  ): Promise<FulltextLookupResult> {
+    try {
+      const cfg = resolveEnrichmentConfig(this.config)
+      const store = await this.storeFactory(cfg, false)
+      const resolved = await resolveArtifactTarget(artifactId, store)
+      const input = resolved.target.input
+      // The resolved target carries the safe display label and the concrete
+      // source; the source record it already read rides along so a windowed
+      // read does not parse the source index a second time.
+      return await this.lookupSource(
+        input,
+        store,
+        signal,
+        {
+          sourceKind: input.source.kind === 'url' ? 'url' : 'attachment',
+          sourceLabel: resolved.target.targetLabel,
+          ...(input.source.kind === 'local' ? { attachmentRef: input.source.attachmentRef } : {}),
+        },
+        resolved.record,
+      )
+    } catch (error) {
+      return lookupFailureOf(error, signal)
+    }
+  }
+
+  /**
+   * Shared read-only lookup kernel for both direct and artifact-addressed
+   * reads. `display` names the stored source when the caller already knows it
+   * (an artifactId handle does not); `record` skips the source-index read when
+   * the caller just resolved it.
+   */
+  private async lookupSource(
+    input: FulltextEnhancerInput,
+    store: ParsedArtifactStore,
+    signal?: AbortSignal,
+    display?: Pick<
+      Extract<FulltextLookupResult, { kind: 'hit' }>,
+      'sourceKind' | 'sourceLabel' | 'attachmentRef'
+    >,
+    record?: SourceIndexRecord,
+  ): Promise<FulltextLookupResult> {
+    signal?.throwIfAborted()
+    const identity = canonicalSourceIdentityOf(input.key)
+    const sourceIdentity = canonicalSourceIdentityOf(
+      input.source.kind === 'url' ? input.source.url : input.source.attachmentRef,
+    )
+    if (identity !== sourceIdentity) throw new Error('The parsed source identity is inconsistent')
+    const sourceKey = sourceKeyOf(identity)
+    const candidate = record ?? (await store.sourceRecord(sourceKey))
+    signal?.throwIfAborted()
+    if (candidate === undefined) return { kind: 'miss', reason: 'absent' }
+    const stamp = await probeSource(
+      input,
+      ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+      hostSourceBytesDeps(this.resolveAttachment, this.client),
+      signal,
+    )
+    signal?.throwIfAborted()
+    if (!stampMatches(candidate.stamp, stamp)) return { kind: 'miss', reason: 'expired' }
+    const artifact = await store.artifactFor(candidate)
+    signal?.throwIfAborted()
+    if (artifact === undefined) return { kind: 'miss', reason: 'expired' }
+    if (artifact.markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
+    // A direct lookup knows its own source; an artifactId read receives the
+    // facts from the resolved target instead.
+    const sourceFacts =
+      display ??
+      (input.source.kind === 'url'
+        ? {
+            sourceKind: 'url' as const,
+            sourceLabel: `${new URL(input.source.url).origin}/…`,
+          }
+        : {
+            sourceKind: 'attachment' as const,
+            sourceLabel: input.source.attachmentRef,
+            attachmentRef: input.source.attachmentRef,
+          })
+    return {
+      kind: 'hit',
+      text: artifact.markdown,
+      format: 'markdown',
+      source: `MinerU (${artifact.meta.mode})`,
+      ...sourceFacts,
+      provenance: {
+        parser: 'mineru',
+        mode: artifact.meta.mode,
+        artifactId: candidate.cacheKey,
+        fingerprint: artifact.meta.contentFingerprint,
+        sourceId: artifact.meta.sourceId,
+        generation: artifact.meta.generation,
+      },
+      ...(artifact.meta.pageCount !== undefined ? { pageCount: artifact.meta.pageCount } : {}),
+    }
+  }
+}
+
+/** Turn a lookup error into the read-only slot's miss or fault arm. */
+function lookupFailureOf(error: unknown, signal?: AbortSignal): FulltextLookupResult {
+  if (signal?.aborted) throw signal.reason ?? error
+  if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'miss', reason: 'expired' }
+  return { kind: 'fault', error: parsingErrorOf(error) }
 }
 
 export default EnrichmentService

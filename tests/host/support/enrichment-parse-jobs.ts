@@ -208,7 +208,6 @@ export async function parseJobsFixture(
           fingerprint: result.provenance.fingerprint,
           characterCount: result.text.length,
           images: [],
-          documentPath: `/root/${result.provenance.artifactId}/full.md`,
           ...(result.pageCount ? { pageCount: result.pageCount } : {}),
         },
         markdownBytes: Buffer.byteLength(result.text),

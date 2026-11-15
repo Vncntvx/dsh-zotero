@@ -187,6 +187,19 @@ export const ZOTERO_RRF_K = 60
  */
 export const ZOTERO_FULLTEXT_CHUNK_WORDS = 200
 export const ZOTERO_MAX_EVIDENCE_CHARS = 6000
+/**
+ * Default characters per `zotero_retrieve` fulltext window. One window plus its
+ * JSON envelope stays under the default inline delivery budget (65536 bytes /
+ * 4000 tokens), so the model receives each window inline. Request successive
+ * windows with `nextStart`.
+ */
+export const ZOTERO_FULLTEXT_WINDOW_CHARS = 12_000
+/**
+ * Character count above which a tool output is worth spilling to the host's
+ * spill store. Shared by scholarly full-text reads and fulltext-mode document
+ * reads, so both name the same "large enough" boundary.
+ */
+export const DEFAULT_SPILL_CHAR_THRESHOLD = 16_000
 
 /**
  * The write-response header carrying the library version a write advanced

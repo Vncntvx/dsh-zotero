@@ -183,6 +183,9 @@ export function readCapsTextOf(
 const READ_DELIVERY_SENTENCE =
   'Read delivery: delivery inline contains complete data within the inline budget; delivery file contains a bounded summary and a standard file block with the complete versioned JSON. Use the mapped file path with run_code Node file APIs to parse long single-line fields; read line previews can truncate individual lines. Get include kinds read all children and full normalized bodies unless that kind has an explicit childPages window; completeness complete/page describes the source scope, while card previews are display-only. Background job_output returns the same persisted file after completion.'
 
+const READ_FULLTEXT_SENTENCE =
+  'zotero_retrieve mode="fulltext" reads one complete document in source order: start at start=0 and repeat with start=nextStart until isTruncated is false, concatenating each window text in order. Each window fits inline delivery. A spillRef on the first window names a stored copy of the whole bounded document; read that handle when the complete text is wanted in one place. textFormat "markdown" is parsed Markdown; "text" is Zotero index text. A source artifactId addresses a stored parsed artifact, including URL-sourced documents; a source ref addresses a Zotero attachment. Parsing requires explicit user submission of a target PDF.'
+
 const READ_EVIDENCE_SENTENCE =
   "truncated, coverage, attachments, matchedFields, sourcesSkipped, and an empty evidence array are honest signals. Absence is not evidence: an unindexed or unread attachment is a named gap in coverage rather than a file with nothing to say, and a hit whose matchedFields is comment is the annotator's own view, not the paper's words. Only annotations carry Zotero's own page labels; never invent page numbers from full text. Refs are checked for database instance match against the running Zotero instance and fail closed on mismatch."
 
@@ -415,10 +418,15 @@ function readParagraphsOf(config: ReadCapsConfig, surface?: ZoteroSurface): read
     surface === undefined
       ? readCapsTextOf(new Set(ZOTERO_READ_TOOL_NAMES), config)
       : readCapsTextOf(surface.reads, config)
+  // The fulltext paragraph names one tool, so it rides only on the steps that
+  // admit it; a search-only step must not be told how to call zotero_retrieve.
+  const fulltext =
+    surface === undefined || surface.reads.has('zotero_retrieve') ? [READ_FULLTEXT_SENTENCE] : []
   return [
     ...(routing === undefined ? [] : [routing]),
     ...(caps === undefined ? [] : [caps]),
     READ_DELIVERY_SENTENCE,
+    ...fulltext,
     READ_EVIDENCE_SENTENCE,
   ]
 }

@@ -211,6 +211,6 @@ describe('the ordinary artifact lookup boundary', () => {
 
   it('has no upload method on the core-visible reader', async () => {
     const { service } = await reader()
-    expect(Object.keys(service.enhancer)).toEqual(['lookup'])
+    expect(Object.keys(service.enhancer)).toEqual(['lookup', 'lookupArtifact'])
   })
 })

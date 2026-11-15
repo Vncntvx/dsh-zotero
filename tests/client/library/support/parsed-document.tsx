@@ -38,7 +38,6 @@ export const METADATA = {
   characterCount: 0,
   images: [],
   pageCount: 18,
-  documentPath: `/tmp/zotero-parsed/${'b'.repeat(64)}/full.md`,
 }
 
 export function documentRead(

@@ -207,15 +207,6 @@ export class ParsedArtifactStore {
     return join(this.root, SHA256.parse(cacheKey))
   }
 
-  /**
-   * The absolute path of one artifact's Markdown. It is the file every
-   * `full.md` read goes through, and the locator an explanation hands the
-   * model so it can read the paper itself.
-   */
-  documentPath(cacheKey: string): string {
-    return join(this.dir(cacheKey), 'full.md')
-  }
-
   private taskPath(cacheKey: string): string {
     return join(this.root, 'tasks', `${SHA256.parse(cacheKey)}.json`)
   }

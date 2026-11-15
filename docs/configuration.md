@@ -4,30 +4,30 @@
 
 dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由各自的 Schemastery schema 提供，加载或保存时经校验；不合法的值会阻止插件加载或该命名空间的配置写入。
 
-- 核心 `zotero` 命名空间：`src/config.ts`，37 个字段，由 `resolveConfig` 执行运行时校验；
+- 核心 `zotero` 命名空间：`src/config.ts`，38 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
 - 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，8 个字段。
 
-四组合计 65 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 66 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
 插件详情页的配置区是一个 7 标签页表单，同时编辑上述四个命名空间。标签、命名空间与字段的对应关系如下：
 
-| 标签     | 设置命名空间        | 字段数 | 分组与字段                                                                                                                                                                                                                                                                                                    |
-| -------- | ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 基础设置 | `zotero`            | 6      | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`、`writeNoteMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`                                                                                                                                                                         |
-| 本地连接 | `zotero`            | 5      | 连接：`baseUrl`、`provider`、`timeoutMs`、`maxInFlightRequests`、`scopeListingTtlMs`                                                                                                                                                                                                                          |
-| 检索提取 | `zotero`            | 13     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars` |
-| 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                           |
-| 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                          |
-| 文档解析 | `enrichment`        | 8      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`；部署限额：`artifactReader`                                                                                                                      |
-| 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                           |
+| 标签     | 设置命名空间        | 字段数 | 分组与字段                                                                                                                                                                                                                                                                                                                           |
+| -------- | ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 基础设置 | `zotero`            | 6      | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`、`writeNoteMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`                                                                                                                                                                                                |
+| 本地连接 | `zotero`            | 5      | 连接：`baseUrl`、`provider`、`timeoutMs`、`maxInFlightRequests`、`scopeListingTtlMs`                                                                                                                                                                                                                                                 |
+| 检索提取 | `zotero`            | 14     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars`、`fulltextWindowChars` |
+| 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                                                  |
+| 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                                                 |
+| 文档解析 | `enrichment`        | 8      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`；部署限额：`artifactReader`                                                                                                                                             |
+| 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                                                  |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
 
-## 核心字段（`zotero`，37 个）
+## 核心字段（`zotero`，38 个）
 
 | 字段                       | 默认值                       | 说明                                                                                                                                                                           |
 | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -45,7 +45,8 @@ dsh-zotero 的配置按四个设置命名空间分开定义，字段默认值由
 | `maxAnnotationRecords`     | `100`                        | 显式批注页大小上限；完整读取不受其截断                                                                                                                                         |
 | `maxAttachmentRecords`     | `50`                         | 显式附件页大小上限；完整读取不受其截断                                                                                                                                         |
 | `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                                                                                         |
-| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 单次调用接受的最大全文字符数（多附件时均分）                                                                                                                 |
+| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 接受的最大全文字符数：证据模式为单次排序预算（多附件时均分），全文模式为整篇文档上限                                                                         |
+| `fulltextWindowChars`      | `12000`                      | 全文读取模式每次窗口的字符数；每窗口都可直接内联交付                                                                                                                           |
 | `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                                                                                |
 | `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                                                                                             |
 | `maxInlineResultTokens`    | `4000`                       | canonical 与展示结果的 Harness 官方 Token 估算上限，须为正安全整数。                                                                                                           |

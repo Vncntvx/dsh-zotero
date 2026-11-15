@@ -132,6 +132,10 @@ import type {
   ZoteroProgressEvent,
   ZoteroProvider,
   ZoteroProviderMethod,
+  ZoteroEvidenceRetrieveRequest,
+  ZoteroEvidenceRetrieveResult,
+  ZoteroFulltextRetrieveRequest,
+  ZoteroFulltextRetrieveResult,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
   ZoteroSearchOptions,
@@ -863,21 +867,35 @@ export class ZoteroService extends Service {
   }
 
   /**
-   * Gather ranked evidence passages for one item across the requested sources.
-   * @param request - the item ref, ranking query, sources, and passage cap.
+   * Gather ranked evidence passages for one item across the requested sources,
+   * or read one complete document in windows under `mode:"fulltext"`.
+   * @param request - the mode, the item ref or fulltext source, and its bounds.
    * @param signal - caller cancellation; forwarded to the provider.
-   * @returns the bounded ranked evidence with a truncation flag.
+   * @param spill - optional whole-document spill for fulltext-mode reads.
+   * @returns the bounded ranked evidence or one fulltext window.
    */
+  retrieve(
+    request: ZoteroEvidenceRetrieveRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroEvidenceRetrieveResult>
+  retrieve(
+    request: ZoteroFulltextRetrieveRequest,
+    signal?: AbortSignal,
+    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
+  ): Promise<ZoteroFulltextRetrieveResult>
   async retrieve(
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
+    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
   ): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
     // Retrieve and changes consume full-text sources internally; the public
     // domain gate is the capability for the requested operation, not a raw-text method.
     this.requireCapability(provider, 'retrieve')
     const retrieve = this.requireMethod(provider, 'retrieve')
-    return await retrieve(request, signal)
+    return request.mode === 'fulltext'
+      ? await retrieve(request, signal, spill)
+      : await retrieve(request, signal)
   }
 
   /**
