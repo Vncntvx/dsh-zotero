@@ -210,6 +210,8 @@ function searchItemViewOf(row: ZoteroSearchResult['items'][number]): ZoteroSearc
     ref: row.ref,
     title: row.title,
     creatorSummary: row.creatorSummary,
+    ...(row.authors !== undefined && row.authors.length > 0 ? { authors: row.authors } : {}),
+    ...(row.venue !== undefined ? { venue: row.venue } : {}),
     ...(row.year !== undefined ? { year: row.year } : {}),
     itemType: row.itemType,
     ...(row.parentRef !== undefined ? { parentRef: row.parentRef } : {}),

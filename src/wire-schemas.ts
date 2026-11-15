@@ -521,6 +521,8 @@ export const zoteroSearchItemSchema = z
     ref: z.string(),
     title: z.string(),
     creatorSummary: z.string(),
+    authors: z.array(z.string()).readonly().optional(),
+    venue: z.string().optional(),
     year: z.number().optional(),
     itemType: z.string(),
     parentRef: z.string().optional(),

@@ -174,7 +174,16 @@ const PARITY_CASES: readonly ParityCase[] = [
     typeSymbol: ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL,
     valid: {
       scope: { kind: 'collection', ref: 'r', name: 'n' },
-      items: [{ ref: 'r', title: 't', creatorSummary: 'c', itemType: 'journalArticle' }],
+      items: [
+        {
+          ref: 'r',
+          title: 't',
+          creatorSummary: 'Leifer和Poulin',
+          authors: ['Leifer', 'Poulin'],
+          venue: 'Nature Climate Change',
+          itemType: 'journalArticle',
+        },
+      ],
       total: 1,
       offset: 0,
       returned: 1,

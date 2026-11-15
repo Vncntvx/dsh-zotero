@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Narrowing, selection and bulk discard: the window is the unit of work. */
-import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { en } from '../../../src/client/locales.ts'
 import { deferred } from '../../helpers/sync.ts'
@@ -27,6 +27,32 @@ afterEach(() => {
 })
 
 describe('parsed document manager narrowing', () => {
+  it('presents the four state pills as one labelled, single-active group', async () => {
+    world({ list: listOf([row, secondRow]) })
+    await screen.findByText(TITLE)
+    const group = screen.getByRole('group', { name: en.parsedManagerFilterLabel })
+    const pills = within(group).getAllByRole('button')
+    expect(pills.map((pill) => pill.textContent)).toEqual([
+      en.parsedManagerFilterAll,
+      en.parsedManagerFilterIndexed,
+      en.parsedManagerFilterOrphan,
+      en.parsedManagerFilterBroken,
+    ])
+    expect(pills.map((pill) => pill.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ])
+    fireEvent.click(pills[3]!)
+    expect(pills.map((pill) => pill.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'false',
+      'false',
+      'true',
+    ])
+  })
+
   it('narrows by state and starts the window over', async () => {
     const w = world({ list: listOf([row, secondRow]) })
     await screen.findByText(TITLE)

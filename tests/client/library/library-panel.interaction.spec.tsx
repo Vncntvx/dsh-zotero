@@ -6,7 +6,7 @@
  * @module tests/client/library/library-panel.interaction
  */
 
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ITEM_DETAIL,
@@ -144,6 +144,26 @@ describe('the paginator walks both ways and refresh reruns every lane', () => {
     })
     // The cleared selection makes no further detail request.
     expect(face.item).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks the current row and names its type, venue, and structured authors', async () => {
+    mountPanel()
+    const row = (await screen.findAllByText('FlashAttention-2'))[0]!.closest('button')!
+    expect(row.getAttribute('aria-current')).toBeNull()
+    expect(row.className).not.toContain('itemRowSelected')
+    act(() => {
+      row.click()
+    })
+    await waitFor(() => {
+      expect(row.getAttribute('aria-current')).toBe('true')
+    })
+    expect(row.className).toContain('itemRowSelected')
+    // The plugin language names the type; the venue and the structured author
+    // list replace the upstream summary the row used to print verbatim.
+    expect(within(row).getByText(zh.libraryItemTypeConferencePaper)).toBeTruthy()
+    expect(within(row).getByText('NeurIPS')).toBeTruthy()
+    expect(within(row).getByText('Tri Dao')).toBeTruthy()
+    expect(within(row).queryByText('Dao和Tri')).toBeNull()
   })
 })
 

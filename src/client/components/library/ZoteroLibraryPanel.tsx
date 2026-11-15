@@ -55,6 +55,7 @@ import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import { writeStatusLabel } from '../write-label.ts'
 import { useLibraryFeed } from './useLibraryFeed.ts'
+import { useItemTypeVocabulary } from './use-item-type-labels.ts'
 import type { LibraryFeedFace, LibraryPanelWireFace } from './library-feed-types.ts'
 import { clearLibraryConversationState } from './library-storage.ts'
 import type { LibraryViewStore } from './library-view-store.ts'
@@ -244,6 +245,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // A cached snapshot paints the lamp; only this mount's own answer opens the
   // wire. An offline or failed probe therefore never sends a first batch.
   const confirmed = settled && connected && canBrowse
+  // Item types are a static Zotero schema listing shared by the filter menu,
+  // the list rows, and the inspector eyebrow. One read here, above the panes,
+  // so a scope change (which remounts the rail) never repeats the walk.
+  const itemTypes = useItemTypeVocabulary(face, t, connected)
   // The chat actions ride the session-scope input face; the pane-tab runtime
   // always carries it (session scope).
   const inputActions: InputActions | undefined = props.inputActions
@@ -615,6 +620,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   library={feed.currentLibrary}
                   value={feed.filters}
                   change={feed.setFilters}
+                  itemTypes={itemTypes}
                   enabled={connected}
                 />
 
@@ -646,6 +652,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   selectItem={handleSelectItem}
                   retry={feed.retryList}
                   useContextMenu={props.useContextMenu}
+                  localizedItemTypes={itemTypes.localized}
                   parsedArtifact={
                     props.parse !== undefined && canReadArtifact
                       ? {
@@ -703,6 +710,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
                   exportItem={canExport ? props.export : undefined}
+                  localizedItemTypes={itemTypes.localized}
                   {...(props.parse !== undefined &&
                   canReadArtifact &&
                   props.openParsed !== undefined

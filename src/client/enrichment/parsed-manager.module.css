@@ -18,12 +18,19 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* The panel draws the rule under its own filter band. The tab strip above it
+   * draws nothing, so this is the one line the reader sees between the chrome
+   * and the first row. */
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .filters {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  /* Breathing room between the panel's top edge and the state pills. */
+  padding-top: 8px;
 }
 
 .toolbarRow {
@@ -141,22 +148,26 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 /* A flat row: the fill alone marks hover and selection, the way the Host's own
- * lists do. Rows bleed to the surface edge so the fill reads as a full band. */
+ * lists do, while one hairline separates each row from the previous one. Rows
+ * bleed to the surface edge so the fill reads as a full band. */
 .row {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0 -8px;
   padding: 8px;
-  border-radius: var(--dsw-radius-xl);
   box-sizing: border-box;
+}
+
+.list > .row + .row {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .rowSelected {
@@ -239,9 +250,11 @@
 
 .actions {
   flex: none;
+  flex-shrink: 0;
   margin-left: auto;
   display: flex;
   gap: 2px;
+  white-space: nowrap;
 }
 
 .broken {
@@ -265,22 +278,18 @@
   }
 }
 
-/* The three actions leave the metadata line before the metadata is forced to
- * wrap word by word. */
-@container (max-width: 460px) {
-  .rowMeta {
-    flex-wrap: wrap;
-  }
-
-  .actions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-end;
-  }
-}
-
+/* The metadata slot is the row's one shrinking part: at narrow widths the text
+ * truncates or wraps and the three actions keep their one-line seat. The host's
+ * own job rows wrap their metadata rather than drop the action cluster. */
 @container (max-width: 360px) {
   .metaCopy {
     white-space: normal;
+  }
+}
+
+/* The floor: the source glyph gives way so the metadata keeps its line. */
+@container (max-width: 320px) {
+  .metaIcon {
+    display: none;
   }
 }

@@ -306,7 +306,9 @@ describe('searchViewOf', () => {
         {
           ref: 'zotero://user/0/item/I1',
           title: 'T',
-          creatorSummary: 'A',
+          creatorSummary: 'Leifer和Poulin',
+          authors: ['Leifer', 'Poulin'],
+          venue: 'Nature Climate Change',
           year: 2020,
           itemType: 'journalArticle',
           parentRef: 'zotero://user/0/item/P1',
@@ -329,7 +331,9 @@ describe('searchViewOf', () => {
         {
           ref: 'zotero://user/0/item/I1',
           title: 'T',
-          creatorSummary: 'A',
+          creatorSummary: 'Leifer和Poulin',
+          authors: ['Leifer', 'Poulin'],
+          venue: 'Nature Climate Change',
           year: 2020,
           itemType: 'journalArticle',
           parentRef: 'zotero://user/0/item/P1',

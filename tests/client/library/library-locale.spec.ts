@@ -25,6 +25,8 @@ import feedSource from '../../../src/client/components/library/useLibraryFeed.ts
 import childFeedSource from '../../../src/client/components/library/useLibraryChildFeed.ts?raw'
 import citationActionsSource from '../../../src/client/components/library/LibraryCitationActions.tsx?raw'
 import dataPlaneSource from '../../../src/client/components/library/library-data-plane.ts?raw'
+import itemTypeLabelsSource from '../../../src/client/components/library/item-type-labels.ts?raw'
+import itemTypeVocabularySource from '../../../src/client/components/library/use-item-type-labels.ts?raw'
 
 const CJK = /[\u4e00-\u9fff]/
 
@@ -45,6 +47,8 @@ const SOURCES: Readonly<Record<string, string>> = {
   'useLibraryChildFeed.ts': childFeedSource,
   'LibraryCitationActions.tsx': citationActionsSource,
   'library-data-plane.ts': dataPlaneSource,
+  'item-type-labels.ts': itemTypeLabelsSource,
+  'use-item-type-labels.ts': itemTypeVocabularySource,
 }
 
 describe('library panel locale discipline', () => {

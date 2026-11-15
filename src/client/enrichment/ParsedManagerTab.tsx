@@ -567,7 +567,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                 )}
                 <span className={css.actions}>
                   <IconButton
-                    className={css.rowAction}
                     shape="square"
                     icon={<IconEyeOutlineRegular size={14} />}
                     aria-label={props.t('parsedManagerOpen')}
@@ -576,7 +575,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                     onClick={() => openParsed(sessionId, row.artifactId, title)}
                   />
                   <IconButton
-                    className={css.rowAction}
                     shape="square"
                     icon={<IconSparkleRegular size={14} />}
                     aria-label={props.t('libraryParsedReparse')}
@@ -585,7 +583,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                     onClick={() => parseSurface.openArtifact?.(row.artifactId, title)}
                   />
                   <IconButton
-                    className={css.rowAction}
                     shape="square"
                     icon={<IconTrashOutlineRegular size={14} />}
                     aria-label={props.t('parsedManagerDelete')}

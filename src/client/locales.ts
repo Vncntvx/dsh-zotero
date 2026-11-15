@@ -1,4 +1,5 @@
 import { libraryEn, libraryZh } from './library-settings-locales.ts'
+import { itemTypeEn, itemTypeZh } from './library-item-type-locales.ts'
 import { parseEn, parseZh } from './enrichment/parse-locales.ts'
 /**
  * Locale bundles for the Zotero plugin: the Settings page (fixed chrome,
@@ -22,6 +23,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
   ...libraryEn,
+  ...itemTypeEn,
   ...parseEn,
   libraryParsePdf: 'Parse this PDF',
   libraryParsePdfNamed: 'Parse PDF: {title}',
@@ -897,6 +899,7 @@ export const en = {
   libraryCollections: 'Collections',
   libraryNoCollections: 'No collections',
   libraryItemList: 'Item list',
+  libraryItemCountBadge: '{count} items in this collection',
   libraryLoading: 'Loading…',
   libraryEmptyList: 'No items in this scope',
   libraryNoMatches: 'No items match these filters',
@@ -904,6 +907,7 @@ export const en = {
   libraryPagePrev: 'Previous',
   libraryPageNext: 'Next',
   libraryRetry: 'Retry',
+  libraryDismissError: 'Dismiss',
   libraryFilters: 'Filters',
   libraryFilterTypes: 'Item types',
   libraryFilterTags: 'Tags',
@@ -932,6 +936,8 @@ export const en = {
   libraryAskInChat: 'Ask',
   libraryExpand: 'Expand',
   libraryCollapse: 'Collapse',
+  libraryAbstractShowMore: 'Show the whole abstract',
+  libraryAbstractShowLess: 'Collapse the abstract',
   libraryInfoTitle: 'Info',
   libraryAskPrompt:
     'Please refer to the paper "{title}" ({ref}) and answer questions based on its contents.',
@@ -984,6 +990,7 @@ export const en = {
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
   ...libraryZh,
+  ...itemTypeZh,
   ...parseZh,
   libraryParsePdf: '解析此 PDF',
   libraryParsePdfNamed: '解析 PDF：{title}',
@@ -1809,6 +1816,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryCollections: '集合',
   libraryNoCollections: '暂无集合',
   libraryItemList: '条目列表',
+  libraryItemCountBadge: '此集合共 {count} 篇文献',
   libraryLoading: '加载中…',
   libraryEmptyList: '此范围暂无条目',
   libraryNoMatches: '没有匹配当前筛选的条目',
@@ -1816,6 +1824,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryPagePrev: '上一页',
   libraryPageNext: '下一页',
   libraryRetry: '重试',
+  libraryDismissError: '关闭',
   libraryFilters: '筛选',
   libraryFilterTypes: '条目类型',
   libraryFilterTags: '标签',
@@ -1844,6 +1853,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryAskInChat: '提问',
   libraryExpand: '展开',
   libraryCollapse: '收起',
+  libraryAbstractShowMore: '展开摘要全文',
+  libraryAbstractShowLess: '收起摘要全文',
   libraryInfoTitle: '信息',
   libraryAskPrompt: '请围绕文献《{title}》（{ref}）回答我的问题：',
   libraryMetaCreators: '作者',

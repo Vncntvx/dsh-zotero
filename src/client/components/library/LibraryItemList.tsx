@@ -13,11 +13,13 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
+import { formatCreatorsList } from '../../../creators.ts'
 import { isPdfContentType } from '../../../media-types.ts'
 import type { ZoteroSearchItemView } from '../../../contract.ts'
 import type { ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
 import type { ParsedDocuments } from '../../parsed-documents.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
+import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
 
@@ -46,6 +48,21 @@ interface LibraryItemListProps {
   readonly retry: () => void
   readonly useContextMenu?: UseContextMenu
   readonly parsedArtifact?: ParsedArtifactProbeFace
+  /** Zotero's own localized item-type names, for types the plugin table lacks. */
+  readonly localizedItemTypes?: ItemTypeLocalizedNames
+}
+
+/**
+ * The row's creator line: the structured authors when Zotero reported them,
+ * else its own summary. The summary is opaque and locale-formatted upstream
+ * (a Chinese Zotero joins two names with a conjunction and no spaces), so the
+ * structured names are the display source whenever they exist.
+ */
+function creatorsOf(item: ZoteroSearchItemView): string {
+  if (item.authors !== undefined && item.authors.length > 0) {
+    return formatCreatorsList(item.authors.map((name) => ({ name })))
+  }
+  return item.creatorSummary
 }
 
 /**
@@ -177,6 +194,7 @@ export function LibraryItemList({
   retry,
   useContextMenu,
   parsedArtifact,
+  localizedItemTypes,
 }: LibraryItemListProps) {
   const scroll = useLibraryScroll(scrollKey, list.phase === 'ready')
   const { preferences } = useLibraryPreferences()
@@ -262,17 +280,21 @@ export function LibraryItemList({
                   itemType: item.itemType,
                 },
               })
+              const creators = creatorsOf(item)
+              const venue = item.venue !== undefined && item.venue !== '' ? item.venue : undefined
               return (
                 <li key={item.ref}>
                   <Button
                     size={compact ? 'sm' : 'md'}
-                    variant={isSelected ? 'outline' : 'ghost'}
+                    variant="ghost"
                     {...triggerProps}
                     className={clsx(
                       css.itemRow,
+                      isSelected && css.itemRowSelected,
                       compact && css.itemRowCompact,
                       hasPdf && css.itemRowHasPdf,
                     )}
+                    aria-current={isSelected || undefined}
                     onClick={() => selectItem(isSelected ? undefined : item.ref)}
                   >
                     <span
@@ -287,10 +309,19 @@ export function LibraryItemList({
                       {item.title}
                     </span>
                     <span className={css.itemMeta}>
-                      {item.year !== undefined && <span>{item.year}</span>}
-                      <span className={css.itemType}>{item.itemType}</span>
-                      {item.creatorSummary !== '' && (
-                        <span className={css.itemCreator}>{item.creatorSummary}</span>
+                      {item.year !== undefined && <span className={css.itemYear}>{item.year}</span>}
+                      <span className={css.itemType}>
+                        {itemTypeLabelOf(item.itemType, localizedItemTypes, t)}
+                      </span>
+                      {venue !== undefined && (
+                        <span className={css.itemVenue} title={venue}>
+                          {venue}
+                        </span>
+                      )}
+                      {creators !== '' && (
+                        <span className={css.itemCreator} title={creators}>
+                          {creators}
+                        </span>
                       )}
                     </span>
                     {/* A detection badge, not an absence claim: the search

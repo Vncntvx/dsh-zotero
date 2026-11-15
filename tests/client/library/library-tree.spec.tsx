@@ -230,6 +230,46 @@ describe('collection tree navigation', () => {
     expect(screen.queryByRole('button', { name: 'Childless' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Nested' })).toBeTruthy()
   })
+  it('shows a collection’s own item count and never fakes an unreported one', () => {
+    const roots: CollectionRowView[] = [
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0201',
+        name: 'Counted',
+        path: ['Counted'],
+        depth: 0,
+        itemCount: 42,
+      },
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0202',
+        name: 'Empty',
+        path: ['Empty'],
+        depth: 0,
+        itemCount: 0,
+      },
+      {
+        kind: 'collection',
+        ref: 'zotero://user/0/collection/COLL0203',
+        name: 'Unreported',
+        path: ['Unreported'],
+        depth: 0,
+      },
+    ]
+    mountTree(new Set(), { phase: 'loading' }, roots)
+    // The badge rides the row's own accessible name, and its tooltip spells the
+    // count out; an unreported count renders nothing rather than a false zero.
+    const counted = screen.getByRole('treeitem', { name: /Counted/ })
+    expect(within(counted).getByText('42')).toBeTruthy()
+    expect(
+      within(counted).getByTitle(zh.libraryItemCountBadge.replace('{count}', '42')),
+    ).toBeTruthy()
+    expect(within(screen.getByRole('treeitem', { name: 'Empty' })).queryByText('0')).toBeNull()
+    expect(
+      within(screen.getByRole('treeitem', { name: 'Unreported' })).queryByText(/^\d+$/),
+    ).toBeNull()
+  })
+
   it('renders nested closing branches innermost first and pages the lane they close', () => {
     const root: CollectionRowView = {
       kind: 'collection',

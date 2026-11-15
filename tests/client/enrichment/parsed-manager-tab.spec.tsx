@@ -43,6 +43,23 @@ describe('parsed document manager tab', () => {
     expect(w.openParsed).toHaveBeenCalledWith(SESSION, ID, TITLE)
   })
 
+  it('gives every row exactly the open, reparse, and delete actions', async () => {
+    world({ list: listOf([row, secondRow]) })
+    await screen.findByText(TITLE)
+    const items = within(listRegion()).getAllByRole('listitem')
+    expect(items.length).toBe(2)
+    for (const item of items) {
+      const labels = within(item)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label'))
+      expect(labels).toEqual([
+        en.parsedManagerOpen,
+        en.libraryParsedReparse,
+        en.parsedManagerDelete,
+      ])
+    }
+  })
+
   it('falls back to a short artifact id when no title was captured', async () => {
     world({ list: listOf([{ ...row, title: undefined }]) })
     const name = await screen.findByText(ID.slice(0, 8))

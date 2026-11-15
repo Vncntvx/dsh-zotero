@@ -187,11 +187,14 @@ describe('the settled panel', () => {
       expect(screen.getByText(zh.libraryMetaVenue)).toBeTruthy()
     })
     // The venue shows in the head origin line and the info table; the head
-    // carries the type eyebrow and the creators line (the type string also
+    // carries the type eyebrow and the creators line (the type label also
     // names the list row's badge, so the pair is the assertion).
     expect(screen.getAllByText('NeurIPS').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('conferencePaper').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Tri Dao')).toBeTruthy()
+    expect(screen.getAllByText(zh.libraryItemTypeConferencePaper).length).toBeGreaterThanOrEqual(1)
+    // The structured author list names the row and the head; the upstream
+    // summary (with its unspaced conjunction) is not what either surface shows.
+    expect(screen.getAllByText('Tri Dao').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText('Dao和Tri')).toBeNull()
     expect(screen.getByText(zh.libraryNotesTitle.replace('{count}', '1'))).toBeTruthy()
     expect(screen.getByText(zh.libraryAttachmentsTitle.replace('{count}', '1'))).toBeTruthy()
     expect(screen.getByText(zh.libraryAnnotationsTitle.replace('{count}', '1'))).toBeTruthy()

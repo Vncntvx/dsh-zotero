@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
-/** Filter controls commit coherent queries and retain recoverable listing errors. */
+/** Filter controls commit coherent queries and render the panel's type vocabulary. */
 import { useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroLibraryBrowseResultView } from '../../../src/contract.ts'
 import { LibraryFilters } from '../../../src/client/components/library/LibraryFilters.tsx'
 import type { LibraryFilters as Filters } from '../../../src/client/components/library/library-model.ts'
 import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
+import type { ItemTypeVocabulary } from '../../../src/client/components/library/use-item-type-labels.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'
-import { deferred } from '../../helpers/sync.ts'
 
 afterEach(() => {
   cleanup()
@@ -22,19 +21,36 @@ const types: ZoteroLibraryBrowseResultView = {
   items: [
     { kind: 'itemType', itemType: 'book', localized: 'Books' },
     { kind: 'itemType', itemType: 'journalArticle' },
+    { kind: 'itemType', itemType: 'customThing', localized: 'Custom Thing' },
   ],
-  total: 2,
+  total: 3,
   offset: 0,
-  returned: 2,
+  returned: 3,
   limit: 50,
 }
 
-function mountFilters(
-  initial: Filters = {},
-  browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue({ ok: true, value: types }),
-  enabled = true,
-) {
+/** The vocabulary the panel-level read publishes for this listing. */
+function vocabularyOf(overrides: Partial<ItemTypeVocabulary> = {}): ItemTypeVocabulary {
+  const rows = types.items.flatMap((row) =>
+    row.kind === 'itemType'
+      ? [
+          {
+            itemType: row.itemType,
+            ...(row.localized !== undefined ? { localized: row.localized } : {}),
+          },
+        ]
+      : [],
+  )
+  const localized: Record<string, string> = {}
+  for (const row of rows) {
+    if (row.localized !== undefined) localized[row.itemType] = row.localized
+  }
+  return { rows, localized, retry: vi.fn(), ...overrides }
+}
+
+function mountFilters(initial: Filters = {}, vocabulary = vocabularyOf(), enabled = true) {
   const change = vi.fn()
+  const browse = vi.fn<LibraryFeedFace['browse']>()
   const face: LibraryFeedFace = {
     collectionPath: vi.fn(),
     browse,
@@ -51,6 +67,7 @@ function mountFilters(
         library={{ type: 'user', id: 0 }}
         value={value}
         enabled={enabled}
+        itemTypes={vocabulary}
         change={(next) => {
           change(next)
           setValue(next)
@@ -73,17 +90,6 @@ function editYear(side: 'from' | 'to', value: string) {
 }
 
 describe('library filter controls', () => {
-  it('ignores a rejected item-type request after unmount', async () => {
-    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
-    const view = mountFilters(
-      {},
-      vi.fn(() => pending.promise),
-    )
-    view.unmount()
-    await act(async () => pending.reject(new Error('stale schema failure')))
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
-
   it('commits an upper-only year range on blur and clears a pending draft', () => {
     const { change } = mountFilters({ hasAttachment: true })
     click(zh.libraryYearLabel)
@@ -99,22 +105,34 @@ describe('library filter controls', () => {
     click(zh.libraryClearFilters)
     expect(change).toHaveBeenLastCalledWith({})
   })
-  it('selects and unselects item types through the host menu contract', async () => {
+
+  it('names every item type in the panel language and lets the menu pick it', () => {
     const { change } = mountFilters()
-    await screen.findByRole('button', { name: zh.libraryFilterTypes })
     click(zh.libraryFilterTypes)
-    fireEvent.click(screen.getByText('Books'))
+    // The plugin dictionary wins over Zotero's own English "Books"; a type it
+    // does not know keeps Zotero's localized name.
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getByText(zh.libraryItemTypeBook)).toBeTruthy()
+    expect(within(menu).getByText(zh.libraryItemTypeJournalArticle)).toBeTruthy()
+    expect(within(menu).getByText('Custom Thing')).toBeTruthy()
+    fireEvent.click(within(menu).getByText(zh.libraryItemTypeBook))
     expect(change).toHaveBeenLastCalledWith({ itemTypes: ['book'] })
-    fireEvent.click(within(screen.getByRole('menu')).getByText('Books'))
+    fireEvent.click(within(screen.getByRole('menu')).getByText(zh.libraryItemTypeBook))
     expect(change).toHaveBeenLastCalledWith({ itemTypes: [] })
-    fireEvent.keyDown(screen.getByText('journalArticle'), { key: 'Escape' })
-    expect(screen.queryByText('Books')).toBeNull()
+    fireEvent.keyDown(screen.getByText(zh.libraryItemTypeJournalArticle), { key: 'Escape' })
+    expect(screen.queryByText(zh.libraryItemTypeBook)).toBeNull()
   })
 
-  it('removes selected type and tag chips and switches tag matching', async () => {
-    const { change } = mountFilters({ itemTypes: ['book', 'unknownType'], tags: ['alpha', 'beta'] })
-    await screen.findByRole('button', { name: mockT('libraryFilterRemove', { label: 'Books' }) })
-    click(mockT('libraryFilterRemove', { label: 'Books' }))
+  it('removes selected type and tag chips and switches tag matching', () => {
+    const { change } = mountFilters({
+      itemTypes: ['book', 'unknownType'],
+      tags: ['alpha', 'beta'],
+    })
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: mockT('libraryFilterRemove', { label: zh.libraryItemTypeBook }),
+      }),
+    )
     expect(change).toHaveBeenLastCalledWith({ itemTypes: ['unknownType'], tags: ['alpha', 'beta'] })
     click(zh.libraryTagAll)
     expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ tagMatch: 'any' }))
@@ -148,7 +166,7 @@ describe('library filter controls', () => {
     click(zh.libraryYearLabel)
     for (const year of ['2', '20', '202', '2020']) editYear('from', year)
     expect(change).not.toHaveBeenCalled()
-    await act(async () => vi.advanceTimersByTimeAsync(300))
+    await vi.advanceTimersByTimeAsync(300)
     expect(change).toHaveBeenCalledTimes(1)
     expect(change).toHaveBeenLastCalledWith({ yearFrom: 2020, yearTo: undefined })
     fireEvent.keyDown(editYear('to', '2019'), { key: 'Enter' })
@@ -176,54 +194,17 @@ describe('library filter controls', () => {
     expect(screen.queryByRole('spinbutton')).toBeNull()
   })
 
-  it('walks item-type pages and recovers from a wire failure on retry', async () => {
-    const browse = vi
-      .fn<LibraryFeedFace['browse']>()
-      .mockResolvedValueOnce({
-        ok: false,
-        error: new RemoteError('zotero/unexpected', 'listing failed', {
-          code: 'ZOTERO_UNEXPECTED',
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        value: { ...types, items: [types.items[0]!], nextOffset: 1 },
-      })
-      .mockResolvedValueOnce({ ok: true, value: { ...types, items: [types.items[1]!], offset: 1 } })
-    mountFilters({}, browse)
-    expect(await screen.findByRole('alert')).toHaveProperty(
-      'textContent',
-      expect.stringContaining('listing failed'),
-    )
+  it('surfaces the vocabulary failure with the vocabulary retry, not a new walk', () => {
+    const retry = vi.fn()
+    mountFilters({}, vocabularyOf({ error: 'listing failed', retry }))
+    expect(screen.getByRole('alert').textContent).toContain('listing failed')
     click(zh.libraryRetry)
-    await screen.findByRole('button', { name: zh.libraryFilterTypes })
-    expect(browse).toHaveBeenLastCalledWith({ kind: 'itemTypes', offset: 1, limit: 50 })
-    expect(screen.queryByRole('alert')).toBeNull()
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses a non-advancing item-type cursor', async () => {
-    mountFilters(
-      {},
-      vi
-        .fn<LibraryFeedFace['browse']>()
-        .mockResolvedValue({ ok: true, value: { ...types, nextOffset: 0 } }),
-    )
-    expect(await screen.findByRole('alert')).toHaveProperty(
-      'textContent',
-      expect.stringContaining(zh.libraryInvalidPage),
-    )
-  })
-
-  it('ignores a type listing that resolves after unmount and makes no request while disabled', async () => {
-    const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
-    const first = mountFilters(
-      {},
-      vi.fn(() => pending.promise),
-    )
-    first.unmount()
-    await act(async () => pending.resolve({ ok: true, value: types }))
-    const second = mountFilters({}, vi.fn(), false)
-    expect(second.browse).not.toHaveBeenCalled()
+  it('renders no type menu while the vocabulary is empty and never reads the wire itself', () => {
+    const { browse } = mountFilters({}, vocabularyOf({ rows: [], localized: {} }))
     expect(screen.queryByRole('button', { name: zh.libraryFilterTypes })).toBeNull()
+    expect(browse).not.toHaveBeenCalled()
   })
 })

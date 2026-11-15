@@ -18,13 +18,14 @@ import {
   Tag,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SupportedLocalLibrary, ZoteroLibraryBrowseItemView } from '../../../contract.ts'
+import type { SupportedLocalLibrary } from '../../../contract.ts'
 import { ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../../../constants.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
-import { LIBRARY_PAGE_SIZE, type LibraryFilters as Filters } from './library-model.ts'
+import type { LibraryFilters as Filters } from './library-model.ts'
 import { LibraryTagPicker } from './LibraryTagPicker.tsx'
+import { itemTypeLabelOf } from './item-type-labels.ts'
+import type { ItemTypeVocabulary } from './use-item-type-labels.ts'
 import { IconButton } from '../IconButton.tsx'
-import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'
 
 const YEAR_COMMIT_DEBOUNCE_MS = 300
@@ -35,6 +36,7 @@ export function LibraryFilters({
   library,
   value,
   change,
+  itemTypes,
   enabled = true,
 }: {
   readonly t: TranslateNS<'zotero'>
@@ -42,11 +44,13 @@ export function LibraryFilters({
   readonly library: SupportedLocalLibrary
   readonly value: Filters
   readonly change: (filters: Filters) => void
+  /** The panel-level item-type read: its rows feed the menu, its errors the retry line. */
+  readonly itemTypes: ItemTypeVocabulary
   readonly enabled?: boolean
 }): ReactNode {
-  const [types, setTypes] = useState<readonly { value: string; label: string }[]>([])
-  const [error, setError] = useState<string>()
-  const [retry, setRetry] = useState(0)
+  // Only the tag picker's own failure lives here; the item-type listing's
+  // failure belongs to the vocabulary that every pane reads.
+  const [pickerError, setPickerError] = useState<string>()
 
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
   const [attachmentOpen, setAttachmentOpen] = useState(false)
@@ -58,41 +62,16 @@ export function LibraryFilters({
   const [yearInvalid, setYearInvalid] = useState(false)
   const yearTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  // Item types are a small static schema listing: one bounded walk on mount.
-  useEffect(() => {
-    if (!enabled) return
-    let active = true
-    setError(undefined)
-    setTypes([])
-    void (async () => {
-      const rows: ZoteroLibraryBrowseItemView[] = []
-      let offset = 0
-      for (;;) {
-        const result = await face.browse({ kind: 'itemTypes', offset, limit: LIBRARY_PAGE_SIZE })
-        if (!active) return
-        if (!result.ok) throw new Error(result.error.message)
-        rows.push(...result.value.items)
-        const next = result.value.nextOffset
-        if (next === undefined) break
-        if (next <= offset) throw new Error(t('libraryInvalidPage'))
-        offset = next
-      }
-      if (active) {
-        setTypes(
-          rows.flatMap((row) =>
-            row.kind === 'itemType'
-              ? [{ value: row.itemType, label: row.localized ?? row.itemType }]
-              : [],
-          ),
-        )
-      }
-    })().catch((cause: unknown) => {
-      if (active) setError(messageOf(cause))
-    })
-    return () => {
-      active = false
-    }
-  }, [face, retry, enabled, t])
+  // Item types are a static schema listing the panel reads once for every
+  // surface that names one; this rail only renders it.
+  const types = useMemo(
+    () =>
+      itemTypes.rows.map((row) => ({
+        value: row.itemType,
+        label: itemTypeLabelOf(row.itemType, itemTypes.localized, t),
+      })),
+    [itemTypes.rows, itemTypes.localized, t],
+  )
 
   useEffect(
     () => () => {
@@ -227,7 +206,7 @@ export function LibraryFilters({
         value={value}
         change={change}
         enabled={enabled}
-        onError={setError}
+        onError={setPickerError}
       />
 
       {/* Selected Tag Chips */}
@@ -356,12 +335,19 @@ export function LibraryFilters({
         </Button>
       )}
 
-      {/* Error Retry banner */}
-      {error !== undefined && (
+      {/* One recovery line: the item-type walk retries itself; the tag picker
+       * re-queries whenever it is opened again, so its message is only dismissed. */}
+      {(itemTypes.error ?? pickerError) !== undefined && (
         <div className={css.filterError} role="alert">
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={() => setRetry((v) => v + 1)}>
-            {t('libraryRetry')}
+          <span>{itemTypes.error ?? pickerError}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={
+              itemTypes.error !== undefined ? itemTypes.retry : () => setPickerError(undefined)
+            }
+          >
+            {itemTypes.error !== undefined ? t('libraryRetry') : t('libraryDismissError')}
           </Button>
         </div>
       )}

@@ -23,6 +23,7 @@ import {
   IconFolderOpenMedium,
   IconTrashOutlineMedium,
   IconUserOutlineMedium,
+  Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FlatCollectionRow, LibraryLaneState, LibrarySelection } from './library-model.ts'
 import { lanePageOf } from './library-model.ts'
@@ -381,6 +382,17 @@ export function LibraryTree({
                       <IconFolderCloseMedium className={css.treeRowIcon} />
                     )}
                     <span className={css.treeRowLabel}>{row.name}</span>
+                    {/* Zotero counts the items directly in each collection; the
+                     * badge shows that count and nothing else. An unreported
+                     * count renders nothing rather than a false zero. */}
+                    {row.itemCount !== undefined && row.itemCount > 0 && (
+                      <span
+                        className={css.treeCount}
+                        title={t('libraryItemCountBadge', { count: row.itemCount })}
+                      >
+                        <Tag tone="quiet">{row.itemCount}</Tag>
+                      </span>
+                    )}
                   </button>
                 </div>
                 {closingBranches.get(row.ref)?.map((entry) => (

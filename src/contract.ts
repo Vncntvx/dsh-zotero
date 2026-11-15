@@ -1019,6 +1019,14 @@ export interface ZoteroSearchItemView {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string
+  /**
+   * The structured author names, ready for display; absent when Zotero reported
+   * no author-type creators. The panel renders these instead of the opaque
+   * `creatorSummary`, whose locale-formatted conjunction is outside our control.
+   */
+  readonly authors?: readonly string[]
+  /** The venue Zotero reports (journal, proceedings, book, conference). */
+  readonly venue?: string
   readonly year?: number
   readonly itemType: string
   readonly parentRef?: string

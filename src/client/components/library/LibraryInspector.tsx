@@ -11,7 +11,7 @@ import type { LibrarySection } from '../../../library-preferences.ts'
  * @module dsh-zotero/client/components/library/LibraryInspector
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -51,6 +51,7 @@ import { LibraryCitationActions, itemInfoTextOf } from './LibraryCitationActions
 import { ListingPager } from './ListingPager.tsx'
 import { PdfActions, type PdfParseFace } from './PdfActions.tsx'
 import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
+import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
 
@@ -87,6 +88,8 @@ interface LibraryInspectorProps {
   /** Read-only access to a PDF's parsed result; absent when enrichment is off. */
   readonly parsedArtifact?: ParsedArtifactFace
   readonly exportItem?: LibraryExportItem
+  /** Zotero's own localized item-type names, for types the plugin table lacks. */
+  readonly localizedItemTypes?: ItemTypeLocalizedNames
 }
 
 /** One label/value row of the metadata table. */
@@ -497,6 +500,7 @@ export function LibraryInspector({
   readPdf,
   parsePdf,
   parsedArtifact,
+  localizedItemTypes,
 }: LibraryInspectorProps) {
   // The abstract's expand state resets with the selection: the section
   // remounts through the inspector's key when another row is picked.
@@ -586,7 +590,9 @@ export function LibraryInspector({
     <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
       {insertError && <p role="alert">{insertError}</p>}
       <header className={css.inspectorHead}>
-        <p className={clsx(css.caption, css.inspectorEyebrow)}>{detail.itemType}</p>
+        <p className={clsx(css.caption, css.inspectorEyebrow)}>
+          {itemTypeLabelOf(detail.itemType, localizedItemTypes, t)}
+        </p>
         <h3 className={css.inspectorTitle}>{detail.title}</h3>
         {creators !== '' && <p className={css.inspectorCreators}>{creators}</p>}
         {origin !== '' && <p className={css.inspectorOrigin}>{origin}</p>}
@@ -638,10 +644,11 @@ export function LibraryInspector({
           title={t('libraryMetaAbstract')}
           t={t}
         >
-          <p className={css.abstract}>{detail.abstract}</p>
-          {detail.abstractTruncated && (
-            <p className={css.listNote}>{t('libraryAbstractTruncated')}</p>
-          )}
+          <ClampedProse
+            text={detail.abstract}
+            t={t}
+            truncatedHint={detail.abstractTruncated ? t('libraryAbstractTruncated') : undefined}
+          />
         </DetailDisclosure>
       )}
       {detail.noteBody !== undefined && (
@@ -929,6 +936,61 @@ function useDisclosure(
     },
   ]
 }
+/**
+ * Long prose: collapses to a readable window with its own disclosure. The
+ * section disclosure still owns whether the block renders; this one decides
+ * how much text shows. The window is measured, not guessed — a paragraph that
+ * fits never gets a dead control — and the control keeps its own accessible
+ * name so it never collides with the section's own expand/collapse pair.
+ */
+function ClampedProse({
+  text,
+  t,
+  truncatedHint,
+}: {
+  readonly text: string
+  readonly t: TranslateNS<'zotero'>
+  /** The data-layer truncation note, rendered under the prose when present. */
+  readonly truncatedHint?: string | undefined
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    const element = ref.current
+    if (element === null || expanded) return
+    const measure = (): void => setOverflowing(element.scrollHeight > element.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [expanded, text])
+  return (
+    <>
+      <p ref={ref} className={clsx(css.abstract, !expanded && css.abstractClamped)}>
+        {text}
+      </p>
+      {overflowing && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className={css.abstractToggle}
+          aria-expanded={expanded}
+          aria-label={expanded ? t('libraryAbstractShowLess') : t('libraryAbstractShowMore')}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <span>{expanded ? t('libraryCollapse') : t('libraryExpand')}</span>
+          <IconChevronDownOutlineRegular
+            size={12}
+            className={clsx(css.toggleChevron, expanded && css.toggleChevronOpen)}
+          />
+        </Button>
+      )}
+      {truncatedHint !== undefined && <p className={css.listNote}>{truncatedHint}</p>}
+    </>
+  )
+}
+
 function DetailDisclosure({
   section,
   itemRef,
@@ -948,13 +1010,14 @@ function DetailDisclosure({
       <Button
         variant="ghost"
         size="sm"
+        className={css.sectionHeaderSeat}
         aria-expanded={open}
         aria-label={
           open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
         }
         onClick={() => setOpen((v) => !v)}
       >
-        {title}
+        <h4 className={css.sectionTitle}>{title}</h4>
       </Button>
       {open && children}
     </section>

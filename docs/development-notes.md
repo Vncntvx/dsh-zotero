@@ -87,6 +87,16 @@
 - **验证**：`tests/unit/tooling/vendor-onnxruntime.spec.ts`（版本一致、文件清单一致、哈希与许可）、`tests/unit/enrichment-semantic-runtime.spec.ts`（加载路径、wasmPaths、缺文件 fail-closed）、`tests/unit/tooling/build-approvals.spec.ts` 与 `tests/unit/tooling/verify-pack.spec.ts`（闭包无安装脚本、打包路径齐全）。人工复核：用桌面运行时自带 pnpm 11.28.5 把打包产物装进干净 profile，应零批准通过；随后从安装位置 import 打包入口并对空文件调用 `InferenceSession.create`，应返回 wasm 侧的 `No graph was found in the protobuf`，证明 wasm 胶水与二进制确实被加载。
 - **后续处理**：若 pnpm 允许依赖自行声明或豁免构建脚本，或 `onnxruntime-web` 放宽 `protobufjs` 到 8.x（8.x 已无 `postinstall`），可把运行时改回 `dependencies` 并删除 vendor 脚本、包内资产与相关守卫；否则每次升级按 `assets:runtime` 重新生成并复核包体体积。
 
+### DN-8：面板自己解析类型名与作者，条目列表保留翻页
+
+- **类型**：数据契约 / 显示语义。
+- **状态**：生效中（2026-11-15，pin `0.2.2-rc.2`）。
+- **位置**：`src/contract.ts` 的 `ZoteroSearchItemView`、`src/library-views.ts` 的 `searchItemViewOf`、`src/client/library-item-type-locales.ts`、`src/client/components/library/item-type-labels.ts`、`use-item-type-labels.ts`、`LibraryItemList.tsx`、`LibraryInspector.tsx`。
+- **要点**：行的作者取 wire 新增的结构化 `authors`，类型名按「插件词典 → Zotero `/itemTypes` 的 `localized` → 原始 `itemType`」三级解析，期刊取 `venue`。`meta.creatorSummary` 仍随 wire 传输，但只在 `authors` 缺失时兜底：它是 Zotero 用自身语言拼好的串（中文环境两个作者之间用连词且两侧不带空格），客户端无法在不破坏姓名的情况下改正，因此显示层不再消费它。item-type 词汇表由面板在三个 pane 之上读一次（`useItemTypeVocabulary`）并共享给筛选菜单、列表行与详情 eyebrow，筛选带自身不再遍历，切换 scope 不会重复请求。条目列表保留「上一页/下一页」：官方客户端一律用 show-more 累积加载，但本插件面向上万条的大库，需要区间跳跃，累积窗口也会让 DOM 变长；这是有意的产品分化（`docs/features.md` 的「文献列表则按页展示」），不是待办。
+- **触发条件**：升级 harness（wire 编解码 / `Remote` 契约）、Zotero `/itemTypes` 的 `localized` 改名或消失、出现新的自定义条目类型、或产品决定把条目列表改成累积加载时复核。
+- **验证**：`tests/unit/library-views.spec.ts` 断言 `authors`/`venue` 透传且空作者列表不落键；`tests/client/library/remote-contract-library.spec.ts` 断言严格 codec 接受这两个可选字段；`tests/client/library/use-item-type-labels.spec.tsx` 断言分页遍历、失败重试、非前进游标、卸载丢弃与三级解析顺序；`tests/client/library/library-panel.interaction.spec.tsx` 断言选中行的 `aria-current` 与友好类型名、期刊、结构化作者；`tests/client/library/library-tree.spec.tsx` 断言合集条目数角标与「未上报不显示」；`tests/client/library/library-inspector-layout.spec.tsx` 断言摘要窗口只在溢出时出现。
+- **后续处理**：若上游直接提供本地化类型名或结构化作者（如 wire 上的 `localizedItemType`），删掉客户端词典与 `/itemTypes` 遍历改为消费 wire；若改用累积加载，按 `LibraryLaneControls.tsx` 的 show-more + 已加载计数范式迁移，并同步 `library-storage.ts` 的窗口状态与 `docs/features`。
+
 ## 升级复核
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。
