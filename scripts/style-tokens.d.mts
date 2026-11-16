@@ -98,3 +98,13 @@ export declare function snapshotOf(
   current: StyleTokenSnapshot | undefined,
   facts: StyleTokenFacts,
 ): StyleTokenSnapshot
+
+export declare function installedThemeSheets(
+  packageRoot: string,
+  pin: string,
+): { files: string[]; read: (name: string) => string }
+export declare const RUNTIME_SEAMS: Readonly<Record<string, readonly string[]>>
+export declare function verifyRuntimeSeams(
+  tokens: readonly string[],
+  read: (component: string, path: string) => string,
+): void

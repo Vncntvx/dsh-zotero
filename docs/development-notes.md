@@ -164,6 +164,66 @@
 
 每次 harness pin 变更都从本文开头逐条核对：上游契约是否已经提供期望能力；提供了就必须在同一次改动中完成迁移并退役条目，不允许“能力已到、绕行还在”的状态长期存在。没有提供能力时，只更新 pin 版本号与复核日期，不修改绕行实现。
 
+## DN-15：构建摘要与发布产物身份
+
+- **类型**：安全边界 / 发布约束。
+- **状态**：生效中（2026-11-16，pin `0.2.2-rc.3`）。
+- **位置**：`scripts/build-state.mjs`、`release-artifact.mjs`、`release-tar.mjs`、`publish-release-branch.mjs`、`release-branch.yml`。
+- **要点**：完整 build/prepare 成功后，记录源文件、脚本、配置、lockfile、工具链及全部产物的摘要。质量门禁生成去掉脚本与开发依赖的单一产物；Web smoke 消费其 tarball，发布消费其目录。校验同时绑定源 SHA、文件闭集、每个文件摘要、tarball 摘要及包内实际内容。publish 作业检出时不保留凭据，写 token 仅提供给最终推送步骤。目标限于项目 origin 的 release 分支，并以读取到的旧 ref 作为 CAS lease；来源回退和字节变化都会被拒绝。
+- **触发条件**：修改构建输入、产物布局、发布入口、Action、Node 或编译器版本。
+- **验证**：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`；`release:check` 与实际 tarball smoke。
+- **后续处理**：新增构建输入必须进入摘要；新增发布文件必须进入经过验证的文件集合。升级发布工具后保留篡改、漏件、来源回退与凭据隔离测试。
+
+## DN-16：ZIP 的实际解压预算与完整性证明
+
+- **类型**：安全边界 / 生命周期。
+- **状态**：生效中（2026-11-16，pin `0.2.2-rc.3`）。
+- **位置**：`src/enrichment/zip-reader.ts`、`zip.ts`、`archive-worker.ts`。
+- **要点**：先验证目录、local header、数据描述符与条目范围一致，再只解压被选择的文本和引用图片。deflate 的原生 `maxOutputLength` 限制实际输出，输出长度、消耗的压缩长度与 CRC 必须全部匹配；originalSize 仅作元数据，实际输出上限控制内存使用。Worker 设置堆/栈限制及 30 秒截止，取消后等待退出再释放槽位。
+- **触发条件**：升级 Node/zlib、改变 ZIP 格式支持、归档预算或 Worker 准入策略。
+- **验证**：`enrichment-zip-integrity`、`enrichment-zip-safety`、`enrichment-archive-worker` 及打包后的真实 JS Worker smoke。
+- **后续处理**：新压缩格式需提供同等的实际输出硬上限与完整性证明；保留伪造大小、CRC、目录不一致和取消退出测试。
+
+## DN-17：样式 token 的 pin 来源
+
+- **类型**：上游契约 / 构建约束。
+- **状态**：生效中（2026-11-16，pin `0.2.2-rc.3`）。
+- **位置**：`scripts/style-tokens.mjs` 的 `installedThemeSheets`、`RUNTIME_SEAMS`、`verifyRuntimeSeams`。
+- **要点**：CI 使用 lockfile 安装的精确版本 theme 源码核对 dsw/ds；链接开发使用 sibling 的 pin tag。dsh 运行时 seam 逐个对应当前 pin 的设置、CSS 定义或 setProperty 调用；来源表与快照保持闭合一致。
+- **触发条件**：每次 harness pin 升级、增加 token 或移动上游定义。
+- **验证**：`tokens:check` 已纳入 `release:check`，`style-tokens.spec.ts` 验证漏 token、错误版本和失效来源均被拒绝。
+- **后续处理**：上游提供完整 token 清单后，以其公开契约替换来源表，保留精确 pin 与删除检查。
+
+## DN-18：解析页远端图片不自动取回
+
+- **类型**：安全边界 / 性能预算。
+- **状态**：生效中（2026-11-16）。
+- **位置**：`src/client/remote-image-links.ts`、`parsed-markdown.ts`、`scripts/client-graph-authority.mjs`、`build-client.mjs`。
+- **要点**：文档显示前以 GFM/math 语法树把直接和引用形式的 HTTP(S) 图片转换为普通链接，原始文档保持完整；只有产物携带的本地图片经受控 Blob URL 显示。代码块中的示例不能误改。纯解析器依赖闭包已明确列入浏览器 allowlist；加入约 88 KB 后实测整体 750 KB，构建上限为 800 KiB。上游 renderer 当前先接受远端图片，再调用 pathImages，因此 pathImages 不能承担拒绝策略。
+- **触发条件**：升级 primitives 的 Markdown 语法或 imageSource、增加 Markdown 扩展、改变图片生命周期。
+- **验证**：`parsed-markdown.spec.ts`、`parsed-document-images.spec.tsx` 验证远端/loopback/引用图片无 img 元素，本地图像与代码完整；build 验证闭包与体积。
+- **后续处理**：上游提供覆盖远端目标的图片策略 API 后迁移，移除本地重复解析与对应依赖闭包，并据实降低体积预算。
+
+## DN-19：一次性授权、完整写周期与回执
+
+- **类型**：Zotero 协议 / 并发与安全约束。
+- **状态**：生效中（2026-11-16）。
+- **位置**：`write-auth.ts`、`write-authorization-budget.ts`、`write-operation.ts`、`local/write-keyed-batch.ts`、`local/write-trash-graph.ts`、`write-plan.ts`。
+- **要点**：Zotero 在鉴权时消耗一次性密钥；授权到发送完成期间必须独占，不能把同一密钥交给两个等待者。整次读改写周期和授权预算由服务持有，跨传输重建保留；审批后的 15 分钟总时限包含排队与授权，超时不能覆盖已发送请求的未知提交状态。原生 POST 支持已有对象的 key/version 和 PATCH 合并语义，最多 50 项，各对象独立提交；按依赖层写完子对象后才能写父对象。每项回执须证明索引、身份、版本和提交字段，缺失或矛盾不允许重发。撤权使用 credentials 原子修改清除密钥；审批文档保留完整值并隔离其 Markdown 语法。
+- **触发条件**：升级 Zotero Local API 的写入协议、授权消费或限流语义，改变 credentials 原子接口，调整批量图排序或审批渲染器。
+- **验证**：`batch-one-time-grant`、`trash`、`restore-items`、`write-operation`、`write-authorization-budget`、`write-auth`、`plan-literal-values`；协议依据为已安装 Zotero 的 `server_localAPI.js` 中 `writeMultipleObjects`、鉴权与 authorize 实现。
+- **后续处理**：升级时重新核验对象级事务与单次密钥消费时机；保留部分冲突、丢失回执、排队取消、总时限和跨重建串行的回归。
+
+## DN-20：共享模型校验与推理准入
+
+- **类型**：本地文件完整性 / 资源所有权约束。
+- **状态**：有效（2026-11-16）。
+- **位置**：`enrichment/model-bundle-inspector.ts`、`model-fs.ts`、`semantic/bundle.ts`、`tokenizer.ts`、`batching.ts`、`session.ts`、`vector-cache.ts`、`evidence-query.ts`。
+- **行为**：安装、状态与加载共用严格目录校验。manifest 在分配前限制为 64 KiB；钉住的文件及其父目录拒绝符号链接。运行时读取器核验 ONNX 与 JSON 解析器实际消费的字节快照，分配和读取受钉住的大小约束。进程校验缓存最多保留 16 个身份，组件卸载时清空。查询和改写在读取源前限制为 2,000 字符；嵌入文本连同前缀在编码前限制为 131,072 字符。每代向量缓存最多一个推理 batch 在途。包含 padding 的批次以 32,768 token 拆分，保留全部行且每条只编码一次。缓存身份覆盖完整模型契约，包括档位与 token 窗口。
+- **复核触发**：目录窗口或维度、tokenizer 分配、运行时字节缓冲区所有权、推理并发或文件校验变化。
+- **验证**：`semantic-bundle`、`semantic-open-ownership`、`semantic-admission-budget`、`semantic-vector-cache`、`semantic-diagnostic-retry`、`evidence-query-admission`。测试使用真实微型文件和受控会话输出，仓库测试不加载模型。
+- **后续**：运行时升级保留精确字节加载与有界准入；调整限制前人工测量真实模型内存和召回。
+
 ## 已退役条目
 
 退役条目保留原标题、退役时间与替代机制，便于回溯为什么曾经这样做。

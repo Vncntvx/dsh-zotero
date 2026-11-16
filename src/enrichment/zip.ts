@@ -1,5 +1,5 @@
 /** Bounded, two-pass extraction of the Markdown and the figures it actually references. */
-import { unzipSync, type UnzipFileInfo } from 'fflate'
+import { readZipDirectory, readZipEntry, type ZipEntry } from './zip-reader.js'
 import {
   artifactImageMediaType,
   ARCHIVE_MAX_IMAGES,
@@ -9,14 +9,9 @@ import {
 import type { ZoteroArtifactImageMediaType } from '../contract.js'
 import { markdownImageReferences } from './markdown-images.js'
 
-import {
-  ZIP_MAX_TOTAL_ENTRIES,
-  ZIP_MAX_FILE_BYTES,
-  ZIP_MAX_ARCHIVE_BYTES,
-} from './archive-limits.js'
+import { ZIP_MAX_FILE_BYTES, ZIP_MAX_ARCHIVE_BYTES } from './archive-limits.js'
 export {
   ZIP_MAX_TOTAL_ENTRIES,
-  ZIP_MAX_WANTED_ENTRIES,
   ZIP_MAX_FILE_BYTES,
   ZIP_MAX_ARCHIVE_BYTES,
 } from './archive-limits.js'
@@ -74,52 +69,31 @@ function imageOf(path: string) {
 export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
   if (bytes.byteLength === 0) invalid('the archive is empty')
   if (bytes.byteLength > ZIP_MAX_ARCHIVE_BYTES) invalid('the archive exceeds the size ceiling')
-  let entries = 0
-  let unsafe = false
-  const kinds = new Set<string>()
-  const imageEntries = new Map<string, { path: string; size: number }>()
+  const imageEntries = new Map<string, ZipEntry>()
   const texts = new Map<string, Uint8Array>()
   try {
-    const archive = unzipSync(bytes, {
-      filter: (info: UnzipFileInfo) => {
-        const directory = info.name.endsWith('/')
-        if (
-          ++entries > ZIP_MAX_TOTAL_ENTRIES ||
-          unsafeName(directory ? info.name.slice(0, -1) : info.name)
-        ) {
-          unsafe = true
-          return false
-        }
-        if (directory) return false
-        const kind = wanted(info.name)
-        const image = imageOf(info.name)
-        if (image !== undefined) {
-          if (imageEntries.has(image.name) || imageEntries.size >= ZIP_MAX_IMAGES) unsafe = true
-          imageEntries.set(image.name, { path: info.name, size: info.originalSize })
-        }
-        if (kind === undefined) return false
-        if (
-          kinds.has(kind) ||
-          info.originalSize > ZIP_MAX_FILE_BYTES ||
-          (info.compression !== 0 && info.compression !== 8)
-        ) {
-          unsafe = true
-          return false
-        }
-        kinds.add(kind)
-        return true
-      },
-    })
-    for (const [path, data] of Object.entries(archive)) {
-      if (data.byteLength > ZIP_MAX_FILE_BYTES) invalid('an extracted file is oversized')
-      texts.set(wanted(path)!, data)
+    for (const entry of readZipDirectory(bytes)) {
+      const directory = entry.name.endsWith('/')
+      if (unsafeName(directory ? entry.name.slice(0, -1) : entry.name))
+        invalid('it contains an unsafe entry name')
+      if (directory) continue
+      const image = imageOf(entry.name)
+      if (image !== undefined) {
+        if (imageEntries.has(image.name) || imageEntries.size >= ZIP_MAX_IMAGES)
+          invalid('it contains duplicate or excessive figures')
+        imageEntries.set(image.name, entry)
+      }
+      const kind = wanted(entry.name)
+      if (kind === undefined) continue
+      if (texts.has(kind)) invalid('it contains duplicate document entries')
+      texts.set(kind, readZipEntry(bytes, entry, ZIP_MAX_FILE_BYTES))
     }
   } catch (error) {
+    if (error instanceof ArchiveValidationError) throw error
     invalid(
       `the archive could not be read (${error instanceof Error ? error.message : String(error)})`,
     )
   }
-  if (unsafe) invalid('it contains an unsafe, oversized, duplicate, or excessive entry')
   const markdownBytes = texts.get('markdown')
   if (markdownBytes === undefined) invalid('it does not contain full.md')
   const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -143,7 +117,7 @@ export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
     )
   }
   if (references.length > ZIP_MAX_IMAGES) invalid('it references excessive figures')
-  const selected = new Set<string>()
+  const selected: ZipEntry[] = []
   let total = 0
   for (const name of references) {
     const entry = imageEntries.get(name)
@@ -154,25 +128,13 @@ export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
       (total += entry.size) > ZIP_MAX_IMAGE_TOTAL_BYTES
     )
       invalid('it contains an oversized or excessive figure')
-    selected.add(entry.path)
+    selected.push(entry)
   }
   const images: ExtractedImage[] = []
   try {
-    const archive = unzipSync(bytes, {
-      filter: (info) => {
-        if (!selected.has(info.name)) return false
-        if (info.compression !== 0 && info.compression !== 8)
-          invalid('a figure uses an unsupported compression')
-        return true
-      },
-    })
-    for (const [path, data] of Object.entries(archive)) {
-      const image = imageOf(path)!
-      if (
-        data.byteLength !== imageEntries.get(image.name)!.size ||
-        data.byteLength > ZIP_MAX_IMAGE_BYTES
-      )
-        invalid('an extracted figure does not match its declared size')
+    for (const entry of selected) {
+      const image = imageOf(entry.name)!
+      const data = readZipEntry(bytes, entry, ZIP_MAX_IMAGE_BYTES)
       images.push({ ...image, data: new Uint8Array(data) })
     }
   } catch (error) {

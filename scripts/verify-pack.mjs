@@ -1,4 +1,5 @@
 import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
+import { assertBuildFresh } from './build-state.mjs'
 /**
  * Prove the artifact a user installs actually carries what the plugin
  * declares.
@@ -187,17 +188,88 @@ export function installScriptsInRuntimeClosure(manifest, lock) {
   const packages = lock.packages ?? {}
   const visited = new Set()
   const scripts = new Set()
-  const visit = (fromPath, name) => {
+  const visit = (fromPath, name, optional = false) => {
     const path = lockedPathOf(packages, fromPath, name)
-    if (path === undefined || visited.has(path)) return
+    if (path === undefined) {
+      if (optional) return
+      throw new Error(
+        `Runtime dependency ${name} from ${fromPath || '<root>'} is missing from the lockfile`,
+      )
+    }
+    if (visited.has(path)) return
     visited.add(path)
     const entry = packages[path]
     if (entry.hasInstallScript === true) scripts.add(`${name}@${entry.version}`)
-    const children = { ...entry.dependencies, ...entry.optionalDependencies }
-    for (const child of Object.keys(children)) visit(path, child)
+    edges(entry, path)
   }
-  for (const name of Object.keys(manifest.dependencies ?? {})) visit('', name)
+  const edges = (entry, path) => {
+    for (const name of Object.keys(entry.dependencies ?? {}))
+      visit(path, name, Object.hasOwn(entry.optionalDependencies ?? {}, name))
+    for (const name of Object.keys(entry.optionalDependencies ?? {})) visit(path, name, true)
+    for (const name of Object.keys(entry.peerDependencies ?? {})) {
+      if (entry.peerDependenciesMeta?.[name]?.optional !== true) visit(path, name)
+    }
+  }
+  edges(manifest, '')
   return [...scripts].sort()
+}
+
+/** A closed output set derived from source modules and declared static assets. */
+export function allowedPackPaths(manifest, base = root) {
+  const paths = new Set([
+    'package.json',
+    'LICENSE',
+    'lib/.build-state.json',
+    'lib/client.js',
+    'lib/client.js.map',
+  ])
+  const walk = (directory, prefix = '') => {
+    for (const entry of readdirSync(resolve(base, directory, prefix), { withFileTypes: true })) {
+      const path = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isSymbolicLink())
+        throw new Error(`Package inputs cannot contain links: ${directory}/${path}`)
+      if (entry.isDirectory()) {
+        if (path !== 'client') walk(directory, path)
+      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
+        const stem = path.slice(0, -3)
+        for (const suffix of ['.js', '.js.map', '.d.ts', '.d.ts.map'])
+          paths.add(`lib/${stem}${suffix}`)
+      }
+    }
+  }
+  walk('src')
+  for (const path of manifest.files ?? []) {
+    const absolute = resolve(base, path)
+    if (existsSync(absolute) && statSync(absolute).isFile()) paths.add(packed(path))
+  }
+  for (const component of ['', 'library/', 'scholarly/', 'enrichment/'])
+    for (const language of ['en', 'zh']) paths.add(`locale/${component}${language}.json`)
+  for (const path of packedRuntimePaths()) paths.add(path)
+  return [...paths].sort()
+}
+
+export function packReportProblems(entry, manifest, allowed) {
+  const problems = []
+  if (entry?.name !== manifest.name || entry?.version !== manifest.version)
+    problems.push('Packed name or version differs from the checked manifest')
+  if (!Number.isSafeInteger(entry?.size) || entry.size < 1 || entry.size > 40 * 1024 * 1024)
+    problems.push('Packed size must be within 40 MiB')
+  if (
+    !Number.isSafeInteger(entry?.unpackedSize) ||
+    entry.unpackedSize < 1 ||
+    entry.unpackedSize > 200 * 1024 * 1024
+  )
+    problems.push('Unpacked size must be within 200 MiB')
+  const expected = new Set(allowed)
+  const seen = new Set()
+  for (const file of entry?.files ?? []) {
+    const path = packed(file.path)
+    if (seen.has(path)) problems.push(`Duplicate packed file: ${path}`)
+    if (!expected.has(path)) problems.push(`Unexpected packed file: ${path}`)
+    seen.add(path)
+  }
+  for (const path of expected) if (!seen.has(path)) problems.push(`Missing packed file: ${path}`)
+  return problems
 }
 
 /** Pack the package and prove every declared entry reached the tarball. */
@@ -214,7 +286,14 @@ function verifyPack() {
     process.exitCode = 1
     return
   }
-  const scripted = installScriptsInRuntimeClosure(manifest, lock)
+  let scripted
+  try {
+    scripted = installScriptsInRuntimeClosure(manifest, lock)
+  } catch (error) {
+    console.error(`verify-pack: ${error.message}`)
+    process.exitCode = 1
+    return
+  }
   if (scripted.length > 0) {
     console.error(
       `verify-pack: the runtime dependency closure declares install scripts (${scripted.join(', ')}) —` +
@@ -264,6 +343,12 @@ function verifyPack() {
   // `npm pack --json` answers a name-keyed object (and an array on older npm),
   // so normalize both shapes to the one entry this package produced.
   const entry = (Array.isArray(report) ? report : Object.values(report))[0]
+  const reportProblems = packReportProblems(entry, manifest, allowedPackPaths(manifest))
+  if (reportProblems.length > 0) {
+    for (const problem of reportProblems) console.error(`verify-pack: ${problem}`)
+    process.exitCode = 1
+    return
+  }
   const files = new Set((entry?.files ?? []).map((file) => packed(file.path)))
 
   const missing = expected.filter((path) => !files.has(path))
@@ -282,6 +367,7 @@ const isMain =
   process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isMain) {
+  assertBuildFresh()
   verifyPack()
   if (!process.exitCode) await smokeArchiveWorker(root)
 }

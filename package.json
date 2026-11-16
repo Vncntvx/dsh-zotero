@@ -58,7 +58,7 @@
     "README.en.md"
   ],
   "scripts": {
-    "build": "node scripts/vendor-onnxruntime.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build": "node scripts/clean-build.mjs && node scripts/vendor-onnxruntime.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/build-state.mjs --write",
     "build:client": "node scripts/build-client.mjs",
     "dev": "tsc -p tsconfig.json --watch",
     "dev:client": "node scripts/build-client.mjs --watch",
@@ -80,7 +80,7 @@
     "verify:pack": "node scripts/verify-pack.mjs",
     "prepare": "node scripts/build-prepare.mjs",
     "prepublishOnly": "npm run release:check",
-    "release:check": "npm run format:check && node scripts/harness-state.mjs --strict && npm run lint:test && npm run style:check && npm run typecheck && npm run test:coverage && npm run build && npm run verify:pack",
+    "release:check": "npm run format:check && node scripts/harness-state.mjs --strict && npm run lint:test && npm run tokens:check && npm run style:check && npm run typecheck && npm run build && npm run test:coverage && npm run verify:pack",
     "release:branch": "node scripts/publish-release-branch.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -227,6 +227,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-theme": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-tool": "0.2.2-rc.3",
     "@deepseek-ai/dsh-commands": "0.2.2-rc.3",
     "@deepseek-ai/dsh-compaction-image-offload": "0.2.2-rc.3",
@@ -263,6 +264,7 @@
     "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3",
     "@deepseek-ai/dsh-timeout": "0.2.2-rc.3",
     "@deepseek-ai/dsh-token-meter": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-tool-executor-ptc": "0.2.2-rc.3",
     "@deepseek-ai/dsh-tool-present": "0.2.2-rc.3",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
     "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3",
@@ -414,7 +416,10 @@
     "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.3",
     "@deepseek-ai/dsh-working-directory": "0.2.2-rc.3",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-client-resources": "0.2.2-rc.3"
+    "@deepseek-ai/dsh-client-resources": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-tool-executor-ptc": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-ptc-runtime": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-theme": "0.2.2-rc.3"
   },
   "license": "MIT",
   "repository": {

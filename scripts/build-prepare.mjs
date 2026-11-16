@@ -2,31 +2,30 @@
  * The build a consumer runs when installing this plugin **from source** (a git
  * URL, a checkout, or any channel that ships no prebuilt `lib/`).
  *
- * Why it is not just `npm run build`: pnpm runs `prepare` inside the installed
- * dependency's own tree, where neither the sibling harness checkout nor a full
- * development toolchain is guaranteed. The harness's plugin-authoring guide
- * makes the requirement explicit: a `prepare` script must be self-contained
- * and, in its cited working example, transpiles `src/` without project
- * references or typechecking. So this script only:
+ * pnpm runs `prepare` inside the installed dependency's own tree. The script
+ * carries the build steps it needs:
  *
  * 1. copies the pinned semantic runtime's build artifacts into `assets/`
  *    (generated like `lib/`, never committed);
  * 2. transpiles the Node half (`src/**` minus `src/client`) into `lib/` with
  *    esbuild, per file, keeping the emitted ESM specifiers exactly as written;
- * 3. emits the browser half through the real client build
+ * 3. emits public declarations with the installed TypeScript compiler;
+ * 4. emits the browser half through the real client build
  *    (`scripts/build-client.mjs`), whose loader-handoff self-check still runs;
- * 4. proves the entries a consumer loads are on disk.
+ * 5. proves the entries a consumer loads are on disk.
  *
- * Declarations are deliberately out of scope here: they come from
- * `npm run build` (`tsc`), which the publish path runs (`prepublishOnly` →
- * `release:check`), and `npm run verify:pack` proves they reached the tarball.
- * A tree that already carries every full-build output (declarations, Node
- * entry, and browser bundle) is left untouched, so `npm pack`/`npm publish`
- * keep tsc's emit instead of overwriting it; pass `--force` to rebuild anyway.
+ * The installed TypeScript compiler emits public declarations for both
+ * installation channels, and verify:pack checks their freshness and contents.
+ * When input and output digests are current, the script keeps the existing
+ * declarations, Node entry, and browser bundle for `npm pack`/`npm publish`.
+ * Pass `--force` to rebuild.
  * @module scripts/build-prepare
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { assertBuildFresh, writeBuildState } from './build-state.mjs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
@@ -50,7 +49,7 @@ function nodeSources(dir = SOURCE_DIR) {
       found.push(...nodeSources(path))
       continue
     }
-    if (entry.name.endsWith('.ts')) found.push(path)
+    if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) found.push(path)
   }
   return found.sort()
 }
@@ -76,7 +75,16 @@ const vendored = await vendorRuntime()
 console.log(`vendored runtime: onnxruntime-web@${vendored.version}`)
 
 const FULL_BUILD_OUTPUTS = fullBuildOutputs()
-if (!process.argv.includes('--force') && FULL_BUILD_OUTPUTS.every((output) => existsSync(output))) {
+let fresh = false
+try {
+  assertBuildFresh()
+  fresh = true
+} catch {}
+if (
+  !process.argv.includes('--force') &&
+  fresh &&
+  FULL_BUILD_OUTPUTS.every((output) => existsSync(output))
+) {
   console.log(
     `prepare skipped: a full build is already present (${FULL_BUILD_OUTPUTS.length} outputs)`,
   )
@@ -111,6 +119,7 @@ const REQUIRED_OUTPUTS = requiredOutputsFrom(
 
 const entryPoints = nodeSources()
 if (entryPoints.length === 0) throw new Error('no Node-half sources found under src/')
+rmSync(join(root, 'lib'), { recursive: true, force: true })
 
 await esbuild.build({
   entryPoints,
@@ -126,6 +135,20 @@ await esbuild.build({
 })
 console.log(`transpiled ${entryPoints.length} Node-half module(s) into lib/`)
 
+const require = createRequire(import.meta.url)
+const compilerManifest = require.resolve('typescript/package.json')
+const compiler = JSON.parse(readFileSync(compilerManifest, 'utf8'))
+execFileSync(
+  process.execPath,
+  [
+    join(dirname(compilerManifest), compiler.bin.tsc),
+    '-p',
+    join(root, 'tsconfig.json'),
+    '--emitDeclarationOnly',
+  ],
+  { cwd: root, stdio: 'inherit' },
+)
+
 await buildClientBundle()
 
 for (const output of REQUIRED_OUTPUTS) {
@@ -135,4 +158,5 @@ for (const output of REQUIRED_OUTPUTS) {
     throw new Error(`prepare did not produce ${output}; the package would not be loadable`)
   }
 }
+writeBuildState()
 console.log(`prepare ok: ${REQUIRED_OUTPUTS.join(', ')}`)

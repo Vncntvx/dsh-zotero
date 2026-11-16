@@ -10,3 +10,37 @@ export function assertReleaseSource({ actualSha, expectedSha, status }) {
     throw new Error('[release-branch] Refusing to publish from a dirty worktree')
   }
 }
+
+/** The installation channel is one reviewed branch on the project's own remote. */
+export function assertReleaseTarget({ branch, remote, remoteUrl }) {
+  if (branch !== 'release' || remote !== 'origin')
+    throw new Error('[release-branch] Only origin refs/heads/release is a release target')
+  if (
+    ![
+      'https://github.com/Vncntvx/dsh-zotero.git',
+      'git@github.com:Vncntvx/dsh-zotero.git',
+    ].includes(remoteUrl)
+  )
+    throw new Error('[release-branch] The release remote is not the trusted project repository')
+}
+
+/** A legacy channel can be initialized only from current main; later moves are monotonic. */
+export function assertReleaseAdvance({
+  sourceSha,
+  mainSha,
+  previous,
+  sourceDescendsFromPrevious,
+  artifactDigest,
+}) {
+  if (previous === undefined) {
+    if (sourceSha !== mainSha)
+      throw new Error('[release-branch] Initialize provenance from current main')
+    return
+  }
+  if (!sourceDescendsFromPrevious)
+    throw new Error(
+      '[release-branch] Refusing to move the release channel backwards or across unrelated history',
+    )
+  if (previous.sourceSha === sourceSha && previous.artifactDigest !== artifactDigest)
+    throw new Error('[release-branch] The same source commit produced different release bytes')
+}

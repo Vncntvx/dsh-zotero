@@ -32,3 +32,9 @@ export declare function installScriptsInRuntimeClosure(
   manifest: Record<string, unknown>,
   lock: Record<string, unknown>,
 ): string[]
+export declare function allowedPackPaths(manifest: Record<string, unknown>, base?: string): string[]
+export declare function packReportProblems(
+  entry: unknown,
+  manifest: Record<string, unknown>,
+  allowed: readonly string[],
+): string[]

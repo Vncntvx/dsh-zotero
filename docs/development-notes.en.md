@@ -164,6 +164,66 @@ An upstream-contract workaround must also state the current symptom, current wor
 
 Every harness pin change walks this page from the top: check whether upstream now provides the requested contract; if it does, migrate and retire the entry in the same change, because a capability that exists while the workaround remains is not an acceptable state. If it does not, update only the pin version and the review date, leaving the workaround untouched.
 
+## DN-15: Build digests and release artifact identity
+
+- **Type**: security boundary / release constraint.
+- **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
+- **Location**: `scripts/build-state.mjs`, `release-artifact.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
+- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The quality gate creates one artifact with scripts and dev dependencies removed; Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected.
+- **Review trigger**: build inputs, artifact layout, publication entry, Actions, Node or compiler changes.
+- **Verification**: `build-state.spec.ts`, `release-artifact.spec.ts`, `release-branch.spec.ts`, `release:check`, and smoke against the actual tarball.
+- **Follow-up**: add new build inputs to the digest and new release files to the verified set. Preserve tamper, missing-file, source rollback and credential-isolation checks after tool upgrades.
+
+## DN-16: Actual ZIP expansion budgets and integrity proof
+
+- **Type**: security boundary / lifecycle.
+- **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
+- **Location**: `src/enrichment/zip-reader.ts`, `zip.ts`, and `archive-worker.ts`.
+- **Behavior**: verify agreement among the directory, local headers, data descriptors and entry ranges before inflating selected text and referenced figures. Native deflate `maxOutputLength` caps actual output; output length, consumed compressed length and CRC must all match. The declared originalSize is metadata, while the actual output limit controls memory use. The Worker has heap/stack limits and a 30-second deadline; cancellation waits for exit before releasing admission.
+- **Review trigger**: Node/zlib upgrades, ZIP format support, archive budgets or Worker admission changes.
+- **Verification**: `enrichment-zip-integrity`, `enrichment-zip-safety`, `enrichment-archive-worker`, and the packed JS Worker smoke.
+- **Follow-up**: additional compression formats require the same hard output limit and integrity proof. Keep forged-size, CRC, directory mismatch and cancellation/exit regressions.
+
+## DN-17: Pinned authority for style tokens
+
+- **Type**: upstream contract / build constraint.
+- **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
+- **Location**: `installedThemeSheets`, `RUNTIME_SEAMS`, and `verifyRuntimeSeams` in `scripts/style-tokens.mjs`.
+- **Behavior**: CI checks dsw/ds against the exact theme source installed from the lockfile; linked development reads the sibling's pin tag. Each dsh runtime seam maps to a setting, CSS definition or setProperty call in that pin, and the provenance table and snapshot agree as closed sets.
+- **Review trigger**: every harness pin upgrade, token addition or upstream definition move.
+- **Verification**: `tokens:check` runs in `release:check`; `style-tokens.spec.ts` refuses missing tokens, wrong versions and missing definitions.
+- **Follow-up**: replace the provenance table with an upstream public token manifest when available; retain exact-pin and deletion checks.
+
+## DN-18: Parsed pages never fetch remote images automatically
+
+- **Type**: security boundary / performance budget.
+- **Status**: active (2026-11-16).
+- **Location**: `src/client/remote-image-links.ts`, `parsed-markdown.ts`, `scripts/client-graph-authority.mjs`, and `build-client.mjs`.
+- **Behavior**: before display, a GFM/math syntax pass converts direct and reference HTTP(S) images to ordinary links while retaining the complete original document. Only artifact-owned local figures render through controlled Blob URLs. Code examples remain intact. The pure parser closure is explicitly allowlisted; its roughly 88 KB cost brings the measured bundle to 750 KB, under an 800 KiB limit. The current upstream renderer accepts remote images before calling pathImages, so pathImages cannot enforce refusal.
+- **Review trigger**: primitives Markdown grammar or imageSource upgrades, new Markdown extensions, or image lifetime changes.
+- **Verification**: `parsed-markdown.spec.ts` and `parsed-document-images.spec.tsx` prove remote, loopback and reference images create no img elements while local figures and code survive. The build checks the dependency closure and size.
+- **Follow-up**: migrate when upstream publishes an image policy API covering remote targets, remove the duplicate parse and its dependency closure, then reduce the measured size budget.
+
+## DN-19: Single-use grants, complete write cycles and receipts
+
+- **Type**: Zotero protocol / concurrency and security constraint.
+- **Status**: Active (2026-11-16).
+- **Location**: `write-auth.ts`, `write-authorization-budget.ts`, `write-operation.ts`, `local/write-keyed-batch.ts`, `local/write-trash-graph.ts`, `write-plan.ts`.
+- **Behavior**: Zotero consumes a single-use key at authentication. Authorization through completed dispatch must be exclusive. The service retains the operation gate and prompt budget across transport rebuilds. The 15-minute deadline starts after approval and includes queueing and authorization; it must preserve a dispatched write's unknown commit state. Native POST accepts existing key/version entries with PATCH merge semantics, at most 50 objects, each committed independently. Dependency layers must settle before their parents. Every receipt proves its index, identity, version and submitted fields; missing or contradictory proof never permits resending. Revocation atomically removes the credentials secret. Approval documents retain complete values and isolate their Markdown syntax.
+- **Review trigger**: A Zotero write, grant-consumption or rate-limit protocol change; a credentials atomic-interface change; changes to graph ordering or approval rendering.
+- **Verification**: `batch-one-time-grant`, `trash`, `restore-items`, `write-operation`, `write-authorization-budget`, `write-auth`, `plan-literal-values`. Protocol evidence comes from the installed Zotero `server_localAPI.js` implementation of `writeMultipleObjects`, authentication and authorize.
+- **Follow-up**: Recheck per-object transactions and grant consumption during upgrades. Retain partial-conflict, missing-receipt, queued cancellation, total-deadline and rebuild-serialization regressions.
+
+## DN-20: Shared model verification and inference admission
+
+- **Type**: Local-file integrity / resource ownership constraint.
+- **Status**: Active (2026-11-16).
+- **Location**: `enrichment/model-bundle-inspector.ts`, `model-fs.ts`, `semantic/bundle.ts`, `tokenizer.ts`, `batching.ts`, `session.ts`, `vector-cache.ts`, `evidence-query.ts`.
+- **Behavior**: Installation, status and loading share exact catalog inspection. Manifest reads cap at 64 KiB before allocation; pinned paths and parent directories reject symlinks. Runtime readers hash the actual byte snapshot consumed by ONNX and JSON parsers, bounded by pinned size. The process verification cache holds at most 16 identities and is cleared on component teardown. Queries and paraphrases cap at 2,000 characters before source I/O; embedding text including its prefix caps at 131,072 characters before encode. One cache generation admits one inference batch at a time. Padded batches split at 32,768 tokens without dropping rows or repeating encoding. Cache identity includes the complete model contract, including tier and token window.
+- **Review trigger**: Catalog windows or dimensions, tokenizer allocation, runtime byte-buffer ownership, inference concurrency, or file inspection changes.
+- **Verification**: `semantic-bundle`, `semantic-open-ownership`, `semantic-admission-budget`, `semantic-vector-cache`, `semantic-diagnostic-retry`, and `evidence-query-admission`. Tests use tiny real files and controlled session outputs; no repository test loads a model.
+- **Follow-up**: Preserve exact-byte loading and bounded admission when changing the runtime; measure real model memory and recall manually before changing these limits.
+
 ## Retired entries
 
 A retired entry keeps its original title, retirement date, and replacement mechanism, so the history of why the workaround existed stays traceable.

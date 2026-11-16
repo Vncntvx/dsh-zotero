@@ -1,187 +1,154 @@
-/**
- * Prepares and publishes a standalone prebuilt `release` branch.
- *
- * Why this exists:
- * When users install this plugin from GitHub (`github:Vncntvx/dsh-zotero`),
- * pnpm (>=10) executes the package's `prepare` script because source repos
- * do not commit `lib/`. However, pnpm blocks git-hosted dependencies from
- * executing lifecycle scripts by default (supply-chain security) unless
- * allowed in `allowBuilds`.
- *
- * This script builds the plugin, creates an isolated worktree, populates it
- * with prebuilt artifacts (`lib/`, manifest, locales, assets), strips the
- * `prepare` script from `package.json`, and pushes it to the `release` branch.
- * Installing `github:Vncntvx/dsh-zotero#release` therefore requires zero build
- * scripts and zero `allowBuilds` approval.
- *
- * @module scripts/publish-release-branch
- */
-
+/** Publish the verified prebuilt artifact without dependency lifecycle code. */
 import { execFileSync } from 'node:child_process'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertReleaseSource } from './release-branch-guard.mjs'
+import {
+  assertReleaseAdvance,
+  assertReleaseSource,
+  assertReleaseTarget,
+} from './release-branch-guard.mjs'
+import { prepareReleaseArtifact, verifyReleaseArtifact } from './release-artifact.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-
-function runGit(args, cwd = root) {
+function git(args, cwd = root) {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 60_000,
   }).trim()
 }
-
-function getOptionValue(argv, flag, defaultValue) {
-  const idx = argv.indexOf(flag)
-  if (idx === -1) return defaultValue
-  const val = argv[idx + 1]
-  if (val === undefined || val.startsWith('--')) {
-    throw new Error(`[release-branch] Expected a value after ${flag}`)
-  }
-  return val
+const args = process.argv.slice(2)
+function option(flag, fallback) {
+  const index = args.indexOf(flag)
+  if (index === -1) return fallback
+  const value = args[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`Expected a value after ${flag}`)
+  return value
 }
-
-function parseArgs() {
-  const argv = process.argv.slice(2)
-  const sourceSha = getOptionValue(
-    argv,
-    '--source-sha',
-    process.env.GITHUB_SHA ?? runGit(['rev-parse', 'HEAD']),
+const sourceSha = option('--source-sha', process.env.GITHUB_SHA ?? git(['rev-parse', 'HEAD']))
+const branch = option('--branch', 'release')
+const remote = option('--remote', 'origin')
+const dryRun = args.includes('--dry-run')
+const push = args.includes('--push') && !dryRun
+const artifact = option('--artifact')
+assertReleaseTarget({ branch, remote, remoteUrl: git(['remote', 'get-url', remote]) })
+assertReleaseSource({
+  actualSha: git(['rev-parse', 'HEAD']),
+  expectedSha: sourceSha,
+  status: git(['status', '--porcelain']),
+})
+if (push && artifact === undefined)
+  throw new Error(
+    'Publication requires the artifact that passed quality and Web composition checks',
   )
-  return {
-    dryRun: argv.includes('--dry-run'),
-    push: argv.includes('--push'),
-    branch: getOptionValue(argv, '--branch', 'release'),
-    remote: getOptionValue(argv, '--remote', 'origin'),
-    sourceSha,
-  }
-}
-
-const options = parseArgs()
-console.log(
-  `[release-branch] Preparing ${options.branch} (dryRun=${options.dryRun}, push=${options.push}, source=${options.sourceSha})`,
-)
-
-assertReleaseSource({
-  actualSha: runGit(['rev-parse', 'HEAD']),
-  expectedSha: options.sourceSha,
-  status: runGit(['status', '--porcelain']),
-})
-
-// 1. Prove and build artifacts
-console.log('[release-branch] Building project (Node and Client bundles)...')
-execFileSync('npm', ['run', 'build'], { cwd: root, stdio: 'inherit' })
-
-assertReleaseSource({
-  actualSha: runGit(['rev-parse', 'HEAD']),
-  expectedSha: options.sourceSha,
-  status: runGit(['status', '--porcelain']),
-})
-
-const requiredFiles = ['lib/index.js', 'lib/client.js']
-for (const file of requiredFiles) {
-  if (!existsSync(join(root, file))) {
-    throw new Error(`[release-branch] Required build artifact missing: ${file}`)
-  }
-}
-
-// 2. Read package.json and sanitize for release branch
-const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const releaseManifest = { ...manifest }
-
-// Remove prepare script so pnpm treats this as a prebuilt package requiring no build execution
-if (releaseManifest.scripts) {
-  const { prepare, prepublishOnly, ...safeScripts } = releaseManifest.scripts
-  releaseManifest.scripts = safeScripts
-}
-
-// 3. Create isolated git worktree
-const tempWorktree = mkdtempSync(join(tmpdir(), 'dsh-zotero-release-worktree-'))
-const orphanBranchName = `temp-release-${Date.now()}`
-
+const temporary = mkdtempSync(join(tmpdir(), 'dsh-zotero-release-'))
 try {
-  console.log(`[release-branch] Creating temporary worktree at ${tempWorktree}`)
-  runGit(['worktree', 'add', '--detach', tempWorktree])
-
-  runGit(['checkout', '--orphan', orphanBranchName], tempWorktree)
-  runGit(['rm', '-rf', '.'], tempWorktree)
-
-  // 4. Copy published files as declared in package.json "files"
-  // The release branch carries exactly what the package ships; the manifest
-  // is already parsed above, so a files entry added there ships without this
-  // list ever being edited again.
-  const filesToCopy = Array.isArray(manifest.files)
-    ? manifest.files.filter((file) => typeof file === 'string')
-    : []
-
-  for (const item of filesToCopy) {
-    const srcPath = join(root, item)
-    const dstPath = join(tempWorktree, item)
-    if (!existsSync(srcPath)) {
-      console.warn(`[release-branch] Warning: optional/declared path missing: ${item}`)
-      continue
-    }
-    mkdirSync(dirname(dstPath), { recursive: true })
-    cpSync(srcPath, dstPath, { recursive: true })
+  let verified
+  if (artifact !== undefined) verified = verifyReleaseArtifact(resolve(artifact), sourceSha)
+  else {
+    execFileSync('npm', ['run', 'build'], { cwd: root, stdio: 'inherit' })
+    execFileSync('npm', ['run', 'verify:pack'], { cwd: root, stdio: 'inherit' })
+    verified = prepareReleaseArtifact(join(temporary, 'artifact'), sourceSha)
   }
-
-  // Copy LICENSE if present
-  if (existsSync(join(root, 'LICENSE'))) {
-    cpSync(join(root, 'LICENSE'), join(tempWorktree, 'LICENSE'))
-  }
-
-  // Write sanitized package.json
-  writeFileSync(join(tempWorktree, 'package.json'), `${JSON.stringify(releaseManifest, null, 2)}\n`)
-
-  // Write release branch .gitignore
-  writeFileSync(join(tempWorktree, '.gitignore'), 'node_modules\n*.log\n.DS_Store\n.env*\n')
-
-  // 5. Commit to orphan branch
-  runGit(['add', '-A'], tempWorktree)
-  const status = runGit(['status', '--porcelain'], tempWorktree)
-  if (!status) {
-    console.log('[release-branch] No changes detected in release branch.')
-  } else {
-    runGit(['commit', '-m', 'chore(release): prebuilt release bundle [skip ci]'], tempWorktree)
-    console.log('[release-branch] Committed prebuilt bundle.')
-  }
-
-  // Update target local branch ref
-  runGit(['branch', '-f', options.branch, 'HEAD'], tempWorktree)
-  console.log(`[release-branch] Updated local branch ref "${options.branch}".`)
-
-  // 6. Push to remote if requested
-  if (options.push && !options.dryRun) {
-    console.log(`[release-branch] Pushing ${options.branch} to ${options.remote}...`)
-    runGit(['push', '-f', options.remote, `${options.branch}:${options.branch}`])
-    console.log(`[release-branch] Successfully pushed ${options.branch} to ${options.remote}.`)
-  } else if (options.dryRun) {
-    console.log('[release-branch] Dry-run complete. Skipping git push.')
-  } else {
+  assertReleaseSource({
+    actualSha: git(['rev-parse', 'HEAD']),
+    expectedSha: sourceSha,
+    status: git(['status', '--porcelain']),
+  })
+  if (dryRun) {
     console.log(
-      `[release-branch] Local branch "${options.branch}" is ready. Pass --push to push to ${options.remote}.`,
+      `[release-branch] Verified ${verified.provenance.artifactDigest} from ${sourceSha}; no refs changed`,
     )
+    process.exitCode = 0
+  } else {
+    // Read the latest remote state before deciding advancement and use that
+    // exact commit as the push lease; a concurrent publisher cannot be erased.
+    const refs = git(['ls-remote', '--heads', remote, 'refs/heads/main', 'refs/heads/release'])
+    const refMap = new Map(
+      refs
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [sha, ref] = line.split(/\s+/)
+          return [ref, sha]
+        }),
+    )
+    const oldRelease = refMap.get('refs/heads/release')
+    const mainSha = refMap.get('refs/heads/main')
+    if (!mainSha) throw new Error('The remote main branch is missing')
+    git(['fetch', '--no-tags', remote, 'main', ...(oldRelease ? ['release'] : [])])
+    let previous
+    if (oldRelease) {
+      let present = false
+      try {
+        git(['cat-file', '-e', `${oldRelease}:release-provenance.json`])
+        present = true
+      } catch {}
+      if (present) previous = JSON.parse(git(['show', `${oldRelease}:release-provenance.json`]))
+    }
+    let descends = false
+    if (previous) {
+      try {
+        git(['merge-base', '--is-ancestor', previous.sourceSha, sourceSha])
+        descends = true
+      } catch {}
+    }
+    assertReleaseAdvance({
+      sourceSha,
+      mainSha,
+      previous,
+      sourceDescendsFromPrevious: descends,
+      artifactDigest: verified.provenance.artifactDigest,
+    })
+    const stage = join(temporary, 'repository')
+    cpSync(verified.stage, stage, { recursive: true })
+    git(['init', '--initial-branch=release'], stage)
+    git(['add', '--all'], stage)
+    git(
+      [
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=github-actions[bot]',
+        '-c',
+        'user.email=github-actions[bot]@users.noreply.github.com',
+        'commit',
+        '-m',
+        `chore(release): prebuilt ${verified.provenance.packageVersion}\n\nSource: ${sourceSha}\nArtifact: ${verified.provenance.artifactDigest}`,
+      ],
+      stage,
+    )
+    if (push) {
+      // The token is supplied only to this process by the final workflow step;
+      // no install, build or npm command executes in this branch.
+      const token = process.env.RELEASE_PUSH_TOKEN
+      const env = token
+        ? {
+            ...process.env,
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+            GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+          }
+        : process.env
+      execFileSync(
+        'git',
+        [
+          'push',
+          `--force-with-lease=refs/heads/release:${oldRelease ?? ''}`,
+          git(['remote', 'get-url', remote]),
+          'HEAD:refs/heads/release',
+        ],
+        { cwd: stage, env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 },
+      )
+      console.log(`[release-branch] Published ${sourceSha} (${verified.provenance.artifactDigest})`)
+    } else
+      console.log(
+        `[release-branch] Verified commit ${git(['rev-parse', 'HEAD'], stage)}; pass --push with the checked artifact to publish`,
+      )
   }
 } finally {
-  console.log('[release-branch] Cleaning up temporary worktree...')
-  try {
-    runGit(['worktree', 'remove', '--force', tempWorktree])
-  } catch (err) {
-    console.warn(`[release-branch] Failed to remove worktree: ${err.message}`)
-  }
-  try {
-    runGit(['branch', '-D', orphanBranchName])
-  } catch {}
-  rmSync(tempWorktree, { recursive: true, force: true })
+  rmSync(temporary, { recursive: true, force: true })
 }

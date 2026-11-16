@@ -29,14 +29,14 @@
  *   node scripts/style-tokens.mjs           # check the snapshot against upstream
  *   node scripts/style-tokens.mjs --write   # rewrite the `dsw` and `ds` halves
  *
- * `DSH_THEME_DIR` overrides the theme sheet directory for a non-sibling
- * checkout. A missing directory fails the check rather than writing an empty
- * snapshot: an empty allowlist would reject every token at once.
+ * The exact registry theme supplies source styles in CI. Linked development
+ * reads the sibling pin tag. Runtime seams are checked against their explicit
+ * pinned host definitions; arbitrary directories cannot supply authority.
  * @module dsh-zotero/scripts/style-tokens
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -149,6 +149,57 @@ export function snapshotOf(current, { harness, dsw, ds = [] }) {
   return { harness, dsw, dsh: [...(current?.dsh ?? [])], ds }
 }
 
+/** CI reads the exact registry package installed from the lockfile. */
+export function installedThemeSheets(packageRoot, pin) {
+  if (lstatSync(packageRoot).isSymbolicLink())
+    throw new Error('A linked theme must be read from its pin tag')
+  const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
+  if (manifest.name !== '@deepseek-ai/dsh-client-ui-theme' || manifest.version !== pin)
+    throw new Error('The installed theme does not match the harness pin')
+  const directory = join(packageRoot, 'src/styles')
+  const files = readdirSync(directory)
+    .filter((name) => name.endsWith('.css'))
+    .sort()
+  if (files.length === 0) throw new Error('The installed theme has no source stylesheets')
+  return { files, read: (name) => readFileSync(join(directory, name), 'utf8') }
+}
+
+/** These host definitions are the provenance of the runtime seam allowlist. */
+export const RUNTIME_SEAMS = {
+  '--dsh-chat-content-width': [
+    'ui-conversation',
+    'src/client/skeleton/ConversationRoot.module.css',
+    'css',
+  ],
+  '--dsh-composer-height': [
+    'ui-conversation',
+    'src/client/skeleton/ConversationContent.tsx',
+    'property',
+  ],
+  '--dsh-content-font-delta': ['ui-theme', 'src/styles/gradient-shadow-text.css', 'css'],
+  '--dsh-content-font-size': ['ui-theme', 'src/theme-settings.ts', 'setting'],
+  '--dsh-content-font-size-secondary': ['ui-theme', 'src/styles/gradient-shadow-text.css', 'css'],
+  '--dsh-scrollbar-thumb': ['ui-theme', 'src/styles/scrollbar.css', 'css'],
+  '--dsh-scrollbar-thumb-hover': ['ui-theme', 'src/styles/scrollbar.css', 'css'],
+}
+
+export function verifyRuntimeSeams(tokens, read) {
+  if (JSON.stringify([...tokens].sort()) !== JSON.stringify(Object.keys(RUNTIME_SEAMS).sort()))
+    throw new Error('Runtime token seams differ from their reviewed provenance')
+  for (const [token, [component, path, kind]] of Object.entries(RUNTIME_SEAMS)) {
+    const source = read(component, path).replace(/\/\*[\s\S]*?\*\//g, '')
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern =
+      kind === 'css'
+        ? `${escaped}\\s*:`
+        : kind === 'setting'
+          ? `variable:\\s*['"]${escaped}['"]`
+          : `setProperty\\(\\s*['"]${escaped}['"]\\s*,`
+    if (!new RegExp(pattern).test(source))
+      throw new Error(`Runtime token ${token} is no longer defined at ${component}/${path}`)
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const fixture = join(root, 'tests', 'fixtures', 'style-tokens.json')
   const manifest = join(root, 'package.json')
@@ -159,22 +210,27 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     )
     process.exit(1)
   }
-  // `DSH_THEME_DIR` stays the explicit escape hatch for a non-sibling checkout.
-  // The default reads the pin tag: a working tree ahead of the pin would
-  // otherwise contribute tokens the pinned host never defines.
-  const themeDir = process.env.DSH_THEME_DIR
+  if (process.env.DSH_THEME_DIR !== undefined)
+    throw new Error(
+      'DSH_THEME_DIR cannot supply token authority; use the pinned registry package or pin tag',
+    )
+  const installed = join(root, 'node_modules/@deepseek-ai/dsh-client-ui-theme')
   let files
   let read
-  if (themeDir !== undefined) {
-    try {
-      files = readdirSync(themeDir)
-        .filter((name) => name.endsWith('.css'))
-        .sort()
-    } catch {
-      console.error(`style-tokens: no theme sheets at ${themeDir}`)
-      process.exit(1)
+  let readSeam
+  if (existsSync(installed) && !lstatSync(installed).isSymbolicLink()) {
+    const sheets = installedThemeSheets(installed, harness)
+    files = sheets.files
+    read = sheets.read
+    readSeam = (component, path) => {
+      const packageRoot = join(root, `node_modules/@deepseek-ai/dsh-client-${component}`)
+      if (
+        lstatSync(packageRoot).isSymbolicLink() ||
+        JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version !== harness
+      )
+        throw new Error(`Runtime token provider ${component} does not match the registry pin`)
+      return readFileSync(join(packageRoot, path), 'utf8')
     }
-    read = (name) => readFileSync(join(themeDir, name), 'utf8')
   } else {
     try {
       const sheets = pinThemeSheets(
@@ -184,12 +240,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       )
       files = sheets.files
       read = sheets.read
+      readSeam = (component, path) =>
+        execFileSync(
+          'git',
+          ['-C', siblingRoot, 'show', `dsh-v${harness}:packages/client/${component}/${path}`],
+          { encoding: 'utf8' },
+        )
     } catch (error) {
       console.error(
         `style-tokens: cannot read dsh-v${harness} from ${siblingRoot}: ${
           error instanceof Error ? error.message : String(error)
         }\n` +
-          '  the snapshot describes the pin tag; check out the sibling with that tag, or set DSH_THEME_DIR',
+          '  install the pinned development dependencies or check out the sibling with that tag',
       )
       process.exit(1)
     }
@@ -203,6 +265,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       return undefined
     }
   })()
+  verifyRuntimeSeams(current?.dsh ?? [], readSeam)
   if (process.argv.includes('--write')) {
     writeFileSync(
       fixture,

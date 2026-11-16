@@ -511,6 +511,10 @@ function overriddenVendorProblem(name) {
  */
 export function collectVendorProblems(harnessRoot, manifest, packages) {
   const found = []
+  for (const name of Object.keys(manifest.overrides ?? {})) {
+    if (name.startsWith('@deepseek-ai/') && !isDshPackage(name))
+      found.push(overriddenVendorProblem(name))
+  }
   if (!existsSync(harnessRoot)) return found
   const resolvedPackages = packages ?? collectHarnessPackages(harnessRoot)
   if (resolvedPackages.size === 0) return found
@@ -533,17 +537,6 @@ export function collectVendorProblems(harnessRoot, manifest, packages) {
           ` (e.g. "^${installed}") so the lockfile resolves the copy the shell loads`,
       )
     }
-  }
-  // The `overrides` arm is separate from the floor comparison: an override
-  // cannot express the floor agreement at all, so any vendored package there is
-  // a problem regardless of what it pins. The other checks (pin face, lock,
-  // override names) all skip non-`dsh-*` names, so without this arm an
-  // overridden vendor package would pass every gate silently.
-  for (const name of Object.keys(manifest.overrides ?? {})) {
-    if (!name.startsWith('@deepseek-ai/') || isDshPackage(name)) continue
-    const dir = resolvedPackages.get(name)
-    if (dir === undefined || !isVendoredPackage(harnessRoot, dir)) continue
-    found.push(overriddenVendorProblem(name))
   }
   return found
 }

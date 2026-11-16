@@ -21,11 +21,13 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   collectThemeTokens,
+  installedThemeSheets,
   diffTokens,
   mergeThemeTokens,
   pinThemeSheets,
   pinnedHarness,
   snapshotOf,
+  verifyRuntimeSeams,
 } from '../../../scripts/style-tokens.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
@@ -128,6 +130,32 @@ describe('snapshotOf', () => {
 })
 
 describe('the committed snapshot', () => {
+  it('matches every token in the pinned registry theme sources', () => {
+    const sheets = installedThemeSheets(
+      join(root, 'node_modules/@deepseek-ai/dsh-client-ui-theme'),
+      pinnedHarness(manifest),
+    )
+    for (const [prefix, tokens] of [
+      ['--dsw-', snapshot.dsw],
+      ['--ds-', snapshot.ds],
+    ] as const)
+      expect(diffTokens(tokens, mergeThemeTokens(sheets.read, sheets.files, prefix))).toEqual({
+        missing: [],
+        removed: [],
+      })
+    expect(() =>
+      installedThemeSheets(join(root, 'node_modules/@deepseek-ai/dsh-client-ui-theme'), '0.0.0'),
+    ).toThrow('pin')
+  })
+
+  it('proves every runtime seam at its pinned host definition', () => {
+    const read = (component: string, path: string) =>
+      readFileSync(join(root, `node_modules/@deepseek-ai/dsh-client-${component}`, path), 'utf8')
+    expect(() => verifyRuntimeSeams(snapshot.dsh, read)).not.toThrow()
+    expect(() => verifyRuntimeSeams(snapshot.dsh.slice(1), read)).toThrow('provenance')
+    expect(() => verifyRuntimeSeams(snapshot.dsh, () => '')).toThrow('no longer defined')
+  })
+
   it('describes the harness this repository pins', () => {
     expect(
       snapshot.harness,

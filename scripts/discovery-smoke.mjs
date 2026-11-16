@@ -269,7 +269,8 @@ async function initializeProfile() {
 }
 
 async function main() {
-  const tarball = packPath()
+  const suppliedTarball = argAfter('--tarball')
+  const tarball = suppliedTarball === undefined ? packPath() : resolve(suppliedTarball)
   console.log(`packed: ${tarball}`)
   console.log(`home: ${HOME} (profile ${PROFILE})`)
 
@@ -292,7 +293,7 @@ async function main() {
   }
 
   try {
-    rmSync(tarball, { force: true })
+    if (suppliedTarball === undefined) rmSync(tarball, { force: true })
     if (argAfter('--home') === undefined) rmSync(HOME, { recursive: true, force: true })
   } catch {
     // Best effort cleanup: a failed smoke run must not mask its own error.

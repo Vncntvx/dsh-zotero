@@ -16,6 +16,7 @@ import {
   expectedPaths,
   installScriptsInRuntimeClosure,
   packReportOf,
+  packReportProblems,
 } from '../../../scripts/verify-pack.mjs'
 import { withTempDir } from '../../helpers/temp-dir.ts'
 
@@ -191,9 +192,58 @@ describe('installScriptsInRuntimeClosure', () => {
     expect(installScriptsInRuntimeClosure({ devDependencies: { dev: '^1' } }, lock)).toEqual([])
   })
 
-  it('skips a dependency the lockfile cannot resolve instead of guessing', () => {
-    expect(
+  it('refuses a required dependency the lockfile cannot resolve', () => {
+    expect(() =>
       installScriptsInRuntimeClosure({ dependencies: { ghost: '^1' } }, { packages: {} }),
-    ).toEqual([])
+    ).toThrow('missing from the lockfile')
+  })
+
+  it('walks root optional dependencies and required peer edges at every level', () => {
+    const lock = {
+      packages: {
+        'node_modules/root-peer': { version: '1.0.0', hasInstallScript: true },
+        'node_modules/optional': { version: '1.0.0', peerDependencies: { 'nested-peer': '^1' } },
+        'node_modules/nested-peer': { version: '1.0.0', hasInstallScript: true },
+      },
+    }
+    expect(
+      installScriptsInRuntimeClosure(
+        {
+          optionalDependencies: { optional: '^1', absent: '^1' },
+          peerDependencies: { 'root-peer': '^1', 'optional-peer': '^1' },
+          peerDependenciesMeta: { 'optional-peer': { optional: true } },
+        },
+        lock,
+      ),
+    ).toEqual(['nested-peer@1.0.0', 'root-peer@1.0.0'])
+  })
+})
+
+describe('the complete packed file set', () => {
+  const manifest = { name: 'dsh-zotero', version: '1.0.0' }
+  const entry = { ...manifest, size: 100, unpackedSize: 200, files: [{ path: 'package.json' }] }
+  it('accepts only the exact package identity and expected files within the size limits', () => {
+    expect(packReportProblems(entry, manifest, ['package.json'])).toEqual([])
+    expect(packReportProblems({ ...entry, name: 'other' }, manifest, ['package.json'])).toContain(
+      'Packed name or version differs from the checked manifest',
+    )
+    expect(
+      packReportProblems({ ...entry, size: 40 * 1024 * 1024 + 1 }, manifest, ['package.json']),
+    ).toContain('Packed size must be within 40 MiB')
+    expect(
+      packReportProblems({ ...entry, unpackedSize: 200 * 1024 * 1024 + 1 }, manifest, [
+        'package.json',
+      ]),
+    ).toContain('Unpacked size must be within 200 MiB')
+    expect(
+      packReportProblems(
+        { ...entry, files: [...entry.files, { path: 'lib/old-module.js' }] },
+        manifest,
+        ['package.json'],
+      ),
+    ).toContain('Unexpected packed file: lib/old-module.js')
+    expect(packReportProblems(entry, manifest, ['package.json', 'lib/index.js'])).toContain(
+      'Missing packed file: lib/index.js',
+    )
   })
 })

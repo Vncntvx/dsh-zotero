@@ -83,7 +83,7 @@ tests/                  # 单元测试与端到端测试用例
 | [功能概览](features.md)          | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
 | [研究 SOP 技能](skills.md)       | 八个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)             | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
-| [配置参考](configuration.md)     | 四个设置命名空间、67 个字段与热更新机制                      |
+| [配置参考](configuration.md)     | 四个设置命名空间、68 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md)   | 常见问题、原因与排查步骤                                     |
 | [系统架构](architecture.md)      | 数据流、分层职责与设计边界                                   |
 | [开发指南](development.md)       | 构建、测试、调试与发布流程                                   |
@@ -322,7 +322,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 `.github/workflows/` 下有三个工作流：
 
-- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时构建并推送预构建 release 分支，只授予 `contents: write`；
+- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时由只读质量作业生成单一产物并交给 Web smoke；最终作业只校验并推送预构建 release 分支，只有它获得 `contents: write`；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
 - `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
 
@@ -342,9 +342,19 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 2. `npm run build:client`：浏览器端产物可以单独构建；
 3. `npm test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）与全量 vitest；
 4. `npm run format:check`：Prettier 格式检查；
-5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`typecheck`、`test:coverage`、`build` 与 `verify:pack`；
+5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`tokens:check`、`style:check`、`typecheck`、`build`、`test:coverage` 与 `verify:pack`；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
 8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。
+
+### 版本、发行说明与发布动作
+
+版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。
+
+CI 的 quality gate 只构建一次，生成 `release-artifact-<source SHA>`；Web composition 安装其中的确切 tarball。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
+
+需要向 npm 发布时，从上述成功流水线下载产物，先运行 `node scripts/release-artifact.mjs --verify --out <artifact directory> --source-sha <full source SHA>`，再对 `artifact.json` 指定的 tarball 执行 `npm publish <tarball> --access public`。发布的必须是已通过门禁和 Web smoke 的原文件。随后建立与 `v<version>` 对应的 GitHub Release，正文列出该版本的变更、验证结果与迁移要求，并记录源 SHA、artifactDigest 与 tarballSha256。发布失败先查明 registry 状态；同一版本不覆盖重发，内容变化需新版本与重新验证。
+
+本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的 release 分支。

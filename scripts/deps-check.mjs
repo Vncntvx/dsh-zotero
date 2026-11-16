@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diff, gt, maxSatisfying, valid } from 'semver'
+import { diff, gt, maxSatisfying, satisfies, valid } from 'semver'
 import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -63,10 +63,22 @@ async function latestVersion(registry, name, range) {
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   const packument = await response.json()
+  return registryVersionsOf(packument, range)
+}
+
+/** Report the declared range and the current stable release independently. */
+export function registryVersionsOf(packument, range) {
   const versions = Object.keys(packument.versions ?? {}).filter((version) => valid(version))
-  const latest = maxSatisfying(versions, range)
-  if (latest === null) throw new Error(`no published version satisfies ${range}`)
-  return latest
+  const wanted = maxSatisfying(versions, range)
+  const latest = packument['dist-tags']?.latest
+  if (wanted === null) throw new Error(`no published version satisfies ${range}`)
+  if (typeof latest !== 'string' || valid(latest) === null || !versions.includes(latest))
+    throw new Error('registry metadata has no valid published latest tag')
+  return {
+    wanted,
+    latest: gt(wanted, latest) ? wanted : latest,
+    outsideRange: !satisfies(latest, range),
+  }
 }
 
 async function mapLimit(items, limit, task) {
@@ -86,47 +98,56 @@ function installedVersion(name) {
   return lock.packages?.[`node_modules/${name}`]?.version
 }
 
-const targets = Object.keys(manifest.dependencies ?? {})
-  .concat(Object.keys(manifest.devDependencies ?? {}))
-  .filter(
-    (name) =>
-      !name.startsWith('@deepseek-ai/') && !HARNESS_MIRRORED.has(name) && installedVersion(name),
-  )
+async function main() {
+  const targets = Object.keys(manifest.dependencies ?? {})
+    .concat(Object.keys(manifest.devDependencies ?? {}))
+    .filter(
+      (name) =>
+        !name.startsWith('@deepseek-ai/') && !HARNESS_MIRRORED.has(name) && installedVersion(name),
+    )
 
-const registry = registryBase()
-const lookups = await mapLimit(targets, CONCURRENCY, async (name) => {
-  const current = installedVersion(name)
-  try {
-    return { name, current, latest: await latestVersion(registry, name, declaredRange(name)) }
-  } catch (error) {
-    return { name, current, error: error instanceof Error ? error.message : String(error) }
-  }
-})
+  const registry = registryBase()
+  const lookups = await mapLimit(targets, CONCURRENCY, async (name) => {
+    const current = installedVersion(name)
+    try {
+      return { name, current, ...(await latestVersion(registry, name, declaredRange(name))) }
+    } catch (error) {
+      return { name, current, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
 
-const failures = lookups.filter((lookup) => lookup.error !== undefined)
-const rows = lookups
-  .filter((lookup) => lookup.error === undefined && gt(lookup.latest, lookup.current))
-  .map((lookup) => ({
-    ...lookup,
-    range: declaredRange(lookup.name),
-    level: (diff(lookup.current, lookup.latest) ?? 'patch').replace(/^pre/, ''),
-  }))
-  .sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.name.localeCompare(b.name))
+  const failures = lookups.filter((lookup) => lookup.error !== undefined)
+  const rows = lookups
+    .filter((lookup) => lookup.error === undefined && gt(lookup.latest, lookup.current))
+    .map((lookup) => ({
+      ...lookup,
+      range: declaredRange(lookup.name),
+      level: (diff(lookup.current, lookup.latest) ?? 'patch').replace(/^pre/, ''),
+    }))
+    .sort(
+      (a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.name.localeCompare(b.name),
+    )
 
-for (const failure of failures)
-  console.error(`deps-check: ${failure.name} could not be checked (${failure.error})`)
+  for (const failure of failures)
+    console.error(`deps-check: ${failure.name} could not be checked (${failure.error})`)
 
-if (rows.length === 0) console.log('deps-check: direct dependencies are current')
-else {
-  console.log(`deps-check: ${rows.length} direct dependencies behind the registry`)
-  const width = Math.max(...rows.map((row) => row.name.length))
-  for (const row of rows) {
+  if (rows.length === 0 && failures.length === 0)
+    console.log('deps-check: direct dependencies are current')
+  else if (rows.length > 0) {
+    console.log(`deps-check: ${rows.length} direct dependencies behind the registry`)
+    const width = Math.max(...rows.map((row) => row.name.length))
+    for (const row of rows) {
+      console.log(
+        `  ${row.level.padEnd(5)} ${row.name.padEnd(width)} ${row.current} -> ${row.latest}  (${row.range}; wanted ${row.wanted}${row.outsideRange ? '; outside range' : ''})`,
+      )
+    }
     console.log(
-      `  ${row.level.padEnd(5)} ${row.name.padEnd(width)} ${row.current} -> ${row.latest}  (${row.range})`,
+      'Review out-of-range releases before updating the manifest; use npm install for in-range updates',
     )
   }
-  console.log('run npm install for in-range bumps; major bumps need a review')
+
+  if (failures.length > 0) process.exitCode = 2
+  else if (rows.length > 0) process.exitCode = 1
 }
 
-if (failures.length > 0) process.exitCode = 2
-else if (rows.length > 0) process.exitCode = 1
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main()

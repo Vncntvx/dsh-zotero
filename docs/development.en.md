@@ -83,7 +83,7 @@ Chinese documents under `docs/` are maintained in pairs with their `.en.md` Engl
 | [Features](features.en.md)                     | Conversation capabilities, literature trail, literature panel, writing, and scholarly search                              |
 | [Research SOP skills](skills.en.md)            | Eight on-demand research workflows, batch budgets, and evidence boundaries                                                |
 | [Tool reference](tools.en.md)                  | 23 local tools (8 read + 15 write) and 7 scholarly retrieval tools                                                        |
-| [Configuration reference](configuration.en.md) | Four settings namespaces, 67 fields, and the hot-reload mechanism                                                         |
+| [Configuration reference](configuration.en.md) | Four settings namespaces, 68 fields, and the hot-reload mechanism                                                         |
 | [Troubleshooting](troubleshooting.en.md)       | Common issues, causes, and diagnostic steps                                                                               |
 | [Architecture](architecture.en.md)             | Data flow, layer responsibilities, and design boundaries                                                                  |
 | [Development guide](development.en.md)         | Build, test, debug, and release flows                                                                                     |
@@ -322,7 +322,7 @@ The locale and Remote/access doubles under `tests/client/helpers/` are local imp
 
 Three workflows live under `.github/workflows/`:
 
-- `release-branch.yml`: builds and pushes the prebuilt release branch on pushes to `main`, on version tags, and on manual dispatch, and is granted only `contents: write`;
+- `release-branch.yml`: creates one artifact in a read-only quality job on pushes to `main`, version tags and manual dispatch, verifies it with Web smoke, then verifies and pushes it in the final job, which alone receives `contents: write`;
 - `upstream-health.yml`: runs `npm run release:check` every Monday at 02:00 UTC and compares the pinned version against the upstream harness mainline;
 - `scanner.yml`: runs the HOL Guard scanner on pull requests and pushes to `main`, failing when the normalized score drops below 75.
 
@@ -342,9 +342,19 @@ Run the following checks in order before a release, and stop at the first failur
 2. `npm run build:client`: the browser artifact builds on its own;
 3. `npm test`: test specification guards (lanes, `.only`/`.skip`, spec line ratchet) plus the full vitest run;
 4. `npm run format:check`: Prettier formatting check;
-5. `npm run release:check`: the release gate, running `format:check`, `harness-state.mjs --strict`, `lint:test`, `typecheck`, `test:coverage`, `build`, and `verify:pack` in order;
+5. `npm run release:check`: the release gate, running `format:check`, `harness-state.mjs --strict`, `lint:test`, `tokens:check`, `style:check`, `typecheck`, `build`, `test:coverage`, and `verify:pack` in order;
 6. Pack review: step 5's `verify:pack` already validated the tarball's required files; to confirm by hand, run `npm pack --dry-run` and check that the artifact contains `lib/`, `cordis.patch.yml`, `locale/`, `README`, and `docs/plugin-detail.md`;
 7. Walk through acceptance workflows: G1 through G8 are mandatory; add P cases when the change touches the panel or the trail, and add W cases in a separate session with writes enabled when the change touches writing;
 8. Asset check: this version's docs embed no screenshots, and `docs/images/` retains the plugin icon `icon.png`, header collage, and Web UI reference screenshots; if release notes add images, take them from the current Web UI and keep the wording consistent with the interface.
 
 `npm test` and the release gate are not the same thing: `npm test` runs `node scripts/test-lint.mjs` plus `vitest run` without the coverage gate, which is the day-to-day regression command; the release path hands those two jobs to steps 3 and 5.
+
+### Versions, release notes and publication
+
+`package.json` owns the version. Before a release, update the root manifest in `package-lock.json` and prepare that version's changes, validation and migration requirements. Use `v<version>` for the tag on the main commit that passed every gate; the tag, manifest and release notes must agree.
+
+CI's quality gate builds once and creates `release-artifact-<source SHA>`. Web composition installs its exact tarball. The publish job downloads that artifact, verifies its source and every file, then advances the project's release branch under a CAS lease. The job only downloads, verifies and publishes the artifact. A tag whose source predates the published source is refused.
+
+For npm publication, download the artifact from that successful run and execute `node scripts/release-artifact.mjs --verify --out <artifact directory> --source-sha <full source SHA>`, then `npm publish <tarball> --access public` using the tarball named in `artifact.json`. Publish the original file that passed the gates and Web smoke. Create the GitHub Release for `v<version>` listing the version's changes, validation and migration requirements, recording source SHA, artifactDigest and tarballSha256. After a publication failure, inspect registry state first; never overwrite a published version. Changed bytes require a new version and fresh verification.
+
+Use `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` to inspect a local artifact from a clean worktree. A real push requires explicit `--push --artifact <checked artifact directory>` and targets only the project's origin release branch.

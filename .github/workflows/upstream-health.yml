@@ -33,6 +33,9 @@ jobs:
       - name: Verify release gate and test suites
         run: npm run release:check
 
+      - name: Check direct dependency releases
+        run: npm run deps:check
+
       - name: Check upstream registry updates
         run: |
           PIN=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-tools']")

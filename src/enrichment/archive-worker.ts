@@ -1,6 +1,7 @@
 /** Cancelable per-service archive admission; a slot lasts through persistence. */
 import { Worker } from 'node:worker_threads'
 import { z } from 'zod'
+import { deadline } from '@deepseek-ai/dsh-timeout'
 import {
   ARTIFACT_READER_DEFAULTS,
   type ArtifactReaderPreferences,
@@ -64,11 +65,17 @@ export type ArchiveWorkerFactory = (entry: URL, bytes: Uint8Array) => Worker
 
 /** Source launches use Node's native TypeScript support; published launches use only emitted JS. */
 const spawnWorker: ArchiveWorkerFactory = (entry, bytes) => {
+  const resourceLimits = {
+    maxOldGenerationSizeMb: 256,
+    maxYoungGenerationSizeMb: 32,
+    stackSizeMb: 4,
+  }
   if (!import.meta.url.endsWith('.ts'))
     return new Worker(entry, {
       workerData: bytes,
       transferList: [bytes.buffer as ArrayBuffer],
       execArgv: [],
+      resourceLimits,
     })
   const source = new URL('./zip-worker.ts', import.meta.url)
   const root = new URL('../', import.meta.url).href
@@ -79,6 +86,7 @@ await import(${JSON.stringify(source.href)});`
     workerData: bytes,
     transferList: [bytes.buffer as ArrayBuffer],
     execArgv: [],
+    resourceLimits,
   })
 }
 
@@ -152,6 +160,8 @@ export class ArchiveProcessor {
 
   async extract(input: Uint8Array, signal: AbortSignal): Promise<ExtractedParsedFiles> {
     signal.throwIfAborted()
+    using budget = deadline(signal, 30_000, ZOTERO_ENRICHMENT_ARCHIVE_INVALID)
+    signal = budget.signal
     if (input.byteLength > ZIP_MAX_ARCHIVE_BYTES)
       throw new ZoteroError(
         'The result archive exceeds its size ceiling.',
