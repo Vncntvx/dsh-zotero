@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   bestIdentifierOf,
   formatAuthorSummary,
@@ -376,15 +376,23 @@ describe('ranking, filtering, and formatting branches', () => {
   }
 
   it('sorts a date query newest first and clamps a future date', () => {
-    const future = `${new Date().getFullYear() + 5}-01-01`
-    const ranked = postProcessRanked(
-      [p({ title: 'old', date: '2019-01-01' }), p({ title: 'future', date: future })],
-      { query: 'q', limit: 10, sort: 'date' },
-    )
-    expect(ranked.map((x) => x.title)).toHaveLength(2)
-    // The future-dated record is clamped to today, so it never sorts above a
-    // record that is genuinely newer than it.
-    expect(ranked[0]?.title).toBe('future')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+    try {
+      const ranked = postProcessRanked(
+        [
+          p({ title: 'today', date: '2026-06-15' }),
+          p({ title: 'future', date: '2026-12-01' }),
+          p({ title: 'old', date: '2019-01-01' }),
+        ],
+        { query: 'q', limit: 10, sort: 'date' },
+      )
+      // Both first records have today's sort key after clamping. Stable sort
+      // preserves their input order; an unclamped future date would jump first.
+      expect(ranked.map((paper) => paper.title)).toEqual(['today', 'future', 'old'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops a future-dated record from a date-sorted list', () => {

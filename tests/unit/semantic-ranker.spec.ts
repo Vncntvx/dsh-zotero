@@ -177,6 +177,7 @@ describe('semanticEvidenceRanker with measured admission', () => {
       physicalKey: 'qwen3-0.6b',
       revision: 'a'.repeat(40),
       dimension: DIMENSION,
+      maxTokens: 32768,
       pooling: 'mean',
       normalize: true,
       queryPrefix: '',
@@ -238,7 +239,9 @@ describe('SemanticEmbedderLoader', () => {
     const loader = new SemanticEmbedderLoader({ open })
     const [first, second] = await Promise.all([loader.get(target), loader.get(target)])
     expect(open).toHaveBeenCalledTimes(1)
-    expect(first).toBe(second)
+    expect(first.dimension).toBe(second.dimension)
+    await first.dispose()
+    await second.dispose()
     await loader.dispose()
   })
 
@@ -275,9 +278,9 @@ describe('SemanticEmbedderLoader', () => {
         },
       }),
     })
-    await loader.get(target)
+    await (await loader.get(target)).dispose()
     const other = { spec: { key: 'lightweight' }, dir: '/models/granite-97m' } as never
-    await loader.get(other)
+    await (await loader.get(other)).dispose()
     expect(disposed).toEqual(['balanced'])
     await loader.dispose()
     expect(disposed).toEqual(['balanced', 'lightweight'])

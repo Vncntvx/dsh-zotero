@@ -17,45 +17,48 @@ import {
   SEMANTIC_RUNTIME_FILES,
   SEMANTIC_RUNTIME_VERSION,
   semanticRuntimeDir,
+  type SemanticRuntime,
 } from '../../src/enrichment/semantic/runtime.ts'
 import { withTempDir } from '../helpers/temp-dir.ts'
 
-/** A stand-in module namespace shaped like the slice `loadSemanticRuntime` touches. */
-function fakeRuntime(): { env: { wasm: Record<string, unknown>; logLevel?: string } } {
-  return { env: { wasm: {} } }
+/** The importer is an external seam: this spec supplies only the env it consumes. */
+function fakeRuntime(): SemanticRuntime {
+  const fixture = {
+    env: { versions: { common: 'fixture' }, wasm: {}, webgl: {}, webgpu: {} },
+  }
+  return fixture as SemanticRuntime
+}
+
+async function runtimeFiles(dir: string): Promise<void> {
+  for (const file of SEMANTIC_RUNTIME_FILES) await writeFile(join(dir, file), '', 'utf8')
 }
 
 describe('loadSemanticRuntime', () => {
-  it('imports the vendored entry from the given directory', async () => {
-    const load = vi.fn(async () => fakeRuntime() as never)
-    await loadSemanticRuntime(semanticRuntimeDir(), load)
-    expect(load).toHaveBeenCalledWith(
-      pathToFileURL(join(semanticRuntimeDir(), 'ort.node.min.mjs')).href,
-    )
+  it('imports the vendored entry from the supplied directory', async () => {
+    await withTempDir(async (dir) => {
+      await runtimeFiles(dir)
+      const load = vi.fn(async () => fakeRuntime())
+      await loadSemanticRuntime(dir, load)
+      expect(load).toHaveBeenCalledWith(pathToFileURL(join(dir, 'ort.node.min.mjs')).href)
+    })
   })
 
-  it('points the wasm loader at the packaged assets with a trailing separator', async () => {
-    const dir = semanticRuntimeDir()
-    const runtime = (await loadSemanticRuntime(
-      dir,
-      async () => fakeRuntime() as never,
-    )) as never as {
-      env: { wasm: { wasmPaths: string; numThreads: number; simd: boolean }; logLevel: string }
-    }
-    expect(runtime.env.wasm.wasmPaths).toBe(dir.endsWith(sep) ? dir : `${dir}${sep}`)
-    expect(runtime.env.wasm.numThreads).toBe(1)
-    expect(runtime.env.wasm.simd).toBe(true)
-    expect(runtime.env.logLevel).toBe('error')
+  it('points the wasm loader at the supplied assets with a trailing separator', async () => {
+    await withTempDir(async (dir) => {
+      await runtimeFiles(dir)
+      const runtime = await loadSemanticRuntime(dir, async () => fakeRuntime())
+      expect(runtime.env.wasm.wasmPaths).toBe(`${dir}${sep}`)
+      expect(runtime.env.wasm.numThreads).toBe(1)
+      expect(runtime.env.wasm.simd).toBe(true)
+      expect(runtime.env.logLevel).toBe('error')
+    })
   })
 
   it('keeps one separator when the directory already ends with one', async () => {
     await withTempDir(async (dir) => {
-      for (const file of SEMANTIC_RUNTIME_FILES) await writeFile(join(dir, file), '', 'utf8')
+      await runtimeFiles(dir)
       const withSeparator = `${dir}${sep}`
-      const runtime = (await loadSemanticRuntime(
-        withSeparator,
-        async () => fakeRuntime() as never,
-      )) as never as { env: { wasm: { wasmPaths: string } } }
+      const runtime = await loadSemanticRuntime(withSeparator, async () => fakeRuntime())
       expect(runtime.env.wasm.wasmPaths).toBe(withSeparator)
     })
   })
@@ -63,7 +66,7 @@ describe('loadSemanticRuntime', () => {
   it('fails closed naming every file a broken package lost', async () => {
     await withTempDir(async (dir) => {
       await writeFile(join(dir, 'ort.node.min.mjs'), '', 'utf8')
-      const load = vi.fn(async () => fakeRuntime() as never)
+      const load = vi.fn(async () => fakeRuntime())
       const error = await loadSemanticRuntime(dir, load).catch((thrown: unknown) => thrown)
       expect(error).toBeInstanceOf(ZoteroError)
       expect((error as ZoteroError).code).toBe(ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE)

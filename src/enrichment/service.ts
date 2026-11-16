@@ -134,6 +134,7 @@ import { admissionProfileOf } from './semantic/model-profiles.js'
 import type { SemanticModelEntry, SemanticModelKey } from '../enrichment-model-catalog.js'
 import {
   createVectorCache,
+  vectorCacheIdentityDigestOf,
   type VectorCache,
   type VectorCacheIdentity,
 } from './semantic/vector-cache.js'
@@ -185,6 +186,7 @@ function vectorCacheIdentityOf(spec: SemanticModelEntry): VectorCacheIdentity {
     physicalKey: spec.physicalKey,
     revision: spec.revision,
     dimension: spec.dimension,
+    maxTokens: spec.maxTokens,
     pooling: spec.pooling,
     normalize: spec.normalize,
     queryPrefix: spec.queryPrefix,
@@ -192,21 +194,6 @@ function vectorCacheIdentityOf(spec: SemanticModelEntry): VectorCacheIdentity {
     scoringVersion: VECTOR_SCORING_VERSION,
     fileDigests: Object.fromEntries(spec.files.map((file) => [file.path, file.sha256])),
   }
-}
-
-/** The generation identity: every field that changes the cached vectors. */
-function vectorCacheDigestOf(identity: VectorCacheIdentity): string {
-  return JSON.stringify([
-    identity.physicalKey,
-    identity.revision,
-    identity.dimension,
-    identity.pooling,
-    identity.normalize,
-    identity.queryPrefix,
-    identity.documentPrefix,
-    identity.scoringVersion,
-    Object.entries(identity.fileDigests),
-  ])
 }
 
 /** Core service face enrichment needs: the two slots and the attachment resolver. */
@@ -528,7 +515,7 @@ export class EnrichmentService extends TypertRemoteService {
       // The vector cache is bound to the physical model identity: a different
       // revision or inference contract must not reuse another tier's vectors.
       const identity = vectorCacheIdentityOf(spec)
-      const digest = vectorCacheDigestOf(identity)
+      const digest = vectorCacheIdentityDigestOf(identity)
       return {
         tier: spec.key,
         target,
@@ -558,7 +545,7 @@ export class EnrichmentService extends TypertRemoteService {
         if (snapshot === undefined) return await bm25EvidenceRanker.rank(request)
         try {
           return await semanticEvidenceRanker({
-            embedder: () => snapshot.loaderScope.embedder(),
+            embedder: (signal) => snapshot.loaderScope.embedder(signal),
             profile: () => admissionProfileOf(snapshot.tier),
             vectorCache: snapshot.generation.cache,
           }).rank(request)
@@ -833,7 +820,7 @@ export class EnrichmentService extends TypertRemoteService {
         this.loader?.retire(target)
         // Only the deleted tier's vectors are invalidated: deleting an unused
         // tier must not flush the warm cache of the configured model.
-        const deletedDigest = vectorCacheDigestOf(vectorCacheIdentityOf(target.spec))
+        const deletedDigest = vectorCacheIdentityDigestOf(vectorCacheIdentityOf(target.spec))
         if (this.vectorCache?.digest === deletedDigest) this.retireActiveCache()
       }
       return result

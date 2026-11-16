@@ -128,6 +128,9 @@ export const probeSeparationOf = (() => {
       return { weakestSame, strongestCross, midpoint: (weakestSame + strongestCross) / 2 }
     })()
     diagnosticCache.set(embedder, measured)
+    void measured.catch(() => {
+      if (diagnosticCache.get(embedder) === measured) diagnosticCache.delete(embedder)
+    })
     return measured
   }
 })()
@@ -139,7 +142,7 @@ export interface SemanticRankerDeps {
    * serve; the rejection propagates to the tool caller without a lexical-only
    * fallback.
    */
-  readonly embedder: () => Promise<Embedder>
+  readonly embedder: (signal?: AbortSignal) => Promise<Embedder>
   /**
    * The selected tier's admission rules (absolute floor plus relative margin),
    * fixed in code per model. An unknown tier fails with the semantic-unavailable
@@ -169,6 +172,15 @@ async function embedWithCache(
     side,
     async (missing, runSignal) => await embedder.embed(missing, side, runSignal),
     signal,
+    embedder.retain === undefined
+      ? undefined
+      : () => {
+          const lease = embedder.retain!()
+          return {
+            run: async (missing, runSignal) => await lease.embed(missing, side, runSignal),
+            release: async () => await lease.dispose(),
+          }
+        },
   )
 }
 
@@ -190,7 +202,7 @@ export function semanticEvidenceRanker(deps: SemanticRankerDeps): EvidenceRanker
       const lexical: RouteScores = lexicalRouteScores(texts, request.chunks)
 
       const rules = validateAdmissionRules(deps.profile(), 'the semantic model profile')
-      const embedder = await deps.embedder()
+      const embedder = await deps.embedder(request.signal)
       request.signal?.throwIfAborted()
       const queryVectors = await embedWithCache(
         embedder,

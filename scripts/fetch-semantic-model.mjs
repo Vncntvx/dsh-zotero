@@ -10,10 +10,11 @@
  * last. A failed or cancelled attempt does not replace the target or publish a
  * marker.
  *
- * The host and this CLI share `src/enrichment/model-installation.ts` and
- * `src/enrichment/model-bundle-inspector.ts`. Node's native TypeScript strip
- * loads those dependency-free modules directly, keeping the manifest and
- * publication rules identical across both installers.
+ * The host and CLI share the gated download client, transactional installer,
+ * and bundle inspector. Every redirect is checked and direct DNS answers are
+ * pinned before connecting; proxy routing follows the public harness policy.
+ * The source-install build emits these modules into `lib/`, so both installers
+ * use the same manifest and publication rules.
  *
  * Usage:
  *   node scripts/fetch-semantic-model.mjs [--model=<key>|all] [--list]
@@ -24,14 +25,16 @@
  * @module scripts/fetch-semantic-model
  */
 
-import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { Readable, Transform } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import { EnvHttpProxyAgent, ProxyAgent, fetch as httpFetch } from 'undici'
+import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import {
+  downloadPinnedFile,
+  MODEL_SOURCES,
+  DEFAULT_SOURCE_ORDER,
+} from '../lib/enrichment/model-download-client.js'
 import { dshHomePath, expandHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
   DEFAULT_SEMANTIC_MODEL,
@@ -41,31 +44,17 @@ import {
   manifestOf,
   semanticModelBytes,
   semanticModelOf,
-} from '../src/enrichment-model-catalog.ts'
-import { installModelBundle } from '../src/enrichment/model-installation.ts'
-import { createBundleInspector } from '../src/enrichment/model-bundle-inspector.ts'
+} from '../lib/enrichment-model-catalog.js'
+import { installModelBundle } from '../lib/enrichment/model-installation.js'
+import { createBundleInspector } from '../lib/enrichment/model-bundle-inspector.js'
 
 export const defaultModelRoot = dshHomePath('models')
 // Installers address a bundle by its physical key (the directory the runtime
 // and the loader resolve), not the config-facing tier key.
 const modelDir = (key, root = defaultModelRoot) => join(root, key)
 
-export const SOURCES = Object.freeze({
-  'hf-mirror': {
-    label: 'hf-mirror.com',
-    url: (model, path) =>
-      `https://hf-mirror.com/${model.modelId}/resolve/${model.revision}/${path}`,
-  },
-  huggingface: {
-    label: 'Hugging Face',
-    url: (model, path) =>
-      `https://huggingface.co/${model.modelId}/resolve/${model.revision}/${path}`,
-  },
-})
-const DEFAULT_ORDER = ['hf-mirror', 'huggingface']
-
-/** One stream stall aborts the attempt: mirrors hang silently. */
-const STALL_TIMEOUT_MS = 60_000
+export const SOURCES = MODEL_SOURCES
+const DEFAULT_ORDER = DEFAULT_SOURCE_ORDER
 
 /** Parse and validate the command line; exported so its rules are testable. */
 export function optionsOf(argv) {
@@ -82,7 +71,7 @@ export function optionsOf(argv) {
   const dir = dirValue ? expandHomePath(dirValue) : defaultModelRoot
   const timeoutRaw = value('timeout-ms')
   const timeoutMs = timeoutRaw === undefined ? 300_000 : Number(timeoutRaw)
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`invalid --timeout-ms=${timeoutRaw}`)
   }
   return {
@@ -98,10 +87,16 @@ export function optionsOf(argv) {
   }
 }
 
-function dispatcherOf(options) {
-  if (options.noProxy) return undefined
-  if (options.proxy) return new ProxyAgent(options.proxy)
-  return new EnvHttpProxyAgent()
+async function installCliProxy(options) {
+  const environment = options.noProxy ? {} : { ...process.env }
+  if (!options.noProxy && options.proxy !== undefined) {
+    for (const name of ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY'])
+      environment[name] = options.proxy
+  }
+  return await installProxyFromEnvironment(
+    { get: (name) => (environment[name] === undefined ? undefined : { value: environment[name] }) },
+    (message) => process.stderr.write(`${message}\n`),
+  )
 }
 
 function listModels() {
@@ -115,88 +110,8 @@ function listModels() {
   }
 }
 
-/**
- * Download one pinned file into the private staging directory. The destination
- * is created exclusively, and a cancelled caller never reaches another mirror.
- */
-async function transfer(model, file, options, dispatcher, stagingDir, signal) {
-  const dest = join(stagingDir, file.path)
-  await mkdir(dirname(dest), { recursive: true })
-  const failures = []
-  for (const name of options.order) {
-    signal.throwIfAborted()
-    const source = SOURCES[name]
-    const url = source.url(model, file.path)
-    const tmp = join(
-      dirname(dest),
-      `.${name}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`,
-    )
-    try {
-      process.stderr.write(`  ${model.key}/${file.path} <- ${source.label}\n`)
-      const response = await httpFetch(url, {
-        dispatcher,
-        redirect: 'follow',
-        signal: AbortSignal.any([signal, AbortSignal.timeout(options.timeoutMs)]),
-      })
-      signal.throwIfAborted()
-      if (!response.ok || response.body === null) {
-        await response.body?.cancel(signal.reason).catch(() => undefined)
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const contentLength = response.headers.get('content-length')
-      if (contentLength !== null && Number(contentLength) !== file.bytes) {
-        await response.body.cancel(signal.reason).catch(() => undefined)
-        throw new Error(`content-length ${contentLength} disagrees with the pinned ${file.bytes}`)
-      }
-      const hash = createHash('sha256')
-      let bytes = 0
-      const stallController = new AbortController()
-      const onAbort = () => stallController.abort(signal.reason)
-      signal.addEventListener('abort', onAbort, { once: true })
-      const stall = setTimeout(
-        () => stallController.abort(new Error('stream stalled')),
-        STALL_TIMEOUT_MS,
-      )
-      try {
-        await pipeline(
-          Readable.fromWeb(response.body, { signal: stallController.signal }),
-          new Transform({
-            transform(chunk, _encoding, callback) {
-              bytes += chunk.length
-              if (bytes > file.bytes) {
-                callback(new Error(`body exceeded the pinned ${file.bytes} bytes`))
-                return
-              }
-              hash.update(chunk)
-              clearTimeout(stall)
-              stall.refresh()
-              callback(null, chunk)
-            },
-          }),
-          createWriteStream(tmp, { flags: 'wx', mode: 0o600 }),
-        )
-      } finally {
-        clearTimeout(stall)
-        signal.removeEventListener('abort', onAbort)
-      }
-      signal.throwIfAborted()
-      const sha256 = hash.digest('hex')
-      if (bytes !== file.bytes || sha256 !== file.sha256) {
-        throw new Error(`integrity mismatch (${bytes} bytes, ${sha256})`)
-      }
-      await rename(tmp, dest)
-      return { source: name, bytes, sha256 }
-    } catch (error) {
-      await rm(tmp, { force: true })
-      if (signal.aborted) throw signal.reason
-      failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  throw new Error(`${model.key}/${file.path}: every source failed\n    ${failures.join('\n    ')}`)
-}
-
 /** Install one model bundle through the shared transactional installer. */
-async function install(model, options, dispatcher, signal) {
+async function install(model, options, signal) {
   const dir = modelDir(model.physicalKey, options.dir)
   process.stderr.write(`installing ${model.key} (${model.physicalKey}) into ${dir}\n`)
   // The parent must exist for the cross-process lock. Create only the root,
@@ -210,7 +125,14 @@ async function install(model, options, dispatcher, signal) {
     force: false,
     signal,
     transfer: async (file, stagingDir, transferSignal) => {
-      await transfer(model, file, options, dispatcher, stagingDir, transferSignal)
+      await downloadPinnedFile({
+        model,
+        file,
+        dir: stagingDir,
+        sources: options.order,
+        signal: transferSignal,
+        timeoutMs: options.timeoutMs,
+      })
     },
   })
   process.stderr.write(`  ${model.key}: ${result.status}\n`)
@@ -294,13 +216,13 @@ async function main() {
     return
   }
 
-  const dispatcher = dispatcherOf(options)
+  const releaseProxy = await installCliProxy(options)
   const controller = new AbortController()
   const onSignal = () => controller.abort(new Error('installation cancelled by signal'))
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    for (const model of models) await install(model, options, dispatcher, controller.signal)
+    for (const model of models) await install(model, options, controller.signal)
     const result = await verifyInstalled(options)
     process.stdout.write(
       `semantic models ready: ${result.models.join(', ')} (${result.files} files verified)\n`,
@@ -309,7 +231,7 @@ async function main() {
     process.off('SIGINT', onSignal)
     process.off('SIGTERM', onSignal)
     // A failed or cancelled run still releases its proxy dispatcher.
-    if (typeof dispatcher?.close === 'function') await dispatcher.close()
+    await releaseProxy()
   }
 }
 

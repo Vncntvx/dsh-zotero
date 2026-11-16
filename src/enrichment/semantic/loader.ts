@@ -24,6 +24,7 @@ import {
   type SemanticBundleVerifier,
 } from './bundle.js'
 import type { Embedder } from './session.js'
+import { awaitSharedWaiter } from '../../waiter-flight.js'
 
 /** What the host resolves per rank call: which model, from which directory. */
 export interface SemanticModelTarget {
@@ -108,7 +109,7 @@ interface Managed {
 export interface RankingScope {
   readonly release: () => void
   /** The embedder fixed for this scope, loaded on first use. */
-  readonly embedder: () => Promise<Embedder>
+  readonly embedder: (signal?: AbortSignal) => Promise<Embedder>
 }
 
 export class SemanticEmbedderLoader {
@@ -116,7 +117,7 @@ export class SemanticEmbedderLoader {
   private pending: Managed | undefined
   private readonly retired = new Set<Managed>()
   private readonly open: (target: SemanticModelTarget) => Promise<Embedder>
-  /** This loader's bundle verification memo: one full hash per on-disk identity. */
+  /** Shared inspection reuses verified identities across replacement loaders. */
   private readonly verifier: SemanticBundleVerifier = createBundleVerifier()
   private closed = false
   private generation = 0
@@ -130,8 +131,7 @@ export class SemanticEmbedderLoader {
   constructor(deps: SemanticEmbedderLoaderDeps = {}) {
     this.open =
       deps.open ??
-      (async (target) =>
-        await openSemanticEmbedder(target.spec, target.dir, undefined, this.verifier))
+      (async (target) => await openSemanticEmbedder(target.spec, target.dir, this.verifier))
   }
 
   /**
@@ -153,33 +153,69 @@ export class SemanticEmbedderLoader {
     }
     managed.scopes += 1
     let released = false
+    let borrowed: Embedder | undefined
     const held = managed
-    return {
-      release: () => {
-        if (released) return
-        released = true
-        held.scopes -= 1
-        this.maybeRelease(held)
+    const release = (): void => {
+      if (released) return
+      released = true
+      held.scopes -= 1
+      this.maybeRelease(held)
+    }
+    const assertHeld = (): void => {
+      if (released) throw semanticUnavailable(new Error('the ranking scope has been released'))
+    }
+    const borrow = (instance: Embedder, assertHeld: () => void, release: () => void): Embedder => ({
+      dimension: instance.dimension,
+      retain: () => {
+        assertHeld()
+        held.scopes += 1
+        let released = false
+        return borrow(
+          instance,
+          () => {
+            if (released)
+              throw semanticUnavailable(new Error('the inference lease has been released'))
+          },
+          () => {
+            if (released) return
+            released = true
+            held.scopes -= 1
+            this.maybeRelease(held)
+          },
+        )
       },
-      embedder: async () => {
+      embed: async (texts, side, signal) => {
+        assertHeld()
         held.running += 1
         try {
-          return await held.load
+          return await instance.embed(texts, side, signal)
         } finally {
           held.running -= 1
           this.maybeRelease(held)
         }
       },
+      dispose: async () => release(),
+    })
+    return {
+      release,
+      embedder: async (signal) => {
+        assertHeld()
+        const instance = await awaitSharedWaiter(held.load, signal)
+        assertHeld()
+        borrowed ??= borrow(instance, assertHeld, release)
+        return borrowed
+      },
     }
   }
 
-  /** Single-call entry; equivalent to a scope used once. */
-  async get(target: SemanticModelTarget): Promise<Embedder> {
+  /** Acquire an owned lease. The caller releases it with `embedder.dispose()`. */
+  async get(target: SemanticModelTarget, signal?: AbortSignal): Promise<Embedder> {
     const admitted = this.scope(target)
     try {
-      return await admitted.embedder()
-    } finally {
+      return await admitted.embedder(signal)
+    } catch (error) {
       admitted.release()
+      throw error
     }
   }
 

@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { deferred } from '../helpers/sync.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
 import {
   createVectorCache,
@@ -22,6 +23,7 @@ function identity(overrides: Partial<VectorCacheIdentity> = {}): VectorCacheIden
     revision: 'a'.repeat(40),
     fileDigests: { 'config.json': 'd'.repeat(64) },
     dimension: 2,
+    maxTokens: 32768,
     pooling: 'mean',
     normalize: true,
     queryPrefix: 'query: ',
@@ -55,6 +57,8 @@ describe('vectorCacheKeyOf', () => {
         'trust',
       ),
     )
+    expect(query).not.toBe(vectorCacheKeyOf(identity({ maxTokens: 8192 }), 'query', 'trust'))
+    expect(query).not.toBe(vectorCacheKeyOf(identity({ key: 'alias' }), 'query', 'trust'))
     expect(query).toBe(vectorCacheKeyOf(base, 'query', 'trust'))
   })
 })
@@ -206,16 +210,48 @@ describe('createVectorCache', () => {
     expect(firstSignal?.aborted).toBe(true)
 
     // The fresh caller must not inherit another request's cancellation.
-    const fresh = await cache.embed(['trust'], 'document', run)
-    expect(calls).toBe(2)
-    // The abandoned run resolving late must not overwrite the fresh vector.
+    const freshRequest = cache.embed(['trust'], 'document', run)
+    // A non-preemptible abandoned run still owns the inference slot; the
+    // fresh caller queues without joining its cancelled result.
+    expect(calls).toBe(1)
     settleAbandoned([new Float32Array([99, 99])])
+    const fresh = await freshRequest
     await Promise.resolve()
     await Promise.resolve()
     const again = await cache.embed(['trust'], 'document', run)
     expect(again[0]?.[0]).toBe(5)
     expect(fresh[0]?.[0]).toBe(5)
     expect(calls).toBe(2)
+    cache.dispose()
+  })
+
+  it('keeps a 160-text cold miss to one actual encoder run at a time', async () => {
+    const cache = createVectorCache(identity())
+    const entered = deferred()
+    const finish = deferred()
+    let active = 0
+    let peak = 0
+    let calls = 0
+    const pending = cache.embed(
+      Array.from({ length: 160 }, (_unused, index) => `text-${index}`),
+      'document',
+      async (texts) => {
+        calls++
+        peak = Math.max(peak, ++active)
+        if (calls === 1) {
+          entered.resolve()
+          await finish.promise
+        }
+        active--
+        return texts.map(() => new Float32Array([1, 0]))
+      },
+    )
+    await entered.promise
+    expect(calls).toBe(1)
+    finish.resolve()
+    await expect(pending).resolves.toHaveLength(160)
+    expect(calls).toBe(20)
+    expect(peak).toBe(1)
     cache.dispose()
   })
 
@@ -244,4 +280,41 @@ describe('createVectorCache', () => {
     expect(VECTOR_CACHE_MAX_ITEMS).toBe(16_384)
     expect(VECTOR_CACHE_MAX_BYTES).toBe(64 * 1024 * 1024)
   })
+})
+
+it('evicts the least recently used entry at the actual item capacity', async () => {
+  const cache = createVectorCache(identity())
+  const run = async (texts: readonly string[]) => texts.map(() => new Float32Array([1, 0]))
+  try {
+    await cache.embed(
+      Array.from({ length: VECTOR_CACHE_MAX_ITEMS }, (_, i) => `text${i}`),
+      'document',
+      run,
+    )
+    await cache.embed(['text0'], 'document', run)
+    await cache.embed(['overflow'], 'document', run)
+    const encoded: string[] = []
+    await cache.embed(['text0', 'text1', 'overflow'], 'document', recorder(encoded))
+    expect(encoded).toEqual(['text1'])
+  } finally {
+    cache.dispose()
+  }
+})
+
+it('evicts by real stored bytes before reaching the item capacity', async () => {
+  const dimension = 1024 * 1024
+  const cache = createVectorCache(identity({ dimension }))
+  const encoded: string[] = []
+  const run = async (texts: readonly string[]) => {
+    encoded.push(...texts)
+    return texts.map(() => new Float32Array(dimension))
+  }
+  try {
+    for (let i = 0; i < 16; i += 1) await cache.embed([`large${i}`], 'document', run)
+    encoded.length = 0
+    await cache.embed(['large0', 'large15'], 'document', run)
+    expect(encoded).toEqual(['large0'])
+  } finally {
+    cache.dispose()
+  }
 })

@@ -16,7 +16,7 @@
 
 import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
-import { lstat, open as openFile, readFile } from 'node:fs/promises'
+import { lstat, open as openFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { SemanticModelManifest } from '../enrichment-model-catalog.js'
 import {
@@ -33,7 +33,7 @@ import type {
   ModelBundleInspectorPort,
   ModelBundleTarget,
 } from './model-installation.js'
-import { identityOf } from './model-fs.js'
+import { identityOf, readRegularFile } from './model-fs.js'
 
 interface VerifiedSnapshot {
   readonly catalogFingerprint: string
@@ -134,7 +134,7 @@ async function hashFile(path: string, signal: AbortSignal | undefined): Promise<
 
 async function readManifest(
   path: string,
-): Promise<{ kind: 'valid' | 'missing' | 'corrupt'; reason?: string }> {
+): Promise<{ kind: 'valid' | 'missing' | 'corrupt'; reason?: string; parsed?: unknown }> {
   const info = await lstatOrUndefined(path)
   if (info === undefined) return { kind: 'missing' }
   if (info.isSymbolicLink() || !info.isFile())
@@ -142,11 +142,11 @@ async function readManifest(
   if (info.size > MANIFEST_MAX_BYTES)
     return { kind: 'corrupt', reason: 'the commit marker exceeds its bounded size' }
   try {
-    const bytes = await readFile(path)
+    const bytes = await readRegularFile(path, MANIFEST_MAX_BYTES)
     const parsed: unknown = JSON.parse(new TextDecoder('utf-8').decode(bytes))
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
       return { kind: 'corrupt', reason: 'the commit marker is not a JSON object' }
-    return { kind: 'valid' }
+    return { kind: 'valid', parsed }
   } catch (error) {
     return { kind: 'corrupt', reason: (error as Error).message }
   }
@@ -169,7 +169,7 @@ export interface BundleInspector extends ModelBundleInspectorPort {
   ) => Promise<BundleSnapshot>
 }
 
-/** One inspector instance owns the coalescing cache for its bundle directory. */
+/** Inspectors share the bounded process cache across status reads and runtime loaders. */
 export function createBundleInspector(): BundleInspector {
   const cacheKeyOf = (target: ModelBundleTarget) =>
     `${resolve(target.dir)}|${catalogFingerprintOf(target.expected)}`
@@ -183,7 +183,7 @@ export function createBundleInspector(): BundleInspector {
     const expected = target.expected
     const files = catalogFiles(expected)
     const relativePaths = [...files.keys()].sort()
-    const directories = new Set<string>()
+    const directories = new Set<string>(['.'])
     for (const relativePath of relativePaths) {
       const segments = relativePath.split('/')
       for (let i = 1; i < segments.length; i += 1) directories.add(segments.slice(0, i).join('/'))
@@ -222,7 +222,18 @@ export function createBundleInspector(): BundleInspector {
     const totalBytes = [...files.values()].reduce((sum, file) => sum + file.bytes, 0)
     let presentBytes = 0
     let verifiedBytes = 0
-    const marker = await readManifest(join(dir, MANIFEST_PATH))
+    let directoryReason: string | undefined
+    for (const directory of current.directories) {
+      const info = await lstatOrUndefined(directory.path)
+      if (info !== undefined && (info.isSymbolicLink() || !info.isDirectory())) {
+        directoryReason = `${directory.relativePath} is not a regular directory`
+        break
+      }
+    }
+    const { parsed, ...marker } =
+      directoryReason === undefined
+        ? await readManifest(join(dir, MANIFEST_PATH))
+        : { kind: 'corrupt' as const, reason: directoryReason, parsed: undefined }
     const fileResults: {
       readonly relativePath: string
       readonly kind: 'valid' | 'missing' | 'corrupt'
@@ -234,18 +245,8 @@ export function createBundleInspector(): BundleInspector {
 
     if (marker.kind !== 'valid') {
       corruptReason = marker.reason ?? 'the commit marker is missing'
-    } else {
-      try {
-        const bytes = await readFile(join(dir, MANIFEST_PATH))
-        if (
-          JSON.stringify(JSON.parse(new TextDecoder('utf-8').decode(bytes))) !==
-          JSON.stringify(expected)
-        )
-          corruptReason = 'the commit marker disagrees with the catalog'
-      } catch (error) {
-        corruptReason = `the commit marker is unreadable (${(error as Error).message})`
-      }
-    }
+    } else if (JSON.stringify(parsed) !== JSON.stringify(expected))
+      corruptReason = 'the commit marker disagrees with the catalog'
 
     const cacheKey = cacheKeyOf(target)
     const cached = verifiedSnapshots.get(cacheKey)
@@ -262,6 +263,10 @@ export function createBundleInspector(): BundleInspector {
     let allValid = corruptReason === undefined
     for (const [relativePath, pin] of files) {
       signal?.throwIfAborted()
+      if (directoryReason !== undefined) {
+        fileResults.push({ relativePath, kind: 'corrupt', bytes: 0, reason: directoryReason })
+        continue
+      }
       const path = join(dir, relativePath)
       const info = await lstatOrUndefined(path)
       if (info === undefined || info.isSymbolicLink() || !info.isFile()) {

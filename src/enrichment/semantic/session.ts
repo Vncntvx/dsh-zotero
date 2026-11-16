@@ -18,9 +18,8 @@
  * @module dsh-zotero/enrichment/semantic/session
  */
 
-import { join } from 'node:path'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
-import { EMBED_BATCH_SIZE } from './batching.js'
+import { EMBED_BATCH_SIZE, EMBED_BATCH_TOKEN_BUDGET } from './batching.js'
 import { loadSemanticRuntime } from './runtime.js'
 import type { EmbeddingSide, EmbeddingTokenizer, TokenizedBatch } from './tokenizer.js'
 import { createEmbeddingTokenizer } from './tokenizer.js'
@@ -66,6 +65,8 @@ export type Int64TensorFactory = (dims: readonly number[], data: BigInt64Array) 
 /** The embedder half of one loaded model. */
 export interface Embedder {
   readonly dimension: number
+  /** Retain an independent owned lease for shared work that can outlive its caller. */
+  readonly retain?: () => Embedder
   /**
    * Embed texts with the side's instruction prefix, in input order.
    * @param texts - the texts to embed.
@@ -97,16 +98,13 @@ function outputShapeOf(outputNames: readonly string[]): OutputShape {
 /** One tokenization drives both the feeds and the pooling masks. */
 function feedsAndMasksOf(
   session: SessionPort,
-  tokenizer: EmbeddingTokenizer,
-  texts: readonly string[],
-  side: EmbeddingSide,
+  batch: TokenizedBatch,
   int64Tensor: Int64TensorFactory,
 ): {
   readonly feeds: Record<string, SessionTensor>
   readonly batch: TokenizedBatch
   readonly masks: BigInt64Array[]
 } {
-  const batch = tokenizer.batch(texts, side)
   const dims = [batch.batchSize, batch.sequenceLength]
   const feeds: Record<string, SessionTensor> = {}
   const has = (name: string): boolean => session.inputNames.includes(name)
@@ -147,6 +145,22 @@ function feedsAndMasksOf(
     )
   }
   return { feeds, batch, masks }
+}
+
+/** Split padded rows before inference; each input is still tokenized exactly once. */
+function* boundedBatches(batch: TokenizedBatch): Generator<TokenizedBatch> {
+  const rowsPerRun = Math.max(1, Math.floor(EMBED_BATCH_TOKEN_BUDGET / batch.sequenceLength))
+  for (let row = 0; row < batch.batchSize; row += rowsPerRun) {
+    const batchSize = Math.min(rowsPerRun, batch.batchSize - row)
+    const start = row * batch.sequenceLength
+    const end = (row + batchSize) * batch.sequenceLength
+    yield {
+      batchSize,
+      sequenceLength: batch.sequenceLength,
+      inputIds: batch.inputIds.subarray(start, end),
+      attentionMask: batch.attentionMask.subarray(start, end),
+    }
+  }
 }
 
 function finiteData(output: SessionTensor): Float32Array {
@@ -242,28 +256,25 @@ export function embedderOf(
       for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
         signal?.throwIfAborted()
         const slice = texts.slice(start, start + EMBED_BATCH_SIZE)
-        // One tokenization per batch: feeds and pooling masks share it.
-        const { feeds, batch, masks } = feedsAndMasksOf(
-          session,
-          tokenizer,
-          slice,
-          side,
-          int64Tensor,
-        )
-        signal?.throwIfAborted()
-        const outputs = await session.run(feeds, signal)
-        // A WASM run already in flight is allowed to finish; the next batch
-        // must not start after cancellation.
-        signal?.throwIfAborted()
-        const output = outputs[outputName]
-        if (output === undefined) {
-          throw new TypeError(`encoder produced no ${outputName} output`)
+        for (const batch of boundedBatches(tokenizer.batch(slice, side))) {
+          const { feeds, masks } = feedsAndMasksOf(session, batch, int64Tensor)
+          signal?.throwIfAborted()
+          const outputs = await session.run(feeds, signal)
+          // A WASM run already in flight is allowed to finish; the next batch
+          // must not start after cancellation.
+          signal?.throwIfAborted()
+          const output = outputs[outputName]
+          if (output === undefined) {
+            throw new TypeError(`encoder produced no ${outputName} output`)
+          }
+          const rows = rowsOf(output, shape, spec, batch, masks, batch.batchSize)
+          if (rows.length !== batch.batchSize) {
+            throw new TypeError(
+              `encoder produced ${rows.length} vectors for ${batch.batchSize} texts`,
+            )
+          }
+          vectors.push(...rows)
         }
-        const rows = rowsOf(output, shape, spec, batch, masks, slice.length)
-        if (rows.length !== slice.length) {
-          throw new TypeError(`encoder produced ${rows.length} vectors for ${slice.length} texts`)
-        }
-        vectors.push(...rows)
       }
       if (vectors.length !== texts.length) {
         throw new TypeError(`encoder produced ${vectors.length} vectors for ${texts.length} texts`)
@@ -295,7 +306,7 @@ export function cacheSpecOf(
   const headDim = config.head_dim
   const layers = config.num_hidden_layers
   const spec: CacheInputSpec = {
-    kvHeads: typeof kvHeads === 'number' ? kvHeads : 1,
+    kvHeads: typeof kvHeads === 'number' ? kvHeads : 0,
     headDim:
       typeof headDim === 'number'
         ? headDim
@@ -304,7 +315,11 @@ export function cacheSpecOf(
           : 0,
     layers: typeof layers === 'number' ? layers : 0,
   }
-  if (spec.headDim <= 0 || spec.layers <= 0) {
+  if (
+    [spec.kvHeads, spec.headDim, spec.layers].some(
+      (value) => !Number.isSafeInteger(value) || value <= 0,
+    )
+  ) {
     throw new TypeError('the encoder declares a KV cache but config.json omits its dimensions')
   }
   return spec
@@ -321,7 +336,9 @@ export async function openEmbedder(spec: SemanticModelEntry, dir: string): Promi
   // The loader owns the runtime's environment (single thread, SIMD, log level)
   // and points its wasm loader at the packaged assets.
   const ort = await loadSemanticRuntime()
-  const session = await ort.InferenceSession.create(join(dir, 'onnx', 'model_quantized.onnx'), {
+  const { readPinnedBundleFile, readJsonFile } = await import('./bundle.js')
+  const modelBytes = await readPinnedBundleFile(spec, dir, 'onnx/model_quantized.onnx')
+  const session = await ort.InferenceSession.create(modelBytes, {
     executionProviders: ['wasm'],
     graphOptimizationLevel: 'all',
   })
@@ -332,8 +349,8 @@ export async function openEmbedder(spec: SemanticModelEntry, dir: string): Promi
     await session.release()
   }
   try {
-    const { readJsonFile } = await import('./bundle.js')
-    const config = (await readJsonFile(join(dir, 'config.json'))) as Record<string, unknown>
+    const readJson = async (path: string): Promise<unknown> => await readJsonFile(spec, dir, path)
+    const config = (await readJson('config.json')) as Record<string, unknown>
     const cacheSpec = cacheSpecOf(session.inputNames, config)
     const port: SessionPort = {
       inputNames: session.inputNames,
@@ -360,8 +377,8 @@ export async function openEmbedder(spec: SemanticModelEntry, dir: string): Promi
     }
     const int64Tensor: Int64TensorFactory = (dims, data) => ({ dims, data })
     const tokenizer = await createEmbeddingTokenizer(
-      await readJsonFile(join(dir, 'tokenizer.json')),
-      await readJsonFile(join(dir, 'tokenizer_config.json')),
+      await readJson('tokenizer.json'),
+      await readJson('tokenizer_config.json'),
       spec,
     )
     return embedderOf(spec, tokenizer, port, int64Tensor)

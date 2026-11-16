@@ -18,6 +18,14 @@ function target(key: string): SemanticModelTarget {
   return { spec: { key } as never, dir: `/models/${key}` }
 }
 
+async function loadOnce(
+  loader: SemanticEmbedderLoader,
+  target: SemanticModelTarget,
+): Promise<void> {
+  const lease = await loader.get(target)
+  await lease.dispose()
+}
+
 function embedderOf(disposed: string[], key: string): Embedder {
   return {
     dimension: 2,
@@ -38,9 +46,8 @@ describe('SemanticEmbedderLoader lifecycle', () => {
         return embedderOf(disposed, requested.spec.key)
       },
     })
-    const a = await loader.get(target('a'))
-    const b = await loader.get(target('b'))
-    expect(a).not.toBe(b)
+    await loadOnce(loader, target('a'))
+    await loadOnce(loader, target('b'))
     expect(disposed).toEqual(['a'])
     await loader.dispose()
     expect(disposed).toEqual(['a', 'b'])
@@ -57,10 +64,10 @@ describe('SemanticEmbedderLoader lifecycle', () => {
         return embedderOf(disposed, requested.spec.key)
       },
     })
-    await loader.get(target('a'))
-    await expect(loader.get(target('b'))).rejects.toThrow(/B failed/)
+    await loadOnce(loader, target('a'))
+    await expect(loadOnce(loader, target('b'))).rejects.toThrow(/B failed/)
     // A is still resident: the next A call does not reopen it.
-    await loader.get(target('a'))
+    await loadOnce(loader, target('a'))
     expect(calls).toBe(2)
     await loader.dispose()
     expect(disposed).toEqual(['a'])
@@ -90,9 +97,9 @@ describe('SemanticEmbedderLoader lifecycle', () => {
         return embedderOf(disposed, requested.spec.key)
       },
     })
-    await loader.get(target('a'))
-    await loader.get(target('b'))
-    await loader.get(target('a'))
+    await loadOnce(loader, target('a'))
+    await loadOnce(loader, target('b'))
+    await loadOnce(loader, target('a'))
     await loader.dispose()
     // A is reopened after B displaced it; each instance is released once.
     expect(opened).toEqual(['a', 'b', 'a'])
@@ -115,7 +122,7 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     expect(disposed).toEqual([])
     // The next caller opens the bundle again rather than reusing the retired
     // instance: that is how deleting a model's files becomes visible.
-    await loader.get(target('a'))
+    await loadOnce(loader, target('a'))
     expect(opened).toEqual(['a', 'a'])
     expect(disposed).toEqual([])
     scope.release()
@@ -146,12 +153,11 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     await started.promise
     loader.retire(target('a'))
     first.resolve(embedderOf(disposed, 'a'))
-    const accepted = await pending
+    await pending
     // The retired instance serves its accepted scope, but never becomes
     // resident: the next caller opens the bundle from disk again.
-    const fresh = await loader.get(target('a'))
+    await loadOnce(loader, target('a'))
     expect(opened).toEqual(['a', 'a'])
-    expect(accepted).not.toBe(fresh)
     scope.release()
     await Promise.resolve()
     expect(disposed).toEqual(['a'])
@@ -182,7 +188,7 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     loader.retire(target('a'))
     first.resolve(embedderOf(disposed, 'a'))
     // The fresh read queues behind the retired load; the release ran before it.
-    await loader.get(target('a'))
+    await loadOnce(loader, target('a'))
     expect(disposed).toEqual(['a'])
     expect(opened).toEqual(['a', 'a'])
     await loader.dispose()
@@ -250,7 +256,7 @@ describe('configured model directory validation', () => {
       // The configured root is the same directory spelled with a traversing
       // segment; the reader must open the canonical path.
       const configuredDir = join(base, 'nested', '..')
-      await loader.get({
+      await loadOnce(loader, {
         spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
         dir: join(configuredDir, 'qwen3-0.6b'),
         configuredDir,
@@ -266,7 +272,7 @@ describe('configured model directory validation', () => {
     const loader = new SemanticEmbedderLoader({ open: async () => embedderOf([], 'x') })
     const configuredDir = join(homedir(), '.ssh', 'models')
     await expect(
-      loader.get({
+      loadOnce(loader, {
         spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
         dir: join(configuredDir, 'qwen3-0.6b'),
         configuredDir,

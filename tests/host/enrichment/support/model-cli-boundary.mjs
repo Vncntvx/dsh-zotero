@@ -10,10 +10,12 @@ import {
 } from './model-cli-control.mjs'
 
 const controlUrl = new URL('./model-cli-control.mjs', import.meta.url).href
+const proxyPolicyUrl = import.meta.resolve('@deepseek-ai/dsh-http-proxy')
 const catalogUrl = 'wp4-test:catalog'
 const httpUrl = 'wp4-test:http'
 const filesystemUrl = 'wp4-test:filesystem'
 const atomicUrl = 'wp4-test:atomic'
+const connectionsUrl = 'wp4-test:connections'
 const ports = Symbol.for('wp4-cli-test-ports')
 globalThis[ports] = { fsPort, atomicPort, fetchPort, TestProxyAgent }
 
@@ -27,31 +29,18 @@ registerHooks({
       return { url: catalogUrl, shortCircuit: true }
     }
     if (specifier === 'undici') return { url: httpUrl, shortCircuit: true }
+    if (
+      specifier.endsWith('/transport/connections.js') ||
+      specifier === '../transport/connections.js'
+    )
+      return { url: connectionsUrl, shortCircuit: true }
     if (context.parentURL !== controlUrl && specifier === 'node:fs/promises') {
       return { url: filesystemUrl, shortCircuit: true }
     }
     if (context.parentURL !== controlUrl && specifier === '@deepseek-ai/dsh-atomic-write') {
       return { url: atomicUrl, shortCircuit: true }
     }
-    try {
-      return nextResolve(specifier, context)
-    } catch (error) {
-      // The sources name each other with the `.js` extension tsc emits, while
-      // the CLI loads the TypeScript sources directly. Resolve the sibling
-      // `.ts` the way a type-stripping loader would, so a new shared module
-      // needs no hand-written entry here.
-      if (
-        specifier.startsWith('./') &&
-        specifier.endsWith('.js') &&
-        context.parentURL !== undefined
-      ) {
-        return {
-          url: new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL).href,
-          shortCircuit: true,
-        }
-      }
-      throw error
-    }
+    return nextResolve(specifier, context)
   },
   load(url, context, nextLoad) {
     if (url === catalogUrl) {
@@ -94,10 +83,27 @@ registerHooks({
           const ports = globalThis[Symbol.for('wp4-cli-test-ports')];
           export const EnvHttpProxyAgent = ports.TestProxyAgent;
           export const ProxyAgent = ports.TestProxyAgent;
+          export const Agent = ports.TestProxyAgent;
+          export const Pool = ports.TestProxyAgent;
+          export const getGlobalDispatcher = () => ({});
+          export const setGlobalDispatcher = () => {};
           export const fetch = ports.fetchPort;
         `,
       }
     }
+    if (url === connectionsUrl)
+      return {
+        format: 'module',
+        shortCircuit: true,
+        source: `
+        import { proxyRouteFor } from ${JSON.stringify(proxyPolicyUrl)};
+        const ports = globalThis[Symbol.for('wp4-cli-test-ports')];
+        export const publicFetch = ports.fetchPort;
+        export const dnsAddressResolver = async () => [{ address: '93.184.216.34', family: 4 }];
+        export const createPinnedDispatcher = () => { const dispatcher = new ports.TestProxyAgent(); return { dispatcher, close: () => dispatcher.close() }; };
+        export const egressRouteFor = proxyRouteFor;
+      `,
+      }
     return nextLoad(url, context)
   },
 })

@@ -21,6 +21,9 @@ export interface TokenizerLike {
   token_to_id(token: string): number | undefined
 }
 
+/** Bound the tokenizer's own allocation before encode creates ids or masks. */
+export const MAX_EMBED_TEXT_CHARS = 131_072
+
 /** One padded batch: int64 tensors shaped `[batch, seq]`, ready for ONNX. */
 export interface TokenizedBatch {
   readonly inputIds: BigInt64Array
@@ -83,6 +86,8 @@ export function embeddingTokenizerOf(
       const rows: number[][] = []
       let sequenceLength = 0
       for (const text of texts) {
+        if (text.length + prefix.length > MAX_EMBED_TEXT_CHARS)
+          throw new RangeError(`Embedding input exceeds ${MAX_EMBED_TEXT_CHARS} characters`)
         const encoded = tokenizer.encode(`${prefix}${text}`, { add_special_tokens: true })
         // Truncation cuts the tail; for the very rare over-window input the
         // closing special token is lost with it, which the poolers tolerate.

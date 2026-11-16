@@ -154,17 +154,23 @@ describe('embedderOf', () => {
     // Models that omit head_dim derive it from hidden_size / heads.
     expect(
       cacheSpecOf(cacheInputs, {
+        num_key_value_heads: 12,
         num_hidden_layers: 12,
         hidden_size: 768,
         num_attention_heads: 12,
       }),
-    ).toEqual({ kvHeads: 1, headDim: 64, layers: 12 })
+    ).toEqual({ kvHeads: 12, headDim: 64, layers: 12 })
     // A plain encoder declares no cache inputs at all.
     expect(cacheSpecOf(['input_ids', 'attention_mask'], {})).toBeUndefined()
     // Declaring cache inputs without usable dimensions is a hard error.
     expect(() => cacheSpecOf(cacheInputs, { num_hidden_layers: 4 })).toThrow(
       /declares a KV cache but config.json omits its dimensions/,
     )
+    for (const num_key_value_heads of [undefined, 0, -1, 1.5, Infinity]) {
+      expect(() =>
+        cacheSpecOf(cacheInputs, { num_key_value_heads, num_hidden_layers: 12, head_dim: 64 }),
+      ).toThrow(/omits its dimensions/)
+    }
   })
 
   it('rejects an encoder whose outputs are neither pooled nor hidden states', () => {

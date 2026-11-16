@@ -124,7 +124,7 @@ export function createScholarlySearchTool(
       return await runScholarlyJob({
         host,
         exec,
-        label: `scholarly_search (${text}, ${selectedSources.length} sources)`,
+        label: `scholarly_search (${selectedSources.length} sources)`,
         runInBackground: args.run_in_background === true,
         run: async (signal, onProgress) => {
           const keys = await host.keys()

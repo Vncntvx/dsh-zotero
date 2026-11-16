@@ -1,208 +1,155 @@
-/**
- * The bundle verifier: manifest↔catalog agreement, pinned sizes, pinned
- * digests, and the fail-closed error class — all against injected filesystem
- * seams, so no test needs a real model bundle.
- * @module tests/unit/semantic-bundle
- */
-
-import { createHash } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
-import { manifestOf, semanticModelOf } from '../../src/enrichment-model-catalog.ts'
+/** Real tiny files exercise the shared installer/status/runtime bundle rule. */
+import * as fs from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  clearVerifiedSnapshots,
+  inspectInstalledBundle,
+} from '../../src/enrichment/model-bundle-inspector.ts'
+import { MANIFEST_MAX_BYTES } from '../../src/enrichment/model-manifest.ts'
 import {
   createBundleVerifier,
   openSemanticEmbedder,
   verifySemanticBundle,
 } from '../../src/enrichment/semantic/bundle.ts'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
+import { tinyManifest, tinyModel, writeTinyBundle } from '../helpers/semantic-model-bundle.ts'
+import { withTempDir } from '../helpers/temp-dir.ts'
 
-const spec = semanticModelOf('lightweight')
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, open: vi.fn(actual.open) }
+})
 
-/**
- * Files at their catalog-pinned sizes; the digest seam answers with the
- * catalog's own pinned digest, so the fixture does not need the real upstream
- * bytes — the verifier's checks stay exactly the production ones.
- */
-function fileTable(entries: Record<string, Buffer | undefined>) {
-  const digestByPath = new Map(
-    spec.files.map((file) => [`${spec.physicalKey}/${file.path}`, file.sha256]),
-  )
-  return {
-    readFile: async (path: string) => {
-      const bytes = entries[path]
-      if (bytes === undefined) throw new Error(`no such file: ${path}`)
-      return new Uint8Array(bytes)
-    },
-    stat: async (path: string) => {
-      const bytes = entries[path]
-      if (bytes === undefined) throw new Error(`no such file: ${path}`)
-      return { size: bytes.length }
-    },
-    hashFile: async (path: string) => {
-      if (entries[path] === undefined) throw new Error(`no such file: ${path}`)
-      const digest = digestByPath.get(path)
-      if (digest === undefined) return createHash('sha256').update(entries[path]!).digest('hex')
-      return digest
-    },
-  }
+afterEach(() => {
+  clearVerifiedSnapshots()
+  vi.clearAllMocks()
+})
+
+async function bundle(run: (dir: string, root: string) => Promise<void>): Promise<void> {
+  await withTempDir(async (root) => await run(await writeTinyBundle(root), root))
 }
 
-function correctBundle(): Record<string, Buffer | undefined> {
-  const entries: Record<string, Buffer | undefined> = {}
-  for (const file of spec.files) {
-    entries[`${spec.physicalKey}/${file.path}`] = Buffer.alloc(file.bytes)
-  }
-  entries[`${spec.physicalKey}/manifest.json`] = Buffer.from(JSON.stringify(manifestOf(spec)))
-  return entries
-}
-
-describe('verifySemanticBundle', () => {
-  it('accepts a bundle whose manifest, sizes, and digests all agree', async () => {
-    const entries = correctBundle()
-    await expect(
-      verifySemanticBundle(spec.physicalKey, spec, fileTable(entries)),
-    ).resolves.toBeUndefined()
+async function refused(dir: string, reason: RegExp): Promise<void> {
+  await expect(verifySemanticBundle(dir, tinyModel)).rejects.toMatchObject({
+    code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+    message: expect.stringMatching(reason),
   })
+  await expect(inspectInstalledBundle(dir, tinyManifest())).resolves.toMatchObject({
+    kind: 'corrupt',
+  })
+}
 
-  it('refuses a missing manifest', async () => {
-    const entries = correctBundle()
-    delete entries[`${spec.physicalKey}/manifest.json`]
-    await expect(
-      verifySemanticBundle(spec.physicalKey, spec, fileTable(entries)),
-    ).rejects.toMatchObject({
-      code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
-      message: expect.stringContaining('manifest.json is missing'),
+describe('shared bundle verification', () => {
+  it('accepts real files with matching manifest, sizes and SHA-256 digests', async () => {
+    await bundle(async (dir) => {
+      await expect(verifySemanticBundle(dir, tinyModel)).resolves.toBeUndefined()
     })
   })
 
-  it('refuses a manifest that disagrees with the catalog', async () => {
-    const entries = correctBundle()
-    const manifest = JSON.parse(entries[`${spec.physicalKey}/manifest.json`]!.toString())
-    manifest.revision = '0'.repeat(40)
-    entries[`${spec.physicalKey}/manifest.json`] = Buffer.from(JSON.stringify(manifest))
-    await expect(verifySemanticBundle(spec.physicalKey, spec, fileTable(entries))).rejects.toThrow(
-      /disagrees with the catalog/,
-    )
-  })
-
-  it('refuses a missing or wrong-size file', async () => {
-    const entries = correctBundle()
-    delete entries[`${spec.physicalKey}/config.json`]
-    await expect(verifySemanticBundle(spec.physicalKey, spec, fileTable(entries))).rejects.toThrow(
-      /config\.json is missing/,
-    )
-
-    const resized = correctBundle()
-    // A file at the wrong size: the manifest and the catalog still agree, so
-    // the size check is what trips.
-    resized[`${spec.physicalKey}/tokenizer.json`] = Buffer.alloc(1)
-    await expect(verifySemanticBundle(spec.physicalKey, spec, fileTable(resized))).rejects.toThrow(
-      /tokenizer\.json is \d+ bytes, expected/,
-    )
-  })
-
-  it('refuses a digest mismatch', async () => {
-    const entries = correctBundle()
-    // Swap the digest seam for one that answers a wrong digest, so only the
-    // catalog's pinned digest can catch the corruption.
-    const tampered = fileTable(entries)
-    tampered.hashFile = async (path: string) =>
-      path.endsWith('config.json')
-        ? createHash('sha256').update('corrupted').digest('hex')
-        : (spec.files.find((file) => `${spec.physicalKey}/${file.path}` === path)?.sha256 ?? '')
-    await expect(verifySemanticBundle(spec.physicalKey, spec, tampered)).rejects.toThrow(
-      /config\.json failed its SHA-256 check/,
-    )
-    return
-    await expect(verifySemanticBundle(spec.physicalKey, spec, fileTable(entries))).rejects.toThrow(
-      /config\.json failed its SHA-256 check/,
-    )
-  })
-})
-
-describe('openSemanticEmbedder', () => {
-  it('propagates the verifier refusal instead of opening a session', async () => {
-    const entries = correctBundle()
-    delete entries[`${spec.physicalKey}/manifest.json`]
-    await expect(
-      openSemanticEmbedder(spec, spec.physicalKey, fileTable(entries) as never),
-    ).rejects.toMatchObject({ code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE })
-  })
-})
-
-describe('createBundleVerifier', () => {
-  /**
-   * The fixture table plus a counted hash seam and a movable on-disk identity.
-   * `clock.t` is the mtime/ctime every file reports, so a case can simulate an
-   * out-of-band rewrite by advancing it.
-   */
-  function counted(entries: Record<string, Buffer | undefined>, clock: { t: number }) {
-    const base = fileTable(entries)
-    const state = { hashes: 0, wrongDigest: false }
-    const deps = {
-      ...base,
-      identity: async (path: string) => ({
-        dev: 1,
-        ino: 2,
-        size: (entries[path] as Buffer).length,
-        mtimeMs: clock.t,
-        ctimeMs: clock.t,
-      }),
-      hashFile: async (path: string) => {
-        state.hashes += 1
-        if (state.wrongDigest) return 'deadbeef'
-        return await base.hashFile(path)
-      },
-    }
-    return { deps, state }
-  }
-
-  it('hashes once per on-disk identity and reuses it on the next load', async () => {
-    const entries = correctBundle()
-    const clock = { t: 1_000 }
-    const { deps, state } = counted(entries, clock)
-    const verifier = createBundleVerifier(deps)
-    await verifier.verify(spec.physicalKey, spec)
-    const first = state.hashes
-    expect(first).toBe(spec.files.length)
-    await verifier.verify(spec.physicalKey, spec)
-    expect(state.hashes).toBe(first)
-  })
-
-  it('verifies again after the files change and reports the bad digest', async () => {
-    const entries = correctBundle()
-    const clock = { t: 1_000 }
-    const { deps, state } = counted(entries, clock)
-    const verifier = createBundleVerifier(deps)
-    await verifier.verify(spec.physicalKey, spec)
-    clock.t += 1
-    state.wrongDigest = true
-    await expect(verifier.verify(spec.physicalKey, spec)).rejects.toMatchObject({
-      code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+  it('refuses a missing commit marker before opening any model session', async () => {
+    await bundle(async (dir) => {
+      await fs.unlink(join(dir, 'manifest.json'))
+      await expect(openSemanticEmbedder(tinyModel, dir)).rejects.toMatchObject({
+        code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+        message: expect.stringContaining('commit marker is missing'),
+      })
     })
   })
 
-  it('verifies again when the catalog record changes under the same on-disk identity', async () => {
-    const entries = correctBundle()
-    const clock = { t: 1_000 }
-    const { deps } = counted(entries, clock)
-    const verifier = createBundleVerifier(deps)
-    await verifier.verify(spec.physicalKey, spec)
-    // The files are untouched; only the catalog revision changed, so the
-    // remembered verification no longer describes this record.
-    const changed = { ...spec, revision: '0'.repeat(40) }
-    await expect(verifier.verify(spec.physicalKey, changed)).rejects.toThrow(
-      /disagrees with the catalog/,
-    )
+  it.each([
+    { ...tinyManifest(), revision: '0'.repeat(40) },
+    { ...tinyManifest(), unexpected: true },
+  ])('refuses any manifest disagreement with the catalog', async (marker) => {
+    await bundle(async (dir) => {
+      await fs.writeFile(join(dir, 'manifest.json'), JSON.stringify(marker))
+      await refused(dir, /disagrees with the catalog/)
+    })
   })
 
-  it('refuses a catalog record whose paths the shared rule rejects', async () => {
-    const entries = correctBundle()
-    const unsafe = {
-      ...spec,
-      files: [...spec.files, { path: '..\\evil', bytes: 1, sha256: 'a'.repeat(64) }],
-    }
-    await expect(
-      verifySemanticBundle(spec.physicalKey, unsafe, fileTable(entries)),
-    ).rejects.toThrow(/invalid catalog path/)
+  it('refuses an oversized manifest before reading it', async () => {
+    await bundle(async (dir) => {
+      await fs.writeFile(join(dir, 'manifest.json'), Buffer.alloc(MANIFEST_MAX_BYTES + 1))
+      const open = vi.mocked(fs.open)
+      await refused(dir, /exceeds its bounded size/)
+      expect(open.mock.calls.some(([path]) => String(path).endsWith('manifest.json'))).toBe(false)
+    })
+  })
+
+  it('refuses a missing pinned file', async () => {
+    await bundle(async (dir) => {
+      await fs.unlink(join(dir, 'config.json'))
+      await refused(dir, /config\.json is missing/)
+    })
+  })
+
+  it('refuses a pinned file at the wrong size', async () => {
+    await bundle(async (dir) => {
+      await fs.writeFile(join(dir, 'config.json'), 'a')
+      await refused(dir, /config\.json is 1 bytes, expected 5/)
+    })
+  })
+
+  it('invalidates a remembered identity after a same-size mutation', async () => {
+    await bundle(async (dir) => {
+      await createBundleVerifier().verify(dir, tinyModel)
+      await fs.writeFile(join(dir, 'config.json'), 'wrong')
+      await refused(dir, /config\.json failed its SHA-256 check/)
+    })
+  })
+
+  it('refuses a symbolic link even when its bytes match the pin', async () => {
+    await bundle(async (dir, root) => {
+      const target = join(root, 'outside-config')
+      await fs.rename(join(dir, 'config.json'), target)
+      await fs.symlink(target, join(dir, 'config.json'))
+      await refused(dir, /config\.json is missing or not a regular file/)
+    })
+  })
+
+  it('refuses symbolic links in parent paths before reading their files', async () => {
+    await bundle(async (dir, root) => {
+      const target = join(root, 'outside-onnx')
+      await fs.rename(join(dir, 'onnx'), target)
+      await fs.symlink(target, join(dir, 'onnx'))
+      const open = vi.mocked(fs.open)
+      await refused(dir, /onnx is not a regular directory/)
+      expect(open).not.toHaveBeenCalled()
+    })
+  })
+
+  it('reads each manifest once and reuses file hashes across replacement verifiers', async () => {
+    await bundle(async (dir) => {
+      const open = vi.mocked(fs.open)
+      await createBundleVerifier().verify(dir, tinyModel)
+      await createBundleVerifier().verify(dir, tinyModel)
+      await inspectInstalledBundle(dir, tinyManifest())
+      const paths = open.mock.calls.map(([path]) => String(path))
+      expect(paths.filter((path) => path.endsWith('manifest.json'))).toHaveLength(3)
+      for (const file of tinyModel.files)
+        expect(paths.filter((path) => path.endsWith(file.path))).toHaveLength(1)
+    })
+  })
+
+  it('invalidates shared verification when the catalog changes', async () => {
+    await bundle(async (dir) => {
+      await createBundleVerifier().verify(dir, tinyModel)
+      await expect(
+        createBundleVerifier().verify(dir, { ...tinyModel, revision: '0'.repeat(40) }),
+      ).rejects.toThrow(/disagrees with the catalog/)
+    })
+  })
+
+  it('refuses unsafe catalog paths through the semantic error vocabulary', async () => {
+    await bundle(async (dir) => {
+      const unsafe = {
+        ...tinyModel,
+        files: [{ path: '..\\evil', bytes: 1, sha256: 'a'.repeat(64) }],
+      }
+      await expect(verifySemanticBundle(dir, unsafe)).rejects.toMatchObject({
+        code: ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
+        message: expect.stringContaining('invalid catalog path'),
+      })
+    })
   })
 })

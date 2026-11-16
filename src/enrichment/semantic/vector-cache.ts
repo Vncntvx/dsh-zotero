@@ -29,6 +29,7 @@ import { LRUCache } from 'lru-cache'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { EMBED_BATCH_SIZE } from './batching.js'
 import { awaitSharedWaiter } from '../../waiter-flight.js'
+import { ConcurrencyGate } from '../../concurrency.js'
 
 export const VECTOR_CACHE_MAX_ITEMS = 16_384
 export const VECTOR_CACHE_MAX_BYTES = 64 * 1024 * 1024
@@ -41,6 +42,7 @@ export interface VectorCacheIdentity {
   /** SHA-256 of each pinned catalog file, by relative path. */
   readonly fileDigests: Readonly<Record<string, string>>
   readonly dimension: number
+  readonly maxTokens: number
   readonly pooling: string
   readonly normalize: boolean
   readonly queryPrefix: string
@@ -55,26 +57,32 @@ function digestOf(value: string): string {
 }
 
 /** A stable key over the model identity, inference contract, side and text. */
+export function vectorCacheIdentityDigestOf(identity: VectorCacheIdentity): string {
+  return digestOf(
+    JSON.stringify([
+      identity.key,
+      identity.physicalKey,
+      identity.revision,
+      identity.scoringVersion,
+      String(identity.dimension),
+      identity.maxTokens,
+      identity.pooling,
+      String(identity.normalize),
+      identity.queryPrefix,
+      identity.documentPrefix,
+      ...Object.entries(identity.fileDigests)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([path, digest]) => `${path}:${digest}`),
+    ]),
+  )
+}
+
 export function vectorCacheKeyOf(
   identity: VectorCacheIdentity,
   side: EmbeddingSide,
   text: string,
 ): string {
-  const contract = [
-    identity.key,
-    identity.physicalKey,
-    identity.revision,
-    identity.scoringVersion,
-    String(identity.dimension),
-    identity.pooling,
-    String(identity.normalize),
-    identity.queryPrefix,
-    identity.documentPrefix,
-    ...Object.entries(identity.fileDigests)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([path, digest]) => `${path}:${digest}`),
-  ].join('|')
-  return `${digestOf(contract)}|${side}|${digestOf(text)}`
+  return `${vectorCacheIdentityDigestOf(identity)}|${side}|${digestOf(text)}`
 }
 
 function byteSizeOf(key: string, vector: Float32Array): number {
@@ -112,9 +120,16 @@ export interface VectorCache {
     side: EmbeddingSide,
     run: (missing: readonly string[], signal: AbortSignal) => Promise<readonly Float32Array[]>,
     signal?: AbortSignal,
+    retain?: () => VectorRunLease,
   ): Promise<readonly Float32Array[]>
   /** Drop every entry and cancel pending cooperative work. */
   dispose(): void
+}
+
+/** A queued shared batch owns its encoder independently of the requesting scope. */
+export interface VectorRunLease {
+  run(texts: readonly string[], signal: AbortSignal): Promise<readonly Float32Array[]>
+  release(): void | Promise<void>
 }
 
 /** One batch's abort handle: a waiter leaving tells its batch it has gone. */
@@ -157,6 +172,7 @@ function createFlight(): Flight {
  * model switch constructs a new cache rather than mutating this one.
  */
 export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
+  const identityDigest = vectorCacheIdentityDigestOf(identity)
   const lru = new LRUCache<string, Float32Array>({
     max: VECTOR_CACHE_MAX_ITEMS,
     maxSize: VECTOR_CACHE_MAX_BYTES,
@@ -165,6 +181,7 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
   let disposed = false
   const view = new LruMapView(lru, () => disposed)
   const retire = new AbortController()
+  const runGate = new ConcurrencyGate(1)
   /** One flight per distinct key; its `batch` is what a leaving waiter asks. */
   const flights = new Map<string, Flight>()
 
@@ -188,6 +205,7 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
   const startBatch = (
     entries: readonly FlightEntry[],
     run: (missing: readonly string[], signal: AbortSignal) => Promise<readonly Float32Array[]>,
+    retain: (() => VectorRunLease) | undefined,
   ): void => {
     const controller = new AbortController()
     const signal = AbortSignal.any([controller.signal, retire.signal])
@@ -210,11 +228,20 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
     }
     for (const entry of entries) entry.flight.batch = batch
     void (async () => {
+      let retained: VectorRunLease | undefined
       try {
-        const vectors = await run(
-          entries.map((entry) => entry.text),
-          signal,
-        )
+        retained = retain?.()
+        const release = await runGate.acquire(signal)
+        let vectors: readonly Float32Array[]
+        try {
+          signal.throwIfAborted()
+          vectors = await (retained?.run ?? run)(
+            entries.map((entry) => entry.text),
+            signal,
+          )
+        } finally {
+          release()
+        }
         // Every caller walked away (or the generation retired): the run's
         // result belongs to nobody and must never repopulate the cache.
         if (signal.aborted) return
@@ -234,6 +261,7 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
         for (const entry of entries) {
           if (flights.get(entry.key) === entry.flight) flights.delete(entry.key)
         }
+        await retained?.release()
       }
     })()
   }
@@ -253,10 +281,10 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
   }
 
   return {
-    async embed(texts, side, run, signal) {
+    async embed(texts, side, run, signal, retain) {
       if (disposed) throw retired()
       signal?.throwIfAborted()
-      const keys = texts.map((text) => vectorCacheKeyOf(identity, side, text))
+      const keys = texts.map((text) => `${identityDigest}|${side}|${digestOf(text)}`)
       const results = new Array<Float32Array>(texts.length)
       const missing = new Map<string, number[]>()
       for (const [index, key] of keys.entries()) {
@@ -283,7 +311,7 @@ export function createVectorCache(identity: VectorCacheIdentity): VectorCache {
         claimed.push({ key, text: texts[positions[0]!]!, flight })
       }
       for (let start = 0; start < claimed.length; start += EMBED_BATCH_SIZE) {
-        startBatch(claimed.slice(start, start + EMBED_BATCH_SIZE), run)
+        startBatch(claimed.slice(start, start + EMBED_BATCH_SIZE), run, retain)
       }
 
       await Promise.all(

@@ -126,6 +126,8 @@ describe('scholarly background jobs', () => {
     expect(result.kind).toBe('background')
     expect(result.jobId).toBeDefined()
     const view = jobs.registry.get(JobId(result.jobId))
+    expect(view.label).toMatch(/^scholarly_search \(\d+ sources\)$/)
+    expect(view.label).not.toContain('attention')
     expect(view.kind).toBe('scholarly')
     expect(view.outputLimitBytes).toBe(SCHOLARLY_JOB_OUTPUT_LIMIT_BYTES)
     const settled = await jobs.settled(JobId(result.jobId))
