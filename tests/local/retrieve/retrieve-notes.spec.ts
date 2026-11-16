@@ -22,7 +22,10 @@ import { expectRequestPaths } from '../../helpers/server/assert.js'
 import { ITEM_KEY, NOTE_ITEM_KEY, apiPath, itemRef } from '../../helpers/server/keys.js'
 import { noteRow } from '../../helpers/server/objects.js'
 import { serveJson, serveItemGraph } from '../../helpers/server/serve.js'
-import { RETRIEVE_PARENT, RETRIEVE_PARENT_WITHOUT_ATTACHMENT } from './support.js'
+import {
+  RETRIEVE_PARENT,
+  RETRIEVE_PARENT_WITHOUT_ATTACHMENT,
+} from '../../helpers/retrieve-fixtures.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider

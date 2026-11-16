@@ -29,10 +29,12 @@ if (typeof window !== 'undefined') {
   })
 }
 
-beforeEach(() => {
-  clipboardWrites.mockClear()
-  clipboardWrites.mockImplementation(async () => {})
-})
+if (typeof window !== 'undefined') {
+  beforeEach(() => {
+    clipboardWrites.mockClear()
+    clipboardWrites.mockImplementation(async () => {})
+  })
+}
 
 /**
  * jsdom has no layout and therefore no ResizeObserver; the filter bar's
@@ -50,7 +52,7 @@ class ResizeObserverStub implements ResizeObserver {
   unobserve(): void {}
   disconnect(): void {}
 }
-vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+if (typeof window !== 'undefined') vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 
 /**
  * jsdom implements no element scrolling, so the filter strip's paging arrows

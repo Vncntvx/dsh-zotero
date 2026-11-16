@@ -4,7 +4,7 @@ import { ZOTERO_READ_ROUTING_SENTENCE, WRITE_POLICY_SENTENCE } from '../../src/p
 import { SCHOLARLY_ROUTE_SENTENCE, SCHOLARLY_TOOL_ROUTING } from '../../src/scholarly/prompt.js'
 import ScholarlyService from '../../src/scholarly/index.js'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
-import { bootScholarlyContext } from '../scholarly/fixtures.js'
+import { bootToolContext } from '../helpers/lanes/tool-context.js'
 
 let lane: HostLane | undefined
 
@@ -29,7 +29,7 @@ describe('tool surface and prompt budgets', () => {
       `core tool definitions: ${coreBytes} bytes (${breakdown})`,
     ).toBeLessThanOrEqual(34 * 1024)
 
-    const scholarly = await bootScholarlyContext()
+    const scholarly = await bootToolContext()
     const fiber = scholarly.plugin(ScholarlyService, {})
     await fiber
     const scholarlySchemas = scholarly.tools.schemas()

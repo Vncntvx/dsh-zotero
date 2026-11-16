@@ -29,7 +29,7 @@ import {
   RETRIEVE_CHILDREN,
   RETRIEVE_PARENT,
   fulltextHit,
-} from './support.js'
+} from '../../helpers/retrieve-fixtures.js'
 
 let mock: MockZotero | undefined
 

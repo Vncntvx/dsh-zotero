@@ -27,7 +27,7 @@ import {
   RETRIEVE_CHILDREN,
   RETRIEVE_PARENT,
   RETRIEVE_PARENT_WITHOUT_ATTACHMENT,
-} from './support.js'
+} from '../../helpers/retrieve-fixtures.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider

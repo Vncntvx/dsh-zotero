@@ -176,11 +176,15 @@ describe('parsing generation ownership', () => {
 
   it('keeps admitting and completing operations past the retained map bound', async () => {
     const release = deferred<void>()
+    const firstEntered = deferred<void>()
     let calls = 0
     fixture = await parseJobsFixture({
       execute: async (execution) => {
         calls += 1
-        if (calls === 1) await release.promise
+        if (calls === 1) {
+          firstEntered.resolve()
+          await release.promise
+        }
         return parsedResult(execution)
       },
     })
@@ -188,6 +192,7 @@ describe('parsing generation ownership', () => {
       target: { kind: 'url', url: 'https://papers.example.org/document-0.pdf' },
     })
     const first = await fixture.helper.startDocumentParse(firstRequest, parseSignal())
+    await firstEntered.promise
     const accepted: string[] = [first.jobId]
     for (let index = 1; index < 257; index += 1) {
       const request = parseRequest(undefined, {

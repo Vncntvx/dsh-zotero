@@ -90,7 +90,7 @@ export interface HostLane {
   runTool(name: string, args: Record<string, unknown>, agent?: Agent): Promise<ToolExecutionResult>
   /** The registered definition for one tool name, if the assembly carries it. */
   tool(name: string): ToolDefinition | undefined
-  /** Close the mock server; call it from the spec's `afterEach`. */
+  /** Dispose the context and close the mock server. Safe to call again. */
   teardown(): Promise<void>
 }
 
@@ -106,63 +106,81 @@ export async function setupHostLane(
 ): Promise<HostLane> {
   const mock = await MockZotero.start()
   const ctx = new Context()
-  // The settings plane the Zotero and library services suppress their
-  // schema-generated pages against; the stub records the call.
-  const configureCalls: { auto: boolean }[] = []
-  class StubSettings extends Service {
-    constructor(settingsCtx: Context) {
-      super(settingsCtx, 'settings')
-    }
+  let cleanup: Promise<void> | undefined
+  const teardown = (): Promise<void> =>
+    (cleanup ??= (async () => {
+      try {
+        await ctx.fiber.dispose()
+      } finally {
+        await mock.close()
+      }
+    })())
+  try {
+    // The settings plane the Zotero and library services suppress their
+    // schema-generated pages against; the stub records the call.
+    const configureCalls: { auto: boolean }[] = []
+    class StubSettings extends Service {
+      constructor(settingsCtx: Context) {
+        super(settingsCtx, 'settings')
+      }
 
-    configure(config: { auto: boolean }, _fiber: Fiber): void {
-      configureCalls.push(config)
+      configure(config: { auto: boolean }, _fiber: Fiber): void {
+        configureCalls.push(config)
+      }
     }
-  }
-  await ctx.plugin(StubSettings, undefined)
-  await ctx.plugin(SystemPrompt, {})
-  await ctx.plugin(ToolRuntime, {})
-  ctx.tools.setExecutor({
-    describe(tools) {
-      return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
-    },
-    execute(input) {
-      return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
-    },
-  })
-  if (options.typert === true) await ctx.plugin(TypertRegistry)
-  if (options.compose !== undefined) await options.compose(ctx)
-  const entry: Options = { baseUrl: mock.baseUrl, ...config }
-  const zoteroFiber = ctx.plugin(ZoteroService, entry)
-  await zoteroFiber
-  let callCounter = 0
-  return {
-    ctx,
-    mock,
-    configureCalls,
-    zoteroFiber,
-    async runTool(name, args, agent) {
-      const batch = await ctx.tools.execute({
-        calls: [
-          {
-            type: 'tool-call',
-            id: ToolCallId(`tool-${++callCounter}`),
-            name,
-            arguments: JSON.stringify(args),
-          },
-        ],
-        signal: new AbortController().signal,
-        agent: agent ?? DEFAULT_AGENT,
+    await ctx.plugin(StubSettings, undefined)
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, {})
+    ctx.tools.setExecutor({
+      describe(tools) {
+        return { schemas: tools.map((definition) => projectToolSchema(definition, false)) }
+      },
+      execute(input) {
+        return executeToolBatch(input, new ToolExecutionPipeline(ctx), () => 10)
+      },
+    })
+    if (options.typert === true) await ctx.plugin(TypertRegistry)
+    if (options.compose !== undefined) await options.compose(ctx)
+    const entry: Options = { baseUrl: mock.baseUrl, ...config }
+    const zoteroFiber = ctx.plugin(ZoteroService, entry)
+    await zoteroFiber
+    let callCounter = 0
+    return {
+      ctx,
+      mock,
+      configureCalls,
+      zoteroFiber,
+      async runTool(name, args, agent) {
+        const batch = await ctx.tools.execute({
+          calls: [
+            {
+              type: 'tool-call',
+              id: ToolCallId(`tool-${++callCounter}`),
+              name,
+              arguments: JSON.stringify(args),
+            },
+          ],
+          signal: new AbortController().signal,
+          agent: agent ?? DEFAULT_AGENT,
+        })
+        const call = batch.results[0]
+        if (call === undefined) throw new Error('Tool execution produced no result')
+        return call.result
+      },
+      tool(name) {
+        return ctx.tools.get(name)
+      },
+      teardown,
+    }
+  } catch (error) {
+    try {
+      await teardown()
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Host lane boot and cleanup failed', {
+        cause: error,
       })
-      const call = batch.results[0]
-      if (call === undefined) throw new Error('Tool execution produced no result')
-      return call.result
-    },
-    tool(name) {
-      return ctx.tools.get(name)
-    },
-    async teardown() {
-      await mock.close()
-    },
+    }
+    throw error
   }
 }
 

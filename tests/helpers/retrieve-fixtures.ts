@@ -5,18 +5,12 @@
  * provider and lifecycle; a spec that needs a different shape overrides a
  * field at its own call site, so the deviation stays visible next to the test
  * that needs it.
- * @module tests/provider/retrieve-graph
+ * @module tests/helpers/retrieve-fixtures
  */
 
-import { ITEM_KEY, ATTACHMENT_KEY } from '../../helpers/server/keys.js'
-import {
-  annotationRow,
-  attachment,
-  item,
-  noteRow,
-  paperItem,
-} from '../../helpers/server/objects.js'
-import { canonicalFulltext } from '../../helpers/server/serve.js'
+import { ITEM_KEY, ATTACHMENT_KEY } from './server/keys.js'
+import { annotationRow, attachment, item, noteRow, paperItem } from './server/objects.js'
+import { canonicalFulltext } from './server/serve.js'
 
 /** The parent's abstract; the ranking specs score it against their queries. */
 const ABSTRACT =
@@ -87,10 +81,7 @@ export const FULLTEXT_PAYLOAD = canonicalFulltext()
 export function fulltextHit(
   text: string,
   sourceLabel = `zotero://user/0/attachment/${ATTACHMENT_KEY}`,
-): Extract<
-  import('../../../src/local/fulltext-enhancer.js').FulltextLookupResult,
-  { kind: 'hit' }
-> {
+): Extract<import('../../src/local/fulltext-enhancer.js').FulltextLookupResult, { kind: 'hit' }> {
   return {
     kind: 'hit',
     text,

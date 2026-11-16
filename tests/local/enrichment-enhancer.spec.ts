@@ -24,7 +24,7 @@ import {
   RETRIEVE_CHILDREN,
   RETRIEVE_PARENT,
   RETRIEVE_PARENT_WITHOUT_ATTACHMENT_TYPE,
-} from './retrieve/support.js'
+} from '../helpers/retrieve-fixtures.js'
 
 let mock: MockZotero | undefined
 

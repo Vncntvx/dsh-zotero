@@ -12,14 +12,15 @@ import type { HostLane } from '../helpers/lanes/host-lane.js'
 import { setupHostLane } from '../helpers/lanes/host-lane.js'
 import { serveFulltext, serveItemGraph } from '../helpers/server/serve.js'
 import { attachmentRef, itemRef } from '../helpers/server/keys.js'
-import type { FulltextEnhancer, FulltextLookupResult } from '../../src/local/fulltext-enhancer.js'
+import type { FulltextEnhancer } from '../../src/local/fulltext-enhancer.js'
 import {
   FULLTEXT_PAYLOAD,
   RETRIEVE_ATTACHMENT,
   RETRIEVE_ATTACHMENT_CHILDREN,
   RETRIEVE_CHILDREN,
   RETRIEVE_PARENT,
-} from '../local/retrieve/support.js'
+  fulltextHit,
+} from '../helpers/retrieve-fixtures.js'
 import {
   RETRIEVE_EVIDENCE_REQUIRED_MESSAGE,
   RETRIEVE_MAX_CHARS_MESSAGE,
@@ -35,23 +36,7 @@ const REF = attachmentRef(RETRIEVE_ATTACHMENT.key)
 const MARKDOWN = 'one two three four five six seven eight nine ten eleven twelve'
 
 function enhancer(text: string): FulltextEnhancer {
-  const hit: Extract<FulltextLookupResult, { kind: 'hit' }> = {
-    kind: 'hit',
-    text,
-    format: 'markdown',
-    source: 'MinerU (free)',
-    sourceKind: 'attachment',
-    sourceLabel: REF,
-    attachmentRef: REF,
-    provenance: {
-      parser: 'mineru',
-      mode: 'free',
-      artifactId: 'a'.repeat(64),
-      fingerprint: 'b'.repeat(64),
-      sourceId: 'c'.repeat(64),
-      generation: 'd'.repeat(64),
-    },
-  }
+  const hit = { ...fulltextHit(text, REF), attachmentRef: REF }
   const resolve = vi.fn(async () => hit)
   return { lookup: resolve, lookupArtifact: resolve }
 }
