@@ -7,6 +7,10 @@
  * tests drive the same rules against fixture graphs.
  * @module dsh-zotero/scripts/client-graph-authority
  */
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..').replaceAll('\\', '/')
 
 /**
  * Local sources the browser graph may value-import.
@@ -49,12 +53,68 @@ export const HOST_ONLY_PACKAGE_INPUT = /(?:^|\/)node_modules\/@deepseek-ai\/sche
  * this list and `EXTERNALS` is refused, so a later import cannot slip in
  * as a silent second copy of a module the shell already shares.
  *
- * `clsx` is the whole list: a tiny classname joiner with no module identity
- * the shell needs to share. React and its family are the opposite case:
- * they must stay external so every bundle sees one instance, and are
- * therefore in `EXTERNALS`, not here.
+ * The list includes clsx and the pure Markdown parser closure that turns
+ * remote image references into links. These packages have no module identity
+ * the shell needs to share. React and its family stay external so every
+ * bundle uses one instance.
  */
-export const CLIENT_INLINE_PACKAGES = ['clsx']
+export const CLIENT_INLINE_PACKAGES = [
+  'clsx',
+  ...[
+    'ccount',
+    'decode-named-character-reference',
+    'devlop',
+    'escape-string-regexp',
+    'katex',
+    'longest-streak',
+    'markdown-table',
+    'mdast-util-find-and-replace',
+    'mdast-util-from-markdown',
+    'mdast-util-gfm',
+    'mdast-util-gfm-autolink-literal',
+    'mdast-util-gfm-footnote',
+    'mdast-util-gfm-strikethrough',
+    'mdast-util-gfm-table',
+    'mdast-util-gfm-task-list-item',
+    'mdast-util-math',
+    'mdast-util-phrasing',
+    'mdast-util-to-markdown',
+    'mdast-util-to-string',
+    'micromark',
+    'micromark-core-commonmark',
+    'micromark-extension-gfm',
+    'micromark-extension-gfm-autolink-literal',
+    'micromark-extension-gfm-footnote',
+    'micromark-extension-gfm-strikethrough',
+    'micromark-extension-gfm-table',
+    'micromark-extension-gfm-tagfilter',
+    'micromark-extension-gfm-task-list-item',
+    'micromark-extension-math',
+    'micromark-factory-destination',
+    'micromark-factory-label',
+    'micromark-factory-space',
+    'micromark-factory-title',
+    'micromark-factory-whitespace',
+    'micromark-util-character',
+    'micromark-util-chunked',
+    'micromark-util-classify-character',
+    'micromark-util-combine-extensions',
+    'micromark-util-decode-numeric-character-reference',
+    'micromark-util-decode-string',
+    'micromark-util-edit-map',
+    'micromark-util-encode',
+    'micromark-util-html-tag-name',
+    'micromark-util-normalize-identifier',
+    'micromark-util-resolve-all',
+    'micromark-util-sanitize-uri',
+    'micromark-util-subtokenize',
+    'unist-util-is',
+    'unist-util-stringify-position',
+    'unist-util-visit',
+    'unist-util-visit-parents',
+    'zwitch',
+  ],
+]
 
 /**
  * Whether a `node_modules/` graph input belongs to a package the allowlist
@@ -114,7 +174,11 @@ export function isInlineSafeHarness(specifier) {
  * @returns normalized key.
  */
 function normalizeInputKey(key) {
-  return key.replaceAll('\\', '/').replace(/^\.\//, '')
+  const normalized = key.replaceAll('\\', '/').replace(/^\.\//, '')
+  if (normalized.startsWith(`${root}/`)) return normalized.slice(root.length + 1)
+  if (packageNameOf(normalized) !== undefined) return normalized
+  const source = normalized.lastIndexOf('/src/')
+  return source < 0 ? normalized : normalized.slice(source + 1)
 }
 
 /**

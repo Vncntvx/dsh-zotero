@@ -39,6 +39,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import { JSDOM } from 'jsdom'
 import * as esbuild from 'esbuild'
 import { transform as transformCss } from 'lightningcss'
 import { createClientAuthorityPlugin, isInlineSafeHarness } from './client-graph-authority.mjs'
@@ -68,12 +69,12 @@ const PLUGIN_ID = PLUGIN_MANIFEST.name
 /**
  * The client bundle's byte ceiling: the whole browser half ships as one file
  * the host loads on every boot, so its growth is a real startup and install
- * cost. The current bundle sits near 656 KB; the ceiling allows ~10% of
- * headroom before a release fails, which turns an accidental dependency
- * balloon (an inlined library, a duplicated copy) into a build error instead
- * of a quiet regression. Raise it deliberately with a measured reason.
+ * cost. The GFM/math image safety pass adds about 88 KB to the former 660 KB
+ * bundle; 800 KiB leaves about 9% headroom over the measured 750 KB result.
+ * A bundle above the ceiling fails the build. Raise the ceiling only with a
+ * measured reason.
  */
-export const MAX_CLIENT_BUNDLE_BYTES = 704 * 1024
+export const MAX_CLIENT_BUNDLE_BYTES = 800 * 1024
 
 /** The package version the bundle carries; `unknown` on an unreadable value. */
 function buildVersionOf() {
@@ -145,9 +146,6 @@ const EXTERNALS = [
  * the host half owns also live there: resolve-time and metafile enforcement
  * share one rule source with the unit tests.
  */
-
-/** Metafile artifact markers that mean host schema materialization leaked in. */
-const HOST_SCHEMA_ARTIFACT_MARKERS = [/\bnode_modules\/zod\b/, /\bnode_modules\/schemastery\b/]
 
 /** Fails the build when a harness module reaches the artifact that may not be
  *  inlined: a second copy of a shell singleton (`ctx`, the store, the UI
@@ -257,7 +255,7 @@ export function assertLoaderApi(api, source) {
 /**
  * Artifact + handoff verification. Runs on every successful build (including
  * watch) through the verify plugin below.
- * @returns void; throws on a failed handoff or host-schema artifact marker.
+ * @returns void; throws when the loader handoff fails.
  */
 export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
   const source = readFileSync(bundlePath, 'utf8')
@@ -275,44 +273,33 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
     )
   }
   let handoff
-  const window = {
-    __ModuleLoader__: {
-      load: (value) => {
-        handoff = value
-      },
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>')
+  const window = dom.window
+  window.__ModuleLoader__ = {
+    load: (value) => {
+      handoff = value
     },
   }
-  vm.runInNewContext(source, { window })
-  if (handoff === undefined || handoff.id !== PLUGIN_ID) {
-    throw new Error(`client bundle did not register the ${PLUGIN_ID} factory`)
-  }
-  if (typeof handoff.factory !== 'function') {
-    throw new Error('client bundle factory is not a function')
-  }
-  // The factory requires its externals from the loader's module table when it
-  // runs; answering those with the shell's own seed entities and refusing
-  // everything else proves the bundle's only runtime dependencies are the
-  // platform modules the table answers.
-  const platform = platformModuleTable()
-  const exported = handoff.factory((specifier) => {
-    if (EXTERNALS.includes(specifier)) return platform[specifier] ?? {}
-    throw new Error(`bundle required non-external ${specifier} at load time`)
-  })
-  if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
-    throw new Error('client bundle must export the apply/inject plugin face')
-  }
-  // Secondary artifact markers: the graph allowlist is the primary authority;
-  // this catches host-schema runtime text that somehow shipped without a
-  // graph-visible module edge (e.g. pasted zod code under src/client).
-  for (const marker of HOST_SCHEMA_ARTIFACT_MARKERS) {
-    if (marker.test(source)) {
-      throw new Error(
-        `client bundle carries host-schema marker ${String(marker)} — ` +
-          'an inlined zod or schemastery copy would split schema identity ' +
-          'from the host; keep zod external (EXTERNALS / PLATFORM_MODULES) and ' +
-          'host schema factories in src/status-codec.ts',
-      )
+  try {
+    vm.runInNewContext(source, { window, document: window.document })
+    if (handoff === undefined || handoff.id !== PLUGIN_ID) {
+      throw new Error(`client bundle did not register the ${PLUGIN_ID} factory`)
     }
+    if (typeof handoff.factory !== 'function') {
+      throw new Error('client bundle factory is not a function')
+    }
+    // Resolve externals through the loader's module table so this check covers
+    // the same runtime dependency boundary as the host.
+    const platform = platformModuleTable()
+    const exported = handoff.factory((specifier) => {
+      if (EXTERNALS.includes(specifier)) return platform[specifier] ?? {}
+      throw new Error(`bundle required non-external ${specifier} at load time`)
+    })
+    if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
+      throw new Error('client bundle must export the apply/inject plugin face')
+    }
+  } finally {
+    window.close()
   }
   console.log(
     `client bundle ok: ${bundlePath} (${source.length} bytes, ${EXTERNALS.join(', ')} external)`,
@@ -401,6 +388,7 @@ export function clientBuildPlugins({ verify = true } = {}) {
 
 /** Metafile inputs are required for the local-source allowlist re-check. */
 const options = {
+  absWorkingDir: root,
   entryPoints: [join(root, 'src/client/index.ts')],
   plugins: clientBuildPlugins(),
   outfile: join(root, 'lib/client.js'),

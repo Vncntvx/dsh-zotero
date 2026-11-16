@@ -7,6 +7,7 @@
  * keeping their text. Code fences pass through untouched.
  * @module dsh-zotero/client/parsed-markdown
  */
+import { remoteImageLinks } from './remote-image-links.ts'
 
 /** Escape the characters that would end a KaTeX `\text{}` group early. */
 function texText(value: string): string {
@@ -40,8 +41,8 @@ function rewriteProse(source: string): string {
     if (next === text) break
     text = next
   }
-  // Figures keep their authored destination: the reader resolves the ones the
-  // artifact carries, and a miss leaves the alt text rather than a broken frame.
+  // Artifact figures retain their destination; remote figures become explicit
+  // links in the syntax pass after HTML projection.
   return text.replace(/<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/giu, '')
 }
 
@@ -51,8 +52,9 @@ function rewriteProse(source: string): string {
  * @returns the same document with inline HTML resolved and fences preserved.
  */
 export function parsedDisplayMarkdown(markdown: string): string {
-  return markdown
+  const display = markdown
     .split(/(```[\s\S]*?```)/gu)
     .map((chunk, index) => (index % 2 === 1 ? chunk : rewriteProse(chunk)))
     .join('')
+  return remoteImageLinks(display)
 }

@@ -1,3 +1,4 @@
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * The incremental ledger's cache contracts: scalar aggregates invalidate the
  * view, the page-view cache is bounded by the wire view plus the current
@@ -19,7 +20,7 @@ import { createEventFactory } from './support/source-ledger-events.js'
 
 const event = createEventFactory()
 
-function searchPair(callId: string): never[] {
+function searchPair(callId: string): SessionEvent[] {
   return [
     event('tool/call', {
       callId,
@@ -89,7 +90,7 @@ describe('chunked block storage', () => {
   it('appends facts in bounded chunks and replays them in order', () => {
     let state = foldLedgerEvent(
       { blockChunks: [], pending: {}, recorded: {} },
-      event('turn/start', {}),
+      event('turn/start', { turn: 1 }),
     )
     for (let i = 0; i < 600; i += 1) {
       for (const next of searchPair(`c${i}`)) state = foldLedgerEvent(state, next)

@@ -101,6 +101,7 @@ const PRIVATE_IP_REGEX = /^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\
 export function isPublicUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString)
+    if (url.username !== '' || url.password !== '') return false
     const protocol = url.protocol.toLowerCase()
     if (protocol !== 'https:' && protocol !== 'http:') return false
 

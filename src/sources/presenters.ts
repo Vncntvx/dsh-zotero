@@ -52,7 +52,12 @@ export function metaOf(block: ToolBlockLike): Record<string, unknown> | null {
 /** Lifecycle state derived from the frozen block, independent of meta. */
 export function rowStateOf(block: ToolBlockLike): ZoteroRowState {
   if (!isSettledTool(block)) return 'running'
-  if (block.error?.code === 'interrupted') return 'stopped'
+  if (
+    block.error?.code === 'interrupted' ||
+    block.error?.code === 'ABORTED' ||
+    block.error?.code === 'ABORTED_BEFORE_DISPATCH'
+  )
+    return 'stopped'
   return block.isError ? 'error' : 'ok'
 }
 

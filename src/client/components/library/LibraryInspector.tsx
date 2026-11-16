@@ -39,6 +39,7 @@ import type {
   ZoteroNoteRowView,
 } from '../../../contract.ts'
 import { parseRefIdentity, pdfUrlOf, selectUrlOf } from '../../actions/open-zotero.ts'
+import { webUrlOf } from '../../actions/web-url.ts'
 import type { ParsedDocuments } from '../../parsed-documents.ts'
 import { formatCreatorsList } from '../../../creators.ts'
 import { HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, isPdfContentType } from '../../../media-types.ts'
@@ -117,6 +118,7 @@ function CopyableMetaRow({
 }) {
   const { phase, copyText } = useCopyFeedback(value)
   const copied = phase === 'done'
+  const webUrl = webUrlOf(openUrl)
 
   return (
     <div className={css.metaRow}>
@@ -143,7 +145,7 @@ function CopyableMetaRow({
               }}
               className={css.metaCopyBtn}
             />
-            {openUrl !== undefined && (
+            {webUrl !== undefined && (
               <IconButton
                 size="sm"
                 shape="square"
@@ -152,7 +154,7 @@ function CopyableMetaRow({
                 title={openUrl}
                 onClick={(e) => {
                   e.stopPropagation()
-                  window.open(openUrl, '_blank', 'noopener,noreferrer')
+                  window.open(webUrl, '_blank', 'noopener,noreferrer')
                 }}
                 className={css.metaCopyBtn}
               />
@@ -249,7 +251,9 @@ function AttachmentItem({
         if (res.value.kind === 'file' && res.value.path) {
           if (openFile) openFile(res.value.path)
         } else if (res.value.kind === 'url' && res.value.url) {
-          window.open(res.value.url, '_blank', 'noopener,noreferrer')
+          const webUrl = webUrlOf(res.value.url)
+          if (webUrl === undefined) throw new Error(t('readErrorUrlBlocked'))
+          window.open(webUrl, '_blank', 'noopener,noreferrer')
         }
       } else {
         setError(res.error.message)

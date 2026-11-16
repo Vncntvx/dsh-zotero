@@ -102,10 +102,8 @@ export interface DownloadFsDeps {
 
 export const hostDownloadFsDeps: DownloadFsDeps = {
   mkdir: async (path) => {
-    // Resolve the longest existing ancestor to its canonical path first (this
-    // tolerates OS-level root symlinks such as macOS /var -> /private/var), then
-    // create the missing suffix one segment at a time. A symlink planted inside
-    // the owned model tree is still refused rather than followed.
+    // Find a real existing directory, refusing a symlink at that boundary,
+    // then create the missing suffix without following planted directory links.
     const absolute = resolve(path)
     let existing = absolute
     const missing: string[] = []
@@ -199,7 +197,14 @@ async function gatedFetch(
   signal: AbortSignal,
 ): Promise<GatedResponse> {
   if (!isPublicUrl(url)) {
-    throw new PublicAddressError(`model download refused a non-public address (${url})`, 'policy')
+    let host = '(invalid URL)'
+    try {
+      host = new URL(url).hostname
+    } catch {}
+    throw new PublicAddressError(
+      `Model download refused a non-public address (${host}). Use a public HTTPS model source.`,
+      'policy',
+    )
   }
   const { hostname, origin } = new URL(url)
   // The harness proxy policy decides the transport: proxied, the route's
@@ -365,6 +370,12 @@ export async function downloadPinnedFile(
 
         const hash = createHash('sha256')
         let received = 0
+        let progressedAt = Date.now()
+        const watchProgress = (): void => {
+          const remaining = stallMs - (Date.now() - progressedAt)
+          if (remaining <= 0) controller.abort(new Error('model download stalled'))
+          else stall = setTimeout(watchProgress, remaining)
+        }
         const counting = new Transform({
           transform(chunk: Buffer, _enc, cb) {
             received += chunk.length
@@ -373,14 +384,11 @@ export async function downloadPinnedFile(
               return
             }
             hash.update(chunk)
-            // The watchdog resets on every chunk: a mirror that stops sending
-            // mid-body must release the socket, not hang the download forever.
-            clearTimeout(stall)
-            stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
+            progressedAt = Date.now()
             cb(null, chunk)
           },
         })
-        stall = setTimeout(() => controller.abort(new Error('model download stalled')), stallMs)
+        stall = setTimeout(watchProgress, stallMs)
         let writeFailure: unknown
         const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
         try {

@@ -1,3 +1,4 @@
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * The literature trail's incremental fold: a view costs the blocks folded
  * since the last read, not the session's whole log.
@@ -25,15 +26,7 @@ import type { SourceLedgerProjectionState } from '../../src/sources/event-ledger
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
 import { createEventFactory } from './support/source-ledger-events.js'
 
-/** One committed event as the fold reads it. */
-interface RawEvent {
-  readonly type: string
-  readonly seq: number
-  readonly time: number
-  readonly data: unknown
-}
-
-const event = createEventFactory<RawEvent>()
+const event = createEventFactory()
 
 /** One item ref in the specs' spelling. */
 const REF = (key: string, serverId?: string): string =>
@@ -56,7 +49,7 @@ function searchMetaOf(rows: readonly string[]): Record<string, unknown> {
 }
 
 /** The two events of one settled search. */
-function searchEvents(callId: string, rows: readonly string[]): readonly RawEvent[] {
+function searchEvents(callId: string, rows: readonly string[]): readonly SessionEvent[] {
   return [
     event('tool/call', {
       callId,
@@ -71,7 +64,7 @@ function searchEvents(callId: string, rows: readonly string[]): readonly RawEven
 }
 
 /** The two events of one settled get. */
-function getEvents(callId: string, ref: string, title: string): readonly RawEvent[] {
+function getEvents(callId: string, ref: string, title: string): readonly SessionEvent[] {
   return [
     event('tool/call', { callId, name: 'zotero_get', arguments: JSON.stringify({ ref }) }),
     event('tool/result', {
@@ -125,8 +118,8 @@ function runningBlock(
 interface Trail {
   readonly projection: ReturnType<typeof createSourceLedgerProjection>
   state(): SourceLedgerProjectionState
-  fold(events: readonly RawEvent[]): void
-  apply(entry: RawEvent): void
+  fold(events: readonly SessionEvent[]): void
+  apply(entry: SessionEvent): void
   view(): SourceWorkspace
   full(currentServerId?: string): SourceWorkspace
 }
@@ -139,10 +132,10 @@ function trail(inherited = 0): Trail {
     projection,
     state: () => state,
     fold: (events) => {
-      for (const entry of events) state = definition.apply(state, entry as never)
+      for (const entry of events) state = definition.apply(state, entry)
     },
     apply: (entry) => {
-      state = definition.apply(state, entry as never)
+      state = definition.apply(state, entry)
     },
     view: () => definition.wire.view(state),
     full: (currentServerId) => projection.fullWorkspaceOf(state, currentServerId),
@@ -218,18 +211,18 @@ describe('the incremental literature-trail fold', () => {
     let first = definition.init({} as never, 0 as never)
     let second = definition.init({} as never, 0 as never)
     for (const entry of searchEvents('a1', [REF('AAAA1111')])) {
-      first = definition.apply(first, entry as never)
+      first = definition.apply(first, entry)
     }
     const firstView = definition.wire.view(first)
     for (const entry of searchEvents('b1', [REF('BBBB2222')])) {
-      second = definition.apply(second, entry as never)
+      second = definition.apply(second, entry)
     }
     expect(definition.wire.view(second).sources.map((item) => item.ref)).toEqual([REF('BBBB2222')])
 
     // The first session's fold survived the second session's activity: its
     // already-frozen item comes back unchanged instead of being rebuilt.
     for (const entry of searchEvents('a2', [REF('CCCC3333')])) {
-      first = definition.apply(first, entry as never)
+      first = definition.apply(first, entry)
     }
     const continued = definition.wire.view(first)
     expect(continued.sources.map((item) => item.ref)).toEqual([REF('AAAA1111'), REF('CCCC3333')])
@@ -315,8 +308,8 @@ describe('the incremental literature-trail fold', () => {
     expect(fresh.definition.wire.view(restored)).toEqual(original)
 
     const next = searchEvents('c2', [REF('BBBB2222')])
-    let state = fresh.definition.apply(restored, next[0] as never)
-    state = fresh.definition.apply(state, next[1] as never)
+    let state = fresh.definition.apply(restored, next[0]!)
+    state = fresh.definition.apply(state, next[1]!)
     expect(fresh.definition.wire.view(state).sources.map((item) => item.ref)).toEqual([
       REF('AAAA1111'),
       REF('BBBB2222'),

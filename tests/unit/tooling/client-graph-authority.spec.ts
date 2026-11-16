@@ -49,6 +49,16 @@ function authorityBuild(contents: string) {
 }
 
 describe('client graph authority', () => {
+  it.each([
+    'src/config.ts',
+    'dsh-zotero/src/config.ts',
+    '/checkout/dsh-zotero/src/config.ts',
+    'C:\\checkout\\dsh-zotero\\src\\config.ts',
+  ])('rejects host authority regardless of input path spelling: %s', (path) => {
+    expect(clientGraphViolations(metafileOf([path]))).toEqual([
+      expect.objectContaining({ kind: 'host-local', key: 'src/config.ts' }),
+    ])
+  })
   it('allows client-safe local sources and the inline allowlist', () => {
     const violations = clientGraphViolations(
       metafileOf([

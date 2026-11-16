@@ -1,3 +1,6 @@
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * The host-side literature-trail fold: settled Zotero outcomes become a
  * bounded workspace, unrelated and malformed events change nothing, and the
@@ -45,7 +48,7 @@ const SEARCH_META = {
 }
 
 /** Fold the event list, starting from the empty state. */
-function fold(events: readonly never[]): SourceLedgerState {
+function fold(events: readonly SessionEvent[]): SourceLedgerState {
   return events.reduce((state, entry) => foldLedgerEvent(state, entry), emptyLedgerState())
 }
 
@@ -119,7 +122,11 @@ describe('the host literature-trail fold', () => {
       event('tool/result', {
         turn: 1,
         step: 1,
-        message: { toolCallId: 'call-2', content: 'not-an-array', isError: true },
+        message: {
+          toolCallId: 'call-2', // Deliberately malformed durable input at the corruption boundary.
+          content: 'not-an-array' as unknown as ContentBlock[],
+          isError: true,
+        },
         meta: { title: 'still no crash' },
       }),
       event('tool/call', {
@@ -232,7 +239,15 @@ describe('the host literature-trail fold', () => {
   })
 
   it.each([
-    { artifact: { ...ARTIFACT, generation: undefined } },
+    {
+      artifact: {
+        parser: 'mineru',
+        mode: 'free',
+        artifactId: ARTIFACT.artifactId,
+        fingerprint: ARTIFACT.fingerprint,
+        sourceId: ARTIFACT.sourceId,
+      },
+    },
     { artifact: { ...ARTIFACT, sourceId: '' } },
     { textFormat: 'text' },
     { textFormat: 'html' },
@@ -338,7 +353,7 @@ describe('the host literature-trail fold', () => {
       name: 'zotero_get',
       arguments: { ref: REF },
       isError: false,
-      content: [{ type: 'text', text: 'title' }],
+      content: [{ type: 'text' as const, text: 'title' }],
       meta: { title: 'Attention Is All You Need' },
     }
     const state = fold([
@@ -401,7 +416,14 @@ describe('the host literature-trail fold', () => {
           toolCallId: 'call-job-1',
           content: [
             { type: 'text', text: `${RESULT_RECEIPT_PREFIX}${JSON.stringify(receipt)}` },
-            { type: 'file', attachment: { attachmentId: 'attachment-1', name: 'export.json' } },
+            {
+              type: 'file',
+              attachment: {
+                attachmentId: AttachmentId('attachment-1'),
+                name: 'export.json',
+                bytes: 12,
+              },
+            },
           ],
         },
       }),

@@ -23,6 +23,43 @@ const tick = async () => {
 }
 
 describe('prepared parsed figures', () => {
+  it('keeps probing after a revision subscriber throws', async () => {
+    const runtime = parsedRuntime(documentRead('# Safe subscribers'))
+    owned.push(runtime)
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const observer = vi.fn()
+    const first = runtime.documents.probeRevision.subscribe(() => {
+      throw new Error('broken observer')
+    })
+    const second = runtime.documents.probeRevision.subscribe(observer)
+    try {
+      runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/ABCD1234')
+      runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/ABCD1234')
+      expect(observer).toHaveBeenCalledTimes(2)
+      expect(runtime.documents.probeRevision.getSnapshot()).toBe(2)
+      expect(diagnostic).toHaveBeenCalledTimes(2)
+    } finally {
+      first()
+      second()
+    }
+  })
+  it('renders remote figures as user-opened links without creating remote image elements', async () => {
+    const runtime = parsedRuntime(
+      documentRead(
+        '# Remote figures\n\n![tracking](https://example.org/track.png)\n\n![loopback](http://127.0.0.1:23119/api/items)\n\n![reference][ref]\n\n[ref]: https://example.org/ref.png',
+      ),
+    )
+    owned.push(runtime)
+    runtime.mount()
+    await tick()
+    expect(screen.queryAllByRole('img')).toHaveLength(0)
+    expect(screen.getByRole('link', { name: 'tracking' }).getAttribute('href')).toBe(
+      'https://example.org/track.png',
+    )
+    expect(screen.getByRole('link', { name: 'reference' }).getAttribute('href')).toBe(
+      'https://example.org/ref.png',
+    )
+  })
   it('waits for the browser image load before publishing the document', async () => {
     const BrowserImage = globalThis.Image
     let figure: { src: string; onload: (() => void) | null }

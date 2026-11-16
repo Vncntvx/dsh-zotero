@@ -38,6 +38,8 @@ describe('scholarly transport safety: allowlist', () => {
     expect(isPublicUrl('http://172.16.0.1')).toBe(false)
     expect(isPublicUrl('file:///etc/passwd')).toBe(false)
     expect(isPublicUrl('not a url')).toBe(false)
+    expect(isPublicUrl('https://secret@example.com/paper.pdf')).toBe(false)
+    expect(isPublicUrl('https://user:secret@example.com/paper.pdf')).toBe(false)
   })
 
   it('refuses every IPv6 literal spelling, not only the canonical ones', () => {
@@ -414,6 +416,44 @@ describe('abortableSleep', () => {
 })
 
 describe('scholarly transport redirect and header handling', () => {
+  it('refuses an open-access PDF downgrade before a second fetch', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, { status: 302, headers: { location: 'http://example.org/paper.pdf' } }),
+    )
+    const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
+      fetchImpl,
+      pacer: new HostPacer({}),
+    })
+    await expect(
+      http.bytes('https://example.org/paper.pdf', { allowPublicPdf: true }),
+    ).rejects.toThrow('HTTPS redirects must remain HTTPS')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['Authorization', 'proxy-authorization', 'X-API-Key', 'api-key', 'Cookie'])(
+    'refuses a cross-origin redirect carrying %s',
+    async (name) => {
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(null, {
+            status: 302,
+            headers: { location: 'https://api.crossref.org/works/target' },
+          }),
+      )
+      const http = createScholarlyHttp({
+        publicAccess: stubPublicAccess,
+        fetchImpl,
+        pacer: new HostPacer({ 'doi.org': 0 }),
+      })
+      await expect(
+        http.bytes('https://doi.org/10.1000/source', { headers: { [name]: 'secret' } }),
+      ).rejects.toThrow('Credentialed redirects')
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    },
+  )
+
   it('refuses a redirect that names no location', async () => {
     const http = createScholarlyHttp({
       publicAccess: stubPublicAccess,

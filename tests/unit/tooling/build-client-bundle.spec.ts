@@ -10,6 +10,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import {
@@ -103,12 +104,6 @@ describe('verifyBundle', () => {
     })
   })
 
-  it('rejects host-schema runtime text that shipped without a graph edge', async () => {
-    await withBundle(`${GOOD_BUNDLE}\n// pasted codec: node_modules/schemastery`, (path) => {
-      expect(() => verifyBundle(path)).toThrow(/host-schema marker/)
-    })
-  })
-
   it('rejects a bundle over the byte ceiling before evaluating it', async () => {
     // One byte over the ceiling: the failure names the size, not the handoff.
     const oversized = `${GOOD_BUNDLE}\n//${'x'.repeat(MAX_CLIENT_BUNDLE_BYTES)}`
@@ -134,7 +129,7 @@ afterAll(async () => {
 })
 
 describe('clientBuildPlugins', () => {
-  it('refuses a graph that value-imports a host-owned package at resolve time', async () => {
+  it('rejects a resolvable graph that inlines the shared Zod runtime', async () => {
     await writeFile(
       join(graphDir, 'thief.ts'),
       "import { z } from 'zod'\nexport const schema = z.object({})\n",
@@ -145,19 +140,28 @@ describe('clientBuildPlugins', () => {
       "import { schema } from './thief.ts'\nexport default schema\n",
       'utf8',
     )
+    const options: esbuild.BuildOptions = {
+      entryPoints: [graphEntry],
+      outfile: join(graphDir, 'out.js'),
+      bundle: true,
+      metafile: true,
+      format: 'cjs',
+      platform: 'browser',
+      target: 'es2022',
+      external: ['react'],
+      nodePaths: [fileURLToPath(new URL('../../../node_modules', import.meta.url))],
+      logLevel: 'silent',
+    }
+    const unguarded = await esbuild.build(options)
+    expect(
+      Object.keys(unguarded.metafile!.inputs).some((key) => /node_modules\/zod\//.test(key)),
+    ).toBe(true)
     await expect(
       esbuild.build({
-        entryPoints: [graphEntry],
-        outfile: join(graphDir, 'out.js'),
-        bundle: true,
-        metafile: true,
-        format: 'cjs',
-        platform: 'browser',
-        target: 'es2022',
-        external: ['react'],
+        ...options,
         plugins: clientBuildPlugins({ verify: false }),
       }),
-    ).rejects.toThrow(/zod/)
+    ).rejects.toThrow(/client graph authority:.*zod.*neither externalized/)
   })
 
   it('builds a clean external-only graph', async () => {

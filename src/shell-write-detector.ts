@@ -1,51 +1,14 @@
 /**
- * Detecting a shell command that would write to Zotero's own local API.
+ * Ask for approval when static shell text describes a Local API write.
+ * The scanner preserves quoted payloads and escaped separators, resolves literal
+ * assignments, and joins raw socket pipelines. Addresses are canonicalized before
+ * comparing ports, including short, numeric and mapped loopback spellings.
  *
- * The plugin's write gate is the `ctx.zotero` seam, and a shell can reach
- * Zotero's write API without ever touching that seam. Nothing inside the
- * plugin can close that hole by itself: `approval/asked` fires only for what
- * the tool pipeline asks about, and the sandbox confines file effects rather
- * than network access. So the plugin does not try to *block* the route; it
- * makes the route ask. A detected command raises the harness's own approval
- * request before the body runs (`tools/pre-execute` → `{kind: 'ask'}`), so the
- * write happens only if the user confirms that one call, and does not happen
- * when they reject it, cancel it, run with the `never` policy (which
- * auto-rejects every ask), or have no approval channel at all.
- *
- * This module is the detector only: pure, synchronous, and total. It reads the
- * command text, which is why it is a detector rather than a guarantee. All of
- * these pass it unseen:
- * - a request written into a script file and then executed (`bash build.sh`);
- * - an interpreter whose command text never spells the endpoint
- *   (`python -c '...'`, `node -e '...'` with the URL assembled at runtime);
- * - a `run_code` program, which reaches the network through `fetch` and can
- *   assemble any request at runtime, exactly like the interpreters above;
- * - the URL carried in an environment variable, a heredoc, or an encoding;
- * - a loopback port other than the configured one, except for writes to the
- *   users path and authorize calls (those are caught on any loopback port;
- *   see {@link USERS_WRITE} and {@link AUTHORIZE_PATH});
- * - any binary of the user's own.
- *
- * Every `terminal_send` text is scanned, with or without `submit`: the harness
- * writes the text to the PTY verbatim and only appends Enter when submitting,
- * so an embedded control character or a later empty-Enter call can execute a
- * buffered command either way.
- *
- * The rule is a read-only allow: `GET` probes of the local API, debugging
- * curls, and requests to any other host are not writing, so they are left
- * alone. Five shapes do match, and {@link WRITE_SHAPES} lists them: the
- * authorize endpoint (which exists only to obtain a write key) beside a
- * loopback host; an explicit write method or body flag beside the configured
- * local API address, and only when an HTTP-client invocation is present; a
- * bare method token or a client-library write call beside that address; and a
- * write to the users path beside any loopback host. Anchoring on the client is
- * what keeps an ordinary command that merely names the address, and uses an
- * unrelated flag such as `rm -f`, from asking.
- *
- * Every proximity match is **segment-scoped**: shell separators (`;`, `&&`,
- * `|`, newlines) bound the steps one command runs, and a `POST` in a later
- * step is not a method for the request in an earlier one. `curl -s …?limit=1
- * && echo POST done` is a read followed by an unrelated echo, not a write.
+ * This is a static detector. Script files, computed endpoints, environment values
+ * absent from the command, and arbitrary binaries require the harness's execution
+ * boundary; no shell text scanner can prove their network effects. run_code stays
+ * outside this tool-name contract. Every terminal_send text is inspected because
+ * a later Enter can execute text that was buffered without submit.
  * @module dsh-zotero/shell-write-detector
  */
 
@@ -53,6 +16,7 @@ import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { LOOPBACK_HOSTNAMES, type ResolvedConfig } from './config.js'
 import { ZOTERO_AUTHORIZE_PATH, ZOTERO_WRITE_TOOL_NAMES } from './constants.js'
 import { asRecord, asString } from './json.js'
+import { literalShellSegments, localAddressesIn } from './shell-command-scan.js'
 
 /**
  * The tools whose command text this detector can read. `terminal_send` types
@@ -76,36 +40,10 @@ const EXPLICIT_METHOD = /(?:-X|--request|-Method)[\s=:]*['"]?(?:POST|PUT|PATCH|D
 
 /**
  * An HTTP client invocation, which is what makes a nearby flag a *write*
- * intent. Without this anchor the rule matched any command that merely named
- * the local address and used a common flag somewhere: `rm -f` after a
- * `curl -s …?limit=1` read was enough to raise an approval prompt. The
- * `http`/`https` CLIs are deliberately absent: every URL contains the scheme,
- * so matching it would re-anchor the rule on nothing. The bare-method shape
- * below covers them instead.
+ * intent. HTTPie has a separate rule requiring an actual body field; the URL's
+ * http scheme alone never identifies a client invocation.
  */
 const WRITER_PROGRAM = /\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b/i
-
-/**
- * Shell separators, which bound the steps one command runs. A flag in a later
- * step is not a flag for the request in an earlier one: `curl -s …?limit=1 -o
- * /dev/null && date -d yesterday` is a read followed by an unrelated command,
- * not a write.
- */
-const SEGMENT_SEPARATOR = /[;&|\n]+/
-
-/** Backslash-newline continues one command; glue those before splitting. */
-const LINE_CONTINUATION = /\\\r?\n/g
-
-/**
- * Split a command into the steps a shell would run. A backslash-newline
- * continues one command across lines, so those are glued first and a wrapped
- * `curl` stays a single segment.
- * @param text - the raw command text.
- * @returns one entry per shell step.
- */
-function segmentsOf(text: string): readonly string[] {
-  return text.replace(LINE_CONTINUATION, ' ').split(SEGMENT_SEPARATOR)
-}
 
 /**
  * curl's and wget's short body/upload flags, spelled case-sensitively: `-d`
@@ -145,9 +83,6 @@ const LIBRARY_WRITE = /\.(?:post|put|patch|delete)\s*\(/gi
  */
 const USERS_WRITE = /(?:POST|PUT|PATCH|DELETE)\b[^|;&]{0,80}?\/api\/users\/\d+\//g
 
-/** How far apart two parts of one heuristically-joined match may sit. */
-const NEAR_WINDOW = 60
-
 /** One matched shape, with the human name the approval texts report. */
 interface WriteShape {
   /** How the texts name what was seen, per locale. */
@@ -176,8 +111,11 @@ interface ShellWriteAttempt {
 
 /** Whether the text names the local API address in any of its loopback spellings. */
 function namesAuthority(text: string, aliases: readonly string[]): boolean {
-  const lower = text.toLowerCase()
-  return aliases.some((alias) => lower.includes(alias.toLowerCase()))
+  if (aliases.length === 0) return false
+  const port = new URL(`http://${aliases[0]}`).port || '80'
+  return localAddressesIn(text).some(
+    (url) => (url.port || (url.protocol === 'https:' ? '443' : '80')) === port,
+  )
 }
 
 /**
@@ -187,35 +125,16 @@ function namesAuthority(text: string, aliases: readonly string[]): boolean {
  * write on another loopback port is still a library write.
  */
 function namesLoopback(text: string): boolean {
-  const lower = text.toLowerCase()
-  for (const host of LOOPBACK_HOSTNAMES) {
-    if (lower.includes(host.toLowerCase())) return true
-  }
-  return false
+  return localAddressesIn(text).length > 0
 }
 
-/**
- * Whether `pattern` and an anchor satisfying `test` both appear in this step,
- * within {@link NEAR_WINDOW}. `pattern` must already carry the `g` flag; the
- * walk is segment-scoped so a match never crosses a shell separator.
- */
-function nearMatch(text: string, pattern: RegExp, test: (window: string) => boolean): boolean {
-  for (const match of text.matchAll(pattern)) {
-    const from = Math.max(0, match.index - NEAR_WINDOW)
-    const window = text.slice(from, match.index + match[0].length + NEAR_WINDOW)
-    if (test(window)) return true
-  }
-  return false
-}
-
-/** Whether `pattern` and the local address both appear in this step, within {@link NEAR_WINDOW}. */
+/** Match throughout one logical command; long interpreter bodies retain their address. */
 function near(text: string, pattern: RegExp, aliases: readonly string[]): boolean {
-  return nearMatch(text, pattern, (window) => namesAuthority(window, aliases))
+  return text.matchAll(pattern).next().done === false && namesAuthority(text, aliases)
 }
 
-/** {@link near}, but the second anchor is any loopback host rather than the configured port. */
 function nearLoopback(text: string, pattern: RegExp): boolean {
-  return nearMatch(text, pattern, namesLoopback)
+  return text.matchAll(pattern).next().done === false && namesLoopback(text)
 }
 
 /** Whether any shell step among `segments` matches `probe`. */
@@ -236,6 +155,18 @@ const LABEL_WRITE_REQUEST: ShapeLabel = {
  * service is never mistaken for a library write.
  */
 const WRITE_SHAPES: readonly WriteShape[] = [
+  {
+    label: LABEL_WRITE_REQUEST,
+    test: (segments, aliases) =>
+      anySegment(
+        segments,
+        (segment) =>
+          /(?:^|\s)(?:\S*\/)?https?\s+/.test(segment) &&
+          namesAuthority(segment, aliases) &&
+          !/\b(?:GET|HEAD|OPTIONS)\b/i.test(segment) &&
+          /(?:^|\s)['"]?[A-Za-z_][\w.-]*(?:=(?!=)|:=|@)/.test(segment),
+      ),
+  },
   {
     label: {
       en: 'the local-API authorize endpoint',
@@ -300,8 +231,9 @@ function authorityAliases(
   // `baseUrl` arrives from ResolvedConfig, which resolveConfig has already
   // proven parseable; an unparseable value must fail loudly here, not blind
   // the address-anchored shapes by silently matching nothing.
-  const port = new URL(baseUrl).port
-  const aliases = port !== '' ? [...LOOPBACK_HOSTNAMES].map((host) => `${host}:${port}`) : []
+  const url = new URL(baseUrl)
+  const port = url.port || (url.protocol === 'https:' ? '443' : '80')
+  const aliases = [...LOOPBACK_HOSTNAMES].map((host) => `${host}:${port}`)
   // One live baseUrl at a time: a rebuilt config starts a fresh entry and
   // drops the previous spelling set.
   cache.clear()
@@ -368,9 +300,8 @@ export function detectShellWrite(
   const text = commandTextOf(execution)
   if (text === undefined) return undefined
   const authority = authorityAliases(config.baseUrl, aliases)
-  // Every shape walks the same split; segment once here so five shapes do
-  // not re-split the same command five times on this pre-execute hot path.
-  const segments = segmentsOf(text)
+  // Every rule consumes the same static scan.
+  const segments = literalShellSegments(text)
   for (const shape of WRITE_SHAPES) {
     if (shape.test(segments, authority)) {
       return { reason: reasonOf(shape.label.en), displayReason: displayReasonOf(shape.label) }

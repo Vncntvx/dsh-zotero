@@ -1,3 +1,4 @@
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * The `sourcePage` endpoint: the authorized session's trail paged behind the
  * projection's window. One behavior per case — session authorization, the
@@ -33,7 +34,7 @@ const SEARCH_META = {
 }
 
 /** One settled search over one ref. */
-function searchEvent(callId: string, ref: string): readonly never[] {
+function searchEvent(callId: string, ref: string): readonly SessionEvent[] {
   return [
     event('tool/call', {
       turn: 1,

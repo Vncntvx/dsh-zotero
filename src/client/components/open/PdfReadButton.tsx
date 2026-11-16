@@ -18,6 +18,7 @@ import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { PdfCapability } from '../../sources/source-capabilities.ts'
 import css from './open.module.css'
 import linkCss from '../link.module.css'
+import { webUrlOf } from '../../actions/web-url.ts'
 
 interface PdfReadButtonProps {
   /** Optional structured PDF capability; extracts ref, filePath, or webUrl automatically. */
@@ -71,8 +72,10 @@ export function PdfReadButton({
   }, [attachmentRef, filePath, webUrl, capability])
 
   const openExternalUrl = (url: string) => {
-    if (onOpenUrl) onOpenUrl(url)
-    else window.open(url, '_blank', 'noopener,noreferrer')
+    const webUrl = webUrlOf(url)
+    if (webUrl === undefined) throw new Error(t('readErrorUrlBlocked'))
+    if (onOpenUrl) onOpenUrl(webUrl)
+    else window.open(webUrl, '_blank', 'noopener,noreferrer')
   }
 
   /**

@@ -1,3 +1,4 @@
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * A `mode:"fulltext"` retrieve settles as its own literature-trail fact: the
  * trail records that a complete document was read in windows, without treating
@@ -19,7 +20,7 @@ import { createEventFactory } from './support/source-ledger-events.js'
 
 const event = createEventFactory()
 
-function fold(events: readonly never[]): SourceLedgerState {
+function fold(events: readonly SessionEvent[]): SourceLedgerState {
   return events.reduce((state, entry) => foldLedgerEvent(state, entry), emptyLedgerState())
 }
 

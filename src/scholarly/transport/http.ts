@@ -415,6 +415,18 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           await response.body?.cancel()
           const nextUrl = new URL(location, currentUrl).href
           assertAllowedScholarlyUrl(nextUrl, publicOnly)
+          if (new URL(currentUrl).protocol === 'https:' && new URL(nextUrl).protocol !== 'https:')
+            throw new ScholarlySecurityError('HTTPS redirects must remain HTTPS.', 'policy')
+          if (
+            new URL(nextUrl).origin !== new URL(currentUrl).origin &&
+            Object.keys(reqOptions.headers ?? {}).some((key) =>
+              /^(?:authorization|proxy-authorization|x-api-key|api-key|cookie)$/i.test(key),
+            )
+          )
+            throw new ScholarlySecurityError(
+              'Credentialed redirects must remain on their original origin.',
+              'policy',
+            )
           if (new URL(nextUrl).hostname !== hostname) releaseProbe(hostname)
           currentUrl = nextUrl
           // The next hop re-runs the lexical gate and its own resolution at

@@ -22,6 +22,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English copy. A key added here becomes required in every other dictionary. */
 export const en = {
+  readErrorUrlBlocked: 'Only HTTP or HTTPS links without embedded credentials can be opened.',
   ...libraryEn,
   ...itemTypeEn,
   ...parseEn,
@@ -431,6 +432,8 @@ export const en = {
     'Stores an "Always Allow" key from the Zotero dialog so writes stop asking every time. One-time approvals are never stored.',
   writeNoteMaxChars: 'Note body cap',
   writeNoteMaxCharsHint: 'Most characters one research note body may carry.',
+  writeFieldMaxChars: 'Write field cap',
+  writeFieldMaxCharsHint: 'Most characters one non-note write field may carry.',
   writeListMaxItems: 'Write list cap',
   writeListMaxItemsHint: 'Most items one write call may carry in a list argument.',
   writeAuthorizeDeadlineMs: 'Authorize dialog deadline (ms)',
@@ -1009,6 +1012,7 @@ export const en = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<ZoteroLocaleKey, string> = {
+  readErrorUrlBlocked: '仅能打开不含内嵌凭据的 HTTP 或 HTTPS 链接。',
   ...libraryZh,
   ...itemTypeZh,
   ...parseZh,
@@ -1389,6 +1393,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     '保存 Zotero 弹窗里「始终允许」的授权密钥，之后写入不再反复弹窗。一次性授权不会保存。',
   writeNoteMaxChars: '笔记正文字数上限',
   writeNoteMaxCharsHint: '单条研究笔记正文最多容纳的字符数。',
+  writeFieldMaxChars: '写入字段上限',
+  writeFieldMaxCharsHint: '单个非笔记写入字段最多容纳的字符数。',
   writeListMaxItems: '写入列表上限',
   writeListMaxItemsHint: '单次写入调用的列表参数最多容纳的条数。',
   writeAuthorizeDeadlineMs: '授权弹窗时限（毫秒）',

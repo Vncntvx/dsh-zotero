@@ -71,7 +71,8 @@ function ipv4OctetsOf(ip: string): readonly [number, number, number, number] | u
   const parts = ip.split('.')
   // Only decimal digits spell an octet: `Number()` would also accept an empty
   // string, a hex literal, exponent notation, and surrounding whitespace.
-  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return undefined
+  if (parts.length !== 4 || parts.some((part) => !/^(?:0|[1-9]\d{0,2})$/.test(part)))
+    return undefined
   const values = parts.map((part) => Number(part))
   if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
     return undefined
@@ -147,6 +148,16 @@ export function isFakeIpAddress(ip: string): boolean {
  * @returns the hextets, or undefined when the literal is not valid IPv6.
  */
 function expandIpv6(ip: string): readonly number[] | undefined {
+  if (ip.includes('.')) {
+    const groups = ip.split(':')
+    const tail = groups.at(-1)
+    if (
+      tail === undefined ||
+      ipv4OctetsOf(tail) === undefined ||
+      groups.slice(0, -1).some((group) => group.includes('.'))
+    )
+      return undefined
+  }
   const halves = ip.split('::')
   if (halves.length > 2) return undefined
   const parseGroup = (group: string): number | undefined => {
@@ -155,12 +166,8 @@ function expandIpv6(ip: string): readonly number[] | undefined {
   }
   const parseTail = (group: string): readonly number[] | undefined => {
     if (!group.includes('.')) return undefined
-    const dotted = group.split('.')
-    if (dotted.length !== 4) return undefined
-    const values = dotted.map((octet) => Number(octet))
-    if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
-      return undefined
-    }
+    const values = ipv4OctetsOf(group)
+    if (values === undefined) return undefined
     return [(values[0]! << 8) | values[1]!, (values[2]! << 8) | values[3]!]
   }
   const left = halves[0] === '' ? [] : halves[0]!.split(':')
