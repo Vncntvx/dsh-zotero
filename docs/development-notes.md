@@ -68,11 +68,11 @@
 
 - **类型**：其他开发约束（npm CLI 行为）。
 - **状态**：生效中（2026-11-15，npm 12）。
-- **位置**：`scripts/smoke-archive-worker.mjs` 的 `smokeArchiveWorker`。
-- **要点**：`npm publish --dry-run` 会带着 `npm_config_dry_run=true` 运行 `prepublishOnly`，冒烟里嵌套的 `npm pack` 继承该环境后产出 0 个 tarball，`verify:pack` 因此报「npm pack did not produce exactly one tarball」。冒烟在子进程环境里删掉这一个变量，让嵌套 pack 始终真实落盘；其余 npm 设置照常继承。
-- **触发条件**：修改发布门禁的脚本链、升级 npm 主版本，或给该冒烟新增子进程调用时，重跑 `npm publish --dry-run` 复核。
+- **位置**：`scripts/smoke-archive-worker.mjs` 的 `smokeArchiveWorker`、`scripts/release-artifact.mjs` 的 `prepareReleaseArtifact` 与 `tests/unit/tooling/release-artifact.spec.ts`。
+- **要点**：`npm publish --dry-run` 会带着 `npm_config_dry_run=true` 运行 `prepublishOnly`，冒烟或产物准备里嵌套的 `npm pack` 继承该环境后产出 0 个 tarball，`verify:pack` 或产物读取因此因找不到 tarball 而失败。子进程环境里删掉这一个变量，让嵌套 pack 始终真实落盘；其余 npm 设置照常继承。
+- **触发条件**：修改发布门禁的脚本链、升级 npm 主版本，或给打包相关流程新增子进程调用时，重跑 `npm publish --dry-run` 复核。
 - **验证**：`npm publish --dry-run` 全程通过，日志里同时出现 `archive-worker pack smoke ok` 与 `verify-pack ok`；单独 `npm run release:check` 仍通过。
-- **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「冒烟必须拿到真实 tarball」的断言。
+- **后续处理**：若 npm 不再把 dry-run 传给生命周期子进程，或提供显式关闭方式，可删除这段环境清理，但保留「嵌套 pack 必须拿到真实 tarball」的断言。
 
 ## DN-7：语义排序运行时打进包内，不做依赖
 
@@ -168,8 +168,8 @@
 
 - **类型**：安全边界 / 发布约束。
 - **状态**：生效中（2026-11-16，pin `0.2.2-rc.3`）。
-- **位置**：`scripts/build-state.mjs`、`release-artifact.mjs`、`release-tar.mjs`、`publish-release-branch.mjs`、`release-branch.yml`。
-- **要点**：完整 build/prepare 成功后，记录源文件、脚本、配置、lockfile、工具链及全部产物的摘要。质量门禁生成去掉脚本与开发依赖的单一产物；Web smoke 消费其 tarball，发布消费其目录。校验同时绑定源 SHA、文件闭集、每个文件摘要、tarball 摘要及包内实际内容。publish 作业检出时不保留凭据，写 token 仅提供给最终推送步骤。目标限于项目 origin 的 release 分支，并以读取到的旧 ref 作为 CAS lease；来源回退和字节变化都会被拒绝。
+- **位置**：`scripts/build-client.mjs`、`build-state.mjs`、`release-artifact.mjs`、`release-branch-guard.mjs`、`release-tar.mjs`、`publish-release-branch.mjs`、`release-branch.yml`。
+- **要点**：完整 build/prepare 成功后，记录源文件、脚本、配置、lockfile、工具链及全部产物的摘要。客户端构建对 CSS 模块导出名称进行排序以保证构建完全可重现；质量门禁生成去掉脚本、开发依赖与 overrides（避免孤立包构建时 Arborist 因直接 peer 依赖与 override 范围冲突抛出 EOVERRIDE）的单一产物；Web smoke 消费其 tarball，发布消费其目录。校验同时绑定源 SHA、文件闭集、每个文件摘要、tarball 摘要及包内实际内容。publish 作业检出时不保留凭据，写 token 仅提供给最终推送步骤。目标限于项目 origin 的 release 分支，并以读取到的旧 ref 作为 CAS lease；来源回退和字节变化都会被拒绝，若远端已具备相同源 commit 与相同产物摘要则幂等跳过推送。
 - **触发条件**：修改构建输入、产物布局、发布入口、Action、Node 或编译器版本。
 - **验证**：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`；`release:check` 与实际 tarball smoke。
 - **后续处理**：新增构建输入必须进入摘要；新增发布文件必须进入经过验证的文件集合。升级发布工具后保留篡改、漏件、来源回退与凭据隔离测试。

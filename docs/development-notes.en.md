@@ -68,11 +68,11 @@ An upstream-contract workaround must also state the current symptom, current wor
 
 - **Type**: other development constraint (npm CLI behaviour).
 - **Status**: active (2026-11-15, npm 12).
-- **Location**: `smokeArchiveWorker` in `scripts/smoke-archive-worker.mjs`.
-- **Behavior**: `npm publish --dry-run` runs `prepublishOnly` with `npm_config_dry_run=true`, and the smoke's nested `npm pack` inherits that environment and writes no archive at all, so `verify:pack` fails with "npm pack did not produce exactly one tarball". The smoke deletes that one variable from the child environment so the nested pack always produces a real tarball; every other npm setting is inherited unchanged.
-- **Review trigger**: run `npm publish --dry-run` again when the release gate's script chain changes, the npm major moves, or this smoke gains another child process.
+- **Location**: `smokeArchiveWorker` in `scripts/smoke-archive-worker.mjs`, `prepareReleaseArtifact` in `scripts/release-artifact.mjs`, and `tests/unit/tooling/release-artifact.spec.ts`.
+- **Behavior**: `npm publish --dry-run` runs `prepublishOnly` with `npm_config_dry_run=true`, and a nested `npm pack` inherits that environment and writes no archive at all, so smoke or artifact preparation fails with a missing tarball. The child environment strips that one variable so nested packs always write a real tarball; every other npm setting is inherited unchanged.
+- **Review trigger**: run `npm publish --dry-run` again when the release gate's script chain changes, the npm major moves, or packaging flows gain child processes.
 - **Verification**: `npm publish --dry-run` completes, and its log carries both `archive-worker pack smoke ok` and `verify-pack ok`; a standalone `npm run release:check` still passes.
-- **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup but keep the assertion that the smoke needs a real tarball.
+- **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup but keep the assertion that nested packs need a real tarball.
 
 ## DN-7: The semantic-ranking runtime ships inside the package, never as a dependency
 
@@ -168,8 +168,8 @@ Every harness pin change walks this page from the top: check whether upstream no
 
 - **Type**: security boundary / release constraint.
 - **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
-- **Location**: `scripts/build-state.mjs`, `release-artifact.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
-- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The quality gate creates one artifact with scripts and dev dependencies removed; Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected.
+- **Location**: `scripts/build-client.mjs`, `build-state.mjs`, `release-artifact.mjs`, `release-branch-guard.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
+- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The client build sorts CSS module export names to ensure bit-for-bit reproducible bundles; the quality gate creates one artifact with scripts, dev dependencies and overrides removed (avoiding npm Arborist EOVERRIDE conflicts between direct peer dependencies and overrides in isolated package builds); Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected, and an already matching release branch is idempotently skipped.
 - **Review trigger**: build inputs, artifact layout, publication entry, Actions, Node or compiler changes.
 - **Verification**: `build-state.spec.ts`, `release-artifact.spec.ts`, `release-branch.spec.ts`, `release:check`, and smoke against the actual tarball.
 - **Follow-up**: add new build inputs to the digest and new release files to the verified set. Preserve tamper, missing-file, source rollback and credential-isolation checks after tool upgrades.

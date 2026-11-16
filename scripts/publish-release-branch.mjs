@@ -103,51 +103,62 @@ try {
       sourceDescendsFromPrevious: descends,
       artifactDigest: verified.provenance.artifactDigest,
     })
-    const stage = join(temporary, 'repository')
-    cpSync(verified.stage, stage, { recursive: true })
-    git(['init', '--initial-branch=release'], stage)
-    git(['add', '--all'], stage)
-    git(
-      [
-        '-c',
-        'commit.gpgsign=false',
-        '-c',
-        'user.name=github-actions[bot]',
-        '-c',
-        'user.email=github-actions[bot]@users.noreply.github.com',
-        'commit',
-        '-m',
-        `chore(release): prebuilt ${verified.provenance.packageVersion}\n\nSource: ${sourceSha}\nArtifact: ${verified.provenance.artifactDigest}`,
-      ],
-      stage,
-    )
-    if (push) {
-      // The token is supplied only to this process by the final workflow step;
-      // no install, build or npm command executes in this branch.
-      const token = process.env.RELEASE_PUSH_TOKEN
-      const env = token
-        ? {
-            ...process.env,
-            GIT_CONFIG_COUNT: '1',
-            GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-            GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
-          }
-        : process.env
-      execFileSync(
-        'git',
-        [
-          'push',
-          `--force-with-lease=refs/heads/release:${oldRelease ?? ''}`,
-          git(['remote', 'get-url', remote]),
-          'HEAD:refs/heads/release',
-        ],
-        { cwd: stage, env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 },
-      )
-      console.log(`[release-branch] Published ${sourceSha} (${verified.provenance.artifactDigest})`)
-    } else
+    if (
+      previous?.sourceSha === sourceSha &&
+      previous.artifactDigest === verified.provenance.artifactDigest
+    ) {
       console.log(
-        `[release-branch] Verified commit ${git(['rev-parse', 'HEAD'], stage)}; pass --push with the checked artifact to publish`,
+        `[release-branch] Current release branch already matches ${sourceSha} (${verified.provenance.artifactDigest})`,
       )
+    } else {
+      const stage = join(temporary, 'repository')
+      cpSync(verified.stage, stage, { recursive: true })
+      git(['init', '--initial-branch=release'], stage)
+      git(['add', '--all'], stage)
+      git(
+        [
+          '-c',
+          'commit.gpgsign=false',
+          '-c',
+          'user.name=github-actions[bot]',
+          '-c',
+          'user.email=github-actions[bot]@users.noreply.github.com',
+          'commit',
+          '-m',
+          `chore(release): prebuilt ${verified.provenance.packageVersion}\n\nSource: ${sourceSha}\nArtifact: ${verified.provenance.artifactDigest}`,
+        ],
+        stage,
+      )
+      if (push) {
+        // The token is supplied only to this process by the final workflow step;
+        // no install, build or npm command executes in this branch.
+        const token = process.env.RELEASE_PUSH_TOKEN
+        const env = token
+          ? {
+              ...process.env,
+              GIT_CONFIG_COUNT: '1',
+              GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+              GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+            }
+          : process.env
+        execFileSync(
+          'git',
+          [
+            'push',
+            `--force-with-lease=refs/heads/release:${oldRelease ?? ''}`,
+            git(['remote', 'get-url', remote]),
+            'HEAD:refs/heads/release',
+          ],
+          { cwd: stage, env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 },
+        )
+        console.log(
+          `[release-branch] Published ${sourceSha} (${verified.provenance.artifactDigest})`,
+        )
+      } else
+        console.log(
+          `[release-branch] Verified commit ${git(['rev-parse', 'HEAD'], stage)}; pass --push with the checked artifact to publish`,
+        )
+    }
   }
 } finally {
   rmSync(temporary, { recursive: true, force: true })

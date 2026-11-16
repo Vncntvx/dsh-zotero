@@ -54,6 +54,19 @@ it.each([
   expect(() => assertReleaseTarget(target)).toThrow()
 })
 
+it.each([
+  'https://github.com/Vncntvx/dsh-zotero.git',
+  'https://github.com/Vncntvx/dsh-zotero',
+  'https://github.com/Vncntvx/dsh-zotero/',
+  'git@github.com:Vncntvx/dsh-zotero.git',
+  'git@github.com:Vncntvx/dsh-zotero',
+  'ssh://git@github.com/Vncntvx/dsh-zotero.git',
+])('accepts the canonical project remote URL: %s', (remoteUrl) => {
+  expect(() =>
+    assertReleaseTarget({ branch: 'release', remote: 'origin', remoteUrl }),
+  ).not.toThrow()
+})
+
 it('accepts a forward source change but refuses history rollback and rebuilt source bytes', () => {
   const previous = { sourceSha: 'old', artifactDigest: 'old-bytes' }
   const request = {
@@ -64,6 +77,9 @@ it('accepts a forward source change but refuses history rollback and rebuilt sou
     artifactDigest: 'new-bytes',
   }
   expect(() => assertReleaseAdvance(request)).not.toThrow()
+  expect(() =>
+    assertReleaseAdvance({ ...request, sourceSha: 'old', artifactDigest: 'old-bytes' }),
+  ).not.toThrow()
   expect(() => assertReleaseAdvance({ ...request, sourceDescendsFromPrevious: false })).toThrow(
     'backwards',
   )
