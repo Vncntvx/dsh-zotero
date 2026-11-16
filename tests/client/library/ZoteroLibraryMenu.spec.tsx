@@ -5,6 +5,7 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroLibraryMenu } from '../../../src/client/components/library/ZoteroLibraryMenu.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
@@ -19,6 +20,18 @@ afterEach(() => {
 })
 
 describe('ZoteroLibraryMenu', () => {
+  it('changes the slot tab kind without changing hook order', () => {
+    const useClient = () => {
+      useState(0)
+      return zoteroClientStub()
+    }
+    const props = { t, useZoteroClient: useClient }
+    const { rerender, container } = render(<ZoteroLibraryMenu {...props} tab={{ kind: 'other' }} />)
+    rerender(<ZoteroLibraryMenu {...props} tab={{ kind: 'zotero-library', id: 'library' }} />)
+    expect(screen.getByRole('menuitem', { name: mockT('libraryMenuRefresh') })).toBeTruthy()
+    rerender(<ZoteroLibraryMenu {...props} tab={{ kind: 'other' }} />)
+    expect(container.innerHTML).toBe('')
+  })
   it('renders nothing when tab kind is not zotero-library', () => {
     const { container } = render(
       <ZoteroLibraryMenu tab={{ kind: 'other' }} t={t} useZoteroClient={useZoteroClient} />,

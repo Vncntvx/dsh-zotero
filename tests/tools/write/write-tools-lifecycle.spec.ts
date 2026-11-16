@@ -389,6 +389,11 @@ describe('zotero_delete_library_tags', () => {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '88',
     })
+    serveJson(lane.mock, '/api/users/0/tags', [{ tag: 'methods' }, { tag: 'legacy' }], {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '88',
+      'Total-Results': '2',
+    })
     lane.mock.route('DELETE', '/api/users/0/tags', (_req, res, helpers) =>
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '89' }, ''),
     )
@@ -411,7 +416,7 @@ describe('zotero_delete_library_tags', () => {
     expect(deleted?.search.get('tag')).toBe('methods||legacy')
   })
 
-  it('leaves the counts unknown when the target does not exist, and names unmatched tags', async () => {
+  it('reports an absent tag as a no-op after an inconclusive preview', async () => {
     const lane = await bootLane()
     serveCatalog(lane.mock)
     // The preview listing answers 404, the miss the preview may degrade: the
@@ -423,6 +428,11 @@ describe('zotero_delete_library_tags', () => {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '88',
     })
+    serveJson(lane.mock, '/api/users/0/tags', [], {
+      'Zotero-Server-ID': SERVER_ID,
+      'Last-Modified-Version': '88',
+      'Total-Results': '0',
+    })
     lane.mock.route('DELETE', '/api/users/0/tags', (_req, res, helpers) =>
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '89' }, ''),
     )
@@ -430,7 +440,8 @@ describe('zotero_delete_library_tags', () => {
       await lane.runTool('zotero_delete_library_tags', { tags: ['absent'] }),
       'zotero_delete_library_tags',
     )
-    expect(result.value).toMatchObject({ kind: 'deleted', deletedTags: ['absent'] })
+    expect(result.value).toMatchObject({ kind: 'deleted', deletedTags: [], absentTags: ['absent'] })
+    expect(lane.mock.requests.some((request) => request.method === 'DELETE')).toBe(false)
     expect(lastPlan(lane)).toContain('- "absent": unknown items')
   })
 

@@ -225,7 +225,7 @@ describe('collection lifecycle presentation', () => {
     })
     expect(remove.presentCall?.({ collection: '方法论' })).toMatchObject({
       card: 'generic',
-      kind: 'edit',
+      kind: 'delete',
       title: 'Delete Zotero collection',
       rawInput: '方法论',
     })
@@ -541,7 +541,7 @@ describe('library-wide tag deletion presentation', () => {
     })
     expect(remove.presentCall?.({ tags: ['a', 'b'] })).toMatchObject({
       card: 'generic',
-      kind: 'edit',
+      kind: 'delete',
       title: 'Delete Zotero library tags',
       rawInput: 'a, b',
     })

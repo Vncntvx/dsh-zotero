@@ -13,6 +13,22 @@ import { deferred } from '../helpers/sync.ts'
 import { statusView } from '../helpers/status-view.ts'
 
 describe('useZoteroProbe', () => {
+  it('uses the current access decision when runProbe is called after revocation', async () => {
+    const probe = vi.fn(async () => ({ ok: true as const, value: statusView() }))
+    const { result, rerender } = renderHook(({ enabled }) => useZoteroProbe(probe, { enabled }), {
+      initialProps: { enabled: true },
+    })
+    rerender({ enabled: false })
+    await act(async () => {
+      await result.current.runProbe()
+    })
+    expect(probe).not.toHaveBeenCalled()
+    rerender({ enabled: true })
+    await act(async () => {
+      await result.current.runProbe()
+    })
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
   it('initializes with loading false by default', () => {
     const { result } = renderHook(() => useZoteroProbe())
     expect(result.current.state.loading).toBe(false)

@@ -1,5 +1,6 @@
 /** Accepted settings source; draft form models never feed runtime behaviour. */
 import { createContext, useContext, useSyncExternalStore, useLayoutEffect, useRef } from 'react'
+import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   LIBRARY_DEFAULTS,
@@ -46,7 +47,7 @@ export function createLibraryPreferenceSource(
     } catch (error) {
       snapshot = { error: error instanceof Error ? error.message : String(error) }
     }
-    for (const listener of listeners) listener()
+    notifySubscribers(listeners, '[zotero-library-preferences]')
   }
   const disposers = [form.subscribe(update), core.subscribe(update)]
   update()

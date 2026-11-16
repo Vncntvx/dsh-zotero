@@ -170,6 +170,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   /** Aborts on unmount, like every other owned read. */
   const discardAbort = useRef<AbortController>()
   const moreAbort = useRef<AbortController>()
+  const listGeneration = useRef(0)
   useEffect(
     () => () => {
       discardAbort.current?.abort()
@@ -221,9 +222,16 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   )
 
   useEffect(() => {
+    const generation = ++listGeneration.current
+    moreAbort.current?.abort()
+    moreAbort.current = undefined
+    setLoadingMore(false)
     const abort = new AbortController()
     loadFirst(abort.signal)
-    return () => abort.abort()
+    return () => {
+      abort.abort()
+      if (listGeneration.current === generation) listGeneration.current++
+    }
   }, [loadFirst, revision, parseSurface.revision])
 
   const changeFilter = (next: StateFilter) => {
@@ -243,6 +251,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   /** One more page behind the rows already on screen; the window only grows. */
   const showMore = async (loaded: readonly ZoteroParsedDocumentRowView[]) => {
     if (loadingMore) return
+    const generation = listGeneration.current
     const abort = new AbortController()
     moreAbort.current = abort
     setLoadingMore(true)
@@ -251,20 +260,24 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
       const page = typedRemoteResult(
         await management.listParsedDocuments(requestOf(loaded.length, PAGE_SIZE), abort.signal),
       )
-      if (abort.signal.aborted) return
+      if (abort.signal.aborted || generation !== listGeneration.current) return
       setList(() => ({ rows: [...loaded, ...page.rows], total: page.total }))
     } catch (cause) {
-      if (!abort.signal.aborted) setError(messageOf(cause))
+      if (!abort.signal.aborted && generation === listGeneration.current) setError(messageOf(cause))
     } finally {
-      moreAbort.current = undefined
-      if (!abort.signal.aborted) setLoadingMore(false)
+      if (moreAbort.current === abort) moreAbort.current = undefined
+      if (!abort.signal.aborted && generation === listGeneration.current) setLoadingMore(false)
     }
   }
 
   /** Re-read the window the reader was looking at in one request. */
-  const reloadWindow = async (target: number, signal: AbortSignal) => {
+  const reloadWindow = async (target: number, signal: AbortSignal, generation: number) => {
+    if (signal.aborted || generation !== listGeneration.current) return
     const limit = Math.min(MAX_WINDOW, Math.max(PAGE_SIZE, target))
-    setList(typedRemoteResult(await management.listParsedDocuments(requestOf(0, limit), signal)))
+    const result = typedRemoteResult(
+      await management.listParsedDocuments(requestOf(0, limit), signal),
+    )
+    if (!signal.aborted && generation === listGeneration.current) setList(result)
   }
 
   /**
@@ -274,6 +287,8 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
    * page that no longer holds anything.
    */
   const discardRows = async (ids: readonly string[], loaded: number) => {
+    if (discardAbort.current !== undefined) return
+    const generation = listGeneration.current
     const abort = new AbortController()
     discardAbort.current = abort
     setBusy(true)
@@ -298,11 +313,12 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         } catch (cause) {
           if (abort.signal.aborted) return
           failed.push(artifactId)
-          setError(cause instanceof Error ? cause.message : String(cause))
+          if (generation === listGeneration.current) setError(messageOf(cause))
         }
-        setProgress({ done: discardedCount + goneCount + failed.length, total: ids.length })
+        if (generation === listGeneration.current)
+          setProgress({ done: discardedCount + goneCount + failed.length, total: ids.length })
       }
-      setSelected(new Set(failed))
+      if (generation === listGeneration.current) setSelected(new Set(failed))
       const removed = discardedCount + goneCount
       if (ids.length === 1) {
         notify(
@@ -314,12 +330,12 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
       } else {
         notify(props.t('parsedManagerBatchPartial', { removed, failed: failed.length }))
       }
-      await reloadWindow(Math.max(0, loaded - removed), abort.signal)
+      await reloadWindow(Math.max(0, loaded - removed), abort.signal, generation)
     } catch (cause) {
-      if (!abort.signal.aborted) setError(messageOf(cause))
+      if (!abort.signal.aborted && generation === listGeneration.current) setError(messageOf(cause))
     } finally {
       discardAbort.current = undefined
-      if (!abort.signal.aborted) {
+      if (!abort.signal.aborted && generation === listGeneration.current) {
         setBusy(false)
         setProgress(undefined)
       }

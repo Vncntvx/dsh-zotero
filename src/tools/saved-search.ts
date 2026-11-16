@@ -7,6 +7,10 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
+import { planValue, planBlock } from '../write-plan.js'
+import { requireUpdateField } from '../write-item-rules.js'
+import { assertWritePayload } from './write-bounds.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   defineTool,
@@ -29,11 +33,7 @@ import {
   renderCommittedUnverified,
 } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_SEARCH_REF_ARG_HINT } from './validate.js'
-import {
-  WRITE_PLAN_LIBRARY_LINE,
-  WRITE_PLAN_OUTCOME_DESCRIPTION,
-  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
-} from '../write-approval.js'
+import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type {
   ZoteroCreateSavedSearchRequest,
@@ -170,7 +170,7 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
   const create = ctx.tools.register(
     defineTool({
       name: 'zotero_create_saved_search',
-      description: `Create a Zotero saved search with explicit conditions. ${WRITE_PLAN_OUTCOME_DESCRIPTION} ${WRITE_COMMITTED_UNVERIFIED_DESCRIPTION}`,
+      description: `Create a Zotero saved search with explicit conditions. ${WRITE_PLAN_OUTCOME_DESCRIPTION}`,
       parameters: CREATE,
       output: {
         schema: CREATED,
@@ -185,18 +185,22 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       }),
       presentResult: presentCreateResult,
       async execute(args, exec): Promise<CreatedOutput> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         // Validate before the plan: a blank name is a refusal, not something
         // the user approves a plan for. The domain keeps its own guard; this
         // is the tool-layer fail-fast every other write tool keeps.
         const name = assertNonBlank('name', args.name)
+        if (args.conditions.length === 0)
+          throw new ZoteroError('conditions cannot be empty.', ZOTERO_INVALID_ARGUMENT)
         const request: ZoteroCreateSavedSearchRequest = { name, conditions: args.conditions }
         return await service.createSavedSearch(request, {
           exec,
           plan: [
             '**Create a Zotero saved search**',
             WRITE_PLAN_LIBRARY_LINE,
-            `- Name: ${name}`,
+            `- Name: ${planValue(name)}`,
             `- Conditions: ${args.conditions.length}`,
+            planBlock(args.conditions),
           ].join('\n'),
         })
       },
@@ -220,6 +224,10 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       }),
       presentResult: presentUpdateResult,
       async execute(args, exec): Promise<UpdateOutput> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
+        requireUpdateField({ name: args.name, conditions: args.conditions })
+        if (args.conditions?.length === 0)
+          throw new ZoteroError('conditions cannot be empty.', ZOTERO_INVALID_ARGUMENT)
         const request: ZoteroUpdateSavedSearchRequest = {
           search: parseWritableRef(args.search, ['search']),
           ...(args.name === undefined ? {} : { name: assertNonBlank('name', args.name) }),
@@ -230,9 +238,11 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
           plan: [
             '**Update a Zotero saved search**',
             WRITE_PLAN_LIBRARY_LINE,
-            `- Search: ${args.search}`,
-            ...(args.name === undefined ? [] : [`- Name: ${args.name.trim()}`]),
-            ...(args.conditions === undefined ? [] : [`- Conditions: ${args.conditions.length}`]),
+            `- Search: ${planValue(args.search)}`,
+            ...(args.name === undefined ? [] : [`- Name: ${planValue(args.name.trim())}`]),
+            ...(args.conditions === undefined
+              ? []
+              : [`- Conditions: ${args.conditions.length}`, planBlock(args.conditions)]),
           ].join('\n'),
         })
       },
@@ -250,7 +260,7 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
       },
       presentCall: (args) => ({
         card: 'generic',
-        kind: 'edit',
+        kind: 'delete',
         title: 'Delete Zotero saved search',
         rawInput: args.search,
       }),
@@ -261,11 +271,12 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
         }
         return await service.deleteSavedSearch(request, {
           exec,
+          risk: 'irreversible-delete',
           plan: [
             '**Delete a Zotero saved search**',
             WRITE_PLAN_LIBRARY_LINE,
-            `- Search: ${args.search}`,
-            'This removes the saved-search definition; library items are unchanged.',
+            `- Search: ${planValue(args.search)}`,
+            'This removes the saved-search definition and cannot be undone; Zotero has no Trash for saved searches. Library items are unchanged.',
           ].join('\n'),
         })
       },

@@ -73,18 +73,16 @@ export const APPROVE_LABEL = 'Apply'
 export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
 
 /**
- * The shared model-facing sentence for the plan-review outcome. Every write
- * tool appends this so the declined contract cannot drift between tools.
- */
-export const WRITE_PLAN_OUTCOME_DESCRIPTION =
-  'Every write first passes the session approval policy (a "never" session auto-rejects) and then shows a plan the user approves; neither confirmation is configurable. Kind "declined" means the write was not approved and nothing was written: do not retry unasked.'
-
-/**
  * Appended by every tool that can report a committed-unverified outcome, so
  * the do-not-retry contract is stated once and cannot drift between tools.
  */
 export const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
-  ' kind "committed-unverified" means the write must be treated as committed although its response could not be verified; do not retry, reconcile by key/ref when available.'
+  ' Treat committed-unverified and per-item unverified receipts as committed: do not retry; reconcile by key/ref.'
+
+/** Shared approval, declined and reconciliation contracts for every write tool. */
+export const WRITE_PLAN_OUTCOME_DESCRIPTION =
+  'Requires session approval followed by an approved plan; neither can be disabled. A "never" policy rejects. Kind "declined" means nothing was written; do not retry unasked.' +
+  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION
 
 /**
  * The plan line every write tool prints naming the library it writes to.

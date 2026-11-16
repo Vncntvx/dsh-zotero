@@ -31,3 +31,28 @@ it('waits for the namespace and CSL settings, then publishes only accepted snaps
   expect(library.unsubscribes).toBe(1)
   expect(core.unsubscribes).toBe(1)
 })
+
+it('continues publishing accepted settings after one subscriber throws', () => {
+  const library = fakeScope({ status: 'ready', value: {} })
+  const core = fakeScope({
+    status: 'ready',
+    value: { defaultStyle: 'apa', defaultLocale: 'en-US' },
+  })
+  const source = createLibraryPreferenceSource(library, core)
+  const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const observer = vi.fn()
+  source.subscribe(() => {
+    throw new Error('broken observer')
+  })
+  source.subscribe(observer)
+  try {
+    library.publish({ status: 'ready', value: { listDensity: 'compact' } })
+    library.publish({ status: 'ready', value: { listDensity: 'comfortable' } })
+    expect(observer).toHaveBeenCalledTimes(2)
+    expect(source.getSnapshot().preferences?.listDensity).toBe('comfortable')
+    expect(diagnostic).toHaveBeenCalledTimes(2)
+  } finally {
+    source.dispose()
+    diagnostic.mockRestore()
+  }
+})

@@ -20,7 +20,12 @@ export interface ZoteroLibraryMenuProps {
   readonly useZoteroClient: () => ZoteroClientFace
 }
 
-export function ZoteroLibraryMenu({
+export function ZoteroLibraryMenu(props: ZoteroLibraryMenuProps) {
+  if (props.tab?.kind !== LIBRARY_TAB_KIND) return null
+  return <ZoteroLibraryMenuBody {...props} />
+}
+
+function ZoteroLibraryMenuBody({
   tab,
   sessionId,
   dismiss,
@@ -30,7 +35,6 @@ export function ZoteroLibraryMenu({
   t,
 }: ZoteroLibraryMenuProps) {
   const [error, setError] = useState<string>()
-  if (tab?.kind !== LIBRARY_TAB_KIND) return null
   const { openProtocol } = useZoteroClient()
   return (
     <>

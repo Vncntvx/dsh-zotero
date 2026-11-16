@@ -158,7 +158,7 @@ it('restores selected child pagination after a new browser tab occurrence', asyn
   await waitFor(() => expect(result.current.inspector?.phase).toBe('ready'))
   expect(face.item).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      childPages: expect.objectContaining({ notes: { offset: 20, limit: 20 } }),
+      childPages: expect.objectContaining({ notes: { offset: 20, limit: 50 } }),
     }),
     expect.anything(),
   )

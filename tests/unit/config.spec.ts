@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { readResolvedConfig, resolveConfig, toLiveEntry } from '../../src/config.js'
 
 describe('resolveConfig', () => {
+  it.each([
+    'timeoutMs',
+    'scopeListingTtlMs',
+    'foregroundWaitMs',
+    'writeAuthorizeDeadlineMs',
+  ] as const)('rejects %s above the runtime timer range before a request can start', (field) => {
+    expect(() => resolveConfig({ [field]: 2_147_483_648 })).toThrow('maximum timer delay')
+    expect(resolveConfig({ [field]: 2_147_483_647 })[field]).toBe(2_147_483_647)
+  })
   it('applies schema defaults for an empty config', () => {
     expect(resolveConfig({})).toEqual({
       maxInlineResultTokens: 4000,
@@ -35,6 +44,7 @@ describe('resolveConfig', () => {
       writeEnabled: false,
       writePersistKey: true,
       writeNoteMaxChars: 65_536,
+      writeFieldMaxChars: 16_384,
       writeListMaxItems: 50,
       writeAuthorizeDeadlineMs: 120_000,
       webEnabled: true,

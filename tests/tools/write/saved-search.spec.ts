@@ -327,7 +327,7 @@ describe('saved-search execution through the approval seam', () => {
     })
     expect(remove.presentCall!({ search: SEARCH_REF })).toEqual({
       card: 'generic',
-      kind: 'edit',
+      kind: 'delete',
       title: 'Delete Zotero saved search',
       rawInput: SEARCH_REF,
     })

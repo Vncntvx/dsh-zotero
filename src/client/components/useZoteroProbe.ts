@@ -105,7 +105,7 @@ export function useZoteroProbe(
       inFlightRef.current = false
       if (!unmountedRef.current) setSettled(true)
     }
-  }, [probe])
+  }, [probe, enabled])
 
   useEffect(() => {
     if (enabled && options?.initialAutoRun && probe) {

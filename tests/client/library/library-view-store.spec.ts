@@ -25,6 +25,14 @@ const probeOf = (serverId: string): ZoteroStatusView => statusView({ serverId })
 const storeOf = (): LibraryViewStore => createLibraryViewStore()
 
 describe('the library view store session cache', () => {
+  it('refreshes recency on a successful read before admitting another session', () => {
+    const store = storeOf()
+    for (let index = 0; index < 8; index++) store.writeSessionView('S1', `s${index}`, {})
+    expect(store.sessionView('S1', 's0')).toBeDefined()
+    store.writeSessionView('S1', 's8', {})
+    expect(store.sessionView('S1', 's0')).toBeDefined()
+    expect(store.sessionView('S1', 's1')).toBeUndefined()
+  })
   it('replaces the whole record instead of merging fields', () => {
     const store = storeOf()
     store.writeSessionView('S1', 's1', { lastProbeData: probeOf('S1') })

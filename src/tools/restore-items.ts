@@ -1,4 +1,6 @@
+import { requireWriteSelection } from '../write-item-rules.js'
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue, WRITE_AUTHORIZATION_PLAN_LINE } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   defineTool,
@@ -75,7 +77,8 @@ function restoreItemsPlan(args: Args): string {
   return [
     '**Restore Zotero Trash items**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Items: ${args.refs.join(', ')}`,
+    `- Items: ${args.refs.map(planValue).join(', ')}`,
+    WRITE_AUTHORIZATION_PLAN_LINE,
     "Each item's whole child graph (attachments, notes, annotations) is restored children-first, every node under its own version precondition, and the graph is read back to prove the restore; failures and unverified receipts are reported per ref with the refs already acknowledged. Never retry an unverified receipt.",
   ].join('\n')
 }
@@ -175,6 +178,7 @@ export function registerRestoreItemsTool(ctx: Context, service: ZoteroService): 
       }),
       presentResult: presentRestoreItemsResult,
       async execute(args, exec): Promise<ZoteroRestoreItemsOutcome> {
+        requireWriteSelection('refs', args.refs)
         const refs = assertWriteList('refs', args.refs, ZOTERO_WRITE_OBJECT_BATCH).map((ref) =>
           parseWritableRef(ref, ['item']),
         )

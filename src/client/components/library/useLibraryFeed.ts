@@ -1,4 +1,5 @@
 import { LIBRARY_DEFAULTS, type LibraryPreferences } from '../../../library-preferences.ts'
+import { ZOTERO_CHILD_PAGE_ROWS } from '../../../constants.ts'
 import type {
   LibrarySessionView,
   LibraryViewMemory,
@@ -594,7 +595,7 @@ export function useLibraryFeed(
                   memory?.childPages && memory.childPages.ref === selectedRef
                     ? (memory.childPages.offsets[kind] ?? 0)
                     : 0,
-                limit: 20,
+                limit: ZOTERO_CHILD_PAGE_ROWS,
               },
             ]),
           ),

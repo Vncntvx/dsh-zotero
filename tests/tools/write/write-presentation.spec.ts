@@ -463,10 +463,10 @@ describe('approval-gate failure arms', () => {
       ),
     )
     expect(bare).toContain('Created note r (version 7).')
-    // The plan preview truncates long markdown.
+    // The approval document includes the complete Markdown body.
     const longPlan = createNotePlan({ markdown: 'x'.repeat(401) })
-    expect(longPlan).toContain('…')
-    expect(longPlan).not.toContain('xxxxx'.repeat(100))
+    expect(longPlan).toContain('x'.repeat(401))
+    expect(longPlan).not.toContain('…')
   })
 
   it('projects complete applied outcomes into presentation meta', async () => {

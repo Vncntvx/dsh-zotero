@@ -65,6 +65,42 @@ it('resolves a generic tab title through the lease-free metadata read alone', as
   expect(read.mock.calls.filter(([request]) => request.op === 'meta')).toHaveLength(1)
 })
 
+it('keeps a denied session title local and resolves it only after read access returns', async () => {
+  const read = documentRead('Passage', { title: 'Protected title' })
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  act(() => runtime.access.publish(false))
+  render(<ParsedDocumentTitle {...runtime.props({ title: 'PDF' })} documents={runtime.documents} />)
+  await tick()
+  expect(read.mock.calls.filter(([request]) => request.op === 'meta')).toHaveLength(0)
+  act(() => runtime.access.publish(true))
+  await tick()
+  expect(screen.getByText('Protected title')).toBeDefined()
+  act(() => runtime.access.publish(false))
+  expect(screen.queryByText('Protected title')).toBeNull()
+})
+
+it('starts a fresh metadata read on regrant while the revoked request is still settling', async () => {
+  const read = documentRead('Passage', { title: 'Current title' })
+  const oldReply = deferred<Awaited<ReturnType<typeof read>>>()
+  read.mockImplementationOnce(async () => await oldReply.promise)
+  const runtime = parsedRuntime(read)
+  owned.push(runtime)
+  render(<ParsedDocumentTitle {...runtime.props({ title: 'PDF' })} documents={runtime.documents} />)
+  await tick()
+  act(() => runtime.access.publish(false))
+  act(() => runtime.access.publish(true))
+  await tick()
+  expect(screen.getByText('Current title')).toBeDefined()
+  expect(read.mock.calls.filter(([request]) => request.op === 'meta')).toHaveLength(2)
+  oldReply.resolve({
+    ok: false,
+    error: new RemoteError('gateway/internal', 'Revoked request settled late', {}),
+  })
+  await tick()
+  expect(screen.getByText('Current title')).toBeDefined()
+})
+
 it('shows unavailable for a foreign tab address and uses artifact title for an untitled paper', async () => {
   const runtime = await fixture({ title: '' })
   expect(screen.getByRole('heading', { name: 'Paper' })).toBeDefined()

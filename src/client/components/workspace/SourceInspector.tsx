@@ -63,6 +63,26 @@ export function SourceInspector({
     [workspace.sources, selectedKey],
   )
 
+  const itemCollections = useMemo(() => {
+    const names = new Set<string>()
+    for (const s of selected?.searches ?? []) {
+      if (s.scope.kind === 'collection' && s.scope.name) {
+        names.add(s.scope.name)
+      }
+    }
+    return Array.from(names)
+  }, [selected?.searches])
+
+  const itemTags = useMemo(() => {
+    const tags = new Set<string>()
+    for (const s of selected?.searches ?? []) {
+      for (const tag of s.tags) {
+        if (tag.trim() !== '') tags.add(tag)
+      }
+    }
+    return Array.from(tags)
+  }, [selected?.searches])
+
   if (selected === undefined) {
     return (
       <main className={css.inspector}>
@@ -73,26 +93,6 @@ export function SourceInspector({
 
   const pdfCapability = pdfCapabilityOf(selected)
   const evidenceMatch = selected.evidenceMatch
-
-  const itemCollections = useMemo(() => {
-    const names = new Set<string>()
-    for (const s of selected.searches) {
-      if (s.scope.kind === 'collection' && s.scope.name) {
-        names.add(s.scope.name)
-      }
-    }
-    return Array.from(names)
-  }, [selected.searches])
-
-  const itemTags = useMemo(() => {
-    const tags = new Set<string>()
-    for (const s of selected.searches) {
-      for (const tag of s.tags) {
-        if (tag.trim() !== '') tags.add(tag)
-      }
-    }
-    return Array.from(tags)
-  }, [selected.searches])
 
   return (
     <main className={css.inspector}>

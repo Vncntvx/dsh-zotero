@@ -1,4 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
+import { requireUpdateField } from '../write-item-rules.js'
+import { assertWritePayload } from './write-bounds.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   defineTool,
@@ -18,7 +21,7 @@ import {
   presentUpdateResultView,
   renderCommittedUnverified,
 } from './write-present.js'
-import { parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
+import { parseWritableRef, assertNonBlank, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateCollectionOutcome, ZoteroUpdateCollectionRequest } from '../types.js'
@@ -29,7 +32,7 @@ const PARAMETERS = {
     required: true,
     description: `A ${WRITE_COLLECTION_REF_ARG_HINT} ref.`,
   },
-  name: { type: 'string' },
+  name: { type: 'string', description: 'The new non-blank collection name.' },
   parent: {
     type: 'string',
     description: 'A collection ref; omit to preserve the current parent.',
@@ -58,9 +61,9 @@ function updateCollectionPlan(args: Args): string {
   return [
     '**Update a Zotero collection**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Collection: ${args.collection}`,
-    ...(args.name === undefined ? [] : [`- Name: ${args.name}`]),
-    ...(args.parent === undefined ? [] : [`- Parent: ${args.parent}`]),
+    `- Collection: ${planValue(args.collection)}`,
+    ...(args.name === undefined ? [] : [`- Name: ${planValue(args.name)}`]),
+    ...(args.parent === undefined ? [] : [`- Parent: ${planValue(args.parent)}`]),
     'The collection is patched under its current object version.',
   ].join('\n')
 }
@@ -116,9 +119,11 @@ export function registerUpdateCollectionTool(ctx: Context, service: ZoteroServic
       }),
       presentResult: presentUpdateCollectionResult,
       async execute(args, exec): Promise<ZoteroUpdateCollectionOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
+        requireUpdateField({ name: args.name, parent: args.parent })
         const request: ZoteroUpdateCollectionRequest = {
           collection: parseWritableRef(args.collection, ['collection']),
-          ...(args.name === undefined ? {} : { name: args.name }),
+          ...(args.name === undefined ? {} : { name: assertNonBlank('name', args.name) }),
           ...(args.parent === undefined
             ? {}
             : { parent: parseWritableRef(args.parent, ['collection']) }),

@@ -6,6 +6,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -27,11 +28,7 @@ import {
   renderCommittedUnverified,
 } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
-import {
-  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
-  WRITE_PLAN_OUTCOME_DESCRIPTION,
-  WRITE_PLAN_LIBRARY_LINE,
-} from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateCollectionOutcome, ZoteroCreateCollectionRequest } from '../types.js'
 
@@ -76,8 +73,8 @@ export function createCollectionPlan(args: CreateCollectionArgs): string {
   return [
     '**Create a Zotero collection**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Name: ${args.name.trim()}`,
-    `- Parent: ${args.parent === undefined ? '(top level)' : args.parent.trim()}`,
+    `- Name: ${planValue(args.name.trim())}`,
+    `- Parent: ${args.parent === undefined ? '(top level)' : planValue(args.parent.trim())}`,
     'A sibling collection with the same name refuses the write; the created collection carries the returned ref.',
   ].join('\n')
 }
@@ -124,8 +121,7 @@ export function registerCreateCollectionTool(ctx: Context, service: ZoteroServic
       name: 'zotero_create_collection',
       description:
         'Create a collection in the Zotero personal library, optionally under a parent (ref or exact name). A sibling collection that already carries the name refuses the write before any POST, so work with the existing ref instead. Zotero itself may show its authorization dialog on first use. ' +
-        WRITE_PLAN_OUTCOME_DESCRIPTION +
-        WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
+        WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: CREATE_COLLECTION_PARAMETERS,
       output: {
         schema: CREATE_COLLECTION_OUTPUT_SCHEMA,

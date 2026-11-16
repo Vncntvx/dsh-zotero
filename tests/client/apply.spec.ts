@@ -530,9 +530,11 @@ describe('the browser-half entry', () => {
     expect(rightTabDef!.kind).toBe('zotero-library')
     expect(parsedTabDef!.id).toBe('dsh-zotero#parsed')
     expect(parsedTabDef!.kind).toBe('zotero-parsed')
+    expect(parsedTabDef).toHaveProperty('keepMounted', true)
     expect(parsedTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed/**'])
     expect(managerTabDef!.id).toBe('dsh-zotero#parsed-manager')
     expect(managerTabDef!.kind).toBe('zotero-parsed-manager')
+    expect(managerTabDef).toHaveProperty('keepMounted', true)
     expect(managerTabDef!.patterns).toEqual(['dsh-resource://zotero-parsed-manager/**'])
     const parsedTitle = (parsedTabDef as unknown as { title: (address: string) => string }).title
     // The chip is the paper's own name; only an untitled address falls back.

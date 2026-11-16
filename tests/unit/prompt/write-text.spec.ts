@@ -15,7 +15,7 @@ describe('writePolicyTextOf', () => {
   it('names only the scholarly save entry in a save-only step', () => {
     const text = writePolicyTextOf([SCHOLARLY_SAVE_TOOL_NAME])
     expect(text).toContain(`Writes (${SCHOLARLY_SAVE_TOOL_NAME}):`)
-    expect(text).toContain('Create only from closed schema; no BibTeX/CSL-JSON.')
+    expect(text).toContain('Create from closed schema; no BibTeX/CSL-JSON.')
     expect(text).toContain('All writes require session approval and an approved plan')
     expect(text).toContain('Success is authoritative')
     expect(text).not.toContain('zotero_create_note')
@@ -35,7 +35,9 @@ describe('writePolicyTextOf', () => {
   it('keeps the membership clause for a tag-only step', () => {
     const text = writePolicyTextOf(['zotero_update_item_tags'])
     expect(text).toContain('Writes (zotero_update_item_tags): Sources are refs.')
-    expect(text).toContain('Tag/membership changes are atomic and version-guarded.')
+    expect(text).toContain(
+      'Tag/membership changes are atomic per object, version-guarded; batches are not transactional.',
+    )
     expect(text).not.toContain('notes use Markdown')
   })
 
@@ -54,16 +56,14 @@ describe('writePolicyTextOf', () => {
   })
 
   it('keeps the scalar-patch clause for update-item only', () => {
-    expect(writePolicyTextOf(['zotero_update_item'])).toContain('Skip unchanged scalar PATCHes.')
-    expect(writePolicyTextOf(['zotero_update_collection'])).not.toContain(
-      'Skip unchanged scalar PATCHes.',
-    )
+    expect(writePolicyTextOf(['zotero_update_item'])).toContain('Skip unchanged PATCHes.')
+    expect(writePolicyTextOf(['zotero_update_collection'])).not.toContain('Skip unchanged PATCHes.')
   })
 
   it('keeps the batch-only clauses together', () => {
     const text = writePolicyTextOf(['zotero_batch_items'])
     expect(text).toContain('Tag/membership changes are atomic')
-    expect(text).toContain('Create only from closed schema')
+    expect(text).toContain('Create from closed schema')
     expect(text).toContain('Item deletion verifies item and all children')
     expect(text).not.toContain('Collection deletion')
   })

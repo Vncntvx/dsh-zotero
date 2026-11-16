@@ -47,7 +47,14 @@ describe('restored view pins', () => {
     expect(result.current.narrowPane).toBe('inspector')
     await waitFor(() =>
       expect(face.item).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: SELECTED }),
+        expect.objectContaining({
+          ref: SELECTED,
+          childPages: {
+            attachments: { offset: 0, limit: 50 },
+            notes: { offset: 0, limit: 50 },
+            annotations: { offset: 0, limit: 50 },
+          },
+        }),
         expect.anything(),
       ),
     )

@@ -8,6 +8,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -76,7 +77,7 @@ export function deleteCollectionPlan(
   return [
     '**Delete a Zotero collection**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Collection: ${args.collection.trim()}`,
+    `- Collection: ${planValue(args.collection.trim())}`,
     `- Items in this collection: ${formatCount(preview.itemTotal)} (they stay in the library, membership only)`,
     `- Child collections: ${formatCount(preview.childTotal)} (they are deleted with the parent)`,
     'This deletes the collection structure and cannot be undone; the delete carries a version precondition, so a concurrent change fails it.',
@@ -213,7 +214,7 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
       },
       presentCall: (args) => ({
         card: 'generic',
-        kind: 'edit',
+        kind: 'delete',
         title: 'Delete Zotero collection',
         rawInput: args.collection,
       }),

@@ -434,7 +434,7 @@ export const BATCH_ITEMS_OUTPUT_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['applied'], required: true },
+        kind: { type: 'string', enum: ['applied', 'partial', 'failed'], required: true },
         total: { type: 'integer', required: true },
         created: {
           type: 'array',
@@ -527,6 +527,7 @@ export function presentBatchItemsResultView(result: ToolResult): ToolResultView 
   if (record.kind === 'declined') {
     return { card: 'generic', title: 'Zotero batch items: declined, nothing written' }
   }
+  const kind = record.kind === 'partial' || record.kind === 'failed' ? record.kind : 'applied'
   const created = typeof record.createdCount === 'number' ? record.createdCount : 0
   const updated = typeof record.updatedCount === 'number' ? record.updatedCount : 0
   const deleted = typeof record.deletedCount === 'number' ? record.deletedCount : 0
@@ -534,6 +535,6 @@ export function presentBatchItemsResultView(result: ToolResult): ToolResultView 
   const failed = typeof record.failedCount === 'number' ? record.failedCount : 0
   return {
     card: 'generic',
-    title: `Zotero batch items applied: ${created} created, ${updated} updated, ${deleted} trashed${failed > 0 ? `, ${failed} failed` : ''}${unverified > 0 ? `, ${unverified} unverified; do not retry` : ''}`,
+    title: `Zotero batch items ${kind}: ${created} created, ${updated} updated, ${deleted} trashed${failed > 0 ? `, ${failed} failed` : ''}${unverified > 0 ? `, ${unverified} unverified; do not retry` : ''}`,
   }
 }

@@ -23,6 +23,20 @@ const CREATABLE_ITEM_TYPES: ReadonlySet<string> = new Set(ZOTERO_CREATABLE_ITEM_
 
 const UPDATABLE_FIELDS: ReadonlySet<string> = new Set(ZOTERO_UPDATABLE_ITEM_FIELDS)
 
+/** Refuse an update that carries no mutation before approval or source I/O. */
+export function requireUpdateField(fields: Readonly<Record<string, unknown>>): void {
+  if (Object.values(fields).every((value) => value === undefined))
+    throw new ZoteroError(
+      `At least one of ${Object.keys(fields).join(' or ')} must be provided.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+}
+
+export function requireWriteSelection(name: string, values: readonly unknown[]): void {
+  if (values.length === 0)
+    throw new ZoteroError(writeListEmptyMessage(name), ZOTERO_INVALID_ARGUMENT)
+}
+
 /** Refuse an item type outside the closed creation whitelist. */
 export function requireCreatableItemType(value: string): ZoteroCreatableItemType {
   if (!CREATABLE_ITEM_TYPES.has(value)) {

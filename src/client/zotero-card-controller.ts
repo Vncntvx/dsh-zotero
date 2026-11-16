@@ -49,6 +49,7 @@ const FIELD_SPECS = [
   { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite' },
   { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite' },
   { key: 'writeNoteMaxChars', kind: 'number', group: 'groupWrite' },
+  { key: 'writeFieldMaxChars', kind: 'number', group: 'groupWrite' },
   { key: 'writeListMaxItems', kind: 'number', group: 'groupWrite' },
   { key: 'writeAuthorizeDeadlineMs', kind: 'number', group: 'groupWrite' },
   { key: 'baseUrl', kind: 'text', group: 'groupConnection' },

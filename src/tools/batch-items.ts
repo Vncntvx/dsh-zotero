@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue, planBlock, WRITE_AUTHORIZATION_PLAN_LINE } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -30,7 +31,7 @@ import {
   presentBatchItemsResultView,
 } from './write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
-import { parseRef } from '../refs.js'
+import { parseRef, formatRef } from '../refs.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import {
   WRITE_LIST_SELECTION_MESSAGE,
@@ -39,6 +40,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import type { ZoteroService } from '../service.js'
+import { assertWritePayload } from './write-bounds.js'
 import type {
   ZoteroBatchItemsOutcome,
   ZoteroBatchItemsRequest,
@@ -160,6 +162,7 @@ export function batchItemsPlan(
     '**Batch item operations**',
     WRITE_PLAN_LIBRARY_LINE,
     `- Total operations: ${total} (${deletes.length} to delete, ${creates.length} to create, ${updates.length} to update)`,
+    WRITE_AUTHORIZATION_PLAN_LINE,
   ]
 
   // Section 1: Deletions
@@ -172,12 +175,12 @@ export function batchItemsPlan(
     )
     for (const delRef of deletes) {
       const p = deletePreviews.find((entry) => entry.ref === delRef)
-      const titleStr = p?.title !== undefined ? ` "${p.title}"` : ''
+      const titleStr = p?.title !== undefined ? ` "${planValue(p.title)}"` : ''
       const childStr =
         p?.childCount !== undefined
           ? ` (${p.childCount} ${p.childCount === 1 ? 'note/attachment' : 'notes/attachments'})`
           : ''
-      lines.push(`- \`${delRef}\`:${titleStr}${childStr}`)
+      lines.push(`- ${planValue(delRef)}:${titleStr}${childStr}`)
     }
   }
 
@@ -188,11 +191,7 @@ export function batchItemsPlan(
     for (const [index, c] of creates.entries()) {
       // Encode every supplied field in a fenced JSON block. A fence longer
       // than any backtick run in the data keeps user text inside the block.
-      const json = JSON.stringify(c, null, 2)
-      const fence = '`'.repeat(
-        Math.max(3, ...[...json.matchAll(/`+/g)].map((match) => match[0].length + 1)),
-      )
-      lines.push('', `#### Create index ${index}`, '', `${fence}json`, json, fence)
+      lines.push('', `#### Create index ${index}`, '', planBlock(c))
     }
   }
 
@@ -205,28 +204,33 @@ export function batchItemsPlan(
     const allAddCols = new Set(updates.flatMap((u) => u.addCollections ?? []))
     const allRemoveCols = new Set(updates.flatMap((u) => u.removeCollections ?? []))
 
-    if (allAddTags.size > 0) lines.push(`- Tags to add: ${[...allAddTags].join(', ')}`)
-    if (allRemoveTags.size > 0) lines.push(`- Tags to remove: ${[...allRemoveTags].join(', ')}`)
-    if (allAddCols.size > 0) lines.push(`- Collections to join: ${[...allAddCols].join(', ')}`)
+    if (allAddTags.size > 0)
+      lines.push(`- Tags to add: ${[...allAddTags].map(planValue).join(', ')}`)
+    if (allRemoveTags.size > 0)
+      lines.push(`- Tags to remove: ${[...allRemoveTags].map(planValue).join(', ')}`)
+    if (allAddCols.size > 0)
+      lines.push(`- Collections to join: ${[...allAddCols].map(planValue).join(', ')}`)
     if (allRemoveCols.size > 0)
-      lines.push(`- Collections to leave: ${[...allRemoveCols].join(', ')}`)
+      lines.push(`- Collections to leave: ${[...allRemoveCols].map(planValue).join(', ')}`)
 
     lines.push('')
     for (const u of updates) {
       const parts: string[] = []
-      if (u.addTags && u.addTags.length > 0) parts.push(`+tags: ${u.addTags.join(', ')}`)
-      if (u.removeTags && u.removeTags.length > 0) parts.push(`-tags: ${u.removeTags.join(', ')}`)
+      if (u.addTags && u.addTags.length > 0)
+        parts.push(`+tags: ${u.addTags.map(planValue).join(', ')}`)
+      if (u.removeTags && u.removeTags.length > 0)
+        parts.push(`-tags: ${u.removeTags.map(planValue).join(', ')}`)
       if (u.addCollections && u.addCollections.length > 0)
-        parts.push(`+col: ${u.addCollections.join(', ')}`)
+        parts.push(`+col: ${u.addCollections.map(planValue).join(', ')}`)
       if (u.removeCollections && u.removeCollections.length > 0)
-        parts.push(`-col: ${u.removeCollections.join(', ')}`)
-      lines.push(`- \`${u.ref}\`: ${parts.join('; ')}`)
+        parts.push(`-col: ${u.removeCollections.map(planValue).join(', ')}`)
+      lines.push(`- ${planValue(u.ref)}: ${parts.join('; ')}`)
     }
   }
 
   lines.push(
     '',
-    'Updates and moves to Trash use version preconditions; creates are sent once in one native batch. Unmentioned properties are preserved.',
+    'This operation is not atomic: creates, updates and deletions can partially complete. Each object has a separate receipt. Updates and moves to Trash use version preconditions; creates are sent once in one native batch. Unmentioned properties are preserved.',
   )
   return lines.join('\n')
 }
@@ -341,7 +345,7 @@ function renderBatchItems(_args: BatchItemsArgs, value: BatchItemsOutput): Conte
     return renderDeclined()
   }
   const lines = [
-    `Batch items applied: ${value.created.length} created, ${value.updated.length} updated, ${value.deleted.length} trashed.`,
+    `Batch items ${value.kind}: ${value.created.length} created, ${value.updated.length} updated, ${value.deleted.length} trashed.`,
   ]
   if (value.created.length > 0) {
     lines.push(
@@ -373,10 +377,10 @@ function renderBatchItems(_args: BatchItemsArgs, value: BatchItemsOutput): Conte
   const unverified = value.unverified
   if (unverified.length > 0) {
     lines.push(
-      `Unverified creates (${unverified.length}; do not retry):`,
+      `Unverified operations (${unverified.length}; do not retry):`,
       ...unverified.map(
         (entry) =>
-          `- index ${entry.index}${entry.ref === undefined ? '' : `: ${entry.ref}`}${entry.key === undefined ? '' : ` (key ${entry.key})`}: ${entry.reason}; reconcile in Zotero before further action`,
+          `- [${entry.op}] index ${entry.index}${entry.ref === undefined ? '' : `: ${entry.ref}`}${entry.key === undefined ? '' : ` (key ${entry.key})`}: ${entry.reason}; reconcile in Zotero before further action`,
       ),
     )
   }
@@ -402,7 +406,7 @@ export function registerBatchItemsTool(ctx: Context, service: ZoteroService): ()
       description:
         'Create items, update tags and collections, or move items to trash in a single call. Operations are reviewed in one plan card before execution. ' +
         WRITE_PLAN_OUTCOME_DESCRIPTION +
-        ' Entries in unverified must be treated as committed: do not retry; reconcile by key/ref or check Zotero first.',
+        ' Results use kind: "applied", "partial", or "failed"; entries in unverified must be treated as committed: do not retry; reconcile by key/ref or check Zotero first.',
       parameters: BATCH_ITEMS_PARAMETERS,
       output: {
         schema: BATCH_ITEMS_OUTPUT_SCHEMA,
@@ -410,7 +414,7 @@ export function registerBatchItemsTool(ctx: Context, service: ZoteroService): ()
         presentationMeta: (_args, value): JsonValue => {
           if (value.kind === 'declined') return { kind: 'declined' }
           return {
-            kind: 'applied',
+            kind: value.kind,
             createdCount: value.created.length,
             created: value.created,
             updatedCount: value.updated.length,
@@ -436,11 +440,14 @@ export function registerBatchItemsTool(ctx: Context, service: ZoteroService): ()
       },
       presentResult: presentBatchItemsResult,
       async execute(args, exec): Promise<ZoteroBatchItemsOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildBatchItemsRequest(args, service.config)
-        const deletePreviews = await previewBatchItems(service, args.delete ?? [], exec.signal)
+        const deletes = request.delete?.map(formatRef) ?? []
+        const reviewed = { ...args, ...(args.delete === undefined ? {} : { delete: deletes }) }
+        const deletePreviews = await previewBatchItems(service, deletes, exec.signal)
         return await service.batchItems(request, {
           exec,
-          plan: batchItemsPlan(args, deletePreviews),
+          plan: batchItemsPlan(reviewed, deletePreviews),
           ...(request.delete !== undefined && request.delete.length > 0
             ? { risk: 'recoverable-delete' as const }
             : {}),

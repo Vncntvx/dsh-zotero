@@ -390,10 +390,10 @@ describe('zotero_update_collection', () => {
     ).toMatchObject({ kind: 'committed-unverified', reason: 'receipt-unknown' })
   })
 
-  it('formats updateNotePlan and truncates markdown over 300 characters', () => {
+  it('shows the complete updateNotePlan body beyond 300 characters', () => {
     const longMarkdown = 'a'.repeat(350)
     const plan = updateNotePlan({ ref: NOTE_REF, markdown: longMarkdown })
-    expect(plan).toContain('…')
+    expect(plan).toContain(longMarkdown)
     const shortPlan = updateNotePlan({ ref: NOTE_REF, markdown: 'short' })
     expect(shortPlan).not.toContain('…')
   })

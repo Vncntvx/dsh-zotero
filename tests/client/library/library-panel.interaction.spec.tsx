@@ -409,9 +409,9 @@ describe('the inspector requests the full child set', () => {
           ref: 'zotero://user/0/item/ITEM0001',
           include: ['notes', 'attachments', 'annotations'],
           childPages: {
-            notes: { offset: 0, limit: 20 },
-            attachments: { offset: 0, limit: 20 },
-            annotations: { offset: 0, limit: 20 },
+            notes: { offset: 0, limit: 50 },
+            attachments: { offset: 0, limit: 50 },
+            annotations: { offset: 0, limit: 50 },
           },
         },
         expect.anything(),

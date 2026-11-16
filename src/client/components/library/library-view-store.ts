@@ -128,6 +128,14 @@ export function createLibraryViewStore(): LibraryViewStore {
   const memories = new Map<string, Set<LibraryViewMemory>>()
   /** Session payloads, oldest first for eviction. */
   const sessionViews = new Map<string, LibrarySessionView>()
+  const touch = (key: string): LibrarySessionView | undefined => {
+    const view = sessionViews.get(key)
+    if (view !== undefined) {
+      sessionViews.delete(key)
+      sessionViews.set(key, view)
+    }
+    return view
+  }
   let disposed = false
 
   const clearView = (serverId: string, sessionId: string): void => {
@@ -209,7 +217,7 @@ export function createLibraryViewStore(): LibraryViewStore {
     },
     sessionView(serverId, sessionId) {
       if (disposed) return undefined
-      if (serverId !== undefined) return sessionViews.get(librarySessionKeyOf(serverId, sessionId))
+      if (serverId !== undefined) return touch(librarySessionKeyOf(serverId, sessionId))
       // Before the probe settles the instance is unknown. Answer only when the
       // session has exactly one cached payload: two instances must never hand
       // each other's item to an inspector.
@@ -217,7 +225,7 @@ export function createLibraryViewStore(): LibraryViewStore {
         const [, storedSessionId] = JSON.parse(key) as [string, string]
         return storedSessionId === sessionId
       })
-      return candidates.length === 1 ? candidates[0]![1] : undefined
+      return candidates.length === 1 ? touch(candidates[0]![0]) : undefined
     },
     writeSessionView(serverId, sessionId, view) {
       if (disposed) return

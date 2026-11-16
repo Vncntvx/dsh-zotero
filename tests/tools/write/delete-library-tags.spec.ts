@@ -258,7 +258,7 @@ describe('zotero_delete_library_tags presentation', () => {
   it('offers the pending card and projects the meta the card reads', () => {
     expect(tool().presentCall!(ARGS)).toEqual({
       card: 'generic',
-      kind: 'edit',
+      kind: 'delete',
       title: 'Delete Zotero library tags',
       rawInput: 'methods',
     })

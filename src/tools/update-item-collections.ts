@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -67,9 +68,9 @@ export function updateItemCollectionsPlan(args: UpdateItemCollectionsArgs): stri
   return [
     '**Update a Zotero item\u2019s collections**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Item: ${args.ref}`,
-    `- Collections to add: ${add.length === 0 ? '(none)' : add.map((c) => c.trim()).join(', ')}`,
-    `- Collections to remove: ${remove.length === 0 ? '(none)' : remove.map((c) => c.trim()).join(', ')}`,
+    `- Item: ${planValue(args.ref)}`,
+    `- Collections to add: ${add.length === 0 ? '(none)' : add.map((c) => planValue(c.trim())).join(', ')}`,
+    `- Collections to remove: ${remove.length === 0 ? '(none)' : remove.map((c) => planValue(c.trim())).join(', ')}`,
     "The item's other collections are preserved; the merged list is written under a version precondition. Names resolve before any write.",
   ].join('\n')
 }
@@ -120,7 +121,7 @@ export function registerUpdateItemCollectionsTool(
     defineTool({
       name: 'zotero_update_item_collections',
       description:
-        "Update one item's collection membership: add and remove settle in a single read-merge-write under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT and a re-run reapplies. Collections are refs or exact names; an unknown name fails before any write. When the merged membership equals the saved one nothing is written and unchanged is true. " +
+        "Update one item's collection membership: add and remove settle in a single read-merge-write under a version precondition, so a concurrent edit fails as ZOTERO_WRITE_CONFLICT. Child attachments and notes inherit membership from their parent and are refused. Collections are refs or exact names; an unknown name fails before any write. When the merged membership equals the saved one nothing is written and unchanged is true. " +
         WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: UPDATE_ITEM_COLLECTIONS_PARAMETERS,
       output: {

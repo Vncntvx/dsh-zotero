@@ -8,6 +8,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -92,11 +93,14 @@ export function deleteLibraryTagsPlan(
   ]
   for (const tag of tags) {
     const count = preview.counts?.get(tag)
-    lines.push(`- "${tag}": ${count === undefined ? 'unknown items' : `${count} items`}`)
+    const absent = preview.unknown?.includes(tag) === true
+    lines.push(
+      `- "${planValue(tag)}": ${absent ? 'proven absent (no-op)' : count === undefined ? 'unknown items' : `${count} items`}`,
+    )
   }
   if (preview.unknown !== undefined && preview.unknown.length > 0) {
     lines.push(
-      `- Unmatched names (proven no-ops: the listing carries no such tag): ${preview.unknown.join(', ')}`,
+      `- Unmatched names (proven no-ops: the listing carries no such tag): ${preview.unknown.map(planValue).join(', ')}`,
     )
   }
   lines.push(
@@ -140,26 +144,32 @@ async function previewLibraryTags(
   return await runPreview<TagPreview>(signal, {}, async () => {
     const wanted = new Set(tags)
     const counts = new Map<string, number | undefined>()
-    let offset = 0
-    for (;;) {
-      const browsed = await service.browse(
-        {
-          kind: 'tags',
-          scope: { kind: 'library' },
-          offset,
-          limit: service.config.maxBrowseResults,
-        },
-        signal,
-      )
-      for (const item of browsed.items) {
-        const row = item as TagRow
-        if (typeof row.tag === 'string' && wanted.has(row.tag) && !counts.has(row.tag)) {
-          counts.set(row.tag, typeof row.count === 'number' ? row.count : undefined)
+    for (const tag of tags) {
+      let offset = 0
+      let pages = 0
+      for (;;) {
+        const browsed = await service.browse(
+          {
+            kind: 'tags',
+            scope: { kind: 'library' },
+            offset,
+            limit: service.config.maxBrowseResults,
+            q: tag,
+            match: 'startsWith',
+          },
+          signal,
+        )
+        for (const item of browsed.items) {
+          const row = item as TagRow
+          if (typeof row.tag === 'string' && wanted.has(row.tag) && !counts.has(row.tag)) {
+            counts.set(row.tag, typeof row.count === 'number' ? row.count : undefined)
+          }
         }
+        const next = browsed.nextOffset
+        pages += 1
+        if (next === undefined || counts.has(tag) || pages >= 2) break
+        offset = next
       }
-      const next = browsed.nextOffset
-      if (next === undefined || counts.size === wanted.size) break
-      offset = next
     }
     const unknown = tags.filter((tag) => !counts.has(tag))
     return {
@@ -219,7 +229,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
       },
       presentCall: (args) => ({
         card: 'generic',
-        kind: 'edit',
+        kind: 'delete',
         title: 'Delete Zotero library tags',
         rawInput: args.tags.join(', '),
       }),
@@ -232,11 +242,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
           plan: deleteLibraryTagsPlan(args, preview),
           risk: 'irreversible-delete',
         })
-        // The plan card proved which names are absent; the receipt carries
-        // that proof so a no-op name is never counted as deleted.
-        return outcome.kind === 'deleted' && preview.unknown !== undefined
-          ? { ...outcome, absentTags: [...preview.unknown] }
-          : outcome
+        return outcome
       },
     }),
   )

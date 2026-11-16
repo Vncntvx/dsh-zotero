@@ -193,7 +193,7 @@ export function useSourcePage(
     }
     // The refs carry the settled state, so the cycle stays click-driven.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [call, click, currentServerId, enabled, key, sessionId, offset, total])
+  }, [call, click, currentServerId, enabled, key, sessionId, offset])
 
   return {
     pages,

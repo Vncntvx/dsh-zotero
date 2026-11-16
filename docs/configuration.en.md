@@ -2,14 +2,14 @@
 
 # Configuration Reference
 
-dsh-zotero configuration is split across four settings namespaces. Each namespace gets its field defaults from its own Schemastery schema and is validated on load or save; an invalid value blocks plugin loading or that namespace's configuration write.
+dsh-zotero organizes configuration into four settings namespaces. Each namespace gets its defaults from an independent Schemastery schema and is validated when loaded and saved; an invalid value blocks plugin loading or that namespace's configuration write.
 
-- Core `zotero` namespace: `src/config.ts`, 38 fields, runtime validation by `resolveConfig`;
+- Core `zotero` namespace: `src/config.ts`, 39 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 11 fields;
 - Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields;
 - Document parsing `enrichment` namespace: `src/enrichment/config.ts`, 9 fields.
 
-The four groups total 67 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
+The four groups total 68 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
 
 ## Settings tabs and field ownership
 
@@ -17,7 +17,7 @@ The configuration area of the plugin detail page is a 7-tab form that edits all 
 
 | Tab                 | Settings namespace  | Fields | Groups and fields                                                                                                                                                                                                                                                                                                                                              |
 | ------------------- | ------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| General             | `zotero`            | 6      | Literature trail: `webEnabled`; Writing: `writeEnabled`, `writePersistKey`, `writeNoteMaxChars`, `writeListMaxItems`, `writeAuthorizeDeadlineMs`                                                                                                                                                                                                               |
+| General             | `zotero`            | 7      | Literature trail: `webEnabled`; Writing: `writeEnabled`, `writePersistKey`, `writeNoteMaxChars`, `writeFieldMaxChars`, `writeListMaxItems`, `writeAuthorizeDeadlineMs`                                                                                                                                                                                         |
 | Connection          | `zotero`            | 5      | Connection: `baseUrl`, `provider`, `timeoutMs`, `maxInFlightRequests`, `scopeListingTtlMs`                                                                                                                                                                                                                                                                     |
 | Search & Extraction | `zotero`            | 14     | Search & Concurrency: `maxSearchResults`, `maxNoteScanRecords`, `searchConcurrency`, `graphConcurrency`, `retrieveAttachmentCap`; Passages & Fulltext Extraction: `maxEvidenceChars`, `maxEvidencePassages`, `maxNoteChars`, `maxNoteRecords`, `maxAnnotationRecords`, `maxAttachmentRecords`, `fulltextChunkWords`, `maxFulltextChars`, `fulltextWindowChars` |
 | Literature panel    | `library`, `zotero` | 13     | 11 panel preferences for display, details, browsing, PDF reading, citations and conversation; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                                                                               |
@@ -27,7 +27,7 @@ The configuration area of the plugin detail page is a 7-tab form that edits all 
 
 `webEnabled` sits under "General → Literature trail", and the toggle is named "Show literature trail"; it decides whether the literature trail tab appears at the top of the conversation. The literature panel also needs the `dsh-zotero/library` component row to be composed and this component's `rightSidebarEnabled` to be on, as described below in "Literature panel component configuration".
 
-## Core fields (`zotero`, 38)
+## Core fields (`zotero`, 39)
 
 | Field                      | Default                      | Description                                                                                                                                                                                                                                          |
 | -------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -61,8 +61,9 @@ The configuration area of the plugin detail page is a 7-tab form that edits all 
 | `defaultLocale`            | `en-US`                      | CSL citation locale; used by `citation` and `bibliography`, shared by tool exports and literature panel citation copying                                                                                                                             |
 | `writeEnabled`             | `false`                      | Whether to register and enable personal library write tools                                                                                                                                                                                          |
 | `writePersistKey`          | `true`                       | Whether Always-Allow write keys are stored in the host credentials manager; a stored grant can be revoked from the settings page's Writing group                                                                                                     |
+| `writeFieldMaxChars`       | `16384`                      | Character cap for other write fields; requests also have a 1 MiB body cap                                                                                                                                                                            |
 | `writeNoteMaxChars`        | `65536`                      | Character cap for one research note body                                                                                                                                                                                                             |
-| `writeListMaxItems`        | `50`                         | Item cap for list-shaped write arguments: `add`/`remove` on `update_item_tags`/`update_item_collections`, `tags` on `delete_library_tags`, and `collections`/`tags`/`sourceRefs` on `create_note`                                                    |
+| `writeListMaxItems`        | `50`                         | Item cap (1–50) for list-shaped write arguments: `add`/`remove` on `update_item_tags`/`update_item_collections`, `tags` on `delete_library_tags`, and `collections`/`tags`/`sourceRefs` on `create_note`                                             |
 | `writeAuthorizeDeadlineMs` | `120000`                     | Time limit for waiting on the Zotero authorization dialog during a write (ms)                                                                                                                                                                        |
 | `webEnabled`               | `true`                       | Whether to show the literature trail tab at the top of the conversation                                                                                                                                                                              |
 | `enableRunInBackground`    | `true`                       | Whether requests with `run_in_background: true` may run in the background (`zotero_export` / `zotero_changes` declare the parameter only while this is on and a `jobs` service is composed; an undeclared `true` still returns a structured refusal) |
@@ -74,7 +75,8 @@ Note: `foregroundWaitMs` controls how long a foreground task waits before it is 
 
 ## Validation rules
 
-`writeNoteMaxChars` constrains both the note creation and note update tools: before approval the original Markdown is checked by JavaScript string length, including whitespace and markup, and is never truncated automatically.
+`writeNoteMaxChars` constrains both the note creation and note update tools. Before approval, the original Markdown is checked by JavaScript string length; writes that exceed the limit are rejected.
+`writeFieldMaxChars` constrains other write fields. Each write is checked before approval against the field and 1 MiB request-body limits; exceeding either limit rejects the write.
 
 `resolveConfig` runs the following validation when the core component loads:
 
@@ -82,7 +84,7 @@ Note: `foregroundWaitMs` controls how long a foreground task waits before it is 
 - the `baseUrl` host must be a loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`); `localhost` resolves to `127.0.0.1` at runtime;
 - the `baseUrl` path must be `/api` or start with `/api/`;
 - `timeoutMs` must be a positive finite number;
-- every other numeric field (concurrency, the various caps, `scopeListingTtlMs`, `foregroundWaitMs`, `writeNoteMaxChars`, `writeListMaxItems`, `writeAuthorizeDeadlineMs`) must be a positive integer;
+- every other numeric field (concurrency, the various caps, `scopeListingTtlMs`, `foregroundWaitMs`, `writeNoteMaxChars`, `writeFieldMaxChars`, `writeListMaxItems`, `writeAuthorizeDeadlineMs`) must be a positive integer;
 - `writeEnabled`, `writePersistKey`, `webEnabled`, `enableRunInBackground`, `promoteOnTimeout`, and `debug` must be booleans;
 - `provider`, `defaultStyle`, and `defaultLocale` must be non-empty strings.
 

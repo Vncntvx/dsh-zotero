@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -59,9 +60,9 @@ export function updateItemTagsPlan(args: UpdateItemTagsArgs): string {
   return [
     '**Update tags on a Zotero item**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Item: ${args.ref}`,
-    `- Tags to add: ${add.length === 0 ? '(none)' : add.map((tag) => tag.trim()).join(', ')}`,
-    `- Tags to remove: ${remove.length === 0 ? '(none)' : remove.map((tag) => tag.trim()).join(', ')}`,
+    `- Item: ${planValue(args.ref)}`,
+    `- Tags to add: ${add.length === 0 ? '(none)' : add.map((tag) => planValue(tag.trim())).join(', ')}`,
+    `- Tags to remove: ${remove.length === 0 ? '(none)' : remove.map((tag) => planValue(tag.trim())).join(', ')}`,
     'Other tags on the item are preserved; the merged list is written under a version precondition.',
   ].join('\n')
 }

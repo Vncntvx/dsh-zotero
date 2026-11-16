@@ -13,6 +13,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
+import { requireUpdateField } from '../write-item-rules.js'
 import { formatRef, isRefString, libraryPrefix, parseRef, PERSONAL_LIBRARY } from '../refs.js'
 import { readAllPages } from './pagination.js'
 import type { WriteDomainDeps } from './write-deps.js'
@@ -191,16 +192,11 @@ export async function updateCollection(
   request: ZoteroUpdateCollectionRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroUpdateCollectionResult | ZoteroWriteCommittedUnverified> {
+  requireUpdateField({ name: request.name, parent: request.parent })
+  const name = request.name !== undefined ? requireNonBlank('name', request.name) : undefined
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.collection, ['collection'], serverId)
-  if (request.name === undefined && request.parent === undefined) {
-    throw new ZoteroError(
-      'At least one of name or parent must be provided.',
-      ZOTERO_INVALID_ARGUMENT,
-    )
-  }
   const { version } = await readRecordForWrite(deps, 'collection', ref.key, serverId, signal)
-  const name = request.name !== undefined ? requireNonBlank('name', request.name) : undefined
   const patch: Record<string, unknown> = {}
   if (name !== undefined) patch.name = name
   if (request.parent !== undefined) {

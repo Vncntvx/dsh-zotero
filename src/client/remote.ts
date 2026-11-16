@@ -29,9 +29,8 @@ import type {
  * Endpoint identity comes from `../contract.ts` (types + wire factory, no
  * zod). The result and parameter codecs are the client arm
  * (`./status-codec.ts`), which materializes the same strict schemas the host
- * registers. Client Gateway decodes a unary result only through
- * `descriptor.result.decode`, so a pure-JSON result arrives unvalidated and
- * the client factory is not called at runtime. Configuration reads and writes
+ * registers. Client Gateway validates unary results through the descriptor's
+ * decode hook. Configuration reads and writes
  * through the harness settings scope, not this namespace.
  * @module dsh-zotero/client/remote
  */

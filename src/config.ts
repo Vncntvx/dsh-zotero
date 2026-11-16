@@ -14,12 +14,14 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import {
   DEFAULT_MAX_RESPONSE_BYTES,
   LOCAL_PROVIDER_ID,
   ZOTERO_FULLTEXT_CHUNK_WORDS,
   ZOTERO_FULLTEXT_WINDOW_CHARS,
   ZOTERO_MAX_EVIDENCE_CHARS,
+  ZOTERO_WRITE_OBJECT_BATCH,
 } from './constants.js'
 
 export interface Config {
@@ -105,6 +107,7 @@ export interface Config {
   writePersistKey?: Volatile<boolean>
   /** Character budget for one research note body write; the converted HTML rides the batch's successful bucket (bounded by `maxResponseBytes`), and this bound keeps one pathological note from dominating a batch. */
   writeNoteMaxChars?: Volatile<number>
+  writeFieldMaxChars?: Volatile<number>
   /** Upper bound for items in one tags/collection-membership write's list arguments, the same scale as the write batch cap, so one call cannot fan out into many protocol batches. */
   writeListMaxItems?: Volatile<number>
   /** Deadline for the Zotero authorization dialog during a write (ms). That request waits for a person to read the dialog, so it is independent of `timeoutMs` and deliberately far above it. */
@@ -181,7 +184,13 @@ export const Config = Schema.object({
   writeEnabled: Schema.boolean().default(false).volatile(),
   writePersistKey: Schema.boolean().default(true).volatile(),
   writeNoteMaxChars: Schema.number().default(65_536).step(1).min(1).volatile(),
-  writeListMaxItems: Schema.number().default(50).step(1).min(1).volatile(),
+  writeFieldMaxChars: Schema.number().default(16_384).step(1).min(1).volatile(),
+  writeListMaxItems: Schema.number()
+    .default(50)
+    .step(1)
+    .min(1)
+    .max(ZOTERO_WRITE_OBJECT_BATCH)
+    .volatile(),
   writeAuthorizeDeadlineMs: Schema.number().default(120_000).step(1).min(1).volatile(),
   webEnabled: Schema.boolean().default(true).volatile(),
   enableRunInBackground: Schema.boolean().default(true).volatile(),
@@ -222,6 +231,7 @@ export interface ResolvedConfig {
   readonly writeEnabled: boolean
   readonly writePersistKey: boolean
   readonly writeNoteMaxChars: number
+  readonly writeFieldMaxChars: number
   readonly writeListMaxItems: number
   readonly writeAuthorizeDeadlineMs: number
   readonly webEnabled: boolean
@@ -391,6 +401,16 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertBoolean('enableRunInBackground', plain.enableRunInBackground)
   assertBoolean('promoteOnTimeout', plain.promoteOnTimeout)
   assertBoolean('debug', plain.debug)
+  for (const field of [
+    'timeoutMs',
+    'scopeListingTtlMs',
+    'foregroundWaitMs',
+    'writeAuthorizeDeadlineMs',
+  ] as const) {
+    const value = plain[field]
+    if (typeof value === 'number' && value > MAX_TIMER_DELAY_MS)
+      throw new Error(`dsh-zotero: ${field} exceeds the maximum timer delay ${MAX_TIMER_DELAY_MS}`)
+  }
   if (
     typeof plain.timeoutMs !== 'number' ||
     !Number.isFinite(plain.timeoutMs) ||
@@ -425,7 +445,10 @@ function assertResolvedConfig(plain: Record<string, unknown>): ResolvedConfig {
   assertPositiveInteger('scopeListingTtlMs', plain.scopeListingTtlMs)
   assertPositiveInteger('foregroundWaitMs', plain.foregroundWaitMs)
   assertPositiveInteger('writeNoteMaxChars', plain.writeNoteMaxChars)
+  assertPositiveInteger('writeFieldMaxChars', plain.writeFieldMaxChars)
   assertPositiveInteger('writeListMaxItems', plain.writeListMaxItems)
+  if (plain.writeListMaxItems > ZOTERO_WRITE_OBJECT_BATCH)
+    throw new Error(`writeListMaxItems must not exceed ${ZOTERO_WRITE_OBJECT_BATCH}`)
   assertPositiveInteger('writeAuthorizeDeadlineMs', plain.writeAuthorizeDeadlineMs)
   // Window bound: a window this wide cannot stay inline at the default budget
   // and always falls to file delivery, defeating the windowed read. The

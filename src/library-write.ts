@@ -1,6 +1,7 @@
 /** Human panel mutations enter the registered tool pipeline and its service approval seam. */
 import type { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { randomUUID } from 'node:crypto'
@@ -56,7 +57,11 @@ export async function executeLibraryWrite(
     throw new ZoteroError('Zotero writes are disabled.', ZOTERO_CAPABILITY_UNAVAILABLE)
   const sessionId = SessionId(request.sessionId)
   if (!ctx.get('remoteAccess')?.allows({ kind: 'session', id: sessionId })) {
-    throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
+    throw new RemoteError(
+      'remote-access/denied',
+      'Zotero writes are not authorized for this session.',
+      { action: 'zotero/write', reason: 'no-allow' },
+    )
   }
   const sessions = ctx.get('sessionController')
   const resolved = await sessions?.resolveAgent(sessionId)
@@ -103,7 +108,10 @@ export async function executeLibraryWrite(
       ? 'declined'
       : result.isError
         ? 'failed'
-        : kind === 'declined' || kind === 'committed-unverified'
+        : kind === 'declined' ||
+            kind === 'partial' ||
+            kind === 'failed' ||
+            kind === 'committed-unverified'
           ? kind
           : 'applied',
     message: result.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n'),

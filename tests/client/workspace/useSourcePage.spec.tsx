@@ -56,6 +56,29 @@ function okPage(page: ZoteroSourcePageResultView): RemoteResult<ZoteroSourcePage
 }
 
 describe('useSourcePage', () => {
+  it('updates the remaining count without fetching or duplicating a page when total changes', async () => {
+    const call = vi
+      .fn<SourcePageCall>()
+      .mockImplementation(async (request) => okPage(pageOf(request.offset ?? 0)))
+    const { result, rerender } = renderHook(
+      ({ total }) =>
+        useSourcePage(call, {
+          sessionId: 'session-1',
+          target: { kind: 'sources', filter: 'all' },
+          offset: 2,
+          total,
+        }),
+      { initialProps: { total: 5 } },
+    )
+    act(() => result.current.loadMore())
+    await waitFor(() => expect(result.current.pages).toHaveLength(1))
+    rerender({ total: 10 })
+    expect(result.current.pages).toHaveLength(1)
+    expect(call).toHaveBeenCalledTimes(1)
+    act(() => result.current.loadMore())
+    await waitFor(() => expect(result.current.pages).toHaveLength(2))
+    expect(call.mock.calls[1]![0].offset).toBe(4)
+  })
   it('appends the accepted pages and reports whether rows remain', async () => {
     const call = vi
       .fn<SourcePageCall>()

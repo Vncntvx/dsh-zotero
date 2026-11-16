@@ -1,5 +1,6 @@
 /** Complete document preparation owned by the host resource model, outside React. */
 import { useEffect, useMemo, useState } from 'react'
+import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError, remoteErrorOf, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
@@ -138,7 +139,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 
   private bumpProbeRevision(): void {
     this.probeGenerations++
-    for (const listener of this.probeListeners) listener()
+    notifySubscribers(this.probeListeners, '[zotero-parsed-probe]')
   }
   constructor(
     private readonly read: ParsedArtifactRead,
@@ -157,7 +158,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 
   private publish(entry: Entry, frame: RemoteResult<ParsedDocumentResource>): void {
     entry.frame = frame
-    for (const notify of entry.listeners) notify()
+    notifySubscribers(entry.listeners, '[zotero-parsed-document]')
   }
   private revoke(document: PreparedParsedDocument): void {
     for (const url of Object.values(document.images)) URL.revokeObjectURL(url)
@@ -342,6 +343,9 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 
   /** The cached tab title for one address; `missing` entries re-resolve. */
   titleSnapshot(address: string): ParsedTitleMeta {
+    const target = parseParsedTabAddress(address)
+    if (target !== undefined && !this.access(target.sessionId).getSnapshot())
+      return { state: 'missing' }
     return this.titles.get(address) ?? { state: 'missing' }
   }
 
@@ -349,10 +353,29 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     const listeners = this.titleListeners.get(address) ?? new Set()
     listeners.add(listener)
     this.titleListeners.set(address, listeners)
+    const target = parseParsedTabAddress(address)
+    const detach =
+      target === undefined
+        ? undefined
+        : this.access(target.sessionId).subscribe(() => {
+            if (!this.access(target.sessionId).getSnapshot()) {
+              this.titleReads.get(address)?.abort()
+              this.titleReads.delete(address)
+              this.titles.delete(address)
+              notifySubscribers(this.titleListeners.get(address) ?? [], '[zotero-parsed-title]', {
+                state: 'missing',
+              })
+            } else this.resolveTitle(address, target)
+          })
     return () => {
+      detach?.()
       listeners.delete(listener)
-      if (listeners.size === 0 && this.titleListeners.get(address) === listeners)
+      if (listeners.size === 0 && this.titleListeners.get(address) === listeners) {
         this.titleListeners.delete(address)
+        this.titles.delete(address)
+        this.titleReads.get(address)?.abort()
+        this.titleReads.delete(address)
+      }
     }
   }
 
@@ -362,7 +385,13 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
    * kept, and a `missing` result re-resolves on the next invalidation.
    */
   resolveTitle(address: string, target: ParsedTabTarget | undefined): void {
-    if (target === undefined || !isGenericParsedTitle(target.title)) return
+    if (
+      target === undefined ||
+      !isGenericParsedTitle(target.title) ||
+      !this.access(target.sessionId).getSnapshot() ||
+      !this.titleListeners.has(address)
+    )
+      return
     const cached = this.titles.get(address)
     if (cached?.state === 'ready' || cached?.state === 'resolving') return
     if (this.titleReads.has(address)) return
@@ -375,7 +404,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     }
     void this.read(request, controller.signal)
       .then((result) => {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted || !this.access(target.sessionId).getSnapshot()) return
         const value =
           result.ok && result.value.kind !== 'missing' && result.value.kind !== 'expired'
             ? result.value
@@ -399,7 +428,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 
   private publishTitle(address: string, meta: ParsedTitleMeta): void {
     this.titles.set(address, meta)
-    for (const notify of this.titleListeners.get(address) ?? []) notify(meta)
+    notifySubscribers(this.titleListeners.get(address) ?? [], '[zotero-parsed-title]', meta)
   }
 
   private invalidateTitles(sessionId: string, matches: (target: ParsedTabTarget) => boolean): void {
@@ -575,8 +604,9 @@ export function useParsedTitleMeta(
   const [snapshot, setSnapshot] = useState<ParsedTitleMeta>(() => documents.titleSnapshot(address))
   useEffect(() => {
     setSnapshot(documents.titleSnapshot(address))
+    const unsubscribe = documents.subscribeTitle(address, setSnapshot)
     documents.resolveTitle(address, stableTarget)
-    return documents.subscribeTitle(address, setSnapshot)
+    return unsubscribe
   }, [documents, address, stableTarget])
   return snapshot
 }

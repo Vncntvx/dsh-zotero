@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue, planBlock } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -32,12 +33,9 @@ import {
   renderCommittedUnverified,
 } from './write-present.js'
 import { assertNonBlank } from './validate.js'
-import {
-  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
-  WRITE_PLAN_OUTCOME_DESCRIPTION,
-  WRITE_PLAN_LIBRARY_LINE,
-} from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
+import { assertWritePayload } from './write-bounds.js'
 import type { ZoteroCreateItemOutcome, ZoteroCreateItemRequest } from '../types.js'
 
 const CREATE_ITEM_PARAMETERS = {
@@ -89,19 +87,23 @@ export function createItemPlan(args: CreateItemArgs): string {
   const lines = [
     '**Create a Zotero item**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Type: ${(args.itemType as string).trim()}`,
-    `- Title: ${args.title === undefined ? '(none)' : args.title.trim()}`,
-    `- URL: ${args.url === undefined ? '(none)' : args.url.trim()}`,
+    `- Type: ${planValue(args.itemType.trim())}`,
+    `- Title: ${args.title === undefined ? '(none)' : planValue(args.title.trim())}`,
+    `- URL: ${args.url === undefined ? '(none)' : planValue(args.url.trim())}`,
   ]
-  if (args.date !== undefined) lines.push(`- Date: ${args.date.trim()}`)
-  if (args.doi !== undefined) lines.push(`- DOI: ${args.doi.trim()}`)
-  if (args.publicationTitle !== undefined) lines.push(`- Venue: ${args.publicationTitle.trim()}`)
+  if (args.date !== undefined) lines.push(`- Date: ${planValue(args.date.trim())}`)
+  if (args.doi !== undefined) lines.push(`- DOI: ${planValue(args.doi.trim())}`)
+  if (args.publicationTitle !== undefined)
+    lines.push(`- Venue: ${planValue(args.publicationTitle.trim())}`)
+  if (args.abstractNote !== undefined)
+    lines.push('- Complete abstract:', planBlock(args.abstractNote.trim()))
   if (args.creators !== undefined && args.creators.length > 0) {
-    lines.push(`- Creators: ${args.creators.length} listed`)
+    lines.push(`- Creators: ${args.creators.length} listed`, planBlock(args.creators))
   }
-  if (args.tags !== undefined) lines.push(`- Tags: ${args.tags.join(', ') || '(none)'}`)
+  if (args.tags !== undefined)
+    lines.push(`- Tags: ${args.tags.map(planValue).join(', ') || '(none)'}`)
   if (args.collections !== undefined)
-    lines.push(`- Collections: ${args.collections.join(', ') || '(none)'}`)
+    lines.push(`- Collections: ${args.collections.map(planValue).join(', ') || '(none)'}`)
   lines.push('Only the closed field set is stored; no BibTeX or CSL-JSON channel exists.')
   return lines.join('\n')
 }
@@ -166,8 +168,7 @@ export function registerCreateItemTool(ctx: Context, service: ZoteroService): ()
       name: 'zotero_create_item',
       description:
         'Create a bibliographic item in the Zotero personal library from the closed field set (itemType plus title, url, date, doi, abstractNote, publicationTitle, creators, tags, collections). At least a title or a URL is required. There is no BibTeX or CSL-JSON intake: build the entry field-by-field instead. Zotero itself may show its authorization dialog on first use. ' +
-        WRITE_PLAN_OUTCOME_DESCRIPTION +
-        WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
+        WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: CREATE_ITEM_PARAMETERS,
       output: {
         schema: CREATE_ITEM_OUTPUT_SCHEMA,
@@ -182,6 +183,7 @@ export function registerCreateItemTool(ctx: Context, service: ZoteroService): ()
       }),
       presentResult: presentCreateItemResult,
       async execute(args, exec): Promise<ZoteroCreateItemOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args)
         return await service.createItem(request, { exec, plan: createItemPlan(args) })
       },

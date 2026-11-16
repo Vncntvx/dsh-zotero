@@ -21,8 +21,9 @@ import {
 import { NOTE_MARKDOWN_PARAMETER_DESCRIPTION } from './note-markdown.js'
 import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
-import { truncateText } from '../normalize-context.js'
+import { planValue, planBlock } from '../write-plan.js'
 import type { ZoteroService } from '../service.js'
+import { assertWritePayload } from './write-bounds.js'
 import type { ZoteroUpdateNoteOutcome, ZoteroUpdateNoteRequest } from '../types.js'
 
 const PARAMETERS = {
@@ -55,12 +56,12 @@ const OUTPUT = {
 type Output = InferValue<typeof OUTPUT>
 
 export function updateNotePlan(args: Args): string {
-  const { text, truncated } = truncateText(args.markdown, 300)
   return [
     '**Update a Zotero note**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Note: ${args.ref}`,
-    `- Markdown: ${truncated ? `${text}…` : text}`,
+    `- Note: ${planValue(args.ref)}`,
+    '- Complete Markdown body:',
+    planBlock(args.markdown),
     'The body is converted to Zotero note HTML before the versioned PATCH.',
   ].join('\n')
 }
@@ -100,7 +101,7 @@ export function registerUpdateNoteTool(ctx: Context, service: ZoteroService): ()
   return ctx.tools.register(
     defineTool({
       name: 'zotero_update_note',
-      description: `Replace an existing Zotero note body with markdown under a version precondition. ${WRITE_PLAN_OUTCOME_DESCRIPTION}`,
+      description: `Replace an existing Zotero note body with markdown under a version precondition. The target must be a note item; a non-note ref fails with ZOTERO_INVALID_ARGUMENT. ${WRITE_PLAN_OUTCOME_DESCRIPTION}`,
       parameters: PARAMETERS,
       output: {
         schema: OUTPUT,
@@ -115,6 +116,10 @@ export function registerUpdateNoteTool(ctx: Context, service: ZoteroService): ()
       }),
       presentResult: presentUpdateNoteResult,
       async execute(args, exec): Promise<ZoteroUpdateNoteOutcome> {
+        assertWritePayload(
+          args,
+          Math.max(service.config.writeFieldMaxChars, service.config.writeNoteMaxChars),
+        )
         const request: ZoteroUpdateNoteRequest = {
           item: parseWritableRef(args.ref, ['item']),
           markdown: assertNoteMarkdown(args.markdown, service.config.writeNoteMaxChars),

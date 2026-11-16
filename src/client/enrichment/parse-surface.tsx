@@ -1,5 +1,6 @@
 /** Session-bound UI composition for explicit document parsing. */
 import { useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { IJobs } from '@deepseek-ai/dsh-api-job-controller/client'
@@ -289,7 +290,7 @@ function capabilitySource(initial: DocumentParseCapabilities) {
       )
         return
       snapshot = next
-      for (const listener of listeners) listener()
+      notifySubscribers(listeners, '[zotero-parse-capability]')
     },
   }
 }

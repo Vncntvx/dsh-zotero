@@ -240,9 +240,10 @@ const WRITE_SUCCESS_CLAUSE =
   'Success is authoritative: report only proven facts; do not re-read to verify.'
 const WRITE_ITEM_TRASH_CLAUSE =
   'Item deletion verifies item and all children moved to recoverable Trash; report refs moved if partial.'
-const WRITE_MEMBERSHIP_CLAUSE = 'Tag/membership changes are atomic and version-guarded.'
-const WRITE_CLOSED_SCHEMA_CLAUSE = 'Create only from closed schema; no BibTeX/CSL-JSON.'
-const WRITE_SCALAR_PATCH_CLAUSE = 'Skip unchanged scalar PATCHes.'
+const WRITE_MEMBERSHIP_CLAUSE =
+  'Tag/membership changes are atomic per object, version-guarded; batches are not transactional.'
+const WRITE_CLOSED_SCHEMA_CLAUSE = 'Create from closed schema; no BibTeX/CSL-JSON.'
+const WRITE_SCALAR_PATCH_CLAUSE = 'Skip unchanged PATCHes.'
 const WRITE_NOTES_CLAUSE = 'notes use Markdown (escape unknown syntax)'
 const WRITE_REFS_CLAUSE = 'sources are refs'
 const WRITE_CHILD_NOTES_CLAUSE = 'child notes cannot take collections'
@@ -330,7 +331,7 @@ export function writePolicyTextOf(admitted: readonly ZoteroWriteToolName[]): str
  * The canonical full write policy: every core write tool admitted. Kept as a
  * literal for the byte-stable contract the lifecycle spec pins.
  */
-export const WRITE_POLICY_SENTENCE = `Writes (${WRITE_TOOL_LIST}): notes use Markdown (escape unknown syntax); sources are refs; child notes cannot take collections. Tag/membership changes are atomic and version-guarded. Create only from closed schema; no BibTeX/CSL-JSON. All writes require session approval and an approved plan; no bypass; decline stops. Item deletion verifies item and all children moved to recoverable Trash; report refs moved if partial. Collection deletion is irreversible (items stay, child collections go); library-tag deletion removes all item tags; plans state counts. Never retry committed-unverified/commit-unknown; reconcile by ref/key. ZOTERO_WRITE_CONFLICT requires one fresh read and replan. ZOTERO_WRITE_UNAUTHORIZED/ZOTERO_WRITE_APPROVAL_UNAVAILABLE means stop. Write only through these tools: no raw Zotero API, shell/scripts/interpreters, or database files; never ask for or reuse a local-API authorization key. Skip unchanged scalar PATCHes. Success is authoritative: report only proven facts; do not re-read to verify.`
+export const WRITE_POLICY_SENTENCE = `Writes (${WRITE_TOOL_LIST}): notes use Markdown (escape unknown syntax); sources are refs; child notes cannot take collections. Tag/membership changes are atomic per object, version-guarded; batches are not transactional. Create from closed schema; no BibTeX/CSL-JSON. All writes require session approval and an approved plan; no bypass; decline stops. Item deletion verifies item and all children moved to recoverable Trash; report refs moved if partial. Collection deletion is irreversible (items stay, child collections go); library-tag deletion removes all item tags; plans state counts. Never retry committed-unverified/commit-unknown; reconcile by ref/key. ZOTERO_WRITE_CONFLICT requires one fresh read and replan. ZOTERO_WRITE_UNAUTHORIZED/ZOTERO_WRITE_APPROVAL_UNAVAILABLE means stop. Write only through these tools: no raw Zotero API, shell/scripts/interpreters, or database files; never ask for or reuse a local-API authorization key. Skip unchanged PATCHes. Success is authoritative: report only proven facts; do not re-read to verify.`
 
 /**
  * What the model is told while the write capability is off. Silence here was

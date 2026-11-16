@@ -98,7 +98,7 @@ describe('panel write gateway', () => {
     agent.status = 'running'
     vi.spyOn(host.ctx.get('remoteAccess')!, 'allows').mockReturnValue(false)
     await expect(executeLibraryWrite(host.ctx, request, signal())).rejects.toMatchObject({
-      code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
+      code: 'remote-access/denied',
     })
     expect(host.mock.requests).toHaveLength(0)
   })

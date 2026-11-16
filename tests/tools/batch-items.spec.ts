@@ -232,7 +232,7 @@ describe('zotero_batch_items plan generation', () => {
   it('renders an empty plan and deletion targets whose preview is unknown', () => {
     expect(batchItemsPlan({})).toContain('Total operations: 0')
     const plan = batchItemsPlan({ delete: [ITEM_REF_1] })
-    expect(plan).toContain(`\`${ITEM_REF_1}\`:`)
+    expect(plan).toContain(`${ITEM_REF_1}:`)
     expect(plan).not.toContain('undefined')
   })
 })
@@ -357,6 +357,12 @@ describe('zotero_batch_items presentation', () => {
     expect(
       presentBatchItemsResultView(ok({ kind: 'applied', failedCount: 1, unverifiedCount: 0 })),
     ).toMatchObject({ title: expect.stringContaining('1 failed') })
+    expect(
+      presentBatchItemsResultView(ok({ kind: 'partial', failedCount: 1, unverifiedCount: 0 })),
+    ).toMatchObject({ title: expect.stringContaining('partial') })
+    expect(
+      presentBatchItemsResultView(ok({ kind: 'failed', failedCount: 2, unverifiedCount: 0 })),
+    ).toMatchObject({ title: expect.stringContaining('failed') })
   })
 
   it('renders partial unverified receipts and persists identity for reconciliation', () => {

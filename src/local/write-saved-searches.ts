@@ -10,6 +10,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { asString } from '../json.js'
+import { requireUpdateField } from '../write-item-rules.js'
 import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
 import { normalizeSavedSearchConditions } from '../normalize-saved-search.js'
 import type { WriteDomainDeps } from './write-deps.js'
@@ -80,13 +81,11 @@ export async function updateSavedSearch(
   request: ZoteroUpdateSavedSearchRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroSavedSearchResult | ZoteroWriteCommittedUnverified> {
+  requireUpdateField({ name: request.name, conditions: request.conditions })
+  if (request.conditions?.length === 0)
+    throw new ZoteroError('conditions cannot be empty.', ZOTERO_INVALID_ARGUMENT)
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
-  if (request.name === undefined && request.conditions === undefined)
-    throw new ZoteroError(
-      'At least one of name or conditions must be provided.',
-      ZOTERO_INVALID_ARGUMENT,
-    )
   const { data, version } = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
   const name = request.name ?? asString(data?.name)
   const conditions = request.conditions ?? normalizeSavedSearchConditions(data?.conditions)

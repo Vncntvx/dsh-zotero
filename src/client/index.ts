@@ -774,6 +774,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       const disposeType = ctx.sidebarRightTabs.register({
         id: PARSED_TAB_ID,
         kind: PARSED_TAB_KIND,
+        keepMounted: true,
         patterns: [PARSED_TAB_PATTERN],
         // The chip names the paper itself: no synthetic prefix, no suffix.
         title: () => panelT('tabParsedFallback'),
@@ -830,6 +831,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         const disposeType = ctx.sidebarRightTabs.register({
           id: PARSED_MANAGER_TAB_ID,
           kind: PARSED_MANAGER_TAB_KIND,
+          keepMounted: true,
           patterns: [PARSED_MANAGER_TAB_PATTERN],
           title: () => panelT('tabParsedManagerFallback'),
         })

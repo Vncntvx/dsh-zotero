@@ -110,12 +110,29 @@ export function DiagnosticsCard({
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
+  return (
+    <DiagnosticsCardSurface
+      subject={subject}
+      t={t}
+      probe={probe}
+      diagnostics={diagnostics}
+      useZoteroClient={useZoteroClient}
+    />
+  )
+}
+
+function DiagnosticsCardSurface({
+  t,
+  probe,
+  diagnostics,
+  useZoteroClient,
+}: ZoteroDiagnosticsCardProps): ReactNode {
   const client = useZoteroClient()
   return (
     <ZoteroSurfaceBoundary
       t={t}
       surface="diagnostics"
-      resetKey={pkgName}
+      resetKey={ZOTERO_REMOTE_PACKAGE}
       report={client.reportClientError}
     >
       <DiagnosticsCardBody t={t} probe={probe} diagnostics={diagnostics} />

@@ -7,6 +7,7 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -35,6 +36,19 @@ const otherSubject: PluginsSubject = {
 }
 
 describe('DiagnosticsCard', () => {
+  it('changes slot subjects on one mounted instance without changing hook order', async () => {
+    const useClient = () => {
+      useState(0)
+      return zoteroClientStub()
+    }
+    const diagnostics = vi.fn(async () => okView())
+    const props = { t, probe: fakeProbe, diagnostics, useZoteroClient: useClient }
+    const { rerender, container } = render(<DiagnosticsCard {...props} subject={otherSubject} />)
+    rerender(<DiagnosticsCard {...props} subject={targetSubject} />)
+    await waitFor(() => expect(diagnostics).toHaveBeenCalled())
+    rerender(<DiagnosticsCard {...props} subject={otherSubject} />)
+    expect(container.innerHTML).toBe('')
+  })
   it('returns null when the subject is another plugin', () => {
     const diagnostics = vi.fn(async () => okView())
     const { container } = render(

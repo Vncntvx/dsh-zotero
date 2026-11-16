@@ -28,6 +28,20 @@ afterEach(() => {
 })
 
 describe('SourceInspector component', () => {
+  it('changes between an empty and a selected source on the same mounted inspector', () => {
+    const source = sourceOf({ title: 'Selected paper' })
+    const props = {
+      workspace: workspaceOf([source]),
+      selectionHidden: false,
+      setMobilePane: vi.fn(),
+      t,
+    }
+    const { rerender } = render(<SourceInspector {...props} selectedKey={undefined} />)
+    rerender(<SourceInspector {...props} selectedKey={source.key} />)
+    expect(screen.getByText('Selected paper')).toBeTruthy()
+    rerender(<SourceInspector {...props} selectedKey={undefined} />)
+    expect(screen.getByText(t('inspectorEmptyNote'))).toBeTruthy()
+  })
   it('renders empty note when no item is selected', () => {
     const workspace = workspaceOf([])
     render(

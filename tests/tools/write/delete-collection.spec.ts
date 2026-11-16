@@ -337,7 +337,7 @@ describe('zotero_delete_collection presentation', () => {
   it('offers the pending card and projects the meta the card reads', () => {
     expect(tool().presentCall!(ARGS)).toEqual({
       card: 'generic',
-      kind: 'edit',
+      kind: 'delete',
       title: 'Delete Zotero collection',
       rawInput: 'Field notes',
     })

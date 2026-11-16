@@ -6,6 +6,7 @@
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { shallowEqual } from '@deepseek-ai/dsh-client-store'
 import { isBibliographyDeliverable, type DeliverableFileMeta } from '../../bibliography.ts'
 import { BibliographyLibraryButton } from '../document/BibliographyLibraryButton.tsx'
 
@@ -66,7 +67,7 @@ export function resolveDeliverablePath(
 
 export function DeliverableZoteroAction(props: DeliverableZoteroActionProps) {
   const { actionUrl, t, useChat, onOpenLibrary } = props
-  const file = useChat((snapshot) => resolveDeliverableFile(actionUrl, snapshot))
+  const file = useChat((snapshot) => resolveDeliverableFile(actionUrl, snapshot), shallowEqual)
 
   if (!isBibliographyDeliverable(file)) return null
 

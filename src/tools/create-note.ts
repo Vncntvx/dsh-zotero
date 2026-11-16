@@ -20,7 +20,7 @@ import {
 import type { ResolvedConfig } from '../config.js'
 import { invalidArgs, WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
 import { isRefString, parseSupportedRef } from '../refs.js'
-import { truncateText } from '../normalize-context.js'
+import { planValue, planBlock } from '../write-plan.js'
 import { renderDeclined } from './present.js'
 import {
   APPLIED_ENVELOPE_PROPERTIES,
@@ -38,12 +38,9 @@ import {
   parseWritableRef,
   WRITE_REF_ARG_HINT,
 } from './validate.js'
-import {
-  WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
-  WRITE_PLAN_OUTCOME_DESCRIPTION,
-  WRITE_PLAN_LIBRARY_LINE,
-} from '../write-approval.js'
+import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
+import { assertWritePayload } from './write-bounds.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
 const CREATE_NOTE_PARAMETERS = {
@@ -115,12 +112,8 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
 type CreateNoteOutput = InferValue<typeof CREATE_NOTE_OUTPUT_SCHEMA>
 
 /** Body characters shown on the approval card; the full markdown is what gets written. */
-const NOTE_PREVIEW_CHARS = 400
-
 /** The deterministic plan markdown the approval card renders. */
 export function createNotePlan(args: CreateNoteArgs): string {
-  const { text, truncated } = truncateText(args.markdown, NOTE_PREVIEW_CHARS)
-  const preview = truncated ? `${text}…` : text
   // buildRequest already refused non-empty collections on a child note, so a
   // planned child write never carries collections. The card must say what the
   // domain will actually do (inherit), not echo a list that cannot land.
@@ -129,15 +122,16 @@ export function createNotePlan(args: CreateNoteArgs): string {
       ? '(inherited from parent item)'
       : args.collections === undefined || args.collections.length === 0
         ? '(none)'
-        : args.collections.map((collection) => collection.trim()).join(', ')
+        : args.collections.map((collection) => planValue(collection.trim())).join(', ')
   return [
     '**Create a Zotero research note**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Kind: ${args.parentItem === undefined ? 'standalone note' : `child note under ${args.parentItem}`}`,
+    `- Kind: ${args.parentItem === undefined ? 'standalone note' : `child note under ${planValue(args.parentItem)}`}`,
     `- Collections: ${collections}`,
-    `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.map((tag) => tag.trim()).join(', ')}`,
-    `- Sources: ${args.sourceRefs === undefined || args.sourceRefs.length === 0 ? '(none)' : args.sourceRefs.join(', ')}`,
-    `- Body preview: ${preview}`,
+    `- Tags: ${args.tags === undefined || args.tags.length === 0 ? '(none)' : args.tags.map((tag) => planValue(tag.trim())).join(', ')}`,
+    `- Sources: ${args.sourceRefs === undefined || args.sourceRefs.length === 0 ? '(none)' : args.sourceRefs.map(planValue).join(', ')}`,
+    '- Complete Markdown body:',
+    planBlock(args.markdown),
     'The markdown is converted to Zotero note HTML; unknown syntax is escaped, never executed.',
   ].join('\n')
 }
@@ -216,8 +210,7 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       name: 'zotero_create_note',
       description:
         "Create a research note in the Zotero personal library, either standalone or a child note under a parent item, with tags, collections, and source relations. The markdown body is converted to Zotero note HTML under an escape-unknown grammar (raw HTML is escaped, never executed). Collections apply to standalone notes only; a child-note call that also passes non-empty collections is refused as ZOTERO_INVALID_ARGUMENT before any plan is shown (child notes inherit their parent item's collections). Zotero itself may show its authorization dialog on first use. " +
-        WRITE_PLAN_OUTCOME_DESCRIPTION +
-        WRITE_COMMITTED_UNVERIFIED_DESCRIPTION,
+        WRITE_PLAN_OUTCOME_DESCRIPTION,
       parameters: CREATE_NOTE_PARAMETERS,
       output: {
         schema: CREATE_NOTE_OUTPUT_SCHEMA,
@@ -234,6 +227,10 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       // timeoutMs is deliberately omitted: the plan-review card waits on user
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroCreateNoteOutcome> {
+        assertWritePayload(
+          args,
+          Math.max(service.config.writeFieldMaxChars, service.config.writeNoteMaxChars),
+        )
         // Validate before the plan: a malformed ask should never bother the
         // user with an approval for a call that cannot run. The plan review
         // itself is the seam's (service.createNote), so no caller can skip it.

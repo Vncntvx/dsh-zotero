@@ -1465,7 +1465,8 @@ export interface ZoteroBatchOperationUnverified {
 export type ZoteroBatchCreateUnverified = ZoteroBatchOperationUnverified & { op: 'create' }
 
 export interface ZoteroBatchItemsResult {
-  kind: 'applied'
+  /** `failed` means no operation was applied; `partial` means some failed or remain unverified. */
+  kind: 'applied' | 'partial' | 'failed'
   total: number
   created: ZoteroBatchCreateItemResult[]
   updated: ZoteroBatchUpdateItemResult[]

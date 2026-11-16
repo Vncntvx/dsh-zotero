@@ -7,12 +7,15 @@ import { ZOTERO_LIBRARY_VERSION_HEADER, ZOTERO_WRITE_OBJECT_BATCH } from '../con
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_UNEXPECTED,
+  ZOTERO_WRITE_CONFLICT,
   ZoteroError,
   ZoteroWriteCommitUnknownError,
   writeListTooLongMessage,
   writeListEmptyMessage,
 } from '../errors.js'
-import { parseNonNegativeSafeInteger } from '../json.js'
+import { asRecord, asString, parseNonNegativeSafeInteger } from '../json.js'
+import { readAllPages, requireLibraryVersionHeader } from './pagination.js'
 import { libraryPrefix, PERSONAL_LIBRARY, formatRef } from '../refs.js'
 import { itemRef } from './write-refs.js'
 import { readTrashGraph } from './trash-item.js'
@@ -178,6 +181,41 @@ export async function deleteLibraryTags(
     serverId,
     signal,
   )
+  const present = new Set<string>()
+  const wanted = new Set(tags)
+  await readAllPages(
+    deps.client,
+    `${libraryPrefix(PERSONAL_LIBRARY)}/tags`,
+    {},
+    effectiveServerId,
+    signal,
+    { body: 'tags', page: 'tag deletion snapshot' },
+    undefined,
+    (rows, headers) => {
+      if (requireLibraryVersionHeader(headers, 'tag deletion snapshot') !== precondition)
+        throw new ZoteroError(
+          'The library changed while reading tags; review the deletion again.',
+          ZOTERO_WRITE_CONFLICT,
+        )
+      for (const row of rows) {
+        const record = asRecord(row)
+        const tag = asString(record?.tag) ?? asString(asRecord(record?.data)?.tag)
+        if (tag === undefined)
+          throw new ZoteroError('Zotero returned a tag without a name.', ZOTERO_UNEXPECTED)
+        if (wanted.has(tag)) present.add(tag)
+      }
+    },
+  )
+  const selectedTags = tags.filter((tag) => present.has(tag))
+  const deletedTags = [...selectedTags].sort()
+  const absentTags = tags.filter((tag) => !present.has(tag)).sort()
+  const receipt = {
+    kind: 'deleted' as const,
+    deletedTags,
+    ...(absentTags.length === 0 ? {} : { absentTags }),
+    serverId: effectiveServerId,
+  }
+  if (deletedTags.length === 0) return { ...receipt, libraryVersion: precondition }
   let libraryVersion: number
   try {
     ;({ libraryVersion } = await withWriteKey(
@@ -185,7 +223,7 @@ export async function deleteLibraryTags(
       effectiveServerId,
       signal,
       async (apiKey) =>
-        await deps.writer.delete(tagsDeletePath(tags), {
+        await deps.writer.delete(tagsDeletePath(selectedTags), {
           serverId: effectiveServerId,
           apiKey,
           ifUnmodifiedSinceVersion: precondition,
@@ -197,9 +235,7 @@ export async function deleteLibraryTags(
     return receiptOfCommitUnknown(error, { kind: 'tag', serverId: effectiveServerId })
   }
   return {
-    kind: 'deleted',
-    deletedTags: [...tags].sort(),
+    ...receipt,
     libraryVersion,
-    serverId: effectiveServerId,
   }
 }

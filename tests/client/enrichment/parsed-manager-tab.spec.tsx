@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** The manager tab names each row, states its facts, and owns open / reparse / discard. */
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ParsedManagerTitle } from '../../../src/client/enrichment/ParsedManagerTab.tsx'
@@ -212,6 +212,31 @@ describe('parsed document manager tab', () => {
       { sessionId: SESSION, offset: 1, limit: 50 },
       expect.any(AbortSignal),
     )
+  })
+
+  it('discards a late show-more page when the active filter has changed', async () => {
+    const pending = deferred<ListResult>()
+    let calls = 0
+    const w = world({
+      listImpl: async () => {
+        calls++
+        return calls === 1
+          ? listOf([row], 120)
+          : calls === 2
+            ? await pending.promise
+            : listOf([secondRow], 1)
+      },
+    })
+    await screen.findByText(TITLE)
+    fireEvent.click(screen.getByRole('button', { name: en.parsedManagerShowMore }))
+    fireEvent.click(screen.getByRole('button', { name: en.parsedManagerFilterOrphan }))
+    expect(await screen.findByText(SECOND_TITLE)).toBeDefined()
+    await act(async () => {
+      pending.resolve(listOf([row], 120))
+    })
+    expect(screen.queryByText(TITLE)).toBeNull()
+    expect(screen.getByText(SECOND_TITLE)).toBeDefined()
+    expect(w.management.listParsedDocuments).toHaveBeenCalledTimes(3)
   })
 
   it('withdraws to the unavailable state and stops requesting', () => {

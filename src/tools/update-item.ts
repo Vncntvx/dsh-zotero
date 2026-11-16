@@ -8,6 +8,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
@@ -31,6 +32,7 @@ import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { validateItemUpdateFields } from '../write-item-rules.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
+import { assertWritePayload } from './write-bounds.js'
 import type {
   ZoteroUpdateItemOutcome,
   ZoteroUpdateItemRequest,
@@ -87,8 +89,8 @@ export function updateItemPlan(args: UpdateItemArgs): string {
   return [
     '**Update a Zotero item**',
     WRITE_PLAN_LIBRARY_LINE,
-    `- Item: ${args.ref}`,
-    ...entries.map(([field, value]) => `- ${field}: ${String(value).trim().slice(0, 200)}`),
+    `- Item: ${planValue(args.ref)}`,
+    ...entries.map(([field, value]) => `- ${planValue(field)}: ${planValue(value.trim())}`),
     'Each field must be valid for the item type; an invalid field refuses the write before any PATCH.',
   ].join('\n')
 }
@@ -166,6 +168,7 @@ export function registerUpdateItemTool(ctx: Context, service: ZoteroService): ()
       }),
       presentResult: presentUpdateItemResult,
       async execute(args, exec): Promise<ZoteroUpdateItemOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args)
         return await service.updateItem(request, { exec, plan: updateItemPlan(args) })
       },

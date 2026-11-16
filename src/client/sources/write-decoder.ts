@@ -23,7 +23,15 @@ import { boolField, numberField } from '../../json.ts'
  * the receipt shows the tool's own sentence, which already names both, and a
  * second copy of that wording is a second thing to keep in step.
  */
-const WRITE_KINDS = ['declined', 'applied', 'deleted', 'committed-unverified', 'restored'] as const
+const WRITE_KINDS = [
+  'declined',
+  'applied',
+  'partial',
+  'failed',
+  'deleted',
+  'committed-unverified',
+  'restored',
+] as const
 
 type WriteKind = (typeof WRITE_KINDS)[number]
 
