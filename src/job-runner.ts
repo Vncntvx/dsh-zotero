@@ -627,7 +627,11 @@ export class ZoteroJobRunner {
     }
 
     // Settled within foreground wait
-    registry.remove(id, owner)
+    try {
+      registry.remove(id, owner)
+    } catch (error) {
+      this.sink?.warn('job.remove', errorMessageOf(error), { jobId: id })
+    }
 
     if (view.status === 'failed') {
       // Prefer the producer's own error: the registry's `detail` is a string,
@@ -649,7 +653,9 @@ export class ZoteroJobRunner {
       throw error
     }
 
-    return { kind: 'foreground', value: resultValue! }
+    if (resultValue === undefined)
+      throw new ZoteroError('The completed Zotero job produced no value.', ZOTERO_UNEXPECTED)
+    return { kind: 'foreground', value: resultValue }
   }
 
   /** Remove a cancelled foreground record after the registry has settled it. */

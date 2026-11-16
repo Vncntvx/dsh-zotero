@@ -5,14 +5,51 @@
  * @module dsh-zotero/parsed-title
  */
 
-/** The first Markdown H1 of a document, with emphasis and code spans stripped. */
+/** ATX headings outside fenced and indented code, with original UTF-16 offsets. */
+export function markdownHeadingsOf(
+  markdown: string,
+): { level: number; title: string; start: number }[] {
+  const headings: { level: number; title: string; start: number }[] = []
+  let fence: { marker: string; length: number } | undefined
+  for (const line of markdown.matchAll(/^.*$/gm)) {
+    const value = line[0].replace(/\r$/, '')
+    const delimiter = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(value)
+    if (fence !== undefined) {
+      if (
+        delimiter !== null &&
+        delimiter[1]![0] === fence.marker &&
+        delimiter[1]!.length >= fence.length &&
+        delimiter[2]!.trim() === ''
+      )
+        fence = undefined
+      continue
+    }
+    if (delimiter !== null) {
+      if (delimiter[1]![0] !== '`' || !delimiter[2]!.includes('`'))
+        fence = { marker: delimiter[1]![0]!, length: delimiter[1]!.length }
+      continue
+    }
+    const heading = /^ {0,3}(#{1,6})(?:[ \t]+|$)(.*)$/.exec(value)
+    if (heading !== null)
+      headings.push({
+        level: heading[1]!.length,
+        title: heading[2]!.replace(/[ \t]+#+[ \t]*$/, '').trim(),
+        start: line.index,
+      })
+  }
+  return headings
+}
+
+/** The first real Markdown H1, with emphasis and code spans stripped. */
 export function extractMarkdownTitleOf(markdown: string): string | undefined {
-  const match = markdown.match(/^\s*#\s+(.+)$/m)
-  if (!match) return undefined
-  return match[1]!
-    .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .trim()
+  const heading = markdownHeadingsOf(markdown).find((candidate) => candidate.level === 1)
+  if (heading === undefined) return undefined
+  return (
+    heading.title
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .trim() || undefined
+  )
 }
 
 /**

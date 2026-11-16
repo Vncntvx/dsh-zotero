@@ -3,7 +3,7 @@
  * on disk; MinerU bodies remain owned by enrichment and are looked up per read.
  * @module dsh-zotero/scholarly/fulltext/store
  */
-import { mkdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { join } from 'node:path'
@@ -58,6 +58,7 @@ const CACHE_VERSION = 3
 const CACHE_DIRECTORY = `v${CACHE_VERSION}`
 const MAX_RECORD_BYTES = 4 * 1_048_576
 const DEFAULT_MEMORY_ITEMS = 8
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /** Same-source URL identity: preserve query spelling/order, remove only the fragment. */
 export function scholarlySourceIdentityOf(raw: string): string {
@@ -226,6 +227,9 @@ export class ScholarlyTextStore {
       return await corrupt('record shape')
     }
     if (envelope.key !== key) return await corrupt('cache key mismatch')
+    const fileInfo = await stat(path).catch(() => undefined)
+    if (fileInfo !== undefined && Date.now() - fileInfo.mtimeMs > CACHE_TTL_MS)
+      return await corrupt('record expired')
     const entry = entryOf(envelope.entry)
     if (!entry) return await corrupt('record shape')
     if (this.disposed) return { kind: 'miss' }
@@ -244,7 +248,11 @@ export class ScholarlyTextStore {
           : { kind: 'document', record }
     const validated = entryOf(entry)
     if (!validated) throw new Error('scholarly store: invalid record')
-    const encoded = JSON.stringify({ version: CACHE_VERSION, key, entry: validated })
+    const encoded = JSON.stringify({
+      version: CACHE_VERSION,
+      key,
+      entry: validated,
+    })
     if (Buffer.byteLength(encoded, 'utf8') > MAX_RECORD_BYTES) {
       throw new Error(
         `scholarly store: record "${key}" exceeds the ${MAX_RECORD_BYTES}-byte cache ceiling`,

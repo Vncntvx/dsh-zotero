@@ -68,7 +68,7 @@ import {
 /**
  * The wire boundary's single source: every zod schema the `zotero` namespace
  * validates with, and the one shared invocation list both halves register.
- * `ZOTERO_COMMON_INVOCATIONS` materializes each schema once through
+ * `ZOTERO_COMMON_INVOCATIONS` names lazy schemas through
  * `strictCodec()`; the host manifest aliases it in `src/status-codec.ts` and
  * the browser face aliases it in `src/client/status-codec.ts`. Neither half
  * imports the other's module or builds its own descriptor list, so the two
@@ -147,20 +147,25 @@ import {
   ZOTERO_YEAR_MIN,
 } from './constants.js'
 
+/** Memoize each boundary only when it is first parsed or reflected. */
+function lazySchema<S extends z.ZodType>(factory: () => S): z.ZodLazy<S> {
+  let schema: S | undefined
+  return z.lazy(() => (schema ??= factory()))
+}
+
 /**
  * The panel's sort fields, derived from the domain's one array so the two
  * cannot drift (`tests/unit/wire-schemas.spec.ts` additionally pins the
  * exact order).
  */
-export const zoteroLibrarySortSchema = z.enum(
-  ZOTERO_SORT_FIELDS as [ZoteroLibrarySortField, ...ZoteroLibrarySortField[]],
+export const zoteroLibrarySortSchema = lazySchema(() =>
+  z.enum(ZOTERO_SORT_FIELDS as [ZoteroLibrarySortField, ...ZoteroLibrarySortField[]]),
 )
 
 /**
- * Wrap a wire schema in the strict codec arm Typert expects. The strict arm is
- * exactly `{ mode, typeSymbol, create }` (plus optional `encode`/`decode` for
- * byte-carrying results, which these pure-JSON views do not need), so no live
- * schema property is carried and `create()` materializes on first use.
+ * Wrap a wire schema in the strict codec arm Typert expects. The codec
+ * validates at both result boundaries: the Host encodes and the Client decodes.
+ * Input validation continues to use create() through the Gateway.
  * @param typeSymbol - the boundary type identity the manifest declares.
  * @param schema - the shared wire schema both halves validate through.
  * @returns the strict codec arm.
@@ -168,415 +173,480 @@ export const zoteroLibrarySortSchema = z.enum(
 export function strictCodec(
   typeSymbol: string,
   schema: z.ZodType,
-): Extract<TypertCodec, { mode: 'strict' }> {
-  return { mode: 'strict', typeSymbol, create: () => schema }
+): Extract<TypertCodec, { mode: 'strict' }> & { create: () => z.ZodType } {
+  return {
+    mode: 'strict',
+    typeSymbol,
+    create: () => schema,
+    encode: (value) => schema.parse(value),
+    decode: (value) => schema.parse(value),
+  }
 }
 
 /** Wire schema: one status view (strict; absent optional facts stay absent). */
-export const zoteroStatusSchema = z
-  .object({
-    providerId: z.string(),
-    sourceProjection: z.discriminatedUnion('state', [
-      z.object({ state: z.literal('not-composed') }).strict(),
-      z.object({ state: z.literal('pending') }).strict(),
-      z.object({ state: z.literal('ready') }).strict(),
-      z
-        .object({
-          state: z.literal('failed'),
-          code: z.literal(ZOTERO_SOURCE_PROJECTION_FAILED),
-        })
-        .strict(),
-    ]),
-    // Optional on the wire because a service that is not composed dialled
-    // nothing; required of every answer that reached a provider, which is what
-    // `ZoteroStatus` (the provider's own record) carries.
-    endpoint: z.string().optional(),
-    connected: z.boolean(),
-    apiVersion: z.string().optional(),
-    serverId: z.string().optional(),
-    schemaVersion: z.string().optional(),
-    zoteroVersion: z.string().optional(),
-    write: z.object({ enabled: z.boolean(), authorized: z.boolean() }).strict().optional(),
-    // Optional on the wire because a connected probe has nothing to diagnose;
-    // the host-internal `ZoteroStatus` keeps the total field with the
-    // `ZOTERO_DIAGNOSIS_OK` sentinel, which the wire producer strips.
-    diagnosis: z.string().optional(),
-  })
-  .strict()
-  .readonly()
-
-/** Wire schema: resolveAttachment parameter (a non-empty string ref). */
-export const zoteroRefSchema = z.string().min(1)
-
-/** Wire schema: resolveAttachment result. */
-export const zoteroAttachmentLocationSchema = z
-  .object({
-    ref: z.string(),
-    kind: z.enum(['file', 'url']),
-    title: z.string(),
-    contentType: z.string(),
-    path: z.string().optional(),
-    url: z.string().optional(),
-  })
-  .strict()
-  .readonly()
-
-/** Wire schema: the write-grant revocation result (strict). */
-export const zoteroWriteGrantRevokeSchema = z.object({ removed: z.boolean() }).strict()
-
-/** Wire schema: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
-export const zoteroDiagnosticsSchema = z
-  .object({
-    entries: z
-      .array(
+export const zoteroStatusSchema = lazySchema(() =>
+  z
+    .object({
+      providerId: z.string(),
+      sourceProjection: z.discriminatedUnion('state', [
+        z.object({ state: z.literal('not-composed') }).strict(),
+        z.object({ state: z.literal('pending') }).strict(),
+        z.object({ state: z.literal('ready') }).strict(),
         z
           .object({
-            seq: z.number(),
-            ts: z.number(),
-            level: z.enum(['debug', 'info', 'warn', 'error']),
-            event: z.string(),
-            message: z.string(),
-            count: z.number(),
-            detail: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+            state: z.literal('failed'),
+            code: z.literal(ZOTERO_SOURCE_PROJECTION_FAILED),
           })
-          .strict()
-          .readonly(),
-      )
-      .readonly(),
-    total: z.number(),
-    truncated: z.boolean(),
-    debug: z.boolean(),
-  })
-  .strict()
-  .readonly()
+          .strict(),
+      ]),
+      // Optional on the wire because a service that is not composed dialled
+      // nothing; required of every answer that reached a provider, which is what
+      // `ZoteroStatus` (the provider's own record) carries.
+      endpoint: z.string().optional(),
+      connected: z.boolean(),
+      apiVersion: z.string().optional(),
+      serverId: z.string().optional(),
+      schemaVersion: z.string().optional(),
+      zoteroVersion: z.string().optional(),
+      write: z.object({ enabled: z.boolean(), authorized: z.boolean() }).strict().optional(),
+      // Optional on the wire because a connected probe has nothing to diagnose;
+      // the host-internal `ZoteroStatus` keeps the total field with the
+      // `ZOTERO_DIAGNOSIS_OK` sentinel, which the wire producer strips.
+      diagnosis: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
+
+/** Wire schema: resolveAttachment parameter (a non-empty string ref). */
+export const zoteroRefSchema = lazySchema(() => z.string().min(1))
+
+/** Wire schema: resolveAttachment result. */
+export const zoteroAttachmentLocationSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      kind: z.enum(['file', 'url']),
+      title: z.string(),
+      contentType: z.string(),
+      path: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
+
+/** Wire schema: the write-grant revocation result (strict). */
+export const zoteroWriteGrantRevokeSchema = lazySchema(() =>
+  z.object({ removed: z.boolean() }).strict(),
+)
+
+/** Wire schema: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
+export const zoteroDiagnosticsSchema = lazySchema(() =>
+  z
+    .object({
+      entries: z
+        .array(
+          z
+            .object({
+              seq: z.number(),
+              ts: z.number(),
+              level: z.enum(['debug', 'info', 'warn', 'error']),
+              event: z.string(),
+              message: z.string(),
+              count: z.number(),
+              detail: z
+                .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+                .optional(),
+            })
+            .strict()
+            .readonly(),
+        )
+        .readonly(),
+      total: z.number(),
+      truncated: z.boolean(),
+      debug: z.boolean(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: reportClientError parameter (surface + message required, stacks optional). */
-export const zoteroClientErrorReportSchema = z
-  .object({
-    surface: z.string().min(1),
-    message: z.string().min(1),
-    stack: z.string().optional(),
-    componentStack: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroClientErrorReportSchema = lazySchema(() =>
+  z
+    .object({
+      surface: z.string().min(1),
+      message: z.string().min(1),
+      stack: z.string().optional(),
+      componentStack: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: reportClientError result (the ring sequence the report was assigned). */
-export const zoteroReportResultSchema = z.object({ seq: z.number() }).strict().readonly()
+export const zoteroReportResultSchema = lazySchema(() =>
+  z.object({ seq: z.number() }).strict().readonly(),
+)
 
 /** Wire schema: openProtocol parameter (a string starting with zotero://). */
-export const zoteroProtocolUrlSchema = z.string().startsWith('zotero://')
+export const zoteroProtocolUrlSchema = lazySchema(() =>
+  z.string().max(2048).startsWith('zotero://'),
+)
 
 /** Wire schema: openProtocol result. */
-export const zoteroOpenProtocolResultSchema = z
-  .object({
-    success: z.literal(true),
-  })
-  .strict()
-  .readonly()
-
-export const zoteroSourcePageTargetSchema = z.discriminatedUnion('kind', [
+export const zoteroOpenProtocolResultSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('sources'),
-      filter: z.enum(['all', 'pdf', 'retrieved', 'evidence', 'exported', 'issues']),
+      success: z.literal(true),
     })
-    .strict(),
+    .strict()
+    .readonly(),
+)
+
+export const zoteroSourcePageTargetSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('sources'),
+        filter: z.enum(['all', 'pdf', 'retrieved', 'evidence', 'exported', 'issues']),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('source'),
+        key: z.string().min(1),
+        rows: z.enum(['searches', 'evidence', 'exports', 'fulltext']),
+      })
+      .strict(),
+    z.object({ kind: z.literal('session'), rows: z.literal('exports') }).strict(),
+  ]),
+)
+
+export const zoteroSourcePageRequestSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('source'),
-      key: z.string().min(1),
-      rows: z.enum(['searches', 'evidence', 'exports', 'fulltext']),
+      sessionId: z.string().min(1),
+      target: zoteroSourcePageTargetSchema,
+      currentServerId: z.string().min(1).max(128).optional(),
+      limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).optional(),
+      offset: z.number().int().nonnegative().optional(),
+      revision: z.number().int().min(-1).optional(),
     })
-    .strict(),
-  z.object({ kind: z.literal('session'), rows: z.literal('exports') }).strict(),
-])
+    .strict()
+    .refine(
+      (request) =>
+        request.offset === undefined || request.offset === 0 || request.revision !== undefined,
+      {
+        message: 'A continuation requires its revision.',
+      },
+    ),
+) satisfies z.ZodType<ZoteroSourcePageRequestView>
 
-export const zoteroSourcePageRequestSchema = z
-  .object({
-    sessionId: z.string().min(1),
-    target: zoteroSourcePageTargetSchema,
-    currentServerId: z.string().min(1).max(128).optional(),
-    limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES).optional(),
-    offset: z.number().int().nonnegative().optional(),
-    revision: z.number().int().min(-1).optional(),
-  })
-  .strict()
-  .refine(
-    (request) =>
-      request.offset === undefined || request.offset === 0 || request.revision !== undefined,
-    {
-      message: 'A continuation requires its revision.',
-    },
-  ) satisfies z.ZodType<ZoteroSourcePageRequestView>
-
-export const zoteroSourcePageResultSchema = z
-  .object({
-    sessionId: z.string().min(1),
-    target: zoteroSourcePageTargetSchema,
-    revision: z.number().int().min(-1),
-    offset: z.number().int().nonnegative(),
-    limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES),
-    total: z.number().int().nonnegative(),
-    workspace: sourceWorkspaceSchema,
-  })
-  .strict()
-  .refine(
-    (result) =>
-      result.workspace.sources.length <= ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES &&
-      result.workspace.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
-      result.workspace.sources.every(
-        (item) =>
-          item.searches.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
-          item.evidence.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
-          item.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
-          item.fulltextReads.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
-      ),
-    { message: 'Source pages must remain bounded.' },
-  ) satisfies z.ZodType<ZoteroSourcePageResultView>
+export const zoteroSourcePageResultSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1),
+      target: zoteroSourcePageTargetSchema,
+      revision: z.number().int().min(-1),
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive().max(ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES),
+      total: z.number().int().nonnegative(),
+      workspace: sourceWorkspaceSchema,
+    })
+    .strict()
+    .refine(
+      (result) =>
+        result.workspace.sources.length <= ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES &&
+        result.workspace.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+        result.workspace.sources.every(
+          (item) =>
+            item.searches.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+            item.evidence.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+            item.exports.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS &&
+            item.fulltextReads.length <= ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
+        ),
+      { message: 'Source pages must remain bounded.' },
+    ),
+) satisfies z.ZodType<ZoteroSourcePageResultView>
 
 // ── Library panel endpoints ────────────────────────────────────────────────
 
 /** Wire schema: the canonical personal library (user/0) on its own. */
-export const zoteroPersonalLibrarySchema = z
-  .object({ type: z.literal('user'), id: z.literal(0) })
-  .strict()
-  .readonly()
+export const zoteroPersonalLibrarySchema = lazySchema(() =>
+  z
+    .object({ type: z.literal('user'), id: z.literal(0) })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one supported local library (canonical personal or a group). */
-export const zoteroLibrarySchema = z.union([
-  zoteroPersonalLibrarySchema,
-  z
-    .object({ type: z.literal('group'), id: z.number().int().positive() })
-    .strict()
-    .readonly(),
-])
+export const zoteroLibrarySchema = lazySchema(() =>
+  z.union([
+    zoteroPersonalLibrarySchema,
+    z
+      .object({ type: z.literal('group'), id: z.number().int().positive() })
+      .strict()
+      .readonly(),
+  ]),
+)
 
 /** Wire schema: the resolved scope a search result echoes back. */
-export const zoteroResolvedScopeSchema = z.discriminatedUnion('kind', [
-  z
-    .object({ kind: z.literal('library'), library: zoteroLibrarySchema })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('publications'), library: zoteroPersonalLibrarySchema })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('collection'), ref: z.string(), name: z.string() })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('savedSearch'), ref: z.string(), name: z.string() })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('trash'), library: zoteroLibrarySchema })
-    .strict()
-    .readonly(),
-])
+export const zoteroResolvedScopeSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({ kind: z.literal('library'), library: zoteroLibrarySchema })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('publications'), library: zoteroPersonalLibrarySchema })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('collection'), ref: z.string(), name: z.string() })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('savedSearch'), ref: z.string(), name: z.string() })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('trash'), library: zoteroLibrarySchema })
+      .strict()
+      .readonly(),
+  ]),
+)
 
 /** Wire schema: browse request (one bounded navigation listing). */
-export const zoteroLibraryBrowseRequestSchema = z
-  .object({
-    kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
-    library: zoteroLibrarySchema.optional(),
-    parentRef: z.string().min(1).optional(),
-    q: z.string().min(1).optional(),
-    match: z.enum(['contains', 'startsWith']).optional(),
-    offset: z.number().int().nonnegative(),
-    limit: z.number().int().positive(),
-  })
-  .strict()
-  .readonly()
-
-/** Wire schema: browse result rows, discriminated by `kind` unlike the domain union. */
-export const zoteroSavedSearchConditionSchema = z
-  .object({
-    condition: z.string(),
-    operator: z.string(),
-    value: z.string(),
-  })
-  .strict()
-  .readonly()
-
-/** Wire schema: one collection row, shared by browse listings and path breadcrumbs. */
-export const zoteroCollectionRowSchema = z
-  .object({
-    kind: z.literal('collection'),
-    ref: z.string(),
-    name: z.string(),
-    parentRef: z.string().optional(),
-    path: z.array(z.string()).readonly(),
-    depth: z.number().int().nonnegative(),
-    childCount: z.number().int().nonnegative().optional(),
-    itemCount: z.number().int().nonnegative().optional(),
-  })
-  .strict()
-  .readonly()
-
-export const zoteroLibraryBrowseItemSchema = z.discriminatedUnion('kind', [
-  z
-    .object({ kind: z.literal('tag'), tag: z.string() })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('itemType'), itemType: z.string(), localized: z.string().optional() })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('library'), library: zoteroLibrarySchema, name: z.string() })
-    .strict()
-    .readonly(),
-  zoteroCollectionRowSchema,
+export const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('savedSearch'),
-      ref: z.string(),
-      name: z.string(),
-      conditions: z.array(zoteroSavedSearchConditionSchema).readonly(),
+      kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
+      library: zoteroLibrarySchema.optional(),
+      parentRef: z.string().min(1).optional(),
+      q: z.string().min(1).optional(),
+      match: z.enum(['contains', 'startsWith']).optional(),
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
     })
     .strict()
     .readonly(),
-])
+)
+
+/** Wire schema: browse result rows, discriminated by `kind` unlike the domain union. */
+export const zoteroSavedSearchConditionSchema = lazySchema(() =>
+  z
+    .object({
+      condition: z.string(),
+      operator: z.string(),
+      value: z.string(),
+    })
+    .strict()
+    .readonly(),
+)
+
+/** Wire schema: one collection row, shared by browse listings and path breadcrumbs. */
+export const zoteroCollectionRowSchema = lazySchema(() =>
+  z
+    .object({
+      kind: z.literal('collection'),
+      ref: z.string(),
+      name: z.string(),
+      parentRef: z.string().optional(),
+      path: z.array(z.string()).readonly(),
+      depth: z.number().int().nonnegative(),
+      childCount: z.number().int().nonnegative().optional(),
+      itemCount: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .readonly(),
+)
+
+export const zoteroLibraryBrowseItemSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({ kind: z.literal('tag'), tag: z.string() })
+      .strict()
+      .readonly(),
+    z
+      .object({
+        kind: z.literal('itemType'),
+        itemType: z.string(),
+        localized: z.string().optional(),
+      })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('library'), library: zoteroLibrarySchema, name: z.string() })
+      .strict()
+      .readonly(),
+    zoteroCollectionRowSchema,
+    z
+      .object({
+        kind: z.literal('savedSearch'),
+        ref: z.string(),
+        name: z.string(),
+        conditions: z.array(zoteroSavedSearchConditionSchema).readonly(),
+      })
+      .strict()
+      .readonly(),
+  ]),
+)
 
 /** Wire schema: browse result (the requested page of one navigation listing). */
-export const zoteroLibraryBrowseResultSchema = z
-  .object({
-    libraryVersion: z.number().int().nonnegative().optional(),
-    kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
-    items: z.array(zoteroLibraryBrowseItemSchema).readonly(),
-    total: z.number().int().nonnegative(),
-    offset: z.number().int().nonnegative(),
-    returned: z.number().int().nonnegative(),
-    limit: z.number().int().positive(),
-    nextOffset: z.number().int().nonnegative().optional(),
-  })
-  .strict()
-  .refine(
-    (value) =>
-      !['collections', 'savedSearches'].includes(value.kind) || value.libraryVersion !== undefined,
-    { message: 'Navigation results require a library version.' },
-  )
-  .readonly()
+export const zoteroLibraryBrowseResultSchema = lazySchema(() =>
+  z
+    .object({
+      libraryVersion: z.number().int().nonnegative().optional(),
+      kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
+      items: z.array(zoteroLibraryBrowseItemSchema).readonly(),
+      total: z.number().int().nonnegative(),
+      offset: z.number().int().nonnegative(),
+      returned: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
+      nextOffset: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        !['collections', 'savedSearches'].includes(value.kind) ||
+        value.libraryVersion !== undefined,
+      { message: 'Navigation results require a library version.' },
+    )
+    .readonly(),
+)
 
 /** Wire schema: search request scope (the panel's scope set, including trash). */
-export const zoteroLibrarySearchScopeSchema = z.discriminatedUnion('kind', [
-  z
-    .object({ kind: z.literal('library') })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('publications') })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('collection'), refOrName: z.string().min(1) })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('savedSearch'), refOrName: z.string().min(1) })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('trash') })
-    .strict()
-    .readonly(),
-])
+export const zoteroLibrarySearchScopeSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({ kind: z.literal('library') })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('publications') })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('collection'), refOrName: z.string().min(1) })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('savedSearch'), refOrName: z.string().min(1) })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('trash') })
+      .strict()
+      .readonly(),
+  ]),
+)
 
 /**
  * The library panel's item-list filters: one schema for the wire request and
  * the panel's stored state, so the two cannot drift (a tag spelling the wire
  * refuses must not survive in localStorage either).
  */
-export const zoteroLibraryFiltersSchema = z
-  .object({
-    itemTypes: z.array(z.string().min(1)).readonly().optional(),
-    tags: z.array(z.string().min(1)).readonly().optional(),
-    tagMatch: z.enum(['all', 'any']).optional(),
-    yearFrom: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
-    yearTo: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
-    hasAttachment: z.boolean().optional(),
-  })
-  .strict()
+export const zoteroLibraryFiltersSchema = lazySchema(() =>
+  z
+    .object({
+      itemTypes: z.array(z.string().min(1)).readonly().optional(),
+      tags: z.array(z.string().min(1)).readonly().optional(),
+      tagMatch: z.enum(['all', 'any']).optional(),
+      yearFrom: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
+      yearTo: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
+      hasAttachment: z.boolean().optional(),
+    })
+    .strict(),
+)
 
 /** Wire schema: search request (one item-list page over one scope). */
-export const zoteroLibrarySearchRequestSchema = z
-  .object({
-    scope: zoteroLibrarySearchScopeSchema,
-    library: zoteroLibrarySchema.optional(),
-    q: z.string().optional(),
-    sort: zoteroLibrarySortSchema,
-    direction: z.enum(['asc', 'desc']),
-    offset: z.number().int().nonnegative(),
-    limit: z.number().int().positive(),
-    itemLevel: z.enum(['top', 'all']).optional(),
-    ...zoteroLibraryFiltersSchema.shape,
-    cacheGeneration: z.number().int().nonnegative().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroLibrarySearchRequestSchema = lazySchema(() =>
+  z
+    .object({
+      scope: zoteroLibrarySearchScopeSchema,
+      library: zoteroLibrarySchema.optional(),
+      q: z.string().optional(),
+      sort: zoteroLibrarySortSchema,
+      direction: z.enum(['asc', 'desc']),
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
+      itemLevel: z.enum(['top', 'all']).optional(),
+      ...zoteroLibraryFiltersSchema.unwrap().shape,
+      cacheGeneration: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one item row of a listing (the domain's compact hit, mirrored). */
-export const zoteroSearchItemSchema = z
-  .object({
-    ref: z.string(),
-    title: z.string(),
-    creatorSummary: z.string(),
-    authors: z.array(z.string()).readonly().optional(),
-    venue: z.string().optional(),
-    year: z.number().optional(),
-    itemType: z.string(),
-    parentRef: z.string().optional(),
-    bestAttachmentRef: z.string().optional(),
-    bestAttachmentType: z.string().optional(),
-    attachmentSize: z.number().optional(),
-    extra: z.string().optional(),
-    doi: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroSearchItemSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      title: z.string(),
+      creatorSummary: z.string(),
+      authors: z.array(z.string()).readonly().optional(),
+      venue: z.string().optional(),
+      year: z.number().optional(),
+      itemType: z.string(),
+      parentRef: z.string().optional(),
+      bestAttachmentRef: z.string().optional(),
+      bestAttachmentType: z.string().optional(),
+      attachmentSize: z.number().optional(),
+      extra: z.string().optional(),
+      doi: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: search result (paged primary hits only; no note supplement crosses). */
-export const zoteroSearchResultSchema = z
-  .object({
-    scope: zoteroResolvedScopeSchema,
-    items: z.array(zoteroSearchItemSchema).readonly(),
-    total: z.number().int().nonnegative(),
-    offset: z.number().int().nonnegative(),
-    returned: z.number().int().nonnegative(),
-    limit: z.number().int().positive(),
-    nextOffset: z.number().int().nonnegative().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroSearchResultSchema = lazySchema(() =>
+  z
+    .object({
+      scope: zoteroResolvedScopeSchema,
+      items: z.array(zoteroSearchItemSchema).readonly(),
+      total: z.number().int().nonnegative(),
+      offset: z.number().int().nonnegative(),
+      returned: z.number().int().nonnegative(),
+      limit: z.number().int().positive(),
+      nextOffset: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one child listing's page window. */
-const childPageSchema = z
-  .object({
-    offset: z.number().int().nonnegative(),
-    limit: z.number().int().positive().max(ZOTERO_CHILD_PAGE_MAX_ROWS),
-  })
-  .strict()
-  .readonly()
+const childPageSchema = lazySchema(() =>
+  z
+    .object({
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive().max(ZOTERO_CHILD_PAGE_MAX_ROWS),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: item-detail request (one ref plus the child kinds to include). */
-export const zoteroLibraryItemRequestSchema = z
-  .object({
-    ref: z.string().min(1),
-    include: z.array(z.enum(['notes', 'attachments', 'annotations'])).readonly(),
-    childPages: z
-      .object({
-        notes: childPageSchema.optional(),
-        attachments: childPageSchema.optional(),
-        annotations: childPageSchema.optional(),
-      })
-      .strict()
-      .readonly()
-      .optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroLibraryItemRequestSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string().min(1),
+      include: z.array(z.enum(['notes', 'attachments', 'annotations'])).readonly(),
+      childPages: z
+        .object({
+          notes: childPageSchema.optional(),
+          attachments: childPageSchema.optional(),
+          annotations: childPageSchema.optional(),
+        })
+        .strict()
+        .readonly()
+        .optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one child listing the detail view serves. */
 export function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRowsView<T>> {
@@ -593,114 +663,134 @@ export function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRow
     .readonly()
 }
 
-export const zoteroNoteRowSchema = z
-  .object({
-    ref: z.string(),
-    text: z.string(),
-    truncated: z.boolean(),
-    parentRef: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroNoteRowSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      text: z.string(),
+      truncated: z.boolean(),
+      parentRef: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
-export const zoteroAnnotationRowSchema = z
-  .object({
-    ref: z.string(),
-    type: z.string(),
-    text: z.string(),
-    comment: z.string().optional(),
-    color: z.string().optional(),
-    pageLabel: z.string().optional(),
-    parentRef: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroAnnotationRowSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      type: z.string(),
+      text: z.string(),
+      comment: z.string().optional(),
+      color: z.string().optional(),
+      pageLabel: z.string().optional(),
+      parentRef: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
-export const zoteroAttachmentRowSchema = z
-  .object({
-    ref: z.string(),
-    title: z.string(),
-    contentType: z.string(),
-  })
-  .strict()
-  .readonly()
+export const zoteroAttachmentRowSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      title: z.string(),
+      contentType: z.string(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one paged child-listing request. */
-export const zoteroLibraryChildPageRequestSchema = z
-  .object({
-    ref: z.string().min(1),
-    kind: z.enum(['notes', 'attachments', 'annotations']),
-    offset: z.number().int().nonnegative(),
-    limit: z.number().int().positive().max(ZOTERO_CHILD_PAGE_MAX_ROWS),
-  })
-  .strict()
-  .readonly()
+export const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string().min(1),
+      kind: z.enum(['notes', 'attachments', 'annotations']),
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive().max(ZOTERO_CHILD_PAGE_MAX_ROWS),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: one child page, discriminated by the kind it carries. */
-export const zoteroChildPageSchema = z.discriminatedUnion('kind', [
-  z
-    .object({ kind: z.literal('notes'), page: childRowsSchema(zoteroNoteRowSchema) })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('attachments'), page: childRowsSchema(zoteroAttachmentRowSchema) })
-    .strict()
-    .readonly(),
-  z
-    .object({ kind: z.literal('annotations'), page: childRowsSchema(zoteroAnnotationRowSchema) })
-    .strict()
-    .readonly(),
-])
+export const zoteroChildPageSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({ kind: z.literal('notes'), page: childRowsSchema(zoteroNoteRowSchema) })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('attachments'), page: childRowsSchema(zoteroAttachmentRowSchema) })
+      .strict()
+      .readonly(),
+    z
+      .object({ kind: z.literal('annotations'), page: childRowsSchema(zoteroAnnotationRowSchema) })
+      .strict()
+      .readonly(),
+  ]),
+)
 
 /** Wire schema: the item detail view (panel include set applied, absent sets stay absent). */
-export const zoteroItemDetailSchema = z
-  .object({
-    ref: z.string(),
-    itemType: z.string(),
-    title: z.string(),
-    creators: z
-      .array(
-        z
-          .object({
-            creatorType: z.string(),
-            name: z.string().optional(),
-            firstName: z.string().optional(),
-            lastName: z.string().optional(),
-          })
-          .strict()
-          .readonly(),
-      )
-      .readonly(),
-    extra: z.string().optional(),
-    date: z.string().optional(),
-    year: z.number().optional(),
-    venue: z.string().optional(),
-    doi: z.string().optional(),
-    url: z.string().optional(),
-    abstract: z.string().optional(),
-    abstractTruncated: z.boolean(),
-    noteBody: z.object({ text: z.string(), truncated: z.boolean() }).strict().readonly().optional(),
-    tags: z.array(z.string()).readonly(),
-    collections: z
-      .array(z.object({ ref: z.string(), name: z.string().optional() }).strict().readonly())
-      .readonly(),
-    children: z.object({ total: z.number().int().nonnegative() }).strict().readonly(),
-    bestAttachment: zoteroAttachmentRowSchema.optional(),
-    notes: childRowsSchema(zoteroNoteRowSchema).optional(),
-    annotations: childRowsSchema(zoteroAnnotationRowSchema).optional(),
-    attachments: childRowsSchema(zoteroAttachmentRowSchema).optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroItemDetailSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      itemType: z.string(),
+      title: z.string(),
+      creators: z
+        .array(
+          z
+            .object({
+              creatorType: z.string(),
+              name: z.string().optional(),
+              firstName: z.string().optional(),
+              lastName: z.string().optional(),
+            })
+            .strict()
+            .readonly(),
+        )
+        .readonly(),
+      extra: z.string().optional(),
+      date: z.string().optional(),
+      year: z.number().optional(),
+      venue: z.string().optional(),
+      doi: z.string().optional(),
+      url: z.string().optional(),
+      abstract: z.string().optional(),
+      abstractTruncated: z.boolean(),
+      noteBody: z
+        .object({ text: z.string(), truncated: z.boolean() })
+        .strict()
+        .readonly()
+        .optional(),
+      tags: z.array(z.string()).readonly(),
+      collections: z
+        .array(z.object({ ref: z.string(), name: z.string().optional() }).strict().readonly())
+        .readonly(),
+      children: z.object({ total: z.number().int().nonnegative() }).strict().readonly(),
+      bestAttachment: zoteroAttachmentRowSchema.optional(),
+      notes: childRowsSchema(zoteroNoteRowSchema).optional(),
+      annotations: childRowsSchema(zoteroAnnotationRowSchema).optional(),
+      attachments: childRowsSchema(zoteroAttachmentRowSchema).optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
 /** Wire schema: the export formats, derived from the domain's one ordered array. */
-export const zoteroLibraryExportFormatSchema = z.enum(
-  ZOTERO_EXPORT_FORMATS as [ZoteroLibraryExportFormatView, ...ZoteroLibraryExportFormatView[]],
+export const zoteroLibraryExportFormatSchema = lazySchema(() =>
+  z.enum(
+    ZOTERO_EXPORT_FORMATS as [ZoteroLibraryExportFormatView, ...ZoteroLibraryExportFormatView[]],
+  ),
 )
 
 /** Wire schema: the translator export formats, derived from the sibling array. */
-export const zoteroLibraryItemizedExportFormatSchema = z.enum(
-  ZOTERO_ITEMIZED_EXPORT_FORMATS as [ZoteroItemizedExportFormat, ...ZoteroItemizedExportFormat[]],
+export const zoteroLibraryItemizedExportFormatSchema = lazySchema(() =>
+  z.enum(
+    ZOTERO_ITEMIZED_EXPORT_FORMATS as [ZoteroItemizedExportFormat, ...ZoteroItemizedExportFormat[]],
+  ),
 )
 
 /**
@@ -708,111 +798,123 @@ export const zoteroLibraryItemizedExportFormatSchema = z.enum(
  * `itemKey` per-request cap: the configured `maxExportRefs` gate runs in the
  * host service, where the live config is read.
  */
-export const zoteroLibraryExportRequestSchema = z
-  .object({
-    refs: z.array(z.string().min(1)).min(1).max(ZOTERO_ITEMKEY_BATCH).readonly(),
-    format: zoteroLibraryExportFormatSchema,
-    style: z.string().min(1).optional(),
-    locale: z.string().min(1).optional(),
-  })
-  .strict()
-  .readonly() satisfies z.ZodType<ZoteroLibraryExportRequestView>
+export const zoteroLibraryExportRequestSchema = lazySchema(() =>
+  z
+    .object({
+      refs: z.array(z.string().min(1)).min(1).max(ZOTERO_ITEMKEY_BATCH).readonly(),
+      format: zoteroLibraryExportFormatSchema,
+      style: z.string().min(1).optional(),
+      locale: z.string().min(1).optional(),
+    })
+    .strict()
+    .readonly(),
+) satisfies z.ZodType<ZoteroLibraryExportRequestView>
 
 /**
  * Wire schema: library export result, discriminated by the exported format.
  * The panel endpoint serves rendered text only, so the translator arm carries
  * no per-document itemization.
  */
-export const zoteroLibraryExportResultSchema = z
-  .discriminatedUnion('format', [
-    z
-      .object({
-        format: z.literal('citation'),
-        style: z.string().optional(),
-        locale: z.string().optional(),
-        citations: z
-          .array(z.object({ ref: z.string(), text: z.string() }).strict().readonly())
-          .readonly(),
-      })
-      .strict()
-      .readonly(),
-    z
-      .object({
-        format: z.literal('bibliography'),
-        style: z.string().optional(),
-        locale: z.string().optional(),
-        text: z.string(),
-      })
-      .strict()
-      .readonly(),
-    z
-      .object({
-        format: zoteroLibraryItemizedExportFormatSchema,
-        style: z.string().optional(),
-        locale: z.string().optional(),
-        text: z.string(),
-      })
-      .strict()
-      .readonly(),
-    z
-      .object({
-        format: z.literal('csv'),
-        text: z.string(),
-      })
-      .strict()
-      .readonly(),
-  ])
-  .readonly() satisfies z.ZodType<ZoteroLibraryExportResultView>
+export const zoteroLibraryExportResultSchema = lazySchema(() =>
+  z
+    .discriminatedUnion('format', [
+      z
+        .object({
+          format: z.literal('citation'),
+          style: z.string().optional(),
+          locale: z.string().optional(),
+          citations: z
+            .array(z.object({ ref: z.string(), text: z.string() }).strict().readonly())
+            .readonly(),
+        })
+        .strict()
+        .readonly(),
+      z
+        .object({
+          format: z.literal('bibliography'),
+          style: z.string().optional(),
+          locale: z.string().optional(),
+          text: z.string(),
+        })
+        .strict()
+        .readonly(),
+      z
+        .object({
+          format: zoteroLibraryItemizedExportFormatSchema.unwrap(),
+          style: z.string().optional(),
+          locale: z.string().optional(),
+          text: z.string(),
+        })
+        .strict()
+        .readonly(),
+      z
+        .object({
+          format: z.literal('csv'),
+          text: z.string(),
+        })
+        .strict()
+        .readonly(),
+    ])
+    .readonly(),
+) satisfies z.ZodType<ZoteroLibraryExportResultView>
 
-const writeText = z.string().min(1)
-const writeList = z.array(writeText)
-const writeFields = z
-  .object({
-    title: writeText.optional(),
-    date: writeText.optional(),
-    url: writeText.optional(),
-    doi: writeText.optional(),
-    abstractNote: writeText.optional(),
-    publicationTitle: writeText.optional(),
-    extra: writeText.optional(),
-  })
-  .strict()
-const writeCreateItem = z
-  .object({
-    itemType: writeText,
-    title: writeText.optional(),
-    url: writeText.optional(),
-    date: writeText.optional(),
-    doi: writeText.optional(),
-    abstractNote: writeText.optional(),
-    publicationTitle: writeText.optional(),
-    tags: writeList.optional(),
-    collections: writeList.optional(),
-    creators: z
-      .array(
-        z
-          .object({
-            creatorType: writeText,
-            name: z.string().optional(),
-            firstName: z.string().optional(),
-            lastName: z.string().optional(),
-          })
-          .strict(),
-      )
-      .optional(),
-  })
-  .strict()
-const writeBatchUpdate = z
-  .object({
-    ref: writeText,
-    addTags: writeList.optional(),
-    removeTags: writeList.optional(),
-    addCollections: writeList.optional(),
-    removeCollections: writeList.optional(),
-  })
-  .strict()
-const writeConditions = z.array(
-  z.object({ condition: writeText, operator: z.string(), value: z.string() }).strict(),
+const writeText = lazySchema(() => z.string().min(1))
+const writeList = lazySchema(() => z.array(writeText))
+const writeFields = lazySchema(() =>
+  z
+    .object({
+      title: writeText.optional(),
+      date: writeText.optional(),
+      url: writeText.optional(),
+      doi: writeText.optional(),
+      abstractNote: writeText.optional(),
+      publicationTitle: writeText.optional(),
+      extra: writeText.optional(),
+    })
+    .strict(),
+)
+const writeCreateItem = lazySchema(() =>
+  z
+    .object({
+      itemType: writeText,
+      title: writeText.optional(),
+      url: writeText.optional(),
+      date: writeText.optional(),
+      doi: writeText.optional(),
+      abstractNote: writeText.optional(),
+      publicationTitle: writeText.optional(),
+      tags: writeList.optional(),
+      collections: writeList.optional(),
+      creators: z
+        .array(
+          z
+            .object({
+              creatorType: writeText,
+              name: z.string().optional(),
+              firstName: z.string().optional(),
+              lastName: z.string().optional(),
+            })
+            .strict(),
+        )
+        .optional(),
+    })
+    .strict(),
+)
+const writeBatchUpdate = lazySchema(() =>
+  z
+    .object({
+      ref: writeText,
+      addTags: writeList.optional(),
+      removeTags: writeList.optional(),
+      addCollections: writeList.optional(),
+      removeCollections: writeList.optional(),
+    })
+    .strict(),
+)
+const writeConditions = lazySchema(() =>
+  z
+    .array(z.object({ condition: writeText, operator: z.string(), value: z.string() }).strict())
+    .min(1),
 )
 const writeBase = { sessionId: writeText }
 const writeArm = <N extends string, S extends z.ZodRawShape>(operation: N, shape: S) =>
@@ -826,512 +928,589 @@ const writeArm = <N extends string, S extends z.ZodRawShape>(operation: N, shape
  * `ZoteroLibraryWriteRequestView`, so drift between the two fails at compile
  * time.
  */
-export const zoteroLibraryWriteRequestSchema = z.discriminatedUnion('operation', [
-  writeArm('updateItem', { ref: writeText, set: writeFields }),
-  writeArm('updateTags', {
-    ref: writeText,
-    add: writeList.optional(),
-    remove: writeList.optional(),
-  }),
-  writeArm('updateMembership', {
-    ref: writeText,
-    add: writeList.optional(),
-    remove: writeList.optional(),
-  }),
-  writeArm('createItem', writeCreateItem.shape),
-  writeArm('createNote', {
-    markdown: writeText,
-    parentItem: writeText.optional(),
-    collections: writeList.optional(),
-    tags: writeList.optional(),
-    sourceRefs: writeList.optional(),
-  }),
-  writeArm('updateNote', { ref: writeText, markdown: writeText }),
-  writeArm('createCollection', { name: writeText, parent: writeText.optional() }),
-  writeArm('updateCollection', {
-    collection: writeText,
-    name: writeText.optional(),
-    parent: writeText.optional(),
-  }),
-  writeArm('deleteCollection', { collection: writeText }),
-  writeArm('createSavedSearch', { name: writeText, conditions: writeConditions }),
-  writeArm('updateSavedSearch', {
-    search: writeText,
-    name: writeText.optional(),
-    conditions: writeConditions.optional(),
-  }),
-  writeArm('deleteSavedSearch', { search: writeText }),
-  writeArm('trash', { refs: writeList }),
-  writeArm('restore', { refs: writeList }),
-  writeArm('batch', {
-    create: z.array(writeCreateItem).optional(),
-    update: z.array(writeBatchUpdate).optional(),
-    delete: writeList.optional(),
-  }),
-]) satisfies z.ZodType<ZoteroLibraryWriteRequestView>
-export const zoteroLibraryWriteResultSchema = z
-  .object({
-    kind: z.enum(['applied', 'declined', 'committed-unverified', 'failed']),
-    message: z.string(),
-    code: z.string().optional(),
-  })
-  .strict()
-  .readonly()
+export const zoteroLibraryWriteRequestSchema = lazySchema(() =>
+  z.discriminatedUnion('operation', [
+    writeArm('updateItem', { ref: writeText, set: writeFields }),
+    writeArm('updateTags', {
+      ref: writeText,
+      add: writeList.optional(),
+      remove: writeList.optional(),
+    }),
+    writeArm('updateMembership', {
+      ref: writeText,
+      add: writeList.optional(),
+      remove: writeList.optional(),
+    }),
+    writeArm('createItem', writeCreateItem.unwrap().shape),
+    writeArm('createNote', {
+      markdown: writeText,
+      parentItem: writeText.optional(),
+      collections: writeList.optional(),
+      tags: writeList.optional(),
+      sourceRefs: writeList.optional(),
+    }),
+    writeArm('updateNote', { ref: writeText, markdown: writeText }),
+    writeArm('createCollection', { name: writeText, parent: writeText.optional() }),
+    writeArm('updateCollection', {
+      collection: writeText,
+      name: writeText.optional(),
+      parent: writeText.optional(),
+    }),
+    writeArm('deleteCollection', { collection: writeText }),
+    writeArm('createSavedSearch', { name: writeText, conditions: writeConditions }),
+    writeArm('updateSavedSearch', {
+      search: writeText,
+      name: writeText.optional(),
+      conditions: writeConditions.optional(),
+    }),
+    writeArm('deleteSavedSearch', { search: writeText }),
+    writeArm('trash', { refs: writeList }),
+    writeArm('restore', { refs: writeList }),
+    writeArm('batch', {
+      create: z.array(writeCreateItem).optional(),
+      update: z.array(writeBatchUpdate).optional(),
+      delete: writeList.optional(),
+    }),
+  ]),
+) satisfies z.ZodType<ZoteroLibraryWriteRequestView>
+export const zoteroLibraryWriteResultSchema = lazySchema(() =>
+  z
+    .object({
+      kind: z.enum(['applied', 'partial', 'declined', 'committed-unverified', 'failed']),
+      message: z.string(),
+      code: z.string().optional(),
+    })
+    .strict()
+    .readonly(),
+)
 
-export const zoteroCollectionPathRequestSchema = z
-  .object({
-    library: zoteroLibrarySchema,
-    ref: z.string().min(1),
-    libraryVersion: z.number().int().nonnegative(),
-  })
-  .strict()
-  .readonly()
-export const zoteroCollectionPathResultSchema = z
-  .object({
-    library: zoteroLibrarySchema,
-    libraryVersion: z.number().int().nonnegative(),
-    path: z.array(zoteroCollectionRowSchema).readonly(),
-  })
-  .strict()
-  .readonly()
+export const zoteroCollectionPathRequestSchema = lazySchema(() =>
+  z
+    .object({
+      library: zoteroLibrarySchema,
+      ref: z.string().min(1),
+      libraryVersion: z.number().int().nonnegative(),
+    })
+    .strict()
+    .readonly(),
+)
+export const zoteroCollectionPathResultSchema = lazySchema(() =>
+  z
+    .object({
+      library: zoteroLibrarySchema,
+      libraryVersion: z.number().int().nonnegative(),
+      path: z.array(zoteroCollectionRowSchema).readonly(),
+    })
+    .strict()
+    .readonly(),
+)
 
 export const ZOTERO_STATUS_RESULT_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
 
-export const zoteroReadUrlPdfRequestSchema = z
-  .object({
-    ref: z.string().refine((ref) => {
-      const fields = refFieldsOf(ref)
-      return (
-        fields?.kind === 'attachment' &&
-        fields.serverId !== undefined &&
-        (fields.libraryType === 'group' || fields.libraryId === '0')
-      )
-    }, 'Expected a qualified local attachment ref'),
-  })
-  .strict()
-export const zoteroUrlPdfSchema = z
-  .object({
-    ref: z.string(),
-    title: z.string(),
-    contentType: z.literal('application/pdf'),
-    path: z.string().min(1),
-    lease: z.uuid(),
-  })
-  .strict() satisfies z.ZodType<ZoteroUrlPdfView>
+export const zoteroReadUrlPdfRequestSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string().refine((ref) => {
+        const fields = refFieldsOf(ref)
+        return (
+          fields?.kind === 'attachment' &&
+          fields.serverId !== undefined &&
+          (fields.libraryType === 'group' || fields.libraryId === '0')
+        )
+      }, 'Expected a qualified local attachment ref'),
+    })
+    .strict(),
+)
+export const zoteroUrlPdfSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      title: z.string(),
+      contentType: z.literal('application/pdf'),
+      path: z.string().min(1),
+      lease: z.uuid(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroUrlPdfView>
 export const ZOTERO_URL_PDF_CODEC = strictCodec('dsh-zotero#ZoteroUrlPdfView', zoteroUrlPdfSchema)
-export const zoteroReleaseUrlPdfSchema = z.object({ lease: z.uuid() }).strict()
+export const zoteroReleaseUrlPdfSchema = lazySchema(() => z.object({ lease: z.uuid() }).strict())
 
 // The directory reaches the filesystem, so the wire carries the same shape
 // rule the settings schema enforces: absolute, `~/...`, a drive, or a UNC path.
-const semanticModelDirSchema = z
-  .string()
-  .regex(ENRICHMENT_OUTPUT_DIR_PATTERN, 'expected an absolute directory or a ~ path')
-const semanticModelEnum = z.enum([...SEMANTIC_MODEL_KEYS] as [string, ...string[]])
-const semanticSourceEnum = z.enum([...SEMANTIC_DOWNLOAD_SOURCES] as [string, ...string[]])
+const semanticModelDirSchema = lazySchema(() =>
+  z.string().regex(ENRICHMENT_OUTPUT_DIR_PATTERN, 'expected an absolute directory or a ~ path'),
+)
+const semanticModelEnum = lazySchema(() =>
+  z.enum([...SEMANTIC_MODEL_KEYS] as [string, ...string[]]),
+)
+const semanticSourceEnum = lazySchema(() =>
+  z.enum([...SEMANTIC_DOWNLOAD_SOURCES] as [string, ...string[]]),
+)
 
-export const zoteroSemanticModelStatusRequestSchema = z
-  .object({
-    model: semanticModelEnum.optional(),
-    modelDir: semanticModelDirSchema.optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelStatusRequestView>
-
-export const zoteroSemanticModelStatusResultSchema = z
-  .object({
-    model: z.string(),
-    ready: z.boolean(),
-    downloading: z.boolean(),
-    path: z.string(),
-    downloadedBytes: z.number().int().nonnegative(),
-    totalBytes: z.number().int().nonnegative(),
-    percent: z.number().int().min(0).max(100),
-    currentFile: z.string().optional(),
-    error: z.string().optional(),
-    warning: z.string().optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelStatusResultView>
-
-export const zoteroSemanticModelDownloadRequestSchema = z
-  .object({
-    model: semanticModelEnum.optional(),
-    source: semanticSourceEnum.optional(),
-    modelDir: semanticModelDirSchema.optional(),
-    force: z.boolean().optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelDownloadRequestView>
-
-export const zoteroSemanticModelDownloadResultSchema = z
-  .object({
-    success: z.boolean(),
-    model: z.string(),
-    status: z.union([z.literal('started'), z.literal('already-ready'), z.literal('downloading')]),
-    path: z.string(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelDownloadResultView>
-
-export const zoteroSemanticModelCancelRequestSchema = z
-  .object({
-    model: semanticModelEnum.optional(),
-    modelDir: semanticModelDirSchema.optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelCancelRequestView>
-
-export const zoteroSemanticModelCancelResultSchema = z
-  .object({
-    cancelled: z.boolean(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelCancelResultView>
-
-export const zoteroSemanticModelDeleteRequestSchema = z
-  .object({
-    model: semanticModelEnum.optional(),
-    modelDir: semanticModelDirSchema.optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelDeleteRequestView>
-
-export const zoteroSemanticModelDeleteResultSchema = z
-  .object({
-    success: z.boolean(),
-    model: z.string(),
-    path: z.string(),
-    removed: z.boolean(),
-    removedFiles: z.number().int().nonnegative(),
-    removedBytes: z.number().int().nonnegative(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelDeleteResultView>
-
-export const zoteroSemanticModelVerifyRequestSchema = z
-  .object({
-    model: semanticModelEnum.optional(),
-    modelDir: semanticModelDirSchema.optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroSemanticModelVerifyRequestView>
-
-export const zoteroParseTargetSchema = z.discriminatedUnion('kind', [
+export const zoteroSemanticModelStatusRequestSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('attachment'),
-      ref: z
-        .string()
-        .max(1024)
-        .refine((value) => {
-          const ref = refFieldsOf(value)
-          return ref?.kind === 'attachment'
-        }, 'expected a Zotero attachment reference'),
+      model: semanticModelEnum.optional(),
+      modelDir: semanticModelDirSchema.optional(),
     })
     .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelStatusRequestView>
+
+export const zoteroSemanticModelStatusResultSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('url'),
-      url: z
-        .string()
-        .max(8192)
-        .url()
-        .refine((value) => {
-          try {
-            const url = new URL(value)
-            return (
-              (url.protocol === 'https:' || url.protocol === 'http:') &&
-              !url.username &&
-              !url.password
-            )
-          } catch {
-            return false
-          }
-        }, 'expected an HTTP(S) URL without credentials'),
+      model: z.string(),
+      ready: z.boolean(),
+      downloading: z.boolean(),
+      path: z.string(),
+      downloadedBytes: z.number().int().nonnegative(),
+      totalBytes: z.number().int().nonnegative(),
+      percent: z.number().int().min(0).max(100),
+      currentFile: z.string().optional(),
+      error: z.string().optional(),
+      warning: z.string().optional(),
     })
     .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelStatusResultView>
+
+export const zoteroSemanticModelDownloadRequestSchema = lazySchema(() =>
   z
     .object({
-      kind: z.literal('artifact'),
-      // The parse boundary is where a string becomes an ArtifactId: the
-      // brand then travels through every host seam that resolves the id, so
-      // a fingerprint or another hex string cannot be passed for an id.
-      artifactId: z
-        .string()
-        .regex(ZOTERO_ARTIFACT_ID_PATTERN)
-        .transform((value) => artifactIdOf(value)!),
+      model: semanticModelEnum.optional(),
+      source: semanticSourceEnum.optional(),
+      modelDir: semanticModelDirSchema.optional(),
+      force: z.boolean().optional(),
     })
     .strict(),
-])
+) satisfies z.ZodType<ZoteroSemanticModelDownloadRequestView>
 
-export const zoteroStartDocumentParseRequestSchema = z
-  .object({
-    sessionId: z.string().min(1).max(256),
-    operationId: z.uuid(),
-    target: zoteroParseTargetSchema,
-    action: z.enum(['parse', 'reparse', 'retry']),
-  })
-  .strict() satisfies z.ZodType<ZoteroStartDocumentParseRequestView>
+export const zoteroSemanticModelDownloadResultSchema = lazySchema(() =>
+  z
+    .object({
+      success: z.boolean(),
+      model: z.string(),
+      status: z.union([z.literal('started'), z.literal('already-ready'), z.literal('downloading')]),
+      path: z.string(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelDownloadResultView>
 
-export const zoteroParseReceiptSchema = z
-  .object({
-    operationId: z.uuid(),
-    generation: z.uuid(),
+export const zoteroSemanticModelCancelRequestSchema = lazySchema(() =>
+  z
+    .object({
+      model: semanticModelEnum.optional(),
+      modelDir: semanticModelDirSchema.optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelCancelRequestView>
+
+export const zoteroSemanticModelCancelResultSchema = lazySchema(() =>
+  z
+    .object({
+      cancelled: z.boolean(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelCancelResultView>
+
+export const zoteroSemanticModelDeleteRequestSchema = lazySchema(() =>
+  z
+    .object({
+      model: semanticModelEnum.optional(),
+      modelDir: semanticModelDirSchema.optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelDeleteRequestView>
+
+export const zoteroSemanticModelDeleteResultSchema = lazySchema(() =>
+  z
+    .object({
+      success: z.boolean(),
+      model: z.string(),
+      path: z.string(),
+      removed: z.boolean(),
+      removedFiles: z.number().int().nonnegative(),
+      removedBytes: z.number().int().nonnegative(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelDeleteResultView>
+
+export const zoteroSemanticModelVerifyRequestSchema = lazySchema(() =>
+  z
+    .object({
+      model: semanticModelEnum.optional(),
+      modelDir: semanticModelDirSchema.optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroSemanticModelVerifyRequestView>
+
+export const zoteroParseTargetSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('attachment'),
+        ref: z
+          .string()
+          .max(1024)
+          .refine((value) => {
+            const ref = refFieldsOf(value)
+            return ref?.kind === 'attachment'
+          }, 'expected a Zotero attachment reference'),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('url'),
+        url: z
+          .string()
+          .max(8192)
+          .url()
+          .refine((value) => {
+            try {
+              const url = new URL(value)
+              return (
+                (url.protocol === 'https:' || url.protocol === 'http:') &&
+                !url.username &&
+                !url.password
+              )
+            } catch {
+              return false
+            }
+          }, 'expected an HTTP(S) URL without credentials'),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('artifact'),
+        // The parse boundary is where a string becomes an ArtifactId: the
+        // brand then travels through every host seam that resolves the id, so
+        // a fingerprint or another hex string cannot be passed for an id.
+        artifactId: z
+          .string()
+          .regex(ZOTERO_ARTIFACT_ID_PATTERN)
+          .transform((value) => artifactIdOf(value)!),
+      })
+      .strict(),
+  ]),
+)
+
+export const zoteroStartDocumentParseRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1).max(256),
+      operationId: z.uuid(),
+      target: zoteroParseTargetSchema,
+      action: z.enum(['parse', 'reparse', 'retry']),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroStartDocumentParseRequestView>
+
+export const zoteroParseReceiptSchema = lazySchema(() =>
+  z
+    .object({
+      operationId: z.uuid(),
+      generation: z.uuid(),
+      sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+      targetLabel: z.string().min(1).max(2048),
+      mode: z.enum(['free', 'pro']),
+      cached: z.boolean(),
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+      fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+      format: z.literal('markdown'),
+      characterCount: z.number().int().nonnegative(),
+      preview: z.string().max(4096),
+      pageCount: z.number().int().positive().optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroParseReceiptView>
+
+export const zoteroStartDocumentParseResultSchema = lazySchema(() =>
+  z
+    .object({
+      operationId: z.uuid(),
+      generation: z.uuid(),
+      jobId: z.string().min(1).max(256),
+      status: z.enum(['started', 'joined', 'completed']),
+      receipt: zoteroParseReceiptSchema.optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroStartDocumentParseResultView>
+
+const artifactSession = lazySchema(() => z.string().min(1).max(256))
+const artifactImageNameSchema = lazySchema(() => z.string().regex(ARTIFACT_IMAGE_NAME_PATTERN))
+export const zoteroDocumentArtifactRequestSchema = lazySchema(() =>
+  z.discriminatedUnion('op', [
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('inspect'),
+        target: zoteroParseTargetSchema,
+      })
+      .strict(),
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('open'),
+        requestId: z.uuid(),
+        target: zoteroParseTargetSchema,
+      })
+      .strict(),
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('page'),
+        lease: z.uuid(),
+        offset: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(2 ** 31 - 1),
+      })
+      .strict(),
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('image'),
+        lease: z.uuid(),
+        name: artifactImageNameSchema,
+      })
+      .strict(),
+    z
+      .object({ sessionId: artifactSession, op: z.literal('release'), requestId: z.uuid() })
+      .strict(),
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('meta'),
+        target: zoteroParseTargetSchema,
+      })
+      .strict(),
+    z
+      .object({
+        sessionId: artifactSession,
+        op: z.literal('probe'),
+        refs: z.array(z.string().min(1).max(1024)).min(1).max(100),
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
+
+const artifactImageMediaType = lazySchema(() =>
+  z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']),
+)
+const artifactImageMeta = lazySchema(() =>
+  z
+    .object({
+      name: artifactImageNameSchema,
+      mediaType: artifactImageMediaType,
+      bytes: z.number().int().positive().max(ZOTERO_ARTIFACT_IMAGE_BYTES),
+    })
+    .strict(),
+)
+
+const artifactMetadata = lazySchema(() =>
+  z.object({
     sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
     targetLabel: z.string().min(1).max(2048),
     mode: z.enum(['free', 'pro']),
-    cached: z.boolean(),
     artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
     fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-    format: z.literal('markdown'),
-    characterCount: z.number().int().nonnegative(),
-    preview: z.string().max(4096),
-    pageCount: z.number().int().positive().optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroParseReceiptView>
-
-export const zoteroStartDocumentParseResultSchema = z
-  .object({
-    operationId: z.uuid(),
-    generation: z.uuid(),
-    jobId: z.string().min(1).max(256),
-    status: z.enum(['started', 'joined', 'completed']),
-    receipt: zoteroParseReceiptSchema.optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroStartDocumentParseResultView>
-
-const artifactSession = z.string().min(1).max(256)
-const artifactImageNameSchema = z.string().regex(ARTIFACT_IMAGE_NAME_PATTERN)
-export const zoteroDocumentArtifactRequestSchema = z.discriminatedUnion('op', [
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('inspect'),
-      target: zoteroParseTargetSchema,
-    })
-    .strict(),
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('open'),
-      requestId: z.uuid(),
-      target: zoteroParseTargetSchema,
-    })
-    .strict(),
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('page'),
-      lease: z.uuid(),
-      offset: z
-        .number()
-        .int()
-        .nonnegative()
-        .max(2 ** 31 - 1),
-    })
-    .strict(),
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('image'),
-      lease: z.uuid(),
-      name: artifactImageNameSchema,
-    })
-    .strict(),
-  z.object({ sessionId: artifactSession, op: z.literal('release'), requestId: z.uuid() }).strict(),
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('meta'),
-      target: zoteroParseTargetSchema,
-    })
-    .strict(),
-  z
-    .object({
-      sessionId: artifactSession,
-      op: z.literal('probe'),
-      refs: z.array(z.string().min(1).max(1024)).min(1).max(100),
-    })
-    .strict(),
-]) satisfies z.ZodType<ZoteroDocumentArtifactRequestView>
-
-const artifactImageMediaType = z.enum([
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'image/bmp',
-])
-const artifactImageMeta = z
-  .object({
-    name: artifactImageNameSchema,
-    mediaType: artifactImageMediaType,
-    bytes: z.number().int().positive().max(ZOTERO_ARTIFACT_IMAGE_BYTES),
-  })
-  .strict()
-
-const artifactMetadata = z.object({
-  sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-  targetLabel: z.string().min(1).max(2048),
-  mode: z.enum(['free', 'pro']),
-  artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-  fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-  characterCount: z.number().int().nonnegative(),
-  pageCount: z.number().int().positive().optional(),
-  images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
-  title: z.string().max(2048).optional(),
-})
-const artifactPage = z
-  .object({
-    offset: z.number().int().nonnegative(),
-    text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
-    totalChars: z.number().int().nonnegative(),
-  })
-  .strict()
-const artifactLimit = z.number().int().positive()
-const artifactPolicy = z
-  .object({
-    maxOpen: artifactLimit,
-    maxBytes: artifactLimit,
-    preparedMaxBytes: artifactLimit,
-    idleTimeoutMs: artifactLimit,
-    maxLifetimeMs: artifactLimit,
-    concurrency: artifactLimit,
-    archiveConcurrency: artifactLimit,
-    archiveQueueLimit: artifactLimit,
-  })
-  .strict()
-export const zoteroDocumentArtifactResultSchema = z.union([
-  z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
-  z.object({ kind: z.literal('released') }).strict(),
-  artifactMetadata.extend({ kind: z.literal('ready') }).strict(),
-  artifactMetadata.extend({ kind: z.literal('meta') }).strict(),
-  z
-    .object({
-      kind: z.literal('probed'),
-      results: z
-        .array(
-          z
-            .object({
-              ref: z.string().min(1).max(1024),
-              state: z.enum(['ready', 'missing', 'expired']),
-            })
-            .strict(),
-        )
-        .max(100),
-    })
-    .strict(),
-  artifactMetadata
-    .extend({
-      kind: z.literal('opened'),
-      lease: z.uuid(),
-      expiresAt: z.number().finite(),
-      policy: artifactPolicy,
-      page: artifactPage,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('page'),
-      lease: z.uuid(),
-      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-      page: artifactPage,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('image'),
-      lease: z.uuid(),
-      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-      name: artifactImageNameSchema,
-      mediaType: artifactImageMediaType,
-      base64: z
-        .string()
-
-        .max(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4)
-        .refine(
-          (value) =>
-            value.length % 4 === 0 &&
-            !/[^A-Za-z0-9+/=]/u.test(value) &&
-            !/=./u.test(value.replace(/={1,2}$/u, '')),
-        ),
-    })
-    .strict(),
-]) satisfies z.ZodType<ZoteroDocumentArtifactResultView>
-
-export const zoteroDocumentParseReceiptRequestSchema = z
-  .object({
-    sessionId: z.string().min(1).max(256),
-    operationId: z.uuid(),
-  })
-  .strict() satisfies z.ZodType<ZoteroDocumentParseReceiptRequestView>
-
-export const zoteroDocumentParseReceiptResultSchema = z.union([
-  z
-    .object({ kind: z.literal('pending'), jobId: z.string().min(1).max(256), generation: z.uuid() })
-    .strict(),
-  z.object({ kind: z.literal('completed'), receipt: zoteroParseReceiptSchema }).strict(),
-  z
-    .object({
-      kind: z.enum(['failed', 'cancelled']),
-      code: z.string().min(1),
-      message: z.string().max(2048),
-    })
-    .strict(),
-]) satisfies z.ZodType<ZoteroDocumentParseReceiptResultView>
-
-const parsedDocumentRow = z
-  .object({
-    artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-    state: z.enum(['indexed', 'orphan', 'broken']),
-    sourceKind: z.enum(['attachment', 'url']),
-    title: z.string().min(1).max(2048).optional(),
-    targetLabel: z.string().max(1024),
-    mode: z.enum(['free', 'pro']),
-    generation: z.uuid().or(z.literal('')),
-    fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN).or(z.literal('')),
     characterCount: z.number().int().nonnegative(),
     pageCount: z.number().int().positive().optional(),
     images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
-    markdownBytes: z.number().int().nonnegative(),
-    committedAt: z.number().finite().nonnegative(),
-    aliases: z.array(z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN)).max(50_000),
-    broken: z
-      .object({
-        code: z.enum(['missing-meta', 'unreadable-meta']),
-        detail: z.string().max(512).optional(),
-      })
-      .strict()
-      .optional(),
-    actionable: z.boolean(),
-  })
-  .strict()
-
-export const zoteroListParsedDocumentsRequestSchema = z
-  .object({
-    sessionId: z.string().min(1).max(256),
-    offset: z.number().int().nonnegative().max(50_000),
-    limit: z.number().int().positive().max(200),
-    state: z.enum(['indexed', 'orphan', 'broken']).optional(),
-    query: z.string().trim().min(1).max(200).optional(),
-  })
-  .strict() satisfies z.ZodType<ZoteroListParsedDocumentsRequestView>
-
-export const zoteroListParsedDocumentsResultSchema = z
-  .object({
-    rows: z.array(parsedDocumentRow).max(200),
-    total: z.number().int().nonnegative(),
-  })
-  .strict() satisfies z.ZodType<ZoteroListParsedDocumentsResultView>
-
-export const zoteroDiscardParsedDocumentRequestSchema = z
-  .object({
-    sessionId: z.string().min(1).max(256),
-    artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
-  })
-  .strict() satisfies z.ZodType<ZoteroDiscardParsedDocumentRequestView>
-
-export const zoteroDiscardParsedDocumentResultSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('missing') }).strict(),
+    title: z.string().max(2048).optional(),
+  }),
+)
+const artifactPage = lazySchema(() =>
   z
     .object({
-      kind: z.literal('discarded'),
-      removedAliases: z.number().int().nonnegative(),
-      removedReceipts: z.number().int().nonnegative(),
+      offset: z.number().int().nonnegative(),
+      text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
+      totalChars: z.number().int().nonnegative(),
     })
     .strict(),
-]) satisfies z.ZodType<ZoteroDiscardParsedDocumentResultView>
+)
+const artifactLimit = lazySchema(() => z.number().int().positive())
+const artifactPolicy = lazySchema(() =>
+  z
+    .object({
+      maxOpen: artifactLimit,
+      maxBytes: artifactLimit,
+      preparedMaxBytes: artifactLimit,
+      idleTimeoutMs: artifactLimit,
+      maxLifetimeMs: artifactLimit,
+      concurrency: artifactLimit,
+      archiveConcurrency: artifactLimit,
+      archiveQueueLimit: artifactLimit,
+    })
+    .strict(),
+)
+export const zoteroDocumentArtifactResultSchema = lazySchema(() =>
+  z.union([
+    z.object({ kind: z.enum(['missing', 'expired']) }).strict(),
+    z.object({ kind: z.literal('released') }).strict(),
+    artifactMetadata
+      .unwrap()
+      .extend({ kind: z.literal('ready') })
+      .strict(),
+    artifactMetadata
+      .unwrap()
+      .extend({ kind: z.literal('meta') })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('probed'),
+        results: z
+          .array(
+            z
+              .object({
+                ref: z.string().min(1).max(1024),
+                state: z.enum(['ready', 'missing', 'expired']),
+              })
+              .strict(),
+          )
+          .max(100),
+      })
+      .strict(),
+    artifactMetadata
+      .unwrap()
+      .extend({
+        kind: z.literal('opened'),
+        lease: z.uuid(),
+        expiresAt: z.number().finite(),
+        policy: artifactPolicy,
+        page: artifactPage,
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('page'),
+        lease: z.uuid(),
+        artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+        page: artifactPage,
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('image'),
+        lease: z.uuid(),
+        artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+        name: artifactImageNameSchema,
+        mediaType: artifactImageMediaType,
+        base64: z
+          .string()
+
+          .max(Math.ceil(ZOTERO_ARTIFACT_IMAGE_BYTES / 3) * 4)
+          .refine(
+            (value) =>
+              value.length % 4 === 0 &&
+              !/[^A-Za-z0-9+/=]/u.test(value) &&
+              !/=./u.test(value.replace(/={1,2}$/u, '')),
+          ),
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<ZoteroDocumentArtifactResultView>
+
+export const zoteroDocumentParseReceiptRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1).max(256),
+      operationId: z.uuid(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroDocumentParseReceiptRequestView>
+
+export const zoteroDocumentParseReceiptResultSchema = lazySchema(() =>
+  z.union([
+    z
+      .object({
+        kind: z.literal('pending'),
+        jobId: z.string().min(1).max(256),
+        generation: z.uuid(),
+      })
+      .strict(),
+    z.object({ kind: z.literal('completed'), receipt: zoteroParseReceiptSchema }).strict(),
+    z
+      .object({
+        kind: z.enum(['failed', 'cancelled']),
+        code: z.string().min(1),
+        message: z.string().max(2048),
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<ZoteroDocumentParseReceiptResultView>
+
+const parsedDocumentRow = lazySchema(() =>
+  z
+    .object({
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+      state: z.enum(['indexed', 'orphan', 'broken']),
+      sourceKind: z.enum(['attachment', 'url']),
+      title: z.string().min(1).max(2048).optional(),
+      targetLabel: z.string().max(1024),
+      mode: z.enum(['free', 'pro']),
+      generation: z.uuid().or(z.literal('')),
+      fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN).or(z.literal('')),
+      characterCount: z.number().int().nonnegative(),
+      pageCount: z.number().int().positive().optional(),
+      images: z.array(artifactImageMeta).max(ARCHIVE_MAX_IMAGES),
+      markdownBytes: z.number().int().nonnegative(),
+      committedAt: z.number().finite().nonnegative(),
+      aliases: z.array(z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN)).max(50_000),
+      broken: z
+        .object({
+          code: z.enum(['missing-meta', 'unreadable-meta']),
+          detail: z.string().max(512).optional(),
+        })
+        .strict()
+        .optional(),
+      actionable: z.boolean(),
+    })
+    .strict(),
+)
+
+export const zoteroListParsedDocumentsRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1).max(256),
+      offset: z.number().int().nonnegative().max(50_000),
+      limit: z.number().int().positive().max(200),
+      state: z.enum(['indexed', 'orphan', 'broken']).optional(),
+      query: z.string().trim().min(1).max(200).optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroListParsedDocumentsRequestView>
+
+export const zoteroListParsedDocumentsResultSchema = lazySchema(() =>
+  z
+    .object({
+      rows: z.array(parsedDocumentRow).max(200),
+      total: z.number().int().nonnegative(),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroListParsedDocumentsResultView>
+
+export const zoteroDiscardParsedDocumentRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1).max(256),
+      artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+    })
+    .strict(),
+) satisfies z.ZodType<ZoteroDiscardParsedDocumentRequestView>
+
+export const zoteroDiscardParsedDocumentResultSchema = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('missing') }).strict(),
+    z
+      .object({
+        kind: z.literal('discarded'),
+        removedAliases: z.number().int().nonnegative(),
+        removedReceipts: z.number().int().nonnegative(),
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<ZoteroDiscardParsedDocumentResultView>
 
 export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
   zoteroDocumentParseInvocation(
@@ -1442,7 +1621,10 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
   ),
   zoteroReleaseUrlPdfInvocation(
     strictCodec('dsh-zotero#ReleaseUrlPdfRequest', zoteroReleaseUrlPdfSchema),
-    strictCodec('dsh-zotero#PdfReleaseResult', z.object({ released: z.literal(true) }).strict()),
+    strictCodec(
+      'dsh-zotero#PdfReleaseResult',
+      lazySchema(() => z.object({ released: z.literal(true) }).strict()),
+    ),
   ),
   zoteroReadUrlPdfInvocation(
     strictCodec('dsh-zotero#ReadUrlPdfRequest', zoteroReadUrlPdfRequestSchema),

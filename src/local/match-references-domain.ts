@@ -105,7 +105,7 @@ async function candidatesByDoi(
   // same listing the search layer spells for a `{kind:'library'}` scope and
   // the search request's own parameter serialization.
   const path = `${libraryPrefix(PERSONAL_LIBRARY)}/${itemsSegmentFor('top')}`
-  const walked = await readPagesConcurrentlyFolded(
+  await readPagesConcurrentlyFolded(
     deps.client,
     path,
     buildSearchParams({
@@ -122,23 +122,18 @@ async function candidatesByDoi(
     signal,
     { body: 'DOI lookup listing', page: 'DOI lookup' },
     deps.limits.searchConcurrency,
-    (rows) => rows,
+    (rows, _offset, serverId) => {
+      for (const row of rows) {
+        const item = normalizeSearchItem(row, {
+          library: PERSONAL_LIBRARY,
+          ...(serverId === undefined ? {} : { serverId }),
+        })
+        const doi = normalizeDoiForAlignment(item.doi)
+        if (doi !== undefined) matches.get(doi)?.push(item)
+      }
+      return null
+    },
   )
-  // Rows normalize after the walk, once the listing's own server id is known,
-  // exactly as the search domain qualifies a listing's refs.
-  const ctx = {
-    library: PERSONAL_LIBRARY,
-    ...(walked.serverId === undefined ? {} : { serverId: walked.serverId }),
-  }
-  for (const page of walked.pages) {
-    for (const row of page.value) {
-      const item = normalizeSearchItem(row, ctx)
-      const doi = normalizeDoiForAlignment(item.doi)
-      if (doi === undefined) continue
-      const bucket = matches.get(doi)
-      if (bucket !== undefined) bucket.push(item)
-    }
-  }
   return matches
 }
 
@@ -177,28 +172,35 @@ export async function matchReferences(
       .filter((doi): doi is string => doi !== undefined),
   )
   const doiMatches = await candidatesByDoi(deps, doiValues, signal)
+  const searches = new Map<string, Promise<ZoteroSearchResult>>()
+  const searchBy = (query: string, signal: AbortSignal) => {
+    let search = searches.get(query)
+    if (search === undefined) {
+      search = deps.search(
+        {
+          query,
+          mode: 'metadata',
+          scope: { kind: 'library' },
+          sort: 'dateModified',
+          direction: 'desc',
+          offset: 0,
+          limit: Math.min(20, deps.limits.maxSearchResults),
+          itemLevel: 'top',
+        },
+        signal,
+      )
+      searches.set(query, search)
+    }
+    return search
+  }
 
   const values = await mapWithConcurrency(
     request.references,
     8,
-    async (input) => {
-      const searchBy = async (query: string) =>
-        await deps.search(
-          {
-            query,
-            mode: 'metadata',
-            scope: { kind: 'library' },
-            sort: 'dateModified',
-            direction: 'desc',
-            offset: 0,
-            limit: 20,
-            itemLevel: 'top',
-          },
-          signal,
-        )
+    async (input, poolSignal) => {
       let incompleteSearch = false
       const searchCandidates = async (query: string) => {
-        const page = await searchBy(query)
+        const page = await searchBy(query, poolSignal)
         if (page.nextOffset !== undefined || page.total > page.returned) incompleteSearch = true
         return page
       }

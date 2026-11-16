@@ -13,12 +13,8 @@ import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
  * instead of materializing their own descriptors. `zod` stays a platform module
  * the shell serves.
  *
- * The two arms do not validate alike. Client Gateway decodes a unary result
- * only through `descriptor.result.decode`, which the generator emits solely for
- * byte-carrying boundaries; a pure-JSON result reaches the browser as
- * `RemoteResult.value` unvalidated, and the client factory is not called there.
- * Strict validation of JSON inputs runs in the host gateway's own `decode`
- * step.
+ * Host result encode and Client result decode both validate the strict schema.
+ * Strict input validation runs through the Host Gateway's create() boundary.
  *
  * The Remote namespace carries the one fact the settings plane does not: live
  * connectivity of the configured Zotero provider. Configuration uses the
@@ -1385,7 +1381,7 @@ export type ZoteroLibraryWriteRequestView =
       }
     >
 export interface ZoteroLibraryWriteResultView {
-  readonly kind: 'applied' | 'declined' | 'committed-unverified' | 'failed'
+  readonly kind: 'applied' | 'partial' | 'declined' | 'committed-unverified' | 'failed'
   readonly message: string
   readonly code?: string
 }

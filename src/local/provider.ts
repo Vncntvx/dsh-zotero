@@ -380,7 +380,13 @@ export class LocalApiProvider implements ZoteroProvider {
     request: ZoteroGetBatchRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroGetBatchResult> {
-    return getBatchDomain((item, itemSignal) => this.getItem(item, itemSignal), request, signal)
+    const limits = this.getLimits()
+    return getBatchDomain(
+      (item, itemSignal) => this.getItem(item, itemSignal),
+      request,
+      signal,
+      Math.max(1, Math.min(limits.graphConcurrency, limits.maxInFlightRequests - 1)),
+    )
   }
 
   async matchReferences(

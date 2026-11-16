@@ -1,5 +1,5 @@
 /**
- * Shared harness for the provider contract specs (`tests/provider/*.spec.ts`).
+ * Shared harness for the provider contract specs under `tests/local/`.
  *
  * Each spec boots a fresh mock Zotero server plus a `LocalApiProvider` over
  * the real HTTP client; the request builders and the typed-error assertion
@@ -12,6 +12,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LocalApiProvider } from '../../src/local/provider.js'
+import { resolveConfig } from '../../src/config.js'
+import { localProviderLimits } from '../../src/service-config.js'
 import type { LocalApiLimits } from '../../src/local/limits.js'
 import { parseRef } from '../../src/refs.js'
 import type {
@@ -29,27 +31,7 @@ import { testHttpClient } from './test-clients.js'
  * through `createProvider`/`setupProvider` or a spread. Kept here as the one
  * home so a new `LocalApiLimits` member costs one edit.
  */
-export const PROVIDER_LIMITS: LocalApiLimits = {
-  maxNoteScanRecords: 200,
-  maxNoteChars: 2000,
-  maxNoteRecords: 50,
-  maxAnnotationRecords: 100,
-  maxAttachmentRecords: 50,
-  fulltextChunkWords: 200,
-  maxEvidenceChars: 6000,
-  maxEvidencePassages: 4,
-  maxFulltextChars: 100_000,
-  fulltextWindowChars: 12_000,
-  maxExportChars: 1_000_000,
-  defaultStyle: 'apa',
-  defaultLocale: 'en-US',
-  maxBrowseResults: 50,
-  maxChangesResults: 50,
-  scopeListingTtlMs: 30_000,
-  searchConcurrency: 4,
-  graphConcurrency: 4,
-  retrieveAttachmentCap: 16,
-}
+export const PROVIDER_LIMITS: LocalApiLimits = localProviderLimits(resolveConfig({}))
 
 /** A provider over the given mock server's base URL, with optional limit overrides. */
 export function createProvider(

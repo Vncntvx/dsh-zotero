@@ -352,6 +352,13 @@ export function chunkText(
   maxWords: number,
   maxCharsPerChunk?: number,
 ): EvidenceChunk[] {
+  if (!Number.isSafeInteger(maxWords) || maxWords < 1)
+    throw new RangeError('maxWords must be a positive safe integer')
+  if (
+    maxCharsPerChunk !== undefined &&
+    (!Number.isSafeInteger(maxCharsPerChunk) || maxCharsPerChunk < 1)
+  )
+    throw new RangeError('maxCharsPerChunk must be a positive safe integer')
   const spans = wordSpansOf(text)
   if (spans.length === 0) return []
   const characterLimit =

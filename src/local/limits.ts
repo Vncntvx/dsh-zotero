@@ -37,6 +37,10 @@ export interface LocalApiLimits {
   readonly defaultLocale: string
   /** Max items a browse call may return; capped by provider */
   readonly maxBrowseResults: number
+  /** Maximum metadata candidates returned by one search, including internal reconciliation. */
+  readonly maxSearchResults: number
+  /** Global transport slots; bulk reads reserve capacity for interactive requests. */
+  readonly maxInFlightRequests: number
   /** Per-resource listing cap for `zotero_changes`; a display bound, not a read bound. */
   readonly maxChangesResults: number
   /**

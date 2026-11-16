@@ -18,7 +18,7 @@ const choices = (values: readonly (string | number)[]) =>
   Schema.union(values.map((value) => Schema.const(value)))
 export const LibraryConfigSchema = Schema.object({
   rightSidebarEnabled: Schema.boolean()
-    .default(true)
+    .default(LIBRARY_DEFAULTS.rightSidebarEnabled)
     .description('显示文献面板与快捷入口。')
     .volatile(),
   listDensity: choices(LIBRARY_CHOICES.listDensity)
@@ -26,7 +26,7 @@ export const LibraryConfigSchema = Schema.object({
     .description('列表信息密度。')
     .volatile(),
   titleLines: choices(LIBRARY_CHOICES.titleLines)
-    .default(2)
+    .default(LIBRARY_DEFAULTS.titleLines)
     .description('文献标题最大行数。')
     .volatile(),
   detailExpandedSections: Schema.array(choices(LIBRARY_SECTIONS))
@@ -34,31 +34,31 @@ export const LibraryConfigSchema = Schema.object({
     .description('默认展开的详情分区，空数组表示全部折叠。')
     .volatile(),
   localPdfOpenTarget: choices(LIBRARY_CHOICES.localPdfOpenTarget)
-    .default('sidebar')
+    .default(LIBRARY_DEFAULTS.localPdfOpenTarget)
     .description('本地 PDF 打开位置。')
     .volatile(),
   urlPdfOpenTarget: choices(LIBRARY_CHOICES.urlPdfOpenTarget)
-    .default('sidebar')
+    .default(LIBRARY_DEFAULTS.urlPdfOpenTarget)
     .description('URL PDF 打开位置。')
     .volatile(),
   allowUrlPdfRead: Schema.boolean()
-    .default(false)
+    .default(LIBRARY_DEFAULTS.allowUrlPdfRead)
     .description('允许用户主动下载库内 URL PDF；会联系来源网站，当前 profile 的客户端共享此授权。')
     .volatile(),
   reopenBehavior: choices(LIBRARY_CHOICES.reopenBehavior)
-    .default('restore')
+    .default(LIBRARY_DEFAULTS.reopenBehavior)
     .description('新建或刷新恢复面板时的浏览位置。')
     .volatile(),
   scopeChangeBehavior: choices(LIBRARY_CHOICES.scopeChangeBehavior)
-    .default('preserve')
+    .default(LIBRARY_DEFAULTS.scopeChangeBehavior)
     .description('切换合集时保留或清除搜索条件。')
     .volatile(),
   defaultCopyFormat: choices(LIBRARY_CHOICES.defaultCopyFormat)
-    .default('citation')
+    .default(LIBRARY_DEFAULTS.defaultCopyFormat)
     .description('主复制按钮使用的格式。')
     .volatile(),
   chatInsertContent: choices(LIBRARY_CHOICES.chatInsertContent)
-    .default('reference')
+    .default(LIBRARY_DEFAULTS.chatInsertContent)
     .description('插入对话的条目上下文。')
     .volatile(),
 })

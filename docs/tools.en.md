@@ -91,7 +91,7 @@ zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations",
 
 ## zotero_get_batch
 
-Read known item or attachment refs in input order. Each result reports success or failure independently; batches accept up to 50 unique refs with at most eight concurrent reads. Use `zotero_get` for one ref and this tool for multiple refs.
+Read known item or attachment refs in input order. Each result reports success or failure independently; batches accept up to 50 unique refs with concurrency `max(1, min(8, graphConcurrency, maxInFlightRequests - 1))`, reserving an interactive-read slot when transport capacity permits. Use `zotero_get` for one ref and this tool for multiple refs.
 
 ### Parameters
 
@@ -146,8 +146,8 @@ Two mutually exclusive modes. `evidence`: extract query-relevant passages from o
 | ------------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence`: rank passages against query; `fulltext`: read one document in paged character windows                                                                                          |
 | `ref`              | string   | none       | `evidence` mode: item ref                                                                                                                                                                                                       |
-| `query`            | string   | none       | `evidence` mode: ranking keywords                                                                                                                                                                                               |
-| `queryVariants`    | string[] | none       | `evidence` mode: other phrasings of the same question (synonyms, field terminology), at most 4; each is ranked separately and a passage keeps its best score                                                                    |
+| `query`            | string   | none       | `evidence` mode: ranking keywords, limited to 2,000 characters; longer input is refused before reading.                                                                                                                         |
+| `queryVariants`    | string[] | none       | `evidence` mode: up to 4 alternative phrasings (synonyms or field terminology), each limited to 2,000 characters; each is ranked separately and a passage keeps its best score.                                                 |
 | `sources`          | string[] | all 4      | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                                                                                                 |
 | `passages`         | integer  | `4`        | `evidence` mode: passage cap (bounded by `maxEvidencePassages`)                                                                                                                                                                 |
 | `attachmentPolicy` | string   | `"best"`   | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                                                                                                  |
@@ -361,6 +361,8 @@ Add and remove an item's tags in one call. Read, merge, write: `add` and `remove
 - Nothing changed: `{kind: "applied", ..., unchanged: true}`, with no PATCH sent and `version` being the version that was read;
 - Declined on the plan card: `{kind: "declined"}`.
 
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
+
 ### Example
 
 ```text
@@ -388,6 +390,8 @@ Join and leave collections for an item in one call. Collection arguments may be 
 - Something changed: `{kind: "applied", ref, version, collections, added, removed, unchanged: false, libraryVersion, serverId?}`;
 - Membership already matched: `{kind: "applied", ..., unchanged: true}`, with no PATCH sent;
 - Declined on the plan card: `{kind: "declined"}`.
+
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
 
 ### Example
 
@@ -436,6 +440,8 @@ Delete a collection. **Irreversible**: the collection's organization is removed,
 
 - Deleted: `{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`;
 - Declined on the plan card: `{kind: "declined"}`.
+
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
 
 ### Example
 
@@ -493,6 +499,8 @@ Standalone notes and child notes are both supported, and reading a version does 
 
 Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`; a declined plan card returns `{kind: "declined"}`, and a version conflict returns `ZOTERO_WRITE_CONFLICT`.
 
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
+
 ### Example
 
 ```text
@@ -515,6 +523,8 @@ Update a collection's name or parent collection. The write is refused when neith
 
 Success returns `{kind: "applied", ref, version, libraryVersion, serverId?}`; a declined plan card returns `{kind: "declined"}`.
 
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
+
 ### Example
 
 ```text
@@ -525,7 +535,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 
 ## zotero_restore_items
 
-Restore selected items from the personal library Trash. Each item's version is read and PATCHed to `deleted: 0` independently, success or failure is settled item by item, and one call takes at most 50 items.
+Restore selected items from the personal library Trash. Each object's version is read and written to `deleted: 0` in dependency-ordered native batches (PATCH for a single object), success or failure is settled item by item, and one call takes at most 50 items.
 
 ### Parameters and output
 
@@ -536,6 +546,8 @@ Restore selected items from the personal library Trash. Each item's version is r
 Output is `{kind: "restored", restored, unverified, failed, serverId?}`; version conflicts are recorded in `failed`, and unknown receipts in `unverified`.
 
 Child notes, child attachments, and annotations are supported. The result body lists every restored object's ref, version, and library version, plus every failed or unverified object's ref and error details; the card reports restored, unverified, and failed counts. An unverified receipt must be reconciled by ref/key before any further action and is never retried.
+
+An unapproved request returns `{kind: "declined"}` without writing.
 
 ### Example
 
@@ -572,7 +584,7 @@ zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "i
 
 ## zotero_update_saved_search
 
-Update the name or search conditions of an existing saved search in the personal library. Carries object and library version preconditions.
+Update the name or search conditions of an existing saved search in the personal library. Updates use an object-version precondition. A supplied `conditions` array must contain at least one condition.
 
 ### Parameters
 
@@ -600,7 +612,7 @@ zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updat
 
 ## zotero_delete_saved_search
 
-Delete a saved search from the personal library. **Irreversible**: removes the saved-search definition only; library items are not affected. Carries object and library version preconditions.
+Delete a saved search from the personal library. **Irreversible**: removes the saved-search definition only; library items are not affected. Deletion uses a library-version precondition.
 
 ### Parameters
 
@@ -669,6 +681,8 @@ Scalar updates validate every requested field against the item type, compare nor
 - Declined on the plan card: `{kind: "declined"}`;
 - Version precondition lost: `ZOTERO_WRITE_CONFLICT`. The object was changed concurrently; run the tool once more (the re-run reads the version again).
 
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
+
 ### Example
 
 ```text
@@ -679,7 +693,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-Delete tags by name across the whole library. **Irreversible**: the tags come off every item in the library. The plan card first pages through the entire tag list, then lists each tag's item count: a tag the list carries without a count shows `unknown items`; only names that do not match across the entire list are listed as proven no-ops. When the read fails, every entry shows `unknown items` and the delete still carries the library version read before it; unmatched names are ignored by Zotero, making retries idempotent.
+Delete tags by name across the whole library. **Irreversible**: the tags come off every item in the library. The plan card pages through the tag list and shows known counts, unknown counts or proven absent names. Before deletion, the domain scans the tags again under one library version and refuses a changing snapshot. Only confirmed present names are submitted. Unverified outcomes require reconciliation and must not be retried.
 
 ### Parameters
 
@@ -689,8 +703,10 @@ Delete tags by name across the whole library. **Irreversible**: the tags come of
 
 ### Output
 
-- Deleted: `{kind: "deleted", deletedTags, libraryVersion, serverId?}` (`deletedTags` is the requested list, sorted by name);
+- Deleted: `{kind: "deleted", deletedTags, absentTags?, libraryVersion, serverId?}` (`deletedTags` contains only names confirmed present and submitted for deletion, sorted by name; `absentTags` reports proven no-ops separately. An all-absent selection sends neither a write nor an authorization request);
 - Declined on the plan card: `{kind: "declined"}`.
+
+An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
 
 ### Example
 
@@ -702,7 +718,7 @@ zotero_delete_library_tags(tags=["stale", "obsolete"])
 
 ## zotero_batch_items
 
-Create items, update tags and collection membership, or move items with their child notes, attachments, and annotations to the trash in one call. Item deletion marks the whole object graph as deleted through versioned PATCH requests and reads it back to verify; when part of the graph fails, `failed.completedRefs` lists the objects confirmed in the trash. Trashed items can be restored from the Zotero trash. Operations merge into one plan review card listing all requested fields and collection memberships.
+Create items, update tags and collection membership, or move items with their child notes, attachments, and annotations to the trash in one call. Item deletion writes each dependency layer with per-object versions in native batches (PATCH for a single object), then reads the graph back to verify it; when part of the graph fails, `failed.completedRefs` lists acknowledged objects. Trashed items can be restored from the Zotero trash. Operations merge into one plan review card listing all requested fields and collection memberships. Each operation runs independently, so a batch may complete only partly. Reconcile the result item by item from the receipts.
 
 The total number of operations in one call (create, update, and delete combined) is bounded by `writeListMaxItems` (default 50). Each created item's receipt lists its saved ref, key, version, and available title/URL by input index. When an item's commit or saved state cannot be verified, it appears in `unverified` with `retryable: false` and should be reconciled by ref/key. Malformed or out-of-bounds batch indexes report as unverified results. A single-item version conflict (HTTP 412) is recorded in `failed` without affecting other items.
 
@@ -718,11 +734,12 @@ At least one of `create`, `update`, or `delete` must be given, and the total cou
 
 ### Output
 
-- Batch result: `{kind: "applied", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`;
+- Batch result: `{kind: "applied" | "partial" | "failed", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`;
+  - `kind: "partial"` means some operations completed while the rest failed or remain unverified; `kind: "failed"` means every operation failed.
   - `created`: `[{index, ref, key, version, itemType, title?, url?}]`, with fields taken from the object Zotero saved;
   - `updated`: `[{ref, unchanged, addedTags, removedTags, addedCollections, removedCollections}]`
   - `deleted`: `[{ref, key, deleted: true, version, children: [ref...]}]`, listing the root items verified into the trash together with all descendants;
-  - `unverified`: `[{op: "create", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`;
+  - `unverified`: `[{op: "create" | "update" | "delete", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`;
   - `failed`: `[{op, index?, ref?, code, message, completedRefs?}]`, recording an item-level failure; when a deletion completes only partly, `completedRefs` lists the objects confirmed in the trash;
 - Declined on the plan card: `{kind: "declined"}`.
 
@@ -748,11 +765,12 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 1. Two-tier confirmation:
    - Session approval policy (`ctx.approval.request`): follows the session policy; a policy of `never` rejects automatically. The prompt wording distinguishes the blast radius: an ordinary add or change, a recoverable move to the trash, or an irreversible deletion;
-   - Plan review card: shows the exact Markdown changes to the user and runs after confirmation; an unapproved request returns `{kind: "declined"}`. The plan body uses only the Markdown subset the host renderer supports.
+   - Plan review card: shows every supplied field and the complete note body. Authored values are rendered as literal text or fenced payloads, keeping their Markdown separate from plan instructions. Execution starts after confirmation; an unapproved request returns `{kind: "declined"}`. The plan body uses only the Markdown subset the host renderer supports.
 2. Local API authentication:
    - A write must carry an API key issued by local Zotero;
-   - The first write needs confirmation in Zotero's local authorization dialog (Allow, Always Allow, or Decline);
+   - Without a reusable grant, each request needs confirmation in Zotero's local authorization dialog (Allow once, Always Allow, or Decline). Multiple independent item updates share native batches of at most 50; Trash and restore batches follow child-to-parent dependencies. A single-use grant belongs exclusively to one request. Prompts share a rolling budget of five per minute and wait cancellably for capacity;
    - With `writePersistKey` on, the persistent key issued by Always Allow is stored safely in the host credentials manager; the settings page's "General → Writing" group can revoke it, and the next write asks again.
+   - An approved operation has one 15-minute deadline, including the operation queue, authorization, writes and verification. The full read-modify-write cycle is serialized across transport rebuilds. Revocation atomically removes the stored secret; commit-unknown results retain their reconciliation status on cancellation.
 3. Shell write detection (turned into one approval):
    - A listener detects write commands aimed at the local API and turns each one into a Harness approval request before the command runs, so an unauthorized script cannot modify the library unasked. This is best-effort, not a boundary.
 
@@ -761,9 +779,10 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
    - an interpreter call whose command text does not spell the endpoint (URLs assembled at runtime in `python -c '...'` or `node -e '...'`); an interpreter call that spells the endpoint in its command text is still detected;
    - a URL hidden in an environment variable, a heredoc, or an encoding;
    - a loopback port other than the configured one (exception: write requests to `/api/users/` and authorize calls are detected on any loopback port);
+   - a `run_code` program that constructs a request at runtime, outside shell-text inspection;
    - any binary of the user's own.
 
-   The system prompt keeps the model on the write tools, and shell writes that bypass them are gated by the approval this detection raises. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A raw write that is confirmed and allowed bypasses the plugin's write domain entirely: no plan card, no version precondition, no Markdown-to-note HTML conversion, and no provenance. That is the price accepted at the moment of confirmation.
+   The system prompt keeps the model on the write tools, and shell writes that bypass them are gated by the approval this detection raises. To make the library entirely unreachable from the shell, run the session without an unconstrained shell: use `tools.restrict({ deny: ["bash"] })` per agent, or a preset without a shell. A raw write that is confirmed and allowed runs outside the plugin's write domain, so it has no plan card, version precondition, Markdown-to-note HTML conversion, or provenance. The confirmation accepts that scope.
 
 ---
 
@@ -822,7 +841,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_WRITE_UNAUTHORIZED`                | Write not authorized: key missing, expired, or rejected in the authorization dialog                                                    |
 | `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | The plan review card cannot start interaction (no interactive channel or a system-level failure)                                       |
 | `ZOTERO_WRITE_CONFLICT`                    | Write version precondition conflict (412); the object was modified externally                                                          |
-| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero authorization endpoint rate limited (429)                                                                                       |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero authorization or data write request rate limited (429)                                                                          |
 
 ---
 
@@ -920,8 +939,8 @@ Tiered reading of lawful open-access full text with passage-level evidence locat
 | `id`                | string   | required   | arXiv ID, DOI, PMID, PMCID, or a direct PDF link                                                                                                                                                                                                |
 | `outline`           | boolean  | none       | Set to `true` to return only the multi-level outline and character spans                                                                                                                                                                        |
 | `section`           | string   | none       | Section number or title to read closely (such as `"2"` or `"Methodology"`)                                                                                                                                                                      |
-| `query`             | string   | none       | Natural-language question; passages are ranked over the full text with the same strategy and the same chunk boundaries as `zotero_retrieve`                                                                                                     |
-| `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; more is refused. Each is ranked separately and a passage keeps its best score                                                                                    |
+| `query`             | string   | none       | Natural-language question; passages are ranked over the full text with the same strategy and the same chunk boundaries as `zotero_retrieve` Each query is limited to 2,000 characters; longer input is refused before reading.                  |
+| `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; each is limited to 2,000 characters. Each is ranked separately and a passage keeps its best score.                                                               |
 | `passages`          | integer  | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                          |
 | `start`             | integer  | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                   |
 | `max_chars`         | integer  | config cap | Maximum characters read per call                                                                                                                                                                                                                |

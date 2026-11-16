@@ -17,6 +17,7 @@
  */
 
 import { chunkText } from '../../evidence.js'
+import { markdownHeadingsOf } from '../../parsed-title.js'
 import type {
   EvidenceMatchKind,
   EvidenceRanker,
@@ -57,27 +58,23 @@ export interface RankedPassage {
  */
 export function extractOutline(text: string): SectionNode[] {
   const sections: SectionNode[] = []
-  // Matches markdown headings e.g. "# 1. Introduction" or "## 2. Method"
-  const mdHeadingRegex = /^(#{1,4})\s+(?:(\d+(?:\.\d+)*)\.?\s*)?([^\n]+)$/gm
-
-  let match: RegExpExecArray | null
-  const matches: Array<{ level: number; num?: string; title: string; index: number }> = []
-
-  while ((match = mdHeadingRegex.exec(text)) !== null) {
-    const level = match[1]!.length
-    const num = match[2]
-    const title = match[3]!.trim()
-    matches.push({ level, num, title, index: match.index })
-  }
+  const matches = markdownHeadingsOf(text).map((heading) => {
+    const numbered = /^(\d+(?:\.\d+)*)\.?\s*(.*)$/.exec(heading.title)
+    return {
+      level: heading.level,
+      index: heading.start,
+      num: numbered?.[1],
+      title: numbered === null ? heading.title : numbered[2]!.trim(),
+    }
+  })
 
   const usedIds = new Set<string>()
   const hasNumbered = matches.some((m) => m.num !== undefined)
 
   for (let i = 0; i < matches.length; i++) {
     const current = matches[i]!
-    const next = matches[i + 1]
     const start = current.index
-    const end = next ? next.index : text.length
+    const end = text.length
     let id = current.num ?? (hasNumbered ? `s${i + 1}` : String(i + 1))
     if (usedIds.has(id)) {
       id = `${id}-${i + 1}`
@@ -93,6 +90,11 @@ export function extractOutline(text: string): SectionNode[] {
     })
   }
 
+  const open: SectionNode[] = []
+  for (const section of sections) {
+    while (open.length > 0 && open.at(-1)!.level >= section.level) open.pop()!.end = section.start
+    open.push(section)
+  }
   return sections
 }
 

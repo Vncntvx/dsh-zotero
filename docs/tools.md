@@ -91,7 +91,7 @@ zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations",
 
 ## zotero_get_batch
 
-按输入顺序批量读取已知条目或附件 ref。每条结果独立报告成功或失败；最多 50 条唯一 ref，最多 8 路并发。单条 `zotero_get` 用于一个 ref；多个 ref 使用本工具。
+按输入顺序批量读取已知条目或附件 ref。每条结果独立报告成功或失败；最多 50 条唯一 ref，实际并发为 `max(1, min(8, graphConcurrency, maxInFlightRequests - 1))`，在传输容量允许时为交互读取保留一个槽位。单条 `zotero_get` 用于一个 ref；多个 ref 使用本工具。
 
 ### 参数
 
@@ -146,8 +146,8 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 | ------------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mode`             | string   | `evidence` | 读取模式，缺省为 `evidence`。`evidence`：按 query 排序证据片段；`fulltext`：按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束）                                  |
 | `ref`              | string   | —          | `evidence` 模式：文献条目 ref                                                                                                                                         |
-| `query`            | string   | —          | `evidence` 模式：排序关键词                                                                                                                                           |
-| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；逐措辞独立排序，段落取各措辞的最好成绩                                                            |
+| `query`            | string   | —          | `evidence` 模式：排序关键词，最多 2,000 个字符；超出时在读取前拒绝                                                                                                    |
+| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；每项最多 2,000 个字符，逐措辞独立排序，段落取各措辞的最好成绩                                     |
 | `sources`          | string[] | 全部 4 种  | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                                                                  |
 | `passages`         | integer  | `4`        | `evidence` 模式：返回段落数量上限（受 `maxEvidencePassages` 限制）                                                                                                    |
 | `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                                                   |
@@ -361,6 +361,8 @@ zotero_create_note(parentItem="zotero://user/0/item/ABCD1234", tags=["综述"], 
 - 请求未造成变化：`{kind: "applied", ..., unchanged: true}`，不发起 PATCH，`version` 为读到的版本；
 - 计划卡拒绝：`{kind: "declined"}`。
 
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
+
 ### 示例
 
 ```text
@@ -388,6 +390,8 @@ zotero_update_item_tags(ref="zotero://user/0/item/ABCD1234", add=["深度学习"
 - 实际发生变更：`{kind: "applied", ref, version, collections, added, removed, unchanged: false, libraryVersion, serverId?}`；
 - 归属本就一致：`{kind: "applied", ..., unchanged: true}`，不发起 PATCH；
 - 计划卡拒绝：`{kind: "declined"}`。
+
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
 
 ### 示例
 
@@ -436,6 +440,8 @@ zotero_create_collection(name="田野笔记", parent="方法论")
 
 - 删除成功：`{kind: "deleted", ref, key, deleted: true, libraryVersion, serverId?}`；
 - 计划卡拒绝：`{kind: "declined"}`。
+
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
 
 ### 示例
 
@@ -493,6 +499,8 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 成功返回 `{kind: "applied", ref, version, libraryVersion, serverId?}`；拒绝计划卡返回 `{kind: "declined"}`，版本冲突返回 `ZOTERO_WRITE_CONFLICT`。
 
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
+
 ### 示例
 
 ```text
@@ -515,6 +523,8 @@ zotero_update_note(ref="zotero://user/0/item/NOTE1234", markdown="## 方法总�
 
 成功返回 `{kind: "applied", ref, version, libraryVersion, serverId?}`；计划卡拒绝返回 `{kind: "declined"}`。
 
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
+
 ### 示例
 
 ```text
@@ -525,7 +535,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 
 ## zotero_restore_items
 
-将个人库 Trash 中指定的条目恢复为活动状态。每个条目独立读取版本并 PATCH `deleted: 0`，逐项返回成功或失败，最多 50 项。
+将个人库 Trash 中指定的条目恢复为活动状态。按对象图读取版本，再按依赖层用原生批次（单个对象用 PATCH）写入 `deleted: 0`，逐项返回成功或失败，最多 50 个根条目。
 
 ### 参数与输出
 
@@ -536,6 +546,8 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 输出为 `{kind: "restored", restored, unverified, failed, serverId?}`；版本冲突记录在 `failed`，回执未知记录在 `unverified`。
 
 支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败和未核验对象的 ref、错误码或原因；卡片根据实际结果显示恢复数、未核验数与失败数，未核验回执必须先按 ref/key 核对，禁止重试。
+
+未获批准返回 `{kind: "declined"}`，不执行写入。
 
 ### 示例
 
@@ -572,7 +584,7 @@ zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "i
 
 ## zotero_update_saved_search
 
-更新个人库中已有保存搜索的名称或匹配条件。写入携带对象版本与库版本前置条件。
+更新个人库中已有保存搜索的名称或匹配条件。更新使用对象版本前置条件；提供 `conditions` 时必须至少包含一条条件。
 
 ### 参数
 
@@ -600,7 +612,7 @@ zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updat
 
 ## zotero_delete_saved_search
 
-删除个人库中的指定保存搜索。**不可逆**：删除操作仅移除保存搜索定义本身，文献库中的条目不受影响。写入携带对象版本与库版本前置条件。
+删除个人库中的指定保存搜索。**不可逆**：删除操作仅移除保存搜索定义本身，文献库中的条目不受影响。删除使用库版本前置条件。
 
 ### 参数
 
@@ -639,7 +651,7 @@ zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 
 该工具仅在本地 Zotero 组件挂载且 `writeEnabled=true` 时向模型注册。
 
-将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，禁止重试。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
+将学术检索结果通过本地写入审批流程保存到个人库。输出为 `declined`、`applied` 或 `committed-unverified` 的联合类型。仅 `applied` 附带成功保存的 `papers`，并保留创建条目的 ref、key、版本、标签、合集与库版本；未核验结果保留原始身份及原因，并进入对账流程。卡片和会话回放通过持久化的正文与状态元数据区分三种结果。
 
 #### 示例
 
@@ -669,6 +681,8 @@ scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You 
 - 计划卡拒绝：`{kind: "declined"}`；
 - 版本前置失败：`ZOTERO_WRITE_CONFLICT`。对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
 
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
+
 ### 示例
 
 ```text
@@ -679,7 +693,7 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表包含该标签但未给计数时显示 `unknown items`；仅整个列表均未匹配的名称列为「确证无效（proven no-ops）」。读取失败时各项显示 `unknown items`，删除仍携带前置读到的库版本；未命中的名称由 Zotero 忽略，重试具有幂等性。
+按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表包含该标签但未给计数时显示 `unknown items`；仅整个列表均未匹配的名称列为「确证无效（proven no-ops）」。读取失败时各项显示 `unknown items`，删除前重新扫描标签并核对所有页的库版本；版本变化拒绝执行，只把确证存在的名称提交给 Zotero。未核验回执必须先核对，禁止重试。
 
 ### 参数
 
@@ -689,8 +703,10 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ### 输出
 
-- 删除成功：`{kind: "deleted", deletedTags, libraryVersion, serverId?}`（`deletedTags` 为按名称排序的请求列表）；
+- 删除成功：`{kind: "deleted", deletedTags, absentTags?, libraryVersion, serverId?}`（`deletedTags` 仅列出同一库版本下确证存在并提交删除的名称，按名称排序；`absentTags` 单列确证不存在的名称，不计入删除数；全部不存在时不发起写入或授权）；
 - 计划卡拒绝：`{kind: "declined"}`。
+
+提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
 
 ### 示例
 
@@ -702,7 +718,7 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ## zotero_batch_items
 
-在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除通过版本化 PATCH 将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复。所有操作合并为一张计划卡确认，卡片完整列出每个创建请求的全部字段与合集归属。
+在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除按依赖层用逐对象版本前置的原生批次（单个对象用 PATCH）将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复。所有操作合并为一张计划卡确认，卡片完整列出每个创建请求的全部字段与合集归属。各项操作独立执行，整批可能只完成一部分；请按回执逐项核对结果。
 
 单次操作总数（创建、更新与删除之和）受 `writeListMaxItems` 限制（默认 50 项）。每项创建的回执按输入索引列出 Zotero 保存后的 ref、key、版本及可用的标题/URL。若某项创建的提交或已保存状态无法核实，它会出现在 `unverified` 中并标记 `retryable: false`，应按 ref/key 核对。异常的批次索引作为未核实结果报告。单个条目的版本冲突（HTTP 412）记录到 `failed` 数组中，不影响其余条目执行。
 
@@ -718,11 +734,12 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ### 输出
 
-- 批量执行结果：`{kind: "applied", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`；
+- 批量执行结果：`{kind: "applied" | "partial" | "failed", total, created: [...], updated: [...], deleted: [...], unverified: [...], failed: [...], libraryVersion?, serverId?}`；
+  - `kind: "partial"` 表示部分操作已完成，其余操作失败或待核验；`kind: "failed"` 表示所有操作均失败。
   - `created`: `[{index, ref, key, version, itemType, title?, url?}]`，字段来自 Zotero 保存后的对象；
   - `updated`: `[{ref, unchanged, addedTags, removedTags, addedCollections, removedCollections}]`
   - `deleted`: `[{ref, key, deleted: true, version, children: [ref...]}]`，列出已核验移入回收站的根条目与所有后代；
-  - `unverified`: `[{op: "create", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`；
+  - `unverified`: `[{op: "create" | "update" | "delete", index, committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}]`；
   - `failed`: `[{op, index?, ref?, code, message, completedRefs?}]`，记录单项失败；删除部分完成时 `completedRefs` 列出已确认移入回收站的对象；
 - 计划卡拒绝：`{kind: "declined"}`。
 
@@ -748,11 +765,12 @@ zotero_batch_items(
 
 1. 双层确认机制：
    - 会话审批策略（`ctx.approval.request`）：遵循会话策略；若策略为 `never` 则自动拒绝。提示文案按影响面区分：普通新增/修改、可恢复的移入回收站、不可撤销的删除；
-   - 计划审查卡：向用户展示具体变更内容 Markdown，经用户确认后执行；未获批准返回 `{kind: "declined"}`。计划正文只使用宿主渲染器支持的 Markdown 子集。
+   - 计划审查卡：完整展示提交字段和笔记正文，可控文本经转义或置于完整围栏中，无法引入新的计划指令；经用户确认后执行；未获批准返回 `{kind: "declined"}`。计划正文只使用宿主渲染器支持的 Markdown 子集。
 2. 本地 API 鉴权：
    - 写操作必须提供 Zotero 本地签发的 API key；
-   - 首次写入需在 Zotero 本地授权弹窗中确认（允许、始终允许或拒绝）；
-   - 开启 `writePersistKey` 时，“始终允许”签发的持久密钥会安全保存在宿主凭据管理器中；设置页「基础设置 → 写入」分组提供撤销入口，撤销只删除宿主保存的密钥，下一次写入会重新弹窗。
+   - 没有可复用授权时，每个请求均须在 Zotero 本地授权弹窗中确认（允许一次、始终允许或拒绝）。多个独立条目更新共用不超过 50 个对象的原生批次；回收站和恢复批次按子对象先于父对象的依赖顺序执行。一次性授权由一个请求独占；全部弹窗共用每分钟五次的滚动预算，超出时可取消地等待；
+   - 开启 `writePersistKey` 时，“始终允许”签发的持久密钥会安全保存在宿主凭据管理器中；设置页「基础设置 → 写入」分组提供撤销入口，撤销在凭据原子修改中移除宿主保存的密钥，下一次写入会重新弹窗。
+   - 审批通过后的整个操作有 15 分钟总时限，覆盖排队、授权、写入和核验。完整读改写周期跨传输重建串行执行；取消仍保留未知提交的核对要求。
 3. Shell 写入检测（转审批）：
    - 监听器检测指向本地 API 的写命令，并在命令执行前把它转成一次 Harness 审批请求，防止未授权脚本修改文献库。这是 best-effort，不是边界。
 
@@ -761,9 +779,10 @@ zotero_batch_items(
    - 命令文本中不出现端点的解释器调用（URL 在运行时拼出时的 `python -c '...'`、`node -e '...'`）；命令文本中写明端点的解释器调用仍会被检出；
    - 藏在环境变量、heredoc 或编码中的 URL；
    - 配置端口之外的 loopback 端口（例外：对 `/api/users/` 的写请求与 authorize 调用在任意 loopback 端口都会被检出）；
+   - `run_code` 的程序可在运行时构造网络请求，未进入 shell 文本检测；
    - 用户自有的任何二进制。
 
-   系统提示约束模型只使用写工具；绕开写工具的 shell 直写，由上述检测转成的审批把关。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入完全绕开插件的写域：没有计划卡、没有版本前置、没有 Markdown 到笔记 HTML 的转换，也没有 provenance。这是用户当场确认时接受的代价。
+   系统提示约束模型只使用写工具；绕开写工具的 shell 直写，由上述检测转成的审批把关。若要 shell 完全无法触碰文献库，应让会话不带无约束 shell：按 agent 使用 `tools.restrict({ deny: ["bash"] })`，或使用不含 shell 的预设。另外，被确认放行的原始写入运行在插件写域之外，因此没有计划卡、版本前置、Markdown 到笔记 HTML 的转换或 provenance。用户确认时同时接受这一范围。
 
 ---
 
@@ -820,9 +839,9 @@ zotero_batch_items(
 | `ZOTERO_PROVIDER_UNAVAILABLE`              | 配置的 Provider 未注册或方法未实现                                                             |
 | `ZOTERO_UNEXPECTED`                        | 响应数据格式异常或未预期行为                                                                   |
 | `ZOTERO_WRITE_UNAUTHORIZED`                | 写入未获授权：密钥缺失、失效或在授权弹窗中被拒绝                                               |
-| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 计划审查卡无法发起交互（无交互通道或系统级异常）                                               |
+| `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`        | 会话审批或计划审查无法完成交互（无交互通道或系统级异常）                                       |
 | `ZOTERO_WRITE_CONFLICT`                    | 写入版本前置条件冲突（412），对象已被外部修改                                                  |
-| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权端点限速（429）                                                                     |
+| `ZOTERO_WRITE_RATE_LIMITED`                | Zotero 授权或数据写请求被限流（429）                                                           |
 
 ---
 
@@ -920,8 +939,8 @@ scholarly_citations(id="2301.07041", direction="citations", limit=5)
 | `id`                | string   | — (必填) | arXiv ID、DOI、PMID、PMCID 或 PDF 直链                                                                                                                                           |
 | `outline`           | boolean  | —        | 设为 `true` 仅返回多级章节目录与字符跨度                                                                                                                                         |
 | `section`           | string   | —        | 指定章节编号或标题进行精读（如 `"2"` 或 `"Methodology"`）                                                                                                                        |
-| `query`             | string   | —        | 自然语言问题，在全文段落中排序检索最相关的证据片段（与 `zotero_retrieve` 同一排序策略与同一切分边界）                                                                            |
-| `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；超限报错。逐措辞独立排序，段落取各措辞的最好成绩                                                                              |
+| `query`             | string   | —        | 自然语言问题，在全文段落中排序检索最相关的证据片段（与 `zotero_retrieve` 同一排序策略与同一切分边界）；最多 2,000 字符，超出时在读取前拒绝                                       |
+| `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；每项最多 2,000 字符，逐措辞独立排序，段落取各措辞的最好成绩                                                                   |
 | `passages`          | integer  | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                         |
 | `start`             | integer  | `0`      | 分块阅读起始字符偏移量                                                                                                                                                           |
 | `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数                                                                                                                                                             |

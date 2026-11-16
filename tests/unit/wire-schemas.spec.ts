@@ -30,15 +30,15 @@ const SESSION = { sessionId: 'test-session' }
 
 describe('the panel wire schemas derive from the domain constants', () => {
   it('offers exactly the domain sort fields, in domain order', () => {
-    expect(zoteroLibrarySortSchema.options).toEqual([...ZOTERO_SORT_FIELDS])
+    expect(zoteroLibrarySortSchema.unwrap().options).toEqual([...ZOTERO_SORT_FIELDS])
   })
 
   it('offers exactly the domain export formats, in domain order', () => {
-    expect(zoteroLibraryExportFormatSchema.options).toEqual([...ZOTERO_EXPORT_FORMATS])
+    expect(zoteroLibraryExportFormatSchema.unwrap().options).toEqual([...ZOTERO_EXPORT_FORMATS])
   })
 
   it('offers exactly the translator export formats, in domain order', () => {
-    expect(zoteroLibraryItemizedExportFormatSchema.options).toEqual([
+    expect(zoteroLibraryItemizedExportFormatSchema.unwrap().options).toEqual([
       ...ZOTERO_ITEMIZED_EXPORT_FORMATS,
     ])
   })

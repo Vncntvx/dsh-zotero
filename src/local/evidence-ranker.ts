@@ -26,6 +26,7 @@
  */
 
 import { ZOTERO_RRF_K } from '../constants.js'
+import { requireEvidenceQueryWithinLimit } from '../evidence-query.js'
 import { prepareCorpus, queryTermsOf, rankPrepared, type EvidenceChunk } from '../evidence.js'
 import type { EvidenceMatchKind } from '../evidence-item.js'
 
@@ -148,6 +149,7 @@ export function queryTextsOf(query: string, variants?: readonly string[]): strin
   const texts: string[] = []
   const seen = new Set<string>()
   for (const raw of [query, ...(variants ?? [])]) {
+    requireEvidenceQueryWithinLimit(raw)
     const text = raw.trim()
     if (text === '' || seen.has(text)) continue
     seen.add(text)

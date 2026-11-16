@@ -9,6 +9,7 @@ import type { ScholarlyTextStore } from '../fulltext/store.js'
 import { extractOutline, findSection, rankPassages } from '../fulltext/evidence-bridge.js'
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
+import { requireEvidenceQueryWithinLimit } from '../../evidence-query.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../../constants.js'
 import { queryVariantsOf } from '../../tools/query-variants.js'
 import { exceedsInlineTokenBudget, spilledNoticeOf, trySpillToolOutput } from '../../spill.js'
@@ -121,11 +122,12 @@ export function createScholarlyReadTool(
         )
       }
       const queryVariants = queryVariantsOf(args.queryVariants)
+      if (args.query !== undefined) requireEvidenceQueryWithinLimit(args.query)
 
       return await runScholarlyJob({
         host,
         exec,
-        label: `scholarly_read (${raw})`,
+        label: 'scholarly_read',
         runInBackground: args.run_in_background === true,
         run: async (signal, onProgress) => {
           // Admit the ranking scope before any source I/O: an accepted read

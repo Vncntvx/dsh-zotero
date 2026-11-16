@@ -42,6 +42,8 @@ import {
 } from './errors.js'
 
 export interface ZoteroHttpClientOptions {
+  /** Service-owned across transport rebuilds; standalone clients own their gate. */
+  readonly gate?: ConcurrencyGate
   readonly baseUrl: string
   readonly timeoutMs: number
   readonly maxResponseBytes: number
@@ -361,6 +363,7 @@ export const SERVER_ID_MISMATCH_STATEMENT = 'does not match this server'
 export class ZoteroHttpClient {
   private currentServerId: string | undefined
   private readonly baseUrlWithSlash: string
+  private readonly baseOrigin: string
   /**
    * One gate for every data request this client makes. Pools bound each
    * call's fan-out, but nothing bounded their product: five concurrent tool
@@ -372,7 +375,8 @@ export class ZoteroHttpClient {
 
   constructor(private readonly options: ZoteroHttpClientOptions) {
     this.baseUrlWithSlash = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`
-    this.gate = new ConcurrencyGate(options.maxInFlight)
+    this.baseOrigin = new URL(this.baseUrlWithSlash).origin
+    this.gate = options.gate ?? new ConcurrencyGate(options.maxInFlight)
   }
 
   /** The instance id remembered from the latest response carrying one (Zotero 10+). */
@@ -420,7 +424,7 @@ export class ZoteroHttpClient {
     // `path` override the loopback base. Every caller builds fixed segments or
     // validated keys, so this can only fire on a future caller that forgets —
     // fail loud before a request leaves the configured origin.
-    if (url.origin !== new URL(this.baseUrlWithSlash).origin) {
+    if (url.origin !== this.baseOrigin) {
       throw new ZoteroError(
         `Refusing to send a request whose resolved origin ${url.origin} leaves the configured origin of ${this.baseUrlWithSlash}.`,
         ZOTERO_UNEXPECTED,
@@ -447,6 +451,7 @@ export class ZoteroHttpClient {
     isIdentityRefresh: boolean,
   ): Promise<ZoteroHttpResponse> {
     const startedAt = Date.now()
+    const timeoutMs = opts.deadlineBudgetMs ?? this.options.timeoutMs
     // The debug request line is the only record that quotes the query string
     // (`relativePathOf` reads `url.href`), bounded by the ring's own clamps;
     // thrown errors and failure lines name the path alone.
@@ -458,11 +463,7 @@ export class ZoteroHttpClient {
       // gate is never reported as Zotero failing to respond in time. The
       // identity refresh re-enters `send` with its triggering request's
       // remaining budget; a fresh call draws the full per-request deadline.
-      using d = deadline(
-        opts.signal,
-        opts.deadlineBudgetMs ?? this.options.timeoutMs,
-        ZOTERO_TIMEOUT,
-      )
+      using d = deadline(opts.signal, timeoutMs, ZOTERO_TIMEOUT)
       const headers: Record<string, string> = {
         [ZOTERO_API_VERSION_HEADER]: ZOTERO_LOCAL_API_VERSION,
       }
@@ -478,7 +479,7 @@ export class ZoteroHttpClient {
           signal: d.signal,
         })
       } catch (error) {
-        translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
+        translateFetchError(error, d.signal, opts.signal, timeoutMs)
       }
       this.rememberServerId(response.headers)
       if (response.status === 412) {
@@ -502,10 +503,10 @@ export class ZoteroHttpClient {
         // of this request's budget is all the caller ever agreed to wait. A
         // 412 that arrives inside the deadline/abort propagation race (no
         // budget left) skips the refresh — there is no time to attempt one.
-        const remainingMs = this.options.timeoutMs - (Date.now() - startedAt)
+        const remainingMs = timeoutMs - (Date.now() - startedAt)
         if (remainingMs <= 0) {
           throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH, {
-            cause: new ZoteroError(requestTimeoutMessage(this.options.timeoutMs), ZOTERO_TIMEOUT),
+            cause: new ZoteroError(requestTimeoutMessage(timeoutMs), ZOTERO_TIMEOUT),
           })
         }
         let refreshError: unknown
@@ -533,7 +534,7 @@ export class ZoteroHttpClient {
             this.options.maxResponseBytes,
             d.signal,
             opts.signal,
-            this.options.timeoutMs,
+            timeoutMs,
           )
         } else {
           void response.body?.cancel()
@@ -547,7 +548,7 @@ export class ZoteroHttpClient {
       try {
         body = await readBody(response, this.options.maxResponseBytes)
       } catch (error) {
-        translateFetchError(error, d.signal, opts.signal, this.options.timeoutMs)
+        translateFetchError(error, d.signal, opts.signal, timeoutMs)
       }
       this.options.sink?.debug('http.request', target, {
         status: response.status,

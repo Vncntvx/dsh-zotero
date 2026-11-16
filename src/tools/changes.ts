@@ -612,6 +612,7 @@ export function registerChangesTool(
               return value
             },
             renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
+            outputLimitBytes: service.config.maxInlineResultBytes,
             runInBackground: changesArgs.run_in_background === true,
             policy: jobPolicyOf(service.config),
           })

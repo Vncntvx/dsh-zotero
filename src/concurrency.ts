@@ -239,9 +239,26 @@ export class ConcurrencyGate {
   private active = 0
   private readonly waiting: GateWaiter[] = []
 
-  constructor(private readonly limit: number) {
+  constructor(private limit: number) {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error(`ConcurrencyGate requires a positive integer limit, got ${limit}`)
+    }
+  }
+
+  /** Existing holders drain after a shrink; newly available slots admit queued work in order. */
+  setLimit(limit: number): void {
+    if (!Number.isInteger(limit) || limit <= 0)
+      throw new Error(`ConcurrencyGate requires a positive integer limit, got ${limit}`)
+    this.limit = limit
+    this.admitQueued()
+  }
+
+  private admitQueued(): void {
+    while (this.active < this.limit) {
+      const next = this.waiting.shift()
+      if (next === undefined) return
+      this.active++
+      next.take()
     }
   }
 
@@ -301,10 +318,7 @@ export class ConcurrencyGate {
       if (released) return
       released = true
       this.active -= 1
-      const next = this.waiting.shift()
-      if (next === undefined) return
-      this.active += 1
-      next.take()
+      this.admitQueued()
     }
   }
 }

@@ -404,6 +404,7 @@ export function registerExportTool(
               return result
             },
             renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
+            outputLimitBytes: service.config.maxInlineResultBytes,
             runInBackground: exportArgs.run_in_background === true,
             policy: jobPolicyOf(service.config),
           })

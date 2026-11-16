@@ -326,7 +326,7 @@ describe('search: note-content scan', () => {
     expect(result.returned).toBe(0)
   })
 
-  it('resolves child-note collection membership through the parent item', async () => {
+  it.each([1, 10])('counts only in-collection notes toward a %i-result page', async (limit) => {
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '7',
@@ -355,7 +355,7 @@ describe('search: note-content scan', () => {
     })
     mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       if (search.get('itemType') === 'note')
-        helpers.json([childIn, childOtherCollection, childParentMissing, standaloneIn])
+        helpers.json([childOtherCollection, childIn, childParentMissing, standaloneIn])
       else if (search.get('itemKey') !== null) {
         // PARE3333 stays absent: an unfetchable parent (e.g. trashed) fails closed.
         // A row with no key names no parent at all and is ignored.
@@ -367,17 +367,17 @@ describe('search: note-content scan', () => {
       } else helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': SERVER_ID })
     })
     const result = await provider.search(
-      request({ query: 'cascade', scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
+      request({ query: 'cascade', limit, scope: { kind: 'collection', refOrName: 'LLM Papers' } }),
       undefined,
       searchOptions(),
     )
     expect(result.items).toEqual([])
     expect(result.supplemental?.items.map((entry) => entry.ref)).toEqual([
       'zotero://user/0/item/NOTE1111?server=S1',
-      'zotero://user/0/item/NOTE4444?server=S1',
+      ...(limit > 1 ? ['zotero://user/0/item/NOTE4444?server=S1'] : []),
     ])
     const parentFetch = mock.requests.find((entry) => entry.search.get('itemKey') !== null)
-    expect(parentFetch?.search.get('itemKey')).toBe('PARE1111,PARE2222,PARE3333')
+    expect(parentFetch?.search.get('itemKey')).toBe('PARE2222,PARE1111,PARE3333')
   })
 
   it('splits parent-membership lookups into itemKey batches of at most 50', async () => {
@@ -620,7 +620,7 @@ describe('search: note-content scan', () => {
     expect(listingReads()).toBe(2)
   })
 
-  it('re-checks the scope listing once before failing an unknown collection name', async () => {
+  it('does not refetch a freshly read listing for an unknown collection name', async () => {
     serveJson(mock, '/api/users/0/collections', COLLECTIONS, {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '7',
@@ -634,11 +634,11 @@ describe('search: note-content scan', () => {
       'ZOTERO_NOT_FOUND',
       'No collection',
     )
-    // A name miss gets one fresh look in case the library changed since the
-    // cached listing; the failure is only reported after that.
+    // The miss was measured on this call's fresh listing, so a second full
+    // read cannot improve its evidence. Cached misses still revalidate below.
     expect(
       mock.requests.filter((entry) => entry.pathname === '/api/users/0/collections'),
-    ).toHaveLength(2)
+    ).toHaveLength(1)
   })
 
   it('finds a collection created after the cached listing via the miss re-check', async () => {

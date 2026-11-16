@@ -8,6 +8,7 @@
 
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
 import { invalidArgs } from '../errors.js'
+import { requireEvidenceQueryWithinLimit } from '../evidence-query.js'
 import { assertNonBlank } from './validate.js'
 
 /**
@@ -33,6 +34,7 @@ export function queryVariantsOf(variants: readonly string[] | undefined): string
   const distinct: string[] = []
   const seen = new Set<string>()
   for (const value of variants) {
+    requireEvidenceQueryWithinLimit(value)
     const trimmed = assertNonBlank('queryVariants entry', value)
     if (seen.has(trimmed)) continue
     seen.add(trimmed)

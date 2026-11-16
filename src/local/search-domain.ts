@@ -35,6 +35,7 @@ import { plainNoteText } from '../normalize-context.js'
 import { requireSupportedLibraryOfRef } from '../refs.js'
 import {
   attachmentParentKeys,
+  filteredCandidatesOf,
   attachmentParentsCacheKey,
   searchIndexKeyOf,
   searchRowsByKeys,
@@ -137,41 +138,57 @@ export async function runSearch(
           .map((row) => asString(asRecord(row)?.key))
           .filter((key): key is string => key !== undefined),
       )
-      // One pass over the scan: the collector examines each batch's slice as
-      // it arrives, so saturation and the supplement list share a single walk
-      // instead of O(batches × rows) rescans. Matched rows keep scan order;
-      // child notes wait here for the parent-membership resolution below
-      // before they can join the page.
+      // Resolve each page's parent membership before charging accepted hits
+      // against headroom. An out-of-scope child must not hide a later match.
       const matched: { row: unknown; key: string; parentKey?: string }[] = []
-      const collect = (added: readonly unknown[]): boolean => {
-        for (const row of added) {
-          if (matched.length >= headroom) return true
+      const memberships = new Map<string, Set<string>>()
+      const collect = async (added: readonly unknown[]): Promise<boolean> => {
+        const candidates = added.flatMap((row) => {
           const key = asString(asRecord(row)?.key)
-          if (key === undefined || seen.has(key)) continue
-          if (!noteRowMatches(row, terms, request, scope.collectionKey)) continue
+          if (
+            key === undefined ||
+            seen.has(key) ||
+            !noteRowMatches(row, terms, request, scope.collectionKey)
+          )
+            return []
           seen.add(key)
           const parentKey =
             scope.collectionKey === undefined
               ? undefined
               : asString(asRecord(asRecord(row)?.data)?.parentItem)
-          matched.push({ row, key, ...(parentKey !== undefined ? { parentKey } : {}) })
+          return [{ row, key, ...(parentKey === undefined ? {} : { parentKey }) }]
+        })
+        const missing = [
+          ...new Set(
+            candidates.flatMap((entry) =>
+              entry.parentKey === undefined || memberships.has(entry.parentKey)
+                ? []
+                : [entry.parentKey],
+            ),
+          ),
+        ]
+        if (missing.length > 0) {
+          for (const [key, collections] of await fetchParentCollections(
+            deps,
+            libraryForItems,
+            missing,
+            scope.serverId,
+            signal,
+          ))
+            memberships.set(key, collections)
         }
-        return matched.length >= headroom
+        for (const entry of candidates) {
+          if (
+            entry.parentKey !== undefined &&
+            !memberships.get(entry.parentKey)?.has(scope.collectionKey!)
+          )
+            continue
+          matched.push(entry)
+          if (matched.length >= headroom) return true
+        }
+        return false
       }
       const scan = await fetchNoteRows(deps, scope, request, signal, collect)
-      let memberships: Map<string, Set<string>> | undefined
-      const pendingParents = matched
-        .map((entry) => entry.parentKey)
-        .filter((parentKey): parentKey is string => parentKey !== undefined)
-      if (pendingParents.length > 0) {
-        memberships = await fetchParentCollections(
-          deps,
-          libraryForItems,
-          [...new Set(pendingParents)],
-          scope.serverId,
-          signal,
-        )
-      }
       const supplementItems: ZoteroSearchItem[] = []
       for (const entry of matched) {
         if (
@@ -397,32 +414,12 @@ async function exactFilteredSearch(
 }
 
 /**
- * The index candidates one request's year/attachment filters accept. The
- * values are applied at page time: the stored index stays valid across year
- * edits and attachment toggles, and only the `attachmentIndexed` dimension
- * decides whether presence facts exist at all.
- */
-function filteredCandidatesOf(
-  index: FilteredIndex,
-  request: ZoteroSearchRequest,
-): readonly FilteredCandidate[] {
-  return index.candidates.filter(
-    (candidate) =>
-      (request.yearFrom === undefined ||
-        (candidate.year !== undefined && candidate.year >= request.yearFrom)) &&
-      (request.yearTo === undefined ||
-        (candidate.year !== undefined && candidate.year <= request.yearTo)) &&
-      (request.hasAttachment === undefined || candidate.hasAttachment === request.hasAttachment),
-  )
-}
-
-/**
  * Scan the whole listing once and store the candidate facts. The candidate
  * scan and the attachment-presence walk run concurrently when the request
  * filters on attachment existence; each scan halves the configured
  * concurrency so the total stays inside the caller's budget.
  *
- * Rows normalize once after the walk. When the request reads trashed rows,
+ * Rows normalize once as each page arrives. When the request reads trashed rows,
  * the normalized rows are retained in-request (bounded by
  * `ZOTERO_FILTERED_ROW_RETENTION`) so a fresh scan's first serve can skip
  * the per-key read-back; they never enter the stored index.
@@ -440,6 +437,8 @@ async function scanFilteredIndex(
   const scanConcurrency = wantParents
     ? Math.max(1, Math.floor(deps.limits.searchConcurrency / 2))
     : deps.limits.searchConcurrency
+  let retained: Map<string, ZoteroSearchItem> | undefined = includeTrashed ? new Map() : undefined
+  let rowsSeen = 0
   const scanPromise = readPagesConcurrentlyFolded(
     deps.client,
     scope.path,
@@ -450,22 +449,35 @@ async function scanFilteredIndex(
     signal,
     { body: 'filtered search candidates', page: 'filtered search candidates' },
     scanConcurrency,
-    (rows) => rows,
-  )
-  const parentsPromise = wantParents
-    ? attachmentParentKeys(deps, deps.searchCaches, library, scope.serverId, includeTrashed, {
-        cacheGeneration: options.cacheGeneration,
-        signal,
+    (rows, _offset, serverId) => {
+      rowsSeen += rows.length
+      if (rowsSeen > ZOTERO_FILTERED_ROW_RETENTION) retained = undefined
+      return rows.map((row): FilteredCandidate => {
+        const item = normalizeSearchItem(row, {
+          library,
+          ...(serverId === undefined ? {} : { serverId }),
+        })
+        const key = parseRef(item.ref).key
+        retained?.set(key, item)
+        return { key, year: item.year }
       })
-    : undefined
+    },
+  )
+  const parentScan = () =>
+    attachmentParentKeys(deps, deps.searchCaches, library, scope.serverId, includeTrashed, {
+      cacheGeneration: options.cacheGeneration,
+      signal,
+      concurrency: scanConcurrency,
+    })
+  const parentsPromise = wantParents && deps.limits.searchConcurrency > 1 ? parentScan() : undefined
   // A scan that rejects first (an aborted caller, a version drift) must not
   // leave the concurrent walk's rejection unconsumed; awaiting it below still
   // surfaces the original rejection.
   if (parentsPromise !== undefined) void parentsPromise.catch(() => undefined)
   const scanned = await scanPromise
   let parentSet: ReadonlySet<string> | undefined
-  if (parentsPromise !== undefined) {
-    const fetched = await parentsPromise
+  if (wantParents) {
+    const fetched = await (parentsPromise ?? parentScan())
     const drifted =
       scanned.libraryVersion !== undefined &&
       fetched.libraryVersion !== undefined &&
@@ -482,7 +494,7 @@ async function scanFilteredIndex(
         library,
         scope.serverId,
         includeTrashed,
-        { cacheGeneration: options.cacheGeneration, signal },
+        { cacheGeneration: options.cacheGeneration, signal, concurrency: scanConcurrency },
       )
       if (
         scanned.libraryVersion !== undefined &&
@@ -504,25 +516,7 @@ async function scanFilteredIndex(
       parentSet = fetched.parents
     }
   }
-  // Rows normalize once, after the walk, with the listing's own server id —
-  // the same qualification the read-back path gives its rows.
-  const ctx = {
-    library,
-    ...(scanned.serverId !== undefined ? { serverId: scanned.serverId } : {}),
-  }
-  const candidates: FilteredCandidate[] = []
-  let retained: Map<string, ZoteroSearchItem> | undefined
-  const retainRows =
-    includeTrashed &&
-    scanned.pages.reduce((sum, page) => sum + page.value.length, 0) <= ZOTERO_FILTERED_ROW_RETENTION
-  if (retainRows) retained = new Map()
-  for (const page of scanned.pages) {
-    for (const row of page.value) {
-      const item = normalizeSearchItem(row, ctx)
-      candidates.push({ key: parseRef(item.ref).key, year: item.year })
-      retained?.set(parseRef(item.ref).key, item)
-    }
-  }
+  const candidates = scanned.pages.flatMap((page) => page.value)
   return {
     index: {
       candidates:
@@ -580,7 +574,7 @@ async function fetchNoteRows(
   scope: ResolvedScopeResult,
   request: ZoteroSearchRequest,
   signal: AbortSignal | undefined,
-  shouldStop?: (added: readonly unknown[]) => boolean,
+  shouldStop?: (added: readonly unknown[]) => boolean | Promise<boolean>,
 ): Promise<{ scanned: number; truncated: boolean }> {
   const libraryForScan = libraryOfResolvedScope(scope.resolved)
   // A publications-scoped scan must stay inside My Publications; the bare
@@ -601,7 +595,10 @@ async function fetchNoteRows(
       signal,
       serverId: scope.serverId,
     })
-    return requireArrayBody(json, 'note scan')
+    const rows = requireArrayBody(json, 'note scan')
+    if (rows.length > limit)
+      throw new ZoteroError('The note scan returned more rows than requested.', ZOTERO_UNEXPECTED)
+    return rows
   }
   let scanned = 0
   let start = 0
@@ -615,13 +612,13 @@ async function fetchNoteRows(
     }
     const added = rows.slice(0, wanted)
     scanned += added.length
-    if (shouldStop?.(added) === true) break
+    start += added.length
+    if ((await shouldStop?.(added)) === true) break
     // Fewer rows than requested means the library has no more notes.
     if (rows.length < wanted) {
       endedByEof = true
       break
     }
-    start += rows.length
   }
   let truncated = false
   if (!endedByEof && scanned >= cap) {

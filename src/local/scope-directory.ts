@@ -12,6 +12,7 @@
  */
 
 import { HarnessError } from '@deepseek-ai/dsh-error'
+import { LRUCache } from 'lru-cache'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { awaitSharedOperation, mapWithConcurrency, type SharedOperation } from '../concurrency.js'
 import type { DiagnosticSink } from '../diagnostics.js'
@@ -128,7 +129,10 @@ export class ScopeDirectory {
   private readonly latestListingGeneration = new Map<string, number>()
 
   /** TTL-cached breadcrumb nodes for hierarchical collection walks. */
-  private readonly collectionNodeCache = new Map<string, CachedCollectionNode>()
+  private readonly collectionNodeCache = new LRUCache<string, CachedCollectionNode>({
+    max: 4096,
+    ttlAutopurge: true,
+  })
 
   /** In-flight breadcrumb node reads, shared so a parallel ancestor walk fetches each key once. */
   private readonly collectionNodeInFlight = new Map<
@@ -417,13 +421,15 @@ export class ScopeDirectory {
       return { ref: refForLibrary(library, kind, ref.key, resolved.serverId), name: resolved.name }
     }
     // Name resolution matches over the effective library's full listing.
+    const listingKey = `${cacheKey(effectiveLibrary, plural)}:${identityKey(claimServerId)}`
+    const previousListing = this.scopeListingCache.get(listingKey)
     let listing = await this.scopeListingOf(
       plural,
       { library: effectiveLibrary, serverId: claimServerId },
       signal,
     )
     let matched = matchScopeName(listing.entries, refOrName)
-    if (matched.length === 0) {
+    if (matched.length === 0 && listing === previousListing) {
       listing = await this.scopeListingOf(
         plural,
         { library: effectiveLibrary, serverId: claimServerId },
@@ -729,11 +735,15 @@ export class ScopeDirectory {
       if (
         (this.collectionBaseGeneration.get(cacheKey(library, 'collections')) ?? 0) === baseEpoch
       ) {
-        this.collectionNodeCache.set(nodeCacheKey, {
-          node,
-          ...(servedBy !== undefined ? { serverId: servedBy } : {}),
-          fetchedAt: Date.now(),
-        })
+        this.collectionNodeCache.set(
+          nodeCacheKey,
+          {
+            node,
+            ...(servedBy !== undefined ? { serverId: servedBy } : {}),
+            fetchedAt: Date.now(),
+          },
+          { ttl: this.ttlMsOf() },
+        )
       }
       return node
     } catch (error) {
@@ -741,11 +751,15 @@ export class ScopeDirectory {
         if (
           (this.collectionBaseGeneration.get(cacheKey(library, 'collections')) ?? 0) === baseEpoch
         ) {
-          this.collectionNodeCache.set(nodeCacheKey, {
-            node: undefined,
-            ...(serverId !== undefined ? { serverId } : {}),
-            fetchedAt: Date.now(),
-          })
+          this.collectionNodeCache.set(
+            nodeCacheKey,
+            {
+              node: undefined,
+              ...(serverId !== undefined ? { serverId } : {}),
+              fetchedAt: Date.now(),
+            },
+            { ttl: this.ttlMsOf() },
+          )
         }
         return undefined
       }

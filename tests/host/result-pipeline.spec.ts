@@ -183,3 +183,21 @@ it('completes the receipt write once the file is stored, even when cancelled aft
   expect(storage.put).toHaveBeenCalledTimes(1)
   expect(controller.signal.aborted).toBe(true)
 })
+
+it('bounds session receipt retention even when a storage adapter lacks deleteMany', async () => {
+  let storage: ReturnType<typeof resultStorage> | undefined
+  lane = await setupHostLane(
+    {},
+    {
+      compose: async (ctx) => {
+        storage = resultStorage(ctx)
+      },
+    },
+  )
+  if (storage === undefined) throw new Error('storage fixture missing')
+  for (let i = 0; i < 129; i += 1) storage.receipts.set(`receipt-${i}`, { sessionId: 'session' })
+  const delivery = new ResultDelivery(lane.ctx, () => resolveConfig({}))
+  await expect(delivery.pruneReceipts('session', 128)).resolves.toBe(0)
+  await lane.teardown()
+  lane = undefined
+})

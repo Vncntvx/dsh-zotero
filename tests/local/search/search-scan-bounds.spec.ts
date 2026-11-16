@@ -37,15 +37,36 @@ afterEach(async () => {
 })
 
 describe('search scan bounds', () => {
-  it('stops the scan at the configured record cap', async () => {
-    const capped = makeProvider(mock, { maxNoteScanRecords: 2 })
-    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+  it('rejects a server page that exceeds the requested scan budget', async () => {
+    const capped = makeProvider(mock, { maxNoteScanRecords: 1 })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (_req, _res, helpers, search) => {
       if (search.get('itemType') === 'note')
         helpers.json([
           noteRow({ data: { note: 'cascade one' } }),
           noteRow({ key: 'NOTE2222', data: { note: 'cascade two' } }),
-          noteRow({ key: 'NOTE3333', data: { note: 'cascade three' } }),
         ])
+      else helpers.json([], { 'Total-Results': '0' })
+    })
+    await expect(
+      capped.search(request({ query: 'cascade' }), undefined, searchOptions()),
+    ).rejects.toMatchObject({ code: 'ZOTERO_UNEXPECTED' })
+    expect(mock.requests.filter((entry) => entry.search.get('itemType') === 'note')).toHaveLength(1)
+  })
+
+  it('stops the scan at the configured record cap', async () => {
+    const capped = makeProvider(mock, { maxNoteScanRecords: 2 })
+    mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
+      if (search.get('itemType') === 'note')
+        helpers.json(
+          [
+            noteRow({ data: { note: 'cascade one' } }),
+            noteRow({ key: 'NOTE2222', data: { note: 'cascade two' } }),
+            noteRow({ key: 'NOTE3333', data: { note: 'cascade three' } }),
+          ].slice(
+            Number(search.get('start') ?? 0),
+            Number(search.get('start') ?? 0) + Number(search.get('limit') ?? 25),
+          ),
+        )
       else helpers.json([], { 'Total-Results': '0' })
     })
     const result = await capped.search(request({ query: 'cascade' }), undefined, searchOptions())

@@ -47,11 +47,13 @@ graph LR
 - 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
 - 结构性配置变更会在现有实例上重建 HTTP 客户端、Provider 与写工具集，触发条件是 `TRANSPORT_CONFIG_KEYS` 中的六个键（`baseUrl`、`timeoutMs`、`maxResponseBytes`、`maxInFlightRequests`、`writeAuthorizeDeadlineMs`、`writeEnabled`）；其余限额由 Provider 实时读取，不触发重建；
 - 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
-- 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求：`bash`/`pwsh` 读 `command`，`terminal_send` 读提交前的 `text`（`submit: false` 不执行即不检测）；`run_code` 的程序可在运行期拼出请求，属文本检测的已知盲区；
+- 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求：`bash`/`pwsh` 读 `command`，`terminal_send` 的 `text` 一律扫描，包括 `submit: false`，因为后续回车可以执行已缓冲的文本；`run_code` 的程序可在运行期拼出请求，属文本检测的已知盲区；
 - 策略提示词段（`zotero:policy`，`src/prompt.ts`）随每一步准入的工具集合裁剪：读路由、读上限与写策略只点名该步准入的工具；只要存在任一 Zotero 工具，就保留调用同意、注入防护与连接失败三段；没有本地读工具时保留写路由约束，准入为空时只保留该约束；写能力关闭时完整保留关闭状态说明与越界路由禁令；全量工具时文本保持稳定；
 - 配置重建策略与 config→limits 投影集中于 `src/service-config.ts`；本地工具注册清单由 `src/tool-registration.ts` 管理，工具调用诊断 hook 由 `src/tool-diagnostics.ts` 安装，步骤准入解析由 `src/step-tools.ts` 每步缓存一次，参数纠错由 `src/parameter-correction.ts` 通过 `tools/post-execute` 安装，`ResultDelivery` 只负责投递；子 agent 写策略由 `src/subagent-guard.ts` 承担，按会话血缘收缩子 agent 的写工具可见性，并在执行期拒绝其写调用；service 保留 fiber 生命周期、这些协作者的组合，以及该策略的刷新与释放；
 - 配置提交校验与 volatile-update 监听由 `src/service-lifecycle.ts` 承担；ZoteroService 提供 live config 和重建 transport/tool 的回调；
 - 请求驱动架构：插件加载过程不发起任何外部或本地网络请求。
+
+Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会话检查是附加防御：真实 RemoteAccessService 从调用 Context 读取主体；无 invocation 的可信进程内调用仍遵循上游允许语义。面板写入被拒时返回 `remote-access/denied`，与审批服务可用性分开。
 
 ### Provider 层 (`src/local/provider.ts`)
 
@@ -59,7 +61,7 @@ graph LR
 - 提供 search、metadata、attachments、citation、browse、retrieve、changes 等核心能力，写入能力仅在明确配置且授权就绪时提供；
 - 搜索与浏览的作用域名称由插件基于缓存的列表数据自行解析；缓存列表由 scope directory 持有，并随传输层一同重建；`trash` 作用域（`/items/trash` 列表）是文献面板专属的搜索范围，模型工具的输入 schema 不提供它；
 - Collection 与 saved search 的名称/层级解析由 `src/local/scope-directory.ts` 负责；全局 item types、fields 与 creator types 的实例隔离缓存由 `src/local/item-schema-directory.ts` 负责，browse 与写入共用同一个 schema directory；
-- 读路径的并发由 `searchConcurrency`、`graphConcurrency` 两个限额约束，避免单次调用对本地 API 造成瞬时过载；
+- 读路径并发由 `searchConcurrency`、`graphConcurrency` 约束。候选扫描与附件扫描分配同一检索预算，预算为 1 时串行执行；批量 get 遵循 graphConcurrency，并在传输容量允许时保留一个槽位；
 - 笔记内容扫描在第一页（offset 0）按限额执行；
 - 查询参数编码由 `src/local/search-query.ts` 负责；路径片段由 `src/local/scope-paths.ts` 提供；
 - 全文读取、coverage 解释和附件来源事实由 `src/local/retrieve-fulltext.ts` 负责；changes cursor 的 identity、coverage 和版本构造由 `src/local/changes-cursor.ts` 负责；
@@ -83,7 +85,7 @@ graph LR
 - 仅支持环回地址 HTTP 请求，固定 API 版本为 3；
 - 通过 `Zotero-Server-ID` 请求头校验实例身份一致性；
 - 强制限制流式响应读取大小（`maxResponseBytes`）；
-- 全局在途请求上限（`maxInFlightRequests`，默认 8），统一管理所有工具调用的并发槽位；
+- 服务持有跨传输重建的全局在途请求闸门（`maxInFlightRequests`，默认 8）。缩容时已接纳请求先排空，扩容时按顺序释放等待者；
 - 严格禁止重定向，无持久长连接；
 - 超时由融合后的 deadline 与调用方取消信号共同管理。
 
@@ -156,6 +158,8 @@ graph LR
 `src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；构建侧的下载器直接导入该模块（Node 的类型剥离），不再保留镜像副本。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。
 
 `src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。运行时 `onnxruntime-web` 不作为依赖：发布路径把 Node 入口、wasm 胶水与 wasm 二进制（约 3.8MB gzip）连同 MIT 许可与 SHA-256 记录写入包内 `assets/onnxruntime/<version>/`，`semantic/runtime.ts` 以绝对 URL 加载它并把 `env.wasm.wasmPaths` 指向该目录。插件安装的依赖闭包因此不带任何安装脚本，`npm run verify:pack` 同时核对资产存在、来源哈希与许可。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序。
+
+运行时、状态读取和安装器共用 bundle inspector：manifest 以单次有界读取核对，逐文件大小、SHA-256 与普通文件/目录检查保持一致，最多 16 个身份快照跨 loader 复用。交给 ONNX 和 tokenizer 的字节另按目录钉值校验，ONNX 直接接收该内存快照，消除路径重开窗口。查询与改写每条最多 2,000 字符；嵌入文本连同前缀在编码前限制为 131,072 字符；每代缓存最多一个编码 batch 在途，每次推理包含 padding 的 token 总数最多 32,768，长批次完整拆分、每条只编码一次。
 
 ## 文献库子组件 (`src/library/`)
 
@@ -259,3 +263,5 @@ graph LR
 设置与阅读验收分工：`tests/host/library/config-commit.spec.ts` 通过真实 Loader 验证原子配置提交与拒绝；`url-pdf.spec.ts` 验证网络安全、撤权及下载边界，`pdf-files.spec.ts` 验证文件权限和释放；客户端 `settings-acceptance.spec.tsx` 验证草稿隔离、确认和复制动作，`preference-runtime.spec.tsx` 验证标签生命周期、范围条件和插入内容，`pdf-reader-lifetime.spec.ts` 验证隐藏与浮动标签的清理归属。实时 Zotero 检查由 `npm run test:integration` 执行，打包浏览器组合由 `npm run smoke:web-composition` 执行；二者不能被模拟测试替代。
 
 浏览器仅保留来源附件 ref，恢复的阅读标签通过显式重载重新下载并替换原标签，不保存临时下载 URL。
+
+全量列表扫描在每页验证后立即 fold，随后释放原始行。筛选检索只持有 key、年份和附件事实，每个索引保留至多四个最近使用的筛选投影；DOI 对账只保留目标 DOI 的命中。协议对超过 1,000,000 行的总数或超过 10,000 页的扫描明确报错，不返回部分成功。面包屑节点缓存采用至多 4,096 项的 LRU 并过期清除；本次新拉取的名称列表未命中时直接拒绝，只有缓存未命中才再读一次。重复引用查询共用一次请求，内部搜索遵循 maxSearchResults。

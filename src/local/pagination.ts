@@ -18,6 +18,10 @@ import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 
+/** Full-library scans refuse implausible headers and pathological tiny-page walks. */
+export const MAX_LISTING_ROWS = 1_000_000
+export const MAX_LISTING_PAGES = 10_000
+
 /**
  * Read and validate the `Total-Results` header a server-paged list endpoint
  * must report. A missing or malformed header fails loud: pagination without
@@ -27,7 +31,7 @@ export function requireTotalResults(headers: Headers, what: string): number {
   // `Headers.get` is case-insensitive; one lookup covers both spellings.
   const raw = headers.get(ZOTERO_TOTAL_RESULTS_HEADER)
   const total = parseNonNegativeSafeInteger(raw)
-  if (total === undefined) {
+  if (total === undefined || total > MAX_LISTING_ROWS) {
     throw new ZoteroError(
       `Zotero did not return a valid Total-Results header for ${what}`,
       ZOTERO_UNEXPECTED,
@@ -177,17 +181,36 @@ export async function readAllPages(
   signal: AbortSignal | undefined,
   what: { readonly body: string; readonly page: string },
   decorate: ((params: URLSearchParams) => void) | undefined,
-  onPage: (rows: readonly unknown[]) => void,
+  onPage: (rows: readonly unknown[], headers: Headers) => void,
 ): Promise<void> {
   let offset = 0
+  let expectedTotal: number | undefined
+  let expectedVersion: number | undefined
+  let pages = 0
   for (;;) {
+    if (++pages > MAX_LISTING_PAGES)
+      throw new ZoteroError(
+        `Zotero exceeded the ${MAX_LISTING_PAGES}-page limit for ${what.page}.`,
+        ZOTERO_UNEXPECTED,
+      )
     const params = setPage(new URLSearchParams(initial), offset, ZOTERO_LIST_PAGE_ROWS)
     decorate?.(params)
     const { json, headers } = await client.getJson<unknown>(path, params, { serverId, signal })
     assertServerIdMatches(serverIdFromHeaders(headers), serverId)
     const page = requireArrayBody(json, what.body)
     const total = requireTotalResults(headers, what.body)
-    onPage(page)
+    const version = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+    if (page.length > ZOTERO_LIST_PAGE_ROWS || page.length > Math.max(0, total - offset))
+      throw new ZoteroError(
+        `Zotero returned a page beyond the reported window for ${what.page}.`,
+        ZOTERO_UNEXPECTED,
+      )
+    if (pages === 1) {
+      expectedTotal = total
+      expectedVersion = version
+    } else if (expectedTotal !== total || expectedVersion !== version)
+      throw new ZoteroError(`Zotero's listing changed during ${what.page}.`, ZOTERO_UNEXPECTED)
+    onPage(page, headers)
     const next = nextOffsetOrFail(offset, page.length, total, what.page)
     if (next === undefined) return
     offset = next
@@ -226,7 +249,7 @@ export async function readPagesConcurrentlyFolded<T>(
   signal: AbortSignal | undefined,
   what: { readonly body: string; readonly page: string },
   concurrency: number,
-  fold: (rows: readonly unknown[], offset: number) => T,
+  fold: (rows: readonly unknown[], offset: number, serverId: string | undefined) => T,
 ): Promise<{
   pages: { offset: number; value: T }[]
   total: number
@@ -235,25 +258,36 @@ export async function readPagesConcurrentlyFolded<T>(
 }> {
   const versionOf = (headers: Headers): number | undefined =>
     parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
-  const readPage = (offset: number, limit: number, poolSignal: AbortSignal | undefined) =>
-    client.getJson<unknown>(path, setPage(new URLSearchParams(initial.toString()), offset, limit), {
-      signal: poolSignal,
-      serverId,
-    })
+  let pagesRead = 0
+  const readPage = async (offset: number, limit: number, poolSignal: AbortSignal | undefined) => {
+    if (++pagesRead > MAX_LISTING_PAGES)
+      throw new ZoteroError(
+        `Zotero exceeded the ${MAX_LISTING_PAGES}-page limit for ${what.page}.`,
+        ZOTERO_UNEXPECTED,
+      )
+    return await client.getJson<unknown>(
+      path,
+      setPage(new URLSearchParams(initial.toString()), offset, limit),
+      {
+        signal: poolSignal,
+        serverId,
+      },
+    )
+  }
   const first = await readPage(0, ZOTERO_LIST_PAGE_ROWS, signal)
   let observed = serverIdFromHeaders(first.headers, serverId)
   assertServerIdMatches(observed, serverId)
   const version = versionOf(first.headers)
   const firstRows = requireArrayBody(first.json, what.body)
   const total = requireTotalResults(first.headers, what.body)
-  if (firstRows.length > ZOTERO_LIST_PAGE_ROWS) {
+  if (firstRows.length > ZOTERO_LIST_PAGE_ROWS || firstRows.length > total) {
     throw new ZoteroError(
       `Zotero returned ${firstRows.length} rows for ${what.page} at offset 0 but the window is ${ZOTERO_LIST_PAGE_ROWS}`,
       ZOTERO_UNEXPECTED,
     )
   }
   nextOffsetOrFail(0, firstRows.length, total, what.page)
-  const pages: { offset: number; value: T }[] = [{ offset: 0, value: fold(firstRows, 0) }]
+  const pages: { offset: number; value: T }[] = [{ offset: 0, value: fold(firstRows, 0, observed) }]
   let rowsRead = firstRows.length
   if (firstRows.length === 0) {
     return { pages, total, serverId: observed ?? undefined, libraryVersion: version }
@@ -276,7 +310,7 @@ export async function readPagesConcurrentlyFolded<T>(
       )
     }
     nextOffsetOrFail(offset, pageRows.length, total, what.page)
-    if (versionOf(headers) !== version) {
+    if (versionOf(headers) !== version || requireTotalResults(headers, what.body) !== total) {
       throw new ZoteroError(
         `Zotero's library version changed during the ${what.page}; the listing cannot be assembled.`,
         ZOTERO_UNEXPECTED,
@@ -286,6 +320,11 @@ export async function readPagesConcurrentlyFolded<T>(
   }
 
   const window = firstRows.length
+  if (Math.ceil(total / window) > MAX_LISTING_PAGES)
+    throw new ZoteroError(
+      `Zotero exceeded the ${MAX_LISTING_PAGES}-page limit for ${what.page}.`,
+      ZOTERO_UNEXPECTED,
+    )
   const windows: { offset: number; limit: number }[] = []
   for (let offset = window; offset < total; offset += window) {
     windows.push({ offset, limit: Math.min(window, total - offset) })
@@ -295,18 +334,23 @@ export async function readPagesConcurrentlyFolded<T>(
     Math.max(1, concurrency),
     async (entry, poolSignal) => {
       const rows = await readWindow(entry.offset, entry.limit, poolSignal)
-      return { offset: entry.offset, requested: entry.limit, rows }
+      return {
+        offset: entry.offset,
+        requested: entry.limit,
+        count: rows.length,
+        value: fold(rows, entry.offset, observed),
+      }
     },
     { signal },
   )
   results.sort((a, b) => a.offset - b.offset)
   const gaps: { start: number; end: number }[] = []
   for (const result of results) {
-    pages.push({ offset: result.offset, value: fold(result.rows, result.offset) })
-    rowsRead += result.rows.length
-    if (result.rows.length < result.requested) {
+    pages.push({ offset: result.offset, value: result.value })
+    rowsRead += result.count
+    if (result.count < result.requested) {
       gaps.push({
-        start: result.offset + result.rows.length,
+        start: result.offset + result.count,
         end: result.offset + result.requested,
       })
     }
@@ -326,7 +370,7 @@ export async function readPagesConcurrentlyFolded<T>(
           ZOTERO_UNEXPECTED,
         )
       }
-      pages.push({ offset: cursor, value: fold(rows, cursor) })
+      pages.push({ offset: cursor, value: fold(rows, cursor, observed) })
       rowsRead += rows.length
       cursor += rows.length
     }

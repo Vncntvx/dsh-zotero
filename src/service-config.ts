@@ -56,6 +56,8 @@ export function localProviderLimits(config: ResolvedConfig): LocalApiLimits {
     fulltextWindowChars: config.fulltextWindowChars,
     maxExportChars: config.maxExportChars,
     maxBrowseResults: config.maxBrowseResults,
+    maxSearchResults: config.maxSearchResults,
+    maxInFlightRequests: config.maxInFlightRequests,
     maxChangesResults: config.maxChangesResults,
     scopeListingTtlMs: config.scopeListingTtlMs,
     searchConcurrency: config.searchConcurrency,

@@ -140,7 +140,7 @@ export async function attachLibraryStatus(
           sort: 'dateModified',
           direction: 'desc',
           offset: 0,
-          limit: 3,
+          limit: 1,
         },
         signal,
         // The in-library lookup reads the primary hits only.

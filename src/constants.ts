@@ -169,6 +169,7 @@ export const ZOTERO_WRITE_OBJECT_BATCH = 50
  * over the same passage corpus. The limit is four, one per synonym set.
  */
 export const ZOTERO_MAX_QUERY_VARIANTS = 4
+export const ZOTERO_MAX_QUERY_CHARS = 2_000
 
 /**
  * The reciprocal-rank constant both fusion sites share: scholarly result

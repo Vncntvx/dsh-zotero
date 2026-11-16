@@ -23,6 +23,7 @@ import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
 import { artifactIdOf } from '../contract.js'
 import { invalidArgs } from '../errors.js'
+import { requireEvidenceQueryWithinLimit } from '../evidence-query.js'
 import { formatRef, parseSupportedRef, sameLibrary } from '../refs.js'
 import { queryVariantsOf } from './query-variants.js'
 import { boundedPresentationMeta, projectRetrieveMeta } from '../presentation-meta.js'
@@ -350,6 +351,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
     invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
   if (typeof args.ref !== 'string' || typeof args.query !== 'string')
     invalidArgs(RETRIEVE_EVIDENCE_REQUIRED_MESSAGE)
+  requireEvidenceQueryWithinLimit(args.query)
   const query = args.query.trim()
   if (query === '') invalidArgs(RETRIEVE_QUERY_EMPTY_MESSAGE)
   const queryVariants = queryVariantsOf(args.queryVariants)

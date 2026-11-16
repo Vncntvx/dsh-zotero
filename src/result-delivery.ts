@@ -14,6 +14,10 @@ import type { ResolvedConfig } from './config.js'
 import { RESULT_RECEIPT_PREFIX } from './constants.js'
 import { ZOTERO_OUTPUT_TOO_LARGE, errorMessageOf, ZoteroError } from './errors.js'
 import { asRecord } from './json.js'
+import type { DiagnosticSink } from './diagnostics.js'
+
+/** A broken producer cannot hold plugin teardown forever. */
+export const RESULT_DELIVERY_DRAIN_MS = 5_000
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -179,9 +183,28 @@ export class ResultDelivery {
   constructor(
     private readonly ctx: Context,
     private readonly config: () => ResolvedConfig,
+    private readonly diagnostics?: DiagnosticSink,
   ) {
     ctx.effect(() => async () => {
-      while (this.pending.size) await Promise.allSettled([...this.pending])
+      if (this.pending.size > 0) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const deadline = new Promise<'timeout'>((resolve) => {
+          timer = setTimeout(() => resolve('timeout'), RESULT_DELIVERY_DRAIN_MS)
+          timer.unref?.()
+        })
+        const drained = Promise.allSettled([...this.pending]).then(() => 'drained' as const)
+        const outcome = await Promise.race([drained, deadline])
+        if (timer !== undefined) clearTimeout(timer)
+        if (outcome === 'timeout') {
+          const count = this.pending.size
+          this.pending.clear()
+          this.diagnostics?.warn(
+            'delivery.drain.timeout',
+            'Result delivery cleanup stopped waiting for producers that did not settle.',
+            { pending: count, deadlineMs: RESULT_DELIVERY_DRAIN_MS },
+          )
+        }
+      }
       if (this.domain) await (await this.domain).close()
     })
   }
@@ -332,6 +355,7 @@ export class ResultDelivery {
     }
     await table.put(key, receipt)
     if (jobId) await table.put(await resultReceiptKey('job', sessionId, jobId), receipt)
+    await this.pruneReceipts(sessionId)
     return receipt
   }
   wrap(definition: ToolDefinition): ToolDefinition {
@@ -426,6 +450,20 @@ export class ResultDelivery {
   }
   async receipt(sessionId: string, callId: string): Promise<Receipt | undefined> {
     return (await this.receipts()).get(await resultReceiptKey(sessionId, callId))
+  }
+
+  /** Retain only recent session receipts; old durable attachments cannot be reclaimed by this API. */
+  async pruneReceipts(sessionId: string, max = 128): Promise<number> {
+    const table = await this.receipts()
+    const entries = [...table.entries()].filter(
+      ([, value]) => asRecord(value)?.sessionId === sessionId,
+    )
+    if (entries.length <= max) return 0
+    const remove = entries.slice(0, entries.length - max).map(([key]) => key)
+    const deleteMany = (
+      table as unknown as { deleteMany?: (keys: readonly string[]) => Promise<number> }
+    ).deleteMany
+    return deleteMany === undefined ? 0 : await deleteMany(remove)
   }
   installJobs(): void {
     this.ctx.on('tools/post-execute', async (exec, result, next) => {

@@ -54,6 +54,8 @@ import { parseRef } from './refs.js'
 import type { ZoteroAttachmentLocationView } from './contract.js'
 import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer, persistedGrantBoundTo, revokePersistedGrant } from './write-auth.js'
+import { WriteAuthorizationBudget } from './write-authorization-budget.js'
+import { runWriteOperation } from './write-operation.js'
 import {
   createSourceLedgerProjection,
   type SourceLedgerProjection,
@@ -245,6 +247,10 @@ export class ZoteroService extends Service {
    * side.
    */
   private readonly writeGate = new ConcurrencyGate(ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS)
+  private readonly readGate = new ConcurrencyGate(1)
+  private readonly writeOperationGate = new ConcurrencyGate(1)
+  private readonly authorizationLeaseGate = new ConcurrencyGate(1)
+  private readonly authorizationPromptBudget = new WriteAuthorizationBudget()
   /** Core-owned durable result delivery shared by every heavy read tool. */
   private readonly resultDelivery: ResultDelivery
   /** Core-owned runner; its registry source follows late jobs composition. */
@@ -314,7 +320,7 @@ export class ZoteroService extends Service {
     const resolved = resolveConfig(config)
     this.diagnostics.setThreshold(resolved.debug ? 'debug' : 'info')
     this.entry = toLiveEntry(config)
-    this.resultDelivery = new ResultDelivery(ctx, () => this.config)
+    this.resultDelivery = new ResultDelivery(ctx, () => this.config, this.diagnostics.sink)
     this.jobRunner = new ZoteroJobRunner(
       () => ctx.get('jobs'),
       this.diagnostics.sink,
@@ -566,7 +572,9 @@ export class ZoteroService extends Service {
    * shares this service's one slot.
    */
   private buildTransport(config: ResolvedConfig): void {
+    this.readGate.setLimit(config.maxInFlightRequests)
     const client = new ZoteroHttpClient({
+      gate: this.readGate,
       baseUrl: config.baseUrl,
       timeoutMs: config.timeoutMs,
       maxResponseBytes: config.maxResponseBytes,
@@ -588,6 +596,8 @@ export class ZoteroService extends Service {
       writer === undefined
         ? undefined
         : new WriteAuthorizer({
+            leaseGate: this.authorizationLeaseGate,
+            promptBudget: this.authorizationPromptBudget,
             client: writer,
             credentials: () => this.credentials(),
             persistKey: () => this.config.writePersistKey,
@@ -1000,7 +1010,9 @@ export class ZoteroService extends Service {
       req: Parameters<NonNullable<ZoteroProvider[M]>>[0],
       signal?: AbortSignal,
     ) => Promise<Awaited<ReturnType<NonNullable<ZoteroProvider[M]>>>>
-    return await invoke(request, call.exec.signal)
+    return await runWriteOperation(this.writeOperationGate, call.exec.signal, (signal) =>
+      invoke(request, signal),
+    )
   }
 
   /**

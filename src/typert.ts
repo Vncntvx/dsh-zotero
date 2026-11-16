@@ -29,7 +29,12 @@
  * @module dsh-zotero/typert
  */
 
-import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
+import type {
+  TypertContribution,
+  TypertSchemaFactory,
+} from '@deepseek-ai/dsh-typert-registry/types'
+import type { TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
+import { z } from 'zod'
 import {
   ZOTERO_DIAGNOSTICS_METHOD,
   ZOTERO_LIBRARY_BROWSE_METHOD,
@@ -61,11 +66,39 @@ import {
 } from './contract.js'
 import { ZOTERO_INVOCATIONS } from './status-codec.js'
 
+/** Invocation codecs are the sole schema registry authority. */
+function schemaFactories(): TypertSchemaFactory[] {
+  const schemas = new Map<string, TypertSchemaFactory>()
+  const add = (codec: TypertCodec): void => {
+    if (codec.mode !== 'strict') return
+    const prefix = `${ZOTERO_REMOTE_PACKAGE}#`
+    if (!codec.typeSymbol.startsWith(prefix))
+      throw new Error(`Unexpected schema owner: ${codec.typeSymbol}`)
+    if (!schemas.has(codec.typeSymbol))
+      schemas.set(codec.typeSymbol, {
+        name: codec.typeSymbol.slice(prefix.length),
+        create: () => {
+          const schema = codec.create()
+          if (!(schema instanceof z.ZodType))
+            throw new Error(`Expected a Zod schema for ${codec.typeSymbol}`)
+          return schema
+        },
+      })
+  }
+  for (const invocation of ZOTERO_INVOCATIONS) {
+    if (invocation.invocation.kind === 'context') add(invocation.invocation.codec)
+    for (const parameter of invocation.parameters) add(parameter.codec)
+    if (invocation.uplink) add(invocation.uplink.codec)
+    add(invocation.result)
+  }
+  return [...schemas.values()]
+}
+
 /** The zotero namespace's host manifest (strict codecs owned by this half). */
 export const TYPERT_MANIFEST: TypertContribution = {
   package: ZOTERO_REMOTE_PACKAGE,
   face: 'host',
-  schemas: [],
+  schemas: schemaFactories(),
   model: {
     services: [
       {

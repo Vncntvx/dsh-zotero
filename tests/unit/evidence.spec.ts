@@ -222,3 +222,10 @@ describe('rankChunks empty corpus', () => {
     expect(rankChunks('anything', [])).toEqual([])
   })
 })
+
+describe('chunk bounds', () => {
+  it.each([0, -1, NaN, Infinity, 1.5])('rejects non-progressing or invalid bounds %s', (bound) => {
+    expect(() => chunkText('text', bound)).toThrow(RangeError)
+    expect(() => chunkText('text', 1, bound)).toThrow(RangeError)
+  })
+})

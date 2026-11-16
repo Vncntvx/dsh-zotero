@@ -142,6 +142,21 @@ We evaluate on WMT 2014 English-to-German and English-to-French translation benc
 
     expect(outline[2]?.id).toBe('2')
     expect(outline[2]?.title).toBe('Methodology')
+    expect(sampleDoc.slice(outline[0]!.start, outline[0]!.end)).toContain('vanishing gradient')
+    expect(outline[0]!.end).toBe(outline[2]!.start)
+    expect(outline[1]!.end).toBe(outline[2]!.start)
+  })
+
+  it('ignores code headings while keeping nested sections inside their parent', () => {
+    const text =
+      '# Parent\nIntro\n## Child\nBody\n### Grandchild\nMore\n```md\n# Fake\n```\n# Next\nEnd'
+    const sections = extractOutline(text)
+    expect(sections.map((entry) => entry.title)).toEqual(['Parent', 'Child', 'Grandchild', 'Next'])
+    expect(sections.slice(0, 3).map((entry) => entry.end)).toEqual([
+      text.indexOf('# Next'),
+      text.indexOf('# Next'),
+      text.indexOf('# Next'),
+    ])
   })
 
   it('locates sections by ID, title, or substring query', () => {

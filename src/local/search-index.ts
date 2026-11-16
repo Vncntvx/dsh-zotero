@@ -53,6 +53,36 @@ export interface FilteredIndex {
   readonly fetchedAt: number
 }
 
+/** A scan has at most four live filter projections; WeakMap ownership follows its eviction. */
+const filteredProjections = new WeakMap<FilteredIndex, Map<string, readonly FilteredCandidate[]>>()
+
+export function filteredCandidatesOf(
+  index: FilteredIndex,
+  request: ZoteroSearchRequest,
+): readonly FilteredCandidate[] {
+  const key = JSON.stringify([request.yearFrom, request.yearTo, request.hasAttachment])
+  const projections =
+    filteredProjections.get(index) ?? new Map<string, readonly FilteredCandidate[]>()
+  const cached = projections.get(key)
+  if (cached !== undefined) {
+    projections.delete(key)
+    projections.set(key, cached)
+    return cached
+  }
+  const candidates = index.candidates.filter(
+    (candidate) =>
+      (request.yearFrom === undefined ||
+        (candidate.year !== undefined && candidate.year >= request.yearFrom)) &&
+      (request.yearTo === undefined ||
+        (candidate.year !== undefined && candidate.year <= request.yearTo)) &&
+      (request.hasAttachment === undefined || candidate.hasAttachment === request.hasAttachment),
+  )
+  if (projections.size === 4) projections.delete(projections.keys().next().value!)
+  projections.set(key, candidates)
+  filteredProjections.set(index, projections)
+  return candidates
+}
+
 /** The parent keys of every attachment in one library, for existence filters. */
 export interface AttachmentParents {
   readonly parents: ReadonlySet<string>
@@ -188,6 +218,7 @@ export async function attachmentParentKeys(
   options: {
     cacheGeneration?: number
     signal?: AbortSignal
+    concurrency?: number
   },
 ): Promise<{ parents: ReadonlySet<string>; libraryVersion?: number; fromCache: boolean }> {
   const key = attachmentParentsCacheKey(library, serverId, includeTrashed, options.cacheGeneration)
@@ -217,7 +248,7 @@ export async function attachmentParentKeys(
         serverId,
         loadSignal,
         { body: 'attachment index', page: 'attachment index' },
-        deps.limits.searchConcurrency,
+        options.concurrency ?? deps.limits.searchConcurrency,
         (rows) => {
           for (const row of rows) {
             const parent = asString(asRecord(asRecord(row)?.data)?.parentItem)

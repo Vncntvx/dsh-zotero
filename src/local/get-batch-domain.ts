@@ -39,11 +39,12 @@ function getRequestOf(ref: ZoteroObjectRef, request: ZoteroGetBatchRequest): Zot
   }
 }
 
-/** Read up to 50 refs with at most eight child operations in flight. */
+/** Read up to 50 refs within the provider's bulk-read concurrency budget. */
 export async function getBatch(
   getItem: (request: ZoteroGetRequest, signal?: AbortSignal) => Promise<ZoteroItemDetail>,
   request: ZoteroGetBatchRequest,
   signal?: AbortSignal,
+  concurrency: number = CONCURRENCY,
 ): Promise<ZoteroGetBatchResult> {
   if (request.refs.length === 0)
     throw new ZoteroError('refs must list at least one Zotero ref', 'ZOTERO_INVALID_ARGUMENT')
@@ -67,7 +68,7 @@ export async function getBatch(
 
   const items = await mapWithConcurrency(
     request.refs,
-    CONCURRENCY,
+    Math.min(CONCURRENCY, concurrency),
     async (ref, poolSignal) => {
       const refString = formatRef(ref)
       try {
