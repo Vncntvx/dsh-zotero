@@ -75,8 +75,14 @@ describe('launcher environment and write grant', () => {
     })
     const runtime = lane.ctx.get('zoteroRemote') as ZoteroRuntime
     await expect(runtime.revokeWriteGrant(LIVE_SIGNAL)).resolves.toEqual({ removed: true })
-    expect(credentials?.records.size).toBe(0)
-    expect(credentials?.deletions).toEqual([String(WRITE_KEY_RECORD)])
+    expect(credentials?.records.get(String(WRITE_KEY_RECORD))).toMatchObject({
+      kind: 'grant',
+      payload: { revoked: true },
+    })
+    expect(JSON.stringify(credentials?.records.get(String(WRITE_KEY_RECORD)))).not.toContain(
+      'stored-key-01',
+    )
+    expect(credentials?.deletions).toEqual([])
   })
 
   it('reports no removed record while writes are disabled and none is stored', async () => {

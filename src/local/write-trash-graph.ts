@@ -13,6 +13,8 @@ import { readTrashGraph, type TrashSnapshot } from './trash-item.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { itemRef } from './write-refs.js'
 import { withWriteKey } from './write-domain.js'
+import { writeKeyedItems, throwKeyedVerdict } from './write-keyed-batch.js'
+import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 
 /** The bookkeeping one graph's patch accumulates as its nodes settle. */
 export interface TrashWalkProgress {
@@ -52,8 +54,57 @@ export async function patchTrashNodes(
   nodes: readonly TrashSnapshot[],
   options: PatchTrashNodesOptions,
 ): Promise<void> {
-  for (const node of nodes) {
-    if (node.deleted === options.wantDeleted) continue
+  const remaining = new Map(
+    nodes.filter((node) => node.deleted !== options.wantDeleted).map((node) => [node.key, node]),
+  )
+  while (remaining.size > 0) {
+    const parents = new Set(
+      [...remaining.values()].map((node) => node.parentKey).filter((key) => key !== undefined),
+    )
+    const frontier = [...remaining.values()]
+      .filter((node) => !parents.has(node.key))
+      .slice(0, ZOTERO_WRITE_OBJECT_BATCH)
+    if (frontier.length === 0)
+      throw new ZoteroError('The Trash graph contains a dependency cycle.', ZOTERO_UNEXPECTED)
+    if (frontier.length > 1) {
+      let batch
+      try {
+        batch = await writeKeyedItems(
+          deps,
+          frontier.map((node) => ({
+            key: node.key,
+            version: node.version,
+            fields: { deleted: options.wantDeleted ? 1 : 0 },
+          })),
+          serverId,
+          signal,
+        )
+      } catch (error) {
+        if (error instanceof ZoteroWriteCommitUnknownError)
+          for (const node of frontier) options.onCommitUnknown?.(node)
+        throw error
+      }
+      options.progress.libraryVersion = batch.libraryVersion
+      let failure: unknown
+      batch.verdicts.forEach((verdict, index) => {
+        const node = frontier[index]!
+        if (verdict.kind === 'applied')
+          options.progress.completedRefs.push(itemRef(node.key, serverId))
+        else {
+          if (verdict.kind === 'unverified') options.onCommitUnknown?.(node)
+          try {
+            throwKeyedVerdict(verdict)
+          } catch (error) {
+            if (failure === undefined || error instanceof ZoteroWriteCommitUnknownError)
+              failure = error
+          }
+        }
+      })
+      if (failure !== undefined) throw failure
+      for (const node of frontier) remaining.delete(node.key)
+      continue
+    }
+    const node = frontier[0]!
     try {
       const { libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
         deps.writer.patch(
@@ -73,6 +124,7 @@ export async function patchTrashNodes(
       throw error
     }
     options.progress.completedRefs.push(itemRef(node.key, serverId))
+    remaining.delete(node.key)
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * Batched item create, merge, and Trash operations against the Local API.
+ * Batched item create, tag/membership update, and Trash operations against the Local API.
  * @module dsh-zotero/local/write-batch
  */
 
@@ -31,6 +31,7 @@ import type {
   ZoteroObjectRef,
 } from '../types.js'
 import type { WriteDomainDeps } from './write-deps.js'
+import { writeKeyedItems, type KeyedItemUpdate } from './write-keyed-batch.js'
 import { collectionRef, itemRef } from './write-refs.js'
 import {
   collectionState,
@@ -73,9 +74,16 @@ function prevalidateBatchUpdates(
   updates: readonly NonNullable<ZoteroBatchItemsRequest['update']>[number][],
   serverId: string,
 ): CheckedBatchUpdate[] {
+  const keys = new Set<string>()
   return updates.map((u) => {
     const writable = requireWritableRef(u.ref, ['item'])
     const ref = requireWritableRefAtServer(writable, ['item'], serverId)
+    if (keys.has(ref.key))
+      throw new ZoteroError(
+        'A batch cannot update one item more than once.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    keys.add(ref.key)
     const addTags = normalizeWriteList('addTags', u.addTags ?? [])
     const removeTags = normalizeWriteList('removeTags', u.removeTags ?? [])
     const addColInputs = (u.addCollections ?? []).map((c) =>
@@ -190,7 +198,14 @@ async function runBatchUpdates(
   failed: ZoteroBatchOperationFailure[],
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
+  const pending: {
+    index: number
+    entry: KeyedItemUpdate
+    receipt: ZoteroBatchUpdateItemResult
+    send: () => Promise<{ libraryVersion: number }>
+  }[] = []
   for (const update of checkedUpdates) {
+    signal?.throwIfAborted()
     try {
       const wantsTags = update.addTags.length > 0 || update.removeTags.length > 0
       const wantsCollections = update.addColInputs.length > 0 || update.removeColInputs.length > 0
@@ -249,39 +264,30 @@ async function runBatchUpdates(
           const patchBody: Record<string, unknown> = {}
           if (tagsChanged) patchBody.tags = nextTags
           if (collectionsChanged) patchBody.collections = nextCollectionKeys
-          let libraryVersion: number
-          try {
-            ;({ libraryVersion } = await send(patchBody))
-          } catch (error) {
-            if (error instanceof ZoteroWriteCommitUnknownError) {
-              unverified.push(
-                batchOperationUnverified(
-                  'update',
-                  checkedUpdates.indexOf(update),
-                  resultRef,
-                  effectiveServerId,
-                ),
-              )
-              return undefined
-            }
-            throw error
-          }
-          lastLibraryVersion = libraryVersion
-          return {
-            ref: resultRef,
-            version: libraryVersion,
-            addedTags,
-            removedTags,
-            addedCollections: addedCollections.map((key) => collectionRef(key, effectiveServerId)),
-            removedCollections: removedCollections.map((key) =>
-              collectionRef(key, effectiveServerId),
-            ),
-            unchanged: false,
-          }
+          pending.push({
+            index: checkedUpdates.indexOf(update),
+            entry: { key: update.ref.key, version: snapshot.version, fields: patchBody },
+            send: () => send(patchBody),
+            receipt: {
+              ref: resultRef,
+              version: snapshot.version,
+              addedTags,
+              removedTags,
+              addedCollections: addedCollections.map((key) =>
+                collectionRef(key, effectiveServerId),
+              ),
+              removedCollections: removedCollections.map((key) =>
+                collectionRef(key, effectiveServerId),
+              ),
+              unchanged: false,
+            },
+          })
+          return undefined
         },
       )
       if (result !== undefined) updated.push(result)
     } catch (err) {
+      if (signal?.aborted || isWriteUnauthorized(err)) throw err
       if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'update',
@@ -289,6 +295,55 @@ async function runBatchUpdates(
         code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
         message: err instanceof Error ? err.message : String(err),
       })
+    }
+  }
+  if (pending.length === 0) return lastLibraryVersion
+  try {
+    // One changed object needs no batch envelope; multiple independent objects
+    // use Zotero's native keyed POST under one single-use authorization.
+    if (pending.length === 1) {
+      const only = pending[0]!
+      const saved = await only.send()
+      updated.push({ ...only.receipt, version: saved.libraryVersion })
+      return saved.libraryVersion
+    }
+    const batch = await writeKeyedItems(
+      deps,
+      pending.map((entry) => entry.entry),
+      serverId,
+      signal,
+    )
+    lastLibraryVersion = batch.libraryVersion
+    batch.verdicts.forEach((verdict, index) => {
+      const entry = pending[index]!
+      if (verdict.kind === 'unverified')
+        unverified.push(
+          batchOperationUnverified('update', entry.index, entry.receipt.ref, serverId),
+        )
+      else if (verdict.kind === 'failed')
+        failed.push({
+          op: 'update',
+          ref: entry.receipt.ref,
+          code: verdict.error.code,
+          message: verdict.error.message,
+        })
+      else
+        updated.push({ ...entry.receipt, version: verdict.version, unchanged: verdict.unchanged })
+    })
+  } catch (error) {
+    if (signal?.aborted || isWriteUnauthorized(error)) throw error
+    for (const entry of pending) {
+      if (error instanceof ZoteroWriteCommitUnknownError)
+        unverified.push(
+          batchOperationUnverified('update', entry.index, entry.receipt.ref, serverId),
+        )
+      else
+        failed.push({
+          op: 'update',
+          ref: entry.receipt.ref,
+          code: error instanceof ZoteroError ? error.code : ZOTERO_UNEXPECTED,
+          message: error instanceof Error ? error.message : String(error),
+        })
     }
   }
   return lastLibraryVersion
@@ -305,6 +360,7 @@ async function runBatchDeletes(
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
   for (const ref of checkedDeletes) {
+    signal?.throwIfAborted()
     const progress = trashWalkProgress()
     try {
       const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
@@ -350,6 +406,7 @@ async function runBatchDeletes(
           .map((node) => itemRef(node.key, serverId)),
       })
     } catch (err) {
+      if (signal?.aborted || isWriteUnauthorized(err)) throw err
       if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'delete',
@@ -425,8 +482,15 @@ export async function batchItems(
     if (version !== undefined) latestLibraryVersion = version
   }
 
+  const successful = created.length + updated.length + deleted.length
+  const kind: ZoteroBatchItemsResult['kind'] =
+    failed.length > 0 && successful === 0 && unverified.length === 0
+      ? 'failed'
+      : failed.length > 0 || unverified.length > 0
+        ? 'partial'
+        : 'applied'
   return {
-    kind: 'applied',
+    kind,
     total,
     created,
     updated,

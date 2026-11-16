@@ -1,36 +1,35 @@
 /** Read and verify the complete object graph for a recoverable item deletion. */
 import type { ZoteroHttpClient } from '../http-client.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
+import { asRecord, asString, isObjectKey } from '../json.js'
 import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { fetchChildrenForTrash } from './children-wire.js'
+import { proveItemRead } from './write-item-proof.js'
 
 export interface TrashSnapshot {
   key: string
   version: number
   itemType: string
   deleted: boolean
+  parentKey?: string
 }
 
 /** Sibling child listings are independent reads; this bounds their parallelism. */
 const TRASH_GRAPH_CONCURRENCY = 4
 
 function snapshotOf(json: unknown, key: string): TrashSnapshot {
-  const row = asRecord(json)
-  const data = asRecord(row?.data)
-  const itemType = asString(data?.itemType)
+  const message = `Zotero returned an invalid Trash snapshot for ${key}.`
+  const { data, version, itemType } = proveItemRead(json, key, {
+    version: message,
+    identity: message,
+    itemType: message,
+  })
   if (
-    row?.key !== key ||
-    data?.key !== key ||
-    !isNonNegativeSafeInteger(row?.version) ||
-    data?.version !== row.version ||
-    itemType === undefined ||
-    itemType === '' ||
-    (data?.deleted !== undefined &&
-      data.deleted !== 0 &&
-      data.deleted !== 1 &&
-      typeof data.deleted !== 'boolean')
+    data?.deleted !== undefined &&
+    data.deleted !== 0 &&
+    data.deleted !== 1 &&
+    typeof data.deleted !== 'boolean'
   ) {
     throw new ZoteroError(
       `Zotero returned an invalid Trash snapshot for ${key}.`,
@@ -39,9 +38,12 @@ function snapshotOf(json: unknown, key: string): TrashSnapshot {
   }
   return {
     key,
-    version: row.version,
+    version,
     itemType,
     deleted: data.deleted === true || data.deleted === 1,
+    ...(typeof data.parentItem === 'string' && data.parentItem !== ''
+      ? { parentKey: data.parentItem }
+      : {}),
   }
 }
 

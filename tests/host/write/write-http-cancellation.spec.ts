@@ -195,4 +195,17 @@ describe('cancellation and bounds', () => {
       ),
     ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
   })
+
+  it('marks a dispatched deletion as commit-unknown when its connection drops', async () => {
+    mock.route('DELETE', '/api/users/0/collections/COLL1234', (req) => {
+      req.socket.destroy()
+    })
+    await expect(
+      client.delete('users/0/collections/COLL1234', {
+        ...writeOptions(),
+        ifUnmodifiedSinceVersion: 3,
+      }),
+    ).rejects.toBeInstanceOf(ZoteroWriteCommitUnknownError)
+    expect(mock.requests.filter((request) => request.method === 'DELETE')).toHaveLength(1)
+  })
 })

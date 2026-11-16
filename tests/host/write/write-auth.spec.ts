@@ -569,14 +569,22 @@ describe('authorization refusals', () => {
 })
 
 describe('user revocation', () => {
-  it("deletes only this plugin's record and forgets the process copy", async () => {
+  it("atomically tombstones this plugin's grant and forgets the process copy", async () => {
     credentials.records.set(String(WRITE_KEY_RECORD), storedGrant('stored-key-02'))
     credentials.records.set('sentinel-record', { kind: 'api-key', key: 'other' })
     const writer = authorizer()
     expect(await writer.hasGrant(SERVER_ID)).toBe(true)
 
     expect(await writer.revoke()).toEqual({ removed: true })
-    expect(credentials.deletions).toEqual([String(WRITE_KEY_RECORD)])
+    expect(credentials.deletions).toEqual([])
+    expect(credentials.records.get(String(WRITE_KEY_RECORD))).toMatchObject({
+      kind: 'grant',
+      payload: { revoked: true },
+    })
+    expect(JSON.stringify(credentials.records.get(String(WRITE_KEY_RECORD)))).not.toContain(
+      'stored-key-02',
+    )
+    expect(await writer.revoke()).toEqual({ removed: false })
     expect(credentials.records.has('sentinel-record')).toBe(true)
     expect(await writer.hasGrant(SERVER_ID)).toBe(false)
   })

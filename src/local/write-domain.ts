@@ -68,6 +68,7 @@ import {
   wireFieldOf,
 } from '../write-item-rules.js'
 import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
+import { proveItemRead } from './write-item-proof.js'
 import type { ItemSnapshot, WriteDomainDeps } from './write-deps.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
@@ -122,29 +123,31 @@ export async function withWriteKey<T>(
   signal: AbortSignal | undefined,
   send: (apiKey: string) => Promise<T>,
 ): Promise<T> {
-  const first = await deps.authorizer.keyFor(serverId, signal)
-  try {
-    return await send(first.key)
-  } catch (error) {
-    if (!isWriteUnauthorized(error)) throw error
-    await deps.authorizer.invalidate(serverId, first.key)
-    const second = await deps.authorizer.keyFor(serverId, signal)
+  return deps.authorizer.exclusive(signal, async () => {
+    const first = await deps.authorizer.keyFor(serverId, signal)
     try {
-      return await send(second.key)
-    } catch (retried) {
-      if (isWriteUnauthorized(retried)) {
-        await deps.authorizer.invalidate(serverId, second.key)
-        throw new ZoteroError(WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED, {
-          cause: retried,
-        })
+      return await send(first.key)
+    } catch (error) {
+      if (!isWriteUnauthorized(error)) throw error
+      await deps.authorizer.invalidate(serverId, first.key)
+      const second = await deps.authorizer.keyFor(serverId, signal)
+      try {
+        return await send(second.key)
+      } catch (retried) {
+        if (isWriteUnauthorized(retried)) {
+          await deps.authorizer.invalidate(serverId, second.key)
+          throw new ZoteroError(WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED, {
+            cause: retried,
+          })
+        }
+        throw retried
+      } finally {
+        if (second.oneTime) deps.authorizer.forget(second.key)
       }
-      throw retried
     } finally {
-      if (second.oneTime) deps.authorizer.forget(second.key)
+      if (first.oneTime) deps.authorizer.forget(first.key)
     }
-  } finally {
-    if (first.oneTime) deps.authorizer.forget(first.key)
-  }
+  })
 }
 
 /**
@@ -283,24 +286,11 @@ async function readItem<S>(
     undefined,
     { signal, serverId },
   )
-  const record = asRecord(json)
-  const version = isNonNegativeSafeInteger(record?.version) ? record.version : undefined
-  if (version === undefined) {
-    throw new ZoteroError(WRITE_VERSION_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
-  }
-  const data = asRecord(record?.data)
-  const responseKey = asString(record?.key)
-  const dataKey = asString(data?.key)
-  if (data === undefined || responseKey !== ref.key || dataKey !== ref.key) {
-    throw new ZoteroError(
-      `Zotero answered the write read with a different item than ${ref.key}; the response cannot be used for this write.`,
-      ZOTERO_UNEXPECTED,
-    )
-  }
-  const itemType = asString(data?.itemType)
-  if (itemType === undefined || itemType === '') {
-    throw new ZoteroError(WRITE_ITEM_TYPE_MISSING_MESSAGE, ZOTERO_UNEXPECTED)
-  }
+  const { data, version, itemType } = proveItemRead(json, ref.key, {
+    version: WRITE_VERSION_MISSING_MESSAGE,
+    identity: `Zotero answered the write read with a different item than ${ref.key}; the response cannot be used for this write.`,
+    itemType: WRITE_ITEM_TYPE_MISSING_MESSAGE,
+  })
   const observedServerId = serverIdFromHeaders(headers)
   assertServerIdMatches(observedServerId, serverId)
   return {

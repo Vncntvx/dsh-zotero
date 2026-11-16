@@ -438,30 +438,25 @@ describe('batchItems domain operations', () => {
       data: { itemType: 'journalArticle', tags: [] },
       version: 1,
     })
-    mock.route('PATCH', '/api/users/0/items/OK000001', (_req, _res, helpers) => {
-      helpers.raw(
-        204,
-        {
-          'Last-Modified-Version': '2',
-          'Zotero-Server-ID': SERVER_ID,
-        },
-        '',
-      )
-    })
-
     // Second update fails with 412 version conflict
     serveItemRead(mock, {
       key: 'FAIL0001',
       data: { itemType: 'journalArticle', tags: [] },
       version: 1,
     })
-    mock.route('PATCH', '/api/users/0/items/FAIL0001', (_req, _res, helpers) => {
-      helpers.raw(
-        412,
+    mock.route('POST', '/api/users/0/items', (_req, _res, helpers) => {
+      expect(JSON.parse(mock.requests.at(-1)!.body)).toEqual([
+        { key: 'OK000001', version: 1, tags: [{ tag: 'tag1' }] },
+        { key: 'FAIL0001', version: 1, tags: [{ tag: 'tag2' }] },
+      ])
+      helpers.json(
         {
-          'Zotero-Server-ID': SERVER_ID,
+          successful: { '0': itemJson('OK000001', 2, { tags: [{ tag: 'tag1' }] }) },
+          success: { '0': 'OK000001' },
+          unchanged: {},
+          failed: { '1': { key: 'FAIL0001', code: 412, message: 'Version mismatch' } },
         },
-        'Precondition Failed: version mismatch',
+        batchHeaders(2),
       )
     })
 
@@ -488,7 +483,7 @@ describe('batchItems domain operations', () => {
       ],
     })
 
-    expect(result.kind).toBe('applied')
+    expect(result.kind).toBe('partial')
     expect(result.updated).toHaveLength(1)
     expect(result.updated[0]?.ref).toBe(`zotero://user/0/item/OK000001?server=${SERVER_ID}`)
     expect(result.failed).toHaveLength(1)

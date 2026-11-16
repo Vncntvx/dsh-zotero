@@ -277,9 +277,8 @@ describe('zotero_restore_items', () => {
     serveIdentityAndGrant()
     const NOTE_KEY = 'NOTECHLD'
     const ATTACH_KEY = 'ATTACH01'
-    // Parent plus a note and an attachment, all still in the Trash; the
-    // children are served first by the walk, so the note PATCH acknowledges
-    // before the attachment PATCH loses its receipt.
+    // One native batch proves the note but omits the attachment receipt.
+    // That partial proof must survive while the parent remains untouched.
     lane.mock.route('GET', `/api/users/0/items/${KEY_1}`, (_req, _res, h) =>
       h.json(itemJson(KEY_1, 10, { itemType: 'book', title: 'Old draft', deleted: 1 }), {
         'Zotero-Server-ID': SERVER_ID,
@@ -313,11 +312,16 @@ describe('zotero_restore_items', () => {
         'Total-Results': '0',
       }),
     )
-    lane.mock.route('PATCH', `/api/users/0/items/${NOTE_KEY}`, (_req, _res, h) =>
-      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' }, ''),
-    )
-    lane.mock.route('PATCH', `/api/users/0/items/${ATTACH_KEY}`, (_req, _res, h) =>
-      h.raw(204, { 'Zotero-Server-ID': SERVER_ID }, ''),
+    lane.mock.route('POST', '/api/users/0/items', (_req, _res, h) =>
+      h.json(
+        {
+          successful: { '0': itemJson(NOTE_KEY, 12, { itemType: 'note', deleted: 0 }) },
+          success: {},
+          unchanged: {},
+          failed: {},
+        },
+        { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '12' },
+      ),
     )
 
     const result = expectValue(
@@ -342,12 +346,14 @@ describe('zotero_restore_items', () => {
       ],
       failed: [],
     })
-    // The note settled; the attachment's outcome is unknown; the parent was
-    // never attempted and the request moved on without a retry.
-    const patches = lane.mock.requests.filter((request) => request.method === 'PATCH')
-    expect(patches.map((request) => request.pathname)).toEqual([
-      `/api/users/0/items/${NOTE_KEY}`,
-      `/api/users/0/items/${ATTACH_KEY}`,
+    expect(lane.mock.requests.filter((request) => request.method === 'PATCH')).toEqual([])
+    const writes = lane.mock.requests.filter(
+      (request) => request.method === 'POST' && request.pathname.endsWith('/items'),
+    )
+    expect(writes).toHaveLength(1)
+    expect(JSON.parse(writes[0]!.body)).toEqual([
+      { key: NOTE_KEY, version: 4, deleted: 0 },
+      { key: ATTACH_KEY, version: 5, deleted: 0 },
     ])
     const text = result.content
       .flatMap((block) => (block.type === 'text' ? [block.text] : []))

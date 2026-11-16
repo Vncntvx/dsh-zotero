@@ -45,6 +45,8 @@ import { TOOL_ABORTED_MESSAGE } from './abort.js'
 import { asRecord, asString } from './json.js'
 import { awaitSharedOperation, type SharedOperation } from './concurrency.js'
 import { ZoteroWriteHttpClient } from './write-http.js'
+import { ConcurrencyGate } from './concurrency.js'
+import { WriteAuthorizationBudget } from './write-authorization-budget.js'
 
 /**
  * The name Zotero's authorization dialog shows the user for this plugin.
@@ -71,6 +73,8 @@ interface ZoteroWriteGrantPayload {
 }
 
 interface WriteAuthorizerDeps {
+  readonly leaseGate?: ConcurrencyGate
+  readonly promptBudget?: WriteAuthorizationBudget
   /** The write transport; the authorize call rides it. */
   readonly client: ZoteroWriteHttpClient
   /** The host credentials seam; absent compositions keep grants in memory only. */
@@ -99,13 +103,15 @@ interface ParsedGrant {
 
 /** A persisted grant narrowed to the fields the authorizer routes on. */
 function parseGrantRecord(record: unknown): ParsedGrant | undefined {
-  if (asRecord(record)?.kind !== 'grant') return undefined
-  const payload = asRecord(asRecord(record)?.payload)
-  const key = payload === undefined ? undefined : asString(payload.key)
-  const boundTo = payload === undefined ? undefined : asString(payload.serverId)
+  const envelope = asRecord(record)
+  if (envelope?.kind !== 'grant') return undefined
+  const payload = asRecord(envelope.payload)
+  if (payload === undefined) return undefined
+  const key = asString(payload.key)
+  const boundTo = asString(payload.serverId)
   if (key === undefined || key === '' || boundTo === undefined) return undefined
-  const appName = payload === undefined ? undefined : asString(payload.appName)
-  const authorizedAt = payload === undefined ? undefined : asString(payload.authorizedAt)
+  const appName = asString(payload.appName)
+  const authorizedAt = asString(payload.authorizedAt)
   return {
     key,
     boundTo,
@@ -136,19 +142,22 @@ async function tombstoneGrant(
 /**
  * Remove this plugin's persisted write grant, whatever the write transport's
  * state. With writes disabled there is no authorizer to own the revocation, so
- * the settings row's revoke still has to delete the record the user granted
- * earlier: the grant is a durable secret, and losing the ability to delete it
- * by turning the write surface off would be a trap.
+ * the settings row atomically replaces its secret with a revocation marker.
+ * The atomic modification orders revocation against concurrent grant writes.
  * @param credentials - the host credentials seam, when composed.
- * @returns whether a credential record was removed.
+ * @returns whether a stored grant secret was removed.
  */
 export async function revokePersistedGrant(
   credentials: CredentialProvider | undefined,
 ): Promise<{ removed: boolean }> {
   if (credentials === undefined) return { removed: false }
-  const current = await credentials.readRecord(WRITE_KEY_RECORD)
-  await credentials.deleteRecord(WRITE_KEY_RECORD)
-  return { removed: current !== undefined }
+  let removed = false
+  await credentials.modifyRecord(WRITE_KEY_RECORD, async (current) => {
+    if (parseGrantRecord(current) === undefined) return undefined
+    removed = true
+    return { kind: 'grant', payload: { revoked: true, revokedAt: new Date().toISOString() } }
+  })
+  return { removed }
 }
 
 /**
@@ -193,13 +202,29 @@ interface AuthorizationOperation extends SharedOperation<ZoteroWriteKey> {}
  * authorize dialog and answers with what the user granted.
  */
 export class WriteAuthorizer {
+  private readonly leaseGate: ConcurrencyGate
+  private readonly promptBudget: WriteAuthorizationBudget
   private memory: MemoryGrant | undefined
   private readonly authorizing = new Map<string, AuthorizationOperation>()
   private readonly persisting = new Map<string, Promise<void>>()
   /** Bumped by a user revoke so an in-flight dialog cannot re-persist a grant. */
   private revokeEpoch = 0
 
-  constructor(private readonly deps: WriteAuthorizerDeps) {}
+  constructor(private readonly deps: WriteAuthorizerDeps) {
+    this.leaseGate = deps.leaseGate ?? new ConcurrencyGate(1)
+    this.promptBudget = deps.promptBudget ?? new WriteAuthorizationBudget()
+  }
+
+  /** A single-use grant belongs to one complete authentication/send lifecycle. */
+  async exclusive<T>(signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
+    const release = await this.leaseGate.acquire(signal)
+    try {
+      signal?.throwIfAborted()
+      return await operation()
+    } finally {
+      release()
+    }
+  }
 
   private getCredentials(): CredentialProvider | undefined {
     return this.deps.credentials?.()
@@ -417,6 +442,7 @@ export class WriteAuthorizer {
    */
   private async authorize(serverId: string, signal?: AbortSignal): Promise<ZoteroWriteKey> {
     const epoch = this.revokeEpoch
+    await this.promptBudget.reserve(signal)
     const grant = await this.deps.client.authorize(WRITE_APP_NAME, { serverId, signal })
     if (signal?.aborted) throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED)
     // A revoke landed while the dialog was open. The user approved this one

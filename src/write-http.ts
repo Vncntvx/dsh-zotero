@@ -310,9 +310,8 @@ export class ZoteroWriteHttpClient {
 
   /**
    * DELETE one object or tag set. Zotero answers 204 with the library version
-   * the delete advanced to. Deletes are idempotent by key/name, so transport
-   * failures stay typed and a retry is safe; only an unreadable version receipt
-   * after the 204 surfaces as commit-unknown.
+   * the delete advanced to. A transport failure after dispatch cannot prove
+   * whether the deletion committed; reconcile external state before any new plan.
    * @param path - the API-relative delete path, built by the domain.
    * @param opts - the serving instance, the API key, the library/object version
    *   precondition, and (for the library-tags delete) the `tagDeleteLimit` mark
@@ -326,6 +325,7 @@ export class ZoteroWriteHttpClient {
         : { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) }
     const { headers } = await this.send(path, 'DELETE', opts, extraHeaders, {
       tagDeleteLimit: opts.tagDeleteLimit,
+      commitSensitive: true,
     })
     try {
       return { libraryVersion: requireLibraryVersion(headers) }

@@ -205,7 +205,7 @@ describe('read-side verdicts', () => {
       body: {
         key: ITEM_KEY,
         version: 7,
-        data: { key: ITEM_KEY, tags: [], collections: [] },
+        data: { key: ITEM_KEY, version: 7, tags: [], collections: [] },
       },
     })
     const { deps } = writeDeps(mock)

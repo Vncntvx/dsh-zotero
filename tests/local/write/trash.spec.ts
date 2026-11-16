@@ -94,6 +94,34 @@ function graph(
       )
     })
   }
+  mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+    const entries = JSON.parse(mock.requests.at(-1)!.body) as {
+      key: string
+      version: number
+      deleted: number
+    }[]
+    const successful: Record<string, unknown> = {}
+    const failed: Record<string, unknown> = {}
+    entries.forEach((entry, index) => {
+      const node = saved.get(entry.key)!
+      expect(entry.version).toBe(node.version)
+      expect(entry.deleted).toBe(1)
+      if (options.fail === node.key) {
+        failed[index] = { key: node.key, code: 412, message: 'Changed' }
+        return
+      }
+      if (options.lie !== node.key) node.deleted = 1
+      node.version++
+      successful[index] = itemJson(node.key, node.version, {
+        itemType: node.type,
+        deleted: node.deleted,
+      })
+    })
+    h.json(
+      { successful, success: {}, unchanged: {}, failed },
+      options.missingReceipt ? { 'Zotero-Server-ID': SERVER_ID } : batchHeaders(10),
+    )
+  })
   return saved
 }
 
@@ -109,7 +137,14 @@ describe('complete Trash operations', () => {
     expect([...saved.values()].every((node) => node.deleted === 1)).toBe(true)
     expect(
       mock.requests.filter((r) => r.method === 'PATCH').map((r) => r.pathname.split('/').at(-1)),
-    ).toEqual(['CHILDNOT', 'CHILDANN', 'CHILDPDF', ITEM_KEY])
+    ).toEqual(['CHILDPDF', ITEM_KEY])
+    const firstWrite = mock.requests.find(
+      (r) => r.method === 'POST' && r.pathname.endsWith('/items'),
+    )!
+    expect(JSON.parse(firstWrite.body).map((entry: { key: string }) => entry.key)).toEqual([
+      'CHILDNOT',
+      'CHILDANN',
+    ])
     expect(mock.requests.some((r) => r.method === 'DELETE')).toBe(false)
     expect(mock.requests.some((r) => r.search.get('start') === '1')).toBe(true)
   })
@@ -139,20 +174,27 @@ describe('complete Trash operations', () => {
     expect(result.failed).toEqual([])
     expect(result.unverified).toMatchObject([
       { op: 'delete', reason: 'receipt-unknown', retryable: false },
+      { op: 'delete', reason: 'receipt-unknown', retryable: false },
     ])
-    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(1)
+    expect(mock.requests.filter((request) => request.method === 'PATCH')).toHaveLength(0)
+    expect(
+      mock.requests.filter(
+        (request) => request.method === 'POST' && request.pathname.endsWith('/items'),
+      ),
+    ).toHaveLength(1)
   })
 
-  it('does not claim success if an acknowledged PATCH did not change saved state', async () => {
+  it('keeps a keyed receipt with unproven saved state unverified and stops the graph', async () => {
     grantAuthorize(mock)
     graph({ lie: 'CHILDNOT' })
     const { deps } = writeDeps(mock)
     const result = await batchItems(deps, { delete: [ITEM_REF] })
     expect(result.deleted).toEqual([])
-    expect(result.failed[0]).toMatchObject({
-      code: 'ZOTERO_UNEXPECTED',
-      completedRefs: expect.any(Array),
-    })
+    expect(result.failed).toEqual([])
+    expect(result.unverified).toMatchObject([
+      { ref: expect.stringContaining('CHILDNOT'), retryable: false },
+    ])
+    expect(mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })
 
   it('refuses incomplete child listings before any write', async () => {

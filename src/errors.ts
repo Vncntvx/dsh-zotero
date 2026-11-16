@@ -91,7 +91,7 @@ export const ZOTERO_UNEXPECTED = 'ZOTERO_UNEXPECTED'
 export const ZOTERO_WRITE_UNAUTHORIZED = 'ZOTERO_WRITE_UNAUTHORIZED'
 /** The object moved between the read backing the write and the write itself (412). */
 export const ZOTERO_WRITE_CONFLICT = 'ZOTERO_WRITE_CONFLICT'
-/** Zotero is rate-limiting write authorization requests (429 on the authorize endpoint). */
+/** Zotero is rate-limiting an authorization or data write request (429). */
 export const ZOTERO_WRITE_RATE_LIMITED = 'ZOTERO_WRITE_RATE_LIMITED'
 /**
  * Plan-review could not be asked: no user-questions channel, or the ask
@@ -308,7 +308,7 @@ export function writeBatchShapeMessage(bucket: string): string {
 /** Shown when Zotero rate-limits write authorizations; `waitSeconds` rides Retry-After when sent. */
 export function writeRateLimitedMessage(waitSeconds: number | undefined): string {
   const wait = waitSeconds === undefined ? 'about a minute' : `${waitSeconds} s`
-  return `Zotero is rate-limiting write authorization requests (429). Wait ${wait} and try again.`
+  return `Zotero is rate-limiting this write request (429). Wait ${wait} and try again.`
 }
 
 /** Shown when the connected Zotero build reports no instance id, which local writes require. */
