@@ -1,6 +1,8 @@
 /** A Trash operation retains objects, verifies every descendant and reports partial progress. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { batchItems } from '../../../src/local/write-batch.js'
+import { ZoteroWriteCommitUnknownError } from '../../../src/errors.js'
+import { deferred } from '../../helpers/sync.js'
 import {
   batchHeaders,
   ITEM_KEY,
@@ -238,5 +240,391 @@ describe('complete Trash operations', () => {
     const result = await batchItems(deps, { delete: [ITEM_REF] })
     expect(result.deleted).toHaveLength(1)
     expect(mock.requests.every((r) => r.method === 'GET')).toBe(true)
+  })
+
+  it('batches trash frontiers across multiple roots into wave requests', async () => {
+    grantAuthorize(mock)
+    const rootCount = 10
+    const roots = Array.from({ length: rootCount }, (_, i) => ({
+      key: `ROOT${String(i).padStart(4, '0')}`,
+      childKey: `CHLD${String(i).padStart(4, '0')}`,
+    }))
+
+    const nodeStates = new Map<
+      string,
+      { key: string; parent?: string; type: string; version: number; deleted: number }
+    >()
+    for (const r of roots) {
+      nodeStates.set(r.key, { key: r.key, type: 'journalArticle', version: 1, deleted: 0 })
+      nodeStates.set(r.childKey, {
+        key: r.childKey,
+        parent: r.key,
+        type: 'attachment',
+        version: 1,
+        deleted: 0,
+      })
+    }
+
+    for (const node of nodeStates.values()) {
+      mock.route('GET', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        h.json(
+          itemJson(node.key, node.version, {
+            itemType: node.type,
+            deleted: node.deleted,
+            ...(node.parent ? { parentItem: node.parent } : {}),
+          }),
+          batchHeaders(node.version),
+        )
+      })
+      mock.route('GET', `/api/users/0/items/${node.key}/children`, (_req, _res, h) => {
+        const children = [...nodeStates.values()].filter((c) => c.parent === node.key)
+        h.json(
+          children.map((c) =>
+            itemJson(c.key, c.version, {
+              itemType: c.type,
+              deleted: c.deleted,
+              parentItem: c.parent,
+            }),
+          ),
+          { ...batchHeaders(node.version), 'Total-Results': String(children.length) },
+        )
+      })
+    }
+
+    let waveWrites = 0
+    mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+      waveWrites++
+      const entries = JSON.parse(mock.requests.at(-1)!.body) as { key: string; version: number }[]
+      const successful: Record<string, unknown> = {}
+      const success: Record<string, string> = {}
+      entries.forEach((e, index) => {
+        const node = nodeStates.get(e.key)!
+        node.deleted = 1
+        node.version++
+        successful[index] = itemJson(node.key, node.version, {
+          itemType: node.type,
+          deleted: node.deleted,
+          ...(node.parent ? { parentItem: node.parent } : {}),
+        })
+        success[index] = node.key
+      })
+      h.json({ successful, success, unchanged: {}, failed: {} }, batchHeaders(10))
+    })
+
+    const { deps } = writeDeps(mock)
+    const result = await batchItems(deps, {
+      delete: roots.map((r) => ({
+        library: { type: 'user' as const, id: 0 },
+        kind: 'item' as const,
+        key: r.key,
+        serverId: SERVER_ID,
+      })),
+    })
+
+    expect(result.kind).toBe('applied')
+    expect(result.deleted).toHaveLength(rootCount)
+    // 2 waves: wave 1 for all children (leaves), wave 2 for all roots (parents)
+    expect(waveWrites).toBe(2)
+    expect(mock.requests.filter((r) => r.method === 'PATCH')).toHaveLength(0)
+  })
+
+  it('keeps independent roots moving when one root refuses a child', async () => {
+    grantAuthorize(mock)
+    const roots: Record<string, string[]> = {
+      ROOTAAAA: ['CHILDAA1', 'CHILDAA2'],
+      ROOTBBBB: ['CHILDBB1', 'CHILDBB2'],
+    }
+    const failing = 'CHILDAA1'
+    const nodeStates = new Map<
+      string,
+      { key: string; parent?: string; type: string; version: number; deleted: number }
+    >()
+    for (const [root, children] of Object.entries(roots)) {
+      nodeStates.set(root, { key: root, type: 'journalArticle', version: 9, deleted: 0 })
+      for (const child of children)
+        nodeStates.set(child, {
+          key: child,
+          parent: root,
+          type: 'note',
+          version: 9,
+          deleted: 0,
+        })
+    }
+
+    for (const node of nodeStates.values()) {
+      mock.route('GET', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        h.json(
+          itemJson(node.key, node.version, {
+            itemType: node.type,
+            deleted: node.deleted,
+            ...(node.parent ? { parentItem: node.parent } : {}),
+          }),
+          batchHeaders(node.version),
+        )
+      })
+      mock.route('GET', `/api/users/0/items/${node.key}/children`, (_req, _res, h) => {
+        const children = [...nodeStates.values()].filter((child) => child.parent === node.key)
+        h.json(
+          children.map((child) =>
+            itemJson(child.key, child.version, {
+              itemType: child.type,
+              deleted: child.deleted,
+              parentItem: child.parent,
+            }),
+          ),
+          { ...batchHeaders(node.version), 'Total-Results': String(children.length) },
+        )
+      })
+      mock.route('PATCH', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        node.deleted = 1
+        node.version++
+        h.raw(204, batchHeaders(10), '')
+      })
+    }
+
+    mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+      const entries = JSON.parse(mock.requests.at(-1)!.body) as { key: string; version: number }[]
+      const successful: Record<string, unknown> = {}
+      const success: Record<string, string> = {}
+      const failed: Record<string, unknown> = {}
+      entries.forEach((entry, index) => {
+        const node = nodeStates.get(entry.key)!
+        if (node.key === failing) {
+          failed[index] = { key: node.key, code: 412, message: 'Changed' }
+          return
+        }
+        node.deleted = 1
+        node.version++
+        successful[index] = itemJson(node.key, node.version, {
+          itemType: node.type,
+          deleted: node.deleted,
+          ...(node.parent ? { parentItem: node.parent } : {}),
+        })
+        success[index] = node.key
+      })
+      h.json({ successful, success, unchanged: {}, failed }, batchHeaders(10))
+    })
+
+    const { deps } = writeDeps(mock)
+    const result = await batchItems(deps, {
+      delete: Object.keys(roots).map((key) => ({
+        library: { type: 'user' as const, id: 0 },
+        kind: 'item' as const,
+        key,
+        serverId: SERVER_ID,
+      })),
+    })
+
+    // The refused child blocks only its own ancestors; the other root still
+    // settles through the same merged waves.
+    expect(result.deleted.map((entry) => entry.key)).toEqual(['ROOTBBBB'])
+    expect(result.failed).toMatchObject([
+      {
+        op: 'delete',
+        ref: expect.stringContaining('ROOTAAAA'),
+        code: 'ZOTERO_WRITE_CONFLICT',
+        completedRefs: [expect.stringContaining('CHILDAA2')],
+      },
+    ])
+    expect(nodeStates.get('ROOTAAAA')!.deleted).toBe(0)
+    expect(nodeStates.get('ROOTBBBB')!.deleted).toBe(1)
+    expect(
+      mock.requests
+        .filter((request) => request.method === 'PATCH')
+        .map((request) => request.pathname.split('/').at(-1)),
+    ).toEqual(['ROOTBBBB'])
+  })
+
+  it('keeps acknowledged deletes in a commit-unknown raised after the graph boundary', async () => {
+    grantAuthorize(mock)
+    const root = 'ROOTABRT'
+    const child = 'CHILDAB1'
+    const state = new Map([
+      [root, { key: root, type: 'journalArticle', version: 9, deleted: 0 }],
+      [child, { key: child, parent: root, type: 'note', version: 9, deleted: 0 }],
+    ])
+    for (const node of state.values()) {
+      mock.route('GET', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        h.json(
+          itemJson(node.key, node.version, {
+            itemType: node.type,
+            deleted: node.deleted,
+            ...(node.parent ? { parentItem: node.parent } : {}),
+          }),
+          batchHeaders(node.version),
+        )
+      })
+      mock.route('GET', `/api/users/0/items/${node.key}/children`, (_req, _res, h) => {
+        const children = [...state.values()].filter((entry) => entry.parent === node.key)
+        h.json(
+          children.map((entry) =>
+            itemJson(entry.key, entry.version, {
+              itemType: entry.type,
+              deleted: entry.deleted,
+              parentItem: entry.parent,
+            }),
+          ),
+          { ...batchHeaders(node.version), 'Total-Results': String(children.length) },
+        )
+      })
+    }
+    const rootPatch = deferred<void>()
+    mock.route('PATCH', `/api/users/0/items/${child}`, (_req, _res, h) => {
+      const node = state.get(child)!
+      node.deleted = 1
+      node.version++
+      h.raw(204, batchHeaders(10), '')
+    })
+    mock.route('PATCH', `/api/users/0/items/${root}`, (_req, _res, h) => {
+      rootPatch.resolve()
+      const node = state.get(root)!
+      node.deleted = 1
+      node.version++
+      h.delayRaw(204, batchHeaders(11), '', 2_000)
+    })
+
+    const { deps } = writeDeps(mock)
+    const controller = new AbortController()
+    const pending = batchItems(
+      deps,
+      {
+        delete: [
+          {
+            library: { type: 'user' as const, id: 0 },
+            kind: 'item' as const,
+            key: root,
+            serverId: SERVER_ID,
+          },
+        ],
+      },
+      controller.signal,
+    )
+    await rootPatch.promise
+    controller.abort()
+    const error = await pending.catch((cause: unknown) => cause)
+    expect(error).toBeInstanceOf(ZoteroWriteCommitUnknownError)
+    const unknownError = error as ZoteroWriteCommitUnknownError
+    expect(unknownError.completedRefs).toEqual([expect.stringContaining(child)])
+    // The model sees the message only; the acknowledged child must be in it.
+    expect(unknownError.message).toContain(child)
+  })
+
+  it('reports an unaffected root when a commit-unknown stops a merged wave', async () => {
+    grantAuthorize(mock)
+    const rootKeys = ['ROOTAAAA', 'ROOTBBBB']
+    const childOf: Record<string, string> = {
+      ROOTAAAA: 'CHILDAAA',
+      ROOTBBBB: 'CHILDBBB',
+    }
+    const state = new Map<
+      string,
+      { key: string; parent?: string; version: number; deleted: number }
+    >()
+    for (const root of rootKeys) {
+      state.set(root, { key: root, version: 9, deleted: 0 })
+      state.set(childOf[root]!, { key: childOf[root]!, parent: root, version: 9, deleted: 0 })
+    }
+    for (const node of state.values()) {
+      mock.route('GET', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        h.json(
+          itemJson(node.key, node.version, {
+            itemType: node.parent === undefined ? 'journalArticle' : 'note',
+            deleted: node.deleted,
+            ...(node.parent === undefined ? {} : { parentItem: node.parent }),
+          }),
+          batchHeaders(node.version),
+        )
+      })
+      mock.route('GET', `/api/users/0/items/${node.key}/children`, (_req, _res, h) => {
+        const children = [...state.values()].filter((entry) => entry.parent === node.key)
+        h.json(
+          children.map((entry) =>
+            itemJson(entry.key, entry.version, {
+              itemType: 'note',
+              deleted: entry.deleted,
+              parentItem: entry.parent,
+            }),
+          ),
+          { ...batchHeaders(node.version), 'Total-Results': String(children.length) },
+        )
+      })
+      mock.route('PATCH', `/api/users/0/items/${node.key}`, (_req, _res, h) => {
+        node.deleted = 1
+        node.version++
+        h.raw(204, batchHeaders(10), '')
+      })
+    }
+    mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+      const entries = JSON.parse(mock.requests.at(-1)!.body) as { key: string; version: number }[]
+      const successful: Record<string, unknown> = {}
+      const success: Record<string, string> = {}
+      entries.forEach((entry, index) => {
+        if (entry.key === childOf.ROOTAAAA) return // omitted from every bucket
+        const node = state.get(entry.key)!
+        node.deleted = 1
+        node.version++
+        successful[index] = itemJson(node.key, node.version, {
+          itemType: 'note',
+          deleted: node.deleted,
+          parentItem: node.parent,
+        })
+        success[index] = node.key
+      })
+      h.json({ successful, success, unchanged: {}, failed: {} }, batchHeaders(10))
+    })
+
+    const { deps } = writeDeps(mock)
+    const result = await batchItems(deps, {
+      delete: rootKeys.map((key) => ({
+        library: { type: 'user' as const, id: 0 },
+        kind: 'item' as const,
+        key,
+        serverId: SERVER_ID,
+      })),
+    })
+
+    expect(result.deleted).toEqual([])
+    // The root whose child outcome is unknown is named by the unverified row;
+    // the other root never reached its own PATCH and must still be reported.
+    expect(result.unverified).toMatchObject([
+      { op: 'delete', index: 0, ref: expect.stringContaining(childOf.ROOTAAAA) },
+    ])
+    expect(result.failed).toMatchObject([
+      {
+        op: 'delete',
+        ref: expect.stringContaining('ROOTBBBB'),
+        code: 'ZOTERO_UNEXPECTED',
+        completedRefs: [expect.stringContaining(childOf.ROOTBBBB!)],
+      },
+    ])
+    expect(state.get('ROOTAAAA')!.deleted).toBe(0)
+    expect(state.get('ROOTBBBB')!.deleted).toBe(0)
+  })
+
+  it('stops a Trash walk when Zotero refuses the PATCH authorization', async () => {
+    grantAuthorize(mock)
+    const root = 'ROOTAUTH'
+    mock.route('GET', `/api/users/0/items/${root}`, (_req, _res, h) => {
+      h.json(itemJson(root, 9, { itemType: 'journalArticle', deleted: 0 }), batchHeaders(9))
+    })
+    mock.route('GET', `/api/users/0/items/${root}/children`, (_req, _res, h) => {
+      h.json([], { ...batchHeaders(9), 'Total-Results': '0' })
+    })
+    mock.route('PATCH', `/api/users/0/items/${root}`, (_req, _res, h) => {
+      h.raw(401, { 'Zotero-Server-ID': SERVER_ID }, 'Unauthorized')
+    })
+    const { deps } = writeDeps(mock)
+    await expect(
+      batchItems(deps, {
+        delete: [
+          {
+            library: { type: 'user' as const, id: 0 },
+            kind: 'item' as const,
+            key: root,
+            serverId: SERVER_ID,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'ZOTERO_WRITE_UNAUTHORIZED' })
   })
 })

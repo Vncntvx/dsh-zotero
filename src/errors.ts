@@ -14,6 +14,7 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
 import { findInCauseChain } from './cause-chain.js'
 import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import type { ZoteroBatchItemsResult } from './types.js'
 
 /**
  * Domain failure with a stable machine-routable code and an actionable,
@@ -30,6 +31,16 @@ export class ZoteroError extends HarnessError {
 }
 
 /**
+ * Options for constructing a `ZoteroWriteCommitUnknownError`.
+ * Carries any verified completed refs, unverified refs, and structured partial results.
+ */
+export interface ZoteroWriteCommitUnknownOptions extends ErrorOptions {
+  readonly completedRefs?: readonly string[]
+  readonly unverifiedRefs?: readonly string[]
+  readonly partial?: ZoteroBatchItemsResult
+}
+
+/**
  * A write request that reached the response/commit boundary but whose
  * outcome could not be proven. Callers that create non-idempotent objects
  * must surface this as a non-retryable, commit-unknown result rather than
@@ -41,9 +52,16 @@ export class ZoteroError extends HarnessError {
  * carries the commit-state marking.
  */
 export class ZoteroWriteCommitUnknownError extends HarnessError {
-  constructor(message: string, code: string, options?: ErrorOptions) {
+  readonly completedRefs?: readonly string[]
+  readonly unverifiedRefs?: readonly string[]
+  readonly partial?: ZoteroBatchItemsResult
+
+  constructor(message: string, code: string, options?: ZoteroWriteCommitUnknownOptions) {
     super(message, code, options)
     this.name = 'ZoteroWriteCommitUnknownError'
+    this.completedRefs = options?.completedRefs
+    this.unverifiedRefs = options?.unverifiedRefs
+    this.partial = options?.partial
   }
 }
 

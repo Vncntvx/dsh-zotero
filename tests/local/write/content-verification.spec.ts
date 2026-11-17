@@ -63,6 +63,21 @@ describe('Zotero save normalization', () => {
         ),
       ).toBe(false)
   })
+
+  it('accepts reordered tags and collections sets', () => {
+    expect(
+      submittedFieldsMatch(
+        { tags: [{ tag: 'b' }, { tag: 'a' }], collections: ['COLL_B', 'COLL_A'] },
+        { tags: ['a', 'b'], collections: ['COLL_A', 'COLL_B'] },
+      ),
+    ).toBe(true)
+  })
+
+  it('accepts deleted boolean equivalents', () => {
+    expect(submittedFieldsMatch({ deleted: 1 }, { deleted: true })).toBe(true)
+    expect(submittedFieldsMatch({ deleted: 0 }, { deleted: false })).toBe(true)
+    expect(submittedFieldsMatch({ deleted: 1 }, { deleted: false })).toBe(false)
+  })
 })
 
 let mock: MockZotero

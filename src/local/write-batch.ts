@@ -3,6 +3,7 @@
  * @module dsh-zotero/local/write-batch
  */
 
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 import {
   WRITE_LIST_SELECTION_MESSAGE,
@@ -12,7 +13,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
-import { preflightTrashGraphs } from './trash-item.js'
+import { preflightTrashGraphs, type TrashSnapshot } from './trash-item.js'
 import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import {
   batchCreateUnverified,
@@ -164,14 +165,12 @@ async function runBatchCreates(
   } catch (err) {
     if (isWriteUnauthorized(err)) throw err
     if (err instanceof ZoteroWriteCommitUnknownError) {
-      // Same split as `sendSingleCreate` in write-verdicts.ts: an aborted
-      // caller would never see these receipt buckets (the pipeline masks a
-      // settled success with the canonical cancellation), so the commit
-      // state must travel as a thrown error result instead.
-      if (signal?.aborted) throw err
+      // Matches `sendSingleCreate` in write-verdicts.ts: cancellations mask
+      // settled receipts, so commit state travels through the thrown error.
       for (let i = 0; i < checkedCreates.length; i++) {
         unverified.push(batchCreateUnverified(i, 'commit-unknown', serverId))
       }
+      if (signal?.aborted) throw err
     } else {
       signal?.throwIfAborted()
       for (let i = 0; i < checkedCreates.length; i++) {
@@ -331,19 +330,24 @@ async function runBatchUpdates(
         updated.push({ ...entry.receipt, version: verdict.version, unchanged: verdict.unchanged })
     })
   } catch (error) {
-    if (signal?.aborted || isWriteUnauthorized(error)) throw error
-    for (const entry of pending) {
-      if (error instanceof ZoteroWriteCommitUnknownError)
+    if (isWriteUnauthorized(error)) throw error
+    if (error instanceof ZoteroWriteCommitUnknownError) {
+      for (const entry of pending) {
         unverified.push(
           batchOperationUnverified('update', entry.index, entry.receipt.ref, serverId),
         )
-      else
+      }
+      if (signal?.aborted) throw error
+    } else {
+      if (signal?.aborted) throw error
+      for (const entry of pending) {
         failed.push({
           op: 'update',
           ref: entry.receipt.ref,
           code: error instanceof ZoteroError ? error.code : ZOTERO_UNEXPECTED,
           message: error instanceof Error ? error.message : String(error),
         })
+      }
     }
   }
   return lastLibraryVersion
@@ -357,6 +361,7 @@ async function runBatchDeletes(
   deleted: ZoteroBatchDeleteItemResult[],
   unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
+  committedRefs: string[],
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
   const graphs = await preflightTrashGraphs(
@@ -365,65 +370,185 @@ async function runBatchDeletes(
     serverId,
     signal,
   )
+
+  interface PlannedDelete {
+    deleteIndex: number
+    ref: ZoteroObjectRef
+    graph: TrashSnapshot[]
+  }
+  const planned: PlannedDelete[] = []
   for (const [deleteIndex, ref] of checkedDeletes.entries()) {
     signal?.throwIfAborted()
-    const progress = trashWalkProgress()
     try {
       const graph = await graphs.take(ref.key)
-      try {
-        await patchTrashNodes(deps, serverId, signal, graph, {
-          wantDeleted: true,
-          progress,
-          onCommitUnknown: (node) => {
-            unverified.push(
-              batchOperationUnverified(
-                'delete',
-                deleteIndex,
-                itemRef(node.key, serverId),
-                serverId,
-              ),
-            )
-          },
-        })
-      } finally {
-        // A mid-graph failure must still hand the versions of the PATCHes
-        // that did land to the request-level result.
-        if (progress.libraryVersion !== undefined) lastLibraryVersion = progress.libraryVersion
-      }
-      const saved = await verifyTrashGraph(
-        deps.client,
-        ref.key,
-        serverId,
-        graph,
-        {
-          wantDeleted: true,
-          message: `Zotero did not verify the complete graph for ${ref.key} in Trash. Check the completed refs before further action.`,
-        },
-        signal,
-      )
-      const version = saved[saved.length - 1].version
-      deleted.push({
-        ref: itemRef(ref.key, serverId),
-        key: ref.key,
-        deleted: true,
-        version,
-        children: graph
-          .filter((node) => node.key !== ref.key)
-          .map((node) => itemRef(node.key, serverId)),
-      })
+      planned.push({ deleteIndex, ref, graph })
     } catch (err) {
       if (signal?.aborted || isWriteUnauthorized(err)) throw err
-      if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'delete',
         ref: itemRef(ref.key, serverId),
         code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
         message: err instanceof Error ? err.message : String(err),
-        ...(progress.completedRefs.length > 0 ? { completedRefs: progress.completedRefs } : {}),
       })
     }
   }
+
+  if (planned.length === 0) return lastLibraryVersion
+
+  const uniqueNodes = new Map<string, TrashSnapshot>()
+  const nodeRoots = new Map<string, PlannedDelete[]>()
+  for (const item of planned) {
+    for (const node of item.graph) {
+      if (!uniqueNodes.has(node.key)) {
+        uniqueNodes.set(node.key, node)
+      }
+      let roots = nodeRoots.get(node.key)
+      if (!roots) {
+        roots = []
+        nodeRoots.set(node.key, roots)
+      }
+      roots.push(item)
+    }
+  }
+
+  const progress = trashWalkProgress()
+  let patchError: unknown
+  try {
+    await patchTrashNodes(deps, serverId, signal, [...uniqueNodes.values()], {
+      wantDeleted: true,
+      progress,
+      onCommitUnknown: (node) => {
+        const roots = nodeRoots.get(node.key)
+        if (roots) {
+          for (const item of roots) {
+            unverified.push(
+              batchOperationUnverified(
+                'delete',
+                item.deleteIndex,
+                itemRef(node.key, serverId),
+                serverId,
+              ),
+            )
+          }
+        }
+      },
+    })
+  } catch (err) {
+    patchError = err
+  } finally {
+    // Preserves library versions and completed refs from settled patches if later operations fail.
+    if (progress.libraryVersion !== undefined) lastLibraryVersion = progress.libraryVersion
+    committedRefs.push(...progress.completedRefs)
+  }
+
+  if (patchError !== undefined && (signal?.aborted || isWriteUnauthorized(patchError))) {
+    throw patchError
+  }
+
+  const completedRefsSet = new Set(progress.completedRefs)
+
+  for (const item of planned) {
+    signal?.throwIfAborted()
+    const itemAllCompleted =
+      patchError === undefined ||
+      item.graph.every((node) => node.deleted || completedRefsSet.has(itemRef(node.key, serverId)))
+    if (itemAllCompleted) {
+      try {
+        const saved = await verifyTrashGraph(
+          deps.client,
+          item.ref.key,
+          serverId,
+          item.graph,
+          {
+            wantDeleted: true,
+            message: `Zotero did not verify the complete graph for ${item.ref.key} in Trash. Check the completed refs before further action.`,
+          },
+          signal,
+        )
+        const version = saved[saved.length - 1].version
+        deleted.push({
+          ref: itemRef(item.ref.key, serverId),
+          key: item.ref.key,
+          deleted: true,
+          version,
+          children: item.graph
+            .filter((node) => node.key !== item.ref.key)
+            .map((node) => itemRef(node.key, serverId)),
+        })
+      } catch (err) {
+        if (signal?.aborted || isWriteUnauthorized(err)) throw err
+        if (err instanceof ZoteroWriteCommitUnknownError) continue
+        const completedChildren = item.graph
+          .map((n) => itemRef(n.key, serverId))
+          .filter((ref) => completedRefsSet.has(ref))
+        failed.push({
+          op: 'delete',
+          ref: itemRef(item.ref.key, serverId),
+          code: err instanceof ZoteroError ? err.code : ZOTERO_UNEXPECTED,
+          message: err instanceof Error ? err.message : String(err),
+          ...(completedChildren.length > 0 ? { completedRefs: completedChildren } : {}),
+        })
+      }
+    } else {
+      // A commit-unknown already reports the node it could not prove through
+      // `unverified`; an item that never reached that node (another root whose
+      // wave stopped behind it) still needs its own failure row, or it would
+      // vanish from every receipt bucket.
+      const unknownReported = unverified.some(
+        (entry) => entry.op === 'delete' && entry.index === item.deleteIndex,
+      )
+      if (patchError instanceof ZoteroWriteCommitUnknownError && unknownReported) continue
+      const completedChildren = item.graph
+        .map((n) => itemRef(n.key, serverId))
+        .filter((ref) => completedRefsSet.has(ref))
+      failed.push({
+        op: 'delete',
+        ref: itemRef(item.ref.key, serverId),
+        code: patchError instanceof ZoteroError ? patchError.code : ZOTERO_UNEXPECTED,
+        message: patchError instanceof Error ? patchError.message : String(patchError),
+        ...(completedChildren.length > 0 ? { completedRefs: completedChildren } : {}),
+      })
+    }
+  }
+
   return lastLibraryVersion
+}
+
+/**
+ * Append the receipts that survived a throw to its model-facing message. The
+ * error object alone never reaches the model: the tool pipeline renders
+ * `Error: <message>` and drops the extra fields, so the refs have to be in the
+ * text or the caller cannot know which writes landed.
+ */
+function partialProgressMessage(
+  base: string,
+  parts: {
+    readonly completedRefs: readonly string[]
+    readonly unverified: readonly ZoteroBatchOperationUnverified[]
+    readonly failed: readonly ZoteroBatchOperationFailure[]
+  },
+): string {
+  const completedRefs = [...new Set(parts.completedRefs)]
+  const unverifiedRefs = [
+    ...new Set(
+      parts.unverified.map((entry) => entry.ref).filter((ref): ref is string => ref !== undefined),
+    ),
+  ]
+  const unverifiedWithoutRef = parts.unverified
+    .filter((entry) => entry.ref === undefined)
+    .map((entry) => `${entry.op} index ${entry.index}`)
+  const failures = parts.failed.map(
+    (entry) => `${entry.op} ${entry.ref ?? `index ${entry.index}`} (${entry.code})`,
+  )
+  const lines = [
+    ...(completedRefs.length === 0 ? [] : [`Completed refs: ${completedRefs.join(', ')}`]),
+    ...(unverifiedRefs.length === 0 ? [] : [`Unverified refs: ${unverifiedRefs.join(', ')}`]),
+    ...(unverifiedWithoutRef.length === 0
+      ? []
+      : [`Unverified operations: ${unverifiedWithoutRef.join(', ')}`]),
+    ...(failures.length === 0 ? [] : [`Failed operations: ${failures.join('; ')}`]),
+  ]
+  return `${base}\nPartial progress before this failure:\n${lines.join('\n')}\nReconcile these facts in Zotero before any further write; never retry a completed ref.`
 }
 
 export async function batchItems(
@@ -460,9 +585,11 @@ export async function batchItems(
   const deleted: ZoteroBatchDeleteItemResult[] = []
   const unverified: ZoteroBatchOperationUnverified[] = []
   const failed: ZoteroBatchOperationFailure[] = []
+  const committedDeletes: string[] = []
   let latestLibraryVersion: number | undefined
-  const versions = [
-    await runBatchCreates(
+
+  try {
+    const v1 = await runBatchCreates(
       deps,
       checkedCreates,
       resolvedColsMap,
@@ -471,8 +598,10 @@ export async function batchItems(
       created,
       unverified,
       failed,
-    ),
-    await runBatchUpdates(
+    )
+    if (v1 !== undefined) latestLibraryVersion = v1
+
+    const v2 = await runBatchUpdates(
       deps,
       checkedUpdates,
       resolvedColsMap,
@@ -481,11 +610,87 @@ export async function batchItems(
       updated,
       unverified,
       failed,
-    ),
-    await runBatchDeletes(deps, checkedDeletes, serverId, signal, deleted, unverified, failed),
-  ]
-  for (const version of versions) {
-    if (version !== undefined) latestLibraryVersion = version
+    )
+    if (v2 !== undefined) latestLibraryVersion = v2
+
+    const v3 = await runBatchDeletes(
+      deps,
+      checkedDeletes,
+      serverId,
+      signal,
+      deleted,
+      unverified,
+      failed,
+      committedDeletes,
+    )
+    if (v3 !== undefined) latestLibraryVersion = v3
+  } catch (error) {
+    const completedRefs = [
+      ...new Set([
+        ...created.map((c) => c.ref),
+        ...updated.map((u) => u.ref),
+        ...deleted.map((d) => d.ref),
+        ...committedDeletes,
+      ]),
+    ]
+    const unverifiedRefs = [
+      ...new Set(unverified.map((u) => u.ref).filter((ref): ref is string => ref !== undefined)),
+    ]
+
+    if (
+      completedRefs.length > 0 ||
+      unverifiedRefs.length > 0 ||
+      unverified.length > 0 ||
+      failed.length > 0
+    ) {
+      const code =
+        error instanceof HarnessError
+          ? error.code
+          : signal?.aborted
+            ? 'TOOL_ABORTED'
+            : ZOTERO_UNEXPECTED
+      const baseMessage =
+        error instanceof Error
+          ? error.message
+          : 'The write operation failed or was cancelled after partial progress.'
+
+      const allCompletedRefs =
+        error instanceof ZoteroWriteCommitUnknownError && error.completedRefs
+          ? [...new Set([...error.completedRefs, ...completedRefs])]
+          : completedRefs
+      const allUnverifiedRefs =
+        error instanceof ZoteroWriteCommitUnknownError && error.unverifiedRefs
+          ? [...new Set([...error.unverifiedRefs, ...unverifiedRefs])]
+          : unverifiedRefs
+
+      const partialResult: ZoteroBatchItemsResult = {
+        kind: 'partial',
+        total,
+        created,
+        updated,
+        deleted,
+        unverified,
+        failed,
+        ...(latestLibraryVersion !== undefined ? { libraryVersion: latestLibraryVersion } : {}),
+        serverId,
+      }
+
+      throw new ZoteroWriteCommitUnknownError(
+        partialProgressMessage(baseMessage, {
+          completedRefs: allCompletedRefs,
+          unverified,
+          failed,
+        }),
+        code,
+        {
+          cause: error instanceof Error && 'cause' in error && error.cause ? error.cause : error,
+          completedRefs: allCompletedRefs,
+          unverifiedRefs: allUnverifiedRefs,
+          partial: partialResult,
+        },
+      )
+    }
+    throw error
   }
 
   const successful = created.length + updated.length + deleted.length

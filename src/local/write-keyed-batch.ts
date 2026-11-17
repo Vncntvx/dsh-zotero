@@ -11,6 +11,7 @@ import {
 import { asRecord, isNonNegativeSafeInteger } from '../json.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { withWriteKey } from './write-domain.js'
+import { submittedFieldsMatch } from './write-content-proof.js'
 
 export interface KeyedItemUpdate {
   readonly key: string
@@ -105,11 +106,7 @@ export async function writeKeyedItems(
       row.version <= entry.version ||
       data?.key !== entry.key ||
       data.version !== row.version ||
-      Object.entries(entry.fields).some(([field, value]) =>
-        field === 'deleted'
-          ? Boolean(data[field]) !== Boolean(value)
-          : JSON.stringify(data[field]) !== JSON.stringify(value),
-      )
+      !submittedFieldsMatch(data, entry.fields)
     )
       return { kind: 'unverified' }
     return { kind: 'applied', key: entry.key, version: row.version, unchanged: false }

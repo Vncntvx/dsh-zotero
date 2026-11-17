@@ -21,7 +21,9 @@ function equal(left: unknown, right: unknown): boolean {
 
 function stringSet(value: unknown, tags: boolean): readonly string[] | undefined {
   if (!Array.isArray(value)) return undefined
-  const strings = value.map((entry) => (tags ? asRecord(entry)?.tag : entry))
+  const strings = value.map((entry) =>
+    tags ? (typeof entry === 'string' ? entry : asRecord(entry)?.tag) : entry,
+  )
   if (strings.some((entry) => typeof entry !== 'string')) return undefined
   return [...new Set(strings as string[])].sort()
 }
@@ -100,7 +102,9 @@ export function submittedFieldsMatch(
 ): boolean {
   for (const [field, expected] of Object.entries(submitted)) {
     const actual = data[field]
-    if (field === 'note') {
+    if (field === 'deleted') {
+      if (Boolean(actual) !== Boolean(expected)) return false
+    } else if (field === 'note') {
       if (
         typeof actual !== 'string' ||
         typeof expected !== 'string' ||

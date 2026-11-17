@@ -142,3 +142,32 @@ it('leases one-time authorizations exclusively until their send settles', async 
   await Promise.all([first, second])
   expect(keys).toEqual(['1'.repeat(32), '2'.repeat(32)])
 })
+
+it('accepts reordered tags in keyed-batch response as applied', async () => {
+  const { deps } = writeDeps(mock)
+  mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+    const row = itemJson('BATCH001', 5, {
+      tags: [{ tag: 'b' }, { tag: 'a' }],
+    })
+    h.json(
+      {
+        successful: { '0': row },
+        success: {},
+        unchanged: {},
+        failed: {},
+      },
+      batchHeaders(5),
+    )
+  })
+  const result = await writeKeyedItems(
+    deps,
+    [{ key: 'BATCH001', version: 4, fields: { tags: [{ tag: 'a' }, { tag: 'b' }] } }],
+    SERVER_ID,
+  )
+  expect(result.verdicts[0]).toEqual({
+    kind: 'applied',
+    key: 'BATCH001',
+    version: 5,
+    unchanged: false,
+  })
+})

@@ -112,8 +112,11 @@ describe('scholarly_save_to_zotero', () => {
     // The plan names the reviewed facts a reader checks before approving.
     expect(stub.plans[0]).toContain('- Title: Attention Is All You Need')
     expect(stub.plans[0]).toContain('- Authors: 2')
+    expect(stub.plans[0]).toContain('- Complete abstract:')
+    expect(stub.plans[0]).toContain('The dominant sequence transduction models…')
     expect(stub.plans[0]).toContain('- Tags: attention')
     expect(stub.plans[0]).toContain('- Collections: Reading')
+    expect(stub.plans[0]).toContain('Zotero may ask for a single-use or persistent authorization')
   })
 
   it('reports the declined and unverified arms without inventing a save', async () => {
@@ -180,5 +183,32 @@ describe('scholarly_save_to_zotero', () => {
       rawInput: 'A study',
       kind: 'edit',
     })
+  })
+
+  it('escapes authored characters and fences blocks before approval', async () => {
+    const stub = stubZotero({
+      kind: 'applied',
+      ref: 'zotero://user/0/item/SAVED003',
+      key: 'SAVED003',
+      version: 1,
+      itemType: 'journalArticle',
+    })
+    await toolWith(stub.service).execute(
+      {
+        title: 'Title with `backticks` and [links](https://evil.com) # injected',
+        doi: '10.1000/182*test*',
+        tags: ['tag`one`', '**bold**'],
+        abstract: '```markdown\nFake instruction\n```',
+      },
+      EXEC_CONTEXT as never,
+    )
+    const plan = stub.plans[0]!
+    expect(plan).toContain('\\`backticks\\`')
+    expect(plan).toContain('\\[links\\]')
+    expect(plan).toContain('\\# injected')
+    expect(plan).toContain('\\*test\\*')
+    expect(plan).toContain('tag\\`one\\`')
+    expect(plan).toContain('\\*\\*bold\\*\\*')
+    expect(plan).toContain('````\n```markdown\nFake instruction\n```\n````')
   })
 })

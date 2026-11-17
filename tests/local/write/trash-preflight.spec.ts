@@ -40,10 +40,9 @@ describe.each(['delete', 'restore'] as const)('%s graph preflight', (operation) 
       peak = 0,
       started = 0,
       writes = 0
+    const states = new Map(keys.map((k) => [k, { version: 9, deleted: 1 - wanted }]))
     for (const key of keys) {
-      let version = 9,
-        deleted = 1 - wanted,
-        first = true
+      let first = true
       mock.route('GET', `/api/users/0/items/${key}`, async (_req, _res, h) => {
         if (first) {
           first = false
@@ -54,15 +53,44 @@ describe.each(['delete', 'restore'] as const)('%s graph preflight', (operation) 
           await release.promise
           active--
         }
-        h.json(itemJson(key, version, { itemType: 'annotation', deleted }), batchHeaders(version))
+        const state = states.get(key)!
+        h.json(
+          itemJson(key, state.version, { itemType: 'annotation', deleted: state.deleted }),
+          batchHeaders(state.version),
+        )
       })
       mock.route('PATCH', `/api/users/0/items/${key}`, (req, _res, h) => {
         expect(active).toBe(0)
         expect(started).toBe(5)
-        expect(req.headers['if-unmodified-since-version']).toBe(String(version))
+        const state = states.get(key)!
+        expect(req.headers['if-unmodified-since-version']).toBe(String(state.version))
         writes++
-        deleted = wanted
-        h.raw(204, batchHeaders(++version), '')
+        state.deleted = wanted
+        h.raw(204, batchHeaders(++state.version), '')
+      })
+    }
+    if (operation === 'delete') {
+      mock.route('POST', '/api/users/0/items', (_req, _res, h) => {
+        expect(active).toBe(0)
+        expect(started).toBe(5)
+        const entries = JSON.parse(mock.requests.at(-1)!.body) as {
+          key: string
+          version: number
+        }[]
+        writes += entries.length
+        const successful: Record<string, unknown> = {}
+        const success: Record<string, string> = {}
+        entries.forEach((e, i) => {
+          const state = states.get(e.key)!
+          state.deleted = wanted
+          state.version = e.version + 1
+          successful[i] = itemJson(e.key, state.version, {
+            itemType: 'annotation',
+            deleted: state.deleted,
+          })
+          success[i] = e.key
+        })
+        h.json({ successful, success, unchanged: {}, failed: {} }, batchHeaders(10))
       })
     }
     const result = perform(keys)

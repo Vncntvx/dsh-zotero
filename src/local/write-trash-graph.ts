@@ -7,7 +7,12 @@
  */
 
 import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
-import { ZoteroError, ZOTERO_UNEXPECTED, ZoteroWriteCommitUnknownError } from '../errors.js'
+import {
+  ZoteroError,
+  ZOTERO_UNEXPECTED,
+  ZOTERO_WRITE_UNAUTHORIZED,
+  ZoteroWriteCommitUnknownError,
+} from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { readTrashGraph, type TrashSnapshot } from './trash-item.js'
 import type { WriteDomainDeps } from './write-deps.js'
@@ -46,6 +51,12 @@ export interface PatchTrashNodesOptions {
  * own version precondition. A commit-unknown aborts the walk: the hook
  * observes the node, then the error rethrows to the caller's policy with the
  * progress so far intact.
+ *
+ * A settled refusal (a version conflict, for example) blocks that node's
+ * ancestors instead: a parent must never be patched over a child whose write
+ * did not settle. Independent branches keep going, so one root's refusal in a
+ * merged cross-root wave does not leave every other root unwritten; the first
+ * refusal is rethrown once no independent node remains.
  */
 export async function patchTrashNodes(
   deps: WriteDomainDeps,
@@ -54,18 +65,34 @@ export async function patchTrashNodes(
   nodes: readonly TrashSnapshot[],
   options: PatchTrashNodesOptions,
 ): Promise<void> {
+  const byKey = new Map(nodes.map((node) => [node.key, node]))
   const remaining = new Map(
     nodes.filter((node) => node.deleted !== options.wantDeleted).map((node) => [node.key, node]),
   )
+  const blocked = new Set<string>()
+  const blockAncestors = (key: string): void => {
+    remaining.delete(key)
+    let parent = byKey.get(key)?.parentKey
+    while (parent !== undefined && !blocked.has(parent)) {
+      blocked.add(parent)
+      parent = byKey.get(parent)?.parentKey
+    }
+  }
+  let failure: unknown
+
   while (remaining.size > 0) {
+    signal?.throwIfAborted()
     const parents = new Set(
       [...remaining.values()].map((node) => node.parentKey).filter((key) => key !== undefined),
     )
     const frontier = [...remaining.values()]
-      .filter((node) => !parents.has(node.key))
+      .filter((node) => !parents.has(node.key) && !blocked.has(node.key))
       .slice(0, ZOTERO_WRITE_OBJECT_BATCH)
-    if (frontier.length === 0)
-      throw new ZoteroError('The Trash graph contains a dependency cycle.', ZOTERO_UNEXPECTED)
+    if (frontier.length === 0) {
+      if ([...remaining.values()].some((node) => !blocked.has(node.key)))
+        throw new ZoteroError('The Trash graph contains a dependency cycle.', ZOTERO_UNEXPECTED)
+      break
+    }
     if (frontier.length > 1) {
       let batch
       try {
@@ -85,23 +112,26 @@ export async function patchTrashNodes(
         throw error
       }
       options.progress.libraryVersion = batch.libraryVersion
-      let failure: unknown
+      let commitUnknown: ZoteroWriteCommitUnknownError | undefined
+      let refused: unknown
       batch.verdicts.forEach((verdict, index) => {
         const node = frontier[index]!
-        if (verdict.kind === 'applied')
+        if (verdict.kind === 'applied') {
           options.progress.completedRefs.push(itemRef(node.key, serverId))
-        else {
-          if (verdict.kind === 'unverified') options.onCommitUnknown?.(node)
-          try {
-            throwKeyedVerdict(verdict)
-          } catch (error) {
-            if (failure === undefined || error instanceof ZoteroWriteCommitUnknownError)
-              failure = error
-          }
+          remaining.delete(node.key)
+          return
         }
+        if (verdict.kind === 'unverified') options.onCommitUnknown?.(node)
+        try {
+          throwKeyedVerdict(verdict)
+        } catch (error) {
+          if (error instanceof ZoteroWriteCommitUnknownError) commitUnknown ??= error
+          else if (refused === undefined) refused = error
+        }
+        blockAncestors(node.key)
       })
-      if (failure !== undefined) throw failure
-      for (const node of frontier) remaining.delete(node.key)
+      if (commitUnknown !== undefined) throw commitUnknown
+      if (refused !== undefined && failure === undefined) failure = refused
       continue
     }
     const node = frontier[0]!
@@ -120,12 +150,21 @@ export async function patchTrashNodes(
       )
       options.progress.libraryVersion = libraryVersion
     } catch (error) {
-      if (error instanceof ZoteroWriteCommitUnknownError) options.onCommitUnknown?.(node)
-      throw error
+      if (signal?.aborted) throw error
+      if (error instanceof ZoteroWriteCommitUnknownError) {
+        options.onCommitUnknown?.(node)
+        throw error
+      }
+      if (error instanceof ZoteroError && error.code === ZOTERO_WRITE_UNAUTHORIZED) throw error
+      if (!(error instanceof ZoteroError)) throw error
+      if (failure === undefined) failure = error
+      blockAncestors(node.key)
+      continue
     }
     options.progress.completedRefs.push(itemRef(node.key, serverId))
     remaining.delete(node.key)
   }
+  if (failure !== undefined) throw failure
 }
 
 /**

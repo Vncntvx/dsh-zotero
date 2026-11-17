@@ -5,6 +5,7 @@ import type { ScholarlyToolHost } from './common.js'
 import type { ZoteroCreateItemRequest } from '../../types.js'
 import { requireCreatableItemType, normalizeCreator } from '../../write-item-rules.js'
 import { WRITE_PLAN_LIBRARY_LINE } from '../../write-approval.js'
+import { planValue, planBlock, WRITE_AUTHORIZATION_PLAN_LINE } from '../../write-plan.js'
 import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../../errors.js'
 import {
   COMMITTED_UNVERIFIED_VARIANT,
@@ -116,29 +117,37 @@ export function createScholarlySaveToZoteroTool(host: ScholarlyToolHost): ToolDe
           index,
         )
       })
+      const abstract = args.abstract?.trim()
       const request: ZoteroCreateItemRequest = {
         itemType,
         title: args.title.trim(),
         ...(args.url ? { url: args.url.trim() } : {}),
         ...(args.year ? { date: String(args.year) } : {}),
         ...(args.doi ? { doi: args.doi.trim() } : {}),
-        ...(args.abstract ? { abstractNote: args.abstract } : {}),
+        ...(abstract ? { abstractNote: abstract } : {}),
         ...(args.publicationTitle ? { publicationTitle: args.publicationTitle } : {}),
         ...(creators.length ? { creators } : {}),
         ...(args.tags ? { tags: args.tags } : {}),
         ...(args.collections ? { collections: args.collections } : {}),
       }
+      const planLines = [
+        '**Save scholarly result to Zotero**',
+        WRITE_PLAN_LIBRARY_LINE,
+        `- Title: ${planValue(request.title)}`,
+        `- DOI: ${request.doi === undefined ? '(none)' : planValue(request.doi)}`,
+        `- Authors: ${creators.length}`,
+      ]
+      if (abstract !== undefined && abstract !== '') {
+        planLines.push('- Complete abstract:', planBlock(abstract))
+      }
+      planLines.push(
+        `- Tags: ${(request.tags ?? []).map(planValue).join(', ') || '(none)'}`,
+        `- Collections: ${(request.collections ?? []).map(planValue).join(', ') || '(none)'}`,
+        WRITE_AUTHORIZATION_PLAN_LINE,
+      )
       const result = await service.createItem(request, {
         exec,
-        plan: [
-          '**Save scholarly result to Zotero**',
-          WRITE_PLAN_LIBRARY_LINE,
-          `- Title: ${request.title}`,
-          `- DOI: ${request.doi ?? '(none)'}`,
-          `- Authors: ${creators.length}`,
-          `- Tags: ${(request.tags ?? []).join(', ') || '(none)'}`,
-          `- Collections: ${(request.collections ?? []).join(', ') || '(none)'}`,
-        ].join('\n'),
+        plan: planLines.join('\n'),
       })
       if (result.kind !== 'applied') return result
       return {
