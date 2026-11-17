@@ -34,7 +34,7 @@ describe('scholarly normalization & matching', () => {
       sources: ['Crossref'],
     }
 
-    mergePaperInto(target, other)
+    mergePaperInto(target, other, 'same')
 
     expect(target.doi).toBe('10.5555/neurips.2017.1')
     expect(target.arxiv).toBe('1706.03762')
@@ -88,10 +88,9 @@ describe('weighted RRF fusion', () => {
   })
 
   it('merges two spellings of one title that share no identifier', () => {
-    // The L2 rule: same title key, or token containment of at least 0.75 over
-    // three or more shared tokens, fuses the pair even when every canonical
-    // key differs. Two indexes describing one work under slightly different
-    // wording must not reach the model as two papers.
+    // Same title token set plus the same first author and year establishes a
+    // version relationship. The published record becomes the primary, and the
+    // preprint keeps its own metadata in `versions`.
     const fromArxiv: ScholarlyPaper = {
       title: 'Attention Is All You Need: A Transformer Architecture',
       authors: ['Ashish Vaswani'],
@@ -117,6 +116,12 @@ describe('weighted RRF fusion', () => {
     expect(fused[0].sources).toContain('OpenAlex')
     expect(fused[0].doi).toBe('10.5555/neurips.2017.1')
     expect(fused[0].arxiv).toBe('1706.03762')
+    expect(fused[0].versions).toHaveLength(1)
+    expect(fused[0].versions?.[0]).toMatchObject({
+      kind: 'preprint',
+      arxiv: '1706.03762',
+      sources: ['arXiv'],
+    })
   })
 
   it('keeps two distinct works apart when their titles share little', () => {
@@ -289,12 +294,16 @@ describe('normalizePaper field derivation', () => {
       sources: [],
       doi: '10.48550/arXiv.2301.1',
     } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      doi: '10.1038/published',
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        doi: '10.1038/published',
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.doi).toBe('10.1038/published')
   })
 
@@ -305,12 +314,16 @@ describe('normalizePaper field derivation', () => {
       sources: [],
       doi: '10.1038/published',
     } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      doi: '10.48550/arXiv.2301.1',
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        doi: '10.48550/arXiv.2301.1',
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.doi).toBe('10.1038/published')
   })
 
@@ -322,49 +335,65 @@ describe('normalizePaper field derivation', () => {
       abstract: 'short',
       citations: 5,
     } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: ['A', 'B'],
-      sources: [],
-      abstract: 'a much longer abstract than the one already present',
-      citations: 12,
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: ['A', 'B'],
+        sources: [],
+        abstract: 'a much longer abstract than the one already present',
+        citations: 12,
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.abstract).toContain('much longer')
     expect(target.authors).toEqual(['A', 'B'])
     expect(target.citations).toBe(12)
   })
 
-  it('makes retraction infectious and unions the source list', () => {
+  it('makes retraction infectious for the same record and unions the source list', () => {
     const target = { title: 'T', authors: [], sources: ['OpenAlex'] } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: ['OpenAlex', 'Crossref'],
-      retracted: true,
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: ['OpenAlex', 'Crossref'],
+        retracted: true,
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.retracted).toBe(true)
     expect(target.sources).toEqual(['OpenAlex', 'Crossref'])
   })
 
   it('keeps an open-access flag once known', () => {
     const target = { title: 'T', authors: [], sources: [], openAccess: true } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      openAccess: false,
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        openAccess: false,
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.openAccess).toBe(true)
   })
 
   it('fills an absent open-access flag from the source', () => {
     const target = { title: 'T', authors: [], sources: [] } as ScholarlyPaper
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      openAccess: false,
-    } as ScholarlyPaper)
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        openAccess: false,
+      } as ScholarlyPaper,
+      'same',
+    )
     expect(target.openAccess).toBe(false)
   })
 })

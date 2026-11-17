@@ -90,9 +90,9 @@ DSH 内建的「轨迹」标签记录工具调用的执行过程；「文献轨�
 
 学术检索由 `dsh-zotero/scholarly` 组件提供，随包发布，默认关闭。启用后注册 7 个外部检索工具：索引检索访问白名单内的学术平台，开放获取 PDF 全文下载访问公网 HTTP(S) 主机（支持本机代理与 fake-IP 映射，明文 HTTP 目标要求真实公网地址）。组件首次在客户端启用时会弹出外发提醒，说明检索词与标识符涉及的目标主机。
 
-- 检索覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 和 DBLP，结果按相关度融合去重，并标出「已在本地库」。
+- 检索覆盖 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 和 DBLP。结果在共享 DOI、PMID、PMCID 或 arXiv ID，或标题词集合、第一作者与发表年份匹配时按相关度融合。预印本与正式版保留各自元数据，并标出「已在本地库」。
 - 能按 DOI、arXiv ID、PMID、PMCID 读开放获取全文并做段落定位，也能追踪引文网络。
-- 引用格式从 DOI 注册中心取；核验参考文献列表时，结论分「已核实」「需人工确认」「注册表说没有」「无法核验」四种。
+- 引用格式从 DOI 注册中心取；核验参考文献列表时，结论分「已核实」「需人工确认」「注册表说没有」「无法核验」四种。裸 DOI 核对标识符与撤稿状态，提供的书目信息按字段比较。
 - 用户明确要求时，把外部结果保存到本地个人库。保存之后，它才进入 Zotero 文献库和文献轨迹。
 
 外部检索通过 Agent 工具调用执行。文献面板在开启 `allowUrlPdfRead` 后支持下载库内已有的 URL 附件 PDF。

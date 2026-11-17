@@ -97,7 +97,7 @@ describe('scholarly_cite tool', () => {
   })
 
   it('fetches official BibTeX citation via DOI content negotiation', async () => {
-    const bibtexSnippet = `@article{Vaswani2017,\n  title={Attention is all you need},\n  author={Vaswani, Ashish},\n  year={2017}\n}`
+    const bibtexSnippet = `@article{Vaswani2017,\n  title={Attention is all you need},\n  author={Vaswani, Ashish},\n  year={2017},\n  DOI={10.1234/test}\n}`
 
     const mockHttp = createMockHttp((url, options) => {
       const accept = (options?.headers as Record<string, string> | undefined)?.accept
@@ -351,8 +351,10 @@ describe('scholarly_cite value handling', () => {
     const result = (await tool.execute(
       { ids: ['10.1234/empty.1'], format: 'bibtex' },
       EXEC_CONTEXT as never,
-    )) as { text: string }
-    expect(result.text.length).toBeGreaterThan(0)
+    )) as { text: string; citations: Array<{ status: string; reason?: string }> }
+    expect(result.text).toContain('0 of 1 resolved')
+    expect(result.text).toContain('empty body')
+    expect(result.citations[0]).toMatchObject({ status: 'failed' })
   })
 
   it('keeps the answers it did get when one identifier fails', async () => {
@@ -360,7 +362,7 @@ describe('scholarly_cite value handling', () => {
       createMockHttp((url) =>
         String(url).includes('bad')
           ? new Response('nope', { status: 500 })
-          : new Response('@article{good, title={Good}}', { status: 200 }),
+          : new Response('@article{good, title={Good}, DOI={10.1234/good.1}}', { status: 200 }),
       ),
     )
     const tool = createScholarlyCiteTool(host)
@@ -368,7 +370,9 @@ describe('scholarly_cite value handling', () => {
       { ids: ['10.1234/good.1', '10.1234/bad.1'], format: 'bibtex' },
       EXEC_CONTEXT as never,
     )) as { text: string }
+    expect(result.text).toContain('1 of 2 resolved')
     expect(result.text).toContain('Good')
+    expect(result.text).toContain('#2 10.1234/bad.1')
   })
 
   it('refuses more than thirty ids instead of silently truncating them', async () => {
@@ -376,7 +380,7 @@ describe('scholarly_cite value handling', () => {
     const host = createMockHost(
       createMockHttp((url) => {
         seen.push(String(url))
-        return new Response('@article{x}', { status: 200 })
+        return new Response('@article{x, DOI={10.1234/frompmid.1}}', { status: 200 })
       }),
     )
     const tool = createScholarlyCiteTool(host)
@@ -394,7 +398,12 @@ describe('scholarly_cite value handling', () => {
 describe('scholarly_cite identifier resolution', () => {
   it('derives an arXiv DOI and strips the leading at-sign for BibTeX', async () => {
     const host = createMockHost(
-      createMockHttp(() => new Response('  @article{arxiv, title={T}}', { status: 200 })),
+      createMockHttp(
+        () =>
+          new Response('  @article{arxiv, title={T}, DOI={10.48550/arXiv.2301.07041}}', {
+            status: 200,
+          }),
+      ),
     )
     const tool = createScholarlyCiteTool(host)
     const result = (await tool.execute(
@@ -419,7 +428,7 @@ describe('scholarly_cite identifier resolution', () => {
             { headers: { 'content-type': 'application/json' } },
           )
         }
-        return new Response('@article{x}', { status: 200 })
+        return new Response('@article{x, DOI={10.1234/frompmid.1}}', { status: 200 })
       }),
     )
     const tool = createScholarlyCiteTool(host)

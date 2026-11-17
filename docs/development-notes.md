@@ -483,3 +483,21 @@
 - **复核触发**：模型目录策略、临时目录布局或运行平台变化。
 - **验证**：运行 `44034659947` / `44034650470` 的测试全通过，但 Linux 分支覆盖率为 93.59%，低于 93.6% 门禁；修正后运行 loader 用例及一次完整发布门禁，覆盖率要求保持原值。
 - **后续动作**：新增目录别名或规范化规则时同时保留规范与非规范输入，避免由本机目录布局偶然覆盖分支。
+
+## DN-47：外部检索融合的身份优先与版本记录
+
+- **类型**：其他开发约束 / 兼容性。
+- **位置**：`src/scholarly/normalize.ts` 的 `identityOf`、`identityRelationOf`、`titleVersionMatch`、`mergePaperInto`；`src/scholarly/fusion.ts` 的 `fuseRankedLists`、`absorbEntry`。
+- **行为**：去重键只能来自强标识（正式 DOI、PMID、PMCID、arXiv ID）；`10.48550/*` 视为预印本身份，不参与正式 DOI 冲突。同类强标识冲突且无共享身份时，两条记录必须保留，标题、作者、年份再一致也不能合并。无共享标识时的标题门要求标题词集合完全相同（至少 3 个 token）、第一作者姓氏与名首字母一致、双方年份都存在且相差不超过一年。预印本/正式版等版本关系合并为一条，主记录优先取正式版；版本合并不得覆盖主记录的标题、摘要、作者或撤稿状态，来源记录整体写入 `ScholarlyPaper.versions`。撤稿只在 `same` 关系内传播。增加新来源或新标识符时，必须同时更新身份集合与反例测试。
+- **复核触发**：新增学术来源、增加或替换强标识、调整 `titleTokens` / `firstAuthorCompatible`，或任何改变 `mergePaperInto` 字段策略的改动。
+- **验证**：`tests/scholarly/fusion-identity.spec.ts` 覆盖研究对象不同、同名异作者、同名异年份、勘误、预印本/正式版、冲突 DOI、同 PMID 异 DOI、短标题与标题子集；`tests/scholarly/fusion.spec.ts` 与 `tests/scholarly/sources/mappers.spec.ts` 保留同 DOI 合并与版本元数据断言。
+- **后续动作**：若引入更强的版本关系（如 Crossref `relation` 或 OpenAlex `locations`），在 `identityRelationOf` 中显式实现并补充对应反例，不要放宽标题门。
+
+## DN-48：外部学术应答只按请求格式与身份接受
+
+- **类型**：安全边界。
+- **位置**：`src/scholarly/citation-format.ts`（新增）、`src/scholarly/tools/cite.ts`、`src/scholarly/tools/verify.ts`。
+- **行为**：HTTP 2xx 不是引用有效性的证据。`scholarly_cite` 必须按 `format` 解析正文并核对请求 DOI：CSL-JSON 需要可解析、非空标题与匹配 DOI；BibTeX 需要 `@type{...}` 结构与匹配的 `doi` 字段；RIS 需要 `TY`/`ER`/`DO` 结构；`text` 拒绝空正文与明显 HTML 错误页。任何校验失败都生成逐项失败记录，不得进入 resolved 项。批量输出按输入顺序保留 `inputIndex`、`requestedId`、`resolvedDoi`、`status`、`value`/`reason`，`issues` 用 1-based 序号指向输入位置。`scholarly_verify` 的裸 DOI 不参与标题/年份/作者比较；完整参考文献只比较它实际提供的字段，未提供字段为 `not-compared`；DOI-only 的 404 不再触发书目检索。
+- **复核触发**：新增引用格式、更换 DOI 内容协商端点、修改 `citations` / `checks` 的输出形状，或新增注册表适配器。
+- **验证**：`tests/scholarly/citation-format.spec.ts` 覆盖 HTML、空正文、损坏 JSON、DOI 不匹配、BibTeX/RIS 结构缺失；`tests/scholarly/verify-input-shapes.spec.ts` 覆盖裸 DOI、`doi.org` URL、DOI+标题、缺作者、机构作者、CJK、复姓、缩写与年份边界；`tests/scholarly/cite-verify.spec.ts` 覆盖批次顺序与部分失败。
+- **后续动作**：若 doi.org 内容协商改为返回多记录或新增格式，先在该模块实现结构校验与身份比对，再允许进入 resolved；不要因为 HTTP 200 放行未校验正文。

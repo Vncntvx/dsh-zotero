@@ -39,8 +39,10 @@ describe('scholarly_cite failure paths', () => {
     const result = (await tool.execute(
       { ids: ['10.1234/none.1'], format: 'bibtex' },
       EXEC_CONTEXT as never,
-    )) as { text: string }
-    expect(result.text.length).toBeGreaterThan(0)
+    )) as { text: string; citations: Array<{ status: string; reason?: string }> }
+    expect(result.text).toContain('0 of 1 resolved')
+    expect(result.text).toContain('no BibTeX entry')
+    expect(result.citations[0]).toMatchObject({ status: 'failed' })
   })
 
   it('reports a transport failure for one identifier without losing the others', async () => {
@@ -48,27 +50,115 @@ describe('scholarly_cite failure paths', () => {
       createMockHttp((url) =>
         String(url).includes('bad')
           ? new Response('boom', { status: 500 })
-          : new Response('@article{good}', { status: 200 }),
+          : new Response('@article{good, DOI={10.1234/good.1}}', { status: 200 }),
       ),
     )
     const tool = createScholarlyCiteTool(host)
     const result = (await tool.execute(
       { ids: ['10.1234/good.1', '10.1234/bad.1'], format: 'bibtex' },
       EXEC_CONTEXT as never,
-    )) as { text: string }
-    expect(result.text.length).toBeGreaterThan(0)
+    )) as { text: string; citations: Array<{ inputIndex: number; status: string }> }
+    expect(result.text).toContain('1 of 2 resolved')
+    expect(result.text).toContain('#2 10.1234/bad.1')
+    expect(result.citations.map((entry) => [entry.inputIndex, entry.status])).toEqual([
+      [0, 'resolved'],
+      [1, 'failed'],
+    ])
   })
 
-  it('accepts every declared format', async () => {
-    const host = createMockHost(createMockHttp(() => new Response('@article{x}', { status: 200 })))
+  it('accepts every declared format only when the body matches it', async () => {
+    const bodies: Record<string, string> = {
+      bibtex: '@article{x, title={T}, DOI={10.1234/any.1}}',
+      ris: 'TY  - JOUR\nDO  - 10.1234/any.1\nER  - ',
+      csljson: JSON.stringify({ DOI: '10.1234/any.1', title: 'T' }),
+      text: 'A formatted citation long enough to pass.',
+    }
+    const host = createMockHost(
+      createMockHttp((_url, init) => {
+        const headers = (init as RequestInit | undefined)?.headers as
+          Record<string, string> | undefined
+        const accept = headers?.accept ?? ''
+        const body = accept.includes('bibtex')
+          ? bodies.bibtex
+          : accept.includes('research-info')
+            ? bodies.ris
+            : accept.includes('csl+json')
+              ? bodies.csljson
+              : bodies.text
+        return new Response(body, { status: 200 })
+      }),
+    )
     const tool = createScholarlyCiteTool(host)
     for (const format of ['bibtex', 'ris', 'csljson', 'text'] as const) {
       const result = (await tool.execute(
         { ids: ['10.1234/any.1'], format },
         EXEC_CONTEXT as never,
       )) as { text: string }
-      expect(result.text.length, format).toBeGreaterThan(0)
+      expect(result.text, format).toContain('1 of 1 resolved')
+      expect(result.text, format).not.toContain('Unresolved items')
     }
+  })
+
+  it('rejects an HTML page returned for a CSL-JSON request', async () => {
+    const host = createMockHost(
+      createMockHttp(() => new Response('<html><body>Not found</body></html>', { status: 200 })),
+    )
+    const tool = createScholarlyCiteTool(host)
+    const result = (await tool.execute(
+      { ids: ['10.1234/html.1'], format: 'csljson' },
+      EXEC_CONTEXT as never,
+    )) as { text: string; citations: Array<{ status: string; value?: string }> }
+    expect(result.text).toContain('0 of 1 resolved')
+    expect(result.text).toContain('not valid JSON')
+    expect(result.citations[0]).toMatchObject({ status: 'failed' })
+    expect(result.citations[0]?.value).toBeUndefined()
+  })
+
+  it('keeps every input in order with its own status and DOI', async () => {
+    const host = createMockHost(
+      createMockHttp((url) => {
+        const value = String(url)
+        if (value.includes('mismatch')) {
+          return new Response('@article{x, DOI={10.1234/other.1}}', { status: 200 })
+        }
+        const doi = value.includes('second') ? '10.1234/second.1' : '10.1234/first.1'
+        return new Response(`@article{x, DOI={${doi}}}`, { status: 200 })
+      }),
+    )
+    const tool = createScholarlyCiteTool(host)
+    const result = (await tool.execute(
+      {
+        ids: ['10.1234/first.1', '10.1234/mismatch.1', '10.1234/second.1'],
+        format: 'bibtex',
+      },
+      EXEC_CONTEXT as never,
+    )) as {
+      text: string
+      citations: Array<Record<string, unknown>>
+      issues: string[]
+    }
+
+    expect(result.text).toContain('2 of 3 resolved')
+    expect(result.citations).toHaveLength(3)
+    expect(result.citations.map((entry) => [entry.inputIndex, entry.status])).toEqual([
+      [0, 'resolved'],
+      [1, 'failed'],
+      [2, 'resolved'],
+    ])
+    expect(result.citations[0]).toMatchObject({
+      requestedId: '10.1234/first.1',
+      resolvedDoi: '10.1234/first.1',
+    })
+    expect(result.citations[1]).toMatchObject({
+      requestedId: '10.1234/mismatch.1',
+      status: 'failed',
+    })
+    expect(String(result.citations[1]?.reason)).toContain('not the requested')
+    expect(result.citations[2]).toMatchObject({
+      requestedId: '10.1234/second.1',
+      resolvedDoi: '10.1234/second.1',
+    })
+    expect(result.issues[0]).toContain('#2 10.1234/mismatch.1')
   })
 
   it('honours a style and locale for a formatted citation', async () => {
@@ -278,26 +368,40 @@ describe('scholarly_verify verdict details', () => {
 describe('scholarly_verify reference parsing', () => {
   it('reads a bracketed numeric prefix, a year, and a first author', () => {
     const parsed = parseReferenceSnippet('[12] Lovelace, A. (2019). Notes on the engine.')
+    expect(parsed.inputKind).toBe('reference')
     expect(parsed.year).toBe(2019)
-    expect(parsed.firstAuthor).toBe('lovelace')
+    expect(parsed.leadingName).toBe('Lovelace')
+    expect(parsed.nameTokens).toContain('lovelace')
     expect(parsed.doi).toBeUndefined()
   })
 
   it('extracts a normalized DOI from a URL form', () => {
-    expect(parseReferenceSnippet('See https://doi.org/10.1234/abc.1 for details.').doi).toBe(
-      '10.1234/abc.1',
-    )
+    const parsed = parseReferenceSnippet('See https://doi.org/10.1234/abc.1 for details.')
+    expect(parsed.doi).toBe('10.1234/abc.1')
+    expect(parsed.inputKind).toBe('reference')
+  })
+
+  it('classifies a doi.org URL with no other text as DOI-only', () => {
+    const parsed = parseReferenceSnippet('https://doi.org/10.1234/abc.1')
+    expect(parsed.doi).toBe('10.1234/abc.1')
+    expect(parsed.inputKind).toBe('doi')
+    expect(parsed.year).toBeUndefined()
+    expect(parsed.leadingName).toBeUndefined()
   })
 
   it('strips a trailing period from the DOI match', () => {
     expect(parseReferenceSnippet('A paper. doi:10.1234/def.2.').doi).toBe('10.1234/def.2')
   })
 
-  it('reports no fields for an empty reference', () => {
+  it('reports no author or year for a number-only reference', () => {
     expect(parseReferenceSnippet('1234')).toEqual({
+      inputKind: 'reference',
       doi: undefined,
       year: undefined,
-      firstAuthor: undefined,
+      leadingName: undefined,
+      nameTokens: [],
+      surnamesFirst: false,
+      remainder: '',
     })
   })
 })

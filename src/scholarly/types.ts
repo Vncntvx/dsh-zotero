@@ -57,6 +57,36 @@ export interface InLibraryInfo {
   collections: string[]
 }
 
+/**
+ * One record-level variant of a fused work.
+ *
+ * A preprint and its published version share an identity (an arXiv ID, a PMID,
+ * or corroborated title/authors/year) while retaining their own metadata. The
+ * fused entry keeps one version as its primary record and stores every other
+ * variant here, keeping abstracts and retraction state with their source
+ * record.
+ */
+export interface PaperVersion {
+  kind: 'preprint' | 'published' | 'other'
+  title: string
+  authors: string[]
+  year?: number
+  /** ISO date string if known by the index. */
+  date?: string
+  venue?: string
+  type?: string
+  doi?: string
+  arxiv?: string
+  pmid?: string
+  pmcid?: string
+  abstract?: string
+  retracted?: boolean
+  url?: string
+  /** Lawful open-access copy URL. */
+  pdfUrl?: string
+  sources: string[]
+}
+
 export interface ScholarlyPaper {
   title: string
   authors: string[]
@@ -80,6 +110,8 @@ export interface ScholarlyPaper {
   citations?: number
   openAccess?: boolean
   retracted?: boolean
+  /** Other record-level variants of this work, stored separately from primary. */
+  versions?: PaperVersion[]
   sources: string[]
   inLibrary?: InLibraryInfo
 }

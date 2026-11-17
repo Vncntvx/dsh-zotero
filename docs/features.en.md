@@ -90,9 +90,9 @@ Every write passes a capability check, session approval, and a plan review card.
 
 Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address). When first enabled in a browser, the client displays an outbound notice listing the destination hosts.
 
-- Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP; results are fused and deduplicated by relevance and annotated with whether they are already in the local library.
+- Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. Results are fused by relevance when they share a DOI, PMID, PMCID, or arXiv ID, or when their title tokens, first author, and publication year match. Preprint and published variants retain their own metadata, and each result is annotated with its local-library status.
 - It can read open-access full text by DOI, arXiv ID, PMID, or PMCID and locate passages, and it can follow citation networks.
-- Citation formats come from DOI registration agencies. When verifying a reference list, the conclusion is one of "verified", "needs manual confirmation", "the registry says it does not exist", or "unable to verify".
+- Citation formats come from DOI registration agencies. Reference verification returns one of "verified", "needs manual confirmation", "the registry says it does not exist", or "unable to verify". A bare DOI checks the identifier and retraction state; supplied bibliographic fields are compared when present.
 - When the user explicitly asks, it saves an external result to the local personal library. Only after saving does the result enter the Zotero library and the literature trail.
 
 External retrieval runs through agent tool calls. The literature panel supports downloading PDFs from existing URL attachments when `allowUrlPdfRead` is enabled.

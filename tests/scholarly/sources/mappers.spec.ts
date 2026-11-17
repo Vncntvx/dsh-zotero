@@ -223,7 +223,11 @@ describe('fusion precedence and OpenAlex mapping corners', () => {
       sources: ['arXiv'],
       doi: '10.48550/arXiv.1',
     }
-    mergePaperInto(target, { title: 'T', authors: [], sources: ['Crossref'], doi: '10.1038/x' })
+    mergePaperInto(
+      target,
+      { title: 'T', authors: [], sources: ['Crossref'], doi: '10.1038/x' },
+      'same',
+    )
     expect(target.doi).toBe('10.1038/x')
 
     const preprintFirst: ScholarlyPaper = {
@@ -232,12 +236,16 @@ describe('fusion precedence and OpenAlex mapping corners', () => {
       sources: ['Crossref'],
       doi: '10.1038/x',
     }
-    mergePaperInto(preprintFirst, {
-      title: 'T',
-      authors: [],
-      sources: ['arXiv'],
-      doi: '10.48550/arXiv.1',
-    })
+    mergePaperInto(
+      preprintFirst,
+      {
+        title: 'T',
+        authors: [],
+        sources: ['arXiv'],
+        doi: '10.48550/arXiv.1',
+      },
+      'same',
+    )
     expect(preprintFirst.doi).toBe('10.1038/x')
   })
 
@@ -249,24 +257,32 @@ describe('fusion precedence and OpenAlex mapping corners', () => {
       sources: [],
       inLibrary: { itemKey: 'A', libraryId: '0', collections: ['First'] },
     }
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      inLibrary: { itemKey: 'B', libraryId: '0', collections: ['Second'] },
-    })
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        inLibrary: { itemKey: 'B', libraryId: '0', collections: ['Second'] },
+      },
+      'same',
+    )
     expect(target.inLibrary?.itemKey).toBe('A')
   })
 
   it('fills a missing in-library annotation from the source', async () => {
     const { mergePaperInto } = await import('../../../src/scholarly/normalize.js')
     const target: ScholarlyPaper = { title: 'T', authors: [], sources: [] }
-    mergePaperInto(target, {
-      title: 'T',
-      authors: [],
-      sources: [],
-      inLibrary: { itemKey: 'C', libraryId: '0', collections: [] },
-    })
+    mergePaperInto(
+      target,
+      {
+        title: 'T',
+        authors: [],
+        sources: [],
+        inLibrary: { itemKey: 'C', libraryId: '0', collections: [] },
+      },
+      'same',
+    )
     expect(target.inLibrary?.itemKey).toBe('C')
   })
 
@@ -278,14 +294,14 @@ describe('fusion precedence and OpenAlex mapping corners', () => {
       sources: [],
       abstract: 'a long abstract already here',
     }
-    mergePaperInto(target, { title: 'T', authors: [], sources: [], abstract: 'short' })
+    mergePaperInto(target, { title: 'T', authors: [], sources: [], abstract: 'short' }, 'same')
     expect(target.abstract).toBe('a long abstract already here')
   })
 
   it('keeps the larger citation count', async () => {
     const { mergePaperInto } = await import('../../../src/scholarly/normalize.js')
     const target: ScholarlyPaper = { title: 'T', authors: [], sources: [], citations: 100 }
-    mergePaperInto(target, { title: 'T', authors: [], sources: [], citations: 3 })
+    mergePaperInto(target, { title: 'T', authors: [], sources: [], citations: 3 }, 'same')
     expect(target.citations).toBe(100)
   })
 })

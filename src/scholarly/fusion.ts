@@ -5,14 +5,20 @@
 
 import { ZOTERO_RRF_K as RRF_K } from '../constants.js'
 import {
-  canonicalKeysOf,
+  identityKeysOf,
+  identityRelationOf,
   mergePaperInto,
   normalizePaper,
+  publishedDoiOf,
   titleKey,
-  titleTokens,
+  titleSignature,
+  titleVersionMatch,
+  type IdentityRelation,
+  type MergeRelation,
 } from './normalize.js'
 import {
   SCHOLARLY_SOURCE_NAMES,
+  type PaperVersion,
   type ScholarlyPaper,
   type ScholarlyQuery,
   type ScholarlySourceId,
@@ -27,16 +33,83 @@ export interface RankedSourceList {
 interface MergedEntry {
   paper: ScholarlyPaper
   score: number
-  titleTokens?: ReadonlySet<string>
-  titleKey?: string
+}
+
+/**
+ * How metadata from two records is merged, given their identity verdict.
+ *
+ * A shared published DOI identifies one record seen twice. A preprint and its
+ * published version merge as versions, while records sharing a preprint
+ * identity without a published DOI remain one record.
+ */
+function metadataRelationOf(
+  existing: ScholarlyPaper,
+  incoming: ScholarlyPaper,
+  verdict: IdentityRelation,
+): MergeRelation {
+  if (verdict === 'version') return 'version'
+  const left = publishedDoiOf(existing)
+  const right = publishedDoiOf(incoming)
+  if (left !== undefined && right !== undefined) {
+    return left.toLowerCase() === right.toLowerCase() ? 'same' : 'version'
+  }
+  if ((left === undefined) !== (right === undefined)) return 'version'
+  return verdict === 'same' ? 'same' : 'version'
+}
+
+/**
+ * A published version carries the better title, venue, and DOI. When the
+ * existing entry is a preprint-only record and the incoming record is
+ * published, the incoming record becomes the primary and the old primary is
+ * retained as a version.
+ */
+function absorbEntry(entry: MergedEntry, paper: ScholarlyPaper, relation: MergeRelation): void {
+  if (publishedDoiOf(paper) !== undefined && publishedDoiOf(entry.paper) === undefined) {
+    const previous = entry.paper
+    const promoted: ScholarlyPaper = {
+      ...paper,
+      sources: [...paper.sources],
+      versions: [...(paper.versions ?? [])],
+    }
+    entry.paper = promoted
+    mergePaperInto(promoted, previous, 'version')
+    return
+  }
+  mergePaperInto(entry.paper, paper, relation)
+}
+
+function indexEntry(
+  entry: MergedEntry,
+  identityIndex: Map<string, MergedEntry>,
+  titleIndex: Map<string, MergedEntry[]>,
+): void {
+  for (const key of identityKeysOf(entry.paper)) identityIndex.set(key, entry)
+  for (const version of entry.paper.versions ?? []) {
+    for (const key of identityKeysOf(version)) identityIndex.set(key, entry)
+  }
+  // Only the primary title is a candidate signature: the merge gate compares
+  // the incoming record against the primary's own authors and year.
+  const signature = titleSignature(entry.paper.title)
+  if (signature === undefined) return
+  const bucket = titleIndex.get(signature)
+  if (!bucket) {
+    titleIndex.set(signature, [entry])
+  } else if (!bucket.includes(entry)) {
+    bucket.push(entry)
+  }
 }
 
 /**
  * Merges multiple ranked lists from heterogeneous scholarly indexes into a single deduplicated ranking.
+ *
+ * Identity decides merges; titles only find candidates. A title candidate must
+ * share its token set, first author, and a year within one with the candidate
+ * entry, with compatible strong identifiers.
  */
 export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPaper[] {
   const merged: MergedEntry[] = []
-  const keyIndex = new Map<string, MergedEntry>()
+  const identityIndex = new Map<string, MergedEntry>()
+  const titleIndex = new Map<string, MergedEntry[]>()
 
   for (const list of lists) {
     const weight = list.weight ?? 1.0
@@ -48,41 +121,32 @@ export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPa
       if (sourceName && !paper.sources.includes(sourceName)) {
         paper.sources.push(sourceName)
       }
-      const keys = canonicalKeysOf(paper)
 
-      // L1: Check exact canonical keys
       let entry: MergedEntry | undefined
-      for (const k of keys) {
-        entry = keyIndex.get(k)
-        if (entry) break
+      let relation: MergeRelation = 'same'
+
+      // Identity keys name records. A match here is a shared identity, and the
+      // verdict distinguishes one record from a verified version relationship.
+      for (const key of identityKeysOf(paper)) {
+        const candidate = identityIndex.get(key)
+        if (!candidate) continue
+        const verdict = identityRelationOf(candidate.paper, paper)
+        entry = candidate
+        relation = metadataRelationOf(candidate.paper, paper, verdict.relation)
+        break
       }
 
-      // L2: Check fuzzy title match across existing entries
-      if (!entry && paper.title.length >= 10) {
-        const paperKey = titleKey(paper.title)
-        const paperTokens = titleTokens(paper.title)
-        for (const existing of merged) {
-          if (existing.paper.title.length < 10) continue
-          if (existing.titleKey === undefined) {
-            existing.titleKey = titleKey(existing.paper.title)
-          }
-          if (existing.titleKey === paperKey) {
-            entry = existing
-            break
-          }
-          if (!existing.titleTokens) {
-            existing.titleTokens = titleTokens(existing.paper.title)
-          }
-          const tokensA = existing.titleTokens
-          let overlap = 0
-          for (const t of paperTokens) {
-            if (tokensA.has(t)) overlap++
-          }
-          const minTokens = Math.min(tokensA.size, paperTokens.size)
-          if (minTokens >= 3 && overlap / minTokens >= 0.75) {
-            entry = existing
-            break
-          }
+      // A title signature proposes candidates; the gate checks the title token
+      // set, first author, year window, and strong-identifier compatibility.
+      if (!entry) {
+        const signature = titleSignature(paper.title)
+        for (const candidate of signature ? (titleIndex.get(signature) ?? []) : []) {
+          const verdict = identityRelationOf(candidate.paper, paper)
+          if (verdict.relation !== 'distinct' || verdict.conflicting) continue
+          if (!titleVersionMatch(candidate.paper, paper)) continue
+          entry = candidate
+          relation = 'version'
+          break
         }
       }
 
@@ -93,16 +157,15 @@ export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPa
         }
         merged.push(entry)
       } else {
-        mergePaperInto(entry.paper, paper)
+        absorbEntry(entry, paper, relation)
       }
 
       // Reciprocal Rank Fusion contribution
       entry.score += weight / (RRF_K + rank)
 
-      // Register all canonical keys
-      for (const k of [...keys, ...canonicalKeysOf(entry.paper)]) {
-        if (!keyIndex.has(k)) keyIndex.set(k, entry)
-      }
+      // Register every identity this entry now answers to, including the
+      // versions it absorbed.
+      indexEntry(entry, identityIndex, titleIndex)
     })
   }
 
@@ -168,7 +231,18 @@ export function postProcessRanked(
   return result.slice(0, query.limit)
 }
 
-export function bestIdentifierOf(paper: ScholarlyPaper): string {
+interface IdentifierFields {
+  arxiv?: string
+  doi?: string
+  pmid?: string
+  pmcid?: string
+  openalex?: string
+  s2?: string
+  url?: string
+  title: string
+}
+
+export function bestIdentifierOf(paper: IdentifierFields): string {
   if (paper.arxiv) return `arXiv:${paper.arxiv}`
   if (paper.doi) return paper.doi
   if (paper.pmid) return `PMID:${paper.pmid}`
@@ -182,6 +256,20 @@ export function formatAuthorSummary(authors: readonly string[], max = 4): string
   return `${authors.slice(0, max - 1).join(', ')}, … ${authors.at(-1)!} (${authors.length} authors)`
 }
 
+function formatVersionLine(version: PaperVersion): string {
+  const facts = [
+    version.kind,
+    version.year !== undefined ? String(version.year) : '',
+    version.venue ?? '',
+    version.doi ? `DOI: ${version.doi}` : version.arxiv ? `arXiv: ${version.arxiv}` : '',
+    version.retracted ? 'RETRACTED' : '',
+    `via ${version.sources.join(', ')}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return `  - ${version.title}\n    ${facts}`
+}
+
 export function formatPaperItem(paper: ScholarlyPaper, index: number, abstractChars = 300): string {
   const facts = [
     formatAuthorSummary(paper.authors),
@@ -192,11 +280,21 @@ export function formatPaperItem(paper: ScholarlyPaper, index: number, abstractCh
     .join(' · ')
 
   const id = bestIdentifierOf(paper)
+  const versions = paper.versions ?? []
+  const retractedVersion =
+    paper.retracted === true ? undefined : versions.find((version) => version.retracted === true)
   const marks = [
     id !== paper.url ? `id: ${id}` : '',
     paper.citations !== undefined ? `cited ${paper.citations}` : '',
     paper.pdfUrl || paper.openAccess ? 'open access' : '',
     paper.retracted ? 'RETRACTED' : '',
+    retractedVersion ? `retracted version: ${bestIdentifierOf(retractedVersion)}` : '',
+    versions.length > 0
+      ? `also: ${versions
+          .slice(0, 2)
+          .map((version) => `${version.kind} ${bestIdentifierOf(version)}`)
+          .join('; ')}`
+      : '',
     paper.inLibrary ? `[In Zotero: ${paper.inLibrary.collections.join('/') || 'Root'}]` : '',
     `via ${paper.sources.join(', ')}`,
   ]
@@ -237,6 +335,9 @@ export function formatPaperDetail(paper: ScholarlyPaper): string {
       : 'in Zotero: no',
     paper.url ? `url: ${paper.url}` : '',
     paper.pdfUrl ? `open-access PDF: ${paper.pdfUrl}` : paper.openAccess ? 'open access: yes' : '',
+    paper.versions && paper.versions.length > 0
+      ? `versions:\n${paper.versions.map(formatVersionLine).join('\n')}`
+      : '',
     `sources: ${paper.sources.join(', ')}`,
     paper.tldr ? `\nsummary (Semantic Scholar): ${paper.tldr}` : '',
     paper.abstract ? `\nabstract:\n${paper.abstract}` : '\n(no abstract in the queried indexes)',

@@ -926,7 +926,7 @@ The bundle component `dsh-zotero/scholarly` ships with the package and is off by
 
 When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
-Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports phrase-based topic routing and multi-source RRF fusion with deduplication, and checks the local Zotero library for saved status automatically.
+Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports phrase-based topic routing, multi-source RRF fusion, and automatic local-library status checks. Fusion merges records that share a published DOI, PMID, PMCID, or arXiv ID. A verified version relationship, such as a preprint and its published version, becomes one entry whose variants keep their own metadata in `versions`; title-based matching requires the same token set, first author, and publication years within one year.
 
 #### Parameters
 
@@ -954,7 +954,7 @@ scholarly_search(query="transformer attention", limit=5)
 ### scholarly_get
 
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `papers`, `spill`, `text`.
-Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, PMID, PMCID, a URL containing one of those identifiers, or an exact title (authors, venue, abstract, citation count, open-access full-text link, and local Zotero library match status).
+Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, PMID, PMCID, a URL containing one of those identifiers, or an exact title (authors, venue, abstract, citation count, open-access full-text link, and local Zotero library match status). Preprint/published version relationships are retained in `versions`, with each variant's title, year, venue, DOI, abstract, and retraction state.
 
 #### Parameters
 
@@ -1030,7 +1030,7 @@ The retrieval tools (`scholarly_search` / `scholarly_get` / `scholarly_citations
 ### scholarly_cite
 
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `papers`, `spill`, `text`.
-Fetch standard citation formats directly from the official DOI registration agencies (Crossref, DataCite) through content negotiation.
+Fetch standard citation formats from doi.org through content negotiation (answered by the DOI registration agencies). The response must parse as the requested format and carry the requested DOI before it becomes a citation value.
 
 #### Parameters
 
@@ -1040,6 +1040,14 @@ Fetch standard citation formats directly from the official DOI registration agen
 | `format`  | string   | required | Citation format: `bibtex`, `ris`, `csljson`, `text` (formatted reference)                                             |
 | `style`   | string   | `"apa"`  | CSL style ID when `format="text"` (such as `apa`, `ieee`, `nature`, `china-national-standard-gb-t-7714-2015-numeric`) |
 | `locale`  | string   | none     | Language code (such as `zh-CN`, `en-US`)                                                                              |
+
+#### Validation and output
+
+- `csljson`: must be one parseable CSL record (or a one-element array) with a non-empty title and the requested DOI.
+- `bibtex`: must have an `@type{...}` structure with balanced braces and a matching `doi` field.
+- `ris`: must start with `TY`, end with `ER`, and carry a matching `DO` field.
+- `text`: rejects an empty body, HTML, and obvious error pages; a formatted reference has no DOI to verify, so its identity is the requested identifier.
+- `citations` is the same length as `ids` and keeps input order; each item is `{inputIndex, requestedId, status, resolvedDoi?, value?, reason?}`, and only items that pass validation have `status="resolved"`. `issues` uses `#<1-based index> <requestedId>: <reason>` so a failure points at its input position.
 
 #### Example
 
@@ -1053,18 +1061,25 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
-Reference truthfulness and accuracy verification. Parses the authors, year, title, and DOI from reference text and compares them field by field against the official Crossref registry, catching fabricated references, mismatched DOIs, wrong years, and retraction status.
+Reference truthfulness and accuracy verification. Each entry may be a full bibliographic reference or a bare DOI / `doi.org` URL. Full references compare the supplied title, year, and first author; bare DOIs check identifier resolution and retraction state, with title/authors/year reported as `not-compared`. The tool compares registry facts against Crossref and reports fabricated references, mismatched DOIs, wrong years, and retraction status. It does not assess whether a paper supports a claim.
 
 #### Parameters
 
 | Parameter           | Type     | Default  | Description                                                                                                                                                                                                                                     |
 | ------------------- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references`        | string[] | required | Reference text list to verify (at most 40 papers per call; exceeding this returns an error)                                                                                                                                                     |
+| `references`        | string[] | required | References or bare DOIs to verify (at most 40 entries per call; exceeding this returns an error)                                                                                                                                                |
 | `run_in_background` | boolean  | `false`  | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
+
+#### Input shapes and comparison rules
+
+- Bare DOI / `doi.org` URL: `VERIFIED` when it resolves and the record is not retracted; `NOT FOUND` on a registry 404; `UNVERIFIED` on other transport failures.
+- DOI + title: only the title is compared; authors and year stay `not-compared`.
+- Full reference: the title uses the DOI bar (a clear mismatch means the DOI was misquoted) or the search bar (closest match); years within one count as agreeing; the first author supports institutional names, CJK names, compound surnames, and initials-first forms.
+- Each `checks` entry carries `inputKind` (`doi`/`reference`), `verdict`, `doi`, `foundPaper`, `retracted`, `fields` (`title`/`authors`/`year`, each `match`, `mismatch`, or `not-compared`), and `notes`.
 
 #### Verdicts
 
-Each reference returns one of four verdicts: `VERIFIED` (the registry record exists and every compared field agrees), `CHECK` (the record exists but a field differs or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable, so nothing is concluded about this entry). When the registry cannot be reached, the verdict is `UNVERIFIED`.
+Each entry returns one of four verdicts: `VERIFIED` (the registry record exists and every supplied field agrees), `CHECK` (the record exists but a supplied field differs, or the work is retracted), `NOT FOUND` (the registry answered and holds no such record), `UNVERIFIED` (the registry was unreachable).
 
 #### Example
 

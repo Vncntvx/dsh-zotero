@@ -119,12 +119,17 @@ export async function searchCrossref(
   return titled((body.message?.items ?? []).map(paperFromCrossref))
 }
 
-export async function lookupCrossref(
+/**
+ * Read one Crossref work by DOI. A 404 is a normal miss (`undefined`); every
+ * other failure stays a throw, because a rate limit or a timeout proves
+ * nothing about the DOI.
+ */
+export async function lookupCrossrefWork(
   doi: string,
   http: ScholarlyHttp,
   keys?: ScholarlyKeys,
   signal?: AbortSignal,
-): Promise<ScholarlyPaper | undefined> {
+): Promise<CrossrefWork | undefined> {
   const clean = cleanDoi(doi) ?? doi.trim()
   const url = `https://api.crossref.org/works/${encodeURIComponent(clean)}${
     keys?.email ? `?mailto=${encodeURIComponent(keys.email)}` : ''
@@ -137,7 +142,17 @@ export async function lookupCrossref(
       timeoutMs: 25_000,
     }),
   )
-  return body?.message ? paperFromCrossref(body.message) : undefined
+  return body?.message
+}
+
+export async function lookupCrossref(
+  doi: string,
+  http: ScholarlyHttp,
+  keys?: ScholarlyKeys,
+  signal?: AbortSignal,
+): Promise<ScholarlyPaper | undefined> {
+  const work = await lookupCrossrefWork(doi, http, keys, signal)
+  return work ? paperFromCrossref(work) : undefined
 }
 
 export async function crossrefMatchReference(

@@ -23,7 +23,7 @@ export const researchLandscape: ResearchSop = {
     {
       name: 'Discover',
       instruction:
-        'Use scholarly_search with snippets, limit 8, initially automatic source routing. Deduplicate by DOI, then normalized title. Permit at most two query formulations and one targeted filter/source adjustment: three search calls total. Record failed sources and exclusions.',
+        'Use scholarly_search with snippets, limit 8, initially automatic source routing. Treat records as the same work only on a shared DOI/PMID/PMCID/arXiv identity, or a title that matches with the same first author and a year within one; conflicting identifiers mean two works. Preprint and published variants keep their own metadata in `versions`. Permit at most two query formulations and one targeted filter/source adjustment: three search calls total. Record failed sources and exclusions.',
     },
     {
       name: 'Anchor',

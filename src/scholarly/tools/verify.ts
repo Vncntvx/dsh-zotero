@@ -1,6 +1,10 @@
 /**
  * The `scholarly_verify` tool: checks reference lists against official registry records.
  * Catches fake DOIs, mismatched titles/authors/years, and retracted publications.
+ *
+ * An entry may be a full bibliographic reference or a bare DOI. A DOI-only
+ * entry establishes identifier resolution and retraction state; its title,
+ * author, and year fields are reported as `not-compared`.
  * @module dsh-zotero/scholarly/tools/verify
  */
 
@@ -11,7 +15,7 @@ import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { titleKey, titleTokens } from '../normalize.js'
 import {
   crossrefMatchReference,
-  lookupCrossref,
+  lookupCrossrefWork,
   paperFromCrossref,
   type CrossrefWork,
 } from '../sources/crossref.js'
@@ -26,18 +30,28 @@ import { toCleanJsonRecords, type ScholarlyToolHost } from './common.js'
 /**
  * What one reference check concluded.
  *
- * Four values, because four different facts must stay distinguishable:
+ * Four values distinguish the registry outcomes:
  *
- * - `verified`: the registry holds the work and every compared field agrees.
- * - `check`: the registry holds the work, but a field disagrees (or it is retracted).
+ * - `verified`: the registry holds the work and every supplied field agrees.
+ * - `check`: the registry holds the work, but a supplied field disagrees (or it is retracted).
  * - `not_found`: the registry answered and holds no such work.
  * - `unverified`: the registry could not be reached, so nothing is known.
  *
- * Collapsing `unverified` into `not_found` would report a rate limit or a
- * timeout as a fabricated citation, which is exactly the reading this tool
- * exists to prevent.
+ * `unverified` identifies a transport failure, such as a rate limit or timeout.
  */
 type VerificationVerdict = 'verified' | 'check' | 'not_found' | 'unverified'
+
+/** One field's outcome: compared and equal, compared and different, or not supplied. */
+type FieldVerdict = 'match' | 'mismatch' | 'not-compared'
+
+interface ReferenceFields {
+  title: FieldVerdict
+  authors: FieldVerdict
+  year: FieldVerdict
+}
+
+/** Whether the entry was just an identifier or carried bibliographic text. */
+type ReferenceInputKind = 'doi' | 'reference'
 
 /** Per-call reference cap; the description promises it and the executor enforces it. */
 const SCHOLARLY_VERIFY_MAX_REFERENCES = 40
@@ -53,113 +67,287 @@ const VERIFY_PARAMETERS = {
 
 interface ReferenceCheckResult {
   raw: string
+  inputKind: ReferenceInputKind
   verdict: VerificationVerdict
   doi?: string
   foundPaper?: ScholarlyPaper
+  /** Whether the registry record is retracted; absent when no record was read. */
+  retracted?: boolean
+  fields: ReferenceFields
   notes: string[]
   /** Internal only: the address gate refused this reference's registry read. */
   localRejection?: true
 }
 
-export function parseReferenceSnippet(text: string): {
+interface ParsedReference {
+  inputKind: ReferenceInputKind
   doi?: string
   year?: number
-  firstAuthor?: string
-} {
-  const doiMatch = /(10\.\d{4,9}\/\S+)/i.exec(text)
-  const doi = doiMatch ? cleanDoi(doiMatch[1]) : undefined
-  const year = parseYear(text)
+  leadingName?: string
+  nameTokens: string[]
+  /** The leading span is followed by a comma: the surname-first citation form. */
+  surnamesFirst: boolean
+  /** The input with the DOI stripped: the text title/year/author checks read. */
+  remainder: string
+}
 
-  const stripped = text.trim().replace(/^(?:\[\d+\]|\d+\.?)\s*/, '')
-  const authorMatch = /^([A-Z\p{L}][\p{L}'-]+)/u.exec(stripped)
-  const firstAuthor = authorMatch ? authorMatch[1].toLowerCase() : undefined
+function uncomparedFields(): ReferenceFields {
+  return { title: 'not-compared', authors: 'not-compared', year: 'not-compared' }
+}
 
-  return { doi, year, firstAuthor }
+const DOI_PATTERN = /(10\.\d{4,9}\/\S+)/i
+
+/** Remove the DOI and the scaffolding around it (`doi:`, `https://doi.org/`). */
+function withoutDoi(text: string, matched: string | undefined): string {
+  let rest = matched ? text.replace(matched, ' ') : text
+  rest = rest.replace(/https?:\/\/(?:dx\.)?doi\.org\/?/gi, ' ')
+  rest = rest.replace(/\bdoi:\s*/gi, ' ')
+  return rest.trim()
+}
+
+function hasBibliographicText(value: string): boolean {
+  return /[\p{L}\p{N}]/u.test(value)
 }
 
 /**
- * Compare one parsed reference against the registry record it matched, pushing
- * a note per discrepancy. Returns false as soon as one is found.
+ * The leading name span: everything before the first comma, bracket, or year.
+ * A reference normally starts with its first author, so this is the span the
+ * author check compares. A title-first entry has no such delimiter near the
+ * start; it yields nothing rather than presenting the title as an author.
+ */
+function leadingNameOf(text: string): string | undefined {
+  const delimiter = /[,([]|\b(?:1[89]|20)\d{2}\b/.exec(text)
+  if (!delimiter) return undefined
+  const head = text.slice(0, delimiter.index).trim()
+  if (!head || !/\p{L}/u.test(head) || head.split(/\s+/).length > 5) return undefined
+  return head
+}
+
+/** Comparable name tokens; a Han run also contributes its prefixes (张 from 张三). */
+function nameTokensOf(value: string): string[] {
+  const tokens = value
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+  const extra: string[] = []
+  for (const token of tokens) {
+    if (/^\p{Script=Han}+$/u.test(token) && token.length > 1) {
+      for (let length = 1; length < token.length; length++) extra.push(token.slice(0, length))
+    }
+  }
+  return [...new Set([...tokens, ...extra])]
+}
+
+function normalizeJoined(value: string): string {
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+/** An institutional author matches on its full name, not on one shared word. */
+function institutionNameMatch(referenceName: string, registryName: string): boolean {
+  const reference = normalizeJoined(referenceName)
+  const registry = normalizeJoined(registryName)
+  if (!reference || !registry) return false
+  if (reference === registry) return true
+  return (
+    reference.length >= 4 &&
+    registry.length >= 4 &&
+    (reference.startsWith(registry) || registry.startsWith(reference))
+  )
+}
+
+type RegistryAuthor = { kind: 'person'; tokens: string[] } | { kind: 'institution'; name: string }
+
+/**
+ * The registry's first author, using Crossref's structured author when the
+ * record has one. `family` is a personal surname; `name` is how Crossref
+ * records an institutional author (and sometimes a full personal name).
+ */
+function registryAuthorOf(work: CrossrefWork | undefined): RegistryAuthor | undefined {
+  const first = work?.author?.[0]
+  if (first?.family) {
+    const tokens = nameTokensOf(first.family)
+    if (tokens.length > 0) return { kind: 'person', tokens }
+  }
+  if (first?.name?.trim()) {
+    return { kind: 'institution', name: first.name.trim() }
+  }
+  return undefined
+}
+
+function personNameMatch(referenceName: string | undefined, registryTokens: string[]): boolean {
+  if (!referenceName) return false
+  const referenceTokens = nameTokensOf(referenceName)
+  if (referenceTokens.some((token) => registryTokens.includes(token))) return true
+  // A Han surname may be written with its given name attached (张 vs 张三).
+  return referenceTokens.some((token) =>
+    registryTokens.some(
+      (registry) => /^\p{Script=Han}+$/u.test(registry) && token.startsWith(registry),
+    ),
+  )
+}
+
+/**
+ * Parse one submitted entry as either a bare DOI or a bibliographic reference.
  *
- * A DOI path and a search path hold the same work to different bars. A DOI
- * names one specific record, so a title mismatch means the DOI was misquoted,
- * while a search hit only has to be the closest match.
- * @param parsed - the fields read out of the reference snippet.
+ * The DOI is removed before year and author parsing: a DOI suffix can contain
+ * a year-shaped number, and a doi.org URL would otherwise be read as an author
+ * named "https".
+ */
+export function parseReferenceSnippet(text: string): ParsedReference {
+  const doiMatch = DOI_PATTERN.exec(text)
+  const doi = doiMatch ? cleanDoi(doiMatch[1]) : undefined
+  const remainder = withoutDoi(text, doiMatch?.[0])
+  const inputKind: ReferenceInputKind = hasBibliographicText(remainder) ? 'reference' : 'doi'
+
+  if (inputKind === 'doi') {
+    return { inputKind, doi, nameTokens: [], surnamesFirst: false, remainder: '' }
+  }
+
+  const rest = remainder.replace(/^(?:\[\d+\]|\d+\.?)\s*/, '')
+  const leadingName = leadingNameOf(rest)
+  const tail = leadingName ? rest.slice(rest.indexOf(leadingName) + leadingName.length) : ''
+  return {
+    inputKind,
+    doi,
+    year: parseYear(rest),
+    leadingName,
+    nameTokens: leadingName ? nameTokensOf(leadingName) : [],
+    surnamesFirst: /^\s*,/.test(tail),
+    remainder: rest,
+  }
+}
+
+/**
+ * Compare one parsed entry against the registry record it matched, pushing a
+ * note per discrepancy.
+ *
+ * A DOI path and a search path hold the same work to different title bars. A
+ * DOI names one specific record, so a title mismatch means the DOI was
+ * misquoted, while a search hit only has to be the closest match. Supplied
+ * fields are compared independently; an omitted field is `not-compared`.
+ * @param parsed - the fields read out of the entry.
  * @param paper - the registry record.
- * @param rawReference - the reference text, for token comparison.
+ * @param work - the structured Crossref record, for author structure.
  * @param notes - the note list, appended in place.
- * @param source - 'doi' or 'search', which bar to apply.
- * @returns true when the reference and the record agree.
+ * @param source - 'doi' or 'search', which title bar to apply.
+ * @returns the overall result and each field's verdict.
  */
 function checkDiscrepancies(
-  parsed: ReturnType<typeof parseReferenceSnippet>,
+  parsed: ParsedReference,
   paper: ScholarlyPaper,
-  rawReference: string,
+  work: CrossrefWork | undefined,
   notes: string[],
   source: 'doi' | 'search',
-): boolean {
+): { ok: boolean; fields: ReferenceFields } {
+  const fields = uncomparedFields()
+  let ok = true
+
+  if (parsed.inputKind === 'doi') {
+    notes.push(
+      'DOI-only input: the identifier and the retraction state were checked; title, authors, and year were not supplied.',
+    )
+  } else {
+    const queryTokens = titleTokens(parsed.remainder)
+    const paperTokens = titleTokens(paper.title)
+    let tokenMatches = 0
+    for (const t of paperTokens) {
+      if (queryTokens.has(t)) tokenMatches++
+    }
+    // How much of the paper's title the reference covers; a short title makes a
+    // single shared token meaningful, a long one does not.
+    const titleCoverage = paperTokens.size > 0 ? tokenMatches / paperTokens.size : 0
+
+    if (source === 'doi') {
+      // A DOI names one record. If the title shares almost nothing with it, the
+      // reference quoted the wrong DOI, and that is worth saying plainly.
+      const titleMismatch =
+        (titleCoverage < 0.35 && paperTokens.size >= 3) ||
+        (paperTokens.size < 3 && tokenMatches === 0)
+      if (titleMismatch) {
+        notes.push(
+          `DOI mismatch: DOI ${parsed.doi} belongs to a different paper ("${paper.title}").`,
+        )
+        ok = false
+        fields.title = 'mismatch'
+      } else {
+        fields.title = 'match'
+      }
+    } else {
+      // A search hit only needs to be the closest match: substring containment
+      // plus shared tokens, so a truncated or differently worded reference still
+      // counts as the same paper.
+      const isTitleMatch =
+        titleKey(parsed.remainder).includes(titleKey(paper.title)) ||
+        (titleCoverage >= 0.5 && tokenMatches >= Math.min(2, paperTokens.size))
+      if (isTitleMatch) {
+        fields.title = 'match'
+      } else {
+        notes.push(`Closest match differed significantly ("${paper.title}").`)
+        ok = false
+        fields.title = 'mismatch'
+      }
+    }
+  }
+
+  if (parsed.year !== undefined) {
+    if (paper.year === undefined) {
+      notes.push('The registry record has no publication year; year was not compared.')
+    } else if (Math.abs(parsed.year - paper.year) > 1) {
+      notes.push(`Year discrepancy: reference says ${parsed.year}, registry says ${paper.year}.`)
+      ok = false
+      fields.year = 'mismatch'
+    } else {
+      fields.year = 'match'
+    }
+  }
+
+  if (parsed.nameTokens.length > 0) {
+    const registryAuthor = registryAuthorOf(work)
+    if (!registryAuthor) {
+      notes.push('The registry record lists no authors; author was not compared.')
+    } else if (
+      registryAuthor.kind === 'person' &&
+      !parsed.surnamesFirst &&
+      parsed.nameTokens.length > 2
+    ) {
+      // A title-first entry has no author span; its first words are the title.
+      // Only a surname-first form or a two-token personal name can be read as
+      // an author without guessing.
+      notes.push(
+        'The entry does not separate an author name from its title; author was not compared.',
+      )
+    } else {
+      const authorMatch =
+        registryAuthor.kind === 'institution'
+          ? institutionNameMatch(parsed.leadingName ?? '', registryAuthor.name)
+          : personNameMatch(parsed.leadingName, registryAuthor.tokens)
+      if (authorMatch) {
+        fields.authors = 'match'
+      } else {
+        notes.push(
+          `Author discrepancy: reference indicates author "${parsed.leadingName}", but registry lists "${paper.authors[0] ?? 'an unnamed author'}".`,
+        )
+        ok = false
+        fields.authors = 'mismatch'
+      }
+    }
+  }
+
   if (paper.retracted) {
     notes.push(
       source === 'doi'
         ? 'CRITICAL: This paper has been officially RETRACTED.'
         : 'CRITICAL: This matched paper has been RETRACTED.',
     )
-    return false
+    ok = false
   }
 
-  const queryTokens = titleTokens(rawReference)
-  const paperTokens = titleTokens(paper.title)
-  let tokenMatches = 0
-  for (const t of paperTokens) {
-    if (queryTokens.has(t)) tokenMatches++
-  }
-  // How much of the paper's title the reference covers; a short title makes a
-  // single shared token meaningful, a long one does not.
-  const titleCoverage = paperTokens.size > 0 ? tokenMatches / paperTokens.size : 0
-
-  if (source === 'doi') {
-    // A DOI names one record. If the title shares almost nothing with it, the
-    // reference quoted the wrong DOI, and that is worth saying plainly.
-    const titleMismatch =
-      (titleCoverage < 0.35 && paperTokens.size >= 3) ||
-      (paperTokens.size < 3 && tokenMatches === 0)
-    if (titleMismatch) {
-      notes.push(`DOI mismatch: DOI ${parsed.doi} belongs to a different paper ("${paper.title}").`)
-      return false
-    }
-  } else {
-    // A search hit only needs to be the closest match: substring containment
-    // plus shared tokens, so a truncated or differently worded reference still
-    // counts as the same paper.
-    const isTitleMatch =
-      titleKey(rawReference).includes(titleKey(paper.title)) ||
-      (titleCoverage >= 0.5 && tokenMatches >= Math.min(2, paperTokens.size))
-    if (!isTitleMatch) {
-      notes.push(`Closest match differed significantly ("${paper.title}").`)
-      return false
-    }
-  }
-
-  if (parsed.year && paper.year && Math.abs(parsed.year - paper.year) > 1) {
-    notes.push(`Year discrepancy: reference says ${parsed.year}, registry says ${paper.year}.`)
-    return false
-  }
-
-  if (parsed.firstAuthor && paper.authors.length > 0) {
-    // A reference names the first author. A later collaborator or a substring
-    // of a different surname cannot establish that identity.
-    const first = paper.authors[0]!.normalize('NFKC').trim().toLowerCase()
-    const surname = first.includes(',') ? first.split(',')[0]!.trim() : first.split(/\s+/).at(-1)!
-    const authorMatch = surname === parsed.firstAuthor.normalize('NFKC')
-    if (!authorMatch) {
-      notes.push(
-        `Author discrepancy: reference indicates author "${parsed.firstAuthor}", but registry lists "${paper.authors[0]}".`,
-      )
-      return false
-    }
-  }
-
-  return true
+  return { ok, fields }
 }
 
 async function verifySingleReference(
@@ -178,42 +366,71 @@ async function verifySingleReference(
 
   if (parsed.doi) {
     try {
-      const paper = await lookupCrossref(parsed.doi, host.http, keys, signal)
-      if (paper) {
-        const ok = checkDiscrepancies(parsed, paper, rawReference, notes, 'doi')
+      const work = await lookupCrossrefWork(parsed.doi, host.http, keys, signal)
+      if (work) {
+        const paper = paperFromCrossref(work)
+        const { ok, fields } = checkDiscrepancies(parsed, paper, work, notes, 'doi')
         return {
           raw: rawReference,
+          inputKind: parsed.inputKind,
           verdict: ok ? 'verified' : 'check',
           doi: parsed.doi,
           foundPaper: paper,
+          retracted: paper.retracted === true,
+          fields,
           notes,
         }
       }
       unregisteredDoi = parsed.doi
     } catch (error) {
-      // `lookupCrossref` normalizes a 404 to `undefined` and rethrows everything
-      // else, so a throw here is a transport or registry failure, never proof
-      // that the DOI does not exist.
+      // `lookupCrossrefWork` normalizes a 404 to `undefined` and rethrows
+      // everything else, so a throw here is a transport or registry failure,
+      // never proof that the DOI does not exist.
       notes.push(`Crossref lookup failed for ${parsed.doi}: ${failureTextOf(error)}`)
       return {
         raw: rawReference,
+        inputKind: parsed.inputKind,
         verdict: 'unverified',
         doi: parsed.doi,
+        fields: uncomparedFields(),
         notes,
         ...(isLocalAddressRejection(error) ? { localRejection: true as const } : {}),
       }
     }
   }
 
-  // If no DOI or DOI not found: search Crossref bibliographic match
+  // A bare DOI carries no title to search with. Its 404 is final: the registry
+  // answered and does not hold that identifier.
+  if (parsed.inputKind === 'doi') {
+    notes.push(`DOI ${parsed.doi ?? rawReference} is not registered in Crossref.`)
+    return {
+      raw: rawReference,
+      inputKind: 'doi',
+      verdict: 'not_found',
+      doi: parsed.doi,
+      fields: uncomparedFields(),
+      notes,
+    }
+  }
+
+  // If no DOI or DOI not found: search Crossref bibliographic match. The DOI is
+  // stripped from the query so its digits and suffix do not pollute the search.
   try {
-    const hits = await crossrefMatchReference(rawReference, 3, host.http, keys, signal)
+    const hits = await crossrefMatchReference(
+      parsed.remainder || rawReference,
+      3,
+      host.http,
+      keys,
+      signal,
+    )
     record = hits[0]
   } catch (error) {
     notes.push(`Crossref search failed: ${failureTextOf(error)}`)
     return {
       raw: rawReference,
+      inputKind: parsed.inputKind,
       verdict: 'unverified',
+      fields: uncomparedFields(),
       notes,
       ...(isLocalAddressRejection(error) ? { localRejection: true as const } : {}),
     }
@@ -225,11 +442,17 @@ async function verifySingleReference(
         ? 'No matching publication record found in Crossref.'
         : `DOI ${unregisteredDoi} is not registered in Crossref, and no bibliographic match was found.`,
     )
-    return { raw: rawReference, verdict: 'not_found', notes }
+    return {
+      raw: rawReference,
+      inputKind: parsed.inputKind,
+      verdict: 'not_found',
+      fields: uncomparedFields(),
+      notes,
+    }
   }
 
   const paper = paperFromCrossref(record)
-  const ok = checkDiscrepancies(parsed, paper, rawReference, notes, 'search')
+  const { ok, fields } = checkDiscrepancies(parsed, paper, record, notes, 'search')
   if (unregisteredDoi !== undefined) {
     // The metadata can match a real record while the supplied identifier stays
     // fictional; report the closest record, but never certify the missing DOI.
@@ -238,9 +461,12 @@ async function verifySingleReference(
     )
     return {
       raw: rawReference,
+      inputKind: parsed.inputKind,
       verdict: 'check',
       doi: paper.doi,
       foundPaper: paper,
+      retracted: paper.retracted === true,
+      fields,
       notes,
     }
   }
@@ -249,9 +475,12 @@ async function verifySingleReference(
   }
   return {
     raw: rawReference,
+    inputKind: parsed.inputKind,
     verdict: ok ? 'verified' : 'check',
     doi: paper.doi,
     foundPaper: paper,
+    retracted: paper.retracted === true,
+    fields,
     notes,
   }
 }
@@ -268,14 +497,20 @@ function formatVerificationResult(result: ReferenceCheckResult, index: number): 
   const badge = VERDICT_BADGE[result.verdict]
 
   const lines = [`[${index}] ${badge} ${result.raw.slice(0, 160)}`]
+  lines.push(`    Input: ${result.inputKind === 'doi' ? 'DOI only' : 'reference'}`)
   if (result.doi) lines.push(`    DOI: https://doi.org/${result.doi}`)
   if (result.foundPaper?.title) lines.push(`    Registry Title: ${result.foundPaper.title}`)
-  if (result.foundPaper?.authors.length) {
-    lines.push(`    Registry Authors: ${result.foundPaper.authors.slice(0, 3).join(', ')}`)
+  const authors = result.foundPaper?.authors ?? []
+  if (authors.length > 0) {
+    lines.push(`    Registry Authors: ${authors.slice(0, 3).join(', ')}`)
   }
-  if (result.notes.length > 0) {
-    for (const note of result.notes) lines.push(`    • ${note}`)
+  if (result.foundPaper) {
+    lines.push(
+      `    Fields: title ${result.fields.title}, authors ${result.fields.authors}, year ${result.fields.year}`,
+    )
   }
+  if (result.retracted) lines.push('    Retracted: yes')
+  for (const note of result.notes) lines.push(`    • ${note}`)
   return lines.join('\n')
 }
 
@@ -354,7 +589,9 @@ export function createScholarlyVerifyTool(
                 report()
                 return {
                   raw: refStr,
+                  inputKind: parseReferenceSnippet(refStr).inputKind,
                   verdict: 'unverified' as const,
+                  fields: uncomparedFields(),
                   notes: [`Verification error: ${failureTextOf(error)}`],
                 }
               }
@@ -370,12 +607,13 @@ export function createScholarlyVerifyTool(
           const summary =
             `Reference verification summary: ${counts.verified} verified, ${counts.check} to check, ` +
             `${counts.not_found} not found, ${counts.unverified} unverified (of ${list.length} checked).\n` +
-            'VERIFIED: official record exists and matches.\n' +
-            'CHECK: record found but discrepancies detected (mismatched DOI/year or retracted).\n' +
+            'VERIFIED: official record exists and every supplied field agrees (fields not supplied are not compared).\n' +
+            'CHECK: record found but a supplied field disagrees, or the paper is retracted.\n' +
             'NOT FOUND: no matching record found in official registries; verify before using.\n' +
             (allUnverifiedAreLocal
               ? 'UNVERIFIED: the local address gate refused the registry read; this is not an index outage.\n'
               : 'UNVERIFIED: the registry could not be reached; nothing is known about this entry.\n') +
+            'Registry facts only: this tool does not assess whether a paper supports a claim.\n' +
             verificationNextStepOf(localRejections, counts.unverified)
 
           const lines = results.map((r, i) => formatVerificationResult(r, i + 1)).join('\n\n')

@@ -926,7 +926,7 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
 输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`jobId`、`kind`、`message`、`papers`、`resultSessionId`、`spill`、`text`、`timeoutMs`。
-跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持主题短语路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
+跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持主题短语路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。记录共享正式 DOI、PMID、PMCID 或 arXiv ID 时合并；预印本与正式版等已核实的版本关系合并为一条，各自元数据保留在 `versions` 中。按标题匹配时，标题词集合、第一作者与年份必须一致（年份相差不超过一年）。
 
 #### 参数
 
@@ -954,7 +954,7 @@ scholarly_search(query="transformer attention", limit=5)
 ### scholarly_get
 
 输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`papers`、`spill`、`text`。
-通过 DOI、arXiv ID、PMID、PMCID、含这些标识符的 URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
+通过 DOI、arXiv ID、PMID、PMCID、含这些标识符的 URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。同一论文的预印本/正式版等版本关系保留在 `versions` 中，各自携带标题、年份、venue、DOI、摘要与撤稿状态。
 
 #### 参数
 
@@ -1030,7 +1030,7 @@ scholarly_read(id="2301.07041", query="attention mechanism")
 ### scholarly_cite
 
 输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`papers`、`spill`、`text`。
-从 DOI 官方注册中心（Crossref、DataCite）通过内容协商直接获取标准引用格式。
+从 doi.org 通过内容协商（由 DOI 注册机构应答）获取标准引用格式。响应按请求格式解析成功并携带匹配 DOI 后，才会成为引用值。
 
 #### 参数
 
@@ -1040,6 +1040,14 @@ scholarly_read(id="2301.07041", query="attention mechanism")
 | `format` | string   | — (必填) | 引用格式：`bibtex`、`ris`、`csljson`、`text`（格式化引文）                                                          |
 | `style`  | string   | `"apa"`  | 当 `format="text"` 时的 CSL 样式 ID（如 `apa`、`ieee`、`nature`、`china-national-standard-gb-t-7714-2015-numeric`） |
 | `locale` | string   | —        | 语言代码（如 `zh-CN`、`en-US`）                                                                                     |
+
+#### 校验与输出
+
+- `csljson`：必须是可解析的单个 CSL 记录（或单元素数组），含非空标题与匹配 DOI。
+- `bibtex`：必须具有 `@type{...}` 结构与配对花括号，并含匹配的 `doi` 字段。
+- `ris`：必须以 `TY` 字段开始、以 `ER` 字段结束，并含匹配的 `DO` 字段。
+- `text`：拒绝空正文、HTML 与明显错误页；纯文本没有可核对的 DOI，身份取请求的标识符。
+- `citations` 与 `ids` 等长且保持输入顺序，每项为 `{inputIndex, requestedId, status, resolvedDoi?, value?, reason?}`；只有通过上述校验的项 `status="resolved"`。`issues` 用 `#<1-based index> <requestedId>: <原因>` 指向输入位置。
 
 #### 示例
 
@@ -1053,18 +1061,25 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
 输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`jobId`、`kind`、`message`、`papers`、`resultSessionId`、`spill`、`text`、`timeoutMs`。
-参考文献真实性与准确性核验工具。解析参考文献文本中的作者、年份、标题与 DOI，对照 Crossref 官方注册数据库进行逐项比对，检测伪造文献、DOI 错配、年份差错及撤稿状态。
+参考文献真实性与准确性核验工具。每条 entry 可以是完整参考文献，也可以是裸 DOI 或 `doi.org` URL。完整参考文献比较其提供的标题、年份与第一作者；裸 DOI 核对标识符解析结果与撤稿状态，标题/作者/年份标为 `not-compared`。工具将书目信息与 Crossref 官方注册数据库比较，报告伪造文献、DOI 错配、年份差错及撤稿状态；它核对注册表事实，不评估论文是否支持某个论断。
 
 #### 参数
 
 | 参数                | 类型     | 默认值   | 说明                                                                                                                                                                             |
 | ------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references`        | string[] | — (必填) | 待核验的参考文献文本列表（单次最多 40 篇；超出限制时返回错误）                                                                                                                   |
+| `references`        | string[] | — (必填) | 待核验的参考文献或裸 DOI 列表（单次最多 40 条；超出限制时返回错误）                                                                                                              |
 | `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
+
+#### 输入形态与比较规则
+
+- 裸 DOI / `doi.org` URL：解析成功且未撤稿为 `VERIFIED`；注册库 404 为 `NOT FOUND`；其余传输失败为 `UNVERIFIED`。
+- DOI + 标题：只比较标题，未提供的年份与作者保持 `not-compared`。
+- 完整参考文献：标题按 DOI 路径（明显不重合即 DOI 错配）或搜索路径（最近匹配）比较；年份相差不超过 1 年视为一致；第一作者支持机构全名、CJK 姓名、复姓与“名首字母 + 姓”形式。
+- `checks` 的每一项包含 `inputKind`（`doi`/`reference`）、`verdict`、`doi`、`foundPaper`、`retracted`、`fields`（`title`/`authors`/`year` 各为 `match`、`mismatch` 或 `not-compared`）与 `notes`。
 
 #### 核验结论
 
-每条参考文献返回四态之一：`VERIFIED`（注册记录存在且各字段一致）、`CHECK`（记录存在但有差异或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达，无法核对）。注册库不可达时返回 `UNVERIFIED`。
+每条 entry 返回四态之一：`VERIFIED`（注册记录存在，且用户提供的字段都一致）、`CHECK`（记录存在但某个提供字段不一致，或已撤稿）、`NOT FOUND`（注册库已应答且无此记录）、`UNVERIFIED`（注册库不可达）。
 
 #### 示例
 

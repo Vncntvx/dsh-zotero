@@ -11,15 +11,13 @@ import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { parsePaperIdentifier } from '../fulltext/resolve.js'
 import { httpStatusOf } from '../transport/http.js'
 import { lookupEuropePmc } from '../sources/pmc.js'
+import { validateCitation, type CiteFormat } from '../citation-format.js'
 import { failureTextOf } from './failure.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
   type ScholarlyToolHost,
   type ScholarlyToolOutput,
 } from './common.js'
-
-/** The citation formats this tool asks a registration agency for. */
-type CiteFormat = 'bibtex' | 'ris' | 'csljson' | 'text'
 
 /**
  * The content-negotiation `accept` value for each non-prose format.
@@ -36,6 +34,14 @@ const FORMAT_MIME_TYPES: Record<Exclude<CiteFormat, 'text'>, string> = {
 
 /** Per-call identifier cap; the description promises it and the executor enforces it. */
 const SCHOLARLY_CITE_MAX_IDS = 30
+
+/**
+ * One identifier's outcome. Every submitted ID produces exactly one item in
+ * input order, preserving partial failures alongside successful results.
+ */
+type CiteOutcome =
+  | { status: 'resolved'; requestedId: string; value: string; resolvedDoi: string }
+  | { status: 'failed'; requestedId: string; reason: string }
 
 export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition {
   return defineTool({
@@ -97,7 +103,7 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
       const outcomes = await mapWithConcurrency(
         targets,
         5,
-        async (raw) => {
+        async (raw, signal): Promise<CiteOutcome> => {
           const id = parsePaperIdentifier(raw)
           let doi: string | undefined =
             id?.kind === 'doi'
@@ -112,62 +118,71 @@ export function createScholarlyCiteTool(host: ScholarlyToolHost): ToolDefinition
                 id.kind === 'pmid' ? { pmid: id.id } : { pmcid: id.id },
                 host.http,
                 keys,
-                exec.signal,
+                signal,
               )
               doi = pmc?.doi
             }
 
             if (!doi) {
               return {
-                issue: `${raw}: No DOI found for this item, cannot query registry citation. Use scholarly_get to resolve metadata before retrying scholarly_cite.`,
+                status: 'failed',
+                requestedId: raw,
+                reason:
+                  'No DOI found for this item, cannot query registry citation. Use scholarly_get to resolve metadata before retrying scholarly_cite.',
               }
             }
 
             const safeDoi = doi.split('/').map(encodeURIComponent).join('/')
-            const citationText = (
-              await host.http.text(`https://doi.org/${safeDoi}`, {
-                headers: { accept: acceptHeader },
-                signal: exec.signal,
-                retries: 1,
-              })
-            ).trim()
+            const body = await host.http.text(`https://doi.org/${safeDoi}`, {
+              headers: { accept: acceptHeader },
+              signal,
+              retries: 1,
+            })
 
-            const formatted =
-              args.format === 'bibtex' ? citationText.replace(/^\s+@/, '@') : citationText
-
-            return { entry: formatted }
+            // Validate both the requested format and DOI before accepting the
+            // response as a citation.
+            const validation = validateCitation(args.format, body, doi)
+            if (!validation.ok) {
+              return { status: 'failed', requestedId: raw, reason: validation.reason }
+            }
+            return {
+              status: 'resolved',
+              requestedId: raw,
+              value: validation.value,
+              resolvedDoi: validation.resolvedDoi,
+            }
           } catch (error) {
-            if (exec.signal.aborted) throw error
+            if (signal.aborted) throw error
             const status = httpStatusOf(error)
             return {
-              issue: `${raw}: ${
-                status === 404 ? 'DOI does not exist on doi.org' : failureTextOf(error)
-              }`,
+              status: 'failed',
+              requestedId: raw,
+              reason: status === 404 ? 'DOI does not exist on doi.org' : failureTextOf(error),
             }
           }
         },
         { signal: exec.signal },
       )
 
-      const entries: string[] = []
+      const values: string[] = []
       const issues: string[] = []
-
-      for (const res of outcomes) {
-        if (res.entry) entries.push(res.entry)
-        if (res.issue) issues.push(res.issue)
-      }
+      const citations = outcomes.map((outcome, inputIndex) => {
+        if (outcome.status === 'resolved') values.push(outcome.value)
+        else issues.push(`#${inputIndex + 1} ${outcome.requestedId}: ${outcome.reason}`)
+        return { inputIndex, ...outcome }
+      })
 
       const label = args.format === 'text' ? `style ${style}` : args.format
       const separator = args.format === 'text' ? '\n' : '\n\n'
-      const summary = `Citations from official DOI registries (${label}): ${entries.length} of ${targets.length} resolved.`
+      const summary = `Citations from official DOI registries (${label}): ${values.length} of ${targets.length} resolved.`
       const problemsText =
         issues.length > 0
           ? `\nUnresolved items:\n${issues.join('\n')}\nNext: use scholarly_get to check alternate-index metadata before treating an item as absent.`
           : ''
 
       return {
-        text: `${summary}\n\n${entries.join(separator)}${problemsText}`,
-        citations: entries.map((entry, index) => ({ index, value: entry })),
+        text: `${summary}\n\n${values.join(separator)}${problemsText}`,
+        citations,
         issues,
       }
     },
