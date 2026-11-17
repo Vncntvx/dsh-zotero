@@ -6,9 +6,7 @@
 import {
   requireNonBlank,
   writeCollectionNameExistsMessage,
-  writeObjectRefusedMessage,
   ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_NOT_FOUND,
   ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
@@ -22,11 +20,11 @@ import {
   ensureServerId,
   normalizeCollectionInput,
   readRecordForWrite,
-  requireLibraryVersion,
   requireWritableRefAtServer,
   withWriteKey,
 } from './write-domain.js'
-import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
+import { deleteRecordForWrite, patchRecordForWrite } from './write-record.js'
+import { settleCreate } from './write-verdicts.js'
 import type {
   ZoteroCreateCollectionCommittedOutcome,
   ZoteroCreateCollectionRequest,
@@ -75,11 +73,12 @@ async function assertNoSiblingWithName(
   )
 }
 
-export async function createCollection(
+/** Resolve the exact parent and reject an existing sibling without obtaining a write grant. */
+export async function prepareCreateCollection(
   deps: WriteDomainDeps,
   request: ZoteroCreateCollectionRequest,
   signal?: AbortSignal,
-): Promise<ZoteroCreateCollectionCommittedOutcome> {
+): Promise<{ name: string; serverId: string; parentKey: string | undefined }> {
   const name = requireNonBlank('name', request.name)
   const parentInput =
     request.parent === undefined ? undefined : normalizeCollectionInput('parent', request.parent)
@@ -94,6 +93,15 @@ export async function createCollection(
         )
   const parentKey = parent?.key
   await assertNoSiblingWithName(deps, name, parentKey, serverId, signal)
+  return { name, serverId, parentKey }
+}
+
+export async function createCollection(
+  deps: WriteDomainDeps,
+  request: ZoteroCreateCollectionRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroCreateCollectionCommittedOutcome> {
+  const { name, serverId, parentKey } = await prepareCreateCollection(deps, request, signal)
   const entry: Record<string, unknown> = {
     name,
     ...(parentKey !== undefined ? { parentCollection: parentKey } : {}),
@@ -147,44 +155,13 @@ export async function deleteCollection(
         ['collection'],
         serverId,
       )
-  const read = await readRecordForWrite(deps, 'collection', checked.key, serverId, signal)
-  const effectiveServerId = read.serverId
-  const precondition = requireLibraryVersion(read.libraryVersion)
-  const resultRef = collectionRef(checked.key, effectiveServerId)
-  let libraryVersion: number
-  try {
-    ;({ libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, async (apiKey) => {
-      try {
-        return await deps.writer.delete(
-          `${libraryPrefix(PERSONAL_LIBRARY)}/collections/${checked.key}`,
-          { serverId: effectiveServerId, apiKey, ifUnmodifiedSinceVersion: precondition, signal },
-        )
-      } catch (error) {
-        if (error instanceof ZoteroError && error.code === ZOTERO_NOT_FOUND) {
-          throw new ZoteroError(
-            writeObjectRefusedMessage('The collection no longer exists.', 404),
-            ZOTERO_NOT_FOUND,
-          )
-        }
-        throw error
-      }
-    }))
-  } catch (error) {
-    return receiptOfCommitUnknown(error, {
-      kind: 'collection',
-      key: checked.key,
-      serverId: effectiveServerId,
-    })
-  }
-  deps.onCollectionsChanged?.()
-  return {
-    kind: 'deleted',
-    ref: resultRef,
-    key: checked.key,
-    deleted: true,
-    libraryVersion,
-    serverId: effectiveServerId,
-  }
+  const result = await deleteRecordForWrite(
+    deps,
+    { kind: 'collection', key: checked.key, serverId },
+    signal,
+  )
+  if (result.kind === 'deleted') deps.onCollectionsChanged?.()
+  return result
 }
 
 export async function updateCollection(
@@ -206,19 +183,15 @@ export async function updateCollection(
       patch.parentCollection = parent.key
     }
   }
-  let libraryVersion: number
-  try {
-    ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, async (apiKey) =>
-      deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/collections/${ref.key}`, patch, {
-        serverId,
-        apiKey,
-        ifUnmodifiedSinceVersion: version,
-        signal,
-      }),
-    ))
-  } catch (error) {
-    return receiptOfCommitUnknown(error, { kind: 'collection', key: ref.key, serverId })
-  }
+  const outcome = await patchRecordForWrite(
+    deps,
+    { kind: 'collection', key: ref.key, serverId },
+    version,
+    patch,
+    signal,
+  )
+  if (outcome.status === 'unverified') return outcome.value
+  const { libraryVersion } = outcome
   deps.onCollectionsChanged?.()
   return {
     kind: 'applied',

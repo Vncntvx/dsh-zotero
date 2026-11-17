@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_delete_library_tags`, the other irreversible one: refusals before
  * any DELETE (empty list, over limit, blank names), the best-effort preview
@@ -10,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../../helpers/lanes/host-lane.js'
+import { previewLibraryTags } from '../../../src/tools/delete-library-tags.js'
 import { serveJson } from '../../helpers/server/serve.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
@@ -17,8 +19,6 @@ import {
   writeListTooLongMessage,
 } from '../../../src/errors.js'
 import { writeNonBlankMessage } from '../../../src/errors.js'
-
-const SERVER_ID = 'srv-delete-tags-1'
 
 let lane: HostLane
 
@@ -77,10 +77,35 @@ describe('zotero_delete_library_tags preview', () => {
   // (the gate fails closed before the card), so the preview is observed
   // through the listing reads it actually sends.
 
+  it('proves an absent name with one filtered all-item request', async () => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, _res, helpers, params) => {
+      expect(params.get('q')).toBe('ghost')
+      expect(params.get('qmode')).toBe('startsWith')
+      helpers.json([], { 'Total-Results': '0', 'Zotero-Server-ID': SERVER_ID })
+    })
+    const preview = await previewLibraryTags(lane.ctx.zotero, ['ghost'], undefined)
+    expect(preview.absent).toEqual(['ghost'])
+    expect(lane.mock.requests.filter((row) => row.pathname.endsWith('/tags'))).toHaveLength(1)
+  })
+
+  it('keeps a name unknown when two prefix pages leave unread matches', async () => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, _res, helpers, params) => {
+      const start = Number(params.get('start') ?? 0)
+      helpers.json([{ tag: 'methods-' + start, numItems: 1 }], {
+        'Total-Results': '3',
+        'Zotero-Server-ID': SERVER_ID,
+      })
+    })
+    const preview = await previewLibraryTags(lane.ctx.zotero, ['methods'], undefined)
+    expect(preview.absent).toBeUndefined()
+    expect(preview.counts?.has('methods')).toBe(false)
+    expect(lane.mock.requests.filter((row) => row.pathname.endsWith('/tags'))).toHaveLength(2)
+  })
+
   it('pages the listing until every requested name is found, so a page-two tag is never a false no-op', async () => {
     // Page 1 carries only an unrelated tag; page 2 carries the requested one.
     // maxBrowseResults is 50, so a second page request proves the loop walks.
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers, params) => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, res, helpers, params) => {
       const rows =
         Number(params.get('offset') ?? '0') === 0
           ? [{ tag: 'unrelated', numItems: 1 }]
@@ -95,7 +120,7 @@ describe('zotero_delete_library_tags preview', () => {
     expect((result.content[0] as { text: string }).text).toContain(
       WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
     )
-    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/top/tags')
+    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/tags')
     // At least two listing reads: the loop walked to the page that proved the
     // tag instead of reporting it as absent from the first page.
     expect(listings.length).toBeGreaterThanOrEqual(2)
@@ -105,7 +130,7 @@ describe('zotero_delete_library_tags preview', () => {
   it('shows a countless row as unknown items and, only after exhausting the listing, names proven no-ops', async () => {
     serveJson(
       lane.mock,
-      '/api/users/0/items/top/tags',
+      '/api/users/0/items/tags',
       [{ tag: 'methods' }, { tag: 'legacy', numItems: 3 }],
       { 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
     )
@@ -123,7 +148,7 @@ describe('zotero_delete_library_tags preview', () => {
     // ZOTERO_NOT_FOUND is one of the two misses the preview may degrade: the
     // plan renders "unknown items" and the delete still carries its version
     // precondition, so the call reaches the plan gate rather than failing here.
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) =>
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, res, helpers) =>
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
     )
     const result = await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
@@ -140,7 +165,7 @@ describe('zotero_delete_library_tags preview', () => {
     // "unknown items".
     await lane.teardown()
     lane = await setupHostLane({ writeEnabled: true, timeoutMs: 20 })
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, _res, helpers) => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, _res, helpers) => {
       helpers.delayJson([{ tag: 'methods', numItems: 1 }], 200, {
         'Total-Results': '1',
         'Zotero-Server-ID': SERVER_ID,
@@ -157,7 +182,7 @@ describe('zotero_delete_library_tags preview', () => {
     // mid-listing is never asked to approve the plan it already abandoned.
     const caller = new AbortController()
     const tool = definition('zotero_delete_library_tags')
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, res, helpers) => {
       caller.abort()
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found')
     })
@@ -182,14 +207,14 @@ describe('zotero_delete_library_tags preview', () => {
   it('stops paging once every requested name has been found', async () => {
     // The listing reports more pages, but page 1 already names everything the
     // call asked for: the preview must not walk the rest.
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) => {
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, res, helpers) => {
       helpers.json([{ tag: 'methods', numItems: 7 }], {
         'Total-Results': '120',
         'Zotero-Server-ID': SERVER_ID,
       })
     })
     await lane.runTool('zotero_delete_library_tags', { tags: ['methods'] })
-    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/top/tags')
+    const listings = lane.mock.requests.filter((r) => r.pathname === '/api/users/0/items/tags')
     expect(listings).toHaveLength(1)
   })
 })

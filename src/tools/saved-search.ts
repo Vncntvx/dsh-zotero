@@ -10,15 +10,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
 import { planValue, planBlock } from '../write-plan.js'
 import { requireUpdateField } from '../write-item-rules.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
@@ -31,7 +31,7 @@ import {
   presentDeleteResultView,
   presentUpdateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_SEARCH_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -115,7 +115,7 @@ type AnyOutput = CreatedOutput | UpdateOutput | DeleteOutput
 const renderWith =
   (pastVerb: 'created' | 'updated' | 'deleted') =>
   (_args: unknown, value: AnyOutput): ContentBlock[] => {
-    if (value.kind === 'declined') return renderDeclined()
+    if (value.kind === 'declined') return renderDeclined(value)
     if (value.kind === 'committed-unverified')
       return renderCommittedUnverified(value, 'saved search', pastVerb)
     return [
@@ -131,7 +131,7 @@ const renderWith =
 
 /** Replayable projection for the update arm: the applied identity. */
 function presentUpdateMeta(_args: UpdateArgs, value: UpdateOutput): JsonValue {
-  if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'declined') return { ...value }
   if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',
@@ -144,7 +144,7 @@ function presentUpdateMeta(_args: UpdateArgs, value: UpdateOutput): JsonValue {
 
 /** Replayable projection for the delete arm: the deleted identity. */
 function presentDeleteMeta(_args: DeleteArgs, value: DeleteOutput): JsonValue {
-  if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'declined') return { ...value }
   if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'deleted',
@@ -283,4 +283,10 @@ export function registerSavedSearchTools(ctx: Context, service: ZoteroService): 
     }),
   )
   return [create, update, remove]
+}
+
+export {
+  CREATE as CREATE_SEARCH_PARAMETERS,
+  UPDATE as UPDATE_SEARCH_PARAMETERS,
+  DELETE as DELETE_SEARCH_PARAMETERS,
 }

@@ -34,7 +34,7 @@ const creates = [
 function serve(body: unknown): void {
   mock.route('POST', '/api/users/0/items', (_req, _res, h) => h.json(body, batchHeaders(25)))
 }
-const written = (key: string, title = 'Saved title') =>
+const written = (key: string, title = 'Requested one') =>
   itemJson(key, 25, { itemType: 'book', title })
 
 describe('batch create settlement', () => {
@@ -47,6 +47,7 @@ describe('batch create settlement', () => {
     })
     const { deps } = writeDeps(mock)
     const result = await batchItems(deps, { create: [...creates, creates[0]] })
+    expect(result.kind).toBe('partial')
     expect(result.created).toEqual([
       {
         index: 0,
@@ -54,7 +55,7 @@ describe('batch create settlement', () => {
         key: 'NEWITEM1',
         version: 25,
         itemType: 'book',
-        title: 'Saved title',
+        title: 'Requested one',
       },
     ])
     expect(result.failed).toMatchObject([
@@ -66,6 +67,29 @@ describe('batch create settlement', () => {
     expect(result.created.length + result.failed.length + result.unverified.length).toBe(
       result.total,
     )
+  })
+
+  it('reports the batch as failed when every requested create was refused', async () => {
+    grantAuthorize(mock)
+    serve({
+      failed: {
+        '0': { key: '', code: 400, message: 'Invalid title' },
+        '1': { key: '', code: 400, message: 'Invalid item type' },
+      },
+    })
+    const { deps } = writeDeps(mock)
+    const result = await batchItems(deps, { create: creates })
+    expect(result).toMatchObject({
+      kind: 'failed',
+      created: [],
+      updated: [],
+      deleted: [],
+      unverified: [],
+    })
+    expect(result.failed).toHaveLength(2)
+    expect(
+      mock.requests.filter((entry) => entry.method === 'POST' && entry.pathname.endsWith('/items')),
+    ).toHaveLength(1)
   })
 
   it.each([
@@ -152,15 +176,16 @@ describe('batch create settlement', () => {
     expect(result.unverified.map((entry) => entry.index)).toEqual([0, 1])
   })
 
-  it('keeps saved metadata instead of filling fields from the request', async () => {
+  it('marks missing or changed submitted titles unverified instead of inventing saved metadata', async () => {
     grantAuthorize(mock)
     serve({
       successful: { '1': written('NEWITEM2'), '0': itemJson('NEWITEM1', 25, { itemType: 'book' }) },
     })
     const { deps } = writeDeps(mock)
     const result = await batchItems(deps, { create: creates })
-    expect(result.created.map((entry) => entry.index)).toEqual([0, 1])
-    expect(result.created[0]).not.toHaveProperty('title')
+    expect(result.created).toEqual([])
+    expect(result.unverified.map((entry) => entry.index)).toEqual([0, 1])
+    expect(result.unverified.every((entry) => entry.reason === 'saved-state-unverified')).toBe(true)
   })
 
   it.each(['drop', 'oversize', 'malformed', 'missing-version'])(

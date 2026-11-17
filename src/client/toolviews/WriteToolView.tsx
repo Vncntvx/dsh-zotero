@@ -141,17 +141,40 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
   zotero_batch_items: {
     icon: () => <IconEditOutlineRegular size={14} />,
     titleKey: 'toolTitleBatchItems',
-    describe: ({ args, t }) => {
-      // The requested operation counts are what the plan card reviewed; the
-      // applied receipt (per-arm counts, unverified entries) rides in the
-      // expanded body, so the summary states the request, not the outcome.
+    describe: ({ args, write, t }) => {
+      if (
+        write !== null &&
+        write.createdCount !== null &&
+        write.updatedCount !== null &&
+        write.deletedCount !== null &&
+        write.failedCount !== null
+      ) {
+        const unverified = write.unverifiedCount ?? 0
+        const succeeded = write.createdCount + write.updatedCount + write.deletedCount
+        return {
+          summary: t('toolSummaryBatchItemsOutcome', {
+            created: write.createdCount,
+            updated: write.updatedCount,
+            deleted: write.deletedCount,
+            failed: write.failedCount,
+            unverified,
+          }),
+          tone:
+            write.failedCount > 0 || unverified > 0
+              ? succeeded > 0 || unverified > 0
+                ? 'partial'
+                : 'failed'
+              : 'applied',
+          tags: [],
+        }
+      }
       return {
         summary: t('toolSummaryBatchItems', {
           creates: listArg(args, 'create').length,
           updates: listArg(args, 'update').length,
           deletes: listArg(args, 'delete').length,
         }),
-        tone: 'applied',
+        tone: 'unreported',
         tags: [],
       }
     },
@@ -302,7 +325,8 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
     titleKey: 'toolTitleRestoreItems',
     describe: ({ args, write, t }) => {
       if (
-        write?.kind !== 'restored' ||
+        write === null ||
+        !['restored', 'partial', 'failed'].includes(write.kind) ||
         write.restoredCount === null ||
         write.failedCount === null
       ) {
@@ -313,11 +337,20 @@ const WRITE_DESCRIPTORS: Record<WriteToolName, WriteDescriptor> = {
         }
       }
       return {
-        summary: t('toolSummaryRestoreItems', {
+        summary: t('toolSummaryRestoreItemsOutcome', {
           restored: write.restoredCount,
+          alreadyPresent: write.alreadyPresentCount ?? 0,
           failed: write.failedCount,
+          unverified: write.unverifiedCount ?? 0,
         }),
-        tone: write.failedCount > 0 ? (write.restoredCount > 0 ? 'partial' : 'failed') : 'applied',
+        tone:
+          write.failedCount > 0 || (write.unverifiedCount ?? 0) > 0
+            ? write.restoredCount > 0 || (write.unverifiedCount ?? 0) > 0
+              ? 'partial'
+              : 'failed'
+            : write.restoredCount === 0 && (write.alreadyPresentCount ?? 0) > 0
+              ? 'noop'
+              : 'applied',
         tags: [],
       }
     },
@@ -429,7 +462,13 @@ export function WriteToolView(props: WriteToolViewProps) {
       icon: descriptor.icon(),
       title: t(descriptor.titleKey),
       summary: described.summary,
-      tone: write?.unchanged ? ('noop' as const) : described.tone,
+      tone: write?.unchanged
+        ? ('noop' as const)
+        : write?.kind === 'failed'
+          ? 'failed'
+          : write?.kind === 'partial'
+            ? 'partial'
+            : described.tone,
       errorSummary: errorSummaryOf(block, raw),
       parentRef: described.parentRef,
       parentSelectUrl: pUrl,

@@ -1,3 +1,4 @@
+import { assertWritePayload } from '../write-bounds.js'
 /**
  * The `zotero_update_item_collections` tool: update one item's collection
  * membership with add and remove settling in a single read-merge-write.
@@ -11,12 +12,12 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import { isRefString } from '../refs.js'
 import {
@@ -25,7 +26,7 @@ import {
   renderUpdateList,
   renderCommittedUnverified,
   UPDATE_ITEM_COLLECTIONS_OUTPUT_SCHEMA,
-} from './write-present.js'
+} from '../write-present.js'
 import {
   assertAddRemoveSelection,
   parseWritableRef,
@@ -39,7 +40,7 @@ import type {
   ZoteroUpdateItemCollectionsRequest,
 } from '../types.js'
 
-const UPDATE_ITEM_COLLECTIONS_PARAMETERS = {
+export const UPDATE_ITEM_COLLECTIONS_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
@@ -137,6 +138,7 @@ export function registerUpdateItemCollectionsTool(
       }),
       presentResult: presentUpdateItemCollectionsResult,
       async execute(args, exec): Promise<ZoteroUpdateItemCollectionsOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args, service.config)
         return await service.updateItemCollections(request, {
           exec,

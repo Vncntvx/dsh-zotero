@@ -15,12 +15,12 @@ import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { asRecord } from '../json.js'
 import { invalidArgs } from '../errors.js'
 import {
@@ -55,7 +55,6 @@ import {
   registerBackgroundAware,
   renderJobArm,
 } from '../job-runner.js'
-import { textOfBlocks } from './present.js'
 import {
   CHANGE_SECTIONS,
   DELETED_OTHER_TOTAL_KEY,
@@ -139,7 +138,8 @@ const CURSOR_INPUT_SCHEMA = {
 const BASE_CHANGES_PARAMETERS = {
   library: {
     ...LIBRARY_SCHEMA,
-    description: 'Library to diff; omitted defaults to personal user/0.',
+    default: { type: 'user', id: 0 },
+    description: 'Library to diff (default: personal user/0).',
   },
   since: {
     ...CURSOR_INPUT_SCHEMA,
@@ -611,7 +611,6 @@ export function registerChangesTool(
               }
               return value
             },
-            renderResult: (value) => textOfBlocks(renderChanges(changesArgs, value)),
             outputLimitBytes: service.config.maxInlineResultBytes,
             runInBackground: changesArgs.run_in_background === true,
             policy: jobPolicyOf(service.config),

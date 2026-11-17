@@ -238,7 +238,7 @@ describe('updateItemTags', () => {
 })
 
 describe('createNote saved-state trust', () => {
-  it('trusts an explicitly empty saved collection list instead of the request', async () => {
+  it('marks a missing requested collection unverified', async () => {
     grantAuthorize(mock)
     let entry: Record<string, unknown> | undefined
     mock.route('POST', '/api/users/0/items', (req, res, helpers) => {
@@ -257,13 +257,21 @@ describe('createNote saved-state trust', () => {
       markdown: 'x',
       collections: ['方法论'],
     })
-    expect(result.kind).toBe('applied')
-    expectApplied(result)
-    expect(result.collections).toEqual([])
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'saved-state-unverified',
+      retryable: false,
+      key: NEW_KEY,
+    })
     expect(entry?.collections).toEqual([COLLECTION_KEY])
+    expect(
+      mock.requests.filter(
+        (request) => request.method === 'POST' && request.pathname.endsWith('/items'),
+      ),
+    ).toHaveLength(1)
   })
 
-  it('trusts explicitly empty saved tags and relations instead of the request', async () => {
+  it('marks missing requested tags and relations unverified', async () => {
     grantAuthorize(mock)
     mock.route('POST', '/api/users/0/items', (_req, res, helpers) =>
       helpers.raw(
@@ -282,9 +290,17 @@ describe('createNote saved-state trust', () => {
       tags: ['requested-tag'],
       sourceRefs: [SOURCE_REF],
     })
-    expectApplied(result)
-    expect(result.tags).toEqual([])
-    expect(result.sourceRefs).toEqual([])
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'saved-state-unverified',
+      retryable: false,
+      key: NEW_KEY,
+    })
+    expect(
+      mock.requests.filter(
+        (request) => request.method === 'POST' && request.pathname.endsWith('/items'),
+      ),
+    ).toHaveLength(1)
   })
 
   it('resolves the second collection from the same listing the first used', async () => {

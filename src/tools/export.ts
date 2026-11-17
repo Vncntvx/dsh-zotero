@@ -19,19 +19,19 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   ToolContextUnavailableError,
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import { invalidArgs } from '../errors.js'
 import { parseSupportedRef } from '../refs.js'
 import { formatCitationKeyConflict } from '../citation-key.js'
-import { assertExportRefsWithinCap } from '../export-limits.js'
+import { assertExportRefsWithinCap, assertUniqueExportRefs } from '../export-limits.js'
 import { boundedPresentationMeta, projectExportMeta } from '../presentation-meta.js'
-import { metaRecordOf, textOfBlocks } from './present.js'
+import { metaRecordOf } from './present.js'
 import {
   ZOTERO_EXPORT_FORMATS,
   ZOTERO_ITEMKEY_BATCH,
@@ -87,6 +87,23 @@ const EXPORT_WITH_BACKGROUND_PARAMETERS = {
 } as const
 
 type ExportArgs = InferArgs<typeof EXPORT_WITH_BACKGROUND_PARAMETERS>
+
+const EXPORT_ITEM_PROPERTIES = {
+  ref: { type: 'string', required: true },
+  exportKey: { type: 'string' },
+  citationKey: { type: 'string' },
+  citationKeySource: { type: 'string', enum: ['native', 'extra'] },
+  citationKeyConflict: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      native: { type: 'string', required: true },
+      extra: { type: 'string', required: true },
+    },
+  },
+  title: { type: 'string' },
+  entryIndex: { type: 'integer' },
+} as const
 
 const EXPORT_OUTPUT_SCHEMA = {
   oneOf: [
@@ -154,31 +171,22 @@ const EXPORT_OUTPUT_SCHEMA = {
         locale: { type: 'string' },
         text: { type: 'string', required: true },
         outputFile: { type: 'string' },
-        metadataIncomplete: { type: 'boolean' },
         items: {
           type: 'array',
           required: true,
           items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              ref: { type: 'string', required: true },
-              exportKey: { type: 'string' },
-              citationKey: { type: 'string' },
-              citationKeySource: { type: 'string', enum: ['native', 'extra'] },
-              citationKeyConflict: {
+            oneOf: [
+              { type: 'object', additionalProperties: false, properties: EXPORT_ITEM_PROPERTIES },
+              {
                 type: 'object',
                 additionalProperties: false,
                 properties: {
-                  native: { type: 'string', required: true },
-                  extra: { type: 'string', required: true },
+                  ...EXPORT_ITEM_PROPERTIES,
+                  start: { type: 'integer', required: true },
+                  end: { type: 'integer', required: true },
                 },
               },
-              title: { type: 'string' },
-              entryIndex: { type: 'integer' },
-              start: { type: 'integer' },
-              end: { type: 'integer' },
-            },
+            ],
           },
         },
       },
@@ -206,6 +214,7 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
     const ref = parseSupportedRef(value, ['item'])
     return ref
   })
+  assertUniqueExportRefs(refs, invalidArgs)
   if (
     args.outputFile !== undefined &&
     (args.outputFile.trim() === '' || args.format === 'citation')
@@ -243,11 +252,6 @@ function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   const text = value.text
   const outputFile = (value as { outputFile?: string }).outputFile
   const notes: string[] = []
-  if ((value as { metadataIncomplete?: boolean }).metadataIncomplete === true) {
-    notes.push(
-      'Citekey and field alignment is partial: the raw metadata batch failed, so the body is complete but per-document facts are missing.',
-    )
-  }
   if (outputFile !== undefined) {
     notes.push(`Export written to ${outputFile}.`)
   }
@@ -352,7 +356,7 @@ export function registerExportTool(
           rawInput: `${args.refs.length} refs · ${args.format}`,
         }),
         presentResult: presentExportResult,
-        isConcurrencySafe: () => true,
+        isConcurrencySafe: (args) => args.outputFile === undefined,
         async execute(args, exec) {
           // The parameters are two shapes (the background arm registers only
           // while the jobs service is available), so defineTool infers a union;
@@ -403,7 +407,6 @@ export function registerExportTool(
               signal.throwIfAborted()
               return result
             },
-            renderResult: (value) => textOfBlocks(renderExport(exportArgs, value)),
             outputLimitBytes: service.config.maxInlineResultBytes,
             runInBackground: exportArgs.run_in_background === true,
             policy: jobPolicyOf(service.config),

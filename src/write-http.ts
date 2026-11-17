@@ -1,3 +1,4 @@
+import { stringifyWriteBody } from './write-bounds.js'
 /**
  * The Local API write boundary. Zotero 10 gates every local write behind a
  * locally issued API key and the serving instance id, and applies batched
@@ -273,7 +274,7 @@ export class ZoteroWriteHttpClient {
       'POST',
       opts,
       { 'Zotero-Write-Token': writeToken },
-      { body: JSON.stringify(entries), commitSensitive: true },
+      { body: stringifyWriteBody(entries), commitSensitive: true },
     )
     // The POST has crossed the commit boundary. A malformed receipt or a
     // missing version cannot prove that any requested create was refused.
@@ -299,7 +300,7 @@ export class ZoteroWriteHttpClient {
       'PATCH',
       opts,
       { 'If-Unmodified-Since-Version': String(opts.ifUnmodifiedSinceVersion) },
-      { body: JSON.stringify(body), commitSensitive: true },
+      { body: stringifyWriteBody(body), commitSensitive: true },
     )
     try {
       return { libraryVersion: requireLibraryVersion(headers) }

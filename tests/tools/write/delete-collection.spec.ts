@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_delete_collection`: the irreversible one. Refusals before any
  * DELETE (blank or group target), the best-effort preview whose failed reads
@@ -6,7 +7,7 @@
  * @module tests/tools/write/delete-collection
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../../helpers/lanes/host-lane.js'
@@ -19,7 +20,6 @@ import { deleteCollectionPlan } from '../../../src/tools/delete-collection.js'
 import { writeNonBlankMessage } from '../../../src/errors.js'
 
 const COLLECTION_REF = 'zotero://user/0/collection/ABCD1234'
-const SERVER_ID = 'srv-delete-collection-1'
 
 let lane: HostLane
 
@@ -214,23 +214,29 @@ describe('zotero_delete_collection preview', () => {
       '- Items in this collection: unknown (they stay in the library, membership only)',
     )
     expect(deleteCollectionPlan({ collection: 'Field notes' })).toContain(
-      '- Child collections: unknown (they are deleted with the parent)',
+      '- Descendant collections: unknown (all levels; the whole subtree is deleted with the parent)',
     )
     expect(
       deleteCollectionPlan({ collection: 'Field notes' }, { itemTotal: 3, childTotal: 2 }),
     ).toContain('- Items in this collection: 3 (they stay in the library, membership only)')
     expect(
       deleteCollectionPlan({ collection: 'Field notes' }, { itemTotal: 3, childTotal: 2 }),
-    ).toContain('- Child collections: 2 (they are deleted with the parent)')
+    ).toContain(
+      '- Descendant collections: 2 (all levels; the whole subtree is deleted with the parent)',
+    )
   })
 
-  it('resolves childTotal in preview when collection is referenced by name', async () => {
+  it('counts all descendant levels before approval when the target is referenced by name', async () => {
     await lane.teardown()
     lane = await approvalLane({ writeEnabled: true })
     resetApprovalStub()
     await lane.ctx.plugin(ApprovingQuestions)
     const scripted = lane.ctx.get('userQuestions') as unknown as ApprovingQuestions
 
+    vi.spyOn(scripted, 'ask').mockImplementation(async (request) => {
+      scripted.asks.push(request)
+      return { answers: [] }
+    })
     lane.mock.route('GET', '/api/users/0/collections', (_req, res, helpers) => {
       helpers.json([{ key: 'COLL9999', data: { name: 'My Target' } }], {
         'Last-Modified-Version': '1',
@@ -253,21 +259,45 @@ describe('zotero_delete_collection preview', () => {
     lane.mock.route(
       'GET',
       '/api/users/0/collections/COLL9999/collections',
-      (_req, res, helpers) => {
+      (_req, res, helpers, query) => {
         helpers.json(
           [
             { key: 'SUB11111', data: { name: 'Sub 1' } },
             { key: 'SUB22222', data: { name: 'Sub 2' } },
-          ],
+          ].slice(
+            Number(query.get('start') ?? 0),
+            Number(query.get('start') ?? 0) + Number(query.get('limit') ?? 100),
+          ),
           { 'Last-Modified-Version': '1', 'Total-Results': '2', 'Zotero-Server-ID': SERVER_ID },
         )
       },
     )
+    for (const [parent, children] of [
+      [
+        'SUB11111',
+        [{ key: 'GRAND001', data: { name: 'Grandchild', parentCollection: 'SUB11111' } }],
+      ],
+      ['SUB22222', []],
+      ['GRAND001', []],
+    ] as const) {
+      lane.mock.route(
+        'GET',
+        `/api/users/0/collections/${parent}/collections`,
+        (_req, _res, helpers) => {
+          helpers.json(children, {
+            'Last-Modified-Version': '1',
+            'Total-Results': String(children.length),
+            'Zotero-Server-ID': SERVER_ID,
+          })
+        },
+      )
+    }
     lane.mock.route('GET', '/api/users/0/collections/COLL9999', (_req, res, helpers) => {
       helpers.json(
-        { key: 'COLL9999', version: 10, data: { name: 'My Target' } },
+        { key: 'COLL9999', version: 10, data: { key: 'COLL9999', name: 'My Target' } },
         {
           'Zotero-Server-ID': SERVER_ID,
+          'Last-Modified-Version': '10',
         },
       )
     })
@@ -275,11 +305,16 @@ describe('zotero_delete_collection preview', () => {
       helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, '')
     })
 
-    await lane.runTool('zotero_delete_collection', { collection: 'My Target' })
+    const result = await lane.runTool('zotero_delete_collection', { collection: 'My Target' })
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(result.value).toMatchObject({ kind: 'declined' })
+    expect(deletes(lane.mock.requests)).toHaveLength(0)
     expect(scripted.asks).toHaveLength(1)
     const plan = scripted.asks[0]?.questions[0]?.detail
     expect(plan).toContain('- Items in this collection: 5')
-    expect(plan).toContain('- Child collections: 2')
+    expect(plan).toContain(
+      '- Descendant collections: 3 (all levels; the whole subtree is deleted with the parent)',
+    )
   })
 })
 

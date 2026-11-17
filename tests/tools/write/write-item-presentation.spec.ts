@@ -132,11 +132,11 @@ describe('collection lifecycle presentation', () => {
 
     const known = deleteCollectionPlan({ collection: '方法论' }, { itemTotal: 12, childTotal: 3 })
     expect(known).toContain('- Items in this collection: 12')
-    expect(known).toContain('- Child collections: 3')
+    expect(known).toContain('- Descendant collections: 3')
     expect(known).toContain('cannot be undone')
     const unknown = deleteCollectionPlan({ collection: '方法论' })
     expect(unknown).toContain('- Items in this collection: unknown')
-    expect(unknown).toContain('- Child collections: unknown')
+    expect(unknown).toContain('- Descendant collections: unknown')
   })
 
   it('projects collection outcomes into presentation meta and cards', async () => {
@@ -507,7 +507,7 @@ describe('library-wide tag deletion presentation', () => {
   it('builds the plan with per-tag counts and the irreversible radius', () => {
     const known = deleteLibraryTagsPlan(
       { tags: ['methods', 'legacy'] },
-      { counts: new Map([['methods', 7]]), unknown: ['legacy'] },
+      { counts: new Map([['methods', 7]]), absent: ['legacy'] },
     )
     expect(known).toContain('- "methods": 7 items')
     expect(known).toContain(

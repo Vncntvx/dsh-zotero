@@ -1,4 +1,5 @@
-import { defineTool, type InferValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type InferValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import { SCHOLARLY_SAVE_TOOL_NAME } from '../../constants.js'
 import type { ScholarlyToolHost } from './common.js'
 import type { ZoteroCreateItemRequest } from '../../types.js'
@@ -58,7 +59,7 @@ const PARAMETERS = {
 } as const
 
 export function renderScholarlySave(_args: unknown, value: SaveOutput) {
-  if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'declined') return renderDeclined(value)
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'item', 'created')
   return [

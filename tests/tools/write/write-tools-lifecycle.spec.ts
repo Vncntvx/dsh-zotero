@@ -1,3 +1,7 @@
+import {
+  WRITE_SERVER_ID as SERVER_ID,
+  WRITE_ITEM_KEY as ITEM_KEY,
+} from '../../helpers/server/keys.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { AskUserQuestionAnswer, AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
@@ -7,9 +11,7 @@ import type { MockZotero } from '../../helpers/mock-zotero.js'
 import { serveJson } from '../../helpers/server/serve.js'
 import { searchHit } from '../../helpers/server/objects.js'
 
-const SERVER_ID = 'srv-write-catalog-1'
 const COLLECTION_KEY = 'COLL5678'
-const ITEM_KEY = 'ITEMABC1'
 
 /**
  * The plan-review channel this lane needs: one answer per ask, always
@@ -205,7 +207,9 @@ describe('zotero_delete_collection', () => {
     })
     const plan = lastPlan(lane)
     expect(plan).toContain('- Items in this collection: 1 (they stay in the library')
-    expect(plan).toContain('- Child collections: 0 (they are deleted with the parent)')
+    expect(plan).toContain(
+      '- Descendant collections: 0 (all levels; the whole subtree is deleted with the parent)',
+    )
     expect(plan).toContain('cannot be undone')
     const deleted = lane.mock.requests.find((request) => request.method === 'DELETE')
     expect(deleted?.headers['if-unmodified-since-version']).toBe('30')
@@ -235,7 +239,7 @@ describe('zotero_delete_collection', () => {
     )
     expect(result.value).toMatchObject({ kind: 'deleted', key: COLLECTION_KEY })
     expect(lastPlan(lane)).toContain('- Items in this collection: unknown')
-    expect(lastPlan(lane)).toContain('- Child collections: unknown')
+    expect(lastPlan(lane)).toContain('- Descendant collections: unknown')
   })
 })
 
@@ -261,6 +265,7 @@ describe('zotero_create_item', () => {
                 version: 60,
                 itemType: 'journalArticle',
                 title: 'A study',
+                DOI: '10.1/xyz',
               },
             },
           },
@@ -377,7 +382,7 @@ describe('zotero_delete_library_tags', () => {
     // The preview listing: tags with their item counts.
     serveJson(
       lane.mock,
-      '/api/users/0/items/top/tags',
+      '/api/users/0/items/tags',
       [
         { tag: 'methods', numItems: 7 },
         { tag: 'legacy', numItems: 3 },
@@ -421,7 +426,7 @@ describe('zotero_delete_library_tags', () => {
     serveCatalog(lane.mock)
     // The preview listing answers 404, the miss the preview may degrade: the
     // plan reads "unknown items" and the write path still reads a version.
-    lane.mock.route('GET', '/api/users/0/items/top/tags', (_req, res, helpers) =>
+    lane.mock.route('GET', '/api/users/0/items/tags', (_req, res, helpers) =>
       helpers.raw(404, { 'Content-Type': 'text/plain' }, 'Not found'),
     )
     serveJson(lane.mock, '/api/users/0/items/top', [], {
@@ -451,7 +456,7 @@ describe('zotero_delete_library_tags', () => {
     // A listing without its Total-Results header is a protocol fault, not an
     // inconclusive target: degrading it to "unknown items" would hide a broken
     // response behind a plan card the user is asked to approve.
-    serveJson(lane.mock, '/api/users/0/items/top/tags', [], { 'Zotero-Server-ID': SERVER_ID })
+    serveJson(lane.mock, '/api/users/0/items/tags', [], { 'Zotero-Server-ID': SERVER_ID })
     serveJson(lane.mock, '/api/users/0/items/top', [], {
       'Zotero-Server-ID': SERVER_ID,
       'Last-Modified-Version': '88',

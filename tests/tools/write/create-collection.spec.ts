@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_create_collection`: refusals before any POST (blank name, blank or
  * group parent), the parent shapes it assembles, and the receipt arms:
@@ -9,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../../helpers/lanes/host-lane.js'
+import { collectionRow } from '../../helpers/server/objects.js'
 import { approvalLane } from '../../helpers/approval-stub.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
@@ -17,7 +19,6 @@ import {
 import { writeNonBlankMessage } from '../../../src/errors.js'
 
 const PARENT_REF = 'zotero://user/0/collection/COLL1234'
-const SERVER_ID = 'srv-create-collection-1'
 
 let lane: HostLane
 
@@ -83,6 +84,23 @@ describe('zotero_create_collection assembly', () => {
     it(`assembles the request with ${shape} and stops at the plan gate`, async () => {
       const lane2 = await approvalLane({ writeEnabled: true })
       try {
+        lane2.mock.route('GET', '/api/', (_req, _res, h) =>
+          h.json({}, { 'Zotero-Server-ID': SERVER_ID }),
+        )
+        lane2.mock.route('GET', '/api/users/0/collections', (_req, _res, h) =>
+          h.json([collectionRow({ key: 'COLL1234', data: { name: 'Field notes' } })], {
+            'Zotero-Server-ID': SERVER_ID,
+            'Last-Modified-Version': '7',
+            'Total-Results': '1',
+          }),
+        )
+        lane2.mock.route('GET', '/api/users/0/collections/COLL1234/collections', (_req, _res, h) =>
+          h.json([], {
+            'Zotero-Server-ID': SERVER_ID,
+            'Last-Modified-Version': '7',
+            'Total-Results': '0',
+          }),
+        )
         const result = await lane2.runTool('zotero_create_collection', {
           name: 'Field notes',
           parent,

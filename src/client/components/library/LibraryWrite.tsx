@@ -15,6 +15,7 @@ import type {
 } from '../../../contract.ts'
 import { zoteroLibraryWriteRequestSchema } from '../../../wire-schemas.ts'
 import { messageOf } from '../../error-text.ts'
+import { asRecord } from '../../../json.ts'
 import { savedSearchConditionsOf } from './write-draft.ts'
 import css from './library.module.css'
 
@@ -117,7 +118,8 @@ export function LibraryWrite({
   const [open, setOpen] = useState(false)
   const [operation, setOperation] = useState<Operation>('updateItem')
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [conditions, setConditions] = useState([{ condition: '', operator: '', value: '' }])
+  const nextConditionId = useRef(1)
+  const [conditions, setConditions] = useState([{ id: 0, condition: '', operator: '', value: '' }])
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ZoteroLibraryWriteResultView>()
   const mounted = useRef(true)
@@ -232,13 +234,18 @@ export function LibraryWrite({
     setBusy(true)
     try {
       const answer = await write(request)
+      const code = answer.ok ? undefined : asRecord(answer.error.details)?.code
       const result = answer.ok
         ? answer.value
-        : { kind: 'failed' as const, message: answer.error.message }
+        : {
+            kind: 'failed' as const,
+            message: answer.error.message,
+            ...(typeof code === 'string' ? { code } : {}),
+          }
       // Refresh before the mount check: the form is re-keyed on a selection
       // change, so the answer can resolve after this instance is gone while
       // the committed write still happened.
-      if (result.kind === 'applied' || result.kind === 'committed-unverified')
+      if (['applied', 'restored', 'partial', 'committed-unverified'].includes(result.kind))
         refreshAffected(AFFECTED_LANE[operation] ?? 'items')
       if (!mounted.current) return
       setResult(result)
@@ -294,7 +301,9 @@ export function LibraryWrite({
                 setOperation(event.target.value as Operation)
                 setDraft({})
                 setResult(undefined)
-                setConditions([{ condition: '', operator: '', value: '' }])
+                setConditions([
+                  { id: nextConditionId.current++, condition: '', operator: '', value: '' },
+                ])
               }}
             >
               {OPERATIONS.map((name) => (
@@ -310,8 +319,8 @@ export function LibraryWrite({
               field === 'conditions' ? (
                 <fieldset key={field} className={css.writeField}>
                   <legend className={css.caption}>{labels.conditions}</legend>
-                  {conditions.map((row, index) => (
-                    <div key={index} className={css.writeConditionRow}>
+                  {conditions.map((row) => (
+                    <div key={row.id} className={css.writeConditionRow}>
                       {(['condition', 'operator', 'value'] as const).map((part) => (
                         <label key={part} className={clsx(css.writeField, css.writeConditionField)}>
                           <span className={css.caption}>
@@ -333,8 +342,10 @@ export function LibraryWrite({
                             }
                             onChange={(event) =>
                               setConditions((rows) =>
-                                rows.map((entry, i) =>
-                                  i === index ? { ...entry, [part]: event.target.value } : entry,
+                                rows.map((entry) =>
+                                  entry.id === row.id
+                                    ? { ...entry, [part]: event.target.value }
+                                    : entry,
                                 ),
                               )
                             }
@@ -345,7 +356,9 @@ export function LibraryWrite({
                         variant="outline"
                         size="sm"
                         disabled={conditions.length === 1}
-                        onClick={() => setConditions((rows) => rows.filter((_, i) => i !== index))}
+                        onClick={() =>
+                          setConditions((rows) => rows.filter((entry) => entry.id !== row.id))
+                        }
                       >
                         {t('libraryWriteRemoveCondition')}
                       </Button>
@@ -354,9 +367,13 @@ export function LibraryWrite({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setConditions((rows) => [...rows, { condition: '', operator: '', value: '' }])
-                    }
+                    onClick={() => {
+                      const id = nextConditionId.current++
+                      setConditions((rows) => [
+                        ...rows,
+                        { id, condition: '', operator: '', value: '' },
+                      ])
+                    }}
                   >
                     {t('libraryWriteAddCondition')}
                   </Button>
@@ -402,7 +419,11 @@ export function LibraryWrite({
                 ? t('libraryWriteUnverified')
                 : result.kind === 'failed'
                   ? t('libraryWriteFailed')
-                  : t('libraryWriteApplied')}
+                  : result.kind === 'partial'
+                    ? t('libraryWritePartial')
+                    : result.kind === 'restored'
+                      ? t('libraryWriteRestored')
+                      : t('libraryWriteApplied')}
           </strong>
           <div className={css.writeResultText}>
             {result.code}

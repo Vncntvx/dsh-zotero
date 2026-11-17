@@ -12,12 +12,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { boundedPresentationMeta, projectGetMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import {

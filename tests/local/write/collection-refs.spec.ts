@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `ScopeDirectory.resolveCollectionRefs`: the write path's batch ref
  * resolution. One cached listing proves every key it carries; only keys the
@@ -15,7 +16,6 @@ import { ScopeDirectory } from '../../../src/local/scope-directory.js'
 import { MockZotero } from '../../helpers/mock-zotero.js'
 import { testHttpClient } from '../../helpers/test-clients.js'
 
-const SERVER_ID = 'srv-coll-refs-1'
 const LIBRARY = { type: 'user', id: 0 } as const
 const LISTING_PATH = '/api/users/0/collections'
 

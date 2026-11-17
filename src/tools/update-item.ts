@@ -12,12 +12,12 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { renderDeclined } from './present.js'
 import {
   APPLIED_ENVELOPE_PROPERTIES,
@@ -27,19 +27,19 @@ import {
   presentUpdateResultView,
   renderCommittedUnverified,
   unverifiedPresentationMeta,
-} from './write-present.js'
+} from '../write-present.js'
 import { parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { validateItemUpdateFields } from '../write-item-rules.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type {
   ZoteroUpdateItemOutcome,
   ZoteroUpdateItemRequest,
   ZoteroUpdatableItemField,
 } from '../types.js'
 
-const UPDATE_ITEM_PARAMETERS = {
+export const UPDATE_ITEM_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
@@ -105,7 +105,7 @@ function buildRequest(args: UpdateItemArgs): ZoteroUpdateItemRequest {
 
 export function renderUpdateItem(_args: UpdateItemArgs, value: UpdateItemOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'item', 'committed')
@@ -158,7 +158,7 @@ export function registerUpdateItemTool(ctx: Context, service: ZoteroService): ()
               }
             : value.kind === 'committed-unverified'
               ? unverifiedPresentationMeta(value)
-              : { kind: 'declined' },
+              : { ...value },
       },
       presentCall: (args) => ({
         card: 'generic',

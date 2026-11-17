@@ -2,12 +2,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { invalidArgs } from '../errors.js'
 import { MATCH_REFERENCES_MAX } from '../local/match-references-domain.js'
 import { projectMatchReferencesMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
-import type { ZoteroMatchReferencesRequest, ZoteroMatchReferencesResult } from '../types.js'
+import type { ZoteroMatchReferencesRequest } from '../types.js'
 import type { ZoteroService } from '../service.js'
 
 const PARAMETERS = {
@@ -38,6 +39,58 @@ const PARAMETERS = {
 
 type Args = InferArgs<typeof PARAMETERS>
 type Output = InferValue<typeof OUTPUT>
+const CANDIDATE = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ref: { type: 'string', required: true },
+    title: { type: 'string', required: true },
+    citationKey: { type: 'string' },
+    citationKeySource: { type: 'string', enum: ['native', 'extra'] },
+    citationKeyConflict: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        native: { type: 'string', required: true },
+        extra: { type: 'string', required: true },
+      },
+    },
+    authors: { type: 'array', items: { type: 'string' } },
+    year: { type: 'integer' },
+    doi: { type: 'string' },
+    venue: { type: 'string' },
+    matchMethod: {
+      type: 'string',
+      enum: ['doi', 'citationKey', 'titleFingerprint'],
+      required: true,
+    },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'], required: true },
+  },
+} as const
+const FIELD_DIFF_ENTRY = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    input: { type: 'string', required: true },
+    zotero: { type: 'string', required: true },
+  },
+} as const
+const FIELD_DIFF_YEAR = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    input: { type: 'integer', required: true },
+    zotero: { type: 'integer', required: true },
+  },
+} as const
+const FIELD_DIFF_AUTHORS = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    input: { type: 'array', required: true, items: { type: 'string' } },
+    zotero: { type: 'array', required: true, items: { type: 'string' } },
+  },
+} as const
 const OUTPUT = {
   type: 'object',
   additionalProperties: false,
@@ -47,7 +100,7 @@ const OUTPUT = {
       required: true,
       items: {
         type: 'object',
-        additionalProperties: true,
+        additionalProperties: false,
         properties: {
           inputId: { type: 'string', required: true },
           status: {
@@ -57,9 +110,19 @@ const OUTPUT = {
           },
           bibKey: { type: 'string' },
           reason: { type: 'string' },
-          selected: { type: 'object', additionalProperties: true },
-          candidates: { type: 'array', items: { type: 'object', additionalProperties: true } },
-          fieldDiff: { type: 'object', additionalProperties: true },
+          selected: CANDIDATE,
+          candidates: { type: 'array', items: CANDIDATE },
+          fieldDiff: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              title: FIELD_DIFF_ENTRY,
+              doi: FIELD_DIFF_ENTRY,
+              year: FIELD_DIFF_YEAR,
+              authors: FIELD_DIFF_AUTHORS,
+              venue: FIELD_DIFF_ENTRY,
+            },
+          },
         },
       },
     },
@@ -81,35 +144,14 @@ export function renderMatchReferences(_args: Args, value: Output): ContentBlock[
       type: 'text',
       text: value.items
         .map((item) => {
-          const selected = item.selected as
-            | {
-                ref?: string
-                citationKey?: string
-                exportKey?: string
-                title?: string
-                matchMethod?: string
-                confidence?: string
-              }
-            | undefined
-          const candidates = Array.isArray(item.candidates) ? item.candidates : []
-          const mapped =
-            selected ??
-            (candidates.length === 1
-              ? (candidates[0] as {
-                  ref?: string
-                  citationKey?: string
-                  exportKey?: string
-                  title?: string
-                  matchMethod?: string
-                  confidence?: string
-                })
-              : undefined)
+          const selected = item.selected
+          const candidates = item.candidates ?? []
+          const mapped = selected ?? (candidates.length === 1 ? candidates[0] : undefined)
           if (mapped === undefined)
             return `${item.inputId}: ${item.status}${item.reason ? ` — ${item.reason}` : ''}`
           const identity = [
             mapped.ref,
             mapped.citationKey && `citationKey=${mapped.citationKey}`,
-            mapped.exportKey && `exportKey=${mapped.exportKey}`,
             mapped.title,
           ]
             .filter(Boolean)
@@ -135,8 +177,7 @@ export function registerMatchReferencesTool(
         output: {
           schema: OUTPUT,
           render: renderMatchReferences,
-          presentationMeta: (_args, value) =>
-            projectMatchReferencesMeta(value as ZoteroMatchReferencesResult),
+          presentationMeta: (_args, value) => projectMatchReferencesMeta(value),
         },
         presentCall: (args) => ({
           card: 'generic',
@@ -146,7 +187,7 @@ export function registerMatchReferencesTool(
         }),
         isConcurrencySafe: () => true,
         async execute(args, exec) {
-          return (await service.matchReferences(buildRequest(args), exec.signal)) as Output
+          return await service.matchReferences(buildRequest(args), exec.signal)
         },
       }),
     ),

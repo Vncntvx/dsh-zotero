@@ -40,6 +40,10 @@ export interface WriteMetaView {
   readonly kind: WriteKind
   readonly restoredCount: number | null
   readonly failedCount: number | null
+  readonly createdCount: number | null
+  readonly updatedCount: number | null
+  readonly unverifiedCount: number | null
+  readonly alreadyPresentCount: number | null
   /** Tags/collections actually added; null on every other tool. */
   readonly addedCount: number | null
   /** Tags/collections actually removed; null on every other tool. */
@@ -64,6 +68,10 @@ export function writeMetaOf(meta: Record<string, unknown>): WriteMetaView {
     ...(boolField(meta, 'unchanged') === true ? { unchanged: true } : {}),
     restoredCount: numberField(meta, 'restoredCount') ?? null,
     failedCount: numberField(meta, 'failedCount') ?? null,
+    createdCount: numberField(meta, 'createdCount') ?? null,
+    updatedCount: numberField(meta, 'updatedCount') ?? null,
+    unverifiedCount: numberField(meta, 'unverifiedCount') ?? null,
+    alreadyPresentCount: numberField(meta, 'alreadyPresentCount') ?? null,
     addedCount: numberField(meta, 'addedCount') ?? null,
     removedCount: numberField(meta, 'removedCount') ?? null,
     deletedCount: numberField(meta, 'deletedCount') ?? null,

@@ -1,3 +1,4 @@
+import { assertWritePayload } from '../write-bounds.js'
 /**
  * The `zotero_delete_library_tags` tool: delete tags library-wide. Names are
  * idempotent (unknown names are silently ignored); the delete carries the
@@ -12,12 +13,12 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import { invalidArgs, writeListEmptyMessage } from '../errors.js'
 import { runPreview } from './degradable.js'
@@ -29,7 +30,7 @@ import {
   presentDeleteResultView,
   renderCommittedUnverified,
   unverifiedPresentationMeta,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertWriteList } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
@@ -69,10 +70,10 @@ type DeleteLibraryTagsOutput = InferValue<typeof DELETE_LIBRARY_TAGS_OUTPUT_SCHE
 
 /** The per-tag proven facts the plan card renders. */
 interface TagPreview {
-  /** Item counts; a seen-but-uncounted tag maps to `undefined`, an unlisted name is absent. */
+  /** Item counts; a seen-but-uncounted tag maps to `undefined`, unproven names are omitted. */
   counts?: ReadonlyMap<string, number | undefined>
-  /** Requested names the full listing does not carry; Zotero will skip them. */
-  unknown?: readonly string[]
+  /** Requested names whose complete filtered listing proves absence. */
+  absent?: readonly string[]
 }
 
 /**
@@ -93,14 +94,14 @@ export function deleteLibraryTagsPlan(
   ]
   for (const tag of tags) {
     const count = preview.counts?.get(tag)
-    const absent = preview.unknown?.includes(tag) === true
+    const absent = preview.absent?.includes(tag) === true
     lines.push(
       `- "${planValue(tag)}": ${absent ? 'proven absent (no-op)' : count === undefined ? 'unknown items' : `${count} items`}`,
     )
   }
-  if (preview.unknown !== undefined && preview.unknown.length > 0) {
+  if (preview.absent !== undefined && preview.absent.length > 0) {
     lines.push(
-      `- Unmatched names (proven no-ops: the listing carries no such tag): ${preview.unknown.map(planValue).join(', ')}`,
+      `- Unmatched names (proven no-ops: the listing carries no such tag): ${preview.absent.map(planValue).join(', ')}`,
     )
   }
   lines.push(
@@ -125,18 +126,12 @@ interface TagRow {
 }
 
 /**
- * Page the library tags listing until every requested name is found or the
- * listing is exhausted, so the plan card never mistakes a tag beyond the
- * first page for a no-op. A row without a count records `undefined`, since the
- * tag exists but its item count is unproven, and a name absent from the
- * whole listing is reported as a proven no-op. Best-effort only where it is
- * genuinely inconclusive: a target that does not exist or a name that matches
- * several tags leaves every count unknown, and the delete still carries its
- * version precondition. Every other failure is rethrown, and a caller
- * cancellation reaches the harness as `TOOL_ABORTED` instead of being folded
- * into a plan (see {@link runPreview}).
+ * Query each exact name through Zotero's prefix listing, including child items.
+ * Two pages bound each name's preview I/O. Exhausting that filtered listing
+ * proves absence; hitting the page budget leaves the count unknown. Transport,
+ * protocol and cancellation failures retain runPreview's explicit outcomes.
  */
-async function previewLibraryTags(
+export async function previewLibraryTags(
   service: ZoteroService,
   tags: readonly string[],
   signal: AbortSignal | undefined,
@@ -144,6 +139,7 @@ async function previewLibraryTags(
   return await runPreview<TagPreview>(signal, {}, async () => {
     const wanted = new Set(tags)
     const counts = new Map<string, number | undefined>()
+    const absent: string[] = []
     for (const tag of tags) {
       let offset = 0
       let pages = 0
@@ -152,6 +148,7 @@ async function previewLibraryTags(
           {
             kind: 'tags',
             scope: { kind: 'library' },
+            itemLevel: 'all',
             offset,
             limit: service.config.maxBrowseResults,
             q: tag,
@@ -167,14 +164,14 @@ async function previewLibraryTags(
         }
         const next = browsed.nextOffset
         pages += 1
+        if (next === undefined && !counts.has(tag)) absent.push(tag)
         if (next === undefined || counts.has(tag) || pages >= 2) break
         offset = next
       }
     }
-    const unknown = tags.filter((tag) => !counts.has(tag))
     return {
       counts,
-      ...(unknown.length > 0 ? { unknown } : {}),
+      ...(absent.length > 0 ? { absent } : {}),
     }
   })
 }
@@ -184,7 +181,7 @@ export function renderDeleteLibraryTags(
   value: DeleteLibraryTagsOutput,
 ): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'library tags', 'committed')
@@ -225,7 +222,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
             ? { kind: 'deleted', deletedCount: value.deletedTags.length }
             : value.kind === 'committed-unverified'
               ? unverifiedPresentationMeta(value)
-              : { kind: 'declined' },
+              : { ...value },
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -235,6 +232,7 @@ export function registerDeleteLibraryTagsTool(ctx: Context, service: ZoteroServi
       }),
       presentResult: presentDeleteLibraryTagsResult,
       async execute(args, exec): Promise<ZoteroDeleteLibraryTagsOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args, service.config)
         const preview = await previewLibraryTags(service, request.tags, exec.signal)
         const outcome = await service.deleteLibraryTags(request, {

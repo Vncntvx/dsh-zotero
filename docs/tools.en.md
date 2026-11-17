@@ -8,7 +8,11 @@ All eight local read tools share a delivery envelope. `{delivery:"inline", data:
 
 When argument validation fails (for example `refs` sent as `ref`), all dsh-zotero tools attach a parameter-correction hint after the `invalid arguments` error, indicating the rejected parameter and the intended name. Matching ignores case and `_`/`-`, and an adjacent character transposition counts as one edit. The hint appears only for a unique near-match.
 
-Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
+All 30 tools have closed root parameters: any undeclared name fails with `INVALID_ARGS` before execution, network access or approval. Misspelled optional parameters are never silently ignored.
+
+Every write tool’s `{kind:"declined"}` can carry `feedback`: the complete custom plan-review response reaches the model and renders as separate user feedback. Free text always declines the current plan and dispatches no write. The model must revise the plan and request approval again.
+
+Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. A backend without file support returns `ZOTERO_OUTPUT_TOO_LARGE` with guidance to configure a file-capable backend and repeat the read. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
 
 The authenticated `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file>` route reads only a file recorded at those persistent coordinates, or the verified receipt of that event's background acknowledgement. It does not accept a path or arbitrary attachment ID. Copy/download become available after the entire verified stream has completed. Attachments use the host lifecycle and may occupy disk beyond a Session's lifetime; this plugin does not delete shared files.
 
@@ -16,6 +20,7 @@ The authenticated `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file
 
 ## zotero_search
 
+Output fields by result arm: `items`, `maximum`, `nextActions`, `nextOffset`, `normalizedQuery`, `offset`, `queryWasEmpty`, `returned`, `scope`, `supplemental`, `total`.
 Search for items in the library. Supports metadata matching and full-text search.
 
 ### Parameters
@@ -34,7 +39,7 @@ Search for items in the library. Supports metadata matching and full-text search
 | `sort`        | string                         | `"dateModified"`    | Sort field: `dateModified`, `dateAdded`, `date`, `title`, `creator`                                                                                                                     |
 | `direction`   | `"asc"` \| `"desc"`            | `"desc"`            | Sort direction                                                                                                                                                                          |
 | `offset`      | integer                        | `0`                 | Pagination offset                                                                                                                                                                       |
-| `limit`       | integer                        | `10`                | Item cap (bounded by `maxSearchResults`, default 20)                                                                                                                                    |
+| `limit`       | integer                        | `10`                | Page size: 1..`maxSearchResults` (default cap 20); larger values fail                                                                                                                   |
 
 ### Output
 
@@ -54,6 +59,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
+Output fields by result arm: `abstract`, `abstractTruncated`, `annotations`, `attachments`, `bestAttachment`, `children`, `citationKey`, `citationKeyConflict`, `citationKeySource`, `collections`, `contentType`, `creators`, `date`, `doi`, `extra`, `extraFields`, `itemType`, `location`, `noteBody`, `notes`, `path`, `ref`, `relations`, `serverId`, `tags`, `title`, `url`, `venue`, `version`, `year`.
 Read detailed metadata and related child content; resolve locations explicitly of a single paper or attachment.
 `ref` is one string; pass multiple known items as `refs[]` to `zotero_get_batch`.
 
@@ -77,7 +83,7 @@ Returns a detailed item or attachment object:
 - `extra`: extra metadata (such as arXiv ID or PMID);
 - `date`, `year`, `venue`, `doi`, `url`, `abstract`, `abstractTruncated`;
 - `tags`, `collections`, `children`, `bestAttachment`, `relations`;
-- `contentType`; explicit location requests add `location` (`file`, `url`, or `unavailable` with a reason);
+- `path` (a verified local disk path) and `contentType`; explicit location requests add `location` (`file`, `url`, or `unavailable` with a reason);
 - the native extra fields `extraFields` when `fields="all"`;
 - the requested child sets: `notes`, `annotations`, `attachments` (each with total, returned, items, completeness and, for explicit pages, offset/limit/nextOffset).
 
@@ -91,6 +97,7 @@ zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations",
 
 ## zotero_get_batch
 
+Output fields by result arm: `counts`, `items`.
 Read known item or attachment refs in input order. Each result reports success or failure independently; batches accept up to 50 unique refs with concurrency `max(1, min(8, graphConcurrency, maxInFlightRequests - 1))`, reserving an interactive-read slot when transport capacity permits. Use `zotero_get` for one ref and this tool for multiple refs.
 
 ### Parameters
@@ -100,6 +107,8 @@ Read known item or attachment refs in input order. Each result reports success o
 | `refs`    | string[] | none         | 1–50 unique item or attachment refs, returned in this order                                                                                                                                   |
 | `fields`  | string   | `"standard"` | `standard` or `all`; the latter preserves unconsumed Zotero data fields                                                                                                                       |
 | `include` | object   | none         | `children` includes notes, annotations, and attachments; `attachments` includes attachments only; `relations:true` includes relations; `bestAttachment` resolves the best attachment location |
+
+For attachment refs, leave `include.children` and `include.attachments` false or omit them. The request is rejected before any network call when either option is enabled; send item and attachment refs in separate calls.
 
 ### Output
 
@@ -115,6 +124,7 @@ zotero_get_batch(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EF
 
 ## zotero_match_references
 
+Output fields by result arm: `items`.
 Reconcile BibTeX, DOI, or reference fields against the local Zotero library. It uses only the local library, does not call scholarly tools, and never writes. Exact DOI matching pages through top-level item metadata once per call because Zotero quick search does not index DOI fields. Each call accepts up to 50 references. Only a unique high-confidence result is `matched`; weak or competing candidates are `ambiguous`, and citekey-source disagreements are `conflict`.
 
 ### Parameters
@@ -138,27 +148,28 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
+Output fields by result arm: `artifact`, `attachmentContentType`, `attachmentRef`, `attachments`, `coverage`, `evidence`, `fulltext`, `mode`, `noMatch`, `queryTerms`, `rankedRoutes`, `ref`, `sourcesSkipped`, `textFormat`, `truncated`.
 Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one document (bounded by `maxFulltextChars`) in source-order character windows, without ranking or chunking; parsed Markdown is preferred and Zotero index text is the explicit fallback.
 
 ### Parameters
 
-| Parameter          | Type     | Default    | Description                                                                                                                                                                                                                     |
-| ------------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence`: rank passages against query; `fulltext`: read one document in paged character windows                                                                                          |
-| `ref`              | string   | none       | `evidence` mode: item ref                                                                                                                                                                                                       |
-| `query`            | string   | none       | `evidence` mode: ranking keywords, limited to 2,000 characters; longer input is refused before reading.                                                                                                                         |
-| `queryVariants`    | string[] | none       | `evidence` mode: up to 4 alternative phrasings (synonyms or field terminology), each limited to 2,000 characters; each is ranked separately and a passage keeps its best score.                                                 |
-| `sources`          | string[] | all 4      | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                                                                                                 |
-| `passages`         | integer  | `4`        | `evidence` mode: passage cap (bounded by `maxEvidencePassages`)                                                                                                                                                                 |
-| `attachmentPolicy` | string   | `"best"`   | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                                                                                                  |
-| `attachmentRefs`   | string[] | none       | `evidence` mode, for `attachmentPolicy="specified"`: attachment refs                                                                                                                                                            |
-| `source`           | object   | none       | `fulltext` mode: exactly one source. `kind="ref"` selects a Zotero attachment by `ref`; `kind="artifactId"` selects a stored parsed artifact by its 64-character lowercase hex id (a malformed id is an invalid-argument error) |
-| `start`            | integer  | `0`        | `fulltext` mode: character offset of this window                                                                                                                                                                                |
-| `maxChars`         | integer  | none       | `fulltext` mode: characters per window, defaulting to and bounded by `fulltextWindowChars`                                                                                                                                      |
+| Parameter          | Type     | Default    | Description                                                                                                                                                                                                                                                                                         |
+| ------------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | string   | `evidence` | Read mode; omitted means `evidence`. `evidence` ranks passages against the query. `fulltext` reads one document in paged character windows; each window rereads the source, so expect about `ceil(totalChars/maxChars)` source reads. The first window may include a whole-document spill reference |
+| `ref`              | string   | none       | `evidence` mode: item ref                                                                                                                                                                                                                                                                           |
+| `query`            | string   | none       | `evidence` mode: ranking keywords, limited to 2,000 characters; longer input is refused before reading.                                                                                                                                                                                             |
+| `queryVariants`    | string[] | none       | `evidence` mode: up to 4 alternative phrasings (synonyms or field terminology), each limited to 2,000 characters; each is ranked separately and a passage keeps its best score.                                                                                                                     |
+| `sources`          | string[] | all 4      | `evidence` mode: retrieval sources `annotation`, `note`, `abstract`, `fulltext`                                                                                                                                                                                                                     |
+| `passages`         | integer  | `4`        | Passage count: 1..`maxEvidencePassages`; larger values fail                                                                                                                                                                                                                                         |
+| `attachmentPolicy` | string   | `"best"`   | `evidence` mode: full-text attachment policy `best`, `allIndexed`, `specified`                                                                                                                                                                                                                      |
+| `attachmentRefs`   | string[] | none       | `evidence` mode, for `attachmentPolicy="specified"`: attachment refs                                                                                                                                                                                                                                |
+| `source`           | object   | none       | `fulltext` mode: exactly one source. `kind="ref"` selects a Zotero attachment by `ref`; `kind="artifactId"` selects a stored parsed artifact by its 64-character lowercase hex id (a malformed id is an invalid-argument error)                                                                     |
+| `start`            | integer  | `0`        | `fulltext` mode: character offset of this window                                                                                                                                                                                                                                                    |
+| `maxChars`         | integer  | none       | `fulltext` mode: characters per window, defaulting to and bounded by `fulltextWindowChars`                                                                                                                                                                                                          |
 
 ### Output
 
-The returned structure contains `mode`. `evidence` mode carries `ref`, `attachmentRef`, `attachmentContentType`, `coverage`, `attachments`, `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms`, `rankedRoutes`, and `noMatch`. `fulltext` mode carries only `mode` and `fulltext` (`sourceKind`, `sourceLabel`, `textFormat`, `artifact`, `coverage`, `totalChars`, `inputTruncated`, `start`, `end`, `text`, `isTruncated`, `nextStart`, `attachmentRef`, `spillRef`). It carries no evidence-side field at all: no `ref`, `evidence`, `truncated`, `sourcesSkipped`, `queryTerms`, `noMatch`, or `rankedRoutes`.
+The returned structure contains `mode`. `evidence` mode carries `ref`, `attachmentRef`, `attachmentContentType`, `coverage`, `attachments`, `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms`, `rankedRoutes`, and `noMatch`. `fulltext` mode carries only `mode` and `fulltext` (`sourceKind`, `sourceLabel`, `item`, `attachmentContentType`, `textFormat`, `artifact`, `coverage`, `totalChars`, `inputTruncated`, `start`, `end`, `text`, `isTruncated`, `nextStart`, `attachmentRef`, `spillRef`). It carries no evidence-side field at all: no `ref`, `evidence`, `truncated`, `sourcesSkipped`, `queryTerms`, `noMatch`, or `rankedRoutes`.
 
 ### Notes
 
@@ -167,7 +178,7 @@ The returned structure contains `mode`. `evidence` mode carries `ref`, `attachme
 - Unavailable or unindexed sources are recorded in `sourcesSkipped`; `noMatch` does not mean the item has nothing on the subject;
 - Annotation content ranks the highlighted text and the user comment together, and `matchedFields` marks whether the match came from `text` or `comment`; a semantic hit names no field (the wording does not overlap);
 - Under the multi-attachment policies, unindexed attachments are marked `unindexed` and attachments that were not read are marked `unread`;
-- In `fulltext` mode, start at `start=0` and follow `nextStart` until `isTruncated` is false; windows are exact character slices, so concatenating them in order yields the complete document. `textFormat` `markdown` comes from a parsed artifact, `text` from Zotero's index. `inputTruncated: true` means the document was cut to `maxFulltextChars`, so the windows cover only that bounded portion. When a `source.kind="ref"` read misses a parsed artifact it falls back to Zotero index text; a `source.kind="artifactId"` miss fails explicitly instead of inventing a source. A parsed-artifact window carries no `coverage`; an index-text window carries Zotero's own indexing coverage. On a long document with more windows to come, the first window also carries `spillRef` (`locator`, `bytes`, `retrievalHint`) when the host provides spill storage: a one-handle copy of the whole bounded text; without a store only the window chain is available. Windows are sized under the inline delivery budget by default; a lowered inline budget can still force file delivery. A read never starts a parse, download, or upload.
+- In `fulltext` mode, start at `start=0` and follow `nextStart` until `isTruncated` is false; `totalChars`, `start`, `end`, and `nextStart` count UTF-16 code units, with window boundaries preserving surrogate pairs. A one-unit request starting at a pair returns its two units. Concatenating windows in order yields the complete document. `textFormat` `markdown` comes from a parsed artifact, while `text` comes from Zotero's index. `inputTruncated: true` means the document was cut to `maxFulltextChars`, so the windows cover that bounded portion. When a `source.kind="ref"` read misses a parsed artifact, it uses Zotero index text; a `source.kind="artifactId"` miss fails explicitly. A parsed-artifact window carries no `coverage`; an index-text window carries Zotero's own indexing coverage. On a long document with more windows to come, the first window also carries `spillRef` (`locator`, `bytes`, `retrievalHint`) when the host provides spill storage: a one-handle copy of the whole bounded text. The default window and delivery budgets fit inline; larger windows or lower inline budgets can select file delivery, preserving the complete window and continuation position. Reads use existing sources; parsing, downloading, and uploading are separate operations.
 
 ### Example
 
@@ -180,9 +191,12 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ## zotero_export
 
+Output fields by result arm: `citations`, `format`, `items`, `jobId`, `kind`, `locale`, `message`, `outputFile`, `resultSessionId`, `style`, `text`, `timeoutMs`.
 Pass a non-empty `outputFile` to write bibliography, translator, or `csv` text (`citation` rejects it). The Harness filesystem resolves the path against the calling session’s current directory and enforces that session’s sandbox policy. Foreground, background, and promoted jobs finish after writing and required internal persistence when oversized or background. Write failures fail the tool or job. Writing the file is not a session delivery: when the file should join the session’s declared deliverables, the model calls the Harness `present` tool with that path.
 
 Generate formatted citations or export data files.
+
+Every export format requires unique item identities. The same library and key is a duplicate even when one ref carries server qualification and the other does not. Duplicates are refused before any request rather than silently deduplicated.
 
 ### Parameters
 
@@ -205,6 +219,8 @@ When the foreground call finishes synchronously:
 - `bibtex` / `biblatex` / `ris` / `csljson`: `{text, items: [{ref, citationKey, exportKey, title, entryIndex, start, end}]}`; `citationKey` is Zotero's native/extra citekey, while `exportKey` is the translator-generated entry key;
 - `csv`: `{text}` (Zotero's own whole-table export, with no per-document entries).
 
+`start` and `end` define a nonempty span in UTF-16 code units and appear together. CSL JSON uses `entryIndex`; an unlocated item retains its ref.
+
 When it runs in the background (or is promoted automatically after the foreground wait times out):
 Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, message}`. Job progress shows in the Web session header and the logs, and the result is written to the job artifact when done.
 
@@ -226,6 +242,7 @@ zotero_export(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5
 
 ## zotero_browse
 
+Output fields by result arm: `items`, `kind`, `library`, `libraryVersion`, `maximum`, `nextOffset`, `offset`, `returned`, `serverId`, `total`.
 Browse library structure and taxonomy metadata. Supports paged queries.
 
 ### Parameters
@@ -244,9 +261,11 @@ Browse library structure and taxonomy metadata. Supports paged queries.
 | `q`             | string  | none                    | Substring filter for tag names                                                                                                  |
 | `match`         | string  | `"contains"`            | Tag filter match mode: `contains` or `startsWith`                                                                               |
 | `offset`        | integer | `0`                     | Pagination offset                                                                                                               |
-| `limit`         | integer | `20`                    | Item cap (bounded by `maxBrowseResults`, default 50)                                                                            |
+| `limit`         | integer | `20`                    | Page size: 1..`maxBrowseResults` (default cap 50); larger values fail                                                           |
 
 ### Output
+
+Every browse result contains `kind`, `items`, `total`, `offset`, `returned` and configured `maximum`, plus `nextOffset` when another page exists. Collections and saved searches also include `libraryVersion`. The card displays a prefix of complete rows within its row and byte budgets and reports omitted rows; this does not trim the canonical page delivered to the model.
 
 Each `kind` returns the matching structured array:
 
@@ -270,6 +289,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ## zotero_changes
 
+Output fields by result arm: `changed`, `cursor`, `deleted`, `fromVersion`, `jobId`, `kind`, `library`, `libraryChanged`, `message`, `resultSessionId`, `serverId`, `timeoutMs`, `totals`, `truncated`, `unobservable`, `versionUnavailable`.
 Read incremental update and deletion records of the library based on local transaction versions.
 
 ### Parameters
@@ -284,13 +304,20 @@ Read incremental update and deletion records of the library based on local trans
 
 ### Output
 
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+
 A synchronous foreground call returns:
 `{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed, deleted?, totals?, unobservable?, truncated?}`.
 
 - `changed`: changed objects by resource type (`items`, `childItems`, `trashedItems`, `collections`, `savedSearches`, `fulltextAttachments`);
+- `include:["fulltext"]` reads the current fulltext index listing (`/fulltext?since=0`) and returns each attachment's index version. It is independent of the library transaction cursor and does not identify when an attachment was reindexed.
 - `deleted`: keys or tag names of deleted entries;
 - `cursor`: returned only when the current batch was read completely and no concurrent write happened during the read; use it for later incremental requests. `cursor.include` contains only the resource classes the active Zotero build actually supports tracking; classes with no matching endpoint (such as older builds lacking the `/deleted` route) are recorded in `cursor.unserved`, are not counted toward coverage claims, and can still be passed back as-is in later incremental requests;
 - `unobservable`: names the resource classes that cannot be observed because of version or endpoint limits, plus the reason. A missing endpoint (`not-served`) does not stop cursor generation; an unsupported key range (`range-not-covered`) or a read failure (`unreadable`) suppresses the cursor for the current batch, so advancing the cursor never skips change rows that were not read successfully.
+
+Each `changed` / `deleted` resource list returns at most `maxChangesResults` rows (default 50), including in the canonical result the model receives. `totals` retains true counts and `truncated` marks a capped list. A cursor requires the complete upstream version map; a capped result list does not mean the upstream read was incomplete.
+
+A large version range can exceed `maxResponseBytes` and fail with `ZOTERO_RESPONSE_TOO_LARGE`, without returning a new cursor. To retain that range, increase the response-byte budget and retry the original `since`. Omitting `since` only creates a current baseline and does not recover intervening changes; complete a full resynchronization before using that new baseline for later increments.
 
 ### Example
 
@@ -303,6 +330,7 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 
 ## zotero_create_note
 
+Output fields by result arm: `collections`, `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `parentItem`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `sourceRefs`, `tags`, `version`.
 Create a standalone research note or a child note under a given item.
 
 ### Supported Markdown syntax
@@ -341,8 +369,11 @@ zotero_create_note(parentItem="zotero://user/0/item/ABCD1234", tags=["review"], 
 
 ---
 
+`committed-unverified` means the write may already have committed. Do not retry it; first reconcile Zotero’s final state using the receipt’s ref, key or server facts.
+
 ## zotero_update_item_tags
 
+Output fields by result arm: `added`, `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `removed`, `retryable`, `serverId`, `tags`, `unchanged`, `version`.
 Add and remove an item's tags in one call. Read, merge, write: `add` and `remove` both take effect, existing tags keep their type (colored or automatic), and `remove` wins for an existing tag named in both lists.
 
 ### Parameters
@@ -373,7 +404,10 @@ zotero_update_item_tags(ref="zotero://user/0/item/ABCD1234", add=["deep-learning
 
 ## zotero_update_item_collections
 
+Output fields by result arm: `added`, `collections`, `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `removed`, `retryable`, `serverId`, `unchanged`, `version`.
 Join and leave collections for an item in one call. Collection arguments may be `zotero://user/0/collection/<KEY>` refs or exact names (`zotero_browse` lists them); a name that fails to resolve fails before any write.
+
+Before approval, reads the target and refuses child items, which inherit their parent’s collections. Execution reads again after approval and writes under the current version.
 
 ### Parameters
 
@@ -403,7 +437,10 @@ zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["Method
 
 ## zotero_create_collection
 
+Output fields by result arm: `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `name`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Create a collection, either top-level or under a parent collection.
+
+Before approval, reads the parent and complete sibling listing and refuses an existing name. Execution checks again after approval to catch a sibling created during review.
 
 ### Parameters
 
@@ -428,7 +465,8 @@ zotero_create_collection(name="Field notes", parent="Methodology")
 
 ## zotero_delete_collection
 
-Delete a collection. **Irreversible**: the collection's organization is removed, the items stay in the library, and child collections are deleted along with the parent. The plan card first lists the collection's item count and child collection count (shown as `unknown` when the read fails), and the delete carries the library version read before it.
+Output fields by result arm: `committed`, `completedRefs`, `deleted`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
+Delete a collection. **Irreversible**: the collection's organization is removed, the items stay in the library, and child collections are deleted along with the parent. The plan card first lists the collection's direct item count and its descendant collection total across every level (a failed read at any level stops preflight before deletion approval), and the delete carries the library version read before it.
 
 ### Parameters
 
@@ -453,6 +491,7 @@ zotero_delete_collection(collection="Field notes")
 
 ## zotero_create_item
 
+Output fields by result arm: `collections`, `committed`, `completedRefs`, `feedback`, `itemType`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `tags`, `title`, `version`.
 Create a paper item from a closed field set. Zotero's `POST /items` only accepts Zotero item JSON, so there is no BibTeX/CSL-JSON intake: fields are assembled one by one, and nothing outside the closed set leaves this module.
 
 ### Parameters
@@ -486,9 +525,12 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 ## zotero_update_note
 
+Output fields by result arm: `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Replace an existing Zotero note body with Markdown. The domain reads the note version before writing and converts the Markdown to Zotero-safe HTML in the PATCH; the target must have `itemType="note"`.
 
 Standalone notes and child notes are both supported, and reading a version does not require the child object to carry collection fields. Both create and update check the original Markdown against `writeNoteMaxChars` before approval, counted by JavaScript string length including whitespace and markup, without automatic truncation.
+
+Before approval, reads the target and verifies its type, refusing non-notes. Execution reads again after approval and checks the type and version.
 
 ### Parameters and output
 
@@ -511,6 +553,7 @@ zotero_update_note(ref="zotero://user/0/item/NOTE1234", markdown="## Summary\n- 
 
 ## zotero_update_collection
 
+Output fields by result arm: `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `name`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Update a collection's name or parent collection. The write is refused when neither `name` nor `parent` is given, when the name is blank, when the target does not exist, when the parent does not belong to the personal library, or when the version precondition fails; omitting `parent` keeps the current parent, and a native caller may pass `null` to move it to the top level.
 
 ### Parameters and output
@@ -535,6 +578,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 
 ## zotero_restore_items
 
+Output fields by result arm: `failed`, `feedback`, `kind`, `restored`, `serverId`, `unverified`.
 Restore selected items from the personal library Trash. Each object's version is read and written to `deleted: 0` in dependency-ordered native batches (PATCH for a single object), success or failure is settled item by item, and one call takes at most 50 items.
 
 ### Parameters and output
@@ -543,7 +587,7 @@ Restore selected items from the personal library Trash. Each object's version is
 | --------- | -------- | -------- | -------------------- |
 | `refs`    | string[] | ✓        | Item refs to restore |
 
-Output is `{kind: "restored", restored, unverified, failed, serverId?}`; version conflicts are recorded in `failed`, and unknown receipts in `unverified`.
+Output is `{kind: "restored" | "partial" | "failed", restored, unverified, failed, serverId?}`. `kind: "restored"` means every graph is restored or already live; `kind: "partial"` includes failed or unverified outcomes; `kind: "failed"` means every operation was explicitly refused. Version conflicts are recorded in `failed`, and unknown receipts in `unverified`.
 
 Child notes, child attachments, and annotations are supported. The result body lists every restored object's ref, version, and library version, plus every failed or unverified object's ref and error details; the card reports restored, unverified, and failed counts. An unverified receipt must be reconciled by ref/key before any further action and is never retried.
 
@@ -559,6 +603,7 @@ zotero_restore_items(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/ite
 
 ## zotero_create_saved_search
 
+Output fields by result arm: `committed`, `completedRefs`, `conditions`, `feedback`, `key`, `kind`, `libraryVersion`, `name`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Create a Zotero saved search with explicit conditions in the personal library. Creation requires at least one condition; when the create response is lost or its saved state cannot be verified, the result is `committed-unverified` (`retryable: false`), which must be reconciled by search ref/key before any retry.
 
 ### Parameters
@@ -582,8 +627,11 @@ zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "i
 
 ---
 
+`committed-unverified` means the write may already have committed. Do not retry it; first reconcile Zotero’s final state using the receipt’s ref, key or server facts.
+
 ## zotero_update_saved_search
 
+Output fields by result arm: `committed`, `completedRefs`, `conditions`, `feedback`, `key`, `kind`, `libraryVersion`, `name`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Update the name or search conditions of an existing saved search in the personal library. Updates use an object-version precondition. A supplied `conditions` array must contain at least one condition.
 
 ### Parameters
@@ -610,8 +658,11 @@ zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updat
 
 ---
 
+`committed-unverified` means the write may already have committed. Do not retry it; first reconcile Zotero’s final state using the receipt’s ref, key or server facts.
+
 ## zotero_delete_saved_search
 
+Output fields by result arm: `committed`, `completedRefs`, `deleted`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
 Delete a saved search from the personal library. **Irreversible**: removes the saved-search definition only; library items are not affected. Deletion uses a library-version precondition.
 
 ### Parameters
@@ -632,7 +683,11 @@ Delete a saved search from the personal library. **Irreversible**: removes the s
 zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 ```
 
+`committed-unverified` means the write may already have committed. Do not retry it; first reconcile Zotero’s final state using the receipt’s ref, key or server facts.
+
 ## scholarly_save_to_zotero
+
+Output fields by result arm: `collections`, `committed`, `completedRefs`, `feedback`, `itemType`, `key`, `kind`, `libraryVersion`, `papers`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `tags`, `title`, `version`.
 
 ### Parameters
 
@@ -661,8 +716,11 @@ scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You 
 
 ---
 
+`committed-unverified` means the write may already have committed. Do not retry it; first reconcile Zotero’s final state using the receipt’s ref, key or server facts.
+
 ## zotero_update_item
 
+Output fields by result arm: `changed`, `committed`, `completedRefs`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `unchanged`, `version`.
 Correct an item's scalar metadata. Field validity follows Zotero's `itemTypeFields`: a field the item type does not accept is refused before any PATCH, and values must be non-blank text. The write carries the item's version precondition (`If-Unmodified-Since-Version`).
 
 Scalar updates validate every requested field against the item type, compare normalized wire values strictly, and PATCH only differences. A satisfied request returns `{kind: "applied", unchanged: true, changed: []}` with the observed item `version`, no new `libraryVersion`, and obtains no write key. Capability and both approval gates still apply.
@@ -693,7 +751,8 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-Delete tags by name across the whole library. **Irreversible**: the tags come off every item in the library. The plan card pages through the tag list and shows known counts, unknown counts or proven absent names. Before deletion, the domain scans the tags again under one library version and refuses a changing snapshot. Only confirmed present names are submitted. Unverified outcomes require reconciliation and must not be retried.
+Output fields by result arm: `absentTags`, `committed`, `completedRefs`, `deletedTags`, `feedback`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `version`.
+Delete tags by name across the whole library. **Irreversible**: the tags come off every item in the library. The plan card queries each name through the tag prefix listing, including child items, with at most two pages per name. It shows counts for exact matches. An uncounted tag or a query with unread pages remains unknown; only an exhausted filtered listing can prove a name absent. Before deletion, the domain scans the tags again under one library version and refuses a changing snapshot. Only confirmed present names are submitted. Unverified outcomes require reconciliation and must not be retried.
 
 ### Parameters
 
@@ -718,6 +777,7 @@ zotero_delete_library_tags(tags=["stale", "obsolete"])
 
 ## zotero_batch_items
 
+Output fields by result arm: `created`, `deleted`, `failed`, `feedback`, `kind`, `libraryVersion`, `serverId`, `total`, `unverified`, `updated`.
 Create items, update tags and collection membership, or move items with their child notes, attachments, and annotations to the trash in one call. Item deletion writes each dependency layer with per-object versions in native batches (PATCH for a single object), then reads the graph back to verify it; when part of the graph fails, `failed.completedRefs` lists acknowledged objects. Trashed items can be restored from the Zotero trash. Operations merge into one plan review card listing all requested fields and collection memberships. Each operation runs independently, so a batch may complete only partly. Reconcile the result item by item from the receipts.
 
 The total number of operations in one call (create, update, and delete combined) is bounded by `writeListMaxItems` (default 50). Each created item's receipt lists its saved ref, key, version, and available title/URL by input index. When an item's commit or saved state cannot be verified, it appears in `unverified` with `retryable: false` and should be reconciled by ref/key. Malformed or out-of-bounds batch indexes report as unverified results. A single-item version conflict (HTTP 412) is recorded in `failed` without affecting other items.
@@ -788,6 +848,8 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 
 ## Error codes
 
+Remote interfaces also expose `zotero/*` reasons grouped by failure class for the host and external clients. `details.code` retains the specific domain code in this table. Reasons are a public wire contract; the plugin UI may display their messages without branching on every reason.
+
 | Error code                                 | Description                                                                                                                            |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `ZOTERO_NOT_RUNNING`                       | Zotero is not running or the local port is unreachable                                                                                 |
@@ -817,7 +879,7 @@ Write tools are not registered by default, need `writeEnabled` turned on explici
 | `ZOTERO_SCOPE_AMBIGUOUS`                   | A collection or saved-search name matches several same-name objects                                                                    |
 | `ZOTERO_TIMEOUT`                           | Provider request timed out                                                                                                             |
 | `ZOTERO_RESPONSE_TOO_LARGE`                | API response stream exceeds the read cap                                                                                               |
-| `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds the character cap                                                                                               |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | Export content exceeds its character cap, or a read-result receipt exceeds the inline budget                                           |
 | `ZOTERO_CAPABILITY_UNAVAILABLE`            | The current provider does not declare the required capability                                                                          |
 | `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | Scholarly full-text resolution found no readable copy, with route failure details in the error message                                 |
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | A scholarly credential reference is configured but no credentials service is mounted                                                   |
@@ -861,22 +923,24 @@ The bundle component `dsh-zotero/scholarly` ships with the package and is off by
 
 ### scholarly_search
 
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports phrase-based topic routing and multi-source RRF fusion with deduplication, and checks the local Zotero library for saved status automatically.
 
 #### Parameters
 
-| Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                     |
-| ------------------- | -------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                        |
-| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by the topic phrase table                                                                           |
-| `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                          |
-| `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                            |
-| `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                   |
-| `sort`              | string   | `"relevance"` | Sort order: `relevance`, `date` (newest first; only the previous year when `year_from` is omitted), `citations` (most cited first)                                                                                                              |
-| `categories`        | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                                                                                                              |
-| `limit`             | integer  | `8`           | Paper cap                                                                                                                                                                                                                                       |
-| `abstract`          | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                                                                                                   |
-| `run_in_background` | boolean  | `false`       | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
+| Parameter           | Type     | Default       | Description                                                                                                                                                                                                                                                         |
+| ------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | required      | Topic words, paper title, or author name                                                                                                                                                                                                                            |
+| `sources`           | string[] | none          | Optional source filter (`arxiv`, `openalex`, `crossref`, `semanticscholar`, `pubmed`, `europepmc`, `dblp`); by default routed automatically by the topic phrase table                                                                                               |
+| `year_from`         | integer  | none          | Start publication year; with `sort="date"` and this omitted, only the previous year is used by default                                                                                                                                                              |
+| `year_to`           | integer  | none          | End publication year                                                                                                                                                                                                                                                |
+| `open_access`       | boolean  | none          | Whether to return only papers with free open-access full text                                                                                                                                                                                                       |
+| `sort`              | string   | `"relevance"` | Sort order: `relevance`, `date` (date order over retrieved candidates: arXiv retrieves by submission date; other sources retrieve the top `min(50, 3×limit)` by relevance; starts in the previous year when `year_from` is omitted), `citations` (most cited first) |
+| `categories`        | string[] | none          | arXiv category filter (such as `cs.CL`, `stat.ML`)                                                                                                                                                                                                                  |
+| `limit`             | integer  | `8`           | Paper cap                                                                                                                                                                                                                                                           |
+| `abstract`          | string   | `"snippet"`   | Abstract verbosity: `none`, `snippet`, `full`                                                                                                                                                                                                                       |
+| `run_in_background` | boolean  | `false`       | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal)                     |
 
 #### Example
 
@@ -888,13 +952,14 @@ scholarly_search(query="transformer attention", limit=5)
 
 ### scholarly_get
 
-Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, PMID, PMCID, URL, or exact title (authors, venue, abstract, citation count, open-access full-text link, and local Zotero library match status).
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `papers`, `spill`, `text`.
+Aggregate the complete scholarly graph metadata of one paper by DOI, arXiv ID, PMID, PMCID, a URL containing one of those identifiers, or an exact title (authors, venue, abstract, citation count, open-access full-text link, and local Zotero library match status).
 
 #### Parameters
 
-| Parameter | Type   | Default  | Description                                                                                           |
-| --------- | ------ | -------- | ----------------------------------------------------------------------------------------------------- |
-| `id`      | string | required | DOI (such as `10.1038/nature1234`), arXiv ID (such as `2301.07041`), PMID, PMCID, URL, or exact title |
+| Parameter | Type   | Default  | Description                                                                                                                                    |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`      | string | required | DOI (such as `10.1038/nature1234`), arXiv ID (such as `2301.07041`), PMID, PMCID, a URL containing one of those identifiers, or an exact title |
 
 #### Example
 
@@ -910,6 +975,7 @@ When an index cannot answer (rate limited, timed out, service error), the result
 
 ### scholarly_citations
 
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `papers`, `spill`, `text`.
 Trace a paper's citation graph: the list of papers citing this work (citations), this paper's reference list (references), or semantically related papers (related).
 
 #### Parameters
@@ -930,6 +996,8 @@ scholarly_citations(id="2301.07041", direction="citations", limit=5)
 
 ### scholarly_read
 
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Tiered reading of lawful open-access full text with passage-level evidence location. Supports outline extraction (`outline`), section-targeted reading (`section`), and evidence-passage matching from a natural-language question (`query`).
 
 #### Parameters
@@ -943,7 +1011,7 @@ Tiered reading of lawful open-access full text with passage-level evidence locat
 | `queryVariants`     | string[] | none       | Other phrasings of the same question (synonyms, field terminology), at most 4; each is limited to 2,000 characters. Each is ranked separately and a passage keeps its best score.                                                               |
 | `passages`          | integer  | `5`        | Number of top passages returned in `query` mode (1-12)                                                                                                                                                                                          |
 | `start`             | integer  | `0`        | Starting character offset for chunked reading                                                                                                                                                                                                   |
-| `max_chars`         | integer  | config cap | Maximum characters read per call                                                                                                                                                                                                                |
+| `max_chars`         | integer  | config cap | Maximum characters read per call, from 1 through the configured cap; out-of-range values are refused                                                                                                                                            |
 | `run_in_background` | boolean  | `false`    | Whether to start as a background job (managed by the Harness `ctx.jobs` under the `scholarly` job kind; declared only while `enableRunInBackground=true` and the host mounts `jobs`, and passing `true` otherwise returns a structured refusal) |
 
 #### Example
@@ -960,6 +1028,7 @@ The retrieval tools (`scholarly_search` / `scholarly_get` / `scholarly_citations
 
 ### scholarly_cite
 
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `papers`, `spill`, `text`.
 Fetch standard citation formats directly from the official DOI registration agencies (Crossref, DataCite) through content negotiation.
 
 #### Parameters
@@ -981,6 +1050,8 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 ### scholarly_verify
 
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Reference truthfulness and accuracy verification. Parses the authors, year, title, and DOI from reference text and compares them field by field against the official Crossref registry, catching fabricated references, mismatched DOIs, wrong years, and retraction status.
 
 #### Parameters
@@ -999,3 +1070,7 @@ Each reference returns one of four verdicts: `VERIFIED` (the registry record exi
 ```text
 scholarly_verify(references=["Vaswani et al. 2017, Attention Is All You Need"])
 ```
+
+Every non-citation export, including panel text export and CSV, independently reads and verifies the complete requested key set. Missing keys return `ZOTERO_NOT_FOUND`; metadata transport, protocol and cancellation failures remain explicit, and no unverified body is delivered. If a translator omits a verified existing item, its mapping remains ref-only. CSV retains Zotero’s whole-table output semantics.
+
+A local fulltext attachment is checked through Local API metadata together with its parent item. `fulltext.item` carries the verified parent ref, title, creator summary and available year/venue; `attachmentContentType` comes from the attachment record. Standalone attachments have no invented parent, and URL artifacts read no local item metadata. Metadata and protocol failures remain explicit. The trail merges local reads under the parent and retains the exact attachment action; URL artifacts without Zotero identity use an `artifact:<id>` key.

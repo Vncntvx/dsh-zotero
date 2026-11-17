@@ -1,14 +1,15 @@
+import { assertWritePayload } from '../write-bounds.js'
 import { requireWriteSelection } from '../write-item-rules.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { planValue, WRITE_AUTHORIZATION_PLAN_LINE } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { metaRecordOf, renderDeclined } from './present.js'
 import {
@@ -16,14 +17,14 @@ import {
   DECLINED_OUTPUT_SCHEMA,
   WRITE_FAILURE_ITEM,
   libraryVersionLine,
-} from './write-present.js'
+} from '../write-present.js'
 import { parseWritableRef, assertWriteList, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroRestoreItemsOutcome, ZoteroRestoreItemsRequest } from '../types.js'
 
-const PARAMETERS = {
+export const PARAMETERS = {
   refs: {
     type: 'array',
     required: true,
@@ -62,7 +63,7 @@ const OUTPUT = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['restored'], required: true },
+        kind: { type: 'string', enum: ['restored', 'partial', 'failed'], required: true },
         restored: { type: 'array', required: true, items: RESTORED_ITEM },
         unverified: { type: 'array', required: true, items: COMMITTED_UNVERIFIED_VARIANT },
         failed: { type: 'array', required: true, items: WRITE_FAILURE_ITEM },
@@ -84,7 +85,7 @@ function restoreItemsPlan(args: Args): string {
 }
 
 export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
-  if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'declined') return renderDeclined(value)
   const written = value.restored.filter((item) => item.restored)
   const alreadyLive = value.restored.filter((item) => item.alreadyPresent === true)
   return [
@@ -127,10 +128,10 @@ export function renderRestoreItems(_args: Args, value: Output): ContentBlock[] {
 
 /** Replayable projection: the per-arm counts, so the card can state them without the rows. */
 function presentRestoreItemsMeta(_args: Args, value: Output): JsonValue {
-  if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'declined') return { ...value }
   const alreadyPresentCount = value.restored.filter((item) => item.alreadyPresent === true).length
   return {
-    kind: 'restored',
+    kind: value.kind,
     restoredCount: value.restored.filter((item) => item.restored).length,
     failedCount: value.failed.length,
     ...(value.unverified.length > 0 ? { unverifiedCount: value.unverified.length } : {}),
@@ -178,6 +179,7 @@ export function registerRestoreItemsTool(ctx: Context, service: ZoteroService): 
       }),
       presentResult: presentRestoreItemsResult,
       async execute(args, exec): Promise<ZoteroRestoreItemsOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         requireWriteSelection('refs', args.refs)
         const refs = assertWriteList('refs', args.refs, ZOTERO_WRITE_OBJECT_BATCH).map((ref) =>
           parseWritableRef(ref, ['item']),

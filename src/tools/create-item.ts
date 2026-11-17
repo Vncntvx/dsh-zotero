@@ -11,12 +11,12 @@ import { planValue, planBlock } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import {
   normalizeCreator,
   requireCreatableItemType,
@@ -31,14 +31,14 @@ import {
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertNonBlank } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type { ZoteroCreateItemOutcome, ZoteroCreateItemRequest } from '../types.js'
 
-const CREATE_ITEM_PARAMETERS = {
+export const CREATE_ITEM_PARAMETERS = {
   itemType: {
     type: 'string',
     required: true,
@@ -142,7 +142,7 @@ function buildRequest(args: CreateItemArgs): ZoteroCreateItemRequest {
 
 export function renderCreateItem(_args: CreateItemArgs, value: CreateItemOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified') {
     return renderCommittedUnverified(value, 'item', 'created')

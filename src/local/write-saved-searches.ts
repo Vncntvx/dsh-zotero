@@ -1,3 +1,5 @@
+import { deleteRecordForWrite, patchRecordForWrite } from './write-record.js'
+import { submittedFieldsMatch } from './write-content-proof.js'
 /**
  * Write operations for saved-search records.
  * @module dsh-zotero/local/write-saved-searches
@@ -18,11 +20,10 @@ import { searchRef } from './write-refs.js'
 import {
   ensureServerId,
   readRecordForWrite,
-  requireLibraryVersion,
   requireWritableRefAtServer,
   withWriteKey,
 } from './write-domain.js'
-import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
+import { committedUnverified, settleCreate } from './write-verdicts.js'
 import type {
   ZoteroCreateSavedSearchRequest,
   ZoteroDeleteSavedSearchRequest,
@@ -56,7 +57,9 @@ export async function createSavedSearch(
       (data) => {
         const savedName = asString(data.name)
         const conditions = normalizeSavedSearchConditions(data.conditions)
-        return savedName === name && conditions !== undefined
+        return savedName === name &&
+          conditions !== undefined &&
+          submittedFieldsMatch({ conditions }, { conditions: request.conditions })
           ? { savedName, conditions }
           : undefined
       },
@@ -87,7 +90,8 @@ export async function updateSavedSearch(
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
   const { data, version } = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
-  const name = request.name ?? asString(data?.name)
+  const name =
+    request.name === undefined ? asString(data?.name) : requireNonBlank('name', request.name)
   const conditions = request.conditions ?? normalizeSavedSearchConditions(data?.conditions)
   if (name === undefined || conditions === undefined) {
     throw new ZoteroError(
@@ -98,28 +102,45 @@ export async function updateSavedSearch(
   const patch: Record<string, unknown> = {}
   if (request.name !== undefined) patch.name = requireNonBlank('name', request.name)
   if (request.conditions !== undefined) patch.conditions = request.conditions
-  let libraryVersion: number
+  const outcome = await patchRecordForWrite(
+    deps,
+    { kind: 'search', key: ref.key, serverId },
+    version,
+    patch,
+    signal,
+  )
+  if (outcome.status === 'unverified') return outcome.value
+  const { libraryVersion } = outcome
   try {
-    ;({ libraryVersion } = await withWriteKey(deps, serverId, signal, (apiKey) =>
-      deps.writer.patch(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, patch, {
+    const saved = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
+    if (
+      saved.version < version ||
+      saved.data === undefined ||
+      !submittedFieldsMatch(saved.data, { name, conditions })
+    )
+      return committedUnverified({
+        kind: 'search',
+        key: ref.key,
         serverId,
-        apiKey,
-        ifUnmodifiedSinceVersion: version,
-        signal,
-      }),
-    ))
-  } catch (error) {
-    return receiptOfCommitUnknown(error, { kind: 'search', key: ref.key, serverId })
-  }
-  return {
-    kind: 'applied',
-    ref: searchRef(ref.key, serverId),
-    key: ref.key,
-    version: libraryVersion,
-    name,
-    conditions,
-    libraryVersion,
-    serverId,
+        reason: 'saved-state-unverified',
+      })
+    return {
+      kind: 'applied',
+      ref: searchRef(ref.key, serverId),
+      key: ref.key,
+      version: saved.version,
+      name,
+      conditions,
+      libraryVersion,
+      serverId,
+    }
+  } catch {
+    return committedUnverified({
+      kind: 'search',
+      key: ref.key,
+      serverId,
+      reason: 'saved-state-unverified',
+    })
   }
 }
 
@@ -130,32 +151,5 @@ export async function deleteSavedSearch(
 ): Promise<ZoteroDeleteSavedSearchResult | ZoteroWriteCommittedUnverified> {
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(request.search, ['search'], serverId)
-  const read = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
-  const effectiveServerId = read.serverId
-  const precondition = requireLibraryVersion(read.libraryVersion)
-  let libraryVersion: number
-  try {
-    ;({ libraryVersion } = await withWriteKey(deps, effectiveServerId, signal, (apiKey) =>
-      deps.writer.delete(`${libraryPrefix(PERSONAL_LIBRARY)}/searches/${ref.key}`, {
-        serverId: effectiveServerId,
-        apiKey,
-        ifUnmodifiedSinceVersion: precondition,
-        signal,
-      }),
-    ))
-  } catch (error) {
-    return receiptOfCommitUnknown(error, {
-      kind: 'search',
-      key: ref.key,
-      serverId: effectiveServerId,
-    })
-  }
-  return {
-    kind: 'deleted',
-    ref: searchRef(ref.key, effectiveServerId),
-    key: ref.key,
-    deleted: true,
-    libraryVersion,
-    serverId: effectiveServerId,
-  }
+  return await deleteRecordForWrite(deps, { kind: 'search', key: ref.key, serverId }, signal)
 }

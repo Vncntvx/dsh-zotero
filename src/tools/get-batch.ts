@@ -3,12 +3,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool, type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { type InferArgs, type InferValue } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { asJsonValue } from '../json.js'
-import { formatRef, parseSupportedRef } from '../refs.js'
-import { invalidArgs } from '../errors.js'
-import { GET_BATCH_MAX } from '../local/get-batch-domain.js'
+import { parseSupportedRef } from '../refs.js'
+import { assertGetBatchRequest, GET_BATCH_MAX } from '../local/get-batch-domain.js'
 import { projectGetBatchMeta } from '../presentation-meta.js'
 import type { ZoteroGetBatchRequest, ZoteroGetBatchResult } from '../types.js'
 import type { ZoteroService } from '../service.js'
@@ -30,8 +30,14 @@ const PARAMETERS = {
     type: 'object',
     additionalProperties: false,
     properties: {
-      children: { type: 'boolean', description: 'Include notes, annotations, and attachments.' },
-      attachments: { type: 'boolean', description: 'Include attachments.' },
+      children: {
+        type: 'boolean',
+        description: 'Notes, annotations and attachments; item refs only.',
+      },
+      attachments: {
+        type: 'boolean',
+        description: 'Attachments; item refs only.',
+      },
       relations: { type: 'boolean', description: 'Include item relations when available.' },
       bestAttachment: { type: 'boolean', description: 'Resolve the best attachment location.' },
     },
@@ -87,22 +93,13 @@ const OUTPUT = {
 } as const
 
 function buildRequest(args: Args): ZoteroGetBatchRequest {
-  if (args.refs.length === 0) invalidArgs('refs must list at least one Zotero ref')
-  if (args.refs.length > GET_BATCH_MAX)
-    invalidArgs(`refs accepts at most ${GET_BATCH_MAX} refs per call`)
-  const seen = new Set<string>()
-  const refs = args.refs.map((value) => {
-    const ref = parseSupportedRef(value, ['item', 'attachment'])
-    const canonical = formatRef(ref)
-    if (seen.has(canonical)) invalidArgs(`refs must be unique; duplicate ref: ${value}`)
-    seen.add(canonical)
-    return ref
-  })
-  return {
-    refs,
+  const request = {
+    refs: args.refs.map((value) => parseSupportedRef(value, ['item', 'attachment'])),
     ...(args.fields !== undefined ? { fields: args.fields } : {}),
     ...(args.include !== undefined ? { include: args.include } : {}),
   }
+  assertGetBatchRequest(request)
+  return request
 }
 
 export function renderGetBatch(_args: Args, value: Output): ContentBlock[] {

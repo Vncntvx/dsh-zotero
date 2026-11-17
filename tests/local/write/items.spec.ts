@@ -95,7 +95,19 @@ describe('createItem', () => {
             '0': {
               key: 'NEWITEM1',
               version: 60,
-              data: { key: 'NEWITEM1', version: 60, itemType: 'journalArticle', title: 'A study' },
+              data: {
+                key: 'NEWITEM1',
+                version: 60,
+                itemType: 'journalArticle',
+                title: 'A study',
+                date: '2024',
+                DOI: '10.1/xyz',
+                publicationTitle: 'Journal',
+                creators: [
+                  { creatorType: 'author', name: 'Wu, Lei' },
+                  { creatorType: 'author', firstName: 'Ada', lastName: 'Lovelace' },
+                ],
+              },
             },
           },
           success: { '0': 'NEWITEM1' },

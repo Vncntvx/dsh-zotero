@@ -11,12 +11,12 @@ import { planValue, planBlock, WRITE_AUTHORIZATION_PLAN_LINE } from '../write-pl
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import {
   normalizeCreator,
@@ -29,7 +29,7 @@ import {
   BATCH_ITEMS_OUTPUT_SCHEMA,
   libraryVersionLine,
   presentBatchItemsResultView,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { parseRef, formatRef } from '../refs.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
@@ -40,7 +40,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import type { ZoteroService } from '../service.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type {
   ZoteroBatchItemsOutcome,
   ZoteroBatchItemsRequest,
@@ -48,7 +48,7 @@ import type {
   ZoteroBatchUpdateItemInput,
 } from '../types.js'
 
-const BATCH_ITEMS_PARAMETERS = {
+export const BATCH_ITEMS_PARAMETERS = {
   create: {
     type: 'array',
     description: 'Items to create or import into the personal library.',
@@ -342,7 +342,7 @@ export async function previewBatchItems(
 
 function renderBatchItems(_args: BatchItemsArgs, value: BatchItemsOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   const lines = [
     `Batch items ${value.kind}: ${value.created.length} created, ${value.updated.length} updated, ${value.deleted.length} trashed.`,
@@ -412,7 +412,7 @@ export function registerBatchItemsTool(ctx: Context, service: ZoteroService): ()
         schema: BATCH_ITEMS_OUTPUT_SCHEMA,
         render: renderBatchItems,
         presentationMeta: (_args, value): JsonValue => {
-          if (value.kind === 'declined') return { kind: 'declined' }
+          if (value.kind === 'declined') return { ...value }
           return {
             kind: value.kind,
             createdCount: value.created.length,

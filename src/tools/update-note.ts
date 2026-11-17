@@ -1,12 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
@@ -17,16 +17,16 @@ import {
   libraryVersionLine,
   presentUpdateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { NOTE_MARKDOWN_PARAMETER_DESCRIPTION } from './note-markdown.js'
 import { parseWritableRef, assertNoteMarkdown, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import { planValue, planBlock } from '../write-plan.js'
 import type { ZoteroService } from '../service.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type { ZoteroUpdateNoteOutcome, ZoteroUpdateNoteRequest } from '../types.js'
 
-const PARAMETERS = {
+export const PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
@@ -67,7 +67,7 @@ export function updateNotePlan(args: Args): string {
 }
 
 function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
-  if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'declined') return renderDeclined(value)
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'note', 'committed')
   return [
@@ -83,7 +83,7 @@ function renderUpdateNote(_args: Args, value: Output): ContentBlock[] {
 
 /** Replayable projection: the applied note identity, or the declined fact. */
 function presentUpdateNoteMeta(_args: Args, value: Output): JsonValue {
-  if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'declined') return { ...value }
   if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',
@@ -118,7 +118,8 @@ export function registerUpdateNoteTool(ctx: Context, service: ZoteroService): ()
       async execute(args, exec): Promise<ZoteroUpdateNoteOutcome> {
         assertWritePayload(
           args,
-          Math.max(service.config.writeFieldMaxChars, service.config.writeNoteMaxChars),
+          service.config.writeFieldMaxChars,
+          service.config.writeNoteMaxChars,
         )
         const request: ZoteroUpdateNoteRequest = {
           item: parseWritableRef(args.ref, ['item']),

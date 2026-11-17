@@ -1,3 +1,7 @@
+import {
+  WRITE_SERVER_ID as SERVER_ID,
+  WRITE_ITEM_KEY as ITEM_KEY,
+} from '../../helpers/server/keys.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {
@@ -20,10 +24,8 @@ import {
 import { WRITE_PLAN_QUESTION_ID } from '../../../src/write-approval.js'
 import { ZOTERO_WRITE_TOOL_NAMES } from '../../../src/constants.js'
 
-const SERVER_ID = 'srv-write-tools-001'
 const NEW_KEY = 'NEWNOTE1'
 const COLLECTION_KEY = 'COLL1234'
-const ITEM_KEY = 'ITEMABC1'
 
 /**
  * The smallest real user-questions seam: answers from a scripted queue, one
@@ -116,7 +118,7 @@ function serveWrites(mock: MockZotero): void {
               key: NEW_KEY,
               version: 42,
               itemType: 'note',
-              note: '<p>x</p>',
+              note: entry.note,
               ...(entry.parentItem === undefined ? {} : { parentItem: entry.parentItem }),
               tags: entry.tags ?? [],
               collections: entry.collections ?? [],
@@ -658,7 +660,11 @@ describe('zotero_update_item_tags and zotero_update_item_collections', () => {
       await lane.runTool('zotero_create_note', { markdown: 'x' }),
       'zotero_create_note',
     )
-    expect(result.value).toEqual({ kind: 'declined' })
+    expect(result.value).toEqual({ kind: 'declined', feedback: 'Please change the note content' })
+    expect(result.content).toContainEqual({
+      type: 'text',
+      text: 'User feedback:\nPlease change the note content',
+    })
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
   })
 })

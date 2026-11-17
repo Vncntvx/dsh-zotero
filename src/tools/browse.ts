@@ -8,13 +8,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
-import { boundedPresentationMeta } from '../presentation-meta.js'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
+import { boundedPresentationMeta, projectBrowseMeta } from '../presentation-meta.js'
 import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { browseRowOf, BROWSE_KINDS, type BrowseRow } from '../browse-rows.js'
@@ -29,7 +29,6 @@ import {
   Q_MATCH_SCOPE_MESSAGE,
   invalidArgs,
   libraryNotAllowedMessage,
-  unsupportedBrowseKindMessage,
 } from '../errors.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroBrowseKind, ZoteroBrowseRequest } from '../types.js'
@@ -44,6 +43,7 @@ const BROWSE_PARAMETERS = {
   },
   library: {
     ...LIBRARY_SCHEMA,
+    default: { type: 'user', id: 0 },
     description:
       'For collections/savedSearches/tags; defaults user/0. Invalid for libraries/itemTypes/itemFields.',
   },
@@ -94,7 +94,7 @@ const BROWSE_PARAMETERS = {
   limit: {
     type: 'integer',
     default: 20,
-    description: 'Max rows; capped by maxBrowseResults.',
+    description: '1..maxBrowseResults; over-cap values are refused.',
   },
 } as const
 
@@ -230,7 +230,6 @@ export const ITEM_QUERY_MODE_MESSAGE = 'itemQueryMode requires itemQuery'
 
 function buildRequest(args: BrowseArgs, config: { maxBrowseResults: number }): ZoteroBrowseRequest {
   const kind = args.kind as ZoteroBrowseKind
-  if (!BROWSE_KINDS.includes(kind)) invalidArgs(unsupportedBrowseKindMessage(kind))
   const offset = args.offset ?? 0
   const limit = args.limit ?? 20
   assertIntInRange('offset', offset, 0, 1_000_000)
@@ -336,6 +335,8 @@ export function browseMoreMessage(nextOffset: number): string {
 function browseRowLines(index: number, row: BrowseRow): string[] {
   const n = index + 1
   switch (row.kind) {
+    case 'unknown':
+      return [`${n}. Unrecognized browse row: ${row.raw}`]
     case 'library':
       return [`${n}. ${row.name} — ${row.libraryId}`, `   library=${row.libraryId}`]
     case 'collection': {
@@ -414,7 +415,8 @@ export function registerBrowseTool(
         output: {
           schema: BROWSE_OUTPUT_SCHEMA,
           render: renderBrowse,
-          presentationMeta: (_args, value) => boundedPresentationMeta(value, ['items']),
+          presentationMeta: (_args, value) =>
+            boundedPresentationMeta(projectBrowseMeta(value), ['items']),
         },
         presentCall: (args) => ({
           card: 'generic',

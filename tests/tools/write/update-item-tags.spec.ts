@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_update_item_tags`, the tag tool: every refusal before a PATCH
  * exists (empty selection, over-limit combined lists, blank entries, group
@@ -17,7 +18,6 @@ import {
 import { writeNonBlankMessage } from '../../../src/errors.js'
 
 const ITEM_REF = 'zotero://user/0/item/ITEMABC1'
-const SERVER_ID = 'srv-update-tags-1'
 
 let lane: HostLane
 

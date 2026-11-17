@@ -11,12 +11,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import { invalidArgs, WRITE_CHILD_COLLECTIONS_MESSAGE } from '../errors.js'
 import { isRefString, parseSupportedRef } from '../refs.js'
@@ -30,7 +30,7 @@ import {
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { NOTE_MARKDOWN_PARAMETER_DESCRIPTION } from './note-markdown.js'
 import {
   assertNoteMarkdown,
@@ -40,10 +40,10 @@ import {
 } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type { ZoteroCreateNoteOutcome, ZoteroCreateNoteRequest } from '../types.js'
 
-const CREATE_NOTE_PARAMETERS = {
+export const CREATE_NOTE_PARAMETERS = {
   parentItem: {
     type: 'string',
     description: `A ${WRITE_REF_ARG_HINT} ref the note attaches under as a child note; omit for a standalone note. A child note inherits its parent's collections. Provide metadata fields (parentItem, collections, tags, sourceRefs) before markdown in the arguments.`,
@@ -183,7 +183,7 @@ function buildRequest(args: CreateNoteArgs, config: ResolvedConfig): ZoteroCreat
 
 export function renderCreateNote(_args: CreateNoteArgs, value: CreateNoteOutput): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified') {
     return renderCommittedUnverified(value, 'note', 'committed')
@@ -229,7 +229,8 @@ export function registerCreateNoteTool(ctx: Context, service: ZoteroService): ()
       async execute(args, exec): Promise<ZoteroCreateNoteOutcome> {
         assertWritePayload(
           args,
-          Math.max(service.config.writeFieldMaxChars, service.config.writeNoteMaxChars),
+          service.config.writeFieldMaxChars,
+          service.config.writeNoteMaxChars,
         )
         // Validate before the plan: a malformed ask should never bother the
         // user with an approval for a call that cannot run. The plan review

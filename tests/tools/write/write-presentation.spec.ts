@@ -400,7 +400,7 @@ describe('approval-gate failure arms', () => {
     } as unknown as ToolRunContext
     // The agent rides the request when present, and the answer names the card.
     const approved = await askPlanApproval(lane.ctx, { exec, plan: '- plan line' })
-    expect(approved).toBe(true)
+    expect(approved).toEqual({ approved: true })
     expect(scripted.asks.at(-1)?.agent).toBe(agent)
     expect(scripted.asks.at(-1)?.questions[0]?.detail).toBe('- plan line')
     expect(scripted.asks.at(-1)?.questions[0]?.intent).toEqual({
@@ -424,7 +424,7 @@ describe('approval-gate failure arms', () => {
       },
       plan: '- plan line',
     })
-    expect(approved).toBe(false)
+    expect(approved).toEqual({ approved: false })
     await lane.teardown()
   })
 
@@ -565,7 +565,7 @@ describe('approval-gate failure arms', () => {
     }
     await expect(
       askPlanApproval(cancelled as unknown as Context, { exec, plan: '- plan' }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({ approved: false })
     // The ask() exit path restores the real UserQuestionError instance.
     const restored = {
       get: () => ({
@@ -576,7 +576,7 @@ describe('approval-gate failure arms', () => {
     }
     await expect(
       askPlanApproval(restored as unknown as Context, { exec, plan: '- plan' }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({ approved: false })
     // A plain error carrying the code is not an ask settlement: fail closed.
     const rogue = {
       get: () => ({
@@ -590,7 +590,7 @@ describe('approval-gate failure arms', () => {
     ).rejects.toMatchObject({ code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE })
     const empty = { get: () => ({ ask: async () => ({ answers: [] }) }) }
     const approved = await askPlanApproval(empty as unknown as Context, { exec, plan: '- plan' })
-    expect(approved).toBe(false)
+    expect(approved).toEqual({ approved: false })
   })
 
   it('reports the declined outcome per tool from the meta record', async () => {

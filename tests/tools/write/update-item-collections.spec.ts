@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_update_item_collections`, the membership tool: every refusal before
  * a PATCH exists (empty selection, over-limit lists, blank entries, group
@@ -9,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ToolDefinition, ToolResult } from '@deepseek-ai/dsh-tools'
 import { type HostLane, setupHostLane } from '../../helpers/lanes/host-lane.js'
+import { itemJson } from '../../helpers/write-domain-fixtures.js'
 import { approvalLane } from '../../helpers/approval-stub.js'
 import {
   WRITE_APPROVAL_UNAVAILABLE_MESSAGE,
@@ -21,7 +23,6 @@ import { writeNonBlankMessage } from '../../../src/errors.js'
 const ITEM_REF = 'zotero://user/0/item/ITEMABC1'
 const ADD_REF = 'zotero://user/0/collection/NEWCOLL1'
 const REMOVE_REF = 'zotero://user/0/collection/OLDCOLL1'
-const SERVER_ID = 'srv-update-collections-1'
 
 let lane: HostLane
 
@@ -101,6 +102,15 @@ describe('zotero_update_item_collections assembly', () => {
     it(`assembles the ${shape} shape and still stops at the plan gate`, async () => {
       const lane2 = await approvalLane({ writeEnabled: true })
       try {
+        lane2.mock.route('GET', '/api/', (_req, _res, h) =>
+          h.json({}, { 'Zotero-Server-ID': SERVER_ID }),
+        )
+        lane2.mock.route('GET', '/api/users/0/items/ITEMABC1', (_req, _res, h) =>
+          h.json(itemJson('ITEMABC1', 7, { collections: [] }), {
+            'Zotero-Server-ID': SERVER_ID,
+            'Last-Modified-Version': '7',
+          }),
+        )
         const result = await lane2.runTool('zotero_update_item_collections', args)
         expect(result.isError).toBe(true)
         expect((result.content[0] as { text: string }).text).toContain(

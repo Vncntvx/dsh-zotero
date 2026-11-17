@@ -1,15 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { planValue } from '../write-plan.js'
 import { requireUpdateField } from '../write-item-rules.js'
-import { assertWritePayload } from './write-bounds.js'
+import { assertWritePayload } from '../write-bounds.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { renderDeclined } from './present.js'
 import {
@@ -20,13 +20,13 @@ import {
   libraryVersionLine,
   presentUpdateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { parseWritableRef, assertNonBlank, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_LIBRARY_LINE, WRITE_PLAN_OUTCOME_DESCRIPTION } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateCollectionOutcome, ZoteroUpdateCollectionRequest } from '../types.js'
 
-const PARAMETERS = {
+export const PARAMETERS = {
   collection: {
     type: 'string',
     required: true,
@@ -68,7 +68,7 @@ function updateCollectionPlan(args: Args): string {
   ].join('\n')
 }
 function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
-  if (value.kind === 'declined') return renderDeclined()
+  if (value.kind === 'declined') return renderDeclined(value)
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'collection', 'committed')
   return [
@@ -83,7 +83,7 @@ function renderUpdateCollection(_args: Args, value: Output): ContentBlock[] {
 }
 /** Replayable projection: the applied collection identity, or the declined fact. */
 function presentUpdateCollectionMeta(_args: Args, value: Output): JsonValue {
-  if (value.kind === 'declined') return { kind: 'declined' }
+  if (value.kind === 'declined') return { ...value }
   if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return {
     kind: 'applied',

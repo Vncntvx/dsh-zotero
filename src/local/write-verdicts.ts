@@ -1,3 +1,4 @@
+import { submittedFieldsMatch } from './write-content-proof.js'
 /**
  * Shared proof rules for write results returned by Zotero's batch endpoints.
  * @module dsh-zotero/local/write-verdicts
@@ -299,7 +300,7 @@ export function batchCreateUnverified(
 
 export function settleBatchCreates(
   batch: ZoteroBatchWrite,
-  creates: readonly { readonly itemType: string }[],
+  creates: readonly Readonly<Record<string, unknown>>[],
   serverId: string,
   created: ZoteroBatchCreateItemResult[],
   unverified: ZoteroBatchOperationUnverified[],
@@ -342,7 +343,9 @@ export function settleBatchCreates(
         serverId,
         (data) => {
           const itemType = asString(data.itemType)
-          return itemType === creates[index].itemType
+          return typeof itemType === 'string' &&
+            itemType === creates[index].itemType &&
+            submittedFieldsMatch(data, creates[index]!)
             ? { itemType, title: asString(data.title), url: asString(data.url) }
             : undefined
         },

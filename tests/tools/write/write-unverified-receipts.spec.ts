@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createWritePresentationMeta,
   renderCommittedUnverified,
-} from '../../../src/tools/write-present.js'
+} from '../../../src/write-present.js'
 
 describe('unverified creation receipts', () => {
   it.each(['commit-unknown', 'saved-state-unverified'] as const)(

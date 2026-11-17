@@ -29,13 +29,16 @@ export function metaRecordOf(result: ToolResult): Record<string, unknown> | unde
  * cannot drift between them.
  * @returns the single declined text block.
  */
-export function renderDeclined(): ContentBlock[] {
-  return [
+export function renderDeclined(value: { readonly feedback?: string } = {}): ContentBlock[] {
+  const blocks: ContentBlock[] = [
     {
       type: 'text',
       text: 'Declined: the user answered the plan without approving. Nothing was written.',
     },
   ]
+  if (value.feedback !== undefined)
+    blocks.push({ type: 'text', text: `User feedback:\n${value.feedback}` })
+  return blocks
 }
 
 /**
@@ -145,7 +148,7 @@ export function createWritePresentationMeta(
   value:
     | { kind: 'applied'; ref: string; key: string; version: number }
     | CommittedUnverifiedLike
-    | { kind: 'declined' },
+    | { kind: 'declined'; readonly feedback?: string },
 ): JsonValue {
   if (value.kind === 'applied') {
     return { kind: 'applied', ref: value.ref, key: value.key, version: value.version }
@@ -167,7 +170,7 @@ export function createWritePresentationMeta(
       ...(value.serverId === undefined ? {} : { serverId: value.serverId }),
     }
   }
-  return { kind: 'declined' }
+  return { kind: 'declined', ...(value.feedback === undefined ? {} : { feedback: value.feedback }) }
 }
 
 /**
@@ -185,7 +188,7 @@ export function listUpdatePresentationMeta(
         removed: readonly unknown[]
       }
     | CommittedUnverifiedLike
-    | { kind: 'declined' },
+    | { kind: 'declined'; readonly feedback?: string },
 ): JsonValue {
   if (value.kind === 'committed-unverified') return createWritePresentationMeta(value)
   return value.kind === 'applied'
@@ -196,7 +199,7 @@ export function listUpdatePresentationMeta(
         addedCount: value.added.length,
         removedCount: value.removed.length,
       }
-    : { kind: 'declined' }
+    : { kind: 'declined', ...(value.feedback === undefined ? {} : { feedback: value.feedback }) }
 }
 
 /** The closing line of every write receipt: the library version and its serving instance. */
@@ -209,6 +212,7 @@ export const DECLINED_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     kind: { type: 'string', enum: ['declined'], required: true },
+    feedback: { type: 'string' },
   },
 } as const
 
@@ -300,7 +304,7 @@ interface UpdateListRenderOptions {
 /** Render the receipt blocks for a tags or collections update tool. */
 export function renderUpdateList(
   value:
-    | { kind: 'declined' }
+    | { kind: 'declined'; readonly feedback?: string }
     | CommittedUnverifiedLike
     | {
         kind: 'applied'
@@ -316,7 +320,7 @@ export function renderUpdateList(
   options: UpdateListRenderOptions,
 ): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, options.noun, 'committed')

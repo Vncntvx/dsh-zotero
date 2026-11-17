@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_update_note` and `zotero_update_collection`, the two PATCH-backed
  * update tools: the versioned read-modify-write through the approval seam, the
@@ -25,7 +26,6 @@ import { itemJson } from '../../helpers/write-domain-fixtures.js'
 import { ZOTERO_INVALID_ARGUMENT } from '../../../src/errors.js'
 import { updateNotePlan } from '../../../src/tools/update-note.js'
 
-const SERVER_ID = 'srv-update-note-0001'
 const NOTE_KEY = 'NOTE0001'
 const COLLECTION_KEY = 'COLL0001'
 const PARENT_KEY = 'COLL0002'
@@ -91,6 +91,13 @@ describe('zotero_update_note', () => {
   })
 
   it('accepts the exact bound for both note tools and observes a raised limit', async () => {
+    serveIdentityAndGrant()
+    lane.mock.route('GET', `/api/users/0/items/${NOTE_KEY}`, (_req, _res, h) =>
+      h.json(itemJson(NOTE_KEY, 10, { itemType: 'note' }), {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '10',
+      }),
+    )
     await commitLive(lane, { writeNoteMaxChars: 10 })
     setApprovalOutcome('rejected')
     for (const name of ['zotero_create_note', 'zotero_update_note']) {
@@ -111,7 +118,7 @@ describe('zotero_update_note', () => {
       ).value,
     ).toEqual({ kind: 'declined' })
     expect(approvalAsks).toHaveLength(3)
-    expect(lane.mock.requests).toHaveLength(0)
+    expect(lane.mock.requests.every((request) => request.method === 'GET')).toBe(true)
   })
 
   it('rewrites a note body under its version precondition', async () => {
@@ -174,6 +181,12 @@ describe('zotero_update_note', () => {
 
   it('writes nothing when the plan is rejected', async () => {
     serveIdentityAndGrant()
+    lane.mock.route('GET', `/api/users/0/items/${NOTE_KEY}`, (_req, _res, h) =>
+      h.json(itemJson(NOTE_KEY, 10, { itemType: 'note' }), {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '10',
+      }),
+    )
     setApprovalOutcome('rejected')
     const result = expectValue(
       await lane.runTool('zotero_update_note', { ref: NOTE_REF, markdown: '# Updated' }),

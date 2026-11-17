@@ -1,7 +1,8 @@
+import { assertWritePayload } from '../write-bounds.js'
 /**
  * The `zotero_create_collection` tool: create a collection, optionally under a
  * parent. A sibling that already carries the name refuses the write before any
- * POST. The plan-review approval runs before Zotero is contacted.
+ * POST. A read-only sibling check runs before approval and again before dispatch.
  * @module dsh-zotero/tools/create-collection
  */
 
@@ -10,12 +11,12 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { isRefString } from '../refs.js'
 import { renderDeclined } from './present.js'
 import {
@@ -26,13 +27,13 @@ import {
   libraryVersionLine,
   presentCreateResultView,
   renderCommittedUnverified,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroCreateCollectionOutcome, ZoteroCreateCollectionRequest } from '../types.js'
 
-const CREATE_COLLECTION_PARAMETERS = {
+export const CREATE_COLLECTION_PARAMETERS = {
   name: {
     type: 'string',
     required: true,
@@ -97,7 +98,7 @@ export function renderCreateCollection(
   value: CreateCollectionOutput,
 ): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified') {
     return renderCommittedUnverified(value, 'collection', 'created')
@@ -136,6 +137,7 @@ export function registerCreateCollectionTool(ctx: Context, service: ZoteroServic
       }),
       presentResult: presentCreateCollectionResult,
       async execute(args, exec): Promise<ZoteroCreateCollectionOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args)
         return await service.createCollection(request, { exec, plan: createCollectionPlan(args) })
       },

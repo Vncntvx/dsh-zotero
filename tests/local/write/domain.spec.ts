@@ -63,6 +63,7 @@ describe('createNote', () => {
         batchHeaders(42),
         batchBody(NEW_KEY, 42, {
           itemType: 'note',
+          note: '<p><strong>方法</strong>：见第 2 节。</p>',
           tags: [{ tag: 'methods' }],
           collections: [COLLECTION_KEY],
           relations: { 'dc:relation': ['http://zotero.org/users/0/items/SOURCE01'] },
@@ -104,6 +105,7 @@ describe('createNote', () => {
         batchHeaders(42),
         batchBody(NEW_KEY, 42, {
           itemType: 'note',
+          note: '<p>Relation test</p>',
           tags: [],
           relations: {
             'dc:relation': [
@@ -117,6 +119,7 @@ describe('createNote', () => {
     const { deps } = writeDeps(mock)
     const result = await createNote(deps, {
       markdown: 'Relation test',
+      sourceRefs: [SOURCE_REF, parseRef('zotero://group/42/item/GROUP001')],
     })
     expect(result.kind).toBe('applied')
     expectApplied(result)
@@ -291,6 +294,7 @@ describe('createNote', () => {
         200,
         batchHeaders(43),
         batchBody(NEW_KEY, 43, {
+          note: '<p>reads it</p>',
           parentItem: ITEM_KEY,
           relations: { 'dc:relation': ['http://zotero.org/users/0/items/SOURCE01'] },
         }),

@@ -12,7 +12,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
-import { readTrashGraph } from './trash-item.js'
+import { preflightTrashGraphs } from './trash-item.js'
 import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import {
   batchCreateUnverified,
@@ -159,7 +159,7 @@ async function runBatchCreates(
         signal,
       }),
     )
-    settleBatchCreates(batch, checkedCreates, serverId, created, unverified, failed)
+    settleBatchCreates(batch, entries, serverId, created, unverified, failed)
     return batch.libraryVersion
   } catch (err) {
     if (isWriteUnauthorized(err)) throw err
@@ -359,11 +359,17 @@ async function runBatchDeletes(
   failed: ZoteroBatchOperationFailure[],
 ): Promise<number | undefined> {
   let lastLibraryVersion: number | undefined
-  for (const ref of checkedDeletes) {
+  const graphs = await preflightTrashGraphs(
+    deps.client,
+    checkedDeletes.map((ref) => ref.key),
+    serverId,
+    signal,
+  )
+  for (const [deleteIndex, ref] of checkedDeletes.entries()) {
     signal?.throwIfAborted()
     const progress = trashWalkProgress()
     try {
-      const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
+      const graph = await graphs.take(ref.key)
       try {
         await patchTrashNodes(deps, serverId, signal, graph, {
           wantDeleted: true,
@@ -372,7 +378,7 @@ async function runBatchDeletes(
             unverified.push(
               batchOperationUnverified(
                 'delete',
-                checkedDeletes.indexOf(ref),
+                deleteIndex,
                 itemRef(node.key, serverId),
                 serverId,
               ),

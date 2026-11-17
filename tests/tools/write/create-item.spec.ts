@@ -206,10 +206,7 @@ describe('zotero_create_item execution', () => {
         200,
         batchHeaders(42),
         batchBody(NEW_KEY, 42, {
-          itemType: entry.itemType,
-          title: entry.title,
-          tags: entry.tags,
-          collections: entry.collections,
+          ...entry,
         }),
       )
     })

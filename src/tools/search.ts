@@ -1,3 +1,4 @@
+import { isLiteralSearchTag } from '../search-tags.js'
 /**
  * The `zotero_search` tool: discover candidates in the user's library with
  * Zotero's own quick search. Output stays compact (refs, titles, creators,
@@ -9,12 +10,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   SEARCH_DEFAULT_DIRECTION,
@@ -55,8 +56,7 @@ function toolScopeOf(scope: ZoteroResolvedScope): ToolSearchScope {
       ZOTERO_UNEXPECTED,
     )
   }
-  // The resolved scope already splits the library arms by user/group, so the
-  // domain record passes through as the tool output verbatim.
+  // Domain and tool schemas share the same personal/group library union.
   return scope
 }
 
@@ -164,7 +164,7 @@ const SEARCH_PARAMETERS = {
   limit: {
     type: 'integer',
     default: SEARCH_DEFAULT_LIMIT,
-    description: 'Result count, capped by maxSearchResults.',
+    description: '1..maxSearchResults; over-cap values are refused.',
   },
 } as const
 
@@ -219,37 +219,32 @@ const SEARCH_OUTPUT_SCHEMA = {
       required: true,
       oneOf: [
         // The personal library is always the canonical user/0; a group id
-        // is any positive integer. Splitting the arms keeps the inferred
-        // type equal to SupportedLocalLibrary.
+        // is any positive integer. The nested union matches SupportedLocalLibrary.
         {
           type: 'object',
           additionalProperties: false,
           properties: {
             kind: { type: 'string', const: 'library', required: true },
             library: {
-              type: 'object',
               required: true,
-              additionalProperties: false,
-              properties: {
-                type: { type: 'string', const: 'user', required: true },
-                id: { type: 'integer', const: 0, required: true },
-              },
-            },
-          },
-        },
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            kind: { type: 'string', const: 'library', required: true },
-            library: {
-              type: 'object',
-              required: true,
-              additionalProperties: false,
-              properties: {
-                type: { type: 'string', const: 'group', required: true },
-                id: { type: 'integer', required: true },
-              },
+              oneOf: [
+                {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', const: 'user', required: true },
+                    id: { type: 'integer', const: 0, required: true },
+                  },
+                },
+                {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', const: 'group', required: true },
+                    id: { type: 'integer', required: true },
+                  },
+                },
+              ],
             },
           },
         },
@@ -316,8 +311,6 @@ const SEARCH_OUTPUT_SCHEMA = {
 } as const
 
 /** The model-facing messages the search argument rules throw. */
-export const INCLUDE_TRASHED_SCOPE_MESSAGE =
-  'includeTrashed is not available on zotero_search; omit it and search the library scope.'
 export const SCOPE_REF_OR_NAME_MESSAGE =
   'scope.refOrName must be a collection/saved-search name or ref'
 export const TAGS_LITERAL_MESSAGE =
@@ -355,12 +348,12 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
     invalidArgs(SCOPE_REF_OR_NAME_MESSAGE)
   }
   for (const tag of args.tags ?? []) {
-    if (tag.trim() === '' || tag.includes('||')) {
+    if (!isLiteralSearchTag(tag)) {
       invalidArgs(`${TAGS_LITERAL_MESSAGE}: "${tag}"`)
     }
   }
   for (const tag of args.excludeTags ?? []) {
-    if (tag.trim() === '' || tag.includes('||')) {
+    if (!isLiteralSearchTag(tag)) {
       invalidArgs(`${EXCLUDE_TAGS_LITERAL_MESSAGE}; got "${tag}"`)
     }
   }
@@ -369,10 +362,6 @@ function buildRequest(args: SearchArgs, config: ResolvedConfig): ZoteroSearchReq
   const tagMatch = args.tagMatch
   if (tagMatch !== undefined && (args.tags === undefined || args.tags.length === 0))
     invalidArgs(TAG_MATCH_REQUIRES_TAGS_MESSAGE)
-  const legacyIncludeTrashed = (args as Record<string, unknown>).includeTrashed
-  if (legacyIncludeTrashed !== undefined) {
-    invalidArgs(INCLUDE_TRASHED_SCOPE_MESSAGE)
-  }
   for (const itemType of args.itemTypes ?? []) {
     if (!isItemTypeIdentifier(itemType)) {
       invalidArgs(`${ITEM_TYPES_LITERAL_MESSAGE}; got "${itemType}"`)

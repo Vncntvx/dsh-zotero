@@ -37,10 +37,11 @@
  *
  * Plan-settlement map ({@link askPlanApproval}):
  * - `ASK_ABORTED` → harness `TOOL_ABORTED` (caller cancelled).
- * - `ASK_CANCELLED` → `false` (the user dismissed the plan review to talk;
+ * - `ASK_CANCELLED` → `{approved:false}` (the user dismissed the plan review to talk;
  *   the official plan card settles the non-approve path this way, never as a
  *   `Cancel` option label). Callers return `kind: 'declined'`.
- * - any other answer without `Apply` → `false` (`declined`).
+ * - any other answer without `Apply` → `{approved:false}` (`declined`);
+ *   a custom answer retains its complete feedback and always declines.
  * - no channel / ask infrastructure failure → `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`
  *   (fail closed; not a user decision, not Zotero write auth).
  *
@@ -64,7 +65,8 @@ import {
   ZoteroError,
 } from './errors.js'
 import { PERSONAL_LIBRARY } from './refs.js'
-import type { ZoteroWriteCall, ZoteroWriteRisk } from './types.js'
+import type { ZoteroWriteRisk } from './types.js'
+import type { ZoteroWriteCall } from './write-call.js'
 
 /** The label the plan-review question is answered with to apply the write. */
 export const APPROVE_LABEL = 'Apply'
@@ -81,7 +83,7 @@ export const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
 
 /** Shared approval, declined and reconciliation contracts for every write tool. */
 export const WRITE_PLAN_OUTCOME_DESCRIPTION =
-  'Requires session approval followed by an approved plan; neither can be disabled. A "never" policy rejects. Kind "declined" means nothing was written; do not retry unasked.' +
+  'Session then plan approval required; "never" rejects. "declined": nothing written; retry only if asked.' +
   WRITE_COMMITTED_UNVERIFIED_DESCRIPTION
 
 /**
@@ -222,7 +224,13 @@ export async function requestWriteApproval(
  *   can answer the question (fail closed).
  * @throws {HarnessError} the harness's own abort when the caller cancelled.
  */
-export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Promise<boolean> {
+export type WritePlanDecision =
+  { readonly approved: true } | { readonly approved: false; readonly feedback?: string }
+
+export async function askPlanApproval(
+  ctx: Context,
+  call: ZoteroWriteCall,
+): Promise<WritePlanDecision> {
   const { exec, plan } = call
   // `ctx.get`, not the property proxy: the service fiber carries no inject
   // declarations for this optional seam, so a property read would trip
@@ -261,8 +269,9 @@ export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Prom
     })
     const items = answer.answers.filter((a) => a.id === WRITE_PLAN_QUESTION_ID)
     const item = items.length === 1 ? items[0] : undefined
-    if (item === undefined || item.custom !== undefined) return false
-    return item.selected.length === 1 && item.selected[0] === APPROVE_LABEL
+    if (item === undefined) return { approved: false }
+    if (item.custom !== undefined) return { approved: false, feedback: item.custom }
+    return { approved: item.selected.length === 1 && item.selected[0] === APPROVE_LABEL }
   } catch (error) {
     if (isAskCode(error, 'ASK_ABORTED') || exec.signal.aborted) {
       throw new HarnessError(TOOL_ABORTED_MESSAGE, TOOL_ABORTED, { cause: error })
@@ -271,7 +280,7 @@ export async function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Prom
     // ASK_CANCELLED is a user decision, not a missing channel. Map it to the
     // same non-approve outcome as choosing Cancel on a generic question UI.
     if (isAskCode(error, 'ASK_CANCELLED')) {
-      return false
+      return { approved: false }
     }
     // NO_PROVIDER, CALLER_NOT_LIVE, DELEGATED_CALLER, BAD_INTENT, and any
     // other infrastructure failure: no channel can answer, so the write

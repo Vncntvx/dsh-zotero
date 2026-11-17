@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_update_item`, the metadata correction tool: every refusal its
  * argument layer raises before a PATCH exists (empty `set`, unknown field,
@@ -19,7 +20,6 @@ import {
 import { updateItemPlan } from '../../../src/tools/update-item.js'
 
 const REF = 'zotero://user/0/item/ITEMABC1'
-const SERVER_ID = 'srv-update-item-1'
 
 let lane: HostLane
 

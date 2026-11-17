@@ -423,7 +423,7 @@ describe('createItem verdicts', () => {
     })
   })
 
-  it('reports no title when the echo proves the save without one', async () => {
+  it('marks an omitted submitted title unverified without inventing saved metadata', async () => {
     grantAuthorize(mock)
     serveCreateBatch(
       '/api/users/0/items',
@@ -442,9 +442,17 @@ describe('createItem verdicts', () => {
     )
     const { deps } = writeDeps(mock)
     const result = await createItem(deps, { itemType: 'book', title: 'A study' })
-    expect(result).toMatchObject({ kind: 'applied', key: 'NEWITEM1', version: 60 })
-    // Saved state comes only from the echo: a title the response did not
-    // carry is absent, never filled back from the request.
+    expect(result).toMatchObject({
+      kind: 'committed-unverified',
+      reason: 'saved-state-unverified',
+      retryable: false,
+      key: 'NEWITEM1',
+    })
+    expect(
+      mock.requests.filter(
+        (request) => request.method === 'POST' && request.pathname.endsWith('/items'),
+      ),
+    ).toHaveLength(1)
     expect(result).not.toHaveProperty('title')
   })
 

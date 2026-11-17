@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../helpers/server/keys.js'
 /**
  * `zotero_batch_items` execution through the approval seam: the host-lane half
  * of the unified batch engine — identity grant, plan review, declined writes,
@@ -17,8 +18,6 @@ import {
   StubApproval,
 } from '../helpers/approval-stub.js'
 import { itemJson } from '../helpers/write-domain-fixtures.js'
-
-const SERVER_ID = 'srv-batch-tool-0001'
 
 let lane: HostLane
 
@@ -62,7 +61,10 @@ describe('batch execution through the approval seam', () => {
           successful: Object.fromEntries(
             create.map((input, index) => [
               index,
-              itemJson(`BATCH${String(index).padStart(3, '0')}`, 42, input),
+              itemJson(`BATCH${String(index).padStart(3, '0')}`, 42, {
+                ...input,
+                tags: input.tags.map((tag) => ({ tag })),
+              }),
             ]),
           ),
         },

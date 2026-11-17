@@ -18,7 +18,7 @@ import { asRecord, asString, parseNonNegativeSafeInteger } from '../json.js'
 import { readAllPages, requireLibraryVersionHeader } from './pagination.js'
 import { libraryPrefix, PERSONAL_LIBRARY, formatRef } from '../refs.js'
 import { itemRef } from './write-refs.js'
-import { readTrashGraph } from './trash-item.js'
+import { preflightTrashGraphs } from './trash-item.js'
 import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type { WriteDomainDeps } from './write-deps.js'
@@ -81,11 +81,26 @@ export async function restoreItems(
   const unverified: ZoteroRestoreItemsResult['unverified'] = []
   const failed: ZoteroRestoreItemsResult['failed'] = []
   const serverId = await ensureServerId(deps, signal)
-  for (const item of request.items) {
+  const checked = request.items.map((item) => {
+    try {
+      return { item, ref: requireWritableRefAtServer(item, ['item'], serverId) }
+    } catch (error) {
+      return { item, error }
+    }
+  })
+  const graphs = await preflightTrashGraphs(
+    deps.client,
+    checked.flatMap((entry) => (entry.ref === undefined ? [] : [entry.ref.key])),
+    serverId,
+    signal,
+  )
+  for (const entry of checked) {
+    const { item } = entry
     const progress = trashWalkProgress()
     try {
-      const ref = requireWritableRefAtServer(item, ['item'], serverId)
-      const graph = await readTrashGraph(deps.client, ref.key, serverId, signal)
+      if (entry.ref === undefined) throw entry.error
+      const ref = entry.ref
+      const graph = await graphs.take(ref.key)
       if (!graph.some((node) => node.deleted)) {
         // The whole graph is already live: writing a `deleted: 0` that the
         // server would accept as a no-op must not be reported as a restore.
@@ -156,7 +171,13 @@ export async function restoreItems(
       })
     }
   }
-  return { kind: 'restored', restored, unverified, failed, serverId }
+  const kind =
+    failed.length > 0 && restored.length === 0 && unverified.length === 0
+      ? 'failed'
+      : failed.length > 0 || unverified.length > 0
+        ? 'partial'
+        : 'restored'
+  return { kind, restored, unverified, failed, serverId }
 }
 
 function tagsDeletePath(tags: readonly string[]): string {

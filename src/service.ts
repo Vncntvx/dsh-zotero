@@ -1,3 +1,4 @@
+import type {} from './job-kinds.js'
 /**
  * `ctx.zotero`: the stable research-domain boundary of the plugin.
  *
@@ -56,6 +57,7 @@ import { TYPERT_MANIFEST } from './typert.js'
 import { WriteAuthorizer, persistedGrantBoundTo, revokePersistedGrant } from './write-auth.js'
 import { WriteAuthorizationBudget } from './write-authorization-budget.js'
 import { runWriteOperation } from './write-operation.js'
+import { assertWritePayload } from './write-bounds.js'
 import {
   createSourceLedgerProjection,
   type SourceLedgerProjection,
@@ -164,10 +166,11 @@ import type {
   ZoteroDeleteSavedSearchOutcome,
   ZoteroBatchItemsOutcome,
   ZoteroBatchItemsRequest,
-  ZoteroWriteCall,
   ZoteroWriteDeclined,
 } from './types.js'
-import { askPlanApproval, requestWriteApproval } from './write-approval.js'
+import type { ZoteroWriteCall } from './write-call.js'
+import { askPlanApproval, requestWriteApproval, type WritePlanDecision } from './write-approval.js'
+import type { ZoteroWritePreflight } from './types.js'
 
 type ZoteroWriteMethod =
   | 'createNote'
@@ -902,12 +905,12 @@ export class ZoteroService extends Service {
   retrieve(
     request: ZoteroFulltextRetrieveRequest,
     signal?: AbortSignal,
-    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
+    spill?: import('./fulltext-spill.js').FulltextSpillSink,
   ): Promise<ZoteroFulltextRetrieveResult>
   async retrieve(
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
-    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
+    spill?: import('./fulltext-spill.js').FulltextSpillSink,
   ): Promise<ZoteroRetrieveResult> {
     const provider = this.resolveProvider()
     // Retrieve and changes consume full-text sources internally; the public
@@ -999,13 +1002,22 @@ export class ZoteroService extends Service {
     call: ZoteroWriteCall,
     methodName: M,
     request: Parameters<NonNullable<ZoteroProvider[M]>>[0],
+    preflight?: ZoteroWritePreflight,
   ): Promise<Awaited<ReturnType<NonNullable<ZoteroProvider[M]>>> | ZoteroWriteDeclined> {
     const provider = this.resolveProvider()
     this.requireCapability(provider, 'write')
     // Method presence before the plan card: a provider that cannot serve the
     // write must not spend the user's approval on a call that cannot run.
     const method = this.requireMethod(provider, methodName)
-    if (!(await this.approveWrite(call))) return { kind: 'declined' }
+    assertWritePayload(request, this.config.writeFieldMaxChars, this.config.writeNoteMaxChars)
+    if (preflight !== undefined)
+      await this.requireMethod(provider, 'preflightWrite')(preflight, call.exec.signal)
+    const approval = await this.approveWrite(call)
+    if (!approval.approved)
+      return {
+        kind: 'declined',
+        ...(approval.feedback === undefined ? {} : { feedback: approval.feedback }),
+      }
     const invoke = method as (
       req: Parameters<NonNullable<ZoteroProvider[M]>>[0],
       signal?: AbortSignal,
@@ -1051,7 +1063,10 @@ export class ZoteroService extends Service {
     request: ZoteroUpdateNoteRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateNoteOutcome> {
-    return await this.dispatchWrite(call, 'updateNote', request)
+    return await this.dispatchWrite(call, 'updateNote', request, {
+      operation: 'updateNote',
+      request,
+    })
   }
 
   /**
@@ -1065,7 +1080,10 @@ export class ZoteroService extends Service {
     request: ZoteroUpdateItemCollectionsRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroUpdateItemCollectionsOutcome | ZoteroWriteDeclined> {
-    return await this.dispatchWrite(call, 'updateItemCollections', request)
+    return await this.dispatchWrite(call, 'updateItemCollections', request, {
+      operation: 'updateItemCollections',
+      request,
+    })
   }
 
   async updateCollection(
@@ -1085,7 +1103,10 @@ export class ZoteroService extends Service {
     request: ZoteroCreateCollectionRequest,
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateCollectionCommittedOutcome | ZoteroWriteDeclined> {
-    return await this.dispatchWrite(call, 'createCollection', request)
+    return await this.dispatchWrite(call, 'createCollection', request, {
+      operation: 'createCollection',
+      request,
+    })
   }
 
   /**
@@ -1189,12 +1210,12 @@ export class ZoteroService extends Service {
    * @param call - the asking write call.
    * @returns true when the write may proceed.
    */
-  private async approveWrite(call: ZoteroWriteCall): Promise<boolean> {
+  private async approveWrite(call: ZoteroWriteCall): Promise<WritePlanDecision> {
     const policy = await requestWriteApproval(this.ctx, call)
     this.diagnostics.sink.info('write.gate', `write policy decision: ${policy}`, {
       tool: call.exec.name,
     })
-    if (policy === 'declined') return false
+    if (policy === 'declined') return { approved: false }
     if (policy === 'unavailable') {
       this.diagnostics.sink.error('write.gate', 'approval channel unavailable; write refused', {
         tool: call.exec.name,
@@ -1204,7 +1225,7 @@ export class ZoteroService extends Service {
     const approved = await askPlanApproval(this.ctx, call)
     this.diagnostics.sink.info(
       'write.gate',
-      approved ? 'plan review approved' : 'plan review declined',
+      approved.approved ? 'plan review approved' : 'plan review declined',
       { tool: call.exec.name },
     )
     return approved

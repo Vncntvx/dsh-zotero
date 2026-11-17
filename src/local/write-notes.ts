@@ -1,3 +1,4 @@
+import { submittedFieldsMatch } from './write-content-proof.js'
 /**
  * Create and update Zotero note items.
  * @module dsh-zotero/local/write-notes
@@ -100,6 +101,7 @@ export async function createNote(
       if (
         data.itemType !== 'note' ||
         typeof data.note !== 'string' ||
+        !submittedFieldsMatch(data, entry) ||
         (parent !== undefined && data.parentItem !== parent.key) ||
         (parent === undefined && data.parentItem !== undefined)
       )

@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * The saved-search write tools: the tool-layer refusals that must happen
  * before any plan card is shown, and the replayable projections the cards
@@ -76,7 +77,6 @@ describe('saved-search write tools refuse blank names before the plan card', () 
   })
 })
 
-const SERVER_ID = 'srv-saved-search-01'
 const SEARCH_KEY = 'SEARCH01'
 const SEARCH_REF = `zotero://user/0/search/${SEARCH_KEY}`
 const SERVED_SEARCH_REF = `${SEARCH_REF}?server=${SERVER_ID}`
@@ -90,21 +90,25 @@ function serveIdentityAndGrant(lane: HostLane): void {
 }
 
 /** The saved-search record the update and delete paths read first. */
-function serveSearchRead(lane: HostLane, version = 7): void {
+function serveSearchRead(
+  lane: HostLane,
+  version = 7,
+): { version: number; data: Record<string, unknown> } {
+  const state = {
+    version,
+    data: {
+      key: SEARCH_KEY,
+      name: 'Recent',
+      conditions: [{ condition: 'title', operator: 'contains', value: 'attention' }],
+    } as Record<string, unknown>,
+  }
   lane.mock.route('GET', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) =>
     h.json(
-      {
-        key: SEARCH_KEY,
-        version,
-        data: {
-          key: SEARCH_KEY,
-          name: 'Recent',
-          conditions: [{ condition: 'title', operator: 'contains', value: 'attention' }],
-        },
-      },
-      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': String(version) },
+      { key: SEARCH_KEY, version: state.version, data: state.data },
+      { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': String(state.version) },
     ),
   )
+  return state
 }
 
 describe('saved-search execution through the approval seam', () => {
@@ -207,10 +211,13 @@ describe('saved-search execution through the approval seam', () => {
   it('updates a saved search under its version precondition', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveIdentityAndGrant(lane)
-    serveSearchRead(lane, 7)
-    lane.mock.route('PATCH', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) =>
-      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '8' }, ''),
-    )
+    const saved = serveSearchRead(lane, 7)
+    lane.mock.route('PATCH', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) => {
+      const patch = JSON.parse(lane.mock.requests.at(-1)?.body ?? '{}') as Record<string, unknown>
+      saved.data = { ...saved.data, ...patch }
+      saved.version = 8
+      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '8' }, '')
+    })
 
     const result = expectValue(
       await lane.runTool('zotero_update_saved_search', { search: SEARCH_REF, name: 'Recent 2' }),
@@ -443,10 +450,13 @@ describe('saved-search execution through the approval seam', () => {
   it('updates only the conditions when no name is given', async () => {
     const lane = await bootLane({ writeEnabled: true })
     serveIdentityAndGrant(lane)
-    serveSearchRead(lane, 7)
-    lane.mock.route('PATCH', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) =>
-      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '8' }, ''),
-    )
+    const saved = serveSearchRead(lane, 7)
+    lane.mock.route('PATCH', `/api/users/0/searches/${SEARCH_KEY}`, (_req, _res, h) => {
+      const patch = JSON.parse(lane.mock.requests.at(-1)?.body ?? '{}') as Record<string, unknown>
+      saved.data = { ...saved.data, ...patch }
+      saved.version = 8
+      h.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '8' }, '')
+    })
 
     const result = expectValue(
       await lane.runTool('zotero_update_saved_search', {

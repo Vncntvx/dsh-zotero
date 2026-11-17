@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * The full write path for a caller cancellation that lands after dispatch.
  *
@@ -25,8 +26,6 @@ import type {
   AskUserQuestionItem,
   AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
-
-const SERVER_ID = 'srv-write-abort-001'
 
 /**
  * The smallest real user-questions seam, identical in shape to the one the

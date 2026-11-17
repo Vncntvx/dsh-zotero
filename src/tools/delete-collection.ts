@@ -1,3 +1,4 @@
+import { assertWritePayload } from '../write-bounds.js'
 /**
  * The `zotero_delete_collection` tool: delete a collection by ref or exact
  * name. The plan card carries the blast radius first (item and subcollection
@@ -12,13 +13,14 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import { isRefString } from '../refs.js'
+import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
 import {
@@ -28,13 +30,13 @@ import {
   presentDeleteResultView,
   renderCommittedUnverified,
   unverifiedPresentationMeta,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertNonBlank, parseWritableRef, WRITE_COLLECTION_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroDeleteCollectionOutcome, ZoteroDeleteCollectionRequest } from '../types.js'
 
-const DELETE_COLLECTION_PARAMETERS = {
+export const DELETE_COLLECTION_PARAMETERS = {
   collection: {
     type: 'string',
     required: true,
@@ -79,7 +81,7 @@ export function deleteCollectionPlan(
     WRITE_PLAN_LIBRARY_LINE,
     `- Collection: ${planValue(args.collection.trim())}`,
     `- Items in this collection: ${formatCount(preview.itemTotal)} (they stay in the library, membership only)`,
-    `- Child collections: ${formatCount(preview.childTotal)} (they are deleted with the parent)`,
+    `- Descendant collections: ${formatCount(preview.childTotal)} (all levels; the whole subtree is deleted with the parent)`,
     'This deletes the collection structure and cannot be undone; the delete carries a version precondition, so a concurrent change fails it.',
   ].join('\n')
 }
@@ -132,11 +134,38 @@ async function fetchChildPreview(
   signal: AbortSignal | undefined,
 ): Promise<number | undefined> {
   return await runPreview(signal, undefined, async () => {
-    const browsed = await service.browse(
-      { kind: 'collections', parentRef, offset: 0, limit: 1 },
-      signal,
-    )
-    return browsed.total
+    const pending = [parentRef]
+    const seen = new Set([parentRef])
+    for (let index = 0; index < pending.length; index++) {
+      let offset = 0
+      while (true) {
+        signal?.throwIfAborted()
+        const page = await service.browse(
+          { kind: 'collections', parentRef: pending[index]!, offset, limit: 1 },
+          signal,
+        )
+        if (page.items.length === 0) {
+          if (offset < page.total)
+            throw new ZoteroError(
+              'Cannot verify the collection subtree: an expected descendant page was empty. Refresh the library and retry the preview.',
+              ZOTERO_UNEXPECTED,
+            )
+          break
+        }
+        for (const row of page.items) {
+          if (!('ref' in row) || typeof row.ref !== 'string' || seen.has(row.ref))
+            throw new ZoteroError(
+              'Cannot verify the collection subtree: a descendant was duplicated or invalid. Check the collection hierarchy before deleting it.',
+              ZOTERO_UNEXPECTED,
+            )
+          seen.add(row.ref)
+          pending.push(row.ref)
+        }
+        offset += page.items.length
+        if (offset >= page.total) break
+      }
+    }
+    return seen.size - 1
   })
 }
 
@@ -175,7 +204,7 @@ export function renderDeleteCollection(
   value: DeleteCollectionOutput,
 ): ContentBlock[] {
   if (value.kind === 'declined') {
-    return renderDeclined()
+    return renderDeclined(value)
   }
   if (value.kind === 'committed-unverified')
     return renderCommittedUnverified(value, 'collection', 'committed')
@@ -210,7 +239,7 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
             ? { kind: 'deleted', ref: value.ref, key: value.key }
             : value.kind === 'committed-unverified'
               ? unverifiedPresentationMeta(value)
-              : { kind: 'declined' },
+              : { ...value },
       },
       presentCall: (args) => ({
         card: 'generic',
@@ -220,6 +249,7 @@ export function registerDeleteCollectionTool(ctx: Context, service: ZoteroServic
       }),
       presentResult: presentDeleteCollectionResult,
       async execute(args, exec): Promise<ZoteroDeleteCollectionOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         const request = buildRequest(args)
         const preview = await previewDeleteCollection(service, request.collection, exec.signal)
         return await service.deleteCollection(request, {

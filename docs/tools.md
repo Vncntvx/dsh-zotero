@@ -8,7 +8,11 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 
 参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具（8 个本地读工具、15 个写入工具与 scholarly 组件工具）都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示仅在存在唯一近似匹配时出现，标明拒绝与建议参数。
 
-正文使用 `AttachmentStore.saveFileStream`，校验后的回执写入 `zotero_results` storage domain。超预算或受管理后台结果需要这两项服务；保存、索引、取消及完整性校验失败均明确报错，不回退全文内联。所属 Zotero 后台任务成功后，`job_output` 追加同一文件引用并保留官方 canonical value。PTC 嵌套调用传递标准文件附加上下文。原始后台确认保留 `resultSessionId`；重启后可按持久回执读取已保存结果，但不会恢复运行任务。
+全部 30 个工具的参数根对象均关闭：任何未声明参数都会在执行、网络请求和审批之前以 `INVALID_ARGS` 拒绝，可选参数误拼也不会被忽略。
+
+所有写工具的 `{kind:"declined"}` 均可携带 `feedback`：用户在计划卡输入的修改意见会完整返回模型，并显示为独立的用户反馈正文。自由文本始终拒绝当前计划，不会触发写入；模型需要根据意见重新制定计划并再次请求批准。
+
+正文使用 `AttachmentStore.saveFileStream`，校验后的回执写入 `zotero_results` storage domain。超预算或受管理后台结果需要这两项服务；保存、索引、取消及完整性校验失败均明确报错，不回退全文内联。附件后端不支持文件时返回 `ZOTERO_OUTPUT_TOO_LARGE`，提示配置支持文件的后端后重新读取。所属 Zotero 后台任务成功后，`job_output` 追加同一文件引用并保留官方 canonical value。PTC 嵌套调用传递标准文件附加上下文。原始后台确认保留 `resultSessionId`；重启后可按持久回执读取已保存结果，但不会恢复运行任务。
 
 认证端点 `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file>` 仅读取持久事件坐标指向的文件，或该事件后台确认对应的已核实回执，不接收任意路径或附件 ID。复制和下载须等待流完整结束并通过校验。附件遵循宿主生命周期，可能在会话结束后继续占用磁盘；插件不自行删除共享文件。
 
@@ -16,6 +20,7 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 
 ## zotero_search
 
+输出字段（按结果臂）： `items`、`maximum`、`nextActions`、`nextOffset`、`normalizedQuery`、`offset`、`queryWasEmpty`、`returned`、`scope`、`supplemental`、`total`。
 检索文献库中的条目。支持元数据匹配与全文检索模式。
 
 ### 参数
@@ -34,7 +39,7 @@ dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通
 | `sort`        | string                         | `"dateModified"`    | 排序字段：`dateModified`、`dateAdded`、`date`、`title`、`creator`                                                                                         |
 | `direction`   | `"asc"` \| `"desc"`            | `"desc"`            | 排序方向                                                                                                                                                  |
 | `offset`      | integer                        | `0`                 | 分页偏移量                                                                                                                                                |
-| `limit`       | integer                        | `10`                | 返回条目数量上限（受配置项 `maxSearchResults` 限制，默认 20）                                                                                             |
+| `limit`       | integer                        | `10`                | 每页条目数：1..`maxSearchResults`（默认上限 20），超出报错                                                                                                |
 
 ### 输出
 
@@ -54,6 +59,7 @@ zotero_search(query="transformer attention", mode="everything", tags=["deep-lear
 
 ## zotero_get
 
+输出字段（按结果臂）： `abstract`、`abstractTruncated`、`annotations`、`attachments`、`bestAttachment`、`children`、`citationKey`、`citationKeyConflict`、`citationKeySource`、`collections`、`contentType`、`creators`、`date`、`doi`、`extra`、`extraFields`、`itemType`、`location`、`noteBody`、`notes`、`path`、`ref`、`relations`、`serverId`、`tags`、`title`、`url`、`venue`、`version`、`year`。
 读取单篇文献或附件的详细元数据、本地文件路径与关联子内容。
 `ref` 是单个字符串；读取多个已知条目时传 `refs[]` 给 `zotero_get_batch`。
 
@@ -91,6 +97,7 @@ zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations",
 
 ## zotero_get_batch
 
+输出字段（按结果臂）： `counts`、`items`。
 按输入顺序批量读取已知条目或附件 ref。每条结果独立报告成功或失败；最多 50 条唯一 ref，实际并发为 `max(1, min(8, graphConcurrency, maxInFlightRequests - 1))`，在传输容量允许时为交互读取保留一个槽位。单条 `zotero_get` 用于一个 ref；多个 ref 使用本工具。
 
 ### 参数
@@ -100,6 +107,8 @@ zotero_get(ref="zotero://user/0/item/ABCD1234", include=["notes", "annotations",
 | `refs`    | string[] | —            | 1–50 个唯一条目或附件 ref，按此顺序返回                                                                                 |
 | `fields`  | string   | `"standard"` | `standard` 或 `all`；后者保留未消费的 Zotero 数据字段                                                                   |
 | `include` | object   | —            | `children` 包含笔记、标注和附件；`attachments` 仅包含附件；`relations:true` 返回关联；`bestAttachment` 解析最佳附件位置 |
+
+附件 ref 批次应将 `include.children` 和 `include.attachments` 保持为 false 或省略。任一选项为 true 时，请求会在发出网络请求前拒绝；条目与附件 ref 请拆分为不同调用。
 
 ### 输出
 
@@ -115,6 +124,7 @@ zotero_get_batch(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EF
 
 ## zotero_match_references
 
+输出字段（按结果臂）： `items`。
 将 BibTeX、DOI 或参考文献字段与本地 Zotero 库对账。仅访问本地库，不调用 scholarly，也不写入。DOI 精确匹配会在每次调用中分页读取一次全部顶层条目的元数据，因为 Zotero 快速搜索不检索 DOI 字段。每次最多 50 条；超过上限时分批。唯一高置信匹配才返回 `matched`；候选不唯一或证据不足时返回 `ambiguous`，citekey 来源冲突时返回 `conflict`。
 
 ### 参数
@@ -138,27 +148,28 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 
 ## zotero_retrieve
 
+输出字段（按结果臂）： `artifact`、`attachmentContentType`、`attachmentRef`、`attachments`、`coverage`、`evidence`、`fulltext`、`mode`、`noMatch`、`queryTerms`、`rankedRoutes`、`ref`、`sourcesSkipped`、`textFormat`、`truncated`。
 两个互斥模式：`evidence` 从单篇文献的多数据源提取与查询相关的原文片段并排序（核心词面 BM25；启用文档解析组件的本地语义检索后经词面+语义双路线 RRF 融合，每段标注 `matchKind`）；`fulltext` 按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束），不排序、不切块，解析 Markdown 命中时优先使用，未命中回退 Zotero 索引文本。
 
 ### 参数
 
-| 参数               | 类型     | 默认值     | 说明                                                                                                                                                                  |
-| ------------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`             | string   | `evidence` | 读取模式，缺省为 `evidence`。`evidence`：按 query 排序证据片段；`fulltext`：按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束）                                  |
-| `ref`              | string   | —          | `evidence` 模式：文献条目 ref                                                                                                                                         |
-| `query`            | string   | —          | `evidence` 模式：排序关键词，最多 2,000 个字符；超出时在读取前拒绝                                                                                                    |
-| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；每项最多 2,000 个字符，逐措辞独立排序，段落取各措辞的最好成绩                                     |
-| `sources`          | string[] | 全部 4 种  | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                                                                  |
-| `passages`         | integer  | `4`        | `evidence` 模式：返回段落数量上限（受 `maxEvidencePassages` 限制）                                                                                                    |
-| `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                                                   |
-| `attachmentRefs`   | string[] | —          | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                                                                    |
-| `source`           | object   | —          | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 64 位小写十六进制 `artifactId` 指定已解析产物（格式不符按参数错误拒绝） |
-| `start`            | integer  | `0`        | `fulltext` 模式：本次窗口的起始字符偏移                                                                                                                               |
-| `maxChars`         | integer  | —          | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                                                             |
+| 参数               | 类型     | 默认值     | 说明                                                                                                                                                                                                                                          |
+| ------------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | string   | `evidence` | 读取模式，缺省为 `evidence`。`evidence` 按 query 排序证据片段；`fulltext` 按字符窗口读取一篇文档（受 `maxFulltextChars` 约束）。每个窗口调用都会重新读取来源全文，窗口数约为 `ceil(totalChars/maxChars)`；首个窗口可提供完整文档的 spill 引用 |
+| `ref`              | string   | —          | `evidence` 模式：文献条目 ref                                                                                                                                                                                                                 |
+| `query`            | string   | —          | `evidence` 模式：排序关键词，最多 2,000 个字符；超出时在读取前拒绝                                                                                                                                                                            |
+| `queryVariants`    | string[] | —          | `evidence` 模式：同一问题的其他措辞（同义词、领域术语），至多 4 个；每项最多 2,000 个字符，逐措辞独立排序，段落取各措辞的最好成绩                                                                                                             |
+| `sources`          | string[] | 全部 4 种  | `evidence` 模式：检索源 `annotation`、`note`、`abstract`、`fulltext`                                                                                                                                                                          |
+| `passages`         | integer  | `4`        | 原文片段数：1..`maxEvidencePassages`，超出报错                                                                                                                                                                                                |
+| `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                                                                                                                           |
+| `attachmentRefs`   | string[] | —          | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                                                                                                                                            |
+| `source`           | object   | —          | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 64 位小写十六进制 `artifactId` 指定已解析产物（格式不符按参数错误拒绝）                                                                         |
+| `start`            | integer  | `0`        | `fulltext` 模式：本次窗口的起始字符偏移                                                                                                                                                                                                       |
+| `maxChars`         | integer  | —          | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                                                                                                                                     |
 
 ### 输出
 
-返回结构包含：`mode`；`evidence` 模式含 `ref`、`attachmentRef`、`attachmentContentType`、`coverage`、`attachments`、`evidence`（段落列表，每项含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`、`rankedRoutes`、`noMatch`；`fulltext` 模式只含 `mode` 与 `fulltext`（`sourceKind`、`sourceLabel`、`textFormat`、`artifact`、`coverage`、`totalChars`、`inputTruncated`、`start`、`end`、`text`、`isTruncated`、`nextStart`、`attachmentRef`、`spillRef`），不携带任何 evidence 侧字段（无 `ref`、`evidence`、`truncated`、`sourcesSkipped`、`queryTerms`、`noMatch`、`rankedRoutes`）。
+返回结构包含：`mode`；`evidence` 模式含 `ref`、`attachmentRef`、`attachmentContentType`、`coverage`、`attachments`、`evidence`（段落列表，每项含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`、`rankedRoutes`、`noMatch`；`fulltext` 模式只含 `mode` 与 `fulltext`（`sourceKind`、`sourceLabel`、`item`、`attachmentContentType`、`textFormat`、`artifact`、`coverage`、`totalChars`、`inputTruncated`、`start`、`end`、`text`、`isTruncated`、`nextStart`、`attachmentRef`、`spillRef`），不携带任何 evidence 侧字段（无 `ref`、`evidence`、`truncated`、`sourcesSkipped`、`queryTerms`、`noMatch`、`rankedRoutes`）。
 
 ### 说明
 
@@ -167,7 +178,7 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 - 不可用或未建立索引的来源记入 `sourcesSkipped`；`noMatch` 不表示"该条目没有相关内容"；
 - 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 或 `comment`；语义命中的段落不标注字段（措辞无重合）；
 - 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`；
-- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 续读直到 `isTruncated` 为 `false`；窗口按字符精确切分，顺序拼接即完整文档（`inputTruncated` 为 `true` 时只覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 回退索引文本，`source.kind="artifactId"` 则明确失败（不伪造来源）。解析产物窗口没有 `coverage`；索引文本窗口带 Zotero 自身的索引覆盖率。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄；未提供存储时仅窗口链可用。窗口默认尺寸下结果走内联交付，调低内联预算时可能落为 file 交付。读取永不触发解析任务、下载或上传。
+- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 续读直到 `isTruncated` 为 `false`；`totalChars`、`start`、`end`、`nextStart` 均按 UTF-16 码元计数，窗口边界不拆分代理对；请求 1 码元且窗口从代理对开始时会返回完整的 2 码元。顺序拼接即完整文档（`inputTruncated` 为 `true` 时覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 使用索引文本，`source.kind="artifactId"` 命中失败时返回明确错误。解析产物窗口没有 `coverage`；索引文本窗口带 Zotero 自身的索引覆盖率。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄。默认窗口和交付预算下结果走内联交付，增大窗口或调低内联预算时可能落为 file 交付，文件保留完整窗口与后续位置。读取使用已有来源；解析、下载和上传由独立操作触发。
 
 ### 示例
 
@@ -180,9 +191,12 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ## zotero_export
 
+输出字段（按结果臂）： `citations`、`format`、`items`、`jobId`、`kind`、`locale`、`message`、`outputFile`、`resultSessionId`、`style`、`text`、`timeoutMs`。
 文件导出可传 `outputFile`（非空路径，适用于书目、translator 文本及 `csv` 格式，不适用于 `citation`）。文件路径按调用会话的当前工作目录解析，由 Harness 文件系统按该会话的沙箱策略写入；写入失败会使工具或后台任务失败。前台、显式后台和超时提升均在文件写入与超预算或后台所需的内部持久化完成后才结束。写盘不等于会话交付：需要把文件列入本次会话的交付物时，由模型另行调用 Harness 的 `present` 工具声明该路径。
 
 生成格式化引用或导出数据文件。
+
+全部导出格式均要求 refs 中的条目身份唯一；同一库与 key 即使混用带 server 与不带 server 的 ref，也视为重复，在发起请求之前拒绝，不自动去重。
 
 ### 参数
 
@@ -205,6 +219,8 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 - `bibtex` / `biblatex` / `ris` / `csljson`：`{text, items: [{ref, citationKey, exportKey, title, entryIndex, start, end}]}`；`citationKey` 是 Zotero 原生/extra citekey，`exportKey` 是 translator 生成词条键；
 - `csv`：`{text}`（Zotero 自身的整表导出，无逐条目定位）。
 
+`start` 与 `end` 以 UTF-16 码元表示正文中的非空区间，并同时出现。CSL JSON 使用 `entryIndex` 定位，未能定位的条目保留 ref。
+
 后台执行（或前台等待超时自动提升）时：
 返回 `{kind: "background", jobId}` 或 `{kind: "promoted", jobId, timeoutMs, message}`。任务进度在 Web 会话顶栏与日志中展示，完成后结果写入 Job 产物。
 
@@ -226,6 +242,7 @@ zotero_export(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5
 
 ## zotero_browse
 
+输出字段（按结果臂）： `items`、`kind`、`library`、`libraryVersion`、`maximum`、`nextOffset`、`offset`、`returned`、`serverId`、`total`。
 浏览文献库结构与分类元数据。支持分页查询。
 
 ### 参数
@@ -244,9 +261,11 @@ zotero_export(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EFGH5
 | `q`             | string  | —                       | 标签名称的子串过滤词                                                                                                    |
 | `match`         | string  | `"contains"`            | 标签过滤匹配方式：`contains` 或 `startsWith`                                                                            |
 | `offset`        | integer | `0`                     | 分页偏移量                                                                                                              |
-| `limit`         | integer | `20`                    | 返回条目数量上限（受配置项 `maxBrowseResults` 限制，默认 50）                                                           |
+| `limit`         | integer | `20`                    | 每页条目数：1..`maxBrowseResults`（默认上限 50），超出报错                                                              |
 
 ### 输出
+
+所有浏览结果包含 `kind`、`items`、`total`、`offset`、`returned` 与配置上限 `maximum`，有下一页时含 `nextOffset`；合集和保存检索另有 `libraryVersion`。卡片按行数及字节预算显示完整行的前缀，并标明未展示数量；模型收到的规范页面不受卡片裁剪影响。
 
 各 `kind` 返回对应的结构化数组：
 
@@ -270,6 +289,7 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ## zotero_changes
 
+输出字段（按结果臂）： `changed`、`cursor`、`deleted`、`fromVersion`、`jobId`、`kind`、`library`、`libraryChanged`、`message`、`resultSessionId`、`serverId`、`timeoutMs`、`totals`、`truncated`、`unobservable`、`versionUnavailable`。
 基于本地事务版本获取文献库的增量更新与删除记录。
 
 ### 参数
@@ -284,13 +304,20 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ### 输出
 
+超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
+
 前台同步完成时返回：
 `{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed, deleted?, totals?, unobservable?, truncated?}`。
 
 - `changed`：按资源类型列出变更对象（`items`、`childItems`、`trashedItems`、`collections`、`savedSearches`、`fulltextAttachments`）；
+- `include:["fulltext"]` 读取当前全文索引清单（`/fulltext?since=0`），返回各附件的全文索引版本；它不是从库事务游标计算的增量，不能据此判断附件何时重新索引。
 - `deleted`：包含已删除条目的 key 或标签名；
 - `cursor`：仅在当前批次完整读取且期间未发生并发写入时返回，用于后续增量请求。`cursor.include` 仅包含当前 Zotero 版本实际支持跟踪的资源类别；未提供对应端点的类别（如缺少 `/deleted` 路由的旧版本）会记入 `cursor.unserved`，不计入覆盖声明，但后续增量请求仍可原样带回；
 - `unobservable`：标明因版本或端点限制无法观测的资源类别及原因。端点未提供（`not-served`）不影响游标生成；若存在不支持的键范围（`range-not-covered`）或读取失败（`unreadable`），当前批次将不返回游标，防止推进游标时遗漏未成功读取的变更行。
+
+每个 `changed` / `deleted` 资源列表最多返回 `maxChangesResults` 条（默认 50），这会限制模型拿到的规范结果列表；`totals` 保留真实数量，`truncated` 标记超限。工具必须完整读取上游版本映射后才可签发游标，列表截断不表示上游读取不完整。
+
+较大的版本区间可能超过 `maxResponseBytes`，导致 `ZOTERO_RESPONSE_TOO_LARGE`，本次调用不返回新游标。需要保留该区间时，提高响应字节预算并使用原 `since` 重试。省略 `since` 只会建立当前基线，不会补回期间变更；全量重新同步后才可将该新基线用于后续增量。
 
 ### 示例
 
@@ -303,6 +330,7 @@ zotero_changes(since={serverId: "server1", library: {type: "user", id: 0}, versi
 
 ## zotero_create_note
 
+输出字段（按结果臂）： `collections`、`committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`parentItem`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`sourceRefs`、`tags`、`version`。
 创建独立研究笔记或挂载在指定条目下的子笔记。
 
 ### Markdown 语法支持
@@ -341,8 +369,11 @@ zotero_create_note(parentItem="zotero://user/0/item/ABCD1234", tags=["综述"], 
 
 ---
 
+`committed-unverified` 表示写入可能已经提交：不可重试；请按回执中的 ref、key 或服务器事实先核对 Zotero 的最终状态。
+
 ## zotero_update_item_tags
 
+输出字段（按结果臂）： `added`、`committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`removed`、`retryable`、`serverId`、`tags`、`unchanged`、`version`。
 在一次调用中完成条目标签的增删。读-合并-写语义：`add` 与 `remove` 同时生效，已存在的标签及其类型（彩色/自动）保留，`remove` 对同时出现在两个列表中的已存标签优先生效。
 
 ### 参数
@@ -373,7 +404,10 @@ zotero_update_item_tags(ref="zotero://user/0/item/ABCD1234", add=["深度学习"
 
 ## zotero_update_item_collections
 
+输出字段（按结果臂）： `added`、`collections`、`committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`removed`、`retryable`、`serverId`、`unchanged`、`version`。
 在一次调用中完成条目在合集之间的加入与退出。合集参数可以是 `zotero://user/0/collection/<KEY>` ref 或精确名称（`zotero_browse` 可列出）；名称解析失败先于任何写入。
+
+审批前读取目标，子条目继承父条目的合集归属，须改为修改父条目；批准后再次读取并使用当前版本写入。
 
 ### 参数
 
@@ -403,7 +437,10 @@ zotero_update_item_collections(ref="zotero://user/0/item/ABCD1234", add=["方法
 
 ## zotero_create_collection
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`name`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 创建合集（顶层或挂在某个父合集之下）。
+
+审批前读取父合集及完整同级列表，已存在同名合集时直接拒绝；批准后再次检查，防止审批期间新增同名合集。
 
 ### 参数
 
@@ -428,7 +465,8 @@ zotero_create_collection(name="田野笔记", parent="方法论")
 
 ## zotero_delete_collection
 
-删除合集。**不可逆**：合集的组织结构被移除，条目仍保留在文献库中，子合集随父合集一起删除。计划卡会先列出该合集的条目数与子合集数（读取失败时显示 `unknown`），删除携带前置读到的库版本。
+输出字段（按结果臂）： `committed`、`completedRefs`、`deleted`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
+删除合集。**不可逆**：合集的组织结构被移除，条目仍保留在文献库中，子合集随父合集一起删除。计划卡会先列出该合集的直属条目数与全部层级的后代合集总数（任一层级读取失败会终止预检，不能进入删除审批），删除携带前置读到的库版本。
 
 ### 参数
 
@@ -453,6 +491,7 @@ zotero_delete_collection(collection="田野笔记")
 
 ## zotero_create_item
 
+输出字段（按结果臂）： `collections`、`committed`、`completedRefs`、`feedback`、`itemType`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`tags`、`title`、`version`。
 从闭合字段集创建文献条目。Zotero 的 `POST /items` 只接受 Zotero 条目 JSON，因此没有 BibTeX/CSL-JSON 入口，字段逐个装配，闭集之外的内容不会离开本模块。
 
 ### 参数
@@ -486,9 +525,12 @@ zotero_create_item(itemType="journalArticle", title="Attention Is All You Need",
 
 ## zotero_update_note
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 使用 Markdown 替换现有 Zotero 笔记正文。写入前读取笔记版本，并在 PATCH 中转换为 Zotero 安全 HTML；目标必须是 `itemType="note"`。
 
 支持独立笔记和子笔记，读取版本不要求子对象具有合集字段。创建和更新均在审批前校验原始 Markdown 的 `writeNoteMaxChars` 上限，按 JavaScript 字符串长度计数，包含空白和标记，不自动截断。
+
+审批前读取目标并核实其类型，非笔记直接拒绝；批准后再次读取并核实类型与版本。
 
 ### 参数与输出
 
@@ -511,6 +553,7 @@ zotero_update_note(ref="zotero://user/0/item/NOTE1234", markdown="## 方法总�
 
 ## zotero_update_collection
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`name`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 更新合集名称或父合集。`name` 与 `parent` 均未提供、名称为空、目标不存在、父合集不属于个人库或版本前置条件失效时拒绝写入；`parent` 省略表示保留现有父级，原生调用可传 `null` 将其移到顶层。
 
 ### 参数与输出
@@ -535,6 +578,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 
 ## zotero_restore_items
 
+输出字段（按结果臂）： `failed`、`feedback`、`kind`、`restored`、`serverId`、`unverified`。
 将个人库 Trash 中指定的条目恢复为活动状态。按对象图读取版本，再按依赖层用原生批次（单个对象用 PATCH）写入 `deleted: 0`，逐项返回成功或失败，最多 50 个根条目。
 
 ### 参数与输出
@@ -543,7 +587,7 @@ zotero_update_collection(collection="zotero://user/0/collection/COLL0001", name=
 | ------ | -------- | ---- | --------------------- |
 | `refs` | string[] | ✓    | 要恢复的条目 ref 列表 |
 
-输出为 `{kind: "restored", restored, unverified, failed, serverId?}`；版本冲突记录在 `failed`，回执未知记录在 `unverified`。
+输出为 `{kind: "restored" | "partial" | "failed", restored, unverified, failed, serverId?}`；全部确认恢复或本来正常时为 `kind: "restored"`，含失败或未核验结果时为 `kind: "partial"`，全部明确失败时为 `kind: "failed"`。版本冲突记录在 `failed`，回执未知记录在 `unverified`。
 
 支持子笔记、子附件和批注。结果正文完整列出成功对象的 ref、版本、库版本，以及失败和未核验对象的 ref、错误码或原因；卡片根据实际结果显示恢复数、未核验数与失败数，未核验回执必须先按 ref/key 核对，禁止重试。
 
@@ -559,6 +603,7 @@ zotero_restore_items(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/ite
 
 ## zotero_create_saved_search
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`conditions`、`feedback`、`key`、`kind`、`libraryVersion`、`name`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 使用明确的条件在个人库中创建 Zotero 保存的搜索（Saved Search）。创建至少需要一个条件；创建响应丢失或回显无法核验时返回 `committed-unverified`（`retryable: false`），必须先按 search ref/key 核对，禁止重复创建。
 
 ### 参数
@@ -582,8 +627,11 @@ zotero_create_saved_search(name="Recent ML Papers", conditions=[{"condition": "i
 
 ---
 
+`committed-unverified` 表示写入可能已经提交：不可重试；请按回执中的 ref、key 或服务器事实先核对 Zotero 的最终状态。
+
 ## zotero_update_saved_search
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`conditions`、`feedback`、`key`、`kind`、`libraryVersion`、`name`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 更新个人库中已有保存搜索的名称或匹配条件。更新使用对象版本前置条件；提供 `conditions` 时必须至少包含一条条件。
 
 ### 参数
@@ -610,8 +658,11 @@ zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updat
 
 ---
 
+`committed-unverified` 表示写入可能已经提交：不可重试；请按回执中的 ref、key 或服务器事实先核对 Zotero 的最终状态。
+
 ## zotero_delete_saved_search
 
+输出字段（按结果臂）： `committed`、`completedRefs`、`deleted`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
 删除个人库中的指定保存搜索。**不可逆**：删除操作仅移除保存搜索定义本身，文献库中的条目不受影响。删除使用库版本前置条件。
 
 ### 参数
@@ -632,7 +683,11 @@ zotero_update_saved_search(search="zotero://user/0/search/SRCH1234", name="Updat
 zotero_delete_saved_search(search="zotero://user/0/search/SRCH1234")
 ```
 
+`committed-unverified` 表示写入可能已经提交：不可重试；请按回执中的 ref、key 或服务器事实先核对 Zotero 的最终状态。
+
 ## scholarly_save_to_zotero
+
+输出字段（按结果臂）： `collections`、`committed`、`completedRefs`、`feedback`、`itemType`、`key`、`kind`、`libraryVersion`、`papers`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`tags`、`title`、`version`。
 
 ### 参数
 
@@ -661,8 +716,11 @@ scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You 
 
 ---
 
+`committed-unverified` 表示写入可能已经提交：不可重试；请按回执中的 ref、key 或服务器事实先核对 Zotero 的最终状态。
+
 ## zotero_update_item
 
+输出字段（按结果臂）： `changed`、`committed`、`completedRefs`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`unchanged`、`version`。
 订正条目的标量元数据。字段合法性以 Zotero 的 `itemTypeFields` 为准：某字段不被该条目类型接受时，在任何 PATCH 之前拒绝；值必须是非空文本。写入携带条目版本前置条件（`If-Unmodified-Since-Version`）。
 
 标量更新先校验全部字段适用于条目类型，再严格比较规范化 wire 值，仅 PATCH 差异。已满足请求返回 `{kind: "applied", unchanged: true, changed: []}` 及实际读取的条目 `version`，不报告新的 `libraryVersion`，不获取写凭据。能力门与两级审批仍适用。
@@ -693,7 +751,8 @@ zotero_update_item(ref="zotero://user/0/item/ABCD1234", set={"title": "Attention
 
 ## zotero_delete_library_tags
 
-按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡先翻页扫描整个标签列表，再列出每个标签的条目数：列表包含该标签但未给计数时显示 `unknown items`；仅整个列表均未匹配的名称列为「确证无效（proven no-ops）」。读取失败时各项显示 `unknown items`，删除前重新扫描标签并核对所有页的库版本；版本变化拒绝执行，只把确证存在的名称提交给 Zotero。未核验回执必须先核对，禁止重试。
+输出字段（按结果臂）： `absentTags`、`committed`、`completedRefs`、`deletedTags`、`feedback`、`key`、`kind`、`libraryVersion`、`parentRef`、`reason`、`ref`、`retryable`、`serverId`、`version`。
+按名称在全库范围删除标签。**不可逆**：标签会从文献库中的每个条目上移除。计划卡按名称查询包含子条目的标签前缀列表，每个名称最多读取两页；列出精确匹配标签的条目数。标签未给计数或两页后仍有未读结果时显示 `unknown items`；只有完整读完该名称的筛选列表且仍无精确匹配，才列为「确证无效（proven no-ops）」。读取失败时各项显示 `unknown items`，删除前重新扫描标签并核对所有页的库版本；版本变化拒绝执行，只把确证存在的名称提交给 Zotero。未核验回执必须先核对，禁止重试。
 
 ### 参数
 
@@ -718,6 +777,7 @@ zotero_delete_library_tags(tags=["旧标签", "废弃"])
 
 ## zotero_batch_items
 
+输出字段（按结果臂）： `created`、`deleted`、`failed`、`feedback`、`kind`、`libraryVersion`、`serverId`、`total`、`unverified`、`updated`。
 在单次调用中批量创建文献、更新标签与合集归属，或将条目及其子笔记、附件和批注移至回收站。条目删除按依赖层用逐对象版本前置的原生批次（单个对象用 PATCH）将整个对象图标记为已删除，完成后重新读取并核验；部分失败时 `failed.completedRefs` 列出已确认移入回收站的对象。此操作可从 Zotero 回收站恢复。所有操作合并为一张计划卡确认，卡片完整列出每个创建请求的全部字段与合集归属。各项操作独立执行，整批可能只完成一部分；请按回执逐项核对结果。
 
 单次操作总数（创建、更新与删除之和）受 `writeListMaxItems` 限制（默认 50 项）。每项创建的回执按输入索引列出 Zotero 保存后的 ref、key、版本及可用的标题/URL。若某项创建的提交或已保存状态无法核实，它会出现在 `unverified` 中并标记 `retryable: false`，应按 ref/key 核对。异常的批次索引作为未核实结果报告。单个条目的版本冲突（HTTP 412）记录到 `failed` 数组中，不影响其余条目执行。
@@ -788,6 +848,8 @@ zotero_batch_items(
 
 ## 错误码
 
+Remote 接口还提供按故障类别划分的 `zotero/*` reason，供宿主与外部客户端分流；`details.code` 保留本表的具体领域码。reason 是公开 wire 契约，插件界面显示消息时不必逐个分支。
+
 | 错误码                                     | 说明                                                                                           |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | `ZOTERO_NOT_RUNNING`                       | Zotero 未运行或本地端口不可达                                                                  |
@@ -817,7 +879,7 @@ zotero_batch_items(
 | `ZOTERO_SCOPE_AMBIGUOUS`                   | 合集或保存搜索名称匹配到多个同名对象                                                           |
 | `ZOTERO_TIMEOUT`                           | 提供方请求超时                                                                                 |
 | `ZOTERO_RESPONSE_TOO_LARGE`                | API 响应数据流超出读取上限                                                                     |
-| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限                                                                         |
+| `ZOTERO_OUTPUT_TOO_LARGE`                  | 导出内容超出字符数上限，或读取结果的交付回执超出内联预算                                       |
 | `ZOTERO_CAPABILITY_UNAVAILABLE`            | 当前 Provider 未声明所需能力                                                                   |
 | `ZOTERO_SCHOLARLY_NO_FULLTEXT`             | 学术全文解析未找到可读副本，细分原因见错误消息                                                 |
 | `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE` | 学术检索配置了凭据引用，但宿主未装载凭据服务                                                   |
@@ -861,22 +923,24 @@ bundle 组件 `dsh-zotero/scholarly` 随包发布但默认关闭。在插件管�
 
 ### scholarly_search
 
+超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`jobId`、`kind`、`message`、`papers`、`resultSessionId`、`spill`、`text`、`timeoutMs`。
 跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 的多源文献检索。支持主题短语路由、多路 RRF 融合去重，并自动检查当前本地 Zotero 库中的收藏状态。
 
 #### 参数
 
-| 参数                | 类型     | 默认值        | 说明                                                                                                                                                                             |
-| ------------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                     |
-| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题短语表路由                                              |
-| `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认只取上一年                                                                                                                       |
-| `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                     |
-| `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                             |
-| `sort`              | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（最新优先，省略 `year_from` 时默认只取上一年）、`citations`（引用最多优先）                                                              |
-| `categories`        | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                                                                          |
-| `limit`             | integer  | `8`           | 返回论文数量上限                                                                                                                                                                 |
-| `abstract`          | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                                                                          |
-| `run_in_background` | boolean  | `false`       | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
+| 参数                | 类型     | 默认值        | 说明                                                                                                                                                                                    |
+| ------------------- | -------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`             | string   | — (必填)      | 检索主题词、论文标题或作者名                                                                                                                                                            |
+| `sources`           | string[] | —             | 可选限制检索的数据源列表（`arxiv`、`openalex`、`crossref`、`semanticscholar`、`pubmed`、`europepmc`、`dblp`）；默认按主题短语表路由                                                     |
+| `year_from`         | integer  | —             | 发表起始年份；`sort="date"` 且省略此参数时，默认从上一年起检索                                                                                                                          |
+| `year_to`           | integer  | —             | 发表截止年份                                                                                                                                                                            |
+| `open_access`       | boolean  | —             | 是否仅返回具有免费开放获取全文的文献                                                                                                                                                    |
+| `sort`              | string   | `"relevance"` | 排序方式：`relevance`（相关度）、`date`（按日期重排候选：arXiv 按提交日期召回，其余源取相关度前 `min(50, 3×limit)` 条；省略 `year_from` 时从上一年起检索）、`citations`（引用最多优先） |
+| `categories`        | string[] | —             | arXiv 分类过滤（如 `cs.CL`、`stat.ML`）                                                                                                                                                 |
+| `limit`             | integer  | `8`           | 返回论文数量上限                                                                                                                                                                        |
+| `abstract`          | string   | `"snippet"`   | 摘要展示程度：`none`、`snippet`、`full`                                                                                                                                                 |
+| `run_in_background` | boolean  | `false`       | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝）        |
 
 #### 示例
 
@@ -888,13 +952,14 @@ scholarly_search(query="transformer attention", limit=5)
 
 ### scholarly_get
 
-通过 DOI、arXiv ID、PMID、PMCID、URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`papers`、`spill`、`text`。
+通过 DOI、arXiv ID、PMID、PMCID、含这些标识符的 URL 或精确标题直接聚合获取单篇论文的完整学术图谱元数据（作者、出版物、摘要、引用次数、开放获取全文链接与本地 Zotero 库匹配状态）。
 
 #### 参数
 
-| 参数 | 类型   | 默认值   | 说明                                                                                     |
-| ---- | ------ | -------- | ---------------------------------------------------------------------------------------- |
-| `id` | string | — (必填) | DOI（如 `10.1038/nature1234`）、arXiv ID（如 `2301.07041`）、PMID、PMCID、URL 或精确标题 |
+| 参数 | 类型   | 默认值   | 说明                                                                                                    |
+| ---- | ------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `id` | string | — (必填) | DOI（如 `10.1038/nature1234`）、arXiv ID（如 `2301.07041`）、PMID、PMCID、含这些标识符的 URL 或精确标题 |
 
 #### 示例
 
@@ -910,6 +975,7 @@ scholarly_get(id="10.1038/nature1234")
 
 ### scholarly_citations
 
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`papers`、`spill`、`text`。
 追踪论文引文网络：检索引用该文献的论文列表（citations）、该文献的参考文献列表（references）或相似关联文献（related）。
 
 #### 参数
@@ -930,6 +996,8 @@ scholarly_citations(id="2301.07041", direction="citations", limit=5)
 
 ### scholarly_read
 
+超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`jobId`、`kind`、`message`、`papers`、`resultSessionId`、`spill`、`text`、`timeoutMs`。
 合法开放获取全文分层读取与段落级证据定位。支持目录大纲提取（outline）、章节精准读取（section）与基于自然语言问题的证据段落匹配（query）。
 
 #### 参数
@@ -943,7 +1011,7 @@ scholarly_citations(id="2301.07041", direction="citations", limit=5)
 | `queryVariants`     | string[] | —        | 同一问题的其他措辞（同义词、领域术语），至多 4 个；每项最多 2,000 字符，逐措辞独立排序，段落取各措辞的最好成绩                                                                   |
 | `passages`          | integer  | `5`      | `query` 模式下返回的最优段落数量（1-12）                                                                                                                                         |
 | `start`             | integer  | `0`      | 分块阅读起始字符偏移量                                                                                                                                                           |
-| `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数                                                                                                                                                             |
+| `max_chars`         | integer  | 配置上限 | 单次读取的最大字符数，范围为 1 至配置上限；越界拒绝                                                                                                                              |
 | `run_in_background` | boolean  | `false`  | 是否作为后台任务启动（由 Harness `ctx.jobs` 管理，作业 kind 为 `scholarly`；仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明，未声明时传 `true` 会得到结构化拒绝） |
 
 #### 示例
@@ -960,6 +1028,7 @@ scholarly_read(id="2301.07041", query="attention mechanism")
 
 ### scholarly_cite
 
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`papers`、`spill`、`text`。
 从 DOI 官方注册中心（Crossref、DataCite）通过内容协商直接获取标准引用格式。
 
 #### 参数
@@ -981,6 +1050,8 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 ### scholarly_verify
 
+超过前台等待预算时，执行转为后台并返回 `kind="promoted"`、`jobId`、`message`、`timeoutMs`；通过 `job_output` 获取最终结果。显式后台提交返回 `kind="job"`，最终业务结果不随这两种回执返回。
+输出字段（按结果臂）： `checks`、`citations`、`document`、`issues`、`jobId`、`kind`、`message`、`papers`、`resultSessionId`、`spill`、`text`、`timeoutMs`。
 参考文献真实性与准确性核验工具。解析参考文献文本中的作者、年份、标题与 DOI，对照 Crossref 官方注册数据库进行逐项比对，检测伪造文献、DOI 错配、年份差错及撤稿状态。
 
 #### 参数
@@ -999,3 +1070,7 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 ```text
 scholarly_verify(references=["Vaswani et al. 2017, Attention Is All You Need"])
 ```
+
+所有非 citation 导出（包括面板文本导出和 CSV）会独立读取请求的条目键并核对完整集合。缺失键返回 `ZOTERO_NOT_FOUND`；元数据读取、协议或取消失败保持明确失败，不交付无法核实条目集合的正文。translator 省略某个已确认存在的条目时，该条目仍保留 ref-only 映射；CSV 仍采用 Zotero 的整表输出语义。
+
+全文读取的本地附件会通过 Local API 核对附件元数据及其父条目；`fulltext.item` 携带已核实的父条目 ref、标题、作者摘要与可用年份/刊名，`attachmentContentType` 来自附件记录。独立附件不虚构父条目，URL 产物不读取本地条目。元数据或协议失败保持明确失败。轨迹按父条目合并本地全文读取，并保留实际附件入口；无 Zotero 身份的 URL 产物采用 `artifact:<id>` 键。

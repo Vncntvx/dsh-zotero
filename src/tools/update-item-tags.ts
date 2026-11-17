@@ -1,3 +1,4 @@
+import { assertWritePayload } from '../write-bounds.js'
 /**
  * The `zotero_update_item_tags` tool: update one item's tags with add and
  * remove settling in a single read-merge-write. Existing tag types are
@@ -11,12 +12,12 @@ import { planValue } from '../write-plan.js'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import {
   listUpdatePresentationMeta,
@@ -24,13 +25,13 @@ import {
   renderUpdateList,
   renderCommittedUnverified,
   UPDATE_ITEM_TAGS_OUTPUT_SCHEMA,
-} from './write-present.js'
+} from '../write-present.js'
 import { assertAddRemoveSelection, parseWritableRef, WRITE_REF_ARG_HINT } from './validate.js'
 import { WRITE_PLAN_OUTCOME_DESCRIPTION, WRITE_PLAN_LIBRARY_LINE } from '../write-approval.js'
 import type { ZoteroService } from '../service.js'
 import type { ZoteroUpdateItemTagsOutcome, ZoteroUpdateItemTagsRequest } from '../types.js'
 
-const UPDATE_ITEM_TAGS_PARAMETERS = {
+export const UPDATE_ITEM_TAGS_PARAMETERS = {
   ref: {
     type: 'string',
     required: true,
@@ -122,6 +123,7 @@ export function registerUpdateItemTagsTool(ctx: Context, service: ZoteroService)
       // timeoutMs is deliberately omitted: the plan-review card waits on user
       // think time, which is not a stuck request.
       async execute(args, exec): Promise<ZoteroUpdateItemTagsOutcome> {
+        assertWritePayload(args, service.config.writeFieldMaxChars)
         // Writes never retry: only idempotent reads may be retried. The plan
         // review is the seam's (service.updateItemTags), so no caller can skip
         // it.

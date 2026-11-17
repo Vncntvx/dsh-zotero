@@ -66,7 +66,11 @@ describe('batchItems domain operations', () => {
         batchHeaders(25),
         JSON.stringify({
           successful: {
-            '0': itemJson('BATCH001', 25, { itemType: 'journalArticle', title: 'Paper 1' }),
+            '0': itemJson('BATCH001', 25, {
+              itemType: 'journalArticle',
+              title: 'Paper 1',
+              tags: [{ tag: 'ml' }],
+            }),
             '1': itemJson('BATCH002', 25, { itemType: 'book', title: 'Book 2' }),
           },
           success: { '0': 'BATCH001', '1': 'BATCH002' },
@@ -192,8 +196,23 @@ describe('batchItems domain operations', () => {
         batchHeaders(26),
         JSON.stringify({
           successful: {
-            '0': itemJson('FULLITM1', 26, { itemType: 'book', title: 'Complete book' }),
-            '1': itemJson('FULLITM2', 26, { itemType: 'webpage', url: 'https://example.org' }),
+            '0': itemJson('FULLITM1', 26, {
+              itemType: 'book',
+              title: 'Complete book',
+              url: 'https://example.org/book',
+              date: '2026',
+              DOI: '10.1000/example',
+              abstractNote: 'Abstract',
+              publicationTitle: 'Publisher',
+              creators: [{ creatorType: 'author', firstName: 'Ada', lastName: 'Lovelace' }],
+              tags: [{ tag: 'reviewed' }],
+              collections: [SECOND_COLLECTION_KEY],
+            }),
+            '1': itemJson('FULLITM2', 26, {
+              itemType: 'webpage',
+              url: 'https://example.org',
+              collections: [COLLECTION_KEY],
+            }),
           },
           success: { '0': 'FULLITM1', '1': 'FULLITM2' },
           unchanged: {},
@@ -244,7 +263,7 @@ describe('batchItems domain operations', () => {
     expect(result.failed).toEqual([])
     expect(result.unverified).toEqual([])
     expect(result.created.map(({ index, url, title }) => ({ index, url, title }))).toEqual([
-      { index: 0, title: 'Complete book', url: undefined },
+      { index: 0, title: 'Complete book', url: 'https://example.org/book' },
       { index: 1, title: undefined, url: 'https://example.org' },
     ])
   })

@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * `zotero_restore_items`: the recoverable Trash restore — per-item versioned
  * PATCHes with a per-ref failure list, the declined arm, and the replayable
@@ -20,7 +21,6 @@ import { ZOTERO_NOT_FOUND } from '../../../src/errors.js'
 import type { ZoteroRestoreItemsResult } from '../../../src/types.js'
 import { renderRestoreItems } from '../../../src/tools/restore-items.js'
 
-const SERVER_ID = 'srv-restore-items-01'
 const KEY_1 = 'RESTORE1'
 const KEY_2 = 'RESTORE2'
 const REF_1 = `zotero://user/0/item/${KEY_1}`
@@ -226,7 +226,7 @@ describe('zotero_restore_items', () => {
       'zotero_restore_items',
     )
     expect(result.value).toMatchObject({
-      kind: 'restored',
+      kind: 'partial',
       restored: [{ ref: SERVED_REF_1, restored: true }],
       unverified: [],
       failed: [{ op: 'update', ref: REF_2, code: ZOTERO_NOT_FOUND }],
@@ -251,7 +251,7 @@ describe('zotero_restore_items', () => {
       'zotero_restore_items',
     )
     expect(result.value).toMatchObject({
-      kind: 'restored',
+      kind: 'partial',
       restored: [],
       unverified: [
         {
@@ -329,7 +329,7 @@ describe('zotero_restore_items', () => {
       'zotero_restore_items',
     )
     expect(result.value).toMatchObject({
-      kind: 'restored',
+      kind: 'partial',
       restored: [],
       unverified: [
         {

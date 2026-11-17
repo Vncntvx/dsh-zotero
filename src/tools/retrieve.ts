@@ -13,12 +13,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
-  defineTool,
   type InferArgs,
   type InferValue,
   type ToolResult,
   type ToolResultView,
 } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../define-tool.js'
 import type { ResolvedConfig } from '../config.js'
 import { ZOTERO_MAX_QUERY_VARIANTS } from '../constants.js'
 import { artifactIdOf } from '../contract.js'
@@ -31,7 +31,7 @@ import { identityToolWrapper, type ToolWrapper } from '../result-delivery.js'
 import { metaRecordOf } from './present.js'
 import { assertIntInRange, assertNonEmptyList, REF_ARG_HINT } from './validate.js'
 import { exceedsInlineTokenBudget, spilledNoticeOf, trySpillToolOutput } from '../spill.js'
-import type { FulltextSpillSink } from '../local/retrieve-fulltext.js'
+import type { FulltextSpillSink } from '../fulltext-spill.js'
 import type { ZoteroService } from '../service.js'
 import type {
   ZoteroCoverage,
@@ -79,7 +79,7 @@ const RETRIEVE_PARAMETERS = {
   passages: {
     type: 'integer',
     default: DEFAULT_PASSAGES,
-    description: 'Evidence mode: passage cap (maxEvidencePassages).',
+    description: 'Evidence mode: 1..maxEvidencePassages; larger values fail.',
   },
   attachmentPolicy: {
     type: 'string',
@@ -104,7 +104,7 @@ const RETRIEVE_PARAMETERS = {
       },
     },
     description:
-      'Fulltext mode: exactly one source. kind="ref" reads a Zotero attachment by ref; kind="artifactId" reads a stored parsed artifact, including URL-sourced documents.',
+      'Fulltext mode: exactly one source. kind="ref" reads a Zotero attachment by ref; kind="artifactId" reads a stored parsed artifact, including URL-sourced documents, when dsh-zotero/enrichment is composed.',
   },
   start: {
     type: 'integer',
@@ -196,6 +196,18 @@ const FULLTEXT_READ_RECORD = {
   properties: {
     sourceKind: { type: 'string', enum: ['attachment', 'url'], required: true },
     sourceLabel: { type: 'string', required: true },
+    item: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ref: { type: 'string', required: true },
+        title: { type: 'string', required: true },
+        creatorSummary: { type: 'string', required: true },
+        year: { type: 'number' },
+        venue: { type: 'string' },
+      },
+    },
+    attachmentContentType: { type: 'string' },
     textFormat: { type: 'string', enum: ['markdown', 'text'], required: true },
     artifact: ARTIFACT_RECORD,
     coverage: COVERAGE_RECORD,
@@ -561,6 +573,10 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
     const header = [
       `Full text of ${read.sourceLabel} (${read.textFormat}; ${read.sourceKind} source)`,
       `Characters ${read.start}–${read.end} of ${read.totalChars}; isTruncated: ${read.isTruncated}.`,
+      read.totalChars === 0 ? 'This source contains no readable text.' : '',
+      read.totalChars > 0 && read.start === read.totalChars
+        ? 'End of document; this window contains no further text.'
+        : '',
       read.inputTruncated ? FULLTEXT_INPUT_TRUNCATED_REMEDY : '',
       read.isTruncated ? `${FULLTEXT_TRUNCATED_REMEDY} (nextStart=${read.nextStart})` : '',
       read.coverage === undefined ? '' : coverageLineOf(read.coverage),
@@ -694,8 +710,8 @@ export function registerRetrieveTool(
       defineTool({
         name: 'zotero_retrieve',
         description: [
-          'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote it as containing the terms), hybrid = both; matchedFields names text or comment, and truncated/sourcesSkipped/noMatch are honest signals.',
-          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; each window is sized to fit inline delivery; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
+          'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote it as containing the terms), hybrid = both; matchedFields names text or comment, truncated/sourcesSkipped report coverage; noMatch never means the item is silent on the subject.',
+          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; windows use inline or file delivery per budget; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
           'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, a specified attachment must provably be this item\u2019s child; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and character budget (a passage charges its text and any annotation comment), and a truncated flag signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,

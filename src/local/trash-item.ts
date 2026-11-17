@@ -67,11 +67,12 @@ async function readTrashSnapshot(
  * graph level: the child listings of one node's children are independent
  * reads and run concurrently.
  */
-export async function readTrashGraph(
+async function readGraph(
   client: ZoteroHttpClient,
   key: string,
   serverId: string,
   signal?: AbortSignal,
+  childReads?: Map<string, Promise<unknown[]>>,
 ): Promise<TrashSnapshot[]> {
   const seen = new Set<string>()
   const visit = async (node: TrashSnapshot): Promise<TrashSnapshot[]> => {
@@ -82,13 +83,18 @@ export async function readTrashGraph(
       )
     seen.add(node.key)
     if (node.itemType === 'annotation') return [node]
-    const children = await fetchChildrenForTrash(
-      { client },
-      node.key,
-      serverId,
-      node.itemType === 'attachment',
-      signal,
-    )
+    let pending = childReads?.get(node.key)
+    if (pending === undefined) {
+      pending = fetchChildrenForTrash(
+        { client },
+        node.key,
+        serverId,
+        node.itemType === 'attachment',
+        signal,
+      )
+      childReads?.set(node.key, pending)
+    }
+    const children = await pending
     const childSnapshots = children.map((json) => {
       const data = asRecord(asRecord(json)?.data)
       const childKey = asString(asRecord(json)?.key)
@@ -103,4 +109,59 @@ export async function readTrashGraph(
     return [...childGraphs.flat(), node]
   }
   return visit(await readTrashSnapshot(client, key, serverId, signal))
+}
+
+/** Read one complete graph from the current server state, including verification reads. */
+export function readTrashGraph(
+  client: ZoteroHttpClient,
+  key: string,
+  serverId: string,
+  signal?: AbortSignal,
+): Promise<TrashSnapshot[]> {
+  return readGraph(client, key, serverId, signal)
+}
+
+/**
+ * Preflight independent roots concurrently and share their child listings.
+ * Consuming a graph invalidates overlapping preflights: an earlier write may
+ * have changed their versions, even if that write subsequently failed.
+ * Verification always uses readTrashGraph and never this snapshot cache.
+ */
+export async function preflightTrashGraphs(
+  client: ZoteroHttpClient,
+  keys: readonly string[],
+  serverId: string,
+  signal?: AbortSignal,
+): Promise<{ take(key: string): Promise<TrashSnapshot[]> }> {
+  type Outcome = { graph: TrashSnapshot[] } | { error: unknown }
+  const childReads = new Map<string, Promise<unknown[]>>()
+  const prepared = new Map<string, Outcome>()
+  await mapWithConcurrency(
+    [...new Set(keys)],
+    TRASH_GRAPH_CONCURRENCY,
+    async (key) => {
+      try {
+        prepared.set(key, { graph: await readGraph(client, key, serverId, signal, childReads) })
+      } catch (error) {
+        signal?.throwIfAborted()
+        prepared.set(key, { error })
+      }
+    },
+    { signal },
+  )
+  const consumed = new Set<string>()
+  return {
+    async take(key) {
+      signal?.throwIfAborted()
+      const outcome = prepared.get(key)
+      if (outcome === undefined)
+        throw new ZoteroError(`No Trash preflight exists for ${key}.`, ZOTERO_UNEXPECTED)
+      if ('error' in outcome) throw outcome.error
+      const graph = outcome.graph.some((node) => consumed.has(node.key))
+        ? await readTrashGraph(client, key, serverId, signal)
+        : outcome.graph
+      for (const node of graph) consumed.add(node.key)
+      return graph
+    },
+  }
 }
