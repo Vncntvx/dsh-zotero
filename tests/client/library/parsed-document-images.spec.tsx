@@ -6,7 +6,7 @@ import { documentRead, parsedRuntime, type ArtifactAnswer } from './support/pars
 import { deferred } from '../../helpers/sync.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
   cleanup()
   for (const runtime of owned.splice(0)) await runtime.dispose()
@@ -24,7 +24,7 @@ const tick = async () => {
 
 describe('prepared parsed figures', () => {
   it('keeps probing after a revision subscriber throws', async () => {
-    const runtime = parsedRuntime(documentRead('# Safe subscribers'))
+    const runtime = await parsedRuntime(documentRead('# Safe subscribers'))
     owned.push(runtime)
     const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
     const observer = vi.fn()
@@ -44,7 +44,7 @@ describe('prepared parsed figures', () => {
     }
   })
   it('renders remote figures as user-opened links without creating remote image elements', async () => {
-    const runtime = parsedRuntime(
+    const runtime = await parsedRuntime(
       documentRead(
         '# Remote figures\n\n![tracking](https://example.org/track.png)\n\n![loopback](http://127.0.0.1:23119/api/items)\n\n![reference][ref]\n\n[ref]: https://example.org/ref.png',
       ),
@@ -77,7 +77,7 @@ describe('prepared parsed figures', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:decoded')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     try {
-      const runtime = parsedRuntime(
+      const runtime = await parsedRuntime(
         documentRead('# Decoded\n\n![figure](images/figure.png)', {
           images: [image('images/figure.png', 1)],
         }),
@@ -122,7 +122,7 @@ describe('prepared parsed figures', () => {
       .mockReturnValueOnce('blob:red')
       .mockReturnValueOnce('blob:blue')
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-    const runtime = parsedRuntime(first)
+    const runtime = await parsedRuntime(first)
     owned.push(runtime)
     runtime.mount()
     await tick()
@@ -153,7 +153,7 @@ describe('prepared parsed figures', () => {
     const read = documentRead(text, { images })
     vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:${Math.random()}`)
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-    const runtime = parsedRuntime(read)
+    const runtime = await parsedRuntime(read)
     owned.push(runtime)
     runtime.mount()
     await tick()
@@ -173,7 +173,7 @@ describe('prepared parsed figures', () => {
     )
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:one')
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-    const runtime = parsedRuntime(read)
+    const runtime = await parsedRuntime(read)
     owned.push(runtime)
     runtime.mount()
     await tick()

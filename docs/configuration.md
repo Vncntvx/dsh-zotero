@@ -7,9 +7,9 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 - 核心 `zotero` 命名空间：`src/config.ts`，39 个字段，由 `resolveConfig` 执行运行时校验；
 - 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
-- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，9 个字段。
+- 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，10 个字段。
 
-四组合计 68 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 69 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
 ## 设置页标签与字段归属
 
@@ -22,7 +22,7 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 | 检索提取 | `zotero`            | 14     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars`、`fulltextWindowChars` |
 | 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                                                  |
 | 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                                                 |
-| 文档解析 | `enrichment`        | 9      | 解析模式与输出：`mode`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`、`semanticIdleTimeoutMs`；部署限额：`artifactReader`                                                                                                                    |
+| 文档解析 | `enrichment`        | 10     | 解析模式与输出：`mode`、`ocrLanguage`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`、`semanticIdleTimeoutMs`；部署限额：`artifactReader`                                                                                                     |
 | 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                                                  |
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
@@ -46,7 +46,7 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 | `maxAttachmentRecords`     | `50`                         | 显式附件页大小上限；完整读取不受其截断                                                                                                                                                |
 | `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                                                                                                |
 | `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 接受的最大全文字符数：证据模式为单次排序预算（多附件时均分），全文模式为整篇文档上限                                                                                |
-| `fulltextWindowChars`      | `12000`                      | 全文读取模式每次窗口的字符数；每窗口都可直接内联交付                                                                                                                                  |
+| `fulltextWindowChars`      | `12000`                      | 全文读取模式每次窗口的字符数；默认配置可内联，增大窗口或降低内联预算时可能以完整文件交付                                                                                              |
 | `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                                                                                       |
 | `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                                                                                                    |
 | `maxInlineResultTokens`    | `4000`                       | canonical 与展示结果的 Harness 官方 Token 估算上限，须为正安全整数。                                                                                                                  |
@@ -55,7 +55,7 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 | `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                                                                                                      |
 | `maxExportRefs`            | `50`                         | 单次 `zotero_export` 调用的引用条数上限；文献面板的 `zotero/export` 端点共用这一上限                                                                                                  |
 | `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限；同时钳制文献面板的浏览页大小（集合树/标签/保存搜索，响应携带实际生效的 `limit`）                                                                   |
-| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源列出的条目上限（仅影响展示）                                                                                                                            |
+| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源的模型可见列表上限；列表会截断，真实数量保留在 `totals`                                                                                                 |
 | `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的信任时长（毫秒），超时后重新读取                                                                                                                                  |
 | `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                     |
 | `defaultLocale`            | `en-US`                      | CSL 引用语言；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                                       |
@@ -149,9 +149,9 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 | `promoteOnTimeout`      | `true`  | 前台等待超时时是否自动提升为后台任务                                                                        |
 | `foregroundWaitMs`      | `30000` | 前台等待毫秒数，超时后提升为后台任务（1-240,000）                                                           |
 
-组件未启用时，设置页的「学术检索」标签页只显示一条指向「包含的组件」的提示，不渲染任何字段，组件行配置入口也不会注册；组件启用后该标签页才成为可编辑表单。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下按 key 存一份 JSON 正文（不受本表控制，无独立开关）。
+组件未启用时，设置页的「学术检索」标签页指向「包含的组件」并隐藏字段；启用组件后，标签页变为可编辑表单，并注册组件行配置入口。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下，每个 key 保存一份 JSON 正文。内存与磁盘记录均在获取后 7 天过期；每次写入先清理过期记录，再按写入时间从旧到新回收，使磁盘正文总量保持在 128 MiB、记录数保持在 256 条以内。缓存由系统管理，不提供独立设置。
 
-密钥值写在哪里：配置只保存凭据引用名；设置页「学术检索 → 数据源身份与密钥」中的三个密码框把输入的密钥值写入宿主凭据存储（credentials seam），不进入配置。引用名解析失败时工具调用直接失败，不会静默降级为匿名请求。
+密钥值写在哪里：配置保存凭据引用名；设置页「学术检索 → 数据源身份与密钥」中的三个密码框把输入的密钥值写入宿主凭据存储（credentials seam）。引用名解析失败时工具调用直接失败。
 
 从旧版升级：旧字段 `s2Key` / `ncbiKey` / `openalexKey` 已从 schema 移除。携带这些字段的 profile 会在组件挂载时被显式拒绝（错误消息列出字段与迁移步骤）。请从 profile 的 `cordis.patch.yml` 删除旧字段，在设置页把密钥重新输入到对应的密码框（引用名建议 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`），并轮换旧密钥：旧值曾以明文保存在配置里，不会自动迁移。
 
@@ -193,6 +193,8 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ---
 
+每次组件挂载生成独立的随机启用标识，确认记录只覆盖对应宿主的该次挂载；浏览器未在线时发生的重新启用、切换宿主或宿主重启都会重新披露。同次挂载下刷新浏览器保留确认。只有明确点击「已知悉」才记录确认，Escape、遮罩点击均不确认；启用标识读取失败时仍显示披露，只在当前浏览器会话保留确认。
+
 ## 文档解析组件配置 (`dsh-zotero/enrichment`)
 
 内容增强是独立的 DSH bundle 子组件，随包发布，默认关闭（`cordis.patch.yml` 包含 `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`）。启用组件即接受 MinerU 文档外发，并提供三类能力：用户主动提交的文档解析、同源有效解析产物的只读复用、本地语义排序与模型管理。客户端首次启用时显示外发提醒。普通读取通过核心的只读 `FulltextEnhancer` 槽（`lookup` 按来源、`lookupArtifact` 按产物 id）复用有效产物，未命中时使用 Zotero 全文索引或本地 PDF 抽取。组件未启用时，两条读取链路沿用原路径。
@@ -208,6 +210,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 | 字段                     | 默认值               | 取值与行为                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mode`                   | `free`               | `free` 使用免 Token 的 Agent 轻量解析接口（IP 限频、API 侧 ≤10 MB、≤20 页）；`pro` 使用精准解析接口（API 侧 ≤200 MB、≤200 页），需配置 Token（单用户每日可免费解析 5000 份文件，限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。页数与 API 字节上限由 MinerU 侧限制，客户端不预检页数                                                                                         |
+| `ocrLanguage`            | `'ch'`               | 免费模式 PDF OCR 语言代码，例如 `ch`（中文）或 `en`（英文）。默认沿用 MinerU 官方默认值；具体语言包由服务端校验。精准模式忽略此字段。切换语言会改变免费模式的缓存键，须明确提交解析后生成新产物。                                                                                                                                                                                   |
 | `mineruTokenRef`         | `'MINERU_API_TOKEN'` | MinerU 精准接口 Token 的凭据引用名（默认插件专属 `MINERU_API_TOKEN`）；在 `pro` 模式下读取凭据存储中该引用名对应的 Token（Token 有效期为 3 个月）。表单默认使用该专属引用名，无需手动输入                                                                                                                                                                                           |
 | `outputDir`              | `''`                 | 解析产物目录的绝对路径（或以 `~/` 开头）；空串表示运行时解析默认位置 `~/.dsh/zotero-parsed`。相对路径在 Schema/表单保存时被拒绝                                                                                                                                                                                                                                                     |
 | `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型不可用时读取明确失败，不回退 BM25；模型需手动下载，WASM 运行时随包发布                                                                                                                                                                                                                                                         |
@@ -236,7 +239,7 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 ### 本地模型语义检索与下载
 
-ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布（`assets/onnxruntime/<version>/`，含来源与 SHA-256 记录），无需另行安装，插件安装也不需要任何构建批准。缺少模型时语义检索按 fail-closed 处理。模型通过语义化档位编号（Semantic Tiers）寻址，与物理模型版本解耦，配置不随模型升级改变：
+ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布（`assets/onnxruntime/<version>/`，含来源与 SHA-256 记录），无需另行安装，发布门禁验证的运行时依赖闭包不含需批准的安装脚本；直接运行时依赖采用精确版本。宿主重新解析的传递依赖仍受其安装策略检查，发布时的验证不替代将来解析结果的检查。缺少模型时语义检索按 fail-closed 处理。模型通过语义化档位编号（Semantic Tiers）寻址，与物理模型版本解耦，配置不随模型升级改变：
 
 - **可选语义档位与特点**：
   - `balanced` (通用平衡 · 当前对应 Qwen3-Embedding-0.6B 开源权重 · ~625 MB, 1024 维, 32K Token, Apache 2.0)：支持 100+ 语言、32K 上下文，面向中文为主或中英混合文献库，默认档位。
@@ -267,7 +270,9 @@ ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布�
 
 缓存分两层：内容产物按指纹命中；源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳；`mode` 记在 artifact meta 与内容缓存键中。本地附件比较大小与修改时间；URL 源发一次不带凭据的 HEAD。URL 源索引命中要求匹配 ETag，或同时匹配 Last-Modified 与 Content-Length，且所有共有校验信息不得冲突。无有效校验信息时重新获取文档并按字节指纹查找内容缓存；探测失败明确报错。有效命中只读本地产物，不下载 PDF、不请求 MinerU。来源元数据中的 URL 只保留 origin。
 
-任务回执保存在 `<outputDir>/tasks/<sha256>.json`，文件权限为 `0600`。上传完成即删除回执中的签名 URL；轮询、下载失败或调用中断后，下次读取恢复同一任务，不重新提交。未上传的签名地址超过 24 小时有效期时失败并清除回执；任务终态失败同样清除，下一次显式读取可创建新任务；成功落盘后清除回执。POST 提交不重试；GET/HEAD/PUT 对瞬时错误最多重试两次，遵守 `Retry-After` 和阶段/总时限。
+任务回执保存在 `<outputDir>/tasks/<sha256>.json`，文件权限为 `0600`。上传完成即删除签名 URL。用户显式解析时可续挂仍有效的任务；上传前、上传后的任务在满 24 小时后均视为过期，当次显式解析会清除并重新提交。轮询次数耗尽、任务终态失败或成功落盘均清除任务记录；损坏 JSON 或非法任务结构先清除再重新提交，存储读取、删除失败仍明确报错。POST 提交不重试；GET/HEAD/PUT 对瞬时错误最多重试两次，遵守 `Retry-After` 和阶段/总时限。
+
+会话操作回执与 source-generation 指针独立保存在 `$DSH_HOME/zotero-receipts/parse-jobs/`（`DSH_HOME` 默认 `~/.dsh`），目录权限 `0700`、文件权限 `0600`；修改解析产物的 `outputDir` 后，重启仍可按原会话和 operationId 查询已完成回执。同一 operationId 对不同配置的再次启动仍明确拒绝。
 
 输出目录在首次解析时校验：Schema/表单拒绝相对路径；不存在、不可写、realpath 后指向敏感系统目录（含 macOS `/private/etc`、`/private/var` 与 `~/.ssh`、`~/.gnupg`）或经符号链接逃逸时，以 `ZOTERO_ENRICHMENT_OUTPUT_INVALID` **fatal** 失败。免费接口超限（>10 MiB）时以 `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` 失败，不截断。
 
@@ -289,3 +294,5 @@ ONNX 嵌入模型需手动下载后启用；WASM 推理运行时随插件发布�
 | `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`    | fatal | 操作 ID 的目标或配置快照被重放且不一致；拒绝该操作，不复用旧结果 |
 
 解析失败时直接向调用方返回错误。
+
+MinerU 语言参数以 [官方接口文档](https://mineru.net/apiManage/docs) 为准；本地只校验代码格式，远端拒绝会明确返回。该配置不触发后台提交，也不声明不同语言的质量已经过本地实测。

@@ -24,6 +24,7 @@ export async function resolveSafeDirectory(options: SafeDirectoryOptions): Promi
     create: options.create,
     readOnly: options.readOnly,
     allowMissing: options.allowMissing,
+    privateOwner: options.privateOwner,
     deps: options.deps,
     refuse: (reason) => {
       throw new ZoteroError(`The ${options.label} is not usable: ${reason}`, options.errorCode)

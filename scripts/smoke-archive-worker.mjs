@@ -50,6 +50,24 @@ export async function smokeArchiveWorker(root) {
     )
       throw new Error('Packed archive Worker returned an unexpected document')
     console.log(`archive-worker pack smoke ok: ${manifest.name}, emitted JS entry executed`)
+    const { openWorkerEmbedder } = await import(
+      pathToFileURL(join(packedRoot, 'lib/enrichment/semantic/worker-embedder.js')).href
+    )
+    const { SEMANTIC_MODELS } = await import(
+      pathToFileURL(join(packedRoot, 'lib/enrichment-model-catalog.js')).href
+    )
+    let refused = false
+    try {
+      await openWorkerEmbedder(SEMANTIC_MODELS[0], join(staging, 'absent-model-bundle'))
+    } catch (error) {
+      if (!(error instanceof Error) || !/not installed|missing|unusable/i.test(error.message))
+        throw error
+      refused = true
+    }
+    if (!refused) throw new Error('Packed semantic Worker accepted a missing model bundle')
+    console.log(
+      `semantic-worker pack smoke ok: ${manifest.name}, emitted JS verified a missing bundle without loading a model`,
+    )
   } finally {
     await rm(staging, { recursive: true, force: true })
   }

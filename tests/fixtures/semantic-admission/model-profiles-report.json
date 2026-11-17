@@ -1,0 +1,2807 @@
+{
+  "schemaVersion": 1,
+  "kind": "fixed-floor-margin-actual-vector-measurement",
+  "measuredAt": "2026-11-16T18:48:43.043Z",
+  "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+  "protocol": "fixed-floor-margin-regression-v1",
+  "provenance": "Authored bilingual regression cases; no empirical extraction, independent annotation or heldout generalization claim.",
+  "evidence": "Manually executed all six pinned ONNX bundles through the production isolated worker on 2026-11-17. Raw vectors are archived here for offline recomputation; file hashes establish artifact identity, not independent execution attestation.",
+  "models": [
+    {
+      "model": {
+        "key": "balanced",
+        "physicalKey": "qwen3-0.6b",
+        "modelId": "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+        "revision": "c25a394dd583836952667c12f008335071b3f43d",
+        "dimension": 1024,
+        "maxTokens": 32768,
+        "pooling": "last_token",
+        "normalize": true,
+        "queryPrefix": "Instruct: Given a search query, retrieve relevant passages that answer the query\nQuery: ",
+        "documentPrefix": "",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 1576,
+            "sha256": "66a10929782f3c9a3cd5dec90e2a95c60e05736134a63cd54479eeae80bed175"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 9731,
+            "sha256": "977648852447cb6587327ff3205b0a84cf2fc9f05621d6c8e88a497caafab2e1"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 613,
+            "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 11423705,
+            "sha256": "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 613527631,
+            "sha256": "87cd124e0ef1fd1f223ebc283efccbaeac386d0b08344701c46975d0657b591f"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.427,
+        "margin": 0.12
+      },
+      "proposal": {
+        "floor": 0.367022,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "758de21fbf6ffcc6d1e38f00f19363835575426715ea08ef4b391ba546b59338",
+      "embeddingsSha256": "499808086be279dca9917f7f5ca82032c939f1380ee6c4222d3e8f82843bbdaa",
+      "weakestSame": 0.3669979037201966,
+      "strongestCross": 0.36602174265133625,
+      "unrelatedMax": 0.36602174265133625,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.916666667,
+            "recallAt4": 0.916666667,
+            "mrr": 0.916666667,
+            "precisionAt4": 1,
+            "returned": 22
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.9,
+            "recallAt4": 0.9,
+            "mrr": 0.9,
+            "precisionAt4": 1,
+            "returned": 18
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      },
+      "unrelatedCorpora": 24,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.30701328338716, 0.6246347601294396, 0.28961911001799956, 0.27223264981154655,
+            0.34953322414115745, 0.30817755730372315, 0.19817898419097804, 0.320098601984801
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.19976926395784364, 0.5221584289861555, 0.24978291607355504, 0.2224045470552979,
+            0.20425095766808518, 0.28075937100341464, 0.24598698545533362, 0.11849560423354345
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.22095220808788701, 0.5921306624372926, 0.2941807197809871, 0.2566178780668157,
+            0.25255203914748753, 0.21352231225424778, 0.24593576700516687, 0.2580376979398179
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2623040561490091, 0.48747769013186215, 0.3054544646056235, 0.21024226563886678,
+            0.3115933365272525, 0.24796395249191402, 0.2926433890167752, 0.3226981860563719
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.17321551955263026, 0.5132760209825203, 0.2918040159837003, 0.17128073424423365,
+            0.22705857585249092, 0.22702374269176628, 0.23678085008562064, 0.2658365493928595
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.14290395494791852, 0.48020431497701854, 0.19625185042445142, 0.18877921891769484,
+            0.26594542216003747, 0.2764891159395853, 0.2646658183845036, 0.17024583322955006
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.17179681530896393, 0.45148220639231407, 0.2548952343198116, 0.2559305488554091,
+            0.2584586011038979, 0.26744559482352775, 0.1919030196482589, 0.2059741293151223
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.15979204029896016, 0.4083959592344563, 0.2908520171587216, 0.24770323010754544,
+            0.26752899622288284, 0.3046919021147968, 0.21773768048549386, 0.223499845673501
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.1987248398110299, 0.48769977342610127, 0.2574450132957431, 0.1733699769254617,
+            0.25989915833216326, 0.22946641236812956, 0.28550081189131155, 0.27407792039093476
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.24114875963446702, 0.5242239533123052, 0.2202437263872971, 0.25305003034880413,
+            0.16478522151722674, 0.14572108969085687, 0.20131739955853237, 0.18008538628963883
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.31023180985835175, 0.667964104301629, 0.16625607732165418, 0.23894667586025858,
+            0.21063109632548782, 0.23882736484511513, 0.24736388591174652, 0.2543587504463372
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.29927602931749797, 0.6375623508503576, 0.23877133413605775, 0.24120084482933668,
+            0.20973740201623736, 0.20230171411940986, 0.3027955171797602, 0.2686004933467605
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-01",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.36602174265133625, 0.5584077599452962, 0.2719621187341179, 0.2669342220800998,
+            0.31002147321597123, 0.3062735442480309, 0.22230687227290885, 0.2796086910394169
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-02",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2976551569656658, 0.5575679248980121, 0.29052254320925014, 0.22279545239670046,
+            0.2210641486632064, 0.2812448399339442, 0.2555621808300128, 0.1937192510897276
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-03",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.33024379339968146, 0.6235630248810085, 0.3059186617556264, 0.2362912812831191,
+            0.2720404505169817, 0.2712378816644278, 0.28799998114649006, 0.29280241357870984
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-04",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3298185855985972, 0.5187971805847037, 0.30729679805142646, 0.23573535562898645,
+            0.23325093334417427, 0.2602265747580045, 0.2803712013967922, 0.30648222765648603
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [7]
+        },
+        {
+          "id": "zh-05",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.22400907896230296, 0.4380906204373811, 0.31040667473132, 0.22402763110063276,
+            0.24009966335145994, 0.2322163468036663, 0.2250054419081131, 0.26562190507365807
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-06",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.24021398455683696, 0.4562853298698818, 0.19689443840656282, 0.19796579644472295,
+            0.24659126842778864, 0.24681217077567297, 0.30988217319982314, 0.2101697450971538
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-07",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.27520819810500513, 0.3669979037201966, 0.3002370482053998, 0.17900381712127933,
+            0.2854061306057916, 0.2839404941359855, 0.2996326423348893, 0.262873073956905
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-08",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.23216930982761852, 0.48422867156931454, 0.29167340009687465, 0.25723059001828713,
+            0.23030275048608284, 0.26780667067487524, 0.21281500076758755, 0.2365368358504923
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-09",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.19100965273958734, 0.5512688892489715, 0.21543311402942367, 0.23712780355717086,
+            0.2539316046248573, 0.1324082135451505, 0.21511304408020132, 0.2587182129419579
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-10",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.24704489819430606, 0.48251969358891605, 0.28760665906423183, 0.29587719206659047,
+            0.26636191385841024, 0.2213558354848072, 0.2920739060068209, 0.28012665483213317
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-11",
+          "language": "zh",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.34259071199838315, 0.6231595198612131, 0.19404695333768154, 0.2512630244295959,
+            0.3034399250811711, 0.264437588140263, 0.2733951357847233, 0.28195461860978305
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-12",
+          "language": "zh",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.321824784908673, 0.47635269099711913, 0.19992675879877073, 0.24555909777635446,
+            0.19476403449765925, 0.1941791691099759, 0.27651776323275173, 0.22791566811500383
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:42:29.192Z",
+      "durationMs": 22473.676417,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/balanced.json"
+    },
+    {
+      "model": {
+        "key": "lightweight",
+        "physicalKey": "granite-97m",
+        "modelId": "onnx-community/granite-embedding-97m-multilingual-r2-ONNX",
+        "revision": "536a9f241cb3f02a9c5995a1e708c784bd274859",
+        "dimension": 384,
+        "maxTokens": 32768,
+        "pooling": "cls",
+        "normalize": true,
+        "queryPrefix": "",
+        "documentPrefix": "",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 1215,
+            "sha256": "ae74d55a56f779774cb9a8e63d3c2da9ae1af83c00229ffdff43d0b38407a0ee"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 12860,
+            "sha256": "6ed69389e30a8ecabfce2f9ebcdf0c908b34056f24d994340f2f216521c057d5"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 871,
+            "sha256": "013787ee251ff611722479197c00853b62113ad303cb0a36524231783c676c69"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 25301671,
+            "sha256": "51947676cae1f991fa51c6b9a24e14ee5460e5f0b9f692f13bb3159829d1592a"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 97858099,
+            "sha256": "704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.797,
+        "margin": 0.02
+      },
+      "proposal": {
+        "floor": 0.728276,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "758de21fbf6ffcc6d1e38f00f19363835575426715ea08ef4b391ba546b59338",
+      "embeddingsSha256": "9ab2cfe0cb76d88bc48169749c838fa79077dce7dced88b5426a31c17eda974e",
+      "weakestSame": 0.7286246756593843,
+      "strongestCross": 0.7272751781374894,
+      "unrelatedMax": 0.7272751781374894,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.625,
+            "recallAt4": 0.625,
+            "mrr": 0.625,
+            "precisionAt4": 1,
+            "returned": 15
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.55,
+            "recallAt4": 0.55,
+            "mrr": 0.55,
+            "precisionAt4": 1,
+            "returned": 11
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      },
+      "unrelatedCorpora": 24,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6958860276591254, 0.8425792787860311, 0.6954793760844041, 0.6694829633851712,
+            0.6713733084266947, 0.6820610145269497, 0.6603585986906463, 0.675112010457543
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6735600939371209, 0.7988812673654028, 0.6283954586492133, 0.6536849320861986,
+            0.6754582017637751, 0.6889395006359753, 0.6061345870746061, 0.6053457492389699
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6468483570236809, 0.806320510641004, 0.6535313011497439, 0.5925510664923256,
+            0.6710174567053567, 0.6103560637806097, 0.6621224014415684, 0.6330717273407903
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.714856078082094, 0.7984414359682313, 0.6358421591734364, 0.66768294675236,
+            0.6546079864771245, 0.6544286892655305, 0.6387829868276736, 0.6294212653893173
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6363567347437895, 0.7985487113294026, 0.6427868999169417, 0.6553101411323783,
+            0.663593474287763, 0.684921328388549, 0.6341729272809613, 0.6224423130434559
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6958011234297455, 0.7688083027141251, 0.6625703599476961, 0.6622694543583303,
+            0.6927244615161574, 0.6697088639172782, 0.6608302405329972, 0.6813910645543078
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6527387117723996, 0.7362280138221364, 0.6183452345145047, 0.6219594283613351,
+            0.6916546440610962, 0.6611556881473065, 0.5726986474178017, 0.6289273630846387
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6741839982506118, 0.779877459464057, 0.6672286780000859, 0.6901435945963814,
+            0.6658003374524193, 0.6729305118053592, 0.6926650308512746, 0.6407388403841892
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6494748802760351, 0.7675324420223362, 0.6576227266079364, 0.6347471672707633,
+            0.6400196258293513, 0.6552189648378519, 0.600888905351069, 0.6973111059893484
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6730784661924232, 0.8030304948751779, 0.6257268514571652, 0.6317625274102385,
+            0.6104880097607241, 0.6166621100505224, 0.6447729703160794, 0.6269454619895966
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.7249558029197206, 0.9088179466950436, 0.6819158673922825, 0.7010448072489062,
+            0.6304553530956203, 0.6773942743644813, 0.7096858132062748, 0.6856027799705795
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.6992586516940957, 0.8712766003921785, 0.6538931886898618, 0.7079010164824516,
+            0.659900019002925, 0.6700281773511146, 0.6672193402135274, 0.6476274795220539
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-01",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.7272751781374894, 0.8233540710803227, 0.6720216715224082, 0.6806103050559932,
+            0.6607919718914854, 0.691245347209906, 0.6391908789609083, 0.6676525439689138
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-02",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6686150095572585, 0.8018130072949045, 0.6411780832778617, 0.6784113795125069,
+            0.6666330561449054, 0.6808254809889069, 0.6509109003492968, 0.6045535446066571
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-03",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6740582100075785, 0.7990332231091744, 0.6385162104049391, 0.6021690418326493,
+            0.7240211595172307, 0.6310371963676811, 0.6462909867431227, 0.6757903952349777
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-04",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.7046397365480371, 0.8156562485969155, 0.6715718038115734, 0.643503597993243,
+            0.7044614396577372, 0.6567393801644433, 0.639516309537701, 0.6701346030752418
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [7]
+        },
+        {
+          "id": "zh-05",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6938196763118484, 0.7451241757076467, 0.700606926510913, 0.6628032527592611,
+            0.6583490050065393, 0.6572499206560523, 0.6594330849098271, 0.6566113124260454
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-06",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6545013342127146, 0.7650500862135975, 0.6092820378654005, 0.658657538494472,
+            0.6879489395694192, 0.7209241801575235, 0.6817214546542089, 0.6837004564146104
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-07",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.663409897504631, 0.7286246756593843, 0.6757061308548673, 0.6979128651503322,
+            0.6875268477763328, 0.6716850823664916, 0.6301910201062012, 0.635565170869148
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-08",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6748238164282234, 0.8053407146127898, 0.6755463145854853, 0.6299623525606377,
+            0.6723667169552817, 0.7046297251921629, 0.67588409681439, 0.685726097636556
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-09",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6874487136463252, 0.7343399997568683, 0.6467160059830377, 0.6739735985850368,
+            0.6669007682900113, 0.6547830859717317, 0.6155832308206185, 0.7211377401266441
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-10",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.6057529258275659, 0.7740628290648163, 0.6272631219846677, 0.6524745770955045,
+            0.5849714750605373, 0.6437754676107668, 0.6405407780169265, 0.6083965908571636
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-11",
+          "language": "zh",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.7249772198394651, 0.9253050521731015, 0.6438782308618464, 0.6545732698700645,
+            0.6715363144692922, 0.654752857575422, 0.6766994052845355, 0.6834705439109665
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-12",
+          "language": "zh",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.7206614465138194, 0.8881660209016913, 0.6915920949938621, 0.6406942736003253,
+            0.6747471737807008, 0.6770022226626898, 0.6683122283791653, 0.6681713847150801
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:19:23.673Z",
+      "durationMs": 1893.555875,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/lightweight.json"
+    },
+    {
+      "model": {
+        "key": "bilingual",
+        "physicalKey": "kalm-0.5b",
+        "modelId": "thomasht86/KaLM-embedding-multilingual-mini-instruct-v2.5-ONNX",
+        "revision": "1ef826ab24cfcf52243ea16fefaf239b8c7fa285",
+        "dimension": 896,
+        "maxTokens": 32768,
+        "pooling": "mean",
+        "normalize": true,
+        "queryPrefix": "Instruct: Given a query, retrieve documents that answer the query \n Query: ",
+        "documentPrefix": "",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 984,
+            "sha256": "bf4f421fa081322e7bd27aa5b48ae5d60177a498b0c5342223aefe7dceb0e625"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 1521,
+            "sha256": "f7d64e83e9748bf609050e04467e28c2edcea4773fc1bd94c1203507ad80c245"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 370,
+            "sha256": "daf48284de8f4779b1dbf20963a68180002fba2a34a5da72292380c5d9fb6af2"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 11419302,
+            "sha256": "2f79052deba517b0663d877714e117a31a4a6243cddb85fc4443c80a2fa65a20"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 562341284,
+            "sha256": "24b1592de862610a04152900c08fc5ccafc8c9f020c7c3d4ff3815f22426aec5"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.515,
+        "margin": 0.12
+      },
+      "proposal": {
+        "floor": 0.456773,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "758de21fbf6ffcc6d1e38f00f19363835575426715ea08ef4b391ba546b59338",
+      "embeddingsSha256": "32131fbc9a8c086d42f0d70b20b5d62907d859d94c4a1034f33e1155b38f3049",
+      "weakestSame": 0.45158042480614446,
+      "strongestCross": 0.4557720904046039,
+      "unrelatedMax": 0.4557720904046039,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.916666667,
+            "recallAt4": 0.916666667,
+            "mrr": 0.916666667,
+            "precisionAt4": 1,
+            "returned": 22
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.9,
+            "recallAt4": 0.9,
+            "mrr": 0.9,
+            "precisionAt4": 1,
+            "returned": 18
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      },
+      "unrelatedCorpora": 24,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3603790373811141, 0.6241492500215126, 0.3568357939398806, 0.2989859114234838,
+            0.38158004610905605, 0.3430121151305028, 0.3073197960708224, 0.2952262195417042
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.36406508711384533, 0.6329253924777186, 0.38398635028399447, 0.349183958208937,
+            0.35836375749086363, 0.3586249692308281, 0.3502382594927092, 0.33087188989010574
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3653255377602009, 0.6401597467594959, 0.41436829773595685, 0.33686398652339566,
+            0.4540043480795262, 0.38346033956926534, 0.38733262103116833, 0.34991894945365276
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3514453773106452, 0.6589045233788644, 0.3308144851020991, 0.34150570339668684,
+            0.38256398547659354, 0.32270336964377205, 0.34051274617949046, 0.32515265178176195
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.32750932751612755, 0.5900052478265018, 0.3850147549380105, 0.29054334515651076,
+            0.33918114126740684, 0.3524741435892325, 0.35739559071283, 0.3112297274097174
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3540681827462936, 0.5730895819545558, 0.3364918478848506, 0.3437387708001002,
+            0.38202059485073075, 0.36828974362238404, 0.38163909756852415, 0.37521790761233537
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.37892135622576073, 0.5750814378765006, 0.3469683875890558, 0.36570968868707326,
+            0.3869119212839361, 0.4133877483299534, 0.3496358751583562, 0.30688595170161426
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3601746906301243, 0.6012428148351622, 0.3616157731081813, 0.38400074485011204,
+            0.38301598061115644, 0.3510928785129353, 0.41535755856678014, 0.3574135976813846
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.32876578313347293, 0.6160162355004539, 0.3906127798283609, 0.36391326388127737,
+            0.399883816405115, 0.3616506819107105, 0.3774734741599492, 0.4219676684454063
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3206803354725517, 0.6290040715651314, 0.31793009563193164, 0.32853863070808054,
+            0.3117324742937631, 0.3072840931442812, 0.32881339660198095, 0.35492502884890326
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.3969629570553958, 0.7702121001833221, 0.32769104529316995, 0.3519591565965997,
+            0.36637526272113835, 0.3850252951597338, 0.3961640158700473, 0.32278833367397797
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.42900798192502354, 0.6462292126504534, 0.4032309858283453, 0.41896533691803467,
+            0.4161056798443785, 0.3476350517941765, 0.45298626225433075, 0.39632142602394543
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-01",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.37524246970766656, 0.5902038492737526, 0.36363381760431207, 0.29051231559804164,
+            0.31683781727795957, 0.33226785311421253, 0.2537006901425685, 0.34576721424163304
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-02",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.348903195184029, 0.5889004669899487, 0.28782907424981324, 0.31043138097298434,
+            0.27813202523885255, 0.3786358184281892, 0.27167510544098034, 0.2899065923861588
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-03",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2978801278418173, 0.5820101356195755, 0.3447692928572937, 0.2496568348097506,
+            0.3209145611030504, 0.2559002780763901, 0.2990191611574494, 0.35444678050476225
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-04",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3430948033529969, 0.6387709613113557, 0.2959271473150238, 0.2869034137255798,
+            0.33944837961307733, 0.3203326665875985, 0.35119115699280695, 0.30897400945380493
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [7]
+        },
+        {
+          "id": "zh-05",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3167742948735382, 0.5151828515606169, 0.3212920400428333, 0.29055431045766533,
+            0.2570280610106089, 0.3133514791570988, 0.313528382347877, 0.3188354508310819
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-06",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3002224501611723, 0.539685319212911, 0.22687136041642572, 0.31186259757374607,
+            0.3445578950165389, 0.31245297504824293, 0.4045103058864751, 0.3750203545885841
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-07",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3046558105613188, 0.45158042480614446, 0.30379650975459177, 0.30998975184956423,
+            0.2860742662373132, 0.34984226188395096, 0.3143308201303939, 0.305084431689617
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-08",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.34101908159551253, 0.46266669462847826, 0.27270833855978016, 0.31312437985293773,
+            0.29380240066272123, 0.3110760180320186, 0.2455792535766937, 0.30881807126845484
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-09",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2968680384788853, 0.5797968169317679, 0.33061817362695173, 0.3266793970908954,
+            0.3099074518855744, 0.31395256210715833, 0.29140699400207376, 0.37860703639503873
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-10",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2528439692430703, 0.5440278630480253, 0.21516092276826448, 0.28559752566914953,
+            0.2620632233302905, 0.3035222059183195, 0.29564987630968237, 0.3145924975859927
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-11",
+          "language": "zh",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.3578782273016979, 0.6809383772800668, 0.2445705203156116, 0.36607104869651125,
+            0.30070691886659223, 0.33352811291159457, 0.3422035875846305, 0.29738269533228395
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-12",
+          "language": "zh",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.4557720904046039, 0.6999087876181521, 0.32976850680837255, 0.38509033032625484,
+            0.3378718978068221, 0.30828264895545227, 0.35298068589064907, 0.35841159582006943
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:45:54.789Z",
+      "durationMs": 18493.811709,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/bilingual.json"
+    },
+    {
+      "model": {
+        "key": "english",
+        "physicalKey": "nomic-137m",
+        "modelId": "nomic-ai/nomic-embed-text-v1.5",
+        "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+        "dimension": 768,
+        "maxTokens": 8192,
+        "pooling": "mean",
+        "normalize": true,
+        "queryPrefix": "search_query: ",
+        "documentPrefix": "search_document: ",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 2538,
+            "sha256": "9ab00bd92cee80a569f708140b7b6c1661a65891ff3765b1519e181ba2f2c92b"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 1191,
+            "sha256": "d7e0000bcc80134debd2222220427e6bf5fa20a669f40a0d0d1409cc18e0a9bc"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 695,
+            "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 711396,
+            "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 137296292,
+            "sha256": "b4342336debaea79de872370664b0aaeb67dea4605513d00ee236ea871a81f27"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.593,
+        "margin": 0.12
+      },
+      "proposal": {
+        "floor": 0.591589,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "b13fc71a9a8387d2ccc0e00aacf47407748bbc4e9647b5d8a41d28976e3542bc",
+      "embeddingsSha256": "4e7404d196c3a007b75532b9da6bb4cc3a52734f130f78c1f2a971396c14cc6e",
+      "weakestSame": 0.5753404570198328,
+      "strongestCross": 0.5905883691364934,
+      "unrelatedMax": 0.5905883691364934,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 12,
+            "recallAt1": 0.833333333,
+            "recallAt4": 0.833333333,
+            "mrr": 0.833333333,
+            "precisionAt4": 1,
+            "returned": 10
+          },
+          "lexical": {
+            "cases": 12,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 10,
+            "recallAt1": 0.8,
+            "recallAt4": 0.8,
+            "mrr": 0.8,
+            "precisionAt4": 1,
+            "returned": 8
+          },
+          "lexical": {
+            "cases": 10,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": null,
+            "returned": 0
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 1,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 1
+          },
+          "lexical": {
+            "cases": 1,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 1
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 1,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 1
+          },
+          "lexical": {
+            "cases": 1,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 1
+          }
+        }
+      },
+      "unrelatedCorpora": 12,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44480850732409133, 0.685507111646497, 0.4959541646542082, 0.5361580506703428,
+            0.5030933214995822, 0.49109912781946197, 0.5086351675064071, 0.4686988817649738
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4403417611266201, 0.599644325876646, 0.49160064762847366, 0.4917830226686074,
+            0.4742943139647762, 0.4687803541082671, 0.46387326863489825, 0.4576096604659834
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44175244857932616, 0.7297724520901236, 0.5236589111348838, 0.4216838258504781,
+            0.55334164539001, 0.45214714335570433, 0.49879050910916145, 0.5340348863766717
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.49099464687829625, 0.6893355574263896, 0.5905883691364934, 0.5067786764975821,
+            0.539381849578156, 0.5749446277650225, 0.5302485822951374, 0.491477551211215
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3958357577949832, 0.6563226756237884, 0.4344828266452973, 0.46447232074992784,
+            0.4658052102671307, 0.42141081653607043, 0.4349377555313209, 0.46637772633114044
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.40467901513058413, 0.5982695891401034, 0.4656736639510316, 0.43066967161563213,
+            0.49691827581642223, 0.49010342467937673, 0.5633276257481442, 0.497012462625353
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4160853680457137, 0.6018742757149703, 0.4938917638360484, 0.4865146291046627,
+            0.5221631991521358, 0.4443603766488163, 0.43333394139946824, 0.5053071374854141
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.38463592648277994, 0.5753404570198328, 0.49985413010858987, 0.47139982692332427,
+            0.4376572064281585, 0.5028377573449636, 0.4698725106080762, 0.4567513928527432
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4011848902047881, 0.6757325913132273, 0.5056185674371408, 0.5170400688493157,
+            0.4748252849716153, 0.4467080928530442, 0.4894467079129154, 0.5394419987567457
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44062340573834263, 0.5928726962606149, 0.4698569083409209, 0.4950077011069309,
+            0.4496436555933799, 0.42446576381981266, 0.42510599833502155, 0.42840840720460227
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.39590078490589087, 0.8078562848340358, 0.37892445610328024, 0.3627857811411819,
+            0.42373980654586824, 0.40567791312065515, 0.41788551559799586, 0.4536933176929795
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.39037592070714267, 0.6792824334315843, 0.4028650382434083, 0.43172143239212035,
+            0.37463686330537527, 0.4113845715350133, 0.3926930859375106, 0.41187664151546094
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:19:57.199Z",
+      "durationMs": 2905.7554999999998,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/english.json"
+    },
+    {
+      "model": {
+        "key": "hybrid",
+        "physicalKey": "bge-m3",
+        "modelId": "onnx-community/bge-m3-ONNX",
+        "revision": "25b9af8e87a38eb120cfe87125383677b9cd309e",
+        "dimension": 1024,
+        "maxTokens": 8192,
+        "pooling": "cls",
+        "normalize": true,
+        "queryPrefix": "",
+        "documentPrefix": "",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 658,
+            "sha256": "70dae5884ced999af00244f776ac9eaa71538d68497d3d6a6091e0318cd32905"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 1203,
+            "sha256": "b87c8703482b0300d3da30e201519aa641f6a450f5eb5bf1e624afbf70c74d80"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 964,
+            "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 17082799,
+            "sha256": "249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 568479395,
+            "sha256": "2237f770aad5c71bbc1fc2d361a57f9a37400574cc9eff32626f0cdb49234730"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.509118,
+        "margin": 0.12
+      },
+      "proposal": {
+        "floor": 0.509118,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "758de21fbf6ffcc6d1e38f00f19363835575426715ea08ef4b391ba546b59338",
+      "embeddingsSha256": "168536a478f72230b42374f92e57e40896975904cbd0c36db0c947a8302d7a8d",
+      "weakestSame": 0.33909319274318583,
+      "strongestCross": 0.5081175622477339,
+      "unrelatedMax": 0.5081175622477339,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.916666667,
+            "recallAt4": 0.916666667,
+            "mrr": 0.916666667,
+            "precisionAt4": 1,
+            "returned": 22
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.9,
+            "recallAt4": 0.9,
+            "mrr": 0.9,
+            "precisionAt4": 1,
+            "returned": 18
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      },
+      "unrelatedCorpora": 24,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.34292795486971644, 0.5519164797234243, 0.2886526624099898, 0.2969347623007322,
+            0.27633036383346377, 0.30863112438915385, 0.2918690971207485, 0.31463683379536217
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.249301252009684, 0.5353434033719191, 0.2769728412529248, 0.3576487272651944,
+            0.32813013646224015, 0.3174683203266584, 0.2777116045879009, 0.2886487492028031
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2617273089955177, 0.5700366569485694, 0.3735268938292344, 0.27029946475341643,
+            0.4156373018462724, 0.38097707993528446, 0.324141122137151, 0.38936226226796766
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3048729530894972, 0.5634216177682149, 0.33802194442050937, 0.3320629661704181,
+            0.3023567449405916, 0.2746367293932864, 0.2974900617061317, 0.3905282861451193
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.2731240651030627, 0.5860879427394561, 0.27009399045608584, 0.2984372624738034,
+            0.23214879847914002, 0.31999923815705633, 0.3001079888637145, 0.26555926033242694
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3075381162449741, 0.593144037801997, 0.2610844693087923, 0.3575583556232086,
+            0.3768566984171727, 0.3525292428551854, 0.3322525539538154, 0.33616981533093365
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.20697846060778044, 0.33909319274318583, 0.28377929891997844, 0.2495011702242323,
+            0.3163980118535937, 0.3238830098466795, 0.2650857386942756, 0.26241663314809927
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.25265170630928346, 0.5422990447302803, 0.38199481988616846, 0.3673871997427764,
+            0.3274426261193939, 0.3463567540130831, 0.2582575125977483, 0.38000475992503996
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.23151840470169854, 0.5158038203769768, 0.33397500792452317, 0.3518127582505044,
+            0.23012927549728562, 0.29202255421119905, 0.2316234354875672, 0.43964002976467614
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.227568123755766, 0.5282532665773992, 0.2643432515619786, 0.2980309919553707,
+            0.2777874296324467, 0.24240156263817444, 0.26965022969138963, 0.245813327293513
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.42001672330698514, 0.7672100072414945, 0.353360583976219, 0.34425716359523273,
+            0.3468298250920696, 0.3918087225321658, 0.3205480677856705, 0.31692023432502336
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.33872026207113026, 0.6534875657078433, 0.3762704290193561, 0.4234703248910041,
+            0.2826042843556487, 0.3472550304062275, 0.2949401578825632, 0.39561535312464696
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-01",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.33133670731370163, 0.5698236744412055, 0.3188567511808291, 0.3134917119677144,
+            0.36004151736476914, 0.24985888942589346, 0.20332568799462516, 0.3498684454443673
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-02",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.28930910187877973, 0.6289961459468123, 0.2628842636492998, 0.31528079840959805,
+            0.2525433748845784, 0.41091212690916945, 0.3027762405691619, 0.2671657684803263
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-03",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.3308925954826625, 0.6430917059477452, 0.3915267420788353, 0.28791787483094666,
+            0.4690101566216817, 0.4161574689229194, 0.32655778730280915, 0.3949787811918281
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-04",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.30020901905023095, 0.569802644329257, 0.2540479603800342, 0.3055554510600453,
+            0.3445319724290542, 0.2773865434159863, 0.3098948672144751, 0.3502517096468949
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [7]
+        },
+        {
+          "id": "zh-05",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.26071921384024394, 0.5685741467638226, 0.33671237636537205, 0.3232784308093711,
+            0.2704113957130965, 0.29078353776127963, 0.2645085835956854, 0.41781788795452435
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-06",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.28071615015324997, 0.5373537349830048, 0.2659499116303351, 0.3640593172414052,
+            0.3389041205747203, 0.42545917481039613, 0.3759505421567509, 0.41083044697876314
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-07",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.27150867899691916, 0.3846950191739237, 0.2797590874221685, 0.30971287535561576,
+            0.2772122243284734, 0.3111028156384189, 0.35961169045401487, 0.27675533016710735
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-08",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.26676571702771246, 0.5171342515871055, 0.3495330881617159, 0.3424435888077659,
+            0.32196088044243254, 0.36449946188654764, 0.2547684393197482, 0.4105099808935036
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-09",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.260919153965429, 0.5727611288426171, 0.3395279256737134, 0.35890067760094424,
+            0.27571260378389384, 0.369171274501854, 0.2037660508952532, 0.5081175622477339
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-10",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.27176328893010365, 0.5378104070691545, 0.21173747474651192, 0.3034377120483852,
+            0.25064651289846696, 0.3175763052624665, 0.2906530553747848, 0.26930234145769966
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-11",
+          "language": "zh",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.3605312463237865, 0.8468941335127744, 0.2778251515099948, 0.4422841050424928,
+            0.3671704846045287, 0.3356760327694812, 0.3545440377088849, 0.3860504082215759
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-12",
+          "language": "zh",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.36790404795814785, 0.7391502362793323, 0.38630581040666023, 0.3682167651801271,
+            0.3774975228694038, 0.42027178065932863, 0.4149723565356327, 0.37106354245943624
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:46:52.092Z",
+      "durationMs": 14932.392416,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/hybrid.json"
+    },
+    {
+      "model": {
+        "key": "academic",
+        "physicalKey": "gte-base",
+        "modelId": "onnx-community/gte-multilingual-base",
+        "revision": "2edbf5e672aab465f9ed4c154a8b61791c082c69",
+        "dimension": 768,
+        "maxTokens": 8192,
+        "pooling": "cls",
+        "normalize": true,
+        "queryPrefix": "",
+        "documentPrefix": "",
+        "files": [
+          {
+            "path": "config.json",
+            "bytes": 1648,
+            "sha256": "6ef2538d4286a7cd18d05225f659d8a1bceca7adb01c186868e53dbd4f822e17"
+          },
+          {
+            "path": "tokenizer_config.json",
+            "bytes": 1149,
+            "sha256": "24cebbf2ef20fc317256e03e52ac7b2ca326586f946a8427ecac036332bf0933"
+          },
+          {
+            "path": "special_tokens_map.json",
+            "bytes": 964,
+            "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835"
+          },
+          {
+            "path": "tokenizer.json",
+            "bytes": 17082734,
+            "sha256": "3a56def25aa40facc030ea8b0b87f3688e4b3c39eb8b45d5702b3a1300fe2a20"
+          },
+          {
+            "path": "onnx/model_quantized.onnx",
+            "bytes": 340318797,
+            "sha256": "ab2bd164ebd8ca9003dc49a981b611e849b5d326f504c8873ba76e07fa6c0082"
+          }
+        ]
+      },
+      "profile": {
+        "floor": 0.584,
+        "margin": 0.12
+      },
+      "proposal": {
+        "floor": 0.553164,
+        "margin": 0,
+        "status": "measurement-only; requires explicit profile review"
+      },
+      "floorProtocol": "ceil((strongest measured answer-removed cosine + 0.001) * 1e6) / 1e6; capped at 1",
+      "marginProtocol": "The shipped margin is a fixed policy limit. The proposal reports the smallest margin supported by this single-answer dataset; it does not establish an optimal multi-answer margin.",
+      "datasetDigest": "f578fd119a9a533279ee2cf47bc4e99457467d08e1896054f4854006ca420788",
+      "inputDigest": "758de21fbf6ffcc6d1e38f00f19363835575426715ea08ef4b391ba546b59338",
+      "embeddingsSha256": "f08edfc4a1620d0db5ca5c2fd0ef889269e72e3fce54cfbde1fa3ecef3fc57ba",
+      "weakestSame": 0.5415503805540736,
+      "strongestCross": 0.5521632061913235,
+      "unrelatedMax": 0.5521632061913235,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.958333333,
+            "recallAt4": 0.958333333,
+            "mrr": 0.958333333,
+            "precisionAt4": 1,
+            "returned": 23
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.95,
+            "recallAt4": 0.95,
+            "mrr": 0.95,
+            "precisionAt4": 1,
+            "returned": 19
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      },
+      "unrelatedCorpora": 24,
+      "unrelatedHits": 0,
+      "cases": [
+        {
+          "id": "en-01",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.5179285373932556, 0.760718550432604, 0.46533521172508335, 0.41675962649737336,
+            0.4242156802635969, 0.4259553826106925, 0.4242837384278425, 0.4665163126483488
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-02",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.46179272902084095, 0.6410258976709058, 0.3895576291540072, 0.45432801524317207,
+            0.39815419638799526, 0.44644495547411717, 0.3950020718741922, 0.39289274114830897
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-03",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.46981561038498115, 0.7608578929472797, 0.4495748325671723, 0.40504211019450914,
+            0.522616513991484, 0.44042533414206647, 0.4878148009153905, 0.4957452256128884
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-04",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4759757071585219, 0.6842930122681574, 0.4401889380864462, 0.46612303895320256,
+            0.5140962096628747, 0.44687637575511296, 0.37621729870937887, 0.5098291088643709
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-05",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4096298490077704, 0.7149547114346674, 0.48792934620023876, 0.4235918427449025,
+            0.3943890769747311, 0.45816619021742877, 0.3849089439893892, 0.39597682470093476
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-06",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.46655551797233563, 0.6891026564753956, 0.3733766632950462, 0.49950391923250304,
+            0.46133229287936545, 0.480303916418892, 0.48794285866913173, 0.4413184868323139
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-07",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44609632708704056, 0.6564340477647047, 0.4105280386913107, 0.4581553513721498,
+            0.506800332072743, 0.48842203476234997, 0.42103102170957024, 0.4247388629772442
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-08",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44554430520187666, 0.5991329241997914, 0.4380192578835256, 0.46367135691463673,
+            0.41927064247338525, 0.43264598344516986, 0.41295443729374365, 0.4502302675823176
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-09",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.39273686161491994, 0.6652575171831023, 0.42772242009704015, 0.41486971905431463,
+            0.37647454413629533, 0.4244250959092371, 0.42089139595320113, 0.5312377329006056
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-10",
+          "language": "en",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4478891458733805, 0.677284726674551, 0.3751047475818569, 0.43999223546014743,
+            0.3965099425374487, 0.41158906252006094, 0.36267963333973297, 0.3655101822376367
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "en-11",
+          "language": "en",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.5521632061913235, 0.8402602230324264, 0.4329437903115152, 0.4805540059988516,
+            0.47072935081629075, 0.46951238547684804, 0.47748104881634307, 0.43545983082701617
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "en-12",
+          "language": "en",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.5261436901231727, 0.7840806168153788, 0.4363783920033455, 0.4435339496147702,
+            0.44193588723347876, 0.39864497837473656, 0.43348150586081824, 0.4333285117150759
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-01",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.48370502052378256, 0.6927219205178538, 0.45589060908115775, 0.45335648357164005,
+            0.4531075257278556, 0.4602920237094729, 0.4203733748719359, 0.49910489007667536
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-02",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4482384465831605, 0.6710624698953548, 0.35903385529667664, 0.38933039391004975,
+            0.3563706144634742, 0.4566356856828408, 0.3645323159897569, 0.4147781368578291
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-03",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4856521541891996, 0.7177021626993142, 0.4760026409828468, 0.38129571596810186,
+            0.4860752753141083, 0.49207630162907473, 0.49481664874037756, 0.5153921356696426
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-04",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4904075368256269, 0.682363777303712, 0.44629081843269097, 0.5014898873587349,
+            0.5406079479177541, 0.4148276510292027, 0.41980395347999283, 0.4831917904192743
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [7]
+        },
+        {
+          "id": "zh-05",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.39480129120647905, 0.6506041914386274, 0.48314359062507733, 0.4518154940503577,
+            0.4301942949103993, 0.43815381823438143, 0.40146641549122114, 0.45027376964221977
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-06",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4744571511703182, 0.65821124504228, 0.3620096976901434, 0.4628819167808359,
+            0.4891483495601697, 0.5285085872947141, 0.500556088564074, 0.5197888055909556
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-07",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.44140071824932287, 0.5415503805540736, 0.3767990695571489, 0.428823029136114,
+            0.37898959949211297, 0.4457638489700389, 0.4000575869826874, 0.3606397119418153
+          ],
+          "top4": [],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-08",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4841277833505605, 0.6075049597814334, 0.44642127202613097, 0.45366665201277373,
+            0.43437620092492535, 0.4886587804105196, 0.44316678199734566, 0.47768409584713833
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-09",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4137488348609814, 0.6504879639325392, 0.4279101067664958, 0.4160120953640602,
+            0.43023654363417113, 0.46318291737207395, 0.44404460696126336, 0.529110679309534
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-10",
+          "language": "zh",
+          "kind": "paraphrase",
+          "relevant": [1],
+          "cosines": [
+            0.4281352658935598, 0.6505037023981144, 0.37400131492098393, 0.4262905911291227,
+            0.3919564717656017, 0.4078557273250129, 0.3175868419027174, 0.4083598101894115
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": []
+        },
+        {
+          "id": "zh-11",
+          "language": "zh",
+          "kind": "lexical",
+          "relevant": [1],
+          "cosines": [
+            0.49094654560226536, 0.8956889249771693, 0.4196100703052028, 0.501862152269875,
+            0.4303803457862041, 0.45107177298469203, 0.4552990867762624, 0.4389627271028218
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        },
+        {
+          "id": "zh-12",
+          "language": "zh",
+          "kind": "duplicate",
+          "relevant": [1],
+          "cosines": [
+            0.5031797409725901, 0.873804956445898, 0.45106227154539047, 0.4975963098666444,
+            0.44325063812042886, 0.4665797126266386, 0.46843546008301434, 0.5049412666688128
+          ],
+          "top4": [1],
+          "unrelatedHits": 0,
+          "lexicalTop4": [1]
+        }
+      ],
+      "generatedBy": "dsh-zotero/encode-admission production semantic Worker",
+      "generatedAt": "2026-11-16T18:22:48.245Z",
+      "durationMs": 5793.747584000001,
+      "runtime": {
+        "node": "24.20.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "vendored": {
+          "package": "onnxruntime-web",
+          "version": "1.31.1",
+          "source": "https://github.com/microsoft/onnxruntime (npm onnxruntime-web@1.31.1)",
+          "license": "MIT; see assets/onnxruntime/LICENSE",
+          "files": {
+            "ort-wasm-simd-threaded.mjs": {
+              "bytes": 24738,
+              "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+            },
+            "ort-wasm-simd-threaded.wasm": {
+              "bytes": 14848852,
+              "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+            },
+            "ort.node.min.mjs": {
+              "bytes": 29181,
+              "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+            }
+          }
+        }
+      },
+      "limitation": "Same authored regression set selects and measures these rules; no heldout or production false-positive guarantee. Answer-removed controls contain only the seven original non-answer passages. Margin support is limited by the relevant labels in this dataset.",
+      "vectorFile": "vectors/academic.json"
+    }
+  ],
+  "previousProfiles": {
+    "hybrid": {
+      "profile": {
+        "floor": 0.461,
+        "margin": 0.12
+      },
+      "unrelatedHits": 2,
+      "summaries": {
+        "all": {
+          "semantic": {
+            "cases": 24,
+            "recallAt1": 0.916666667,
+            "recallAt4": 0.916666667,
+            "mrr": 0.916666667,
+            "precisionAt4": 0.956521739,
+            "returned": 23
+          },
+          "lexical": {
+            "cases": 24,
+            "recallAt1": 0.166666667,
+            "recallAt4": 0.166666667,
+            "mrr": 0.166666667,
+            "precisionAt4": 0.8,
+            "returned": 5
+          }
+        },
+        "paraphrase": {
+          "semantic": {
+            "cases": 20,
+            "recallAt1": 0.9,
+            "recallAt4": 0.9,
+            "mrr": 0.9,
+            "precisionAt4": 0.947368421,
+            "returned": 19
+          },
+          "lexical": {
+            "cases": 20,
+            "recallAt1": 0,
+            "recallAt4": 0,
+            "mrr": 0,
+            "precisionAt4": 0,
+            "returned": 1
+          }
+        },
+        "lexical": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        },
+        "duplicate": {
+          "semantic": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          },
+          "lexical": {
+            "cases": 2,
+            "recallAt1": 1,
+            "recallAt4": 1,
+            "mrr": 1,
+            "precisionAt4": 1,
+            "returned": 2
+          }
+        }
+      }
+    }
+  },
+  "acceptanceScope": "24 authored regression cases (20 paraphrases, 2 lexical and 2 duplicate controls), each with 8 passages and one labeled answer; English tier uses 12 English cases. Answer-removed controls have seven passages. No external annotations, real PDF extraction, heldout evaluation, throughput or production-wide false-positive assurance."
+}

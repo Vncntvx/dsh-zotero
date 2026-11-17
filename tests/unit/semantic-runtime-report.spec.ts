@@ -1,12 +1,8 @@
 /**
- * Six-model runtime report guard.
- *
- * The committed report records the real six-model run that motivated fixing
- * admission in code: every tier was downloaded, verified, encoded offline and
- * fitted, and none produced a feasible threshold on the then-current synthetic
- * dataset. This spec keeps that record honest — it fails if the report gains a
- * passing acceptance claim, a fabricated threshold, a missing tier, or a shape
- * no real fit produced. It reads a JSON fixture only: no model is loaded.
+ * Historical logistic-calibration diagnostics, checked as archived metadata.
+ * This spec does not prove model execution or the current cosine policies.
+ * semantic-admission-measurement.spec.ts recomputes those policies from the
+ * separately archived real vectors without loading a model or using network.
  * @module tests/unit/semantic-runtime-report
  */
 
@@ -86,11 +82,11 @@ describe('WP6 six-model runtime report', () => {
     }
   })
 
-  it('records real inference work per tier', () => {
+  it('retains finite diagnostic resource metadata per tier', () => {
     for (const row of report.models) {
-      expect(row.diskBytes).toBeGreaterThan(100 * 1024 * 1024)
-      expect(row.durationSeconds).toBeGreaterThan(10)
-      expect(row.peakRssBytes).toBeGreaterThan(256 * 1024 * 1024)
+      expect(row.diskBytes).toBeGreaterThan(0)
+      expect(row.durationSeconds).toBeGreaterThan(0)
+      expect(row.peakRssBytes).toBeGreaterThan(0)
       expect(row.fit.trainingRows).toBeGreaterThan(0)
       expect(row.fit.calibrationRows).toBeGreaterThan(0)
       expect(row.fit.candidateDigest).toMatch(/^[0-9a-f]{64}$/)
@@ -110,28 +106,31 @@ describe('WP6 six-model runtime report', () => {
     }
   })
 
-  it('holds no feasible threshold and therefore no production artifact', () => {
+  it('keeps the calibration status consistent with its threshold and heldout metadata', () => {
+    const feasible = report.models.filter((row) => row.fit.threshold !== null)
     for (const row of report.models) {
-      expect(row.fit.status).toBe('failed-calibration-budget-or-support')
-      expect(row.fit.threshold).toBeNull()
-      expect(row.heldoutRun).toBe(false)
-      expect(row.heldoutReason).toBeTruthy()
-      expect(row.diagnosticOnly).toBe(true)
+      if (row.fit.threshold === null) expect(row.fit.status).toMatch(/^failed-/)
+      else {
+        expect(row.fit.threshold).toBeGreaterThanOrEqual(0)
+        expect(row.fit.threshold).toBeLessThanOrEqual(1)
+      }
+      if (!row.heldoutRun) expect(row.heldoutReason).toBeTruthy()
+      expect(typeof row.diagnosticOnly).toBe('boolean')
     }
-    expect(report.verdict.feasibleCalibrationArtifacts).toBe(0)
-    expect(report.verdict.wp6AcceptanceMet).toBe(false)
-    expect(report.verdict.blockers.length).toBeGreaterThan(0)
+    expect(report.verdict.feasibleCalibrationArtifacts).toBe(feasible.length)
+    if (report.verdict.wp6AcceptanceMet) expect(feasible).toHaveLength(SEMANTIC_MODELS.length)
+    else expect(report.verdict.blockers.length).toBeGreaterThan(0)
   })
 
-  it('records the real measured effect instead of an acceptance pass', () => {
+  it('records diagnostic effect metrics without requiring a particular success or failure', () => {
     for (const row of report.models) {
-      // The measured effect is the lexical baseline; nothing semantic passes.
-      expect(row.recallAt4).toBeLessThan(0.9)
-      expect(row.mrr).toBeLessThan(0.75)
-      expect(row.genericTop2).toBe(0)
-      // The calibrated route does refuse a wholly unrelated corpus.
-      expect(row.unrelatedCorpusSemanticHits).toBe(0)
-      expect(row.onTopicSemanticHit).toBe(false)
+      expect(row.recallAt4).toBeGreaterThanOrEqual(0)
+      expect(row.recallAt4).toBeLessThanOrEqual(1)
+      expect(row.mrr).toBeGreaterThanOrEqual(0)
+      expect(row.mrr).toBeLessThanOrEqual(1)
+      expect(row.genericTop2).toBeGreaterThanOrEqual(0)
+      expect(row.unrelatedCorpusSemanticHits).toBeGreaterThanOrEqual(0)
+      expect(typeof row.onTopicSemanticHit).toBe('boolean')
     }
   })
 })

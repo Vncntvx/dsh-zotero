@@ -325,6 +325,20 @@ export function EnrichmentSettingsForm({
               disabled={disabled}
             />
             <p className={fieldCss.hint}>{t('enrichmentModeHint')}</p>
+            <SettingsValueField
+              id="enrichment-ocr-language"
+              label={t('enrichmentOcrLanguage')}
+              hint={t('enrichmentOcrLanguageHint')}
+              text={state.ocrLanguage.text}
+              overridden={state.ocrLanguage.overridden}
+              invalid={state.ocrLanguage.invalid}
+              overriddenLabel={t('overridden')}
+              resetLabel={t('reset')}
+              invalidLabel={t('enrichmentOcrLanguageInvalid')}
+              disabled={disabled || modeValue !== 'free'}
+              onEdit={(text) => actions.edit('ocrLanguage', text)}
+              onReset={() => actions.resetField('ocrLanguage')}
+            />
           </div>
         </div>
       </section>

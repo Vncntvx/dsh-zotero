@@ -19,6 +19,7 @@ import { ENRICHMENT_CREDENTIAL_REFERENCE_NAMES } from '../credential-names.js'
 import { SEMANTIC_DOWNLOAD_SOURCES, SEMANTIC_MODEL_KEYS } from '../enrichment-model-catalog.js'
 import {
   ENRICHMENT_DEFAULTS,
+  ENRICHMENT_OCR_LANGUAGE_PATTERN,
   ENRICHMENT_MODE_CHOICES,
   ENRICHMENT_OUTPUT_DIR_PATTERN,
   ENRICHMENT_PREFERENCE_KEYS,
@@ -45,6 +46,11 @@ export const EnrichmentConfigSchema = Schema.object({
   mode: schemaChoices(ENRICHMENT_MODE_CHOICES)
     .default(ENRICHMENT_DEFAULTS.mode)
     .description('Which MinerU API to use: free (Agent lightweight) or pro (precise).')
+    .volatile(),
+  ocrLanguage: Schema.string()
+    .pattern(ENRICHMENT_OCR_LANGUAGE_PATTERN)
+    .default(ENRICHMENT_DEFAULTS.ocrLanguage)
+    .description('MinerU free PDF OCR language code (service default ch); ignored by pro mode.')
     .volatile(),
   mineruTokenRef: Schema.string()
     .role('credential-ref')

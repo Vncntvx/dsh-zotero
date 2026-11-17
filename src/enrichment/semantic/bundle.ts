@@ -3,7 +3,7 @@ import { manifestOf, type SemanticModelEntry } from '../../enrichment-model-cata
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { createBundleInspector } from '../model-bundle-inspector.js'
-import { readRegularFile } from '../model-fs.js'
+import { readRegularFile } from '../../regular-file.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { openEmbedder, type Embedder } from './session.js'
 

@@ -17,10 +17,8 @@ import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { refFieldsOf } from '../ref-grammar.js'
 import type { ParsedArtifactStore } from './artifact-store.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import {
-  ENRICHMENT_DOCUMENT_LIMITS,
-  type EnrichmentPreferences,
-} from '../enrichment-preferences.js'
+import type { EnrichmentPreferences } from '../enrichment-preferences.js'
+import { limitsFor } from './types.js'
 import type {
   ZoteroArtifactMetadataView,
   ZoteroAttachmentLocationView,
@@ -213,6 +211,8 @@ export async function probeAttachments(
         if (fields === undefined || fields.kind !== 'attachment') return { ref, state: 'missing' }
         const record = index.sources[sourceKeyOf(canonicalSourceIdentityOf(ref))]
         if (record === undefined) return { ref, state: 'missing' }
+        const meta = await store.metadataFor(record)
+        if (meta === undefined) return { ref, state: 'expired' }
         const target = await resolveParseTarget(
           parseTargetOf({ kind: 'attachment', ref }),
           resolve,
@@ -220,12 +220,11 @@ export async function probeAttachments(
         )
         const stamp = await probeSource(
           target.input,
-          ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+          limitsFor(meta.mode).maxBytes,
           hostSourceBytesDeps(resolve, deps.client),
           perCall,
         )
         if (!stampMatches(record.stamp, stamp)) return { ref, state: 'expired' }
-        if ((await store.metadataFor(record)) === undefined) return { ref, state: 'expired' }
         return { ref, state: 'ready' }
       } catch {
         return { ref, state: 'missing' }

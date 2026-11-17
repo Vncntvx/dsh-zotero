@@ -142,8 +142,8 @@ cli(async () => {
     near(result.features[3], Math.log1p(2))
     near(result.features[4], Math.log1p(3))
     assert.throws(() => cosine([1], [1, 0]), /dimension/)
-    assert.throws(() => cosine([0], [1]), /Zero/)
-    assert.throws(() => cosine([NaN], [1]), /Nonfinite/)
+    assert.equal(cosine([0], [1]), 0)
+    assert.throws(() => cosine([NaN], [1]), /non-finite/)
   })
   await check('query and document families are jointly held out during grouped selection', () => {
     const rows = Array.from({ length: 6 }, (_, i) =>

@@ -22,6 +22,9 @@ import {
   type JobRegistry,
 } from '@deepseek-ai/dsh-jobs'
 import { z } from 'zod'
+import { LRUCache } from 'lru-cache'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import { resolveSafeDirectory } from './safe-directory.js'
 import {
   type ZoteroArtifactMetadataView,
   type ZoteroDocumentArtifactRequestView,
@@ -39,6 +42,7 @@ import {
   ZoteroError,
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+  ZOTERO_ENRICHMENT_OUTPUT_INVALID,
   ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_JOBS_LIMIT_REACHED,
@@ -153,10 +157,23 @@ const recordSchema = z
   })
   .strict()
 
-/** Receipts survive service remounts. The root resolver must validate the snapshot directory. */
+/** Receipts use a stable state root; artifact outputDir changes cannot move them. */
 export class DiskParseJobPersistence implements ParseJobPersistence {
   constructor(
-    private readonly root: (config: EnrichmentPreferences, create: boolean) => Promise<string>,
+    private readonly root: (
+      config: EnrichmentPreferences,
+      create: boolean,
+    ) => Promise<string> = async (_config, create) =>
+      await resolveSafeDirectory({
+        configured: '',
+        defaultRoot: dshHomePath('zotero-receipts'),
+        create,
+        readOnly: !create,
+        allowMissing: !create,
+        privateOwner: true,
+        errorCode: ZOTERO_ENRICHMENT_OUTPUT_INVALID,
+        label: 'enrichment receipt directory',
+      }),
   ) {}
 
   private async directory(config: EnrichmentPreferences, create: boolean): Promise<string> {
@@ -323,6 +340,7 @@ export interface EnrichmentParseJobsDeps {
 }
 
 interface Operation {
+  readonly replayed?: true
   record: ParseJobRecord
   readonly owner: SessionId
   readonly config: EnrichmentPreferences
@@ -361,6 +379,7 @@ export class EnrichmentParseJobs {
   private closed = false
   private disposal: Promise<void> | undefined
   private readonly operations = new Map<string, Operation>()
+  private readonly removingGenerations = new Set<string>()
   private readonly owned = new Set<Operation>()
   private readonly admissions = new Map<
     string,
@@ -368,11 +387,12 @@ export class EnrichmentParseJobs {
       readonly binding: string
       readonly action: ZoteroStartDocumentParseRequestView['action']
       readonly task: Promise<Operation>
+      readonly revoked: Set<string>
     }
   >()
   private readonly shared = new Map<string, SharedGeneration>()
   private readonly tails = new Map<string, Promise<void>>()
-  private readonly generations = new Map<string, string>()
+  private readonly generations = new LRUCache<string, string>({ max: 256 })
   /** Live completion-notice cadences; teardown clears every one of them. */
   private readonly noticeCadences = new Set<ReturnType<typeof setInterval>>()
 
@@ -448,17 +468,43 @@ export class EnrichmentParseJobs {
     return await expandRequestTarget(target, store)
   }
 
-  /** Drop in-memory job state bound to one artifact generation. */
-  forgetGeneration(generation: string): void {
-    for (const [key, operation] of this.operations)
-      if (operation.record.generation === generation) {
-        this.operations.delete(key)
-        this.owned.delete(operation)
-      }
-    for (const [source, value] of this.generations)
-      if (value === generation) this.generations.delete(source)
-    for (const [key, shared] of this.shared)
-      if (shared.generation === generation) this.shared.delete(key)
+  /** Drain a generation before deletion, reserving it until storage cleanup finishes. */
+  async discardGeneration<T>(generation: string, remove: () => Promise<T>): Promise<T> {
+    this.assertGenerationAvailable(generation)
+    this.removingGenerations.add(generation)
+    for (const admission of this.admissions.values()) admission.revoked.add(generation)
+    try {
+      const operations = [...this.owned].filter(
+        (operation) => operation.record.generation === generation,
+      )
+      const flights = [...this.shared.values()].filter((shared) => shared.generation === generation)
+      for (const operation of operations) operation.cancel()
+      for (const flight of flights) flight.controller.abort(cancelled())
+      await Promise.allSettled([
+        ...operations.map((operation) => operation.done),
+        ...flights.map((flight) => flight.promise),
+      ])
+      for (const [key, operation] of this.operations)
+        if (operation.record.generation === generation) {
+          this.operations.delete(key)
+          this.owned.delete(operation)
+        }
+      for (const [source, value] of this.generations)
+        if (value === generation) this.generations.delete(source)
+      for (const [key, shared] of this.shared)
+        if (shared.generation === generation) this.shared.delete(key)
+      return await remove()
+    } finally {
+      this.removingGenerations.delete(generation)
+    }
+  }
+
+  private assertGenerationAvailable(generation: string, revoked?: ReadonlySet<string>): void {
+    if (this.removingGenerations.has(generation) || revoked?.has(generation))
+      throw new ZoteroError(
+        'This parsed artifact generation was removed or is being removed.',
+        ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+      )
   }
 
   /** Invalidate open document leases bound to one artifact. */
@@ -546,6 +592,7 @@ export class EnrichmentParseJobs {
     if (existing !== undefined && !retry) operation = existing
     else if (admission !== undefined) operation = await raceWithSignal(admission.task, signal)
     else {
+      const revoked = new Set(this.removingGenerations)
       const task = this.admit(
         request,
         target,
@@ -555,8 +602,12 @@ export class EnrichmentParseJobs {
         signal,
         currentCtx,
         retry ? existing : undefined,
-      )
-      this.admissions.set(key, { binding, action: request.action, task })
+        revoked,
+      ).then((operation) => {
+        this.assertGenerationAvailable(operation.record.generation, revoked)
+        return operation
+      })
+      this.admissions.set(key, { binding, action: request.action, task, revoked })
       try {
         operation = await task
         this.operations.set(key, operation)
@@ -566,6 +617,7 @@ export class EnrichmentParseJobs {
       }
     }
     this.open()
+    this.assertGenerationAvailable(operation.record.generation)
     this.authorize(sessionId, 'startDocumentParse', currentCtx)
     const completed =
       operation.record.state.kind === 'completed' ? operation.record.state.receipt : undefined
@@ -573,7 +625,12 @@ export class EnrichmentParseJobs {
       operationId: request.operationId,
       generation: operation.record.generation,
       jobId: operation.record.jobId,
-      status: completed !== undefined ? 'completed' : replay ? 'joined' : 'started',
+      status:
+        completed !== undefined
+          ? 'completed'
+          : replay || operation.replayed === true
+            ? 'joined'
+            : 'started',
       ...(completed !== undefined ? { receipt: completed } : {}),
     }
   }
@@ -586,7 +643,8 @@ export class EnrichmentParseJobs {
     registry: JobRegistry,
     signal: AbortSignal,
     currentCtx: Context,
-    retry?: Operation,
+    retry: Operation | undefined,
+    revoked: ReadonlySet<string>,
   ): Promise<Operation> {
     const owner = parseDigest(request.sessionId)
     const saved =
@@ -611,6 +669,7 @@ export class EnrichmentParseJobs {
       )
     }
     if (saved !== undefined && (request.action !== 'retry' || saved.state.kind === 'completed')) {
+      this.assertGenerationAvailable(saved.generation, revoked)
       // A process restart never resumes a task as a side effect of RPC replay.
       const state: ReceiptState =
         saved.state.kind === 'pending'
@@ -621,6 +680,7 @@ export class EnrichmentParseJobs {
             }
           : saved.state
       return {
+        replayed: true,
         record: { ...saved, state },
         owner: SessionId(request.sessionId),
         config,
@@ -638,6 +698,7 @@ export class EnrichmentParseJobs {
     this.open()
     this.authorize(SessionId(request.sessionId), 'startDocumentParse', currentCtx)
     const generation = request.action === 'reparse' ? randomUUID() : (previous ?? randomUUID())
+    this.assertGenerationAvailable(generation, revoked)
     let operation!: Operation
     let jobId: JobId
     try {
@@ -807,6 +868,7 @@ export class EnrichmentParseJobs {
       }
     }
     cadence = setInterval(() => void watch(), PARSE_NOTICE_REARM_MS)
+    cadence.unref()
     this.noticeCadences.add(cadence)
     void watch()
   }
@@ -887,8 +949,6 @@ export class EnrichmentParseJobs {
       })
     entry = { generation, controller, waiters, promise, settled: false }
     this.generations.set(source, generation)
-    while (this.generations.size > 256)
-      this.generations.delete(this.generations.keys().next().value!)
     this.shared.set(source, entry)
     this.tails.set(lane, tail)
     return entry

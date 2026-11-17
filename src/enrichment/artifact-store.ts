@@ -14,7 +14,7 @@ import {
 } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { z } from 'zod'
 import {
@@ -29,6 +29,15 @@ import { stampMatches } from './source-stamp.js'
 import { extractMarkdownTitleOf } from '../parsed-title.js'
 import type { ZoteroArtifactImageMediaType } from '../contract.js'
 import type { FulltextSourceStamp, ParsedArtifact } from './types.js'
+
+function digestOf(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function verifyDigest(bytes: Uint8Array, expected: string | undefined): void {
+  if (expected === undefined || digestOf(bytes) !== expected)
+    throw new Error('The stored parsed artifact does not match its metadata digest')
+}
 
 export type { SourceIndexRecord } from './artifact-schema.js'
 
@@ -164,7 +173,7 @@ async function readIndexFile(path: string, maxBytes: number): Promise<Uint8Array
 
 const hostDeps: ArtifactStoreDeps = {
   mkdir: async (path) => {
-    await mkdir(path, { recursive: true })
+    await mkdir(path, { recursive: true, mode: 0o700 })
   },
   readFile,
   writeFile: async (path, data) => {
@@ -281,7 +290,18 @@ export class ParsedArtifactStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
     }
-    return taskReceipt.parse(JSON.parse(decoder.decode(bytes)))
+    let decoded: unknown
+    try {
+      decoded = JSON.parse(decoder.decode(bytes))
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error
+      await this.deleteTask(cacheKey)
+      return undefined
+    }
+    const parsed = taskReceipt.safeParse(decoded)
+    if (parsed.success) return parsed.data
+    await this.deleteTask(cacheKey)
+    return undefined
   }
 
   async putTask(cacheKey: string, task: ParseTaskRecord): Promise<void> {
@@ -316,7 +336,9 @@ export class ParsedArtifactStore {
     // miss a missing meta.json is.
     let markdown: string
     try {
-      markdown = decoder.decode(await this.readExact(join(dir, 'full.md'), meta.markdownBytes))
+      const bytes = await this.readExact(join(dir, 'full.md'), meta.markdownBytes)
+      verifyDigest(bytes, meta.markdownSha256)
+      markdown = decoder.decode(bytes)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
@@ -325,9 +347,9 @@ export class ParsedArtifactStore {
     let contentList: string | undefined
     if (meta.files.length === 2) {
       try {
-        contentList = decoder.decode(
-          await this.readBounded(join(dir, 'content_list.json'), CONTENT_LIST_MAX_BYTES),
-        )
+        const bytes = await this.readBounded(join(dir, 'content_list.json'), CONTENT_LIST_MAX_BYTES)
+        verifyDigest(bytes, meta.contentListSha256)
+        contentList = decoder.decode(bytes)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
         throw error
@@ -335,7 +357,14 @@ export class ParsedArtifactStore {
       if (!Array.isArray(JSON.parse(contentList)))
         throw new Error('The stored parsed content list is invalid')
     }
-    const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
+    const {
+      characterCount: _characterCount,
+      markdownBytes: _markdownBytes,
+      markdownSha256: _markdownHash,
+      contentListSha256: _contentHash,
+      imageSha256: _imageHashes,
+      ...domainMeta
+    } = meta
     return { markdown, ...(contentList !== undefined ? { contentList } : {}), meta: domainMeta }
   }
 
@@ -357,6 +386,18 @@ export class ParsedArtifactStore {
   private async persist(cacheKey: string, artifact: ParsedArtifact): Promise<void> {
     this.touch()
     const markdownBytes = encoder.encode(artifact.markdown)
+    const contentBytes =
+      artifact.contentList === undefined ? undefined : encoder.encode(artifact.contentList)
+    const images = artifact.images ?? []
+    if (images.length !== (artifact.meta.images?.length ?? 0))
+      throw new Error('The parsed artifact image list does not match its payload')
+    images.forEach((image, index) => {
+      const declared = artifact.meta.images?.[index]
+      if (declared === undefined || declared.name !== image.name)
+        throw new Error('The parsed artifact image list does not match its payload')
+      if (declared.bytes !== image.data.byteLength)
+        throw new Error('The parsed artifact image size does not match its metadata')
+    })
     const meta = artifactMetaSchema.parse({
       ...artifact.meta,
       // meta.json is the commit marker; every committed artifact carries the
@@ -364,26 +405,21 @@ export class ParsedArtifactStore {
       title: artifact.meta.title ?? extractMarkdownTitleOf(artifact.markdown),
       characterCount: artifact.markdown.length,
       markdownBytes: markdownBytes.byteLength,
+      markdownSha256: digestOf(markdownBytes),
+      ...(contentBytes === undefined ? {} : { contentListSha256: digestOf(contentBytes) }),
+      imageSha256: Object.fromEntries(
+        (artifact.images ?? []).map((image) => [image.name, digestOf(image.data)]),
+      ),
     })
     if (artifact.markdown.trim() === '') throw new Error('The parsed Markdown is empty')
     if ((artifact.contentList !== undefined) !== (meta.files.length === 2))
       throw new Error('The parsed artifact file list does not match its payload')
-    const images = artifact.images ?? []
-    if (images.length !== (meta.images?.length ?? 0))
-      throw new Error('The parsed artifact image list does not match its payload')
-    images.forEach((image, index) => {
-      const declared = meta.images?.[index]
-      if (declared === undefined || declared.name !== image.name)
-        throw new Error('The parsed artifact image list does not match its payload')
-      if (declared.bytes !== image.data.byteLength)
-        throw new Error('The parsed artifact image size does not match its metadata')
-    })
     const dir = this.dir(cacheKey)
     await this.ensureRoot()
     await this.deps.mkdir(dir)
     await this.atomicWrite(join(dir, 'full.md'), markdownBytes)
-    if (artifact.contentList !== undefined)
-      await this.atomicWrite(join(dir, 'content_list.json'), encoder.encode(artifact.contentList))
+    if (contentBytes !== undefined)
+      await this.atomicWrite(join(dir, 'content_list.json'), contentBytes)
     if (images.length > 0) {
       // `images/<file>`, exactly the reference the Markdown carries; the name
       // was validated against the meta schema before this write.
@@ -434,8 +470,14 @@ export class ParsedArtifactStore {
     return bytes
   }
 
-  async readMarkdown(cacheKey: string, characterCount: number, byteCount: number): Promise<string> {
+  async readMarkdown(
+    cacheKey: string,
+    characterCount: number,
+    byteCount: number,
+    sha256: string,
+  ): Promise<string> {
     const bytes = await this.readBounded(join(this.dir(cacheKey), 'full.md'), byteCount)
+    verifyDigest(bytes, sha256)
     const text = decoder.decode(bytes)
     if (bytes.byteLength !== byteCount || text.trim() === '' || text.length !== characterCount)
       throw new Error('The stored parsed Markdown does not match its metadata')
@@ -476,6 +518,7 @@ export class ParsedArtifactStore {
     }
     if (data.byteLength !== declared.bytes)
       throw new Error('The stored parsed image does not match its metadata')
+    verifyDigest(data, meta.imageSha256[declared.name])
     return { data, mediaType: declared.mediaType }
   }
 
@@ -550,9 +593,13 @@ export class ParsedArtifactStore {
    * keys, redirect aliases included. Management lists and discards group from
    * this instead of rescanning the index per artifact.
    */
-  async groupByArtifact(): Promise<ReadonlyMap<string, ArtifactGroup>> {
+  async groupByArtifact(
+    snapshot?: Awaited<ReturnType<ParsedArtifactStore['snapshot']>>,
+  ): Promise<ReadonlyMap<string, ArtifactGroup>> {
     const groups = new Map<string, { record?: SourceIndexRecord; aliases: string[] }>()
-    for (const [key, record] of Object.entries((await this.sourceSnapshot()).sources)) {
+    for (const [key, record] of Object.entries(
+      (snapshot ?? (await this.sourceSnapshot())).sources,
+    )) {
       const group = groups.get(record.cacheKey) ?? { aliases: [] }
       group.record ??= record
       group.aliases.push(key)
@@ -566,9 +613,12 @@ export class ParsedArtifactStore {
    * with its cached meta. Cached between writes: a page flip, refresh or
    * discard-driven refetch re-reads nothing until the store is written again.
    */
-  async inventory(signal?: AbortSignal): Promise<readonly InventoryEntry[]> {
+  async inventory(
+    signal?: AbortSignal,
+    provided?: Awaited<ReturnType<ParsedArtifactStore['snapshot']>>,
+  ): Promise<readonly InventoryEntry[]> {
     if (this.inventoryCache?.generation === this.#writes) return this.inventoryCache.entries
-    const snapshot = await this.sourceSnapshot()
+    const snapshot = provided ?? (await this.sourceSnapshot())
     const ids = new Set<string>([
       ...Object.values(snapshot.sources).map((record) => record.cacheKey),
       ...(await this.listArtifactDirectories()),
@@ -611,16 +661,16 @@ export class ParsedArtifactStore {
   }
 
   /**
-   * Remove one committed artifact completely under the publication lock, so a
-   * concurrent publication cannot re-point an alias at a removed directory:
-   * aliases go first (the index pointer is the marker), then the directory,
-   * then the task file. The caller has already retired the artifact's readers
-   * and parse receipts.
+   * Remove one committed artifact under the source-index lock. The caller
+   * has reserved and drained its generation; the lock serializes other index
+   * edits. Remove aliases first, then the directory and task receipt.
    */
   async discardArtifact(cacheKey: string, signal?: AbortSignal): Promise<number> {
     SHA256.parse(cacheKey)
     signal?.throwIfAborted()
     this.touch()
+    await this.ensureRoot()
+    await this.deps.mkdir(join(this.root, 'sources'))
     return await (this.deps.withSourceLock ?? withFileLock)(
       this.indexPath(),
       async () => {
@@ -749,8 +799,16 @@ export class ParsedArtifactStore {
       candidate.cacheKey,
       meta.characterCount,
       meta.markdownBytes,
+      meta.markdownSha256,
     )
-    const { characterCount: _characterCount, markdownBytes: _markdownBytes, ...domainMeta } = meta
+    const {
+      characterCount: _characterCount,
+      markdownBytes: _markdownBytes,
+      markdownSha256: _markdownHash,
+      contentListSha256: _contentHash,
+      imageSha256: _imageHashes,
+      ...domainMeta
+    } = meta
     return { markdown, meta: domainMeta }
   }
 

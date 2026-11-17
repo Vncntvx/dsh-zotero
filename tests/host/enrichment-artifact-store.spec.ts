@@ -42,6 +42,18 @@ const WITH_FIGURES = {
 }
 
 describe('ParsedArtifactStore figures', () => {
+  it('rejects an equal-size image replacement without modifying stored evidence', async () => {
+    const fs = memoryFiles()
+    const store = new ParsedArtifactStore('/root', fs.deps)
+    await store.put(CACHE_KEY, WITH_FIGURES)
+    await fs.deps.writeFile(
+      `/root/${CACHE_KEY}/images/page_0_figure.png`,
+      new Uint8Array([1, 2, 3, 4]),
+    )
+    const before = new Map(fs.files)
+    await expect(store.readImage(CACHE_KEY, 'images/page_0_figure.png')).rejects.toThrow('digest')
+    expect(fs.files).toEqual(before)
+  })
   it('stores a figure beside the Markdown and serves only the names its meta lists', async () => {
     const fs = memoryFiles()
     const store = new ParsedArtifactStore('/root', fs.deps)
@@ -389,9 +401,10 @@ describe('ParsedArtifactStore task receipts', () => {
         uploaded: false,
       }),
     },
-  ])('rejects a $name task receipt', async ({ body }) => {
+  ])('removes a $name task receipt so an explicit parse can submit afresh', async ({ body }) => {
     const fs = memoryFiles()
     await fs.deps.writeFile(`/root/tasks/${CACHE_KEY}.json`, body)
-    await expect(new ParsedArtifactStore('/root', fs.deps).getTask(CACHE_KEY)).rejects.toThrow()
+    expect(await new ParsedArtifactStore('/root', fs.deps).getTask(CACHE_KEY)).toBeUndefined()
+    expect(fs.files.has(`/root/tasks/${CACHE_KEY}.json`)).toBe(false)
   })
 })

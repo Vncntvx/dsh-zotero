@@ -85,7 +85,7 @@ export function l2NormalizeInPlace(vector: Float32Array): Float32Array {
  * a non-finite component is a runtime/calibration error, not a reason to
  * silently truncate the longer vector or return a plausible number.
  */
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) {
     throw new RangeError(`embedding dimension mismatch: ${a.length} vs ${b.length}`)
   }
@@ -105,5 +105,5 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (normA === 0 || normB === 0) return 0
   const result = dot / Math.sqrt(normA * normB)
   if (!Number.isFinite(result)) throw new RangeError('cosine produced a non-finite value')
-  return result
+  return Math.max(-1, Math.min(1, result))
 }

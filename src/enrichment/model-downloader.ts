@@ -538,7 +538,8 @@ export class ModelDownloadManager {
       downloading: false,
       error: controller.signal.aborted ? 'Download cancelled' : messageOf(error),
     }
-    if (this.entries.get(entry.key) === entry) this.entries.set(entry.key, entry)
+    // Failed entries remain registered so a later start can report the prior
+    // failure and replace it transactionally; removal owns deletion.
   }
 
   private async runInstall(

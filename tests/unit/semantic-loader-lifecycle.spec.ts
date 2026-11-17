@@ -13,6 +13,7 @@ import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { SemanticModelTarget } from '../../src/enrichment/semantic/loader.ts'
 import { deferred } from '../helpers/sync.ts'
+import { tinyModel } from '../helpers/semantic-model-bundle.ts'
 
 function target(key: string): SemanticModelTarget {
   return { spec: { key } as never, dir: `/models/${key}` }
@@ -37,6 +38,32 @@ function embedderOf(disposed: string[], key: string): Embedder {
 }
 
 describe('SemanticEmbedderLoader lifecycle', () => {
+  it('preserves a retained inference lease while released scopes stay permanently closed', async () => {
+    const dispose = vi.fn(async () => {})
+    const loader = new SemanticEmbedderLoader({
+      open: async () => ({
+        dimension: 2,
+        embed: async () => [new Float32Array([1, 0])],
+        dispose,
+      }),
+    })
+    const scope = loader.scope({ spec: tinyModel, dir: '/synthetic/retained-model' })
+    const borrowed = await scope.embedder(),
+      retained = borrowed.retain!()
+    scope.release()
+    await expect(scope.embedder()).rejects.toThrow('ranking scope has been released')
+    expect(() => borrowed.retain!()).toThrow('ranking scope has been released')
+    const draining = loader.dispose()
+    expect(await retained.embed(['accepted'], 'query')).toEqual([new Float32Array([1, 0])])
+    expect(dispose).not.toHaveBeenCalled()
+    await Promise.all([retained.dispose(), retained.dispose()])
+    await draining
+    expect(dispose).toHaveBeenCalledOnce()
+    await expect(retained.embed(['late'], 'query')).rejects.toThrow(
+      'inference lease has been released',
+    )
+    expect(() => retained.retain!()).toThrow('inference lease has been released')
+  })
   it('commits B as resident only after its load succeeds', async () => {
     const disposed: string[] = []
     const keys: string[] = []
@@ -165,33 +192,22 @@ describe('SemanticEmbedderLoader lifecycle', () => {
     expect(disposed).toEqual(['a', 'a'])
   })
 
-  it('releases a pending load retired with no scopes and opens a fresh one', async () => {
-    const disposed: string[] = []
-    const opened: string[] = []
-    const started = deferred<void>()
-    const first = deferred<Embedder>()
-    let calls = 0
+  it('does not start a load released before opening and serves a later scope freshly', async () => {
+    const disposed: string[] = [],
+      opened: string[] = []
     const loader = new SemanticEmbedderLoader({
       open: async (requested) => {
         opened.push(requested.spec.key)
-        calls += 1
-        if (calls === 1) {
-          started.resolve()
-          return await first.promise
-        }
         return embedderOf(disposed, requested.spec.key)
       },
     })
-    const scope = loader.scope(target('a'))
-    scope.release()
-    await started.promise
-    loader.retire(target('a'))
-    first.resolve(embedderOf(disposed, 'a'))
-    // The fresh read queues behind the retired load; the release ran before it.
+    const unused = loader.scope(target('a'))
+    unused.release()
     await loadOnce(loader, target('a'))
-    expect(disposed).toEqual(['a'])
-    expect(opened).toEqual(['a', 'a'])
+    expect(opened).toEqual(['a'])
+    expect(disposed).toEqual([])
     await loader.dispose()
+    expect(disposed).toEqual(['a'])
   })
 
   it('rejects new admission after disposal', async () => {

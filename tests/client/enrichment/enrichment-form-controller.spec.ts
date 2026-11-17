@@ -356,3 +356,18 @@ describe('EnrichmentFormController', () => {
     expect(scope.writes.some((write) => write.field === 'mineruToken')).toBe(false)
   })
 })
+
+it('validates, commits and resets the OCR language independently of API mode', async () => {
+  const { scope, face } = controllerOf()
+  expect(face.hooks.enrichmentCard.getSnapshot().ocrLanguage.text).toBe('ch')
+  face.edit('ocrLanguage', 'invalid code')
+  expect(face.hooks.enrichmentCard.getSnapshot().ocrLanguage.invalid).toBe(true)
+  await face.save()
+  expect(scope.writes).toEqual([])
+  face.edit('ocrLanguage', 'en')
+  await face.save()
+  expect(scope.writes).toContainEqual({ op: 'set', field: 'ocrLanguage', value: 'en' })
+  face.resetField('ocrLanguage')
+  await face.save()
+  expect(scope.writes).toContainEqual({ op: 'unset', field: 'ocrLanguage' })
+})

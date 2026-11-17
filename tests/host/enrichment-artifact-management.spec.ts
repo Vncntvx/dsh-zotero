@@ -42,7 +42,9 @@ function management(fs: ReturnType<typeof memoryFiles>) {
   }
   const jobs = {
     retireArtifact: vi.fn(),
-    forgetGeneration: vi.fn(),
+    discardGeneration: vi.fn(
+      async (_generation: string, remove: () => Promise<unknown>) => await remove(),
+    ),
   }
   const deps: ArtifactManagementDeps = {
     store: async () => store,
@@ -54,6 +56,26 @@ function management(fs: ReturnType<typeof memoryFiles>) {
 }
 
 describe('parsed artifact inventory', () => {
+  it.each(['dangling', 'broken'])(
+    'clears indexed generation receipts and memory for a %s artifact',
+    async (state) => {
+      const world = management(memoryFiles())
+      await world.store.putSources(['c'.repeat(64)], SOURCE_RECORD)
+      if (state === 'broken')
+        world.fs.files.set(`/root/${CACHE_KEY}/meta.json`, new TextEncoder().encode('{bad json'))
+      const result = await discardParsedDocument(world.deps, CACHE_KEY)
+      expect(result).toEqual({ kind: 'discarded', removedAliases: 1, removedReceipts: 2 })
+      expect(world.persistence.deleteByGeneration).toHaveBeenCalledWith(
+        {},
+        SOURCE_RECORD.generation,
+      )
+      expect(world.jobs.discardGeneration).toHaveBeenCalledWith(
+        SOURCE_RECORD.generation,
+        expect.any(Function),
+      )
+      expect((await world.store.groupByArtifact()).size).toBe(0)
+    },
+  )
   it('deduplicates index aliases and never returns a complete URL', async () => {
     const world = management(memoryFiles())
     await world.store.put(CACHE_KEY, URL_ARTIFACT)
@@ -102,7 +124,10 @@ describe('parsed artifact inventory', () => {
     expect(await world.store.getTask(CACHE_KEY)).toBeUndefined()
     expect(world.persistence.deleteByGeneration).toHaveBeenCalledWith({}, ARTIFACT.meta.generation)
     expect(world.jobs.retireArtifact).toHaveBeenCalledWith(CACHE_KEY)
-    expect(world.jobs.forgetGeneration).toHaveBeenCalledWith(ARTIFACT.meta.generation)
+    expect(world.jobs.discardGeneration).toHaveBeenCalledWith(
+      ARTIFACT.meta.generation,
+      expect.any(Function),
+    )
     const list = await listParsedDocuments(world.deps, FIRST_PAGE)
     expect(list.total).toBe(0)
   })
@@ -292,6 +317,17 @@ describe('parsed artifact inventory', () => {
     await world.store.put('d'.repeat(64), ARTIFACT)
     await world.store.inventory()
     expect(metaReads()).toBeGreaterThan(afterFirst)
+  })
+
+  it('reads the source index once when combining inventory and alias groups', async () => {
+    const world = management(memoryFiles())
+    await world.store.put(CACHE_KEY, ARTIFACT)
+    await world.store.putSources(['c'.repeat(64)], SOURCE_RECORD)
+    const read = vi.mocked(world.fs.deps.readFile)
+    read.mockClear()
+    const result = await listParsedDocuments(world.deps, FIRST_PAGE)
+    expect(result.rows).toHaveLength(1)
+    expect(read.mock.calls.filter(([path]) => path.endsWith('/sources/index.json'))).toHaveLength(1)
   })
 
   it('answers directory presence without enumerating the store', async () => {

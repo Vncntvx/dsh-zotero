@@ -12,30 +12,8 @@
  * @module dsh-zotero/enrichment/model-fs
  */
 
-import { constants, type Stats } from 'node:fs'
-import { lstat, open } from 'node:fs/promises'
-
-/** Read a regular file through one descriptor, bounded before allocating or reading. */
-export async function readRegularFile(path: string, maxBytes: number): Promise<Buffer> {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error('Invalid file byte limit')
-  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
-  try {
-    const info = await handle.stat()
-    if (!info.isFile()) throw new Error('The path is not a regular file')
-    if (info.size > maxBytes) throw new Error('The file exceeds its bounded size')
-    const bytes = Buffer.alloc(info.size + 1)
-    let length = 0
-    while (length < bytes.length) {
-      const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null)
-      if (bytesRead === 0) break
-      length += bytesRead
-    }
-    if (length !== info.size) throw new Error('The file changed size while being read')
-    return bytes.subarray(0, length)
-  } finally {
-    await handle.close()
-  }
-}
+import type { Stats } from 'node:fs'
+import { lstat } from 'node:fs/promises'
 
 /**
  * Everything about one file that decides whether it is still the same file:

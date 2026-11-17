@@ -157,6 +157,7 @@ export async function parseDocument(
           identity,
           generation: deps.generation,
           mode: config.mode,
+          ocrLanguage: config.ocrLanguage,
           fingerprint: record.fingerprint,
         })
     ) {
@@ -197,6 +198,7 @@ export async function parseDocument(
           identity,
           generation: deps.generation,
           mode: config.mode,
+          ocrLanguage: config.ocrLanguage,
           bytes: source.bytes,
           fingerprint,
           ...(token !== undefined ? { token } : {}),

@@ -42,6 +42,7 @@ export async function resolveOutputDir(
     create: options.create ?? configured.trim() === '',
     readOnly: options.readOnly,
     allowMissing: options.allowMissing,
+    privateOwner: true,
     errorCode: ZOTERO_ENRICHMENT_OUTPUT_INVALID,
     label: 'enrichment output directory',
     deps,

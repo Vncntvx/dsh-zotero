@@ -41,6 +41,7 @@ import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../tra
 import { egressRouteFor } from '../transport/connections.js'
 import { isMineruApiHost, MINERU_API_ORIGIN } from './hosts.js'
 import { ConcurrencyGate } from '../concurrency.js'
+import { redactParseText } from './parse-target.js'
 import { setTimeout as delay } from 'node:timers/promises'
 
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -123,13 +124,13 @@ export function sanitizedErrorDetail(text: string): string | undefined {
     message = xmlMessage?.trim() || xmlCode?.trim()
   }
   if (message === undefined) message = trimmed.split(/\r?\n/)[0]
-  const cleaned = (message ?? '')
-    .replace(/https?:\/\/\S+/gi, '[url]')
-    .replace(/Bearer\s+[^\s,;]+/gi, 'Bearer [redacted]')
+  const cleaned = redactParseText(message ?? '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, ERROR_DETAIL_MAX_CHARS)
-  return cleaned === '' ? undefined : cleaned
+  if (cleaned === '') return undefined
+  if (cleaned.length <= ERROR_DETAIL_MAX_CHARS) return cleaned
+  // Keep the diagnosis and the recovery action after redacting the full input.
+  return `${cleaned.slice(0, 96)}…${cleaned.slice(-(ERROR_DETAIL_MAX_CHARS - 97))}`
 }
 
 async function errorOf(response: Response, hostname: string): Promise<MineruHttpError> {

@@ -82,7 +82,9 @@ export interface ArtifactReadDependencies {
 export class ArtifactReads {
   private readonly requests = new Map<string, Lease>()
   private readonly tokens = new Map<string, Lease>()
+  private readonly cancelledAdmissions = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly draining = new Set<Lease>()
+  private readonly admissions = new Map<string, Set<{ revoked: boolean }>>()
   private bytes = 0
   private closed = false
 
@@ -100,7 +102,6 @@ export class ArtifactReads {
     )
     entry.timer = setTimeout(() => {
       this.retire(entry)
-      this.requests.delete(entry.key)
     }, remaining)
     entry.timer.unref()
   }
@@ -117,6 +118,8 @@ export class ArtifactReads {
   }
 
   private retire(entry: Lease): void {
+    clearTimeout(entry.timer)
+    if (this.requests.get(entry.key) === entry) this.requests.delete(entry.key)
     if (!entry.retired) {
       entry.retired = true
       if (entry.active > 0) this.draining.add(entry)
@@ -164,10 +167,19 @@ export class ArtifactReads {
       )
     if (request.op === 'release') {
       const key = this.key(peer, request.sessionId, request.requestId)
+      for (const admission of this.admissions.get(key) ?? []) admission.revoked = true
       const entry = this.requests.get(key)
       if (entry !== undefined) this.retire(entry)
-      else this.tombstone(key, request.sessionId, peer)
+      else this.tombstone(key)
       return { kind: 'released' }
+    }
+    const admissionKey =
+      request.op === 'open' ? this.key(peer, request.sessionId, request.requestId) : undefined
+    const admission = { revoked: false }
+    if (admissionKey !== undefined) {
+      const pending = this.admissions.get(admissionKey) ?? new Set()
+      pending.add(admission)
+      this.admissions.set(admissionKey, pending)
     }
     let owner: ReadOwner
     try {
@@ -179,7 +191,18 @@ export class ArtifactReads {
           this.retire(entry)
       }
       throw error
+    } finally {
+      if (admissionKey !== undefined) {
+        const pending = this.admissions.get(admissionKey)!
+        pending.delete(admission)
+        if (pending.size === 0) this.admissions.delete(admissionKey)
+      }
     }
+    if (admission.revoked)
+      throw new ZoteroError(
+        'The document read was cancelled before admission. Reload the document.',
+        ZOTERO_NOT_FOUND,
+      )
     if (this.closed)
       throw new ZoteroError('Document reading is closed.', ZOTERO_PROVIDER_UNAVAILABLE)
     if (request.op === 'inspect') {
@@ -273,34 +296,20 @@ export class ArtifactReads {
     }
   }
 
-  private tombstone(key: string, sessionId: string, peer: PeerScope): void {
+  private tombstone(key: string): void {
+    if (this.cancelledAdmissions.has(key)) return
     const policy = this.deps.policy()
-    if (this.requests.size >= policy.maxOpen * 64)
+    if (this.cancelledAdmissions.size >= policy.maxOpen * 64)
       throw new ZoteroError(
-        'Document read cleanup capacity is full. Retry later.',
+        'Too many cancelled document requests are awaiting expiry. Retry later.',
         ZOTERO_PROVIDER_UNAVAILABLE,
       )
-    let finish!: () => void
-    const entry: Lease = {
-      key,
-      token: randomUUID(),
-      sessionId,
-      owner: { peer },
-      binding: '',
-      policy,
-      started: Date.now(),
-      abort: new AbortController(),
-      done: new Promise((resolve) => {
-        finish = resolve
-      }),
-      finish: () => finish(),
-      bytes: 0,
-      active: 0,
-      retired: true,
-    }
-    this.requests.set(key, entry)
-    finish()
-    this.arm(entry)
+    const timer = setTimeout(
+      () => this.cancelledAdmissions.delete(key),
+      Math.min(policy.idleTimeoutMs, policy.maxLifetimeMs),
+    )
+    timer.unref()
+    this.cancelledAdmissions.set(key, timer)
   }
 
   private async open(
@@ -310,6 +319,11 @@ export class ArtifactReads {
     ctx: Context,
   ): Promise<ZoteroDocumentArtifactResultView> {
     const key = this.key(owner.peer, request.sessionId, request.requestId)
+    if (this.cancelledAdmissions.has(key))
+      throw new ZoteroError(
+        'The document read was cancelled before admission. Reload the document.',
+        ZOTERO_NOT_FOUND,
+      )
     const binding = JSON.stringify(request.target)
     const old = this.requests.get(key)
     if (old !== undefined) {
@@ -323,10 +337,7 @@ export class ArtifactReads {
       return await raceWithSignal(old.task!, signal)
     }
     const policy = this.deps.policy()
-    if (
-      this.tokens.size + this.draining.size >= policy.maxOpen ||
-      this.requests.size >= policy.maxOpen * 64
-    )
+    if (this.tokens.size + this.draining.size >= policy.maxOpen)
       throw new ZoteroError(
         'Too many documents are being prepared. Retry after a preparation finishes.',
         ZOTERO_PROVIDER_UNAVAILABLE,
@@ -435,5 +446,7 @@ export class ArtifactReads {
     }
     await Promise.all(entries.map((entry) => entry.done))
     this.requests.clear()
+    for (const timer of this.cancelledAdmissions.values()) clearTimeout(timer)
+    this.cancelledAdmissions.clear()
   }
 }

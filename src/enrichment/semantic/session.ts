@@ -65,6 +65,8 @@ export type Int64TensorFactory = (dims: readonly number[], data: BigInt64Array) 
 /** The embedder half of one loaded model. */
 export interface Embedder {
   readonly dimension: number
+  /** A terminated isolated runtime cannot be reused by a later ranking scope. */
+  readonly unavailable?: boolean
   /** Retain an independent owned lease for shared work that can outlive its caller. */
   readonly retain?: () => Embedder
   /**

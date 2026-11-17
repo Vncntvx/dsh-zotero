@@ -1,3 +1,5 @@
+import { cosineSimilarity as cosine } from '../../src/enrichment/semantic/tensor.ts'
+export { cosine }
 // Read-only adapter for externally supplied embeddings. Never loads a model.
 // Input JSON: {schemaVersion:1, synthetic:false, generatedBy:"...", model:{...},
 // datasetDigest, backgroundDigest, partitionDigests, entries:[{key,vector:[...]}]}.
@@ -92,20 +94,6 @@ export async function loadEmbeddings(path, dataset, requestedSplits) {
     generatedBy: value.generatedBy,
     inputSha256: sha256(bytes),
   }
-}
-export function cosine(a, b) {
-  invariant(a.length === b.length && a.length > 0, 'Cosine dimension mismatch')
-  let product = 0
-  let normA = 0
-  let normB = 0
-  for (let i = 0; i < a.length; i++) {
-    invariant(Number.isFinite(a[i]) && Number.isFinite(b[i]), 'Nonfinite cosine input')
-    product += a[i] * b[i]
-    normA += a[i] ** 2
-    normB += b[i] ** 2
-  }
-  invariant(normA > 0 && normB > 0, 'Zero cosine vector')
-  return Math.max(-1, Math.min(1, product / Math.sqrt(normA * normB)))
 }
 export function featureRows(dataset, rows, embeddings, k) {
   const bank = backgroundEntries(dataset)

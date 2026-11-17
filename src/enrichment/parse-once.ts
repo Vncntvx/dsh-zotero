@@ -1,3 +1,4 @@
+import { ENRICHMENT_DEFAULTS, ENRICHMENT_OCR_LANGUAGE_PATTERN } from '../enrichment-preferences.js'
 /**
  * Orchestrate one MinerU parse inside a single async body.
  *
@@ -82,6 +83,8 @@ export interface ParseOnceInput {
   /** Job-owned parse attempt: retries keep it; explicit re-parses replace it. */
   readonly generation: string
   readonly mode: EnrichmentMode
+  /** Omitted means the published MinerU default; pro mode does not send this parameter. */
+  readonly ocrLanguage?: string
   readonly bytes: Uint8Array
   /**
    * The SHA-256 of `bytes`, when the caller already hashed them — the service
@@ -112,7 +115,7 @@ export interface ParseOnceResult {
   readonly cached: boolean
 }
 
-type ParseCacheIdentity = Pick<ParseOnceInput, 'identity' | 'generation' | 'mode'> &
+type ParseCacheIdentity = Pick<ParseOnceInput, 'identity' | 'generation' | 'mode' | 'ocrLanguage'> &
   (
     | { readonly fingerprint: string; readonly bytes?: Uint8Array }
     | { readonly fingerprint?: string; readonly bytes: Uint8Array }
@@ -131,10 +134,14 @@ export function cacheKeyOf(input: ParseCacheIdentity): string {
       ZOTERO_INVALID_ARGUMENT,
     )
   }
+  const language = input.ocrLanguage ?? ENRICHMENT_DEFAULTS.ocrLanguage
+  if (!ENRICHMENT_OCR_LANGUAGE_PATTERN.test(language))
+    throw new ZoteroError('Invalid MinerU OCR language code.', ZOTERO_INVALID_ARGUMENT)
   return sha256(
     JSON.stringify({
       identity: canonicalSourceIdentityOf(input.identity),
       mode: input.mode,
+      ...(input.mode === 'free' ? { ocrLanguage: language } : {}),
       generation: input.generation,
       fingerprint,
     }),
@@ -157,7 +164,10 @@ async function submit(
     const data = responseData(
       await client.json(MINERU_ENDPOINTS.free.submit, {
         method: 'POST',
-        body: JSON.stringify({ file_name: fileName, language: 'ch' }),
+        body: JSON.stringify({
+          file_name: fileName,
+          language: input.ocrLanguage ?? ENRICHMENT_DEFAULTS.ocrLanguage,
+        }),
         signal: combined,
         timeoutMs: SUBMIT_TIMEOUT_MS,
         maxBytes: 1024 * 1024,
@@ -445,6 +455,10 @@ export async function parseOnce(
       if (cached !== undefined) return cachedResultOf(cached, input, cacheKey)
       let task = await deps.store.getTask(cacheKey)
       combined.throwIfAborted()
+      if (task !== undefined && Date.now() - task.createdAt >= 24 * 60 * 60_000) {
+        await deps.store.deleteTask(cacheKey)
+        task = undefined
+      }
       if (task === undefined) {
         input.onProgress?.('uploading')
         combined.throwIfAborted()
@@ -460,14 +474,6 @@ export async function parseOnce(
       let documentBytes: Uint8Array | undefined = input.bytes
       try {
         if (!task.uploaded) {
-          if (Date.now() - task.createdAt >= 24 * 60 * 60_000)
-            throw new MineruApiError(
-              'MinerU upload URL expired; the next explicit read can create a new task',
-              undefined,
-              undefined,
-              taskId,
-              true,
-            )
           if (documentBytes === undefined) {
             throw new ZoteroError(
               'The upload bytes were already released; the next explicit read can re-parse the document',
@@ -496,7 +502,10 @@ export async function parseOnce(
           } catch (error) {
             if (!(error instanceof MineruApiError) || error.terminal || !error.retryable)
               throw error
-            if (attempt + 1 === maxPolls) throw error
+            if (attempt + 1 === maxPolls) {
+              await deps.store.deleteTask(cacheKey)
+              throw error
+            }
             await delay(Math.min(30_000, pollIntervalMs * 2 ** Math.min(attempt, 4)), undefined, {
               signal: combined,
             })
@@ -510,6 +519,7 @@ export async function parseOnce(
           if (attempt + 1 < maxPolls) await delay(pollIntervalMs, undefined, { signal: combined })
         }
         if (done === undefined) {
+          await deps.store.deleteTask(cacheKey)
           throw new ZoteroError(
             `MinerU parse did not finish within ${maxPolls} polls; try again later.`,
             ZOTERO_ENRICHMENT_TASK_FAILED,

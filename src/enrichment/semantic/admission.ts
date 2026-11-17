@@ -8,18 +8,16 @@
  *
  * - an **absolute floor**: a passage must reach a per-model cosine before the
  *   semantic route may return it at all. The floor sits above the strongest
- *   cosine an unrelated corpus produces for that model, so a wholly unrelated
- *   corpus is refused instead of answered with its least-bad neighbour.
+ *   cosine of the measured answer-removed controls for that model.
+ *   A corpus whose best cosine falls below it returns no semantic passage.
  * - a **relative margin**: among passages that clear the floor, only those
  *   within `margin` of the corpus's own best cosine stay, which keeps a
  *   same-topic answer set together without dragging in distant neighbours.
  *
- * Both numbers are measured on real model output over a bilingual paraphrase
- * set whose questions share no content word with their answers, so BM25 scores
- * those answers zero and every admitted passage is a semantic hit. The floors
- * are model-specific because the cosine scale differs per tier (0.427 for
- * Qwen3-0.6B, 0.797 for Granite-97M): a single absolute number cannot serve
- * them all.
+ * The fixed policies are checked against archived actual model output; the
+ * report distinguishes 20 paraphrases from four lexical/duplicate controls,
+ * and measures BM25 separately. The margin is a policy limit. Passing these
+ * authored regression cases does not establish a production false-hit bound.
  *
  * Nothing here depends on a stored calibration artifact, so a tier works as
  * soon as its bundle is installed. A tier outside the catalog has no profile

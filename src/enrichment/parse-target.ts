@@ -30,7 +30,7 @@ export function parseDigest(value: string): string {
 }
 
 /** Receipt and progress text never retain URLs, absolute paths, or credential assignments. */
-export function safeParseText(value: string, limit: number): string {
+export function redactParseText(value: string): string {
   return value
     .replace(/(?:https?|file):\/\/[^\s<>"')\]]+/gi, '[URL]')
     .replace(
@@ -40,7 +40,10 @@ export function safeParseText(value: string, limit: number): string {
     .replace(/(?:[A-Za-z]:[\\/]|\\\\)[^\s<>"')\]]+/g, '[path]')
     .replace(/(^|[\s("'=`])\/(?:[^\s/]+\/)*[^\s<>"')\]`]*/g, '$1[path]')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
-    .slice(0, limit)
+}
+
+export function safeParseText(value: string, limit: number): string {
+  return redactParseText(value).slice(0, limit)
 }
 
 function publicPdfUrl(value: string): string {

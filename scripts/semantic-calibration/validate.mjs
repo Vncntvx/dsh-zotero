@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   cli,
+  digestOf,
   fixtureRoot,
   invariant,
   isMain,
@@ -23,9 +24,21 @@ export async function dataReport() {
     resolve(fixtureRoot, '../../../', dataset.quarantine.legacySource),
     'utf8',
   )
+  const { RECALL_CASES } = await import('../../tests/helpers/semantic-recall-fixtures.ts')
+  const currentCases = RECALL_CASES.map((row) => ({
+    id: row.id,
+    query: row.query,
+    answer: row.passages[row.relevant[0]],
+  }))
   invariant(
-    sha256(source) === dataset.quarantine.legacySourceSha256,
-    'Legacy regression source changed: review the quarantine explicitly',
+    digestOf(currentCases) === digestOf(dataset.quarantine.legacyCases),
+    'Legacy regression cases changed: review the quarantine explicitly',
+  )
+  invariant(
+    RECALL_CASES.flatMap((row) =>
+      row.passages.filter((_, index) => !row.relevant.includes(index)),
+    ).every((text) => dataset.quarantine.distractors.includes(text)),
+    'Legacy distractors changed: review the quarantine explicitly',
   )
   const p = dataset.manifest.protocol
   const negativeSupport = Object.fromEntries(
@@ -54,6 +67,8 @@ export async function dataReport() {
     counts,
     negativeSupport,
     quarantinedRegressionCases: dataset.quarantine.legacyCases.length,
+    legacySourceSha256: sha256(source),
+    legacySourceChanged: sha256(source) !== dataset.quarantine.legacySourceSha256,
     minimumZeroFailureIndependentTrialsForOnePercent: minimumZeroFailureTrials(),
     readyForWp6Acceptance: false,
     reasons: dataset.manifest.limitations,

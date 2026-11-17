@@ -24,6 +24,46 @@ const identity: VectorCacheIdentity = {
   scoringVersion: 'test',
 }
 
+it('retires every queued load for a target even when a later target was admitted', async () => {
+  const starts = Array.from({ length: 4 }, () => deferred<void>())
+  const finishes = Array.from({ length: 4 }, () => deferred<void>())
+  const opened: string[] = [],
+    disposed: number[] = []
+  const loader = new SemanticEmbedderLoader({
+    open: async ({ dir }) => {
+      const index = opened.length
+      opened.push(dir)
+      starts[index]!.resolve()
+      await finishes[index]!.promise
+      return {
+        dimension: 2,
+        embed: async () => [],
+        dispose: async () => {
+          disposed.push(index)
+        },
+      }
+    },
+  })
+  const scopes = ['a', 'b', 'c'].map((name) => loader.scope(target(name)))
+  await starts[0]!.promise
+  loader.retire(target('b'))
+  scopes.push(loader.scope(target('b')))
+  try {
+    const values = scopes.map((scope) => scope.embedder())
+    for (let index = 0; index < 4; index++) {
+      await starts[index]!.promise
+      finishes[index]!.resolve()
+    }
+    await Promise.all(values)
+    expect(opened).toEqual(['/synthetic/a', '/synthetic/b', '/synthetic/c', '/synthetic/b'])
+  } finally {
+    for (const finish of finishes) finish.resolve()
+    for (const scope of scopes) scope.release()
+    await loader.dispose()
+  }
+  expect(disposed.sort()).toEqual([0, 1, 2, 3])
+})
+
 it('retains an actual inference after its owning lease is released and the model switches', async () => {
   const started = deferred<void>()
   const finish = deferred<void>()

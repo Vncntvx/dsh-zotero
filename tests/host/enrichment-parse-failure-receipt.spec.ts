@@ -13,6 +13,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroError, ZOTERO_ENRICHMENT_TASK_FAILED } from '../../src/errors.ts'
 import { PARSE_FAILED_MESSAGE } from '../../src/enrichment/parse-jobs.ts'
+import { parseDigest } from '../../src/enrichment/parse-target.ts'
 import {
   parseJobsFixture,
   parseRequest,
@@ -28,9 +29,8 @@ afterEach(async () => {
 })
 const owner = SessionId('parse-owner')
 
-async function failedReceiptOf(execute: () => Promise<never>) {
+async function failedReceiptOf(execute: () => Promise<never>, request = parseRequest()) {
   fixture = await parseJobsFixture({ execute })
-  const request = parseRequest()
   const started = await fixture.helper.startDocumentParse(request, parseSignal())
   expect((await fixture.ctx.jobs.wait(JobId(started.jobId), 5000, owner)).status).toBe('failed')
   const receipt = await fixture.helper.documentParseReceipt(
@@ -64,9 +64,42 @@ describe('a failed parse receipt', () => {
       )
     })
     expect(receipt).toMatchObject({ kind: 'failed', code: ZOTERO_ENRICHMENT_TASK_FAILED })
-    expect(receipt.message).toContain('[url]')
+    expect(receipt.message).toContain('[URL]')
     expect(receipt.message).not.toContain('sig=private')
     expect(receipt.message).toHaveLength(256)
+  })
+
+  it.each([
+    "EACCES: permission denied, open '/Users/research/private/zotero-parsed/sources/index.json'",
+    "ENOENT: no such file, open 'C:\\Users\\research\\private\\index.json'",
+    "ENOTDIR: scandir '\\\\server\\private\\index.json'",
+  ])('redacts filesystem paths before writing and returning the receipt: %s', async (message) => {
+    const request = parseRequest()
+    const receipt = await failedReceiptOf(async () => {
+      throw new Error(message)
+    }, request)
+    expect(receipt.message).toContain('[path]')
+    expect(receipt.message).not.toContain('research')
+    expect(receipt.message).not.toContain('private')
+    const persisted = await fixture!.persistence.get(
+      fixture!.config.value,
+      parseDigest(request.sessionId),
+      request.operationId,
+    )
+    expect(persisted).toBeDefined()
+    expect(JSON.stringify(persisted)).not.toContain('private')
+  })
+
+  it('keeps the recovery instruction for a long fake-IP hostname', async () => {
+    const hostname = `${'long-cdn-name-'.repeat(10)}.example.org`
+    const receipt = await failedReceiptOf(async () => {
+      throw new Error(
+        `Security rejection: "${hostname}" resolves to a non-public address (198.18.0.1). A local DNS proxy (Clash/mihomo TUN) answers with this fake-IP placeholder; add the host to its fake-ip-filter or switch the DNS mode to redir-host.`,
+      )
+    })
+    expect(receipt.message).toHaveLength(256)
+    expect(receipt.message).toContain('fake-ip-filter or switch the DNS mode to redir-host.')
+    expect(receipt.message).toContain('Security rejection:')
   })
 
   it('falls back to the fixed line when the failure carries no message', async () => {

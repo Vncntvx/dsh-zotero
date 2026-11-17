@@ -1,7 +1,7 @@
 /**
  * The session layer's batching, pooling, and output-shape logic, driven
  * through a scripted `SessionPort`: the WASM session itself is only exercised
- * by the opt-in semantic-eval run against a real model.
+ * by the manual scripts/semantic-calibration/encode-admission.mjs run.
  * @module tests/unit/semantic-session
  */
 

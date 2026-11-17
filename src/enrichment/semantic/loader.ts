@@ -18,11 +18,7 @@
 import { semanticModelOf, type SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { resolveSemanticModelDirSafe } from '../model-dir.js'
-import {
-  createBundleVerifier,
-  openSemanticEmbedder,
-  type SemanticBundleVerifier,
-} from './bundle.js'
+import { openWorkerEmbedder } from './worker-embedder.js'
 import type { Embedder } from './session.js'
 import { awaitSharedWaiter } from '../../waiter-flight.js'
 
@@ -40,10 +36,10 @@ export interface SemanticModelTarget {
 
 export interface SemanticEmbedderLoaderDeps {
   /**
-   * Open one embedder; defaults to the real bundle verifier + WASM session.
+   * Open one embedder; defaults to the isolated verifier + WASM worker.
    * Injectable so tests never touch disk or WASM.
    */
-  readonly open?: (target: SemanticModelTarget) => Promise<Embedder>
+  readonly open?: (target: SemanticModelTarget, signal: AbortSignal) => Promise<Embedder>
 }
 
 /** Map any loader failure onto the fail-closed semantic-unavailable error. */
@@ -99,6 +95,8 @@ interface Managed {
   readonly key: string
   readonly target: SemanticModelTarget
   readonly load: Promise<Embedder>
+  readonly controller: AbortController
+  instance?: Embedder
   scopes: number
   running: number
   retiring: boolean
@@ -114,11 +112,9 @@ export interface RankingScope {
 
 export class SemanticEmbedderLoader {
   private resident: Managed | undefined
-  private pending: Managed | undefined
-  private readonly retired = new Set<Managed>()
-  private readonly open: (target: SemanticModelTarget) => Promise<Embedder>
-  /** Shared inspection reuses verified identities across replacement loaders. */
-  private readonly verifier: SemanticBundleVerifier = createBundleVerifier()
+  private readonly pending = new Map<string, Managed>()
+  private readonly owned = new Set<Managed>()
+  private readonly open: (target: SemanticModelTarget, signal: AbortSignal) => Promise<Embedder>
   private closed = false
   private generation = 0
   private nextId = 1
@@ -131,7 +127,8 @@ export class SemanticEmbedderLoader {
   constructor(deps: SemanticEmbedderLoaderDeps = {}) {
     this.open =
       deps.open ??
-      (async (target) => await openSemanticEmbedder(target.spec, target.dir, this.verifier))
+      (async (target, signal) =>
+        await openWorkerEmbedder(target.spec, target.dir, undefined, signal))
   }
 
   /**
@@ -143,11 +140,12 @@ export class SemanticEmbedderLoader {
     if (this.closed) throw semanticUnavailable(new Error('the semantic loader is closed'))
     const key = keyOf(target)
     let managed =
-      this.resident?.key === key && !this.resident.retiring && !this.resident.released
+      this.resident?.key === key &&
+      !this.resident.retiring &&
+      !this.resident.released &&
+      this.resident.instance?.unavailable !== true
         ? this.resident
-        : this.pending?.key === key && !this.pending.retiring && !this.pending.released
-          ? this.pending
-          : undefined
+        : this.pending.get(key)
     if (managed === undefined) {
       managed = this.beginLoad(target)
     }
@@ -229,33 +227,33 @@ export class SemanticEmbedderLoader {
    */
   retire(target: SemanticModelTarget): void {
     const key = keyOf(target)
-    const candidates: Managed[] = []
-    if (this.resident?.key === key) candidates.push(this.resident)
-    if (this.pending?.key === key) candidates.push(this.pending)
-    for (const managed of candidates) {
+    for (const managed of this.owned) {
+      if (managed.key !== key) continue
       managed.retiring = true
-      this.retired.add(managed)
       this.maybeRelease(managed)
     }
-    if (this.pending?.key === key) this.pending = undefined
+    this.pending.delete(key)
     if (this.resident?.key === key) this.resident = undefined
   }
 
   private beginLoad(target: SemanticModelTarget): Managed {
     const id = this.nextId++
     const key = keyOf(target)
+    const controller = new AbortController()
     // The open call starts only after any previous switch has settled. A load
     // that was admitted before teardown still runs: the scope waiting on it
     // was accepted while the component lived, and the loader's contract is
     // that accepted scopes drain with their fixed model. Teardown closes
     // admission (see `scope`), not the work already admitted.
     const load = this.switchQueue.then(async () => {
+      controller.signal.throwIfAborted()
       // A user-configured root is validated with the same policy the downloader
       // applies, so an unvalidated alias or `..` never reaches the reader.
       const resolved = await safeTargetOf(target).catch((error: unknown) => {
         throw semanticUnavailable(error)
       })
-      return this.open(resolved).catch((error: unknown) => {
+      controller.signal.throwIfAborted()
+      return this.open(resolved, controller.signal).catch((error: unknown) => {
         throw semanticUnavailable(error)
       })
     })
@@ -264,15 +262,18 @@ export class SemanticEmbedderLoader {
       key,
       target,
       load,
+      controller,
       scopes: 0,
       running: 0,
       retiring: false,
       released: false,
     }
-    this.pending = managed
+    this.pending.set(key, managed)
+    this.owned.add(managed)
     // Commit B as resident only on success; a failure keeps A and reports to B.
     void load
-      .then(() => {
+      .then((instance) => {
+        managed.instance = instance
         if (this.closed || managed.retiring || managed.released) {
           // Teardown closed admission or a deletion retired this instance while
           // the load was in flight. An already accepted scope still awaits
@@ -282,25 +283,22 @@ export class SemanticEmbedderLoader {
           // accepted callers a released ONNX session; promoting it to resident
           // would hand it to scopes admitted after the deletion instead.
           managed.retiring = true
-          this.retired.add(managed)
           this.maybeRelease(managed)
           return
         }
         const previous = this.resident
-        if (this.pending === managed) this.pending = undefined
+        if (this.pending.get(managed.key) === managed) this.pending.delete(managed.key)
         this.resident = managed
         if (previous !== undefined && previous !== managed) {
           previous.retiring = true
-          this.retired.add(previous)
           this.maybeRelease(previous)
         }
       })
       .catch(() => {
         // A failed load never becomes resident. A stays managed; B's own
         // callers already have the rejection from `managed.load`.
-        if (this.pending === managed) this.pending = undefined
+        if (this.pending.get(managed.key) === managed) this.pending.delete(managed.key)
         managed.retiring = true
-        this.retired.add(managed)
         this.maybeRelease(managed)
       })
     this.switchQueue = load.catch(() => undefined)
@@ -309,21 +307,31 @@ export class SemanticEmbedderLoader {
 
   private maybeRelease(managed: Managed): void {
     if (
+      managed.scopes === 0 &&
+      managed.running === 0 &&
+      this.pending.get(managed.key) === managed &&
+      managed.instance === undefined
+    ) {
+      managed.retiring = true
+      managed.controller.abort(new Error('No ranking scope retains this model opening'))
+      this.pending.delete(managed.key)
+    }
+    if (
       managed.released ||
       managed.scopes > 0 ||
       managed.running > 0 ||
       (managed === this.resident && !managed.retiring && !this.closed) ||
-      (managed === this.pending && !managed.retiring)
+      (this.pending.get(managed.key) === managed && !managed.retiring)
     )
       return
     managed.released = true
-    this.retired.delete(managed)
     const disposal = managed.load
       .then((embedder) => embedder.dispose())
       .catch(() => undefined)
       .finally(() => {
+        this.owned.delete(managed)
         if (this.resident === managed) this.resident = undefined
-        if (this.pending === managed) this.pending = undefined
+        if (this.pending.get(managed.key) === managed) this.pending.delete(managed.key)
       })
     this.disposals.add(disposal)
     void disposal.finally(() => this.disposals.delete(disposal))
@@ -345,11 +353,11 @@ export class SemanticEmbedderLoader {
   private async disposeOnce(): Promise<void> {
     this.closed = true
     this.generation += 1
-    const all = new Set<Managed>()
-    if (this.resident !== undefined) all.add(this.resident)
-    if (this.pending !== undefined) all.add(this.pending)
-    for (const managed of this.retired) all.add(managed)
-    for (const managed of all) managed.retiring = true
+    const all = new Set(this.owned)
+    for (const managed of all) {
+      managed.retiring = true
+      this.maybeRelease(managed)
+    }
     // Wait for the actual loads/runs to settle. Accepted scopes are NOT
     // force-released here: they drain on their own `release()` and keep their
     // fixed model alive for the rest of the original request.
@@ -358,7 +366,6 @@ export class SemanticEmbedderLoader {
     // Wait for the one-time dispose calls that were actually started.
     await Promise.allSettled([...this.disposals])
     this.resident = undefined
-    this.pending = undefined
-    this.retired.clear()
+    this.pending.clear()
   }
 }

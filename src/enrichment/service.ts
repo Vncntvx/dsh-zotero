@@ -1,3 +1,4 @@
+import { registerComponentEnablement } from '../component-enablement.js'
 import type { DisplayArtifactLookup } from './artifact-reads.js'
 import {
   discardParsedDocument,
@@ -74,10 +75,7 @@ import type {
   ZoteroDiscardParsedDocumentRequestView,
   ZoteroDiscardParsedDocumentResultView,
 } from '../contract.js'
-import {
-  ENRICHMENT_DOCUMENT_LIMITS,
-  type EnrichmentPreferences,
-} from '../enrichment-preferences.js'
+import type { EnrichmentPreferences } from '../enrichment-preferences.js'
 import { ZOTERO_ENRICHMENT_SERVICE_KEY, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.js'
 import {
   isPdfCandidateContentType,
@@ -112,7 +110,7 @@ import {
 import { resolveMineruToken } from './credentials.js'
 import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
-import type { ParsedArtifactMeta } from './types.js'
+import { limitsFor, type ParsedArtifactMeta } from './types.js'
 import {
   AttachmentResolutionCache,
   probeAttachments,
@@ -399,6 +397,7 @@ export class EnrichmentService extends TypertRemoteService {
     deps: EnrichmentServiceDeps = {},
   ) {
     super(ctx, ZOTERO_ENRICHMENT_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
+    registerComponentEnablement(ctx, 'enrichment')
     this.downloads = deps.downloads ?? new ModelDownloadManager()
     this.loaderFactory = deps.loader ?? (() => new SemanticEmbedderLoader())
     this.client =
@@ -411,7 +410,7 @@ export class EnrichmentService extends TypertRemoteService {
     this.storeFactory =
       deps.store ?? (async (config, create) => await this.storeFor(config, create))
     this.resolveAttachment = async (ref, signal) => {
-      const core = ctx.get('zotero') as EnrichmentCoreLink | undefined
+      const core = ctx.get('zotero')
       if (core === undefined) {
         throw new ZoteroError(
           'The Zotero service is not composed; a local attachment cannot be resolved.',
@@ -425,11 +424,7 @@ export class EnrichmentService extends TypertRemoteService {
     // operation without rebuilding the coordinator.
     const flight =
       deps.flight ?? new ParseFlight(() => resolveEnrichmentConfig(this.config).artifactReader)
-    const persistence =
-      deps.parsePersistence ??
-      new DiskParseJobPersistence(
-        async (config, create) => (await this.storeFactory(config, create)).root,
-      )
+    const persistence = deps.parsePersistence ?? new DiskParseJobPersistence()
     this.parsing = new EnrichmentParseJobs(ctx, {
       config: () => resolveEnrichmentConfig(this.config),
       resolveAttachment: this.resolveAttachment,
@@ -614,7 +609,7 @@ export class EnrichmentService extends TypertRemoteService {
     // inject callback over the old instance left semantic ranking dead while
     // the namespace still reported ready.
     ctx.inject(['zotero'], (scoped) => {
-      const zotero = scoped.zotero as unknown as EnrichmentCoreLink
+      const zotero: EnrichmentCoreLink = scoped.zotero
       const previous = this.loader
       const loader = this.loaderFactory()
       this.loader = loader
@@ -882,17 +877,17 @@ export class EnrichmentService extends TypertRemoteService {
     const record = resolvedRecord ?? (await store.sourceRecord(sourceKeyOf(identity)))
     signal.throwIfAborted()
     if (record === undefined) return { kind: 'missing' }
+    const meta = await store.metadataFor(record)
+    signal.throwIfAborted()
+    if (meta === undefined) return { kind: 'expired' }
     const stamp = await probeSource(
       input,
-      ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+      limitsFor(meta.mode).maxBytes,
       hostSourceBytesDeps(this.resolveAttachment, this.client),
       signal,
     )
     signal.throwIfAborted()
     if (!stampMatches(record.stamp, stamp)) return { kind: 'expired' }
-    const meta = await store.metadataFor(record)
-    signal.throwIfAborted()
-    if (meta === undefined) return { kind: 'expired' }
     return {
       metadata: {
         sourceId: meta.sourceId,
@@ -905,7 +900,13 @@ export class EnrichmentService extends TypertRemoteService {
         ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
       },
       markdownBytes: meta.markdownBytes,
-      read: () => store.readMarkdown(record.cacheKey, meta.characterCount, meta.markdownBytes),
+      read: () =>
+        store.readMarkdown(
+          record.cacheKey,
+          meta.characterCount,
+          meta.markdownBytes,
+          meta.markdownSha256,
+        ),
       image: (name) => store.readImage(record.cacheKey, name, meta),
     }
   }
@@ -993,7 +994,12 @@ export class EnrichmentService extends TypertRemoteService {
       ...(input.source.kind === 'local' ? { attachmentRef: input.source.attachmentRef } : {}),
     }
     const meta = resolved.stored.meta
-    const markdown = await store.readMarkdown(artifactId, meta.characterCount, meta.markdownBytes)
+    const markdown = await store.readMarkdown(
+      artifactId,
+      meta.characterCount,
+      meta.markdownBytes,
+      meta.markdownSha256,
+    )
     signal?.throwIfAborted()
     if (markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')
     const hit: CachedDocument = {
@@ -1047,10 +1053,13 @@ export class EnrichmentService extends TypertRemoteService {
     const candidate = record ?? (await store.sourceRecord(sourceKey))
     signal?.throwIfAborted()
     if (candidate === undefined) return { kind: 'miss', reason: 'absent' }
+    const meta = captured?.meta ?? (await store.metadataFor(candidate))
+    signal?.throwIfAborted()
+    if (meta === undefined) return { kind: 'miss', reason: 'expired' }
     if (probe) {
       const stamp = await probeSource(
         input,
-        ENRICHMENT_DOCUMENT_LIMITS.pro.maxBytes,
+        limitsFor(meta.mode).maxBytes,
         hostSourceBytesDeps(this.resolveAttachment, this.client),
         signal,
       )
@@ -1060,13 +1069,11 @@ export class EnrichmentService extends TypertRemoteService {
     // The meta (captured by the caller's resolution or read here) validates
     // the record before the bytes are read; the artifact read enforces the
     // meta's own byte and character counts.
-    const meta = captured?.meta ?? (await store.metadataFor(candidate))
-    signal?.throwIfAborted()
-    if (meta === undefined) return { kind: 'miss', reason: 'expired' }
     const markdown = await store.readMarkdown(
       candidate.cacheKey,
       meta.characterCount,
       meta.markdownBytes,
+      meta.markdownSha256,
     )
     signal?.throwIfAborted()
     if (markdown.trim() === '') throw new Error('The parsed artifact has no Markdown')

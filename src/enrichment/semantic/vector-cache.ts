@@ -50,7 +50,7 @@ export interface VectorCacheIdentity {
   readonly scoringVersion: string
 }
 
-export type EmbeddingSide = 'query' | 'document'
+import type { EmbeddingSide } from './tokenizer.js'
 
 function digestOf(value: string): string {
   return createHash('sha256').update(value).digest('hex')

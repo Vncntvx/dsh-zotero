@@ -13,6 +13,7 @@
 import {
   ZOTERO_ENRICHMENT_ARTIFACT_DELETE_FAILED,
   ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
+  ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
   ZoteroError,
 } from '../errors.js'
 import {
@@ -63,7 +64,9 @@ export async function listParsedDocuments(
   const config = deps.config()
   const store = await deps.store(config, false)
   signal?.throwIfAborted()
-  const [entries, groups] = [await store.inventory(signal), await store.groupByArtifact()]
+  const snapshot = await store.snapshot()
+  const entries = await store.inventory(signal, snapshot)
+  const groups = await store.groupByArtifact(snapshot)
   const needle = request.query?.trim().toLowerCase() || undefined
   const rows: ParsedDocumentRow[] = []
   for (const entry of entries) {
@@ -158,23 +161,29 @@ export async function discardParsedDocument(
   const config = deps.config()
   const store = await deps.store(config, false)
   signal?.throwIfAborted()
-  const aliases = (await store.groupByArtifact()).get(artifactId)?.aliases ?? []
+  const group = (await store.groupByArtifact()).get(artifactId)
+  const aliases = group?.aliases ?? []
   const stored = await store.metaFor(artifactId).catch(() => undefined)
   const present =
     stored !== undefined || aliases.length > 0 || (await store.hasArtifactDirectory(artifactId))
   if (!present) return { kind: 'missing' }
-  const generation = stored?.meta.generation
+  const generation = stored?.meta.generation ?? group?.record?.generation
   deps.jobs.retireArtifact(artifactId)
-  if (generation !== undefined) deps.jobs.forgetGeneration(generation)
-  let removedReceipts = 0
   try {
-    removedReceipts =
-      generation === undefined ? 0 : await deps.persistence.deleteByGeneration(config, generation)
-    signal?.throwIfAborted()
-    const removedAliases = await store.discardArtifact(artifactId, signal)
-    return { kind: 'discarded', removedAliases, removedReceipts }
+    const remove = async (): Promise<DiscardResult> => {
+      const removedReceipts =
+        generation === undefined ? 0 : await deps.persistence.deleteByGeneration(config, generation)
+      signal?.throwIfAborted()
+      const removedAliases = await store.discardArtifact(artifactId, signal)
+      return { kind: 'discarded', removedAliases, removedReceipts }
+    }
+    return generation === undefined
+      ? await remove()
+      : await deps.jobs.discardGeneration(generation, remove)
   } catch (error) {
     if (signal?.aborted) throw signal.reason
+    if (error instanceof ZoteroError && error.code === ZOTERO_ENRICHMENT_OPERATION_CONFLICT)
+      throw error
     throw new ZoteroError(
       `Could not remove the parsed artifact: ${safeParseText(
         error instanceof Error ? error.message : String(error),

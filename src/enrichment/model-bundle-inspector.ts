@@ -33,7 +33,8 @@ import type {
   ModelBundleInspectorPort,
   ModelBundleTarget,
 } from './model-installation.js'
-import { identityOf, readRegularFile } from './model-fs.js'
+import { identityOf } from './model-fs.js'
+import { readRegularFile } from '../regular-file.js'
 
 interface VerifiedSnapshot {
   readonly catalogFingerprint: string
