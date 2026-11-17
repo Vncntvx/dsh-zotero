@@ -4,7 +4,8 @@
  * Each spec boots a fresh mock Zotero server plus a `LocalApiProvider` over
  * the real HTTP client; the request builders and the typed-error assertion
  * helper live here because every provider spec uses them. Domain fixtures
- * stay in the spec file that owns them.
+ * stay in the spec file that owns them. Shared limits and assertions are also
+ * consumed by the tool, host, and opt-in integration lanes.
  * @module tests/helpers/provider-harness
  */
 
@@ -29,7 +30,7 @@ import { testHttpClient } from './test-clients.js'
 /**
  * The limits every provider-facing spec starts from; a spec passes overrides
  * through `createProvider`/`setupProvider` or a spread. Kept here as the one
- * home so a new `LocalApiLimits` member costs one edit.
+ * home, derived from the production config-to-limits projection.
  */
 export const PROVIDER_LIMITS: LocalApiLimits = localProviderLimits(resolveConfig({}))
 

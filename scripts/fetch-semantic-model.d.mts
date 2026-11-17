@@ -4,6 +4,8 @@
  * @module dsh-zotero/scripts/fetch-semantic-model
  */
 
+import type { SemanticDownloadSource } from '../lib/enrichment-model-catalog.js'
+
 /** One interchangeable download source. */
 export interface SemanticFetchSource {
   readonly label: string
@@ -15,7 +17,7 @@ export declare const SOURCES: Readonly<Record<string, SemanticFetchSource>>
 /** The validated command line. */
 export interface SemanticFetchOptions {
   readonly keys: readonly string[]
-  readonly order: readonly string[]
+  readonly order: readonly SemanticDownloadSource[]
   readonly dir: string
   readonly proxy: string | undefined
   readonly noProxy: boolean

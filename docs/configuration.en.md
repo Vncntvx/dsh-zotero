@@ -119,11 +119,11 @@ The first two are two views of one `ConfigForm` state, synced live over both cha
 ## Hot reload behavior
 
 - When transport configuration or a write gate changes, the HTTP client, local provider, and write tool set are rebuilt on the same `ZoteroService` instance;
-- Limit configuration changes are read by the provider on the next call, with no transport rebuild;
+- Limit configuration changes are read by the provider on the next call and take effect immediately;
 - The `webEnabled` toggle shows or hides the literature trail tab immediately after saving;
 - The `rightSidebarEnabled` toggle shows or hides the right-sidebar literature panel immediately after saving;
 - The `debug` toggle takes effect immediately after saving and controls the diagnostics panel at the bottom of the detail page and diagnostic log retention, with no component reinitialization;
-- Every other configuration update applies on the next tool call, with no host restart.
+- Every other configuration update applies on the next tool call.
 
 ## Environments without a settings service
 

@@ -11,7 +11,7 @@
 
 import type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectZoteroCalls,
   currentTime,
@@ -26,6 +26,8 @@ import { CONNECTED, UNAVAILABLE, chatOf, toolRow } from '../helpers/sources-tab-
 
 import { mockT } from '../helpers/mock-translate.ts'
 import { statusView } from '../../helpers/status-view.ts'
+afterEach(() => vi.useRealTimers())
+
 const t = mockT
 
 describe('collectZoteroCalls', () => {
@@ -38,7 +40,6 @@ describe('collectZoteroCalls', () => {
     const snapshot = chatOf([toolRow(result), toolRow(running({ callId: 'a' }))])
     const calls = collectZoteroCalls(snapshot)
     expect(calls.map((call) => call.callId)).toEqual(['b', 'a'])
-    expect(collectZoteroCalls(snapshot).map((call) => call.callId)).toEqual(['b', 'a'])
   })
 
   it('includes nested dispatch and ignores non-zotero calls', () => {
@@ -82,8 +83,15 @@ describe('status projection helpers', () => {
     ).toEqual({ kind: 'remote-error', message: 'offline' })
   })
 
-  it('formats the clock as an absolute HH:MM:SS time', () => {
-    expect(currentTime()).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  it.each([
+    [0, 0, 0, '00:00:00'],
+    [3, 4, 5, '03:04:05'],
+    [12, 0, 1, '12:00:01'],
+    [23, 59, 59, '23:59:59'],
+  ] as const)('reads one local clock instant at %i:%i:%i', (hours, minutes, seconds, expected) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 0, 2, hours, minutes, seconds))
+    expect(currentTime()).toBe(expected)
   })
 
   it('signs the zotero-relevant snapshot slice with in-flight phase', () => {

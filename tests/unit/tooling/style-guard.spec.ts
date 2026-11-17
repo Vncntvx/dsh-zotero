@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  type TokenPalette,
   bareFontScaleViolations,
   declarationsOf,
   NEUTRAL_BORDER_ACCENTS,
@@ -49,7 +50,7 @@ const KNOWN = {
   dsw: ['--dsw-alias-label-primary'],
   dsh: ['--dsh-content-font-size'],
   ds: ['--ds-ease-in-out'],
-}
+} satisfies TokenPalette
 
 describe('stripComments', () => {
   it('blanks a comment body without moving a single offset', () => {
@@ -163,7 +164,7 @@ describe('bareFontScaleViolations', () => {
 
   it('accepts a token and a size that rides the reader axis', () => {
     expect(bareFontScaleViolations(sheet('.a { font: var(--dsw-font-xs-13); }'), KNOWN)).toEqual([])
-    const axis = '.a { font-size: var(--dsh-content-font-size-secondary, 13px); }'
+    const axis = '.a { font-size: var(--dsh-content-font-size-secondary); }'
     expect(bareFontScaleViolations(sheet(axis), KNOWN)).toEqual([])
   })
 
@@ -301,10 +302,12 @@ describe('neutralBorderViolations', () => {
 
   it('fires when a variant inherits a full-pixel neutral width from its base', () => {
     const css = [
-      '.panel { border: 1px solid var(--dsw-alias-border-l2); }',
+      '.panel { border: 1px solid var(--dsw-alias-state-success-primary); }',
       '.panel[data-tone="quiet"] { border-color: var(--dsw-alias-border-l1); }',
     ].join('\n')
-    expect(neutralBorderViolations(sheet(css), KNOWN)).toHaveLength(1)
+    const violations = neutralBorderViolations(sheet(css), KNOWN)
+    expect(violations).toHaveLength(1)
+    expect(violations[0]?.selector).toContain('[data-tone=')
   })
 
   it('accepts a declared decorative rail', () => {

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["src/client", "src/sources", "tests/client"]
+}

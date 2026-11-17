@@ -25,7 +25,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 ## 4. Scholarly tools do not appear
 
 - Symptom: the model cannot see the seven scholarly tools such as `scholarly_search`, or the "Scholarly Search" tab of the settings page shows only a pointer and no field.
-- Cause: the `dsh-zotero/scholarly` component is not mounted. The component ships with the package and is off by default, and that row is its only switch: while the component is not mounted, its service, transport, and tools do not exist, and no scholarly retrieval requests are issued.
+- Cause: the `dsh-zotero/scholarly` component is not mounted. The component ships with the package and is off by default; the row under "Included components" is its only switch, and enabling it registers the service, transport, and tools.
 - Fix: turn on the `dsh-zotero/scholarly` row under "Included components" in the plugin manager; the tools and the settings page take effect without a restart. The authorization boundary for external retrieval is in [Product model](product-model.en.md).
 
 ## 5. Zotero tools missing from the current session after installation

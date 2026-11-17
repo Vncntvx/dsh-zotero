@@ -9,11 +9,14 @@ import type { ZoteroObjectRef } from '../../src/types.js'
 import { MockZotero } from './mock-zotero.js'
 import { testHttpClient, testWriteClient } from './test-clients.js'
 
-export const SERVER_ID = 'srv-write-domain-1'
-export const ITEM_KEY = 'ITEMABC1'
-export const NEW_KEY = 'NEWNOTE1'
-export const COLLECTION_KEY = 'COLL1234'
-export const SECOND_COLLECTION_KEY = 'COLL5678'
+import {
+  WRITE_SERVER_ID as SERVER_ID,
+  WRITE_ITEM_KEY as ITEM_KEY,
+  NEW_NOTE_KEY as NEW_KEY,
+  WRITE_COLLECTION_KEY as COLLECTION_KEY,
+  SECOND_COLLECTION_KEY,
+} from './server/keys.js'
+export { SERVER_ID, ITEM_KEY, NEW_KEY, COLLECTION_KEY, SECOND_COLLECTION_KEY }
 
 export const ITEM_REF: ZoteroObjectRef = parseRef(`zotero://user/0/item/${ITEM_KEY}`)
 export const SOURCE_REF: ZoteroObjectRef = parseRef('zotero://user/0/item/SOURCE01')

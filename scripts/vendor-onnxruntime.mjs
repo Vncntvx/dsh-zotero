@@ -77,6 +77,30 @@ export function packedRuntimePaths(version = pinnedVersion()) {
   ]
 }
 
+/** Independently reviewed release identity; never generated from the installation tree. */
+function releaseAnchor(version) {
+  const anchor = JSON.parse(
+    readFileSync(join(root, 'scripts/shared/onnxruntime-release.json'), 'utf8'),
+  )
+  if (anchor.version !== version || anchor.package !== 'onnxruntime-web')
+    throw new Error(`No reviewed upstream runtime release identity for ${version}`)
+  const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
+  if (lock.packages?.['node_modules/onnxruntime-web']?.integrity !== anchor.integrity)
+    throw new Error('onnxruntime-web lock integrity differs from the reviewed upstream release')
+  return anchor
+}
+
+function releaseAssetProblems(path, expected, label) {
+  if (!existsSync(path)) return [`${label} is missing`]
+  if (
+    expected === undefined ||
+    statSync(path).size !== expected.bytes ||
+    digestOf(path) !== expected.sha256
+  )
+    return [`${label} differs from the independently reviewed upstream release`]
+  return []
+}
+
 function digestOf(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
@@ -87,7 +111,8 @@ function provenanceOf(version, files) {
     {
       package: 'onnxruntime-web',
       version,
-      source: `https://github.com/microsoft/onnxruntime (npm onnxruntime-web@${version})`,
+      source: releaseAnchor(version).tarball,
+      integrity: releaseAnchor(version).integrity,
       license: 'MIT; see assets/onnxruntime/LICENSE',
       files,
     },
@@ -102,6 +127,7 @@ function provenanceOf(version, files) {
  */
 export async function vendorRuntime() {
   const version = pinnedVersion()
+  const anchor = releaseAnchor(version)
   const source = join(root, 'node_modules', 'onnxruntime-web')
   const target = join(assetsRoot(), version)
   if (!existsSync(join(source, 'package.json'))) {
@@ -121,11 +147,21 @@ export async function vendorRuntime() {
     const from = join(source, upstream)
     const to = join(target, name)
     if (!existsSync(from)) throw new Error(`onnxruntime-web@${version} ships no ${upstream}`)
+    const invalid = releaseAssetProblems(
+      from,
+      anchor.files[upstream],
+      `installed onnxruntime-web ${upstream}`,
+    )
+    if (invalid.length > 0) throw new Error(invalid.join('; '))
     const bytes = statSync(from).size
     // Preserve identical files so rebuilds keep their timestamps.
     if (!existsSync(to) || digestOf(to) !== digestOf(from)) await copyFile(from, to)
     files[name] = { bytes, sha256: digestOf(to) }
   }
+  const license = join(root, 'scripts/shared/onnxruntime-LICENSE')
+  const invalidLicense = releaseAssetProblems(license, anchor.license, 'reviewed upstream LICENSE')
+  if (invalidLicense.length > 0) throw new Error(invalidLicense.join('; '))
+  await copyFile(license, join(assetsRoot(), 'LICENSE'))
   await writeFile(join(target, PROVENANCE_FILE), provenanceOf(version, files))
   for (const entry of readdirSync(assetsRoot(), { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === version) continue
@@ -135,19 +171,18 @@ export async function vendorRuntime() {
 }
 
 /**
- * Prove a packaged copy matches its provenance and the installed runtime, and
+ * Prove a packaged copy matches its provenance and the reviewed upstream release, and
  * that the license ships beside it. Read-only; used by `npm run verify:pack`.
  * @returns the pinned version the package carries.
  */
-export function checkVendoredRuntime() {
+export function checkVendoredRuntime(base = assetsRoot()) {
   const version = pinnedVersion()
-  const dir = join(assetsRoot(), version)
+  const anchor = releaseAnchor(version)
+  const dir = join(base, version)
   const problems = []
-  if (!existsSync(join(assetsRoot(), 'LICENSE'))) {
-    problems.push(
-      'assets/onnxruntime/LICENSE is missing; the packaged runtime would ship unlicensed',
-    )
-  }
+  problems.push(
+    ...releaseAssetProblems(join(base, 'LICENSE'), anchor.license, 'assets/onnxruntime/LICENSE'),
+  )
   let provenance
   try {
     provenance = JSON.parse(readFileSync(join(dir, PROVENANCE_FILE), 'utf8'))
@@ -155,6 +190,8 @@ export function checkVendoredRuntime() {
     problems.push(`assets/onnxruntime/${version}/${PROVENANCE_FILE} is missing or unreadable`)
   }
   if (provenance !== undefined) {
+    if (provenance.source !== anchor.tarball || provenance.integrity !== anchor.integrity)
+      problems.push('the provenance does not identify the reviewed upstream tarball and integrity')
     if (provenance.version !== version) {
       problems.push(`the provenance records ${String(provenance.version)}, not ${version}`)
     }
@@ -164,6 +201,7 @@ export function checkVendoredRuntime() {
         problems.push(`${name} is missing from assets/onnxruntime/${version}/`)
         continue
       }
+      problems.push(...releaseAssetProblems(path, anchor.files[RUNTIME_FILES[name]], name))
       const recorded = provenance.files?.[name]
       if (recorded?.sha256 !== digestOf(path)) {
         problems.push(`${name} does not match its provenance hash`)

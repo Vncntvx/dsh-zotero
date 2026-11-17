@@ -22,6 +22,22 @@ import {
 } from '../../../scripts/harness-state.mjs'
 
 describe('applyPinToManifest', () => {
+  it('pins newly added direct and transitive harness packages without overriding other dependencies', () => {
+    const next = applyPinToManifest(
+      {
+        dependencies: { '@deepseek-ai/dsh-tool-testkit': '0.2.2-rc.3' },
+        devDependencies: {},
+        overrides: { zod: '4.4.3' },
+      },
+      '0.2.2-rc.3',
+      ['@deepseek-ai/dsh-remote-mock', 'react'],
+    )
+    expect(next.overrides).toEqual({
+      zod: '4.4.3',
+      '@deepseek-ai/dsh-tool-testkit': '0.2.2-rc.3',
+      '@deepseek-ai/dsh-remote-mock': '0.2.2-rc.3',
+    })
+  })
   const manifest = () => ({
     engines: { node: '>=22', dsh: '^0.1.7-alpha.2' },
     dsh: { manifestVersion: 1, bundle: { patch: './cordis.patch.yml' } },
@@ -248,6 +264,16 @@ describe('collectVendorLockProblems', () => {
       'node_modules/@deepseek-ai/cosmokit': { version: '1.8.7-alpha.2' },
     },
   }
+
+  it('rejects a resolved vendor patch above its declared floor even when semver allows it', () => {
+    const manifest = { dependencies: { '@deepseek-ai/cordis': '^4.1.0' } }
+    const lock = {
+      packages: { '': manifest, 'node_modules/@deepseek-ai/cordis': { version: '4.1.1' } },
+    }
+    expect(collectVendorLockProblems(lock, manifest).join(' ')).toContain(
+      'differs from the declared vendor floor',
+    )
+  })
 
   it('accepts a lock whose root ranges and resolved vendor versions match', () => {
     expect(collectVendorLockProblems(validVendorLock, vendorManifest)).toEqual([])

@@ -9,11 +9,12 @@
  *
  *   ZOTERO_INTEGRATION=1 npx vitest run tests/integration/zotero.integration.spec.ts
  *
- * Zotero must be running with the local API enabled. An empty library is
- * tolerated for browse-only checks; item-dependent checks record a pass
- * with a note instead of failing on a fresh library. The child-note
- * membership check needs a "collection → item → child note" arrangement;
- * when the library has none, it prints how to build one and passes.
+ * Zotero must be running with the Local API enabled and the fixture library
+ * populated: ordinary items, two parent-owned PDF attachments, annotations,
+ * tags, collections, a searchable child note in a collection, saved searches,
+ * versioned child objects and a readable group library. Missing prerequisites
+ * fail explicitly with setup guidance; they never count as successful reads.
+ * This lane performs no fixture writes.
  * @module tests/integration/zotero.integration
  */
 
@@ -44,6 +45,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
         // The live lane reads real abstracts and real full text, so it takes
         // the production-scale budgets for those two bounds.
         maxFulltextChars: 250_000,
+        maxEvidencePassages: 40,
       }),
     })
   })
@@ -97,8 +99,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
 
   it('reads the first hit back through getItem', async () => {
     if (firstItemRef === undefined) {
-      console.log('[integration] library has no items; skipping getItem check')
-      return
+      throw new Error(
+        '[integration] library has no items; fixture prerequisite missing for getItem check',
+      )
     }
     const detail = await provider.getItem({ ref: parseRef(firstItemRef), include: new Set() })
     expect(detail.ref).toMatch(/^zotero:\/\/user\/0\/item\/[A-Z0-9]{8}/)
@@ -108,8 +111,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
 
   it('exports a citation for the first hit', async () => {
     if (firstItemRef === undefined) {
-      console.log('[integration] library has no items; skipping export check')
-      return
+      throw new Error(
+        '[integration] library has no items; fixture prerequisite missing for export check',
+      )
     }
     const result = await provider.export({ refs: [parseRef(firstItemRef)], format: 'citation' })
     if (result.format !== 'citation') throw new Error('unreachable')
@@ -120,8 +124,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
 
   it('gathers abstract evidence through retrieve', async () => {
     if (firstItemRef === undefined) {
-      console.log('[integration] library has no items; skipping retrieve check')
-      return
+      throw new Error(
+        '[integration] library has no items; fixture prerequisite missing for retrieve check',
+      )
     }
     const result = await provider.retrieve({
       mode: 'evidence',
@@ -160,8 +165,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       }
     }
     if (candidates.length < 2) {
-      console.log('[integration] fewer than two items with attachments; skipping ownership check')
-      return
+      throw new Error(
+        '[integration] fewer than two items with attachments; fixture prerequisite missing for ownership check',
+      )
     }
     const [mine, theirs] = candidates as [
       { ref: string; attachmentRef: string },
@@ -214,8 +220,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     )
     const withAttachment = page.items.find((item) => item.bestAttachmentRef !== undefined)
     if (withAttachment === undefined) {
-      console.log('[integration] no item with an attachment; skipping per-source accounting check')
-      return
+      throw new Error(
+        '[integration] no item with an attachment; fixture prerequisite missing for per-source accounting check',
+      )
     }
     const result = await provider.retrieve({
       mode: 'evidence',
@@ -257,8 +264,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     const first = await provider.browse({ kind: 'tags', offset: 0, limit: 5 })
     expect(first.total).toBeGreaterThanOrEqual(first.returned)
     if (first.total === 0) {
-      console.log('[integration] library has no tags; skipping tag browse checks')
-      return
+      throw new Error(
+        '[integration] library has no tags; fixture prerequisite missing for tag browse checks',
+      )
     }
     expect(first.returned).toBe(Math.min(5, first.total))
     if (first.total > first.returned) {
@@ -274,8 +282,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   it('browses collections with coherent breadcrumbs and paginates the snapshot', async () => {
     const first = await provider.browse({ kind: 'collections', offset: 0, limit: 5 })
     if (first.total === 0) {
-      console.log('[integration] library has no collections; skipping collection browse checks')
-      return
+      throw new Error(
+        '[integration] library has no collections; fixture prerequisite missing for collection browse checks',
+      )
     }
     for (const item of first.items as {
       ref: string
@@ -305,13 +314,15 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
   it('navigates into a collection and lists its children with real breadcrumbs', async () => {
     const top = await provider.browse({ kind: 'collections', offset: 0, limit: 5 })
     if (top.total === 0) {
-      console.log('[integration] library has no collections; skipping child navigation')
-      return
+      throw new Error(
+        '[integration] library has no collections; fixture prerequisite missing for child navigation',
+      )
     }
     const parent = top.items[0] as unknown as { ref: string; name: string; depth: number }
     if (parent.depth !== 0) {
-      console.log('[integration] first browse page held no top-level collection; skipping')
-      return
+      throw new Error(
+        '[integration] first browse page held no top-level collection; fixture prerequisite missing for',
+      )
     }
     const children = await provider.browse({
       kind: 'collections',
@@ -343,8 +354,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     )
     const rows = Array.isArray(listing.json) ? listing.json : []
     if (rows.length === 0) {
-      console.log('[integration] library has no annotations; annotation contract pin skipped')
-      return
+      throw new Error(
+        '[integration] library has no annotations; annotation contract pin not exercised because its fixture is missing',
+      )
     }
     const annotationRow = rows[0] as {
       key?: string
@@ -492,10 +504,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     for (const key of childKeys) expect(topKeys.has(key)).toBe(false)
     const newestChild = whole.changed.childItems?.[0]
     if (newestChild === undefined || newestChild.version === 0) {
-      console.log(
-        '[integration] no versioned child object to narrow onto; skipping the window check',
+      throw new Error(
+        '[integration] no versioned child object to narrow onto; fixture prerequisite missing for the window check',
       )
-      return
     }
     const narrowed = await provider.changes({
       since: { ...baseline.cursor!, version: newestChild.version - 1 },
@@ -575,8 +586,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     const result = await provider.browse({ kind: 'savedSearches', offset: 0, limit: 10 })
     expect(result.total).toBeGreaterThanOrEqual(result.returned)
     if (result.total === 0) {
-      console.log('[integration] library has no saved searches; skipping saved-search checks')
-      return
+      throw new Error(
+        '[integration] library has no saved searches; fixture prerequisite missing for saved-search checks',
+      )
     }
     for (const item of result.items as { ref: string; name: string; conditions?: unknown }[]) {
       expect(item.ref).toMatch(/^zotero:\/\/user\/0\/search\/[A-Z0-9]{8}/)
@@ -590,8 +602,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       libraries.items as { library: { type: string; id: number }; name: string }[]
     ).find((item) => item.library.type === 'group')
     if (group === undefined) {
-      console.log('[integration] no group libraries; skipping group read checks')
-      return
+      throw new Error(
+        '[integration] no group libraries; fixture prerequisite missing for group read checks',
+      )
     }
     const search = await provider.search(
       {
@@ -654,21 +667,19 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
       break
     }
     if (noteKey === undefined || parentKey === undefined || token === undefined) {
-      console.log(
+      throw new Error(
         '[integration] no child note with a searchable body found; to exercise this ' +
           'check, add a child note with text to an item inside a collection and rerun',
       )
-      return
     }
     const parent = await client.getJson<unknown>(`users/0/items/${parentKey}`)
     const collections = (
       (parent.json as { data?: { collections?: unknown[] } })?.data?.collections ?? []
     ).filter((entry): entry is string => typeof entry === 'string')
     if (collections.length === 0) {
-      console.log(
-        `[integration] parent ${parentKey} of note ${noteKey} sits in no collection; skipping`,
+      throw new Error(
+        `[integration] parent ${parentKey} of note ${noteKey} sits in no collection; fixture prerequisite missing for`,
       )
-      return
     }
     const result = await provider.search(
       {

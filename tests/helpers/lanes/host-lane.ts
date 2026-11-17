@@ -26,6 +26,7 @@ import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
   projectToolSchema,
@@ -151,21 +152,13 @@ export async function setupHostLane(
       configureCalls,
       zoteroFiber,
       async runTool(name, args, agent) {
-        const batch = await ctx.tools.execute({
-          calls: [
-            {
-              type: 'tool-call',
-              id: ToolCallId(`tool-${++callCounter}`),
-              name,
-              arguments: JSON.stringify(args),
-            },
-          ],
+        return await executeModelToolFixture(ctx, {
+          callId: ToolCallId(`tool-${++callCounter}`),
+          name,
+          arguments: args,
           signal: new AbortController().signal,
           agent: agent ?? DEFAULT_AGENT,
         })
-        const call = batch.results[0]
-        if (call === undefined) throw new Error('Tool execution produced no result')
-        return call.result
       },
       tool(name) {
         return ctx.tools.get(name)

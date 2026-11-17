@@ -148,7 +148,7 @@ export function SourceEvidence({
   pager,
   fulltextPager,
 }: SourceEvidenceProps) {
-  const hasFulltextReads = item.fulltextReads.length > 0
+  const hasFulltextReads = item.fulltextReadsTotal > 0
   if (item.retrievalFacts === undefined && !hasFulltextReads) {
     return (
       <div className={css.panel}>

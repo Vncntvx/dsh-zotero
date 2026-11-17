@@ -1,3 +1,19 @@
+import { controlStyleViolations } from './shared/control-style-ownership.mjs'
+import {
+  stripCssComments,
+  styleRules,
+  styleDeclarations,
+  tokenReferences,
+  valueNodes,
+  boxValues,
+  colorLiterals,
+  mediaRequires,
+  mediaCovers,
+  selectorHasHover,
+  selectorBaseClass,
+  selectorSubjects,
+  reductionSubjects,
+} from './shared/css-syntax.mjs'
 /**
  * The browser stylesheets' mechanical guards.
  *
@@ -105,103 +121,9 @@ export const NEUTRAL_BORDER_ACCENTS = [
  * @param css - stylesheet source.
  * @returns same-length text with comments replaced by spaces.
  */
-export function stripComments(css) {
-  return css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-}
-
-/**
- * The index of the `}` closing the block opened at `open`.
- * @param css - stylesheet source.
- * @param open - index of the `{`.
- * @returns index of the matching `}`, or the text length when unbalanced.
- */
-function closingBraceOf(css, open) {
-  let depth = 0
-  for (let i = open; i < css.length; i += 1) {
-    if (css[i] === '{') depth += 1
-    else if (css[i] === '}') {
-      depth -= 1
-      if (depth === 0) return i
-    }
-  }
-  return css.length
-}
-
-/**
- * Every style rule in a stylesheet, flattening nested at-rules.
- *
- * A rule knows the at-rule preludes it sits under, which is what the hover and
- * focus-zoom exceptions are written against. At-rule blocks are recursed into,
- * so a rule inside `@media` is reported like any other; `@keyframes` steps fall
- * out as selectors (`from`, `40%`), and no guard reads them.
- * @param css - stylesheet source, comments already stripped.
- * @returns the rules, in source order.
- */
-export function rulesOf(css) {
-  const rules = []
-  const walk = (start, end, atRules) => {
-    let buffer = ''
-    let preludeAt = -1
-    let i = start
-    while (i < end) {
-      const char = css[i]
-      if (char === '}') {
-        buffer = ''
-        preludeAt = -1
-        i += 1
-        continue
-      }
-      if (char === '{') {
-        const close = closingBraceOf(css, i)
-        const prelude = buffer.trim()
-        if (prelude.startsWith('@')) walk(i + 1, Math.min(close, end), [...atRules, prelude])
-        else
-          rules.push({ selector: prelude, body: css.slice(i + 1, close), atRules, at: preludeAt })
-        buffer = ''
-        preludeAt = -1
-        i = close + 1
-        continue
-      }
-      if (preludeAt === -1) {
-        if (/\s/.test(char)) {
-          i += 1
-          continue
-        }
-        preludeAt = i
-      }
-      buffer += char
-      i += 1
-    }
-  }
-  walk(0, css.length, [])
-  return rules
-}
-
-/**
- * The declarations of one rule body.
- * @param body - the text between a rule's braces.
- * @returns property/value pairs, property lower-cased, value trimmed.
- */
-export function declarationsOf(body) {
-  const declarations = []
-  const push = (chunk) => {
-    const colon = chunk.indexOf(':')
-    if (colon === -1) return
-    const property = chunk.slice(0, colon).trim().toLowerCase()
-    const value = chunk.slice(colon + 1).trim()
-    if (property === '' || value === '') return
-    declarations.push({ property, value })
-  }
-  let buffer = ''
-  for (const char of body) {
-    if (char === ';') {
-      push(buffer)
-      buffer = ''
-    } else buffer += char
-  }
-  push(buffer)
-  return declarations
-}
+export const stripComments = stripCssComments
+export const rulesOf = styleRules
+export const declarationsOf = styleDeclarations
 
 /**
  * Every design-system token a stylesheet references. The three namespaces are
@@ -211,7 +133,7 @@ export function declarationsOf(body) {
  * @returns the referenced names, `--` prefix included.
  */
 export function tokenReferencesOf(text) {
-  return [...text.matchAll(/var\(\s*(--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)].map((match) => match[1])
+  return tokenReferences(text).map((reference) => reference.name)
 }
 
 /**
@@ -248,26 +170,19 @@ function borderWidthOf(value) {
 function sideWidthsOf(declarations) {
   const widths = {}
   for (const { property, value } of declarations) {
-    if (property === 'border') {
+    if (property.endsWith('-color') || property.endsWith('-style')) continue
+    const sides = sidesFor(property)
+    if (property.endsWith('-width')) {
+      const stated = boxValues(value).map(borderWidthOf)
+      const expanded = sides.length === 4 ? expandBox(stated) : undefined
+      sides.forEach((side, index) => {
+        const width = expanded?.[side] ?? stated[index] ?? stated[0]
+        if (width !== undefined) widths[side] = width
+      })
+    } else {
       const width = borderWidthOf(value)
-      if (width !== undefined) for (const side of SIDES) widths[side] = width
-      continue
+      if (width !== undefined) for (const side of sides) widths[side] = width
     }
-    if (property === 'border-width') {
-      const stated = expandBox(value.split(/\s+/).map((part) => borderWidthOf(part)))
-      for (const side of SIDES) if (stated[side] !== undefined) widths[side] = stated[side]
-      continue
-    }
-    if (LOGICAL_SIDES[property] !== undefined) {
-      const width = borderWidthOf(value)
-      if (width !== undefined) for (const side of LOGICAL_SIDES[property]) widths[side] = width
-      continue
-    }
-    const side = SIDES.find(
-      (name) => property === `border-${name}` || property === `border-${name}-width`,
-    )
-    const width = side === undefined ? undefined : borderWidthOf(value)
-    if (side !== undefined && width !== undefined) widths[side] = width
   }
   return widths
 }
@@ -287,20 +202,56 @@ function expandBox(values) {
  * @param declarations - the rule's declarations.
  * @returns the sides, empty when the rule paints no state colour.
  */
-function stateSidesOf(declarations) {
-  const sides = new Set()
+function sidesFor(property) {
+  if (['border', 'border-color', 'border-width', 'border-style'].includes(property)) return SIDES
+  const logical = property.replace(/-(?:width|color|style)$/, '')
+  if (LOGICAL_SIDES[logical]) return LOGICAL_SIDES[logical]
+  const physical = SIDES.find(
+    (side) => property === `border-${side}` || property.startsWith(`border-${side}-`),
+  )
+  if (physical) return [physical]
+  const logicalSide = {
+    'border-block-start': 'top',
+    'border-block-end': 'bottom',
+    'border-inline-start': 'left',
+    'border-inline-end': 'right',
+  }[logical]
+  return logicalSide ? [logicalSide] : []
+}
+
+function borderColours(declarations) {
+  const colours = {}
+  const solid = {}
   for (const { property, value } of declarations) {
-    if (!value.includes('--dsw-alias-state-')) continue
-    if (property === 'border' || property === 'border-color')
-      for (const side of SIDES) sides.add(side)
-    else {
-      const side = SIDES.find(
-        (name) => property === `border-${name}` || property === `border-${name}-color`,
-      )
-      if (side !== undefined) sides.add(side)
+    const sides = sidesFor(property)
+    if (sides.length === 0 || /-width$/.test(property)) continue
+    if (property.endsWith('-style')) {
+      const values = boxValues(value)
+      const expanded = sides.length === 4 ? expandBox(values) : undefined
+      sides.forEach((side, index) => {
+        solid[side] = (expanded?.[side] ?? values[index] ?? values[0]) === 'solid'
+      })
+      continue
+    }
+    if (property.endsWith('-color')) {
+      const values = boxValues(value)
+      const expanded = sides.length === 4 ? expandBox(values) : undefined
+      sides.forEach((side, index) => {
+        colours[side] = expanded?.[side] ?? values[index] ?? values[0]
+      })
+    } else {
+      for (const side of sides) {
+        colours[side] = value
+        solid[side] = /(?:^|\s)solid(?:\s|$)/.test(value)
+      }
     }
   }
-  return [...sides]
+  return { colours, solid }
+}
+
+function stateSidesOf(declarations) {
+  const { colours } = borderColours(declarations)
+  return SIDES.filter((side) => (colours[side] ?? '').includes('--dsw-alias-state-'))
 }
 
 /**
@@ -312,54 +263,27 @@ function stateSidesOf(declarations) {
  * @param selector - one selector of a rule's selector list.
  * @returns the base class, or `undefined` when the selector opens with none.
  */
-function baseClassOf(selector) {
-  const match = /^\.([A-Za-z0-9_-]+)/.exec(selector.trim())
-  return match === null ? undefined : `.${match[1]}`
-}
-
-/**
- * The classes a rule actually styles: the last compound of each selector.
- *
- * `.row:hover .icon` animates `.icon`, not `.row`, so the subject — not the
- * qualifying ancestor — is what the motion guard holds against the reduction
- * list. Pseudo-classes and their arguments are stripped before the names are
- * read, so `.link:not(.x)` yields `.link`.
- * @param selector - a rule's selector list.
- * @returns the subject classes, de-duplicated, in source order.
- */
-function subjectClassesOf(selector) {
-  const subjects = new Set()
-  for (const one of selector.split(',')) {
-    const compound =
-      one
-        .trim()
-        .split(/[\s>+~]+/)
-        .filter(Boolean)
-        .pop() ?? ''
-    const bare = compound.replace(/::?[A-Za-z-]+(\([^)]*\))?/g, '')
-    for (const match of bare.matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)) subjects.add(`.${match[1]}`)
-  }
-  return [...subjects]
-}
+const baseClassOf = selectorBaseClass
+const subjectClassesOf = selectorSubjects
 
 /**
  * Violations of the token contract: a reference to a name the palette does not
  * publish resolves to nothing, so the declaration silently does nothing.
  * @param source - one stylesheet: its repo-relative path and its source text.
- * @param palette - the published `--dsw-*` and `--dsh-*` names.
+ * @param palette - the published `--dsw-*`, `--dsh-*`, and `--ds-*` names.
  * @returns the violations, empty when every reference resolves.
  */
 export function unknownTokenViolations(source, palette) {
   const css = stripComments(source.css)
   const known = new Set([...palette.dsw, ...(palette.dsh ?? []), ...(palette.ds ?? [])])
   const violations = []
-  for (const match of css.matchAll(/var\(\s*(--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)) {
-    if (known.has(match[1])) continue
+  for (const reference of tokenReferences(css)) {
+    if (known.has(reference.name)) continue
     violations.push({
       file: source.file,
-      line: lineOf(css, match.index),
+      line: lineOf(css, reference.at),
       selector: '',
-      detail: `var(${match[1]}) names no published token`,
+      detail: `var(${reference.name}) names no published token`,
       fix: 'use a name from tests/fixtures/style-tokens.json, or add a --dsh-* seam there with the host code that publishes it',
     })
   }
@@ -378,9 +302,26 @@ export function bareFontScaleViolations(source) {
   for (const rule of rulesOf(css)) {
     for (const { property, value } of declarationsOf(rule.body)) {
       if (!['font', 'font-size', 'line-height'].includes(property)) continue
-      if (!/\d*\.?\d+px/.test(value) || value.includes('var(')) continue
+      const offScale = valueNodes(value).some(
+        (node) =>
+          (['Dimension', 'Percentage'].includes(node.type) && Number(node.value) !== 0) ||
+          (node.type === 'Identifier' &&
+            [
+              'xx-small',
+              'x-small',
+              'small',
+              'medium',
+              'large',
+              'x-large',
+              'xx-large',
+              'xxx-large',
+              'smaller',
+              'larger',
+            ].includes(node.name.toLowerCase())),
+      )
+      if (!offScale) continue
       const licensed =
-        rule.atRules.some((at) => at.includes(FOCUS_ZOOM_GUARD.query)) &&
+        rule.atRules.some((at) => mediaRequires(at, 'pointer', 'coarse')) &&
         value === FOCUS_ZOOM_GUARD.value
       if (licensed) continue
       violations.push({
@@ -406,9 +347,10 @@ export function literalColorViolations(source) {
   const violations = []
   for (const rule of rulesOf(css)) {
     for (const { property, value } of declarationsOf(rule.body)) {
-      const literals = [...value.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)].map(
-        (match) => match[0],
-      )
+      const named =
+        /color|background|border|shadow|fill|stroke|outline|decoration|filter/.test(property) ||
+        property.startsWith('--')
+      const literals = colorLiterals(value, named)
       if (literals.length === 0) continue
       const maskCoverage =
         MASK_PROPERTIES.includes(property) &&
@@ -437,12 +379,25 @@ export function fullRoundRadiusViolations(source) {
   const violations = []
   for (const rule of rulesOf(css)) {
     const declarations = declarationsOf(rule.body)
-    const radius = declarations.find(({ property }) => property === 'border-radius')
+    const radius = declarations.find(
+      ({ property, value }) =>
+        (property === 'border-radius' ||
+          /^border-(?:top|bottom)-(?:left|right)-radius$/.test(property) ||
+          /^border-(?:start|end)-(?:start|end)-radius$/.test(property)) &&
+        valueNodes(value).some(
+          (node) =>
+            (node.type === 'Percentage' && Number(node.value) >= 50) ||
+            (node.type === 'Dimension' &&
+              ((node.unit.toLowerCase() === 'px' && Number(node.value) >= 999) ||
+                (['vh', 'vw', 'vmin', 'vmax', 'svh', 'svw', 'lvh', 'lvw', 'dvh', 'dvw'].includes(
+                  node.unit.toLowerCase(),
+                ) &&
+                  Number(node.value) >= 100))),
+        ),
+    )
     if (radius === undefined) continue
-    const fullRound = /\b(?:50|100)%/.test(radius.value) || /\b9{3,}(?:\.\d+)?px/.test(radius.value)
-    if (!fullRound) continue
     const paired = declarations.some(
-      ({ property, value }) => property === 'corner-shape' && value.includes('round'),
+      ({ property, value }) => property === 'corner-shape' && value === 'round',
     )
     if (paired) continue
     violations.push({
@@ -535,28 +490,9 @@ export function stateBorderViolations(source) {
  * @returns the sides whose effective colour is a neutral border token and whose effective style is solid.
  */
 function neutralSidesOf(declarations) {
-  const colour = {}
-  const solid = {}
-  for (const { property, value } of declarations) {
-    const sides =
-      property === 'border'
-        ? SIDES
-        : (LOGICAL_SIDES[property] ??
-          SIDES.filter(
-            (name) => property === `border-${name}` || property === `border-${name}-color`,
-          ))
-    if (sides.length === 0) continue
-    const statesStyle =
-      property === 'border' || LOGICAL_SIDES[property] !== undefined || property === 'border-style'
-    const isSolid = /(?:^|\s)solid(?:\s|$)/.test(value)
-    for (const side of sides) {
-      colour[side] = value
-      if (isSolid) solid[side] = true
-      else if (statesStyle || property === `border-${side}`) solid[side] = false
-    }
-  }
+  const { colours, solid } = borderColours(declarations)
   return SIDES.filter(
-    (side) => solid[side] === true && (colour[side] ?? '').includes('--dsw-alias-border-'),
+    (side) => solid[side] !== false && (colours[side] ?? '').includes('--dsw-alias-border-'),
   )
 }
 
@@ -622,8 +558,8 @@ export function hoverMediaViolations(source) {
   const css = stripComments(source.css)
   const violations = []
   for (const rule of rulesOf(css)) {
-    if (!rule.selector.includes(':hover')) continue
-    if (rule.atRules.some((at) => /hover\s*:\s*hover/.test(at))) continue
+    if (!selectorHasHover(rule.selector)) continue
+    if (rule.atRules.some((at) => mediaRequires(at, 'hover', 'hover'))) continue
     violations.push({
       file: source.file,
       line: lineOf(css, rule.at),
@@ -652,28 +588,54 @@ export function hoverMediaViolations(source) {
 export function unreducedMotionViolations(source) {
   const css = stripComments(source.css)
   const animated = new Map()
-  const reduced = new Set()
+  const reduced = new Map()
   for (const rule of rulesOf(css)) {
-    const subjects = subjectClassesOf(rule.selector)
-    if (rule.atRules.some((at) => /prefers-reduced-motion\s*:\s*reduce/.test(at))) {
-      for (const subject of subjects) reduced.add(subject)
-      continue
+    const declarations = declarationsOf(rule.body)
+    const modes = new Map()
+    for (const { property, value } of declarations) {
+      const kind = property.startsWith('transition')
+        ? 'transition'
+        : property.startsWith('animation')
+          ? 'animation'
+          : undefined
+      if (kind === undefined) continue
+      const disables =
+        (property === kind ||
+          property === `${kind}-${kind === 'transition' ? 'property' : 'name'}`) &&
+        value === 'none'
+      modes.set(kind, !disables)
     }
-    const animates = declarationsOf(rule.body).some(
-      ({ property }) => property === 'transition' || property === 'transition-property',
-    )
-    if (!animates) continue
-    for (const subject of subjects) if (!animated.has(subject)) animated.set(subject, rule.at)
+    const subjects = subjectClassesOf(rule.selector)
+    const isReduction =
+      rule.atRules.length > 0 &&
+      rule.atRules.every((at) => mediaCovers(at, 'prefers-reduced-motion', 'reduce'))
+    if (rule.atRules.some((at) => mediaRequires(at, 'prefers-reduced-motion', 'no-preference')))
+      continue
+    for (const subject of subjects)
+      for (const [kind, enabled] of modes) {
+        if (isReduction) {
+          if (!enabled && reductionSubjects(rule.selector).includes(subject)) {
+            const kinds = reduced.get(subject) ?? new Set()
+            kinds.add(kind)
+            reduced.set(subject, kinds)
+          } else if (enabled) reduced.get(subject)?.delete(kind)
+        } else if (enabled) {
+          const record = animated.get(subject) ?? { at: rule.at, kinds: new Set() }
+          record.kinds.add(kind)
+          animated.set(subject, record)
+        }
+      }
   }
   const violations = []
-  for (const [subject, at] of animated) {
-    if (reduced.has(subject)) continue
+  for (const [subject, { at, kinds }] of animated) {
+    const missing = [...kinds].filter((kind) => !reduced.get(subject)?.has(kind))
+    if (missing.length === 0) continue
     violations.push({
       file: source.file,
       line: lineOf(css, at),
       selector: subject,
-      detail: `${subject} animates with no prefers-reduced-motion reduction`,
-      fix: 'add it to a `@media (prefers-reduced-motion: reduce)` block in this sheet with `transition: none`',
+      detail: `${subject}: ${missing.join(' and ')} has no effective reduced-motion disable`,
+      fix: 'set transition: none and/or animation: none for this subject under @media (prefers-reduced-motion: reduce)',
     })
   }
   return violations
@@ -745,7 +707,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const palette = JSON.parse(
     readFileSync(join(root, 'tests', 'fixtures', 'style-tokens.json'), 'utf8'),
   )
-  const violations = styleViolations(styleSources(), palette)
+  const code = readdirSync(join(root, 'src/client'), { recursive: true })
+    .filter((file) => /\.tsx$/.test(String(file)))
+    .map((file) => ({
+      file: `src/client/${file}`,
+      code: readFileSync(join(root, 'src/client', file), 'utf8'),
+    }))
+  const violations = [
+    ...styleViolations(styleSources(), palette),
+    ...controlStyleViolations(code, styleSources()),
+  ]
   if (violations.length > 0) {
     console.error(`style-guard: ${violations.length} violation(s)`)
     for (const violation of violations) console.error(formatViolation(violation))

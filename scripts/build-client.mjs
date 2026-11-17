@@ -42,7 +42,11 @@ import vm from 'node:vm'
 import { JSDOM } from 'jsdom'
 import * as esbuild from 'esbuild'
 import { transform as transformCss } from 'lightningcss'
-import { createClientAuthorityPlugin, isInlineSafeHarness } from './client-graph-authority.mjs'
+import {
+  createClientAuthorityPlugin,
+  isInlineSafeHarness,
+  CLIENT_EXTERNALS as EXTERNALS,
+} from './client-graph-authority.mjs'
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -106,35 +110,6 @@ function buildCommitOf() {
   }
   return 'unknown'
 }
-
-/** Platform modules the loader's module table answers; never bundled. The
- *  snapshot-store library (`@deepseek-ai/dsh-client-store`) shares the shell
- *  singleton via the module table (harness `packages/client/web/src/platform.ts`
- *  `PLATFORM_MODULES` + `seed.ts:getStaticModules`), so it stays external
- *  alongside react and the UI primitives instead of bundling zustand/immer.
- *  That harness list is this one's counterpart: anything in it that this bundle
- *  value-imports belongs here too, and `bundlePurityPlugin` below fails the
- *  build when a harness module slips into the artifact.
- *
- *  No PLATFORM_MODULES member can be silently inlined: `@deepseek-ai/cordis`,
- *  `ui-slots`, and `ui-dockkit` match the purity plugin's `@deepseek-ai/*`
- *  filter; `react-dom` is external because the tag filter's portal is a real
- *  value import (`createPortal`); and `@tanstack/react-virtual` (new on the
- *  platform table in dsh 0.2.1-alpha.4) is refused by the graph-authority
- *  metafile check until a real value import externalizes it here. Every
- *  external above resolves through the shell's one copy instead of a second
- *  copy bundled into the artifact. */
-const EXTERNALS = [
-  'react',
-  'react/jsx-runtime',
-  'react-dom',
-  'react-dom/client',
-  'zod',
-  '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-store',
-  '@deepseek-ai/dsh-client-ui-primitives',
-  '@tanstack/react-virtual',
-]
 
 /**
  * Harness inline-safety lives in `client-graph-authority.mjs`
@@ -320,11 +295,8 @@ const cssModulesPlugin = {
         cssModules: true,
         minify: true,
       })
-      const names = Object.fromEntries(
-        Object.entries(classMap ?? {})
-          .sort(([a], [b]) => a.localeCompare(b, 'en'))
-          .map(([original, info]) => [original, info.name]),
-      )
+      const names = {}
+      for (const [original, info] of Object.entries(classMap)) names[original] = info.name
       // Path-relative id: basename alone collides when two directories
       // ship the same module filename (e.g. `fields.module.css`).
       const id = `${PLUGIN_ID}/${relative(root, args.path).split('\\').join('/')}`

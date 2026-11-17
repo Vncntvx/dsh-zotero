@@ -8,6 +8,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync, existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import {
   BINARY_EXTENSIONS,
   TEXT_EXTENSIONS,
@@ -156,6 +159,23 @@ describe('extension coverage guard', () => {
 })
 
 describe('upstream private-source import guard', () => {
+  it('allows only the explicitly published locale fixture entry', () => {
+    const entry = '@deepseek-ai/dsh-client-test-runtime/src/translate.ts'
+    expect(upstreamSourceImportsOf(`import {makeTranslate} from '${entry}'`)).toEqual([])
+    expect(
+      upstreamSourceImportsOf("import {} from '@deepseek-ai/dsh-client-test-runtime/src/index.ts'"),
+    ).toHaveLength(1)
+    const manifestPath = createRequire(import.meta.url).resolve(
+      '@deepseek-ai/dsh-client-test-runtime/package.json',
+    )
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      exports: Record<string, string>
+      files: string[]
+    }
+    expect(manifest.exports['./src/*']).toBe('./src/*')
+    expect(manifest.files).toContain('src')
+    expect(existsSync(join(dirname(manifestPath), 'src/translate.ts'))).toBe(true)
+  })
   it('names the specifier and line for every import spelling', () => {
     const source = [
       `import type {} from '@deepseek-ai/dsh-client-ui-deliverables/src/client/turn-deliverables.ts'`,
@@ -233,10 +253,26 @@ describe('helper size guard', () => {
     ).toMatchObject([{ kind: 'new', path: 'tests/client/helpers/new.ts', lines: 301 }])
   })
 
-  it('allows a baselined helper to shrink and rejects growth', () => {
+  it('requires lowering a shrunken baseline and refuses regrowth after lowering it', () => {
     expect(
       helperSizeViolations([{ path: 'tests/client/helpers/big.ts', lines: 399 }], baseline, 300),
+    ).toMatchObject([
+      { kind: 'shrunk', path: 'tests/client/helpers/big.ts', lines: 399, limit: 400 },
+    ])
+    expect(
+      helperSizeViolations(
+        [{ path: 'tests/client/helpers/big.ts', lines: 399 }],
+        { 'tests/client/helpers/big.ts': 399 },
+        300,
+      ),
     ).toEqual([])
+    expect(
+      helperSizeViolations(
+        [{ path: 'tests/client/helpers/big.ts', lines: 400 }],
+        { 'tests/client/helpers/big.ts': 399 },
+        300,
+      ),
+    ).toMatchObject([{ kind: 'grown', lines: 400, limit: 399 }])
     expect(
       helperSizeViolations([{ path: 'tests/client/helpers/big.ts', lines: 401 }], baseline, 300),
     ).toMatchObject([{ kind: 'grown', path: 'tests/client/helpers/big.ts', limit: 400 }])

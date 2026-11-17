@@ -1,3 +1,10 @@
+/** Modules resolved by the pinned browser platform table. */
+export declare const CLIENT_EXTERNALS: readonly string[]
+export declare function clientPlatformProblems(
+  source: string,
+  externals?: readonly string[],
+): string[]
+
 /** Shape of one client-graph authority violation. */
 export interface ClientGraphViolation {
   readonly kind: 'host-package' | 'host-local' | 'unknown-package'
@@ -8,10 +15,10 @@ export interface ClientGraphViolation {
 /** Allowlist regex for local sources the browser graph may value-import. */
 export declare const CLIENT_SAFE_LOCAL: RegExp
 
-/** Resolve-time filter for host-owned packages (zod). */
+/** Resolve-time filter for host-owned packages (schemastery; zod stays external). */
 export declare const HOST_ONLY_PACKAGE_RESOLVE: RegExp
 
-/** Metafile-input filter for host-owned packages (zod). */
+/** Metafile-input filter for host-owned packages (schemastery; zod stays external). */
 export declare const HOST_ONLY_PACKAGE_INPUT: RegExp
 
 /**
@@ -79,3 +86,6 @@ export interface ClientAuthorityPlugin {
  * @returns plugin that fails host-package resolves and host-local metafile inputs.
  */
 export declare function createClientAuthorityPlugin(): ClientAuthorityPlugin
+
+/** Compare complete regular-expression semantics against an immutable pin source. */
+export declare function clientMirrorProblems(source: string): string[]

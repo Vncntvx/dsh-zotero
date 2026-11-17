@@ -23,6 +23,12 @@ import type {
 
 /** The instance id every fixture response reports unless a test says otherwise. */
 export const SERVER_ID = 'S1'
+export const SECOND_SERVER_ID = 'S2'
+export const WRITE_SERVER_ID = 'srv-write-domain-1'
+export const WRITE_ITEM_KEY = 'ITEMABC1'
+export const WRITE_COLLECTION_KEY = 'WRITEC01'
+export const SECOND_COLLECTION_KEY = 'COLL5678'
+export const NEW_NOTE_KEY = 'NEWNOTE1'
 
 /** The group library the group-scoped specs use. */
 export const GROUP_ID = 42

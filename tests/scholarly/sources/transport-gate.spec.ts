@@ -1,8 +1,10 @@
 /** The transport's deadline, retry and in-flight gate arms. */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+afterEach(() => vi.useRealTimers())
 import { CircuitBreaker } from '../../../src/scholarly/transport/circuit-breaker.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
 import { deferred } from '../../helpers/sync.js'
 
@@ -126,6 +128,7 @@ describe('scholarly transport deadline and gate behavior', () => {
   })
 
   it('reopens circuit when probe fails in HALF_OPEN state', async () => {
+    vi.useFakeTimers()
     const breaker = new CircuitBreaker({
       failureThreshold: 1,
       cooldownMs: 5,
@@ -134,7 +137,7 @@ describe('scholarly transport deadline and gate behavior', () => {
     const host = 'api.crossref.org'
     breaker.recordFailure(host)
     expect(breaker.getState(host)).toBe('OPEN')
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await vi.advanceTimersByTimeAsync(10)
     // The cooldown elapsed: the gate read probes the host (HALF_OPEN).
     expect(breaker.getState(host)).toBe('HALF_OPEN')
     // A failed probe reopens immediately, with a fresh cooldown.
@@ -142,14 +145,15 @@ describe('scholarly transport deadline and gate behavior', () => {
     expect(breaker.getState(host)).toBe('OPEN')
   })
 
-  it('prunes healthy ad-hoc circuits and expired pacer request timestamps', async () => {
+  it('prunes expired ad-hoc circuits before admitting another host', async () => {
+    vi.useFakeTimers()
     const breaker = new CircuitBreaker({ maxTrackedCircuits: 2, cooldownMs: 10, windowMs: 10 })
     breaker.beforeRequest('adhoc-1.org')
     breaker.recordFailure('adhoc-1.org')
     breaker.beforeRequest('adhoc-2.org')
     breaker.recordFailure('adhoc-2.org')
     // Wait for failure window & cooldown to elapse
-    await new Promise((resolve) => setTimeout(resolve, 15))
+    await vi.advanceTimersByTimeAsync(15)
     // Trigger prune on next new host
     breaker.beforeRequest('adhoc-3.org')
   })

@@ -28,4 +28,4 @@ export declare function vendorRuntime(): Promise<{
 }>
 
 /** Prove the packaged files match their provenance and ship a license. */
-export declare function checkVendoredRuntime(): string
+export declare function checkVendoredRuntime(base?: string): string

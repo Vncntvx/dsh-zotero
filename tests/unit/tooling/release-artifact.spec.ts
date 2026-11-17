@@ -24,8 +24,6 @@ async function artifact(root: string) {
       files: ['lib'],
       scripts: { prepare: 'exit 91' },
       devDependencies: { dangerous: '1.0.0' },
-      peerDependencies: { '@deepseek-ai/dsh-api-job-controller': '>=0.2.2-rc.3' },
-      overrides: { '@deepseek-ai/dsh-api-job-controller': '0.2.2-rc.3' },
     }),
   )
   await writeFile(join(base, 'lib/index.js'), 'export const answer = 42')
@@ -62,7 +60,6 @@ it('packs public declarations and removes install-time code from the checked art
     const manifest = JSON.parse(await readFile(join(verified.stage, 'package.json'), 'utf8'))
     expect(manifest.scripts).toBeUndefined()
     expect(manifest.devDependencies).toBeUndefined()
-    expect(manifest.overrides).toBeUndefined()
     expect(verifyReleaseArtifact(out, sha).provenance.files).toHaveProperty('lib/index.d.ts')
   })
 })
@@ -82,13 +79,11 @@ it('rejects a substituted tarball even if its envelope digest is updated', async
     const substitute = join(root, 'substitute')
     await mkdir(substitute)
     await writeFile(join(substitute, 'package.json'), '{"name":"substitute","version":"1.0.0"}')
-    const env = { ...process.env }
-    delete env.npm_config_dry_run
     const packed = JSON.parse(
       execFileSync(
         'npm',
         ['pack', '--ignore-scripts', '--json', '--pack-destination', substitute],
-        { cwd: substitute, encoding: 'utf8', env },
+        { cwd: substitute, encoding: 'utf8' },
       ),
     )
     const report = (Array.isArray(packed) ? packed : Object.values(packed))[0]

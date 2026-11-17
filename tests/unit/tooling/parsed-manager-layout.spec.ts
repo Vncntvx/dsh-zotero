@@ -25,7 +25,9 @@ interface Rule {
 }
 
 function ruleOf(selector: string): Rule {
-  const found = RULES.find((rule: Rule) => rule.selector === selector)
+  const found = RULES.find(
+    (rule: Rule) => rule.selector.replace(/\s+/g, '') === selector.replace(/\s+/g, ''),
+  )
   expect(found, `no rule for ${selector}`).toBeDefined()
   return found!
 }

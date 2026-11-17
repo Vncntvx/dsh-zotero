@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/fetch-semantic-model.mjs",
+    "scripts/client-test-platform.mjs",
+    "scripts/client-declarations.mjs"
+  ],
+  "exclude": []
+}

@@ -36,8 +36,8 @@ export const SEMANTIC_RUNTIME_FILES = Object.freeze([
   'ort-wasm-simd-threaded.wasm',
 ])
 
-/** The module namespace the semantic session uses, typed from the dev package. */
-export type SemanticRuntime = typeof import('onnxruntime-web')
+/** The module namespace the semantic session uses, defined by the installed shared ONNX contract. */
+export type SemanticRuntime = typeof import('onnxruntime-common')
 
 type RuntimeLoader = (url: string) => Promise<SemanticRuntime>
 

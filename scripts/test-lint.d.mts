@@ -43,8 +43,8 @@ export declare function unscannedExtensionsOf(paths: readonly string[]): string[
 
 /** One helper whose size exceeds its limit or frozen baseline. */
 export interface HelperSizeViolation {
-  /** `grown` for a baselined file, `new` for an unbudgeted one, `stale` for a vanished baseline path. */
-  readonly kind: 'grown' | 'new' | 'stale'
+  /** A baselined file grew/shrank, a new helper exceeded its limit, or a baseline path disappeared. */
+  readonly kind: 'grown' | 'shrunk' | 'new' | 'stale'
   /** Repo-root-relative helper path. */
   readonly path: string
   /** Actual line count (0 for a stale baseline entry). */
@@ -95,3 +95,10 @@ export declare function wholesalePrimitiveMocksOf(
  * @returns one formatted violation per offending line.
  */
 export declare function fetchOwnershipIssuesOf(rel: string, source: string): string[]
+
+export declare const ROOT_TEXT_FILES: readonly string[]
+export declare const MAX_SPEC_LINES: number
+export declare const MAX_HELPER_LINES: number
+export declare const HELPER_SIZE_BASELINE: Readonly<Record<string, number>>
+export declare function textFiles(base?: string): string[]
+export declare function specFiles(base?: string): string[]

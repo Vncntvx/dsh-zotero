@@ -9,6 +9,45 @@
  */
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from '@babel/parser'
+
+/** Platform imports must be served by the pinned host loader table. */
+export const CLIENT_EXTERNALS = [
+  'react',
+  'react/jsx-runtime',
+  'react-dom',
+  'react-dom/client',
+  'zod',
+  // typert-protocol's public entry resolves Cordis before tree shaking, even for RemoteError.
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-store',
+  '@deepseek-ai/dsh-client-ui-primitives',
+  '@tanstack/react-virtual',
+]
+
+/** Compare declared externals with the pinned host's actual PLATFORM_MODULES literal. */
+export function clientPlatformProblems(source, externals = CLIENT_EXTERNALS) {
+  const parsed = parse(source, { sourceType: 'module', plugins: ['typescript'] })
+  const declarations = parsed.program.body.flatMap((node) =>
+    node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration'
+      ? node.declaration.declarations
+      : [],
+  )
+  const target = declarations.find(
+    (node) => node.id.type === 'Identifier' && node.id.name === 'PLATFORM_MODULES',
+  )
+  const expression = target?.init?.type === 'TSAsExpression' ? target.init.expression : target?.init
+  if (
+    expression?.type !== 'ArrayExpression' ||
+    expression.elements.some((node) => node?.type !== 'StringLiteral')
+  )
+    return ['Pinned host has no static string PLATFORM_MODULES declaration']
+  const entries = expression.elements.map((node) => node.value)
+  const available = new Set(entries)
+  return externals
+    .filter((name) => !available.has(name))
+    .map((name) => `Client external ${name} is absent from the pinned host PLATFORM_MODULES`)
+}
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..').replaceAll('\\', '/')
 
@@ -25,7 +64,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..').replaceAll('
  *   settings wire name (`settings-namespace`), JSON guards (`json`), the
  *   `zotero://` ref grammar (`ref-grammar`), export-key grammar
  *   (`export-items`), the changes projection contract (`changes-contract`),
- *   the browse row classification (`browse-rows`), the evidence-passage
+ *   the literal search-tag rule (`search-tags`), the browse row classification (`browse-rows`), the evidence-passage
  *   shape (`evidence-item`), the runtime constants module (`constants`, which
  *   only carries values and type-only imports), the wire boundary schemas
  *   (`wire-schemas`) both codec arms materialize, and the durable-result
@@ -36,7 +75,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..').replaceAll('
  * this list deliberately and must stay free of host authority.
  */
 export const CLIENT_SAFE_LOCAL =
-  /^src\/(?:client(?:\/|$)|sources(?:\/|$)|artifact-(?:images|reader-preferences)\.(?:ts|js|mjs|cjs)$|library-preferences\.(?:ts|js|mjs|cjs)$|enrichment-preferences\.(?:ts|js|mjs|cjs)$|enrichment-model-catalog\.(?:ts|js|mjs|cjs)$|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$|constants\.(?:ts|js|mjs|cjs)$|credential-names\.(?:ts|js|mjs|cjs)$|wire-schemas\.(?:ts|js|mjs|cjs)$|creators\.(?:ts|js|mjs|cjs)$|media-types\.(?:ts|js|mjs|cjs)$|parsed-title\.(?:ts|js|mjs|cjs)$|result-receipt\.(?:ts|js|mjs|cjs)$|waiter-flight\.(?:ts|js|mjs|cjs)$)/
+  /^src\/(?:client(?:\/|$)|sources(?:\/|$)|artifact-(?:images|reader-preferences)\.(?:ts|js|mjs|cjs)$|library-preferences\.(?:ts|js|mjs|cjs)$|enrichment-preferences\.(?:ts|js|mjs|cjs)$|enrichment-model-catalog\.(?:ts|js|mjs|cjs)$|contract\.(?:ts|js|mjs|cjs)$|settings-namespace\.(?:ts|js|mjs|cjs)$|json\.(?:ts|js|mjs|cjs)$|ref-grammar\.(?:ts|js|mjs|cjs)$|export-items\.(?:ts|js|mjs|cjs)$|changes-contract\.(?:ts|js|mjs|cjs)$|search-tags\.(?:ts|js|mjs|cjs)$|browse-rows\.(?:ts|js|mjs|cjs)$|evidence-item\.(?:ts|js|mjs|cjs)$|constants\.(?:ts|js|mjs|cjs)$|credential-names\.(?:ts|js|mjs|cjs)$|wire-schemas\.(?:ts|js|mjs|cjs)$|creators\.(?:ts|js|mjs|cjs)$|media-types\.(?:ts|js|mjs|cjs)$|parsed-title\.(?:ts|js|mjs|cjs)$|result-receipt\.(?:ts|js|mjs|cjs)$|waiter-flight\.(?:ts|js|mjs|cjs)$)/
 
 /**
  * Packages the host half owns. Boundary schema materialization (schemastery
@@ -134,7 +173,7 @@ export function packageNameOf(key) {
 /**
  * Harness specifiers a client bundle may **inline**. Counterpart of the three
  * constants in `packages/client/tsdown.client.ts` **at the harness pin tag**
- * (`dsh-v<pin>`, currently `dsh-v0.2.2-rc.2`): `INLINE_SAFE`,
+ * (`dsh-v<pin>` from the manifest): `INLINE_SAFE`,
  * `GENERATED_REMOTE`, `VENDORED_LIBRARY`. Keep this table in step with that
  * file: never invent a fourth arm here.
  *
@@ -194,8 +233,7 @@ export function clientGraphViolations(inputs) {
       violations.push({
         kind: 'host-package',
         key,
-        detail:
-          'host-owned package — boundary codecs materialize on the host half only (src/status-codec.ts)',
+        detail: 'host-owned package — browser code consumes the client-safe wire schemas',
       })
       continue
     }
@@ -253,7 +291,7 @@ export function createClientAuthorityPlugin() {
               text:
                 `client graph resolved host-owned package "${args.path}" from ${args.importer || '(entry)'}` +
                 ' — import structural identity from src/contract.ts;' +
-                ' host zod/schemastery codecs live only in src/status-codec.ts and src/config.ts' +
+                ' host runtime and schemastery configuration stay outside the browser graph' +
                 ' and must never enter src/client',
             },
           ],
@@ -271,4 +309,33 @@ export function createClientAuthorityPlugin() {
       })
     },
   }
+}
+
+/** Compare both pattern and flags of every mirrored constant with the pinned source. */
+export function clientMirrorProblems(source) {
+  const parsed = parse(source, { sourceType: 'module', plugins: ['typescript'] })
+  const declarations = parsed.program.body.flatMap((node) => {
+    const declaration = node.type === 'ExportNamedDeclaration' ? node.declaration : node
+    return declaration?.type === 'VariableDeclaration' ? declaration.declarations : []
+  })
+  const problems = []
+  for (const [name, mirror] of [
+    ['INLINE_SAFE', INLINE_SAFE],
+    ['GENERATED_REMOTE', GENERATED_REMOTE],
+    ['VENDORED_LIBRARY', VENDORED_LIBRARY],
+  ]) {
+    const binding = declarations.find(
+      (node) => node.id.type === 'Identifier' && node.id.name === name,
+    )
+    if (binding?.init?.type !== 'RegExpLiteral') {
+      problems.push(`upstream ${name} has no static regular-expression declaration`)
+      continue
+    }
+    const upstream = new RegExp(binding.init.pattern, binding.init.flags)
+    if (upstream.source !== mirror.source || upstream.flags !== mirror.flags)
+      problems.push(
+        `client-graph mirror ${name} does not match the pin tag (pattern or flags) — re-extract the mirror and tests/fixtures/harness-client-graph-pin.json from the tag`,
+      )
+  }
+  return problems
 }

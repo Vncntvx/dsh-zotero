@@ -4,7 +4,7 @@
 
 ## 概述
 
-dsh-zotero 是基于 Cordis 的服务插件，向宿主环境暴露 `ctx.zotero` 服务边界；文献面板另有 `ctx.zoteroLibrary`，学术检索另有 `ctx.scholarly`。加载器将默认导出的 `ZoteroService` 与校验后的配置一同挂载。插件是请求驱动的：加载过程不发起任何外部或本地网络请求。
+dsh-zotero 是基于 Cordis 的服务插件，向宿主环境暴露 `ctx.zotero` 服务边界；文献面板另有 `ctx.zoteroLibrary`，学术检索另有 `ctx.scholarly`。加载器将默认导出的 `ZoteroService` 与校验后的配置一同挂载。插件按请求访问网络，加载阶段保持无网络请求。
 
 ## 数据流
 

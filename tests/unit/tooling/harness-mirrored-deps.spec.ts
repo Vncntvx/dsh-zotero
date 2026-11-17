@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { HARNESS_MIRRORED } from '../../../scripts/shared/harness-mirrored-deps.mjs'
 import { clientDepsMirrorProblems } from '../../../scripts/harness-state.mjs'
+import { mirroredDeclarationsOf } from '../../../scripts/shared/harness-packages.mjs'
 import { pinnedHarness } from '../../../scripts/style-tokens.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -75,5 +76,58 @@ describe('the mirrored client dependencies at the pin', () => {
       new Map(Object.entries(fixture.declarations)),
     )
     expect(problems.join('\n')).toContain('zod')
+  })
+})
+
+describe('immutable-tag dependency declarations', () => {
+  it('merges client ranges once and takes root types only when clients omit them', () => {
+    const tree = new Map([
+      ['ls-tree --name-only -d dsh-vtest:packages/client', 'zeta\nalpha\n'],
+      [
+        'show dsh-vtest:packages/client/zeta/package.json',
+        JSON.stringify({ dependencies: { zod: '^4.0.0', '@types/a': '^1.0.0', invalid: 7 } }),
+      ],
+      [
+        'show dsh-vtest:packages/client/alpha/package.json',
+        JSON.stringify({
+          dependencies: { zod: '^3.0.0' },
+          devDependencies: { zod: '^4.0.0', react: '^19.0.0' },
+        }),
+      ],
+      [
+        'show dsh-vtest:package.json',
+        JSON.stringify({
+          dependencies: { '@types/a': '^2.0.0', '@types/b': '^1.0.0', server: '^9.0.0' },
+        }),
+      ],
+    ])
+    const requested: string[] = []
+    const actual = mirroredDeclarationsOf((args) => {
+      const command = args.join(' ')
+      requested.push(command)
+      const value = tree.get(command)
+      if (value === undefined) throw new Error(`unexpected git command: ${command}`)
+      return value
+    }, 'dsh-vtest')
+    expect(actual).toEqual({
+      '@types/a': ['^1.0.0'],
+      '@types/b': ['^1.0.0'],
+      react: ['^19.0.0'],
+      zod: ['^3.0.0', '^4.0.0'],
+    })
+    expect(Object.keys(actual)).toEqual(['@types/a', '@types/b', 'react', 'zod'])
+    expect(requested).toEqual([...tree.keys()])
+  })
+
+  it('propagates an unreadable or malformed tag instead of returning an empty authority', () => {
+    const unavailable = new Error('tag unavailable')
+    expect(() =>
+      mirroredDeclarationsOf(() => {
+        throw unavailable
+      }, 'dsh-vmissing'),
+    ).toThrow(unavailable)
+    expect(() =>
+      mirroredDeclarationsOf((args) => (args[0] === 'ls-tree' ? 'client\n' : '{bad'), 'dsh-vbad'),
+    ).toThrow(SyntaxError)
   })
 })

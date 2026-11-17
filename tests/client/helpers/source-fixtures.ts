@@ -10,10 +10,9 @@
  */
 
 import type { SourceItem, SourceWorkspace } from '../../../src/sources/model.js'
-import { filterCountsOf } from '../../../src/sources/filters.js'
+import { filterCountsOf } from '../../helpers/source-filter-counts.ts'
 import { normalizeRefKey } from '../../../src/sources/evidence-match.js'
 
-/** A neutral base source; override per-spec fields to build a scenario. */
 export function sourceOf(overrides: Partial<SourceItem> = {}): SourceItem {
   const base = {
     key: 'zotero://user/0/item/a',
@@ -60,6 +59,7 @@ export function workspaceOf(
     exports,
     exportTotal: overrides.exportTotal ?? exports.length,
     exportOperations: overrides.exportOperations ?? { running: 0, failed: 0, stopped: 0 },
+    searchOperations: overrides.searchOperations ?? { running: 0, failed: 0, stopped: 0 },
     omittedRows: overrides.omittedRows ?? 0,
     filterCounts: overrides.filterCounts ?? filterCountsOf(sources),
     evidencePassageTotal:
@@ -109,7 +109,6 @@ export function artifactOf(
   }
 }
 
-/** A neutral search occurrence record; override per scenario. */
 export function searchOf(
   overrides: Partial<SourceItem['searches'][number]> = {},
 ): SourceItem['searches'][number] {
@@ -117,11 +116,11 @@ export function searchOf(
     callId: 'call-1',
     query: 'risk policy',
     mode: 'everything',
+    itemLevel: 'top',
     scope: { kind: 'library', library: { type: 'user', id: 0 } },
     itemTypes: [],
     tags: [],
     excludeTags: [],
-    includeTrashed: false,
     returned: 1,
     total: 1,
     ...overrides,

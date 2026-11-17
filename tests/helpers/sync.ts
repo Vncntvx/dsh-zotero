@@ -65,3 +65,22 @@ export function progress(): Progress {
     },
   }
 }
+
+/** Wait on an observable's owned notification without polling or scheduling guesses. */
+export async function snapshotWhen<T>(
+  source: { getSnapshot(): T; subscribe(listener: () => void): () => void },
+  predicate: (value: T) => boolean,
+): Promise<T> {
+  const settled = deferred<void>()
+  const check = () => {
+    if (predicate(source.getSnapshot())) settled.resolve()
+  }
+  const unsubscribe = source.subscribe(check)
+  try {
+    check()
+    await settled.promise
+    return source.getSnapshot()
+  } finally {
+    unsubscribe()
+  }
+}

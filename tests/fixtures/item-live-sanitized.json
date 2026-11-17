@@ -1,0 +1,95 @@
+{
+  "key": "CAPTURE1",
+  "version": 2098,
+  "library": {
+    "type": "user",
+    "id": 999,
+    "name": "Fixture",
+    "links": {
+      "self": {
+        "href": "http://127.0.0.1:23119/api/users/0/items/CAPTURE1",
+        "type": "application/json"
+      },
+      "alternate": {
+        "href": "http://127.0.0.1:23119/api/users/0/items/CAPTURE1",
+        "type": "text/html"
+      }
+    }
+  },
+  "links": {
+    "self": {
+      "href": "http://127.0.0.1:23119/api/users/0/items/CAPTURE1",
+      "type": "application/json"
+    },
+    "alternate": {
+      "href": "http://127.0.0.1:23119/api/users/0/items/CAPTURE1",
+      "type": "text/html"
+    },
+    "attachment": {
+      "href": "http://127.0.0.1:23119/api/users/0/items/CAPTURE1",
+      "type": "application/json",
+      "attachmentType": "application/pdf",
+      "attachmentSize": 2154481
+    }
+  },
+  "meta": {
+    "creatorSummary": "Fixture",
+    "parsedDate": "2026",
+    "numChildren": 1
+  },
+  "data": {
+    "key": "CAPTURE1",
+    "version": 2098,
+    "itemType": "journalArticle",
+    "title": "Captured Zotero fixture",
+    "abstractNote": "Sanitized fixture text",
+    "date": "2026",
+    "language": "Sanitized fixture text",
+    "shortTitle": "Sanitized fixture text",
+    "libraryCatalog": "Sanitized fixture text",
+    "url": "Sanitized fixture text",
+    "accessDate": "2026-01-01T00:00:00Z",
+    "volume": "Sanitized fixture text",
+    "pages": "Sanitized fixture text",
+    "publicationTitle": "Sanitized fixture text",
+    "DOI": "Sanitized fixture text",
+    "citationKey": "Sanitized fixture text",
+    "journalAbbreviation": "Sanitized fixture text",
+    "ISSN": "Sanitized fixture text",
+    "creators": [
+      {
+        "firstName": "Fixture",
+        "lastName": "Fixture",
+        "creatorType": "author"
+      },
+      {
+        "firstName": "Fixture",
+        "lastName": "Fixture",
+        "creatorType": "author"
+      },
+      {
+        "firstName": "Fixture",
+        "lastName": "Fixture",
+        "creatorType": "author"
+      },
+      {
+        "firstName": "Fixture",
+        "lastName": "Fixture",
+        "creatorType": "author"
+      },
+      {
+        "firstName": "Fixture",
+        "lastName": "Fixture",
+        "creatorType": "author"
+      }
+    ],
+    "tags": [],
+    "collections": ["CAP00001"],
+    "relations": {
+      "dc:replaces": ["Sanitized fixture text"]
+    },
+    "inPublications": true,
+    "dateAdded": "2026-01-01T00:00:00Z",
+    "dateModified": "2026-01-01T00:00:00Z"
+  }
+}

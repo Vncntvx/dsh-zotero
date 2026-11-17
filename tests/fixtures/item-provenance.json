@@ -1,0 +1,60 @@
+{
+  "reviewedAt": "2026-11-16T20:58:16.071143+00:00",
+  "entries": {
+    "item10.json": {
+      "kind": "legacy-unverified",
+      "source": "Repository fixture; no original capture artifact or acquisition record survives in its recorded provenance.",
+      "sourceBuild": null,
+      "apiVersion": null,
+      "captureDate": null,
+      "firstRepositoryCommit": "d48b6e3471a4add89c53c3bf5127814742b651a2",
+      "firstRepositoryDate": "2026-08-15T11:59:26+08:00",
+      "sanitization": "Original sanitization process is unknown; present keys and user identifiers are fixture values. This is not evidence of a live server response.",
+      "sha256": "c89e17c518ae11602ebb2fa37efba1ca4fb50133d3bb11de2efe03b4b6797b0e"
+    },
+    "item-pre10.json": {
+      "kind": "legacy-unverified",
+      "source": "Repository fixture; no original capture artifact or acquisition record survives in its recorded provenance.",
+      "sourceBuild": null,
+      "apiVersion": null,
+      "captureDate": null,
+      "firstRepositoryCommit": "d48b6e3471a4add89c53c3bf5127814742b651a2",
+      "firstRepositoryDate": "2026-08-15T11:59:26+08:00",
+      "sanitization": "Original sanitization process is unknown; present keys and user identifiers are fixture values. This is not evidence of a live server response.",
+      "sha256": "5d0db7b6623d3b9b9f7731bb1e0e05cf0bb5ca20d43316194ff8af925a8ea751"
+    },
+    "item-minimal.json": {
+      "kind": "legacy-unverified",
+      "source": "Repository fixture; no original capture artifact or acquisition record survives in its recorded provenance.",
+      "sourceBuild": null,
+      "apiVersion": null,
+      "captureDate": null,
+      "firstRepositoryCommit": "d48b6e3471a4add89c53c3bf5127814742b651a2",
+      "firstRepositoryDate": "2026-08-15T11:59:26+08:00",
+      "sanitization": "Original sanitization process is unknown; present keys and user identifiers are fixture values. This is not evidence of a live server response.",
+      "sha256": "6f865d8e11ce426e89c266f0e034a87310780a20242583c1dd5d7c579a203978"
+    },
+    "item-extra-fields.json": {
+      "kind": "synthetic",
+      "source": "Repository fixture; no original capture artifact or acquisition record survives in its recorded provenance.",
+      "sourceBuild": null,
+      "apiVersion": null,
+      "captureDate": null,
+      "firstRepositoryCommit": "d48b6e3471a4add89c53c3bf5127814742b651a2",
+      "firstRepositoryDate": "2026-08-15T11:59:26+08:00",
+      "sanitization": "Original sanitization process is unknown; present keys and user identifiers are fixture values. This is not evidence of a live server response.",
+      "sha256": "e0942a38ad119706d4b22305a218585a9f01c5f3a34cd9432f95abf87c510c58"
+    },
+    "item-live-sanitized.json": {
+      "kind": "captured-sanitized",
+      "source": "GET http://127.0.0.1:23119/api/users/0/items/top?limit=1",
+      "sourceBuild": "11.0-beta.4+045d52044",
+      "apiVersion": "3",
+      "captureDate": "2026-11-16T20:58:16.071143+00:00",
+      "rawSha256": "e77688ea1ea8a8b3551d5d729fddbbadb4b88a0796eeca38468b4b53cedab7cb",
+      "rawEvidence": "/private/tmp/dsh-fixture-capture-raw-2026-11-17.json",
+      "sanitization": "Selected the first response row. Preserved field names, JSON types, array lengths, numeric/boolean wire values, itemType, creatorType, contentType, attachmentType, linkMode and library type. Replaced all other strings, object/collection keys, user id, URLs and dates with deterministic fixture values. Raw library data is retained outside the repository only.",
+      "sha256": "d2ce31890486b99da3a7aa3e99db9764867cb457dff7b5d41ed47ecf4dfe2985"
+    }
+  }
+}

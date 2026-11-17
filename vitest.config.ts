@@ -1,11 +1,13 @@
 import { defineConfig } from 'vitest/config'
+import { clientTestAliasesOf } from './scripts/client-test-platform.mjs'
 
 export default defineConfig({
   oxc: {
     jsx: { runtime: 'automatic' },
   },
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    alias: clientTestAliasesOf(),
+    dedupe: ['react', 'react-dom', 'vitest'],
   },
   test: {
     // The published harness client packages ship their CSS modules and keep
@@ -14,8 +16,8 @@ export default defineConfig({
     // loads `lib/index.js` directly and throws ERR_UNKNOWN_FILE_EXTENSION on
     // `.module.css`, while its bare imports need the devDependencies that
     // mirror them in this manifest.
-    server: { deps: { inline: [/@deepseek-ai\/dsh-client-/] } },
-    include: ['tests/**/*.spec.{ts,tsx}'],
+    server: { deps: { inline: [/@deepseek-ai\/dsh-client-/, /@deepseek-ai\/dsh-remote-mock/] } },
+    include: ['tests/**/*.spec.{ts,tsx,mts,cts}'],
     setupFiles: ['tests/client/setup.ts'],
     coverage: {
       provider: 'v8',
@@ -33,6 +35,7 @@ export default defineConfig({
         'src/scholarly/index.ts',
         'src/scholarly/types.ts',
         'src/client/css-modules.d.ts',
+        'src/client/react-dom.d.ts',
         'src/client/build-info-globals.d.ts',
         'src/client/plugin-slots.d.ts',
         'src/client/deliverables-turn-data.d.ts',
@@ -80,21 +83,19 @@ export default defineConfig({
       // measured value, never on it: statements re-sited to 97.7.
       thresholds: {
         'src/*.ts': { statements: 98, branches: 95.8, functions: 98, lines: 98 },
+        // Independent floors prevent a new network boundary or panel endpoint from hiding in global coverage.
+        'src/transport/**': { statements: 98.57, branches: 98.13, functions: 99.9, lines: 99.9 },
+        'src/library/**': { statements: 96.88, branches: 91.08, functions: 99.9, lines: 98.48 },
+        'src/skills/**': { statements: 100, branches: 100, functions: 100, lines: 100 },
+        'src/session-projection/**': {
+          statements: 100,
+          branches: 91.57,
+          functions: 100,
+          lines: 100,
+        },
         'src/local/**': { statements: 97.7, branches: 93, functions: 99, lines: 97.8 },
         'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
         'src/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
-        // The library component had no floor of its own, so the layers around
-        // it answered for it while its reading-file store sat near two thirds
-        // statement coverage. The behaviour specs for the abandoned-directory
-        // reap, the open-file cap and the disposal race were added first.
-        //
-        // Measured after them: 96.88 / 89.58 / 100 / 98.51. The first attempt
-        // at this floor read a hand-computed 97.56 / 100 / 100 / 97.47 and
-        // failed its own gate; the branch figure there counted branch
-        // locations with any arm hit instead of arms, and the statement figure
-        // came from a run before the suite settled. The numbers above are the
-        // coverage report's own.
-        'src/library/**': { statements: 96.6, branches: 89, functions: 99, lines: 98 },
         // Component layer ratchets include both SourcesTab and the global Library components.
         // The parsed-document manager surface (lease-free tab title, batched
         // badge probes, manager actions) added branch-heavy client code whose

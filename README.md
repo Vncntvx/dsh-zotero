@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.2-blue" alt="dsh 版本" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.3"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.3-blue" alt="dsh 版本" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
   <a href="https://github.com/hashgraph-online/hol-guard"><img src="https://img.shields.io/badge/HOL%20Guard-passing-00a67e" alt="HOL Guard Scanner"></a>
 </p>
@@ -61,7 +61,7 @@ Agent 在对话里用工具检索、阅读与引用文献；文献轨迹核对�
 在 DeepSeek Harness 桌面端打开侧栏的**插件**，点击**添加插件**，输入对应标识：
 
 - 最新版（推荐）：`dsh-zotero`
-- 指定版本：`dsh-zotero@1.0.1`
+- 指定版本：`dsh-zotero@1.2.0`
 - GitHub 预构建分支：`github:Vncntvx/dsh-zotero#release`
 
 ### 命令行安装

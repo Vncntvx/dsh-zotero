@@ -21,7 +21,14 @@
  * @module tests/helpers/server/objects
  */
 
-import { ATTACHMENT_KEY, COLLECTION_KEY, ITEM_KEY, SERVER_ID } from './keys.js'
+import {
+  ATTACHMENT_KEY,
+  COLLECTION_KEY,
+  ITEM_KEY,
+  SERVER_ID,
+  NOTE_KEY,
+  ANNOTATION_KEY,
+} from './keys.js'
 
 /** The library version an unspecified `versionHeaders()` reports. */
 export const DEFAULT_LIBRARY_VERSION = 20
@@ -156,7 +163,7 @@ export function attachment(overrides: ObjectOverrides = {}): WireObject {
  */
 export function noteRow(overrides: ObjectOverrides = {}): WireObject {
   return {
-    key: overrides.key ?? 'NOTE1111',
+    key: overrides.key ?? NOTE_KEY,
     version: overrides.version ?? 1,
     data: { itemType: 'note', note: 'my note', ...overrides.data },
   }
@@ -173,7 +180,7 @@ export function noteRow(overrides: ObjectOverrides = {}): WireObject {
  */
 export function annotationRow(overrides: ObjectOverrides = {}): WireObject {
   return {
-    key: overrides.key ?? 'ANNO1111',
+    key: overrides.key ?? ANNOTATION_KEY,
     version: overrides.version ?? 1,
     data: {
       itemType: 'annotation',

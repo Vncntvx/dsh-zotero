@@ -2,7 +2,7 @@
 
 # Product Model
 
-dsh-zotero runs around the local Zotero library. The model uses tools, the human uses the interface, working together through two entry points and two views, backed by four decoupled components.
+dsh-zotero runs around the local Zotero library. The model works through tools and the user works through the interface; two entry points and two views divide the responsibilities, backed by four decoupled components.
 
 ## Two Entry Points
 
@@ -29,7 +29,7 @@ The local Zotero desktop app is the single source of truth. The interface offers
 | **Literature panel** | Right sidebar   | **Global library view**: for manual browsing and citing. Navigate collection trees, tags, saved searches, and the Trash; inspect details and read PDFs.                | Local API (via `zoteroLibrary` service endpoints) |
 | **Literature trail** | Session top tab | **Session audit view**: for verifying the agent's work. Lists queried papers, search parameters, extracted passages, and export records from the current conversation. | Tool-call snapshots from the current session      |
 
-Their responsibilities are distinct: the literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry. Both are views of the literature panel.
+The literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry.
 
 DSH's built-in "Trail" tab records tool-call execution times and raw parameters; the "Literature trail" focuses purely on literature, showing search conditions, source passages, and export records.
 

@@ -86,6 +86,6 @@ export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
     return { result, writes, view: tool.presentResult?.({ title: 'A study' }, result) }
   } finally {
     unregister()
-    await runtime.dispose()
+    await ctx.fiber.dispose()
   }
 }

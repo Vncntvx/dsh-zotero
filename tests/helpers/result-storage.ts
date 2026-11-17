@@ -4,12 +4,13 @@ import { createHash } from 'node:crypto'
 import { vi } from 'vitest'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 
-export function resultStorage(ctx: Context) {
+export function resultStorage(ctx: Context, beforeOpen?: () => Promise<void>) {
   const files = new Map<string, Uint8Array>()
   const receipts = new Map<string, unknown>()
   const put = vi.fn(async (key: string, value: unknown) => {
     receipts.set(key, value)
   })
+  const close = vi.fn(async () => {})
   const save = vi.fn(
     async (input: { data: AsyncIterable<Uint8Array>; name?: string; signal?: AbortSignal }) => {
       const chunks: Uint8Array[] = []
@@ -42,14 +43,22 @@ export function resultStorage(ctx: Context) {
     },
   } as never) // Only external service operations consumed by production are substituted.
   ctx.provide('storageDomain', {
-    open: vi.fn(async () => ({
-      table: () => ({
-        get: (key: string) => receipts.get(key),
-        put,
-        entries: () => receipts.entries(),
-      }),
-      close: async () => {},
-    })),
+    open: vi.fn(async () => {
+      await beforeOpen?.()
+      return {
+        table: () => ({
+          get: (key: string) => receipts.get(key),
+          put,
+          deleteMany: async (keys: readonly string[]) => {
+            let deleted = 0
+            for (const key of keys) if (receipts.delete(key)) deleted += 1
+            return deleted
+          },
+          entries: () => receipts.entries(),
+        }),
+        close,
+      }
+    }),
   } as never)
-  return { files, receipts, put, save }
+  return { files, receipts, put, save, close }
 }

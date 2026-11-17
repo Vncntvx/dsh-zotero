@@ -17,6 +17,8 @@ export interface TokenPalette {
   readonly dsw: readonly string[]
   /** `--dsh-*` seams the host publishes at runtime. */
   readonly dsh: readonly string[]
+  /** `--ds-*` names the host base stylesheet defines. */
+  readonly ds?: readonly string[]
 }
 
 /** One style rule, flattened out of any at-rules around it. */

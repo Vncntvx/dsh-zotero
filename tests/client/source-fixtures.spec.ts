@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { filterCountsOf } from '../../src/client/sources/selectors.ts'
+import { filterCountsOf } from '../helpers/source-filter-counts.ts'
 import { hasPdf } from '../../src/client/sources/source-capabilities.ts'
 import {
   largeArtifactFixture,

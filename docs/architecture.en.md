@@ -4,7 +4,7 @@
 
 ## Overview
 
-dsh-zotero is a Cordis service plugin that exposes the `ctx.zotero` service boundary to the host. The literature panel has its own `ctx.zoteroLibrary`, and scholarly retrieval has `ctx.scholarly`. The loader mounts the default-exported `ZoteroService` together with its validated configuration. The plugin is request-driven: loading issues no external or local network request.
+dsh-zotero is a Cordis service plugin that exposes the `ctx.zotero` service boundary to the host. The literature panel has its own `ctx.zoteroLibrary`, and scholarly retrieval has `ctx.scholarly`. The loader mounts the default-exported `ZoteroService` together with its validated configuration. The plugin accesses the network in response to requests; loading remains network-free.
 
 ## Data Flow
 

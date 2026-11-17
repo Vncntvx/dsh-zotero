@@ -9,7 +9,7 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 - Zotero ≥ 7 desktop installed (reads require Zotero ≥ 7; writes require Zotero 10).
 - Local API enabled: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
 - Node.js ≥ 24.15.0.
-- Host dsh ≥ 0.2.2-rc.2; for the mapping of earlier versions, see GitHub Releases.
+- Host dsh `>=0.2.2-rc.3 <0.3.0`; for the mapping of earlier versions, see GitHub Releases.
 
 ## Installing the Plugin
 
@@ -18,9 +18,9 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 In the DeepSeek Harness desktop app under **Plugins** (or **Settings → Plugins**), click **Install Plugin** and enter the package identifier:
 
 - Latest version (recommended): `dsh-zotero`
-- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.0.1`)
+- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.2.0`)
 - GitHub prebuilt branch: `github:Vncntvx/dsh-zotero#release`
-- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.0.1` or `github:Vncntvx/dsh-zotero#<commit-hash>`
+- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.2.0` or `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### Command line
 
@@ -51,7 +51,7 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ### Build-script approval at install time
 
-The npm package, the GitHub `#release` branch, and a local tarball install without approval on pnpm 10 or pnpm 11. An install from the `main` source branch runs a `prepare` build and needs this entry in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
+The npm package, the GitHub `#release` branch, and a local tarball install without build approval on pnpm 10 or pnpm 11. An install from the `main` source branch runs a `prepare` build and needs this entry in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
 
 ```yaml
 allowBuilds:

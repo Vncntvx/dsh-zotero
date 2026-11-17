@@ -8,11 +8,13 @@
  * refuses it rather than rewriting it.
  * @param manifest - parsed package.json.
  * @param version - the exact new pin.
+ * @param lockedPackageNames - installed harness closure to include in exact overrides.
  * @returns the same manifest.
  */
 export declare function applyPinToManifest<T extends Record<string, unknown>>(
   manifest: T,
   version: string,
+  lockedPackageNames?: readonly string[],
 ): T
 
 /**
@@ -113,6 +115,8 @@ export interface RegistryInstall {
 export declare function collectVendorProblems(
   harnessRoot: string,
   manifest: Record<string, unknown>,
+  packages?: ReadonlyMap<string, string>,
+  pin?: string,
 ): string[]
 
 /**
@@ -154,4 +158,13 @@ export declare function collectArtifactProblems(
  * dependency.
  * @returns the sorted, de-duplicated specifiers.
  */
-export declare function importedSpecifiers(): string[]
+export declare function importedSpecifiers(scanRoot?: string): string[]
+
+/** Resolve a declared browser runtime; absent or unreadable manifests return undefined. */
+export declare function clientRuntimeOf(packageDirectory: string): string | undefined
+
+/** Stale harness dependency names are failures in every gate mode. */
+export declare function overrideNameProblems(
+  manifest: Record<string, unknown>,
+  names: Iterable<string>,
+): string[]

@@ -1,4 +1,5 @@
 /** Vendor floors and override refusals remain effective in standalone CI. */
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +28,56 @@ describe('collectVendorProblems', () => {
     mkdirSync(pkgDir, { recursive: true })
     writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name, version }))
   }
+
+  it('uses the immutable pin vendor manifests when the working tree has moved ahead', () => {
+    writeVendor('cordis', '@deepseek-ai/cordis', '4.1.0')
+    const git = (...args: string[]) =>
+      execFileSync(
+        'git',
+        [
+          '-C',
+          tree,
+          '-c',
+          'tag.gpgsign=false',
+          '-c',
+          'commit.gpgsign=false',
+          '-c',
+          `core.hooksPath=${join(tree, 'no-hooks')}`,
+          ...args,
+        ],
+        { stdio: 'pipe', timeout: 10_000 },
+      )
+    git('init')
+    git('add', 'vendor')
+    git(
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '-m',
+      'fixture pin',
+    )
+    git('tag', 'dsh-v0.2.2-rc.3')
+    writeVendor('cordis', '@deepseek-ai/cordis', '4.2.0')
+    expect(
+      collectVendorProblems(
+        tree,
+        { devDependencies: { '@deepseek-ai/cordis': '4.1.0' } },
+        undefined,
+        '0.2.2-rc.3',
+      ),
+    ).toEqual([])
+    const mismatch = collectVendorProblems(
+      tree,
+      { devDependencies: { '@deepseek-ai/cordis': '4.2.0' } },
+      undefined,
+      '0.2.2-rc.3',
+    )
+    expect(mismatch).toEqual([expect.stringContaining('publishes 4.1.0 at pin dsh-v0.2.2-rc.3')])
+  })
 
   it('reports a prerelease floor against the stable version the sibling publishes', () => {
     writeVendor('cordis', '@deepseek-ai/cordis', '4.0.5')

@@ -67,3 +67,17 @@ if (typeof Element !== 'undefined' && typeof Element.prototype.scrollBy !== 'fun
     this.dispatchEvent(new Event('scroll'))
   } as unknown as typeof Element.prototype.scrollBy
 }
+
+// jsdom omits range geometry. Tests that exercise placement supply explicit rectangles.
+if (typeof Range !== 'undefined') {
+  if (typeof Range.prototype.getClientRects !== 'function')
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [],
+    })
+  if (typeof Range.prototype.getBoundingClientRect !== 'function')
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => new DOMRect(),
+    })
+}

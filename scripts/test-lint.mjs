@@ -22,10 +22,11 @@
  * @module scripts/test-lint
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, join, relative, resolve, extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { stripCommentsAndStrings } from './shared/source-scan.mjs'
+import { stripCommentsAndStrings, sourceNodes } from './shared/source-scan.mjs'
+import { fakeIpPolicyIssues } from './fake-ip-guard.mjs'
 
 // Re-exported so `tests/unit/tooling/test-lint` keeps driving the one shared stripper.
 export { stripCommentsAndStrings }
@@ -33,7 +34,18 @@ export { stripCommentsAndStrings }
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Directories that carry the project's source, tests, tooling, prose, and locale copy. */
-export const TEXT_ROOTS = ['src', 'tests', 'scripts', 'docs', 'locale']
+export const TEXT_ROOTS = ['src', 'tests', 'scripts', 'docs', 'locale', '.github']
+export const ROOT_TEXT_FILES = [
+  'AGENTS.md',
+  'README.md',
+  'README.en.md',
+  'LICENSE',
+  'SECURITY.md',
+  'package.json',
+  'package-lock.json',
+  'vitest.config.ts',
+  'eslint.config.mjs',
+]
 
 /**
  * The extensions that contract to be text. Binary assets are not the target
@@ -80,25 +92,25 @@ const ALLOWED_CONTROL = new Set([0x09, 0x0a, 0x0d])
  * `tests/tools/write/write-presentation.spec.ts`; lowering it requires
  * splitting that spec first.
  */
-const MAX_SPEC_LINES = 726
+export const MAX_SPEC_LINES = 726
 
 /**
  * Ratchet: the most lines one helper may occupy. Existing helpers above the
  * limit are frozen in {@link HELPER_SIZE_BASELINE}; a baselined file may only
  * shrink, and a new helper may never enter the baseline.
  */
-const MAX_HELPER_LINES = 300
+export const MAX_HELPER_LINES = 300
 
 /**
  * Grandfathered helpers at their pre-change size. Removing a file or splitting
  * it means deleting or lowering its entry in the same commit; adding an entry
  * is never allowed.
  */
-const HELPER_SIZE_BASELINE = Object.freeze({
-  'tests/client/helpers/source-fixtures.ts': 129,
-  'tests/client/helpers/apply-world.ts': 378,
-  'tests/client/helpers/library-panel-harness.tsx': 299,
-  'tests/host/support/enrichment-parse-endpoints.ts': 335,
+export const HELPER_SIZE_BASELINE = Object.freeze({
+  'tests/client/helpers/source-fixtures.ts': 128,
+  'tests/client/helpers/apply-world.ts': 350,
+  'tests/client/helpers/library-panel-harness.tsx': 156,
+  'tests/host/support/enrichment-parse-endpoints.ts': 334,
   'tests/host/support/enrichment-parse-jobs.ts': 323,
 })
 
@@ -136,10 +148,10 @@ function lineCountOf(path) {
 }
 
 /** File paths of every spec, as paths relative to the repo root. */
-function specFiles() {
-  return filesUnder(join(root, 'tests'))
-    .filter((path) => /\.spec\.tsx?$/.test(path))
-    .map((path) => relative(root, path))
+export function specFiles(base = root) {
+  return filesUnder(join(base, 'tests'))
+    .filter((path) => /\.spec\.(?:[cm]?ts|tsx)$/.test(path))
+    .map((path) => relative(base, path))
     .sort()
 }
 
@@ -154,7 +166,7 @@ function specFiles() {
  * @returns true for a helper or support module.
  */
 export function isHelperFile(path) {
-  return /[\\/](?:helpers|support)[\\/]/.test(path) && /\.tsx?$/.test(path)
+  return /[\\/](?:helpers|support)[\\/]/.test(path) && /\.(?:[cm]?ts|tsx)$/.test(path)
 }
 
 /** File paths of every helper and support module, relative to the repo root. */
@@ -169,33 +181,39 @@ function helperFiles() {
  * A file must read as text end to end. The byte offset and a short context
  * are named because the offending byte is invisible in every editor view.
  */
+export function textFiles(base = root) {
+  const tree = TEXT_ROOTS.flatMap((dir) =>
+    existsSync(join(base, dir)) ? filesUnder(join(base, dir)) : [],
+  )
+  return [...tree, ...ROOT_TEXT_FILES.map((name) => join(base, name)).filter(existsSync)].filter(
+    (path) => extname(path) === '' || TEXT_EXTENSIONS.includes(extname(path)),
+  )
+}
+
 function checkTextFiles() {
-  for (const dir of TEXT_ROOTS) {
-    for (const path of filesUnder(join(root, dir))) {
-      if (!TEXT_EXTENSIONS.some((extension) => path.endsWith(extension))) continue
-      const bytes = readFileSync(path)
-      const found = new Map()
-      for (const [index, byte] of bytes.entries()) {
-        if (byte < 0x20 && !ALLOWED_CONTROL.has(byte)) {
-          found.set(byte, [...(found.get(byte) ?? []), index])
-        }
+  for (const path of textFiles()) {
+    const bytes = readFileSync(path)
+    const found = new Map()
+    for (const [index, byte] of bytes.entries()) {
+      if (byte < 0x20 && !ALLOWED_CONTROL.has(byte)) {
+        found.set(byte, [...(found.get(byte) ?? []), index])
       }
-      for (const [byte, offsets] of found) {
-        const context = bytes
-          .subarray(Math.max(0, offsets[0] - 40), offsets[0] + 40)
-          .toString('utf8')
-          .replaceAll(
-            /[\u0000-\u001f]/g,
-            (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
-          )
-        failures.push(
-          [
-            `${relative(root, path)} contains ${offsets.length} raw 0x${byte.toString(16).padStart(2, '0')} byte(s)`,
-            `  first at offset ${offsets[0]}: …${context}…`,
-            `  fix: write the escape (\\u0000) instead of the byte, so the file stays text`,
-          ].join('\n'),
+    }
+    for (const [byte, offsets] of found) {
+      const context = bytes
+        .subarray(Math.max(0, offsets[0] - 40), offsets[0] + 40)
+        .toString('utf8')
+        .replaceAll(
+          /[\u0000-\u001f]/g,
+          (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
         )
-      }
+      failures.push(
+        [
+          `${relative(root, path)} contains ${offsets.length} raw 0x${byte.toString(16).padStart(2, '0')} byte(s)`,
+          `  first at offset ${offsets[0]}: …${context}…`,
+          `  fix: write the escape (\\u0000) instead of the byte, so the file stays text`,
+        ].join('\n'),
+      )
     }
   }
 }
@@ -210,9 +228,8 @@ export function unscannedExtensionsOf(paths) {
   const declared = new Set([...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS])
   const unscanned = new Set()
   for (const path of paths) {
-    const dot = path.lastIndexOf('.')
-    if (dot === -1) continue
-    const extension = path.slice(dot)
+    const extension = extname(path)
+    if (!extension) continue
     if (!declared.has(extension)) unscanned.add(extension)
   }
   return [...unscanned].sort()
@@ -249,7 +266,7 @@ function checkSpecSize() {
 /**
  * Compare helper sizes against the limit and the frozen baseline.
  *
- * A baselined helper may shrink but never grow; a helper outside the baseline
+ * A baselined helper must match its lowered baseline; a helper outside the baseline
  * may not exceed the limit; a baseline entry whose file disappeared is stale
  * and must be removed with the split.
  * @param entries - `{ path, lines }` for every helper.
@@ -269,6 +286,7 @@ export function helperSizeViolations(
     if (frozen !== undefined) {
       seen.add(path)
       if (lines > frozen) found.push({ kind: 'grown', path, lines, limit: frozen })
+      if (lines < frozen) found.push({ kind: 'shrunk', path, lines, limit: frozen })
       continue
     }
     if (lines > limit) found.push({ kind: 'new', path, lines, limit })
@@ -289,6 +307,10 @@ function checkHelperSize() {
           `${violation.path} is ${violation.lines} lines; its frozen baseline is ${violation.limit}`,
           `  fix: split it and lower the baseline in the same commit`,
         ].join('\n'),
+      )
+    } else if (violation.kind === 'shrunk') {
+      failures.push(
+        `${violation.path} shrank to ${violation.lines} lines; lower its helper-size baseline from ${violation.limit} to ${violation.lines}`,
       )
     } else if (violation.kind === 'stale') {
       failures.push(
@@ -313,7 +335,7 @@ function checkHelperSize() {
 function checkLanes() {
   for (const path of specFiles()) {
     const lane = relative(join(root, 'tests'), join(root, path)).split('/')[0]
-    const segment = lane.endsWith('.spec.ts') || lane.endsWith('.spec.tsx') ? '' : lane
+    const segment = /\.spec\.(?:[cm]?ts|tsx)$/.test(lane) ? '' : lane
     if (!SPEC_LANES.includes(segment)) {
       failures.push(
         [
@@ -336,11 +358,9 @@ function skipSpace(text, index) {
 /**
  * The index just past the balanced call whose `(` sits at `open`.
  *
- * Strings are already blanked by the scan's stripper, so a parenthesis inside
- * one is a space here. A regex literal is not stripped (see
- * {@link stripCommentsAndStrings}); a regex body with an unbalanced parenthesis
- * inside a chain would end the call early, which errs toward reporting rather
- * than hiding a focus modifier.
+ * Strings, comments and regex bodies are already blanked by the token-aware
+ * scanner, so their parentheses cannot affect this balance. Template
+ * expressions remain code and participate normally.
  */
 function afterCall(text, open) {
   let depth = 0
@@ -459,12 +479,22 @@ function checkFocus() {
 const UPSTREAM_SOURCE_IMPORT =
   /\b(?:from|import|require)\s*\(?\s*['"](@deepseek-ai\/[a-z0-9-]+\/src\/[^'"\n]+)['"]/g
 
+// This test-support package explicitly exports and publishes src. Its root also
+// loads browser-loader bundles, so its independent pure fixture uses this entry.
+const PUBLISHED_TEST_SUPPORT_ENTRIES = new Set([
+  '@deepseek-ai/dsh-client-test-runtime/src/translate.ts',
+  '@deepseek-ai/dsh-client-test-runtime/src/assembly/roster.ts',
+  '@deepseek-ai/dsh-client-test-runtime/src/assembly/test-client.ts',
+  '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts',
+])
+
 export function upstreamSourceImportsOf(source) {
   const noComments = stripCommentsAndStrings(source, false)
   const codeOnly = stripCommentsAndStrings(source)
   const found = []
   for (const match of noComments.matchAll(UPSTREAM_SOURCE_IMPORT)) {
     if (codeOnly[match.index] === ' ') continue
+    if (PUBLISHED_TEST_SUPPORT_ENTRIES.has(match[1])) continue
     found.push({
       line: noComments.slice(0, match.index).split('\n').length,
       specifier: match[1],
@@ -500,28 +530,97 @@ const NO_ARG_PRIMITIVE_MOCK = new RegExp(
  * @returns the violations.
  */
 export function wholesalePrimitiveMocksOf(source) {
-  // Comments are blanked, strings are kept: the module name is a string. A
-  // match inside a comment is dropped by the fully stripped copy, the same way
-  // {@link upstreamSourceImportsOf} separates the two readings.
-  const noComments = stripCommentsAndStrings(source, false)
-  const codeOnly = stripCommentsAndStrings(source)
-  const found = []
-  for (const pattern of [WHOLESALE_PRIMITIVE_MOCK, NO_ARG_PRIMITIVE_MOCK]) {
-    for (const match of noComments.matchAll(pattern)) {
-      if (codeOnly[match.index] === ' ') continue
-      const line = noComments.slice(0, match.index).split('\n').length
-      // The two patterns can both match one call; report the line once.
-      if (found.some((entry) => entry.line === line)) continue
-      found.push({ line, module: match[1] })
+  const nodes = sourceNodes(source)
+  const bindings = new Map()
+  const aliases = new Set(['vi', 'vitest'])
+  for (const { node } of nodes) {
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier')
+      bindings.set(node.id.name, node.init)
+    if (node.type === 'ImportDeclaration' && node.source.value === 'vitest')
+      for (const entry of node.specifiers)
+        if (['vi', 'vitest'].includes(entry.imported?.name)) aliases.add(entry.local.name)
+  }
+  const stringOf = (node, visited = new Set()) => {
+    if (node?.type === 'StringLiteral') return node.value
+    if (node?.type === 'Identifier' && !visited.has(node.name))
+      return stringOf(bindings.get(node.name), new Set([...visited, node.name]))
+    if (node?.type === 'BinaryExpression' && node.operator === '+') {
+      const left = stringOf(node.left, visited),
+        right = stringOf(node.right, visited)
+      if (left !== undefined && right !== undefined) return left + right
     }
   }
-  return found
+  const partialFactory = (factory) => {
+    if (factory?.type === 'Identifier') factory = bindings.get(factory.name)
+    if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(factory?.type)) return false
+    const importer = factory.params[0]?.name
+    if (!importer) return false
+    const originalCall = (node) => {
+      if (node?.type === 'AwaitExpression') return originalCall(node.argument)
+      return node?.type === 'CallExpression' && node.callee.name === importer
+    }
+    const originals = new Set()
+    const own = []
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (
+        node !== factory &&
+        ['ArrowFunctionExpression', 'FunctionExpression', 'FunctionDeclaration'].includes(node.type)
+      )
+        return
+      own.push(node)
+      for (const [key, value] of Object.entries(node)) {
+        if (['loc', 'comments', 'tokens'].includes(key)) continue
+        if (Array.isArray(value)) value.forEach(walk)
+        else if (value && typeof value === 'object') walk(value)
+      }
+    }
+    walk(factory)
+    for (const node of own)
+      if (
+        node.type === 'VariableDeclarator' &&
+        originalCall(node.init) &&
+        node.id.type === 'Identifier'
+      )
+        originals.add(node.id.name)
+    const preservesOriginal = (node) => {
+      if (node?.type === 'ConditionalExpression')
+        return preservesOriginal(node.consequent) && preservesOriginal(node.alternate)
+      return (
+        node?.type === 'ObjectExpression' &&
+        node.properties.some(
+          (property) =>
+            property.type === 'SpreadElement' &&
+            (originalCall(property.argument) ||
+              (property.argument.type === 'Identifier' && originals.has(property.argument.name))),
+        )
+      )
+    }
+    const results =
+      factory.body.type === 'BlockStatement'
+        ? own.filter((node) => node.type === 'ReturnStatement').map((node) => node.argument)
+        : [factory.body]
+    return results.length > 0 && results.every(preservesOriginal)
+  }
+  return nodes.flatMap(({ node }) => {
+    if (
+      node.type !== 'CallExpression' ||
+      node.callee.type !== 'MemberExpression' ||
+      !aliases.has(node.callee.object?.name)
+    )
+      return []
+    const method = node.callee.computed ? node.callee.property.value : node.callee.property.name
+    if (!['mock', 'doMock'].includes(method)) return []
+    const name = stringOf(node.arguments[0])
+    if (name !== '@deepseek-ai/dsh-client-ui-primitives') return []
+    return partialFactory(node.arguments[1]) ? [] : [{ line: node.loc.start.line, module: name }]
+  })
 }
 
 /** No client spec may replace the host primitives bundle wholesale. */
 function checkPrimitiveMocks() {
   for (const path of filesUnder(join(root, 'tests', 'client'))) {
-    if (!/\.spec\.tsx?$/.test(path)) continue
+    if (!/\.spec\.(?:[cm]?ts|tsx)$/.test(path)) continue
     const source = readFileSync(path, 'utf8')
     for (const violation of wholesalePrimitiveMocksOf(source)) {
       failures.push(
@@ -572,48 +671,72 @@ function checkUpstreamSourceImports() {
  * @returns one formatted violation per offending line.
  */
 export function fetchOwnershipIssuesOf(rel, source) {
-  const undiciOwner = 'src/transport/connections.ts'
-  // The runtime fetch is legitimate only where no dispatcher rides along.
-  const runtimeFetchAllowed = new Set([
-    undiciOwner, // owns the seam, including the `typeof globalThis.fetch` alias
-    'src/http-client.ts', // loopback Local API reads
-    'src/write-http.ts', // loopback Local API writes
-  ])
-  const undiciImport = /from\s+'undici'|import\(\s*'undici'\s*\)/
-  const runtimeFetchUse = /globalThis\.fetch|(?<![\w.])fetch\s*\(/
-  const commentLine = /^\s*(?:\*|\/\/|\/\*)/
+  const owner = 'src/transport/connections.ts'
+  const allowed = new Set([owner, 'src/http-client.ts', 'src/write-http.ts'])
   const issues = []
-  for (const [index, line] of source.split('\n').entries()) {
-    const lineNo = index + 1
+  const seen = new Set()
+  const add = (node, message) => {
+    const line = node.loc.start.line
+    const key = `${line}:${message}`
+    if (seen.has(key)) return
+    seen.add(key)
+    issues.push(`${rel}:${line} ${message} — use the publicFetch seam from ${owner}`)
+  }
+  for (const { node, parent } of sourceNodes(source)) {
     if (rel.startsWith('src/')) {
-      if (commentLine.test(line)) continue
-      if (undiciImport.test(line) && rel !== undiciOwner) {
-        issues.push(
-          [
-            `${rel}:${lineNo} imports undici`,
-            `  fix: import publicFetch from ${undiciOwner}; a second undici copy rejects the pinned dispatchers`,
-          ].join('\n'),
+      if (node.type === 'ImportDeclaration' && node.source.value === 'undici' && rel !== owner)
+        add(node, 'imports undici')
+      if (
+        node.type === 'CallExpression' &&
+        node.callee.type === 'Import' &&
+        node.arguments[0]?.value === 'undici' &&
+        rel !== owner
+      )
+        add(node, 'imports undici')
+      if (rel.startsWith('src/client/') || allowed.has(rel)) continue
+      if (
+        node.type === 'VariableDeclarator' &&
+        node.id.type === 'ObjectPattern' &&
+        ['window', 'globalThis', 'self'].includes(node.init?.name) &&
+        node.id.properties.some(
+          (property) => (property.key?.name ?? property.key?.value) === 'fetch',
         )
-      }
-      if (rel === undiciOwner || rel.startsWith('src/client/')) continue
-      if (runtimeFetchAllowed.has(rel)) continue
-      if (runtimeFetchUse.test(line)) {
-        issues.push(
-          [
-            `${rel}:${lineNo} uses the runtime fetch`,
-            `  fix: external transports inject publicFetch from ${undiciOwner}; the global fetch ships another undici copy`,
-          ].join('\n'),
+      )
+        add(node, 'uses the runtime fetch')
+      if (node.type === 'Identifier' && node.name === 'fetch') {
+        if (
+          parent?.type?.startsWith('TS') ||
+          (['MemberExpression', 'OptionalMemberExpression'].includes(parent?.type) &&
+            parent.property === node &&
+            !parent.computed) ||
+          (parent?.type === 'ObjectProperty' && parent.key === node && !parent.shorthand) ||
+          ['ImportSpecifier', 'ImportDefaultSpecifier'].includes(parent?.type)
         )
+          continue
+        add(node, 'uses the runtime fetch')
       }
+      if (
+        ['MemberExpression', 'OptionalMemberExpression'].includes(node.type) &&
+        ['window', 'globalThis', 'self'].includes(node.object?.name) &&
+        (node.computed ? node.property.value : node.property.name) === 'fetch'
+      )
+        add(node, 'uses the runtime fetch')
     } else if (rel.startsWith('tests/scholarly/')) {
-      if (/vi\.stubGlobal\(\s*'fetch'|globalThis\.fetch\s*=/.test(line)) {
-        issues.push(
-          [
-            `${rel}:${lineNo} stubs the runtime fetch`,
-            `  fix: mock ${undiciOwner}'s publicFetch export instead; the composition never uses the global`,
-          ].join('\n'),
-        )
-      }
+      if (
+        node.type === 'CallExpression' &&
+        node.callee.type === 'MemberExpression' &&
+        ['vi', 'vitest'].includes(node.callee.object?.name) &&
+        ['stubGlobal', 'spyOn'].includes(node.callee.property?.name) &&
+        node.arguments.some((arg) => arg.value === 'fetch')
+      )
+        add(node, 'stubs the runtime fetch')
+      if (
+        node.type === 'AssignmentExpression' &&
+        node.left.type === 'MemberExpression' &&
+        ['window', 'globalThis', 'self'].includes(node.left.object?.name) &&
+        (node.left.computed ? node.left.property.value : node.left.property.name) === 'fetch'
+      )
+        add(node, 'stubs the runtime fetch')
     }
   }
   return issues
@@ -641,6 +764,13 @@ if (invokedDirectly) {
   checkUpstreamSourceImports()
   checkFetchOwnership()
   checkPrimitiveMocks()
+  failures.push(
+    ...fakeIpPolicyIssues(
+      filesUnder(join(root, 'src'))
+        .filter((path) => /\.(?:ts|tsx)$/.test(path))
+        .map((path) => [relative(root, path).replaceAll('\\', '/'), readFileSync(path, 'utf8')]),
+    ),
+  )
 
   if (failures.length > 0) {
     process.stderr.write(`test-lint: ${failures.length} problem(s)\n\n`)

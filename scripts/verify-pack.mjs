@@ -1,3 +1,4 @@
+import { declarationDependencyProblems } from './published-declarations.mjs'
 import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
 import { assertBuildFresh } from './build-state.mjs'
 /**
@@ -351,6 +352,15 @@ function verifyPack() {
   }
   const files = new Set((entry?.files ?? []).map((file) => packed(file.path)))
 
+  const declarations = [...files]
+    .filter((path) => path.endsWith('.d.ts'))
+    .map((path) => ({ path, source: readFileSync(resolve(root, path), 'utf8') }))
+  const declarationProblems = declarationDependencyProblems(declarations, manifest)
+  if (declarationProblems.length > 0) {
+    for (const problem of declarationProblems) console.error(`verify-pack: ${problem}`)
+    process.exitCode = 1
+    return
+  }
   const missing = expected.filter((path) => !files.has(path))
   if (missing.length > 0) {
     console.error(

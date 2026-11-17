@@ -5,13 +5,19 @@ import { chromium } from 'playwright'
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { resolve, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { pinThemeSheets, pinnedHarness } from './style-tokens.mjs'
+import { clientTestAliasesOf } from './client-test-platform.mjs'
 
-const root = resolve(new URL('..', import.meta.url).pathname)
+const root = fileURLToPath(new URL('..', import.meta.url))
 const output = process.argv[2] ?? '/tmp/dsh-zotero-parsed-ui'
 mkdirSync(output, { recursive: true })
+const aliases = clientTestAliasesOf(root)
 const css = {
   name: 'inline-css',
   setup(build) {
+    for (const { find, replacement } of aliases)
+      build.onResolve({ filter: find }, () => ({ path: replacement }))
     build.onLoad({ filter: /dsh-client-ui-primitives[\/]lib[\/]index\.js$/ }, (args) => ({
       contents: readFileSync(args.path, 'utf8').replace(
         'function parseGfmWithMath(text) {',
@@ -49,8 +55,29 @@ import {PdfPickerDialog} from './src/client/components/PdfPickerDialog.tsx';
 import {ParseDocumentDialog} from './src/client/enrichment/ParseDocumentDialog.tsx';
 import {ParsedDocumentTab} from './src/client/components/library/ParsedDocumentTab.tsx';
 import {ParsedDocuments} from './src/client/parsed-documents.ts';
+import {Context} from '@deepseek-ai/cordis';
+import * as renderer from '@deepseek-ai/dsh-client-ui-renderer/client';
+import * as menu from '@deepseek-ai/dsh-client-ui-context-menu/client';
+import * as uiSession from '@deepseek-ai/dsh-client-ui-session/client';
+import {createSnapshotStore} from '@deepseek-ai/dsh-client-store';
+import {LibraryItemList} from './src/client/components/library/LibraryItemList.tsx';
+import {LibraryPreferencesContext} from './src/client/library-preferences.tsx';
+import {LIBRARY_DEFAULTS} from './src/library-preferences.ts';
 import {ARTIFACT_READER_DEFAULTS} from './src/artifact-reader-preferences.ts';
 import {en,zh} from './src/client/locales.ts';
+import {parseEn,parseZh} from './src/client/enrichment/parse-locales.ts';
+window.fixtureReady=(async()=>{
+const ctx=new Context();renderer.apply(ctx);
+ctx.provide('sessions',{list:createSnapshotStore({phase:'ready',ids:[],byId:{}})});
+const remoteListeners=new Map();ctx.provide('remote',{$on:(name,listener)=>{remoteListeners.set(name,listener);return()=>remoteListeners.delete(name)}});
+ctx.provide('remoteAccess',{source:()=>{throw Error('Unexpected session access in an absent-session overlay')}});
+uiSession.apply(ctx);
+const dictionaries=new Map();
+ctx.provide('locale',{register:(name,value)=>{dictionaries.set(name,value);return()=>dictionaries.delete(name)},bind:name=>key=>dictionaries.get(name)?.en?.[key]??key});
+ctx.provide('shortcuts',{catalog:createSnapshotStore([])});
+ctx.slots.installLocale({...createSnapshotStore({revision:0}),bind:name=>key=>dictionaries.get(name)?.en?.[key]??key});
+ctx.slots.register({name:'root',children:{'shell.overlay':{kind:'list',scope:'root'}}},props=>props.renderSlot('shell.overlay',{}));
+await ctx.plugin(menu,{});
 const source=value=>{const listeners=new Set();return {getSnapshot:()=>value,subscribe:f=>{listeners.add(f);return()=>listeners.delete(f)},publish:v=>{value=v;for(const f of listeners)f()}}};
 const access=source(true), snapshot=source({status:'loading'});
 const sessionId='fixture',ref='zotero://user/0/attachment/PDF00001';
@@ -66,14 +93,20 @@ return {ok:true,value:{kind:'opened',lease,artifactId,sourceId:'a'.repeat(64),fi
 const documents=new ParsedDocuments(read,()=>access,console.error); const stop=new AbortController();
 (async()=>{for await(const frame of documents.open(address,{signal:stop.signal})){snapshot.publish(frame.ok?{status:'live',value:frame.value}:{status:'failed',failure:frame.error,value:snapshot.getSnapshot().value})}})();
 let root=createRoot(document.getElementById('app'));
-const tFor=locale=>(key,args={})=>(locale==='zh'?zh:en)[key]?.replace(/\\{(\\w+)\\}/g,(_,key)=>String(args[key]??''))??key;
+const tFor=locale=>(key,args={})=>(locale==='zh'?{...zh,...parseZh}:{...en,...parseEn})[key]?.replace(/\\{(\\w+)\\}/g,(_,key)=>String(args[key]??''))??key;
 window.showFixture=(mode,locale='en')=>{const t=tFor(locale);let component;
-if(mode==='picker')component=<PdfPickerDialog open onClose={()=>{}} title="Choose a PDF with a long paper title" t={t} options={Array.from({length:40},(_,i)=>({key:String(i),title:'Attachment '+i+' with a long title that should truncate.pdf',action:'Read PDF',onSelect:()=>{window.chosen=i}}))}/>;
-else if(mode==='parse')component=<ParseDocumentDialog open selection={{sessionId,target:{kind:'attachment',ref},label:'A long selected attachment.pdf'}} remote={{documentArtifact:async()=>({ok:true,value:{kind:'missing'}}),startDocumentParse:async()=>{throw Error('No upload from UI fixture')},documentParseReceipt:async()=>({ok:true,value:{kind:'missing'}})}} capabilities={source({mounted:true,connected:true,mode:'free',revision:'1',maxFileBytes:10485760,maxPages:20,startAllowed:true,readAllowed:true,cancelAllowed:true,sessionAllowed:true})} onClose={()=>{}} locale={locale}/>;
-else component=<ParsedDocumentTab t={t} sessionId={sessionId} refresh={value=>documents.refresh(value)} useResource={()=>useSyncExternalStore(snapshot.subscribe,snapshot.getSnapshot)} useAccess={()=>true} useSession={select=>select({removed:false})} useTabInfo={()=>({tab:{navigation:{address,params:{title:'Paper with a sufficiently long title to exercise the narrow toolbar'}},actions:{bindCommands:()=>()=>{}}}})} inputActions={{insertQuote:text=>{window.inserted.push(text);return true},persistDraft:()=>{}}}/>;
-root.render(component)};
+if(mode.startsWith('list')){
+const density=mode.includes('Compact')?'compact':'comfortable',titleLines=mode.endsWith('1')?1:2;
+const items=[0,1,2].map((i)=>({ref:'zotero://user/0/item/PAPER00'+i,title:i===2?'':('A long literature title with detailed research findings and methodological evidence '.repeat(3)),itemType:'journalArticle',creatorSummary:'Researcher A; Researcher B',year:2026,venue:'Journal of detailed experimental evidence',bestAttachmentType:'application/pdf',bestAttachmentRef:ref}));
+component=<LibraryPreferencesContext.Provider value={{preferences:{...LIBRARY_DEFAULTS,listDensity:density,titleLines}}}><LibraryItemList t={t} list={{phase:'ready',items,total:3,offset:0,limit:20}} selection={{kind:'library'}} offset={0} gotoOffset={()=>{throw Error('Unexpected page')}} selectedRef={items[0].ref} selectItem={value=>window.selected=value} retry={()=>{throw Error('Unexpected retry')}} parsedArtifact={{sessionId,read:async()=>({ok:true,value:{kind:'probed',results:[{ref,state:'ready'}]}})}}/></LibraryPreferencesContext.Provider>;
+}
+else if(mode==='picker')component=<PdfPickerDialog open onClose={()=>{}} title="Choose a PDF with a long paper title" t={t} options={Array.from({length:40},(_,i)=>({key:String(i),title:'Attachment '+i+' with a long title that should truncate.pdf',action:'Read PDF',onSelect:()=>{window.chosen=i}}))}/>;
+else if(mode==='parse')component=<ParseDocumentDialog open selection={{sessionId,target:{kind:'attachment',ref},label:'A long selected attachment.pdf'}} remote={{documentArtifact:async()=>({ok:true,value:{kind:'missing'}}),startDocumentParse:async()=>{throw Error('No upload from UI fixture')},documentParseReceipt:async()=>({ok:true,value:{kind:'missing'}})}} capabilities={source({mounted:true,connected:true,mode:'free',revision:'1',maxFileBytes:10485760,maxPages:20,startAllowed:true,readAllowed:true,cancelAllowed:true,sessionAllowed:true})} onClose={()=>{}} t={t}/>;
+else component=<ParsedDocumentTab contextMenus={ctx.contextMenus} t={t} sessionId={sessionId} refresh={value=>documents.refresh(value)} useResource={()=>useSyncExternalStore(snapshot.subscribe,snapshot.getSnapshot)} useAccess={()=>true} useSession={select=>select({removed:false})} useTabInfo={()=>({tab:{navigation:{address,params:{title:'Paper with a sufficiently long title to exercise the narrow toolbar'}},actions:{bindCommands:()=>()=>{}}}})} inputActions={{insertQuote:text=>{window.inserted.push(text);return true},persistDraft:()=>{}}}/>;
+root.render(<>{component}{ctx.slots.renderSlot('root',{})}</>)};
 window.changeGeneration=()=>{generation++;documents.refresh(address)};window.failRefresh=()=>{fail=true;documents.refresh(address)};
 window.showFixture('picker');
+})();
 `,
   },
   bundle: true,
@@ -85,14 +118,15 @@ window.showFixture('picker');
   define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{"MODE":"production"}' },
   loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' },
 })
-const themeDir = 'packages/client/ui-theme/src/styles'
+const pin = pinnedHarness(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')))
+if (!pin) throw new Error('No pinned harness theme for the browser fixture')
 const harness = resolve(root, '../deepseek-harness')
-const run = (args) => execFileSync('git', ['-C', harness, ...args], { encoding: 'utf8' })
-const sheets = run(['ls-tree', '--name-only', `dsh-v0.2.2-rc.2:${themeDir}`])
-  .trim()
-  .split('\n')
-  .filter((name) => name.endsWith('.css'))
-const theme = sheets.map((name) => run(['show', `dsh-v0.2.2-rc.2:${themeDir}/${name}`])).join('\n')
+const sheets = pinThemeSheets(
+  (args) => execFileSync('git', args, { encoding: 'utf8' }),
+  harness,
+  pin,
+)
+const theme = sheets.files.map(sheets.read).join('\n')
 const browser = await chromium.launch({ headless: true })
 const results = []
 try {
@@ -107,9 +141,10 @@ try {
   await page.addStyleTag({
     content:
       theme +
-      '\nbody{margin:0;font-family:var(--dsw-font-family);--dsh-content-font-size:14px;--dsh-ui-font-size:13px}#app{height:100vh} ',
+      '\nbody{margin:0;font-family:var(--dsw-font-family);--dsh-content-font-size:14px;--dsh-ui-font-size:13px}#app{height:100vh;display:flex;flex-direction:column} ',
   })
   await page.addScriptTag({ content: bundle.outputFiles[0].text })
+  await page.evaluate(() => window.fixtureReady)
   for (const dark of [false, true]) {
     await page.evaluate((dark) => document.body.toggleAttribute('data-ds-dark-theme', dark), dark)
     for (const size of [
@@ -117,9 +152,35 @@ try {
       { width: 800, height: 600 },
     ]) {
       await page.setViewportSize(size)
-      for (const mode of ['picker', 'parse', 'document']) {
+      for (const mode of [
+        'picker',
+        'parse',
+        'document',
+        'listComfortable1',
+        'listCompact1',
+        'listComfortable2',
+        'listCompact2',
+      ]) {
         await page.evaluate((mode) => window.showFixture(mode, 'zh'), mode)
-        if (mode !== 'document') await page.getByRole('dialog').waitFor()
+        if (mode.startsWith('list')) {
+          await page.locator('button[aria-current=true]').waitFor()
+          await page.getByText('MD', { exact: true }).first().waitFor()
+        } else if (mode !== 'document')
+          await page
+            .getByRole('dialog')
+            .waitFor()
+            .catch(async (error) => {
+              writeFileSync(
+                join(output, 'failure.json'),
+                JSON.stringify(
+                  { mode, errors, body: await page.locator('body').innerText() },
+                  null,
+                  2,
+                ),
+              )
+              await page.screenshot({ path: join(output, 'failure.png') })
+              throw error
+            })
         else
           await page
             .getByRole('heading', { name: 'Generation 1', exact: true })
@@ -130,7 +191,9 @@ try {
             })
         const layout = await page.evaluate((mode) => {
           const rect = document
-            .querySelector(mode === 'document' ? 'section' : '[role=dialog]')
+            .querySelector(
+              mode === 'document' || mode.startsWith('list') ? 'section' : '[role=dialog]',
+            )
             .getBoundingClientRect()
           return {
             x: rect.x,
@@ -152,6 +215,32 @@ try {
           if ((await page.evaluate(() => window.chosen)) !== 39)
             throw new Error('Last PDF choice inaccessible')
         }
+        if (mode.startsWith('list')) {
+          const rows = await page.locator('li > button').evaluateAll((buttons) =>
+            buttons.map((button) => {
+              const box = button.getBoundingClientRect()
+              const content = button.firstElementChild.getBoundingClientRect()
+              return {
+                height: box.height,
+                contentHeight: content.height,
+                clipped: content.top < box.top || content.bottom > box.bottom,
+                label: button.textContent,
+              }
+            }),
+          )
+          if (rows.length !== 3 || rows.some((row) => row.clipped || row.height < 28 || !row.label))
+            throw new Error(`Library content was clipped or unlabeled: ${JSON.stringify(rows)}`)
+          const last = page.locator('li > button').last()
+          await last.scrollIntoViewIfNeeded()
+          await last.click()
+          if ((await page.evaluate(() => window.selected)) !== 'zotero://user/0/item/PAPER002')
+            throw new Error('Last literature row was not reachable')
+          await page.locator('button[aria-current=true]').scrollIntoViewIfNeeded()
+          await page.locator('button[aria-current=true]').click()
+          if ((await page.evaluate(() => window.selected)) !== undefined)
+            throw new Error('Selected literature row did not deselect')
+          layout.rows = rows
+        }
         results.push({ dark, mode, ...size, layout })
         await page.screenshot({
           animations: 'disabled',
@@ -160,6 +249,8 @@ try {
       }
     }
   }
+  await page.evaluate(() => window.showFixture('document', 'zh'))
+  await page.getByRole('heading', { name: 'Generation 1', exact: true }).waitFor()
   await page.evaluate(() => {
     const range = document.createRange()
     range.selectNodeContents(

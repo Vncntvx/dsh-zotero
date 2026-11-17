@@ -13,6 +13,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   createClientAuthorityPlugin,
+  CLIENT_EXTERNALS,
+  clientPlatformProblems,
+  clientMirrorProblems,
   clientGraphViolations,
   GENERATED_REMOTE,
   INLINE_SAFE,
@@ -22,6 +25,31 @@ import {
 import { pinnedHarness } from '../../../scripts/style-tokens.mjs'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+
+describe('pinned browser platform', () => {
+  it('accepts every external only when the host loader actually declares it', () => {
+    const source = `export const PLATFORM_MODULES=${JSON.stringify(CLIENT_EXTERNALS)} as const`
+    expect(clientPlatformProblems(source)).toEqual([])
+    for (const missing of CLIENT_EXTERNALS) {
+      const changed = `export const PLATFORM_MODULES=${JSON.stringify(CLIENT_EXTERNALS.filter((name) => name !== missing))} as const`
+      expect(clientPlatformProblems(changed)).toEqual([
+        `Client external ${missing} is absent from the pinned host PLATFORM_MODULES`,
+      ])
+    }
+  })
+
+  it('does not accept names present only in a comment or fixture string', () => {
+    expect(
+      clientPlatformProblems(
+        `// export const PLATFORM_MODULES=['react']\nconst fixture="export const PLATFORM_MODULES=['react']"`,
+        ['react'],
+      ),
+    ).toHaveLength(1)
+    expect(
+      clientPlatformProblems('export const PLATFORM_MODULES=[...dynamic]', ['react']),
+    ).toHaveLength(1)
+  })
+})
 
 function metafileOf(paths: readonly string[]) {
   const inputs: Record<string, { bytes: number }> = {}
@@ -63,7 +91,7 @@ describe('client graph authority', () => {
     const violations = clientGraphViolations(
       metafileOf([
         'src/client/index.ts',
-        'src/client/status-codec.ts',
+        'src/wire-schemas.ts',
         'src/contract.ts',
         'src/settings-namespace.ts',
         'src/json.ts',
@@ -141,12 +169,12 @@ describe('client graph authority', () => {
 
   it('rejects host-local modules even without zod path comments', () => {
     const violations = clientGraphViolations(
-      metafileOf(['src/status-codec.ts', 'src/typert.ts', 'src/remote.ts', 'src/service.ts']),
+      metafileOf(['src/config.ts', 'src/typert.ts', 'src/remote.ts', 'src/service.ts']),
     )
     expect(violations.map((entry) => entry.key).sort()).toEqual([
+      'src/config.ts',
       'src/remote.ts',
       'src/service.ts',
-      'src/status-codec.ts',
       'src/typert.ts',
     ])
     expect(violations.every((entry) => entry.kind === 'host-local')).toBe(true)
@@ -183,12 +211,12 @@ describe('client graph authority', () => {
     expect(violations[0]!.key).toContain('node_modules/@deepseek-ai/schemastery')
   })
 
-  it('rejects a client graph that value-imports the host status codec', async () => {
+  it('rejects a client graph that value-imports the host manifest', async () => {
     await expect(
       authorityBuild(
-        `import { ZOTERO_INVOCATIONS } from '../status-codec.ts'\nexport default { apply() {}, inject: [], invocations: ZOTERO_INVOCATIONS }\n`,
+        `import { TYPERT_MANIFEST } from '../typert.ts'\nexport default { apply() {}, inject: [], invocations: TYPERT_MANIFEST.invocations }\n`,
       ),
-    ).rejects.toThrow(/status-codec|host-local|client graph/i)
+    ).rejects.toThrow(/host-local|client graph/i)
   })
 
   it('allows the shared wire-schemas module and still rejects other host-local files', () => {
@@ -246,7 +274,7 @@ describe('client graph authority', () => {
   })
 })
 
-describe('harness inline-safe table (dsh-v0.2.2-rc.2)', () => {
+describe('harness inline-safe table (dsh-v0.2.2-rc.3)', () => {
   it('accepts the pinned package names and rejects the retired agent-presets arm', () => {
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-preset-registry/display')).toBe(true)
     expect(isInlineSafeHarness('@deepseek-ai/dsh-agent-presets/display')).toBe(false)
@@ -307,15 +335,25 @@ describe('the mirror matches the pin tag snapshot', () => {
     // the extraction command.
     const fixture = JSON.parse(
       readFileSync(join(repoRoot, 'tests/fixtures/harness-client-graph-pin.json'), 'utf8'),
-    ) as { pin: string; inlineSafe: string; generatedRemote: string; vendoredLibrary: string }
+    ) as {
+      pin: string
+      inlineSafe: { source: string; flags: string }
+      generatedRemote: { source: string; flags: string }
+      vendoredLibrary: { source: string; flags: string }
+    }
     const hint = `re-extract with: git -C ../deepseek-harness show ${fixture.pin}:packages/client/tsdown.client.ts`
-    expect(INLINE_SAFE.source, `INLINE_SAFE vs ${fixture.pin}: ${hint}`).toBe(fixture.inlineSafe)
-    expect(GENERATED_REMOTE.source, `GENERATED_REMOTE vs ${fixture.pin}: ${hint}`).toBe(
-      fixture.generatedRemote,
-    )
-    expect(VENDORED_LIBRARY.source, `VENDORED_LIBRARY vs ${fixture.pin}: ${hint}`).toBe(
-      fixture.vendoredLibrary,
-    )
+    expect(
+      { source: INLINE_SAFE.source, flags: INLINE_SAFE.flags },
+      `INLINE_SAFE vs ${fixture.pin}: ${hint}`,
+    ).toEqual(fixture.inlineSafe)
+    expect(
+      { source: GENERATED_REMOTE.source, flags: GENERATED_REMOTE.flags },
+      `GENERATED_REMOTE vs ${fixture.pin}: ${hint}`,
+    ).toEqual(fixture.generatedRemote)
+    expect(
+      { source: VENDORED_LIBRARY.source, flags: VENDORED_LIBRARY.flags },
+      `VENDORED_LIBRARY vs ${fixture.pin}: ${hint}`,
+    ).toEqual(fixture.vendoredLibrary)
   })
 
   it('names the pin this repository actually declares', () => {
@@ -327,5 +365,22 @@ describe('the mirror matches the pin tag snapshot', () => {
     ) as { pin: string }
     const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
     expect(fixture.pin).toBe(`dsh-v${pinnedHarness(manifest)}`)
+  })
+})
+
+describe('immutable regex semantics', () => {
+  const source = (flags = '') => `
+    const INLINE_SAFE = /${INLINE_SAFE.source}/${flags}
+    const GENERATED_REMOTE = /${GENERATED_REMOTE.source}/${GENERATED_REMOTE.flags}
+    const VENDORED_LIBRARY = /${VENDORED_LIBRARY.source}/${VENDORED_LIBRARY.flags}
+  `
+  it('accepts the exact patterns and flags', () => {
+    expect(clientMirrorProblems(source())).toEqual([])
+  })
+  it('rejects flag-only drift even when the pattern is identical', () => {
+    expect(clientMirrorProblems(source('i'))).toEqual([expect.stringContaining('INLINE_SAFE')])
+  })
+  it('rejects absent or dynamic declarations explicitly', () => {
+    expect(clientMirrorProblems('const INLINE_SAFE = new RegExp("dynamic")')).toHaveLength(3)
   })
 })

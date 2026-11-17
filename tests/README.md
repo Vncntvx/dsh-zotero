@@ -14,11 +14,13 @@ a rule does not become optional because lint cannot check it yet.
 | -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tests/unit/`        | `src/*.ts`, tooling   | pure modules: refs, normalize, search-text, evidence, attachments, export mapping, presentation meta, config, errors; build, pack, and test guard contracts belong under `unit/tooling/`                                                                                                    |
 | `tests/local/`       | `src/local/`          | the provider contract against the mocked Local API, one file per mechanism (search, the note scan, retrieve sources/ranking/notes/tolerance, browse, changes, get, export, identity, the scope directory) plus the write domain (notes, tags, membership, collections, items, library tags) |
-| `tests/tools/`       | `src/tools/`          | a file per tool that carries its own behaviour (the write tools share `write-tools`, `write-presentation`, `write-item-presentation`, and `write-approval-policy`), plus `validation`, `presentation`, `registry-integration`                                                               |
+| `tests/tools/`       | `src/tools/`          | a file per tool that carries its own behaviour (the write tools share `write-tools`, `write-presentation`, `write-item-presentation`, and `write-approval-policy`; `update-note` also covers collection updates), plus `validation`, `presentation`, `registry-integration`                 |
 | `tests/host/`        | the composition seams | lifecycle, composition, settings, remote, entry, provider gate, concurrency, doc examples, the HTTP client, and the write seams (auth, gate, HTTP, shell-write approval, prompt policy)                                                                                                     |
 | `tests/client/`      | `src/client/`         | the browser half, including one file per render surface                                                                                                                                                                                                                                     |
 | `tests/scholarly/`   | `src/scholarly/`      | the external scholarly literature search, fusion ranking, fulltext retrieval, and citation verification subsystem                                                                                                                                                                           |
 | `tests/integration/` | live Zotero           | opt-in: `npm run test:integration` sets `ZOTERO_INTEGRATION=1` and runs the read spec only. The write probe needs `ZOTERO_WRITE_PROBE=1` as well and is not part of that script. The only place a real library answers                                                                      |
+
+Scripted scholarly hosts used across lanes live in `tests/helpers/scholarly-runtime.ts`; retrieve payloads and fulltext hits live in `tests/helpers/retrieve-fixtures.ts`. Specs must not import another lane's runtime fixtures.
 
 Cross-cutting behaviour goes in the lane of the module it belongs to, as a
 file named for the behaviour (`presentation.spec.ts`, `validation.spec.ts`),
@@ -43,7 +45,7 @@ never in a file named after a number or a function.
   completeness, and fusion contracts in their own modules rather than mixing
   them into files spanning every adapter's parsing and requests.
 - Library tests retain their ownership across lanes: pure view mapping under
-  `unit/library/`, host composition and write entry under `host/library/`, and
+  `unit/library-views.spec.ts`, host composition and write entry under `host/library/`, and
   browser behaviour under `client/library/`. Do not duplicate a suite to make
   a feature appear under one directory.
 - Enrichment tests keep their ownership across the existing lanes rather than
@@ -368,19 +370,22 @@ mechanical rules; each one exists because this repository hit it:
   someone decided it should be;
 - helpers and module support modules (`tests/**/helpers/`, `tests/**/support/`)
   stay at or below 300 lines; files over the limit are frozen in a
-  path-specific baseline that only shrinks, and new files may never enter it;
+  path-specific baseline that must equal its current measured line count: shrink it in the same change that shrinks a helper; new files may never enter it;
 - no `src/**` or `tests/**` import may reach into an upstream
   `@deepseek-ai/*` package's private source subtree. Those packages advertise
   a `./src/*` export but ship only `lib/**` and `locale/*.json`, so such an
   import resolves against a sibling checkout and breaks both typecheck and
-  Vite resolution in the registry-only client lane CI runs. Only import
+  Vite resolution in the registry-only client lane CI runs. The explicitly published `dsh-client-test-runtime/src/translate.ts` fixture is the one checked exception. Only import
   syntax is scanned: the `/src/` string fixtures in the artifact-audit spec
   and in the guard's own positive/negative cases, plus commented-out
   examples, are not dependencies.
 - fetch ownership stays with `src/transport/connections.ts`: no second undici
   import site, no runtime `fetch` on an external-egress path, and no global
-  `fetch` stub. Specs stub the seam or use `importOriginal`, so the pinned
-  dispatcher and the production `publicFetch` stay the exercised code;
+  `fetch` stub on those paths. Browser-platform tests may stub global `fetch`
+  through their platform seam and restore it after each test. Loopback failure
+  injection remains owned by the Local API client. External-egress specs stub
+  the connection seam or use `importOriginal`, keeping the pinned dispatcher
+  and production `publicFetch` exercised;
 - no wholesale client-primitives mock. A spec imports the real
   `@deepseek-ai/dsh-client-ui-primitives` (or a narrow `importOriginal`
   partial); replacing the module hides primitive regressions the client lane
@@ -449,3 +454,10 @@ sole merge gate, and scheduled or live checks never substitute for it.
 - No spec written to reach a branch. If a branch is unreachable, say so in the
   code; if it is reachable but untested, that is a finding to report, not a
   test to add in a hurry.
+
+The live read lane requires a populated fixture library: ordinary items, two
+parent-owned PDF attachments, annotations, tags, collections, a searchable
+child note under a collected parent, saved searches, versioned child objects,
+and a readable group library. An unavailable prerequisite fails with its setup
+reason. The lane never creates data and never records an unexercised branch as
+a passing check.

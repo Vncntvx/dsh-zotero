@@ -15,16 +15,11 @@ export function assertReleaseSource({ actualSha, expectedSha, status }) {
 export function assertReleaseTarget({ branch, remote, remoteUrl }) {
   if (branch !== 'release' || remote !== 'origin')
     throw new Error('[release-branch] Only origin refs/heads/release is a release target')
-  const normalized = (remoteUrl ?? '')
-    .trim()
-    .replace(/\.git$/, '')
-    .replace(/\/$/, '')
   if (
     ![
-      'https://github.com/Vncntvx/dsh-zotero',
-      'git@github.com:Vncntvx/dsh-zotero',
-      'ssh://git@github.com/Vncntvx/dsh-zotero',
-    ].includes(normalized)
+      'https://github.com/Vncntvx/dsh-zotero.git',
+      'git@github.com:Vncntvx/dsh-zotero.git',
+    ].includes(remoteUrl)
   )
     throw new Error('[release-branch] The release remote is not the trusted project repository')
 }

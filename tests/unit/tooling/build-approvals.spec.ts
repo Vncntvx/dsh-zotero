@@ -10,8 +10,9 @@
  * approval no longer has anything to run.
  *
  * Scope: the repository's own declaration surface — the lockfile's production
- * tree. A consumer resolving wider semver ranges can differ; the discovery
- * smoke covers that end to end.
+ * tree. Direct runtime versions are exact. Consumer transitive resolution can still
+ * differ; release validation proves the checked closure, while the host applies
+ * its install policy again when resolving a new installation.
  * @module tests/unit/build-approvals
  */
 
@@ -38,6 +39,16 @@ function declaredBuildScripts(): string[] {
     s.slice(0, s.lastIndexOf('@')),
   )
 }
+
+it('pins every direct runtime dependency to the actually checked version', () => {
+  const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+  expect(
+    Object.entries(manifest.dependencies).filter(
+      ([, value]) =>
+        typeof value !== 'string' || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(value),
+    ),
+  ).toEqual([])
+})
 
 describe('the profile build approvals', () => {
   it('keeps the production dependency tree free of install scripts', () => {

@@ -1,0 +1,63 @@
+{
+  "declined": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Declined: the user answered the plan without approving. Nothing was written."
+      }
+    ],
+    "meta": {
+      "kind": "declined"
+    }
+  },
+  "commit-unknown": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Zotero may have created the item (key NOTE0001; ref zotero://user/0/item/NOTE0001?server=srv-save; version 12; server srv-save), but the response did not prove the outcome. Do not retry; reconcile the item by its key/ref."
+      }
+    ],
+    "meta": {
+      "kind": "committed-unverified",
+      "committed": true,
+      "retryable": false,
+      "reason": "commit-unknown",
+      "key": "NOTE0001",
+      "ref": "zotero://user/0/item/NOTE0001?server=srv-save",
+      "version": 12,
+      "serverId": "srv-save"
+    }
+  },
+  "saved-state-unverified": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Zotero created the item (key NOTE0001; ref zotero://user/0/item/NOTE0001?server=srv-save; version 12; server srv-save), but its saved state could not be verified. Do not retry; reconcile the item by its key/ref."
+      }
+    ],
+    "meta": {
+      "kind": "committed-unverified",
+      "committed": true,
+      "retryable": false,
+      "reason": "saved-state-unverified",
+      "key": "NOTE0001",
+      "ref": "zotero://user/0/item/NOTE0001?server=srv-save",
+      "version": 12,
+      "serverId": "srv-save"
+    }
+  },
+  "applied": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Saved scholarly result to Zotero as zotero://user/0/item/NOTE0001?server=srv-save (key NOTE0001; version 12).\nTitle: A study\nTags: (none)\nCollections: (none)\nLibrary version: 12 (served by srv-save)"
+      }
+    ],
+    "meta": {
+      "kind": "applied",
+      "ref": "zotero://user/0/item/NOTE0001?server=srv-save",
+      "key": "NOTE0001",
+      "version": 12
+    }
+  }
+}

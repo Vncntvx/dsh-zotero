@@ -15,21 +15,8 @@
  * @module scripts/shared/build-approvals
  */
 
-/** Hooks pnpm treats as a build script; `prepare` belongs to source installs. */
-const INSTALL_HOOKS = ['preinstall', 'install', 'postinstall']
-
 /** Every install script this plugin's dependency tree needs a decision for. */
 export const APPROVED_BUILD_SCRIPTS = Object.freeze([])
-
-/**
- * The install hooks a package manifest declares.
- * @param manifest parsed `package.json`
- * @returns the hook names it declares, in hook order
- */
-export function buildScriptHooksOf(manifest) {
-  const scripts = manifest?.scripts ?? {}
-  return INSTALL_HOOKS.filter((hook) => typeof scripts[hook] === 'string')
-}
 
 /**
  * Compare the install hooks a dependency tree declares with the approved list.

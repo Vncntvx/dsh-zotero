@@ -30,7 +30,7 @@ src/
   creators.ts           # 作者显示格式（端侧共享）
   media-types.ts        # 媒体类型常量（端侧共享）
   diagnostics.ts        # 进程内诊断环形缓冲、条目模型与接收器
-  status-codec.ts       # Host 端状态解码（zod）
+  wire-schemas.ts       # Host 与客户端共享的严格 wire schema（zod）
   abort.ts              # 调用方取消错误的唯一拼写（harness TOOL_ABORTED）
   errors.ts             # 错误类与错误码
   json.ts               # 无损 JSON 读取辅助函数
@@ -83,7 +83,7 @@ tests/                  # 单元测试与端到端测试用例
 | [功能概览](features.md)          | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
 | [研究 SOP 技能](skills.md)       | 八个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)             | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
-| [配置参考](configuration.md)     | 四个设置命名空间、68 个字段与热更新机制                      |
+| [配置参考](configuration.md)     | 四个设置命名空间、69 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md)   | 常见问题、原因与排查步骤                                     |
 | [系统架构](architecture.md)      | 数据流、分层职责与设计边界                                   |
 | [开发指南](development.md)       | 构建、测试、调试与发布流程                                   |
@@ -97,7 +97,7 @@ tests/                  # 单元测试与端到端测试用例
 ```sh
 npm install                  # 依赖安装（与 deepseek-harness 并列）
 npm test                     # 单元测试与测试规范检查
-npm run typecheck            # 类型检查（包含 Node、测试与浏览器端工程）
+npm run typecheck            # 类型检查（包含 Node、宿主测试、浏览器端、浏览器测试与 CLI 工程）
 npm run build                # 编译全部产物（tsc → lib/，esbuild → lib/client.js）
 npm run build:client         # 仅构建浏览器端产物
 npm run test:coverage        # 覆盖率门禁检查
@@ -106,13 +106,15 @@ npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
 npm run deps:check           # 查询 registry，列出落后于最新版的直接依赖
 npm run verify:pack          # 校验打包产物文件完整性（含包内语义运行时资产的哈希与许可）
 npm run assets:runtime       # 从 devDependency 重新生成包内语义运行时资产
-npm run smoke                # 生产栈冒烟：在 dsh profile 内对真实 Zotero 调用全部读工具
+npm run smoke -- --profile-dir <profile目录> # 已安装 profile + dsh 运行时，对真实 Zotero 执行八个只读入口
+npm run smoke:scholarly      # 需联网的手动 scholarly_get 冒烟，使用生产 DNS/undici/TLS 栈
 npm run smoke:discovery      # 打包产物 → 临时 profile（无需构建批准）→ dsh web 启动探针
 npm run release:branch       # 切出可发布的 release 分支（清单驱动）
 npm run release:check        # 发布门禁：格式、版本钉、测试、类型、覆盖率、构建、打包
 npm run link:local-harness   # 将 @deepseek-ai/dsh-* 依赖链接到 sibling 检出
 npm run dev                  # 监听 Node 端源码并增量编译
 npm run dev:client           # 监听浏览器端源码并增量打包
+npm run lint:hooks           # React Hook 顺序与依赖；告警也拦截发布
 npm run lint:test            # 仅运行测试规范守卫
 npm run test:watch           # vitest watch 模式
 npm run format               # 执行 Prettier 格式化
@@ -166,38 +168,34 @@ npm run test:integration
 
 ## 语义准入档位（固化在代码中）
 
-本地语义排序的准入规则不再依赖离线校准数据：每档的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）固化在 `src/enrichment/semantic/model-profiles.ts`，安装好模型包即可工作，未知档位按 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` fail-closed。
+每档的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）位于 `src/enrichment/semantic/model-profiles.ts`。安装好模型包即可工作；未知档位按 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 明确失败。
 
-`floor` 取自真实模型输出上的测量：12 个双语主题族，每族一个回答段、四个同族干扰段、一个与答案**没有任何实词重合**的改写提问，外加一个无人回答的无关提问。因为提问与答案零重合，BM25 对这些答案的打分为 0，凡是被准入的段落都只能来自语义路。门槛放在「最弱真实改写」与「最强无关语料余弦」之间，并偏向安全：宁可漏召回，也不把无关段落当作证据。
+2026-11-17 使用六档 pinned ONNX 包，经生产 worker 实际编码，原始向量与完整报告归档在 `tests/fixtures/semantic-admission/`。数据是 `tests/helpers/semantic-recall-fixtures.ts` 的 24 个手工编写回归例：20 个改写、2 个词面和 2 个重复控制例，每例 8 段，其中 1 段为标注答案；english 仅使用 12 个英文例，其中改写 10 个。移除各例答案后的 7 段构成无关对照语料。它与 `semantic-calibration/` 的五特征 logistic 数据集是两套协议。
 
-六档实测（in-scope 语言，未做同族重排）：
+| 档位        |    floor | margin | 改写例数 | 改写 recall@4 | 改写 MRR | 对照语料命中 |
+| ----------- | -------: | -----: | -------: | ------------: | -------: | -----------: |
+| balanced    |    0.427 |   0.12 |       20 |           90% |      0.9 |         0/24 |
+| lightweight |    0.797 |   0.02 |       20 |           55% |     0.55 |         0/24 |
+| bilingual   |    0.515 |   0.12 |       20 |           90% |      0.9 |         0/24 |
+| english     |    0.593 |   0.12 |       10 |           80% |      0.8 |         0/12 |
+| hybrid      | 0.509118 |   0.12 |       20 |           90% |      0.9 |         0/24 |
+| academic    |    0.584 |   0.12 |       20 |           95% |     0.95 |         0/24 |
 
-| 档位        | floor | margin | 语义 recall@1 | 语义 recall@4 |   MRR | 无关语料语义命中 |
-| ----------- | ----: | -----: | ------------: | ------------: | ----: | ---------------: |
-| balanced    | 0.427 |   0.12 |           79% |           92% | 0.854 |               0% |
-| lightweight | 0.797 |   0.02 |           58% |           58% | 0.583 |               0% |
-| bilingual   | 0.515 |   0.12 |           88% |           96% | 0.910 |               0% |
-| english     | 0.593 |   0.12 |           83% |           92% | 0.861 |               0% |
-| hybrid      | 0.461 |   0.12 |           67% |           92% | 0.785 |               0% |
-| academic    | 0.584 |   0.12 |           79% |           92% | 0.854 |               0% |
+同一批改写问题上，BM25 的答案 recall@4 为 0%；完整回归集包含词面控制例，BM25 recall@4 为 4/24（english 为 2/12）。不能把两个分母混用。`margin` 是固定策略值，本次未声称独立拟合得到最优 margin。所有当前 floor 均高于实测移除答案对照的最高余弦；hybrid 旧 floor 0.461 曾产生 2 次无关命中，现按最高余弦 0.508117562 加 0.001 安全距离向上取六位小数，改为 0.509118，保持本组改写召回不变。
 
-同一批提问下 BM25 的 recall@4 为 0%（零实词重合），因此这些数字就是语义路的净增益。`lightweight`（Granite-97M）的无关语料最高余弦接近其最弱真实改写，安全门槛下只保留 58% 召回；这是该档的实际限制，不用降低门槛换取数字。
+这些结果描述同组回归检查，不构成外部独立标注、真实 PDF 提取、heldout 效果或生产误命中率保证。档位仍可漏召回。报告列出模型 identity、输入摘要、向量文件 SHA-256、逐例余弦、语义与 BM25 排名；自动测试只复算归档向量，不加载模型、不联网。
 
-改模型 revision 或换档位后需要重新测量：`floor` 只能从真实嵌入里定，因此这一步是**需要模型的手工流程，不在仓库测试里**。仓库自身的测试从不加载模型、不联网。步骤：
+重新测量使用以下完整流程；编码是明确的手工模型执行，其余步骤只读本地数据：
 
 ```sh
-# 1. 下载并校验模型（本地已有则跳过）
-npm run assets:semantic -- --model=<key> --dir=<model root>
-# 2. 导出该档的编码输入（纯 CPU，无模型）
-node scripts/semantic-calibration/prepare.mjs --mode encoding --split fit > /tmp/encoding.json
-# 3. 用该档真实 ONNX 编码 /tmp/encoding.json 中的 entries，写出向量文件
-#    （格式见 prepare 输出中的 requiredEmbeddingFormat）
-# 4. 拟合候选，观察校准支持度与阈值（读入供给向量，不加载模型）
-node scripts/semantic-calibration/fit.mjs --embeddings /absolute/fit-vectors.json
-# 5. 把该档的 floor/margin 写回 model-profiles.ts，并记录测量来源
+npm run build
+npm run assets:semantic -- --model=<key> --dir=<model-root>
+node scripts/semantic-calibration/prepare-admission.mjs > /tmp/admission-input.json
+node scripts/semantic-calibration/encode-admission.mjs --request /tmp/admission-input.json --model <key> --dir <model-root> --out /tmp/<key>-vectors.json
+node scripts/semantic-calibration/measure-admission.mjs --embeddings /tmp/<key>-vectors.json > /tmp/<key>-report.json
 ```
 
-`scripts/semantic-calibration/` 是离线数据与拟合工具链：只做 CPU 与文件系统计算，不加载、不下载模型，不联网，输出到 stdout；`self-check.mjs` 与 `validate.mjs` 可在没有模型的情况下验证数据集本身。六档的 `floor`/`margin` 就是按上面的流程测出来并写进代码的。
+编码输出以独占创建保存，重复执行应选择新的输出路径。测量报告同时提供显式的 floor/margin 候选及支持范围，须结合逐例结果复核后再修改策略、更新归档向量和报告。`fit.mjs` 的 logistic 阈值不用于生成 cosine floor。`self-check.mjs` 与 `validate.mjs` 仍只验证独立的离线拟合协议。
 
 ## 构建产物
 
@@ -248,21 +246,22 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 本表是 WP0 第 5 项要求的编号→测试→验收结果对照，按当前工作树记录。「已实现」表示该包的协议/源码与行为测试存在，不含实时或效果验收。结论以本机测试文件与已运行的检查为准；实时/浏览器/模型矩阵检查未运行的项目标记「未验收」。
 
-| 编号 | 主题                                 | 行为测试证据（真实存在的 spec）                                                                                                                                                                                                                                                                                                                                                                                                          | 验收结果                                                                                                                                                                       |
-| ---- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| WP0  | 冻结产品、协议与复现标准             | `tests/host/enrichment-api-contract.spec.ts`、`tests/unit/enrichment-preferences.spec.ts`、`tests/unit/enrichment-parse-wire.spec.ts`、`tests/host/doc-examples.spec.ts`                                                                                                                                                                                                                                                                 | 已实现（协议闭合、双端类型、组件启用授权文档外发、域名错误保留、旧 parsing 别名清除）；此表即编号→测试→验收记录                                                                |
-| WP1  | 普通读取仅复用解析产物               | `tests/local/enrichment-enhancer.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`                                                                                                                                                                                                                                                                                           | 已实现（只读 `lookup` 接缝、命中优先/正常未命中、启动/打开 PDF/设置保存不触发 MinerU 的负向断言）                                                                              |
-| WP2  | 两类主动解析入口与任务生命周期       | `tests/host/enrichment-parse-document.spec.ts`、`tests/host/enrichment-parse-jobs-lifetime.spec.ts`、`tests/host/enrichment-parse-jobs-admission.spec.ts`、`tests/client/enrichment/parse-integration-operations.spec.tsx`                                                                                                                                                                                                               | 已实现（闭合联合目标、会话所属 `ctx.jobs`、取消/卸载清理、Gateway 错误分类）                                                                                                   |
-| WP3  | 来源身份、解析优先级与 Markdown 结构 | `tests/host/enrichment-artifact-format.spec.ts`、`tests/scholarly/read/read-artifact-format.spec.ts`、`tests/host/enrichment-source-publication.spec.ts`                                                                                                                                                                                                                                                                                 | 已实现（统一身份/源戳、Markdown `format`、outline/section、缓存失效、旧普通文本不遮蔽新产物）                                                                                  |
-| WP4  | 下载、安装、目录与 CLI               | `tests/host/enrichment/model-cli-coordination.spec.ts`、`tests/host/enrichment/model-installation-safety.spec.ts`、`tests/unit/model-download-client.spec.ts`、`tests/unit/enrichment-safe-directory-preflight.spec.ts`                                                                                                                                                                                                                  | 已实现（真实流/锁/符号链接与取消安全、bundle 唯一校验、CLI 一致）                                                                                                              |
-| WP5  | 排序身份、variants 基础与输出解释    | `tests/local/retrieve/evidence-ranker.spec.ts`、`tests/tools/retrieve-render.spec.ts`、`tests/unit/evidence.spec.ts`                                                                                                                                                                                                                                                                                                                     | 已实现（caller index 保全、重复 handle 拒绝、语义去重映射回全部来源、variants 单调并集、空结果仅在显式 `noMatch` 时下结论）                                                    |
-| WP6  | 可拒绝无关语料的语义准入             | `tests/unit/semantic-admission.spec.ts`、`tests/unit/semantic-ranker.spec.ts`、`scripts/semantic-calibration/self-check.mjs`                                                                                                                                                                                                                                                                                                             | 已实现并实测：准入固化为每档 `floor`+`margin`，六档在零实词重合改写集上 recall@4 58–96%、无关语料语义命中 0%（见「语义准入档位」）。模型相关测量是手工流程，仓库测试不加载模型 |
-| WP7  | 读取作用域、模型事务切换与排空       | `tests/unit/semantic-loader-lifecycle.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/fulltext.spec.ts`                                                                                                                                                                                                                                                                                                      | 已实现（前台作用域在来源 I/O 前接纳并 `try/finally` 释放、loader 事务化 resident/pending/retired、失败 B 不丢 A、卸载排空）                                                    |
-| WP8  | 推理取消、验证和有界向量缓存         | `tests/unit/semantic-session.spec.ts`、`tests/unit/semantic-tensor.spec.ts`、`tests/unit/semantic-vector-cache.spec.ts`                                                                                                                                                                                                                                                                                                                  | 已实现（单 `TokenizedBatch`、signal 贯穿、输出张量校验、所有权转移释放、`lru-cache@11.5.3` 有界跨请求缓存）；六档在真实模型上实测通过（见「语义准入档位」）                    |
-| WP9  | 端到端模型设置状态机                 | `tests/client/enrichment/enrichment-model-controller.spec.ts`、`tests/client/enrichment/enrichment-model-form.spec.tsx`                                                                                                                                                                                                                                                                                                                  | 已实现（完整 `RemoteResult` 码/详情保留、仅 `gateway/service-unavailable` 判缺席、目标世代绑定、草稿不发 RPC、串行刷新与 signal 清理、zh/en 文案锁步）                         |
-| WP10 | 清理文档、旧语义与包契约             | `tests/host/doc-examples.spec.ts`、`tests/unit/tooling/client-graph-authority.spec.ts`                                                                                                                                                                                                                                                                                                                                                   | 已实现（12 对 zh/en 文档、旧语义清除、错误码表、语义准入档位与本对照表）；源码/预构建双安装核对未运行                                                                          |
-| WP11 | 分层与真实验收，逐问题闭环           | `npm run test:integration`、`npm run smoke:web-composition`                                                                                                                                                                                                                                                                                                                                                                              | 未验收（整体验收门禁；不替代下列实时检查）                                                                                                                                     |
-| WP12 | 已解析文档统一管理                   | `tests/host/enrichment-artifact-management.spec.ts`、`tests/host/enrichment-artifact-target.spec.ts`、`tests/unit/enrichment-parsed-manager-wire.spec.ts`、`tests/client/enrichment/parsed-manager-tab.spec.tsx`、`tests/client/library/library-panel-header.spec.tsx`、`tests/host/enrichment-artifact-metadata.spec.ts`、`tests/client/enrichment/parsed-manager-actions.spec.tsx`、`tests/client/library/parsed-badge-probe.spec.tsx` | 已实现（index 与目录合并去重、孤儿/悬空/损坏三态、删除清全部别名与收据、完整 URL 不进 wire、artifact 认址、header 顺序与挂载门控）                                             |
+| 编号 | 主题                                 | 行为测试证据（真实存在的 spec）                                                                                                                                                                                                                                                                                                                                                                                                          | 验收结果                                                                                                                                                                 |
+| ---- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| WP0  | 冻结产品、协议与复现标准             | `tests/host/enrichment-api-contract.spec.ts`、`tests/unit/enrichment-preferences.spec.ts`、`tests/unit/enrichment-parse-wire.spec.ts`、`tests/host/doc-examples.spec.ts`                                                                                                                                                                                                                                                                 | 已实现（协议闭合、双端类型、组件启用授权文档外发、域名错误保留、旧 parsing 别名清除）；此表即编号→测试→验收记录                                                          |
+| WP1  | 普通读取仅复用解析产物               | `tests/local/enrichment-enhancer.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`                                                                                                                                                                                                                                                                                           | 已实现（只读 `lookup` 接缝、命中优先/正常未命中、启动/打开 PDF/设置保存不触发 MinerU 的负向断言）                                                                        |
+| WP2  | 两类主动解析入口与任务生命周期       | `tests/host/enrichment-parse-document.spec.ts`、`tests/host/enrichment-parse-jobs-lifetime.spec.ts`、`tests/host/enrichment-parse-jobs-admission.spec.ts`、`tests/client/enrichment/parse-integration-operations.spec.tsx`                                                                                                                                                                                                               | 已实现（闭合联合目标、会话所属 `ctx.jobs`、取消/卸载清理、Gateway 错误分类）                                                                                             |
+| WP3  | 来源身份、解析优先级与 Markdown 结构 | `tests/host/enrichment-artifact-format.spec.ts`、`tests/scholarly/read/read-artifact-format.spec.ts`、`tests/host/enrichment-source-publication.spec.ts`                                                                                                                                                                                                                                                                                 | 已实现（统一身份/源戳、Markdown `format`、outline/section、缓存失效、旧普通文本不遮蔽新产物）                                                                            |
+| WP4  | 下载、安装、目录与 CLI               | `tests/host/enrichment/model-cli-coordination.spec.ts`、`tests/host/enrichment/model-installation-safety.spec.ts`、`tests/unit/model-download-client.spec.ts`、`tests/unit/enrichment-safe-directory-preflight.spec.ts`                                                                                                                                                                                                                  | 已实现（真实流/锁/符号链接与取消安全、bundle 唯一校验、CLI 一致）                                                                                                        |
+| WP5  | 排序身份、variants 基础与输出解释    | `tests/local/retrieve/evidence-ranker.spec.ts`、`tests/tools/retrieve-render.spec.ts`、`tests/unit/evidence.spec.ts`                                                                                                                                                                                                                                                                                                                     | 已实现（caller index 保全、重复 handle 拒绝、语义去重映射回全部来源、variants 单调并集、空结果仅在显式 `noMatch` 时下结论）                                              |
+| WP6  | 可拒绝无关语料的语义准入             | `tests/unit/semantic-admission.spec.ts`、`tests/unit/semantic-ranker.spec.ts`、`scripts/semantic-calibration/self-check.mjs`                                                                                                                                                                                                                                                                                                             | 六档实际向量已归档；20 个改写例（english 为 10 个）recall@4 为 55–95%，移除答案对照命中 0。编码为手工流程，自动测试只离线复算。                                          |
+| WP7  | 读取作用域、模型事务切换与排空       | `tests/unit/semantic-loader-lifecycle.spec.ts`、`tests/local/retrieve/retrieve-sources.spec.ts`、`tests/scholarly/fulltext.spec.ts`                                                                                                                                                                                                                                                                                                      | 已实现（前台作用域在来源 I/O 前接纳并 `try/finally` 释放、loader 事务化 resident/pending/retired、失败 B 不丢 A、卸载排空）                                              |
+| WP8  | 推理取消、验证和有界向量缓存         | `tests/unit/semantic-session.spec.ts`、`tests/unit/semantic-tensor.spec.ts`、`tests/unit/semantic-vector-cache.spec.ts`                                                                                                                                                                                                                                                                                                                  | 已实现（单 `TokenizedBatch`、signal 贯穿、输出张量校验、所有权转移释放、`lru-cache@11.5.3` 有界跨请求缓存）；六档在真实模型上实测通过（见「语义准入档位」）              |
+| WP9  | 端到端模型设置状态机                 | `tests/client/enrichment/enrichment-model-controller.spec.ts`、`tests/client/enrichment/enrichment-model-form.spec.tsx`                                                                                                                                                                                                                                                                                                                  | 已实现（完整 `RemoteResult` 码/详情保留、仅 `gateway/service-unavailable` 判缺席、目标世代绑定、草稿不发 RPC、串行刷新与 signal 清理、zh/en 文案锁步）                   |
+| WP10 | 清理文档、旧语义与包契约             | `tests/host/doc-examples.spec.ts`、`tests/unit/tooling/client-graph-authority.spec.ts`                                                                                                                                                                                                                                                                                                                                                   | 已实现（12 对 zh/en 文档、旧语义清除、错误码表、语义准入档位与本对照表）；源码/预构建双安装核对未运行                                                                    |
+| WP11 | 分层与真实验收，逐问题闭环           | `npm run test:integration`、`npm run smoke:web-composition`                                                                                                                                                                                                                                                                                                                                                                              | 未验收（整体验收门禁；不替代下列实时检查）                                                                                                                               |
+| WP12 | 已解析文档统一管理                   | `tests/host/enrichment-artifact-management.spec.ts`、`tests/host/enrichment-artifact-target.spec.ts`、`tests/unit/enrichment-parsed-manager-wire.spec.ts`、`tests/client/enrichment/parsed-manager-tab.spec.tsx`、`tests/client/library/library-panel-header.spec.tsx`、`tests/host/enrichment-artifact-metadata.spec.ts`、`tests/client/enrichment/parsed-manager-actions.spec.tsx`、`tests/client/library/parsed-badge-probe.spec.tsx` | 已实现（index 与目录合并去重、孤儿/悬空/损坏三态、删除清全部别名与收据、完整 URL 不进 wire、artifact 认址、header 顺序与挂载门控）                                       |
+| WP13 | 整篇文档窗口读取                     | `tests/local/retrieve/retrieve-fulltext.spec.ts`、`tests/tools/retrieve-fulltext.spec.ts`、`tests/host/source-ledger-fulltext.spec.ts`                                                                                                                                                                                                                                                                                                   | 已实现（ref 优先复用解析 Markdown，缺失时读取索引文本；artifactId 可读 URL 产物；无解析/下载/上传，UTF-16 窗口无损续读，超内联预算完整文件交付，卡片与轨迹记录全文事实） |
 
 ### 未运行的实时验收（需单独用户授权）
 
@@ -274,36 +273,36 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 已运行门禁（真实结果）
 
-- `npm test`：491 个 spec 文件、5736 个测试，489 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
-- `npm run release:check`：退出码 0（format、strict harness、lint:test、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
+- `npm test`：654 个 spec 文件、6999 个测试，652 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
+- `npm run release:check`：退出码 0（format、strict harness、lint:test、lint:hooks、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
 - `npm run build:client`、`npx vitest run tests/host/doc-examples.spec.ts`：通过。
 
 ### 问题编号 A1–X4 结项对照
 
-| 编号 | 修复位置                                                                                                               | 行为测试                                                                                                                                            | 结论                                                                                       |
-| ---- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| A1   | `local/fulltext-enhancer.ts` 只读 `lookup` 缝、`enrichment/service.ts` 私有解析域                                      | `tests/local/enrichment-enhancer.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`、`tests/host/enrichment-parse-jobs-admission.spec.ts` | 普通读取不再 `enhance`/上传；负向断言通过                                                  |
-| A2   | `enrichment/parse-{target,document,jobs}.ts`、客户端对话框                                                             | `tests/host/enrichment-parse-*.spec.ts`、`tests/client/enrichment/parse-integration-*.spec.tsx`                                                     | 子附件/顶层附件/URL 三类主动入口 + 取消/幂等/跨会话隔离通过                                |
-| A3   | `scholarly/fulltext/{resolve,store}.ts`、`enrichment/artifact-store.ts`                                                | `tests/scholarly/fulltext-cache.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`                                                        | 新产物优先、旧缓存按 revision 失效通过                                                     |
-| A4   | `src/scholarly/tools/read.ts`、`artifact-schema.ts`                                                                    | `tests/scholarly/read/read-artifact-format.spec.ts`                                                                                                 | `format:'markdown'\|'text'`、outline/section、偏移回指通过                                 |
-| S1   | `enrichment/semantic/admission.ts`、`ranker.ts`（删除 `routeBest-0.02`）                                               | `tests/unit/semantic-admission.spec.ts`、`tests/unit/semantic-ranker.spec.ts`                                                                       | 固定参考集分类器可拒绝全无关语料（六档实测无关语料语义命中 0）；六档效果验收已运行且未达标 |
-| S2   | `local/evidence-ranker.ts`（每 phrasing 独立准入并集）                                                                 | `tests/unit/semantic-ranker.spec.ts`、`tests/local/retrieve/evidence-ranker.spec.ts`                                                                | 新增 variant 不删除原成员通过                                                              |
-| S3   | `src/evidence.ts`（`indexes` 保全）、`ranker.ts`（去重映射全部来源）                                                   | `tests/local/retrieve/evidence-ranker.spec.ts`、`tests/unit/semantic-ranker.spec.ts`                                                                | 非连续/重复文本/重复 handle 测试通过                                                       |
-| S4   | `enrichment/semantic/loader.ts`（resident/pending/retired 事务）                                                       | `tests/unit/semantic-loader-lifecycle.spec.ts`                                                                                                      | 失败 B 不丢 A、A→B→A、排空、单次 release 通过                                              |
-| S5   | `enrichment/semantic/vector-cache.ts`、`session.ts`                                                                    | `tests/unit/semantic-vector-cache.spec.ts`、`tests/unit/semantic-session.spec.ts`                                                                   | 跨请求缓存、单 `TokenizedBatch`、信号贯穿通过                                              |
-| S6   | `src/tools/retrieve.ts` 渲染、`local/retrieve.ts`                                                                      | `tests/tools/retrieve-render.spec.ts`                                                                                                               | 显式 `noMatch` 分类、预算省略不与「无匹配」矛盾通过                                        |
-| D1   | `enrichment/model-download-client.ts`（响应消费作用域）                                                                | `tests/host/enrichment/model-response-scope.spec.ts`                                                                                                | 16 MiB 真实 undici 大正文、redirect/error 体释放通过                                       |
-| D2   | `enrichment/model-downloader.ts`（同步预占、cancel/dispose 排空）                                                      | `tests/host/enrichment/model-task-ownership.spec.ts`                                                                                                | 并发/取消/卸载/已中止 caller 通过                                                          |
-| D3   | `enrichment/model-bundle-inspector.ts`、`model-downloader.ts` 只读 status/verify                                       | `tests/host/enrichment/model-installation-state.spec.ts`                                                                                            | 缺 marker/同尺寸损坏/不同 revision 判 not-ready、状态零写入通过                            |
-| D4   | `enrichment/model-installation.ts`、`model-download-client.ts`                                                         | `tests/host/enrichment/model-installation-safety.spec.ts`、`model-cli-coordination.spec.ts`                                                         | 私有 staging、目录白名单、符号链接哨兵、force 保留用户文件通过                             |
-| D5   | `enrichment/safe-directory-path.ts`                                                                                    | `tests/unit/enrichment-safe-directory-preflight.spec.ts`、`tests/unit/safe-directory.spec.ts`                                                       | 完整候选先检查后创建、ENOENT 与 I/O 区分通过                                               |
-| C1   | `client/index.ts`、`enrichment-form-controller.ts`                                                                     | `tests/client/enrichment/model-error-codes.spec.ts`、`enrichment-model-controller.spec.ts`                                                          | 完整 `RemoteResult` 码/详情保留、仅 `gateway/service-unavailable` 判缺席通过               |
-| C2   | `client/enrichment-form-controller.ts`（`{model,normalizedDir,generation}`）                                           | `tests/client/enrichment/model-generation-invalidation.spec.ts`                                                                                     | 晚到结果/草稿/外部更新失效通过                                                             |
-| C3   | `client/locales.ts`、`docs/configuration.*`、`docs/features.*`                                                         | `tests/client/enrichment/*`、文档锁步核对                                                                                                           | 「关闭→BM25；开启但模型未就绪→明确失败」zh/en 一致                                         |
-| X1   | `enrichment/semantic/{session,tensor}.ts`                                                                              | `tests/unit/semantic-session.spec.ts`、`semantic-tensor.spec.ts`                                                                                    | 所有权转移释放、张量 rank/width/finite/维度校验、cosine 不截断通过                         |
-| X2   | `scripts/fetch-semantic-model.mjs`                                                                                     | `tests/host/enrichment/model-cli-installer.spec.ts`、`model-cli-coordination.spec.ts`                                                               | 真实跨进程锁、取消、私有 staging、finally 关闭 dispatcher 通过                             |
-| X3   | `src/enrichment/semantic/model-profiles.ts`、`scripts/semantic-calibration/*`、`tests/fixtures/semantic-calibration/*` | 离线校准链、数据集与六档 runtime-report（`tests/unit/semantic-runtime-report.spec.ts` 守卫）                                                        | 每档准入常量有真实测量来源与报告存档；离线链可在无模型下自检；模型相关复测列为手工流程     |
-| X4   | 全仓清除 `allowParsingUpload` / `dsh-zotero/parsing` / 旧 `{lookup,enhance}` 描述                                      | `tests/host/enrichment-parse-aliases.spec.ts`、文档 Grep                                                                                            | 无旧别名/迁移/兼容分支                                                                     |
+| 编号 | 修复位置                                                                                              | 行为测试                                                                                                                                            | 结论                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| A1   | `local/fulltext-enhancer.ts` 只读 `lookup` 缝、`enrichment/service.ts` 私有解析域                     | `tests/local/enrichment-enhancer.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`、`tests/host/enrichment-parse-jobs-admission.spec.ts` | 普通读取不再 `enhance`/上传；负向断言通过                                    |
+| A2   | `enrichment/parse-{target,document,jobs}.ts`、客户端对话框                                            | `tests/host/enrichment-parse-*.spec.ts`、`tests/client/enrichment/parse-integration-*.spec.tsx`                                                     | 子附件/顶层附件/URL 三类主动入口 + 取消/幂等/跨会话隔离通过                  |
+| A3   | `scholarly/fulltext/{resolve,store}.ts`、`enrichment/artifact-store.ts`                               | `tests/scholarly/fulltext-cache.spec.ts`、`tests/scholarly/enrichment-read-enhancer.spec.ts`                                                        | 新产物优先、旧缓存按 revision 失效通过                                       |
+| A4   | `src/scholarly/tools/read.ts`、`artifact-schema.ts`                                                   | `tests/scholarly/read/read-artifact-format.spec.ts`                                                                                                 | `format:'markdown'\|'text'`、outline/section、偏移回指通过                   |
+| S1   | `enrichment/semantic/admission.ts`、`ranker.ts`（删除 `routeBest-0.02`）                              | `tests/unit/semantic-admission.spec.ts`、`tests/unit/semantic-ranker.spec.ts`                                                                       | 固定余弦策略由归档真实向量复算；报告保留 hybrid 旧门槛误命中及修正结果。     |
+| S2   | `local/evidence-ranker.ts`（每 phrasing 独立准入并集）                                                | `tests/unit/semantic-ranker.spec.ts`、`tests/local/retrieve/evidence-ranker.spec.ts`                                                                | 新增 variant 不删除原成员通过                                                |
+| S3   | `src/evidence.ts`（`indexes` 保全）、`ranker.ts`（去重映射全部来源）                                  | `tests/local/retrieve/evidence-ranker.spec.ts`、`tests/unit/semantic-ranker.spec.ts`                                                                | 非连续/重复文本/重复 handle 测试通过                                         |
+| S4   | `enrichment/semantic/loader.ts`（resident/pending/retired 事务）                                      | `tests/unit/semantic-loader-lifecycle.spec.ts`                                                                                                      | 失败 B 不丢 A、A→B→A、排空、单次 release 通过                                |
+| S5   | `enrichment/semantic/vector-cache.ts`、`session.ts`                                                   | `tests/unit/semantic-vector-cache.spec.ts`、`tests/unit/semantic-session.spec.ts`                                                                   | 跨请求缓存、单 `TokenizedBatch`、信号贯穿通过                                |
+| S6   | `src/tools/retrieve.ts` 渲染、`local/retrieve.ts`                                                     | `tests/tools/retrieve-render.spec.ts`                                                                                                               | 显式 `noMatch` 分类、预算省略不与「无匹配」矛盾通过                          |
+| D1   | `enrichment/model-download-client.ts`（响应消费作用域）                                               | `tests/host/enrichment/model-response-scope.spec.ts`                                                                                                | 16 MiB 真实 undici 大正文、redirect/error 体释放通过                         |
+| D2   | `enrichment/model-downloader.ts`（同步预占、cancel/dispose 排空）                                     | `tests/host/enrichment/model-task-ownership.spec.ts`                                                                                                | 并发/取消/卸载/已中止 caller 通过                                            |
+| D3   | `enrichment/model-bundle-inspector.ts`、`model-downloader.ts` 只读 status/verify                      | `tests/host/enrichment/model-installation-state.spec.ts`                                                                                            | 缺 marker/同尺寸损坏/不同 revision 判 not-ready、状态零写入通过              |
+| D4   | `enrichment/model-installation.ts`、`model-download-client.ts`                                        | `tests/host/enrichment/model-installation-safety.spec.ts`、`model-cli-coordination.spec.ts`                                                         | 私有 staging、目录白名单、符号链接哨兵、force 保留用户文件通过               |
+| D5   | `enrichment/safe-directory-path.ts`                                                                   | `tests/unit/enrichment-safe-directory-preflight.spec.ts`、`tests/unit/safe-directory.spec.ts`                                                       | 完整候选先检查后创建、ENOENT 与 I/O 区分通过                                 |
+| C1   | `client/index.ts`、`enrichment-form-controller.ts`                                                    | `tests/client/enrichment/model-error-codes.spec.ts`、`enrichment-model-controller.spec.ts`                                                          | 完整 `RemoteResult` 码/详情保留、仅 `gateway/service-unavailable` 判缺席通过 |
+| C2   | `client/enrichment-form-controller.ts`（`{model,normalizedDir,generation}`）                          | `tests/client/enrichment/model-generation-invalidation.spec.ts`                                                                                     | 晚到结果/草稿/外部更新失效通过                                               |
+| C3   | `client/locales.ts`、`docs/configuration.*`、`docs/features.*`                                        | `tests/client/enrichment/*`、文档锁步核对                                                                                                           | 「关闭→BM25；开启但模型未就绪→明确失败」zh/en 一致                           |
+| X1   | `enrichment/semantic/{session,tensor}.ts`                                                             | `tests/unit/semantic-session.spec.ts`、`semantic-tensor.spec.ts`                                                                                    | 所有权转移释放、张量 rank/width/finite/维度校验、cosine 不截断通过           |
+| X2   | `scripts/fetch-semantic-model.mjs`                                                                    | `tests/host/enrichment/model-cli-installer.spec.ts`、`model-cli-coordination.spec.ts`                                                               | 真实跨进程锁、取消、私有 staging、finally 关闭 dispatcher 通过               |
+| X3   | `semantic/model-profiles.ts`, `scripts/semantic-calibration/*`, `tests/fixtures/semantic-admission/*` | 真实向量准入报告与六档原始向量；`semantic-admission-measurement.spec.ts` 逐项复算。                                                                 | 自动测试不加载模型、不联网；历史 logistic 报告由独立元数据守卫检查。         |
+| X4   | 全仓清除 `allowParsingUpload` / `dsh-zotero/parsing` / 旧 `{lookup,enhance}` 描述                     | `tests/host/enrichment-parse-aliases.spec.ts`、文档 Grep                                                                                            | 无旧别名/迁移/兼容分支                                                       |
 
 表内「通过」仅指对应行为测试与本机门禁通过；效果、实时与浏览器验收状态见上节，不得据此宣称完整实时落地。
 
@@ -316,7 +315,9 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 客户端测试替身
 
-`tests/client/helpers/` 里的 locale 与 Remote/access 替身是本地实现，不从上游 `@deepseek-ai/dsh-client-test-runtime` 引入。该包在当前 pin 上**确实**已发布，但装进来会让 dev 依赖图多出 28 个包：它的 peer 集合要求本插件并不携带的六个 harness 包（`dsh-client-web`、`dsh-client-hmr`、`dsh-client-modules`、`dsh-remote-mock`、`dsh-api-workspace-controller`、`dsh-host-directory-picker`），而它把 `vitest ^4.1.11` 作为硬依赖，会在 v5 旁边嵌套第二套测试运行器；它的根入口还会加载整个 jsdom slot runtime，一个纯函数也要每个导入它的 spec 付这份装载成本。复核命令：`npm install --dry-run @deepseek-ai/dsh-client-test-runtime@<pin>`，看输出里新增的包。上游实现若变，按模块注释点名的文件同步本地替身。
+工具测试通过公开的 `@deepseek-ai/dsh-tool-testkit` 执行真实单调用管线，locale fixture 使用同 pin 的 `@deepseek-ai/dsh-client-test-runtime/src/translate.ts`：这个子路径由包的 `./src/*` 显式导出，且注册表包实际发布 `src`。该纯函数入口移除了本地翻译算法副本。工具包和客户端测试支持均只进入 devDependencies，并由精确 overrides 绑定 harness pin。
+
+完整 Slot runtime 已通过包显式发布的生产源码契约装配，并实际用于 slot 创建/销毁与资源组合测试。测试仅对加载器形式的 `/client` 入口使用该映射，普通 ESM 入口仍读取编译产物；原始资源编译包另有真实执行用例。Vitest 依赖按同一运行实例解析。入口组合测试另以公开 `TestClient` 运行生产 `bootClient`，渲染七个设置页签并验证保存、重载和完整卸载；本地记录替身仅用于故障注入，不能替代装配验收。升级 runtime、浏览器导出或测试运行器时，重跑发布源码映射的正反例、slot 生命周期与编译包执行用例。
 
 ## CI 工作流
 
@@ -338,11 +339,11 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 发布前按顺序完成以下检查，任一步失败即停止：
 
-1. `npm run typecheck`：Node、测试与浏览器端三个工程的类型检查；
+1. `npm run typecheck`：Node、宿主测试、浏览器端、浏览器测试与 CLI 五个工程的类型检查；
 2. `npm run build:client`：浏览器端产物可以单独构建；
 3. `npm test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）与全量 vitest；
 4. `npm run format:check`：Prettier 格式检查；
-5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`tokens:check`、`style:check`、`typecheck`、`build`、`test:coverage` 与 `verify:pack`；
+5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`typecheck`、`build`、`test:coverage`、`test:calibration` 与 `verify:pack`；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
 8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
@@ -358,3 +359,5 @@ CI 的 quality gate 只构建一次，生成 `release-artifact-<source SHA>`；W
 需要向 npm 发布时，从上述成功流水线下载产物，先运行 `node scripts/release-artifact.mjs --verify --out <artifact directory> --source-sha <full source SHA>`，再对 `artifact.json` 指定的 tarball 执行 `npm publish <tarball> --access public`。发布的必须是已通过门禁和 Web smoke 的原文件。随后建立与 `v<version>` 对应的 GitHub Release，正文列出该版本的变更、验证结果与迁移要求，并记录源 SHA、artifactDigest 与 tarballSha256。发布失败先查明 registry 状态；同一版本不覆盖重发，内容变化需新版本与重新验证。
 
 本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的 release 分支。
+
+发布与 harness 升级的浏览器验收：在完整 `release:check` 之后运行 `npm run smoke:web-composition`，保留临时 profile、浏览器报告和错误日志；保证范围见 DN-41。

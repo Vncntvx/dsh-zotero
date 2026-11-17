@@ -11,7 +11,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { collectArtifactProblems, importedSpecifiers } from '../../../scripts/harness-state.mjs'
+import {
+  clientRuntimeOf,
+  collectArtifactProblems,
+  importedSpecifiers,
+} from '../../../scripts/harness-state.mjs'
 
 describe('artifact resolution provenance', () => {
   let checkout: string
@@ -114,7 +118,61 @@ describe('artifact resolution provenance', () => {
     // The focus gate's own spec spells imports out inside template literals.
     // The scan reads the same tree, so the two readings must agree that those
     // are fixtures, not dependencies.
-    expect(importedSpecifiers().length).toBeGreaterThan(0)
-    expect(importedSpecifiers().filter((specifier) => specifier.includes('/src/'))).toEqual([])
+    expect(importedSpecifiers()).toContain('@deepseek-ai/dsh-home-paths')
+    expect(importedSpecifiers().filter((specifier) => specifier.includes('/src/'))).toEqual([
+      '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts',
+      '@deepseek-ai/dsh-client-test-runtime/src/assembly/roster.ts',
+      '@deepseek-ai/dsh-client-test-runtime/src/assembly/test-client.ts',
+      '@deepseek-ai/dsh-client-test-runtime/src/translate.ts',
+    ])
+  })
+
+  it('scans tooling and module variants without treating quoted examples as imports', () => {
+    const scripts = join(checkout, 'scripts')
+    mkdirSync(scripts)
+    writeFileSync(
+      join(scripts, 'entry.mjs'),
+      'import { home } from "@deepseek-ai/fixture-home"; const example = ' +
+        JSON.stringify('import x from "@deepseek-ai/not-real"'),
+    )
+    writeFileSync(join(scripts, 'module.mts'), 'export { value } from "@deepseek-ai/fixture-types"')
+    writeFileSync(
+      join(scripts, 'legacy.cts'),
+      'const value = import("@deepseek-ai/fixture-dynamic")',
+    )
+    expect(importedSpecifiers(checkout)).toEqual([
+      '@deepseek-ai/fixture-dynamic',
+      '@deepseek-ai/fixture-home',
+      '@deepseek-ai/fixture-types',
+    ])
+  })
+  it('treats missing and corrupt browser manifests as unresolved installations', () => {
+    const missing = join(installed, 'absent-package')
+    expect(clientRuntimeOf(missing)).toBeUndefined()
+    mkdirSync(missing)
+    writeFileSync(join(missing, 'package.json'), '{broken')
+    expect(clientRuntimeOf(missing)).toBeUndefined()
+  })
+
+  it('reports a declared client bundle missing from a linked package', () => {
+    const dir = join(checkout, 'vendor/client-fixture')
+    mkdirSync(join(dir, 'lib/types'), { recursive: true })
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@deepseek-ai/dsh-client-fixture',
+        exports: {
+          '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+          './client': { types: './lib/types/index.d.ts', default: './lib/client.js' },
+        },
+      }),
+    )
+    writeFileSync(join(dir, 'lib/types/index.d.ts'), 'export {}')
+    const found = collectArtifactProblems(
+      checkout,
+      ['@deepseek-ai/dsh-client-fixture'],
+      new Map([['@deepseek-ai/dsh-client-fixture', dir]]),
+    )
+    expect(found.missing).toEqual(['@deepseek-ai/dsh-client-fixture/client'])
   })
 })

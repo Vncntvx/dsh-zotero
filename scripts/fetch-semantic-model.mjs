@@ -38,7 +38,7 @@ import {
 import { dshHomePath, expandHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
   DEFAULT_SEMANTIC_MODEL,
-  DEFAULT_SEMANTIC_MODEL_ROOT,
+  SEMANTIC_DOWNLOAD_SOURCES,
   SEMANTIC_MODEL_KEYS,
   SEMANTIC_MODELS,
   manifestOf,
@@ -51,18 +51,28 @@ import { createBundleInspector } from '../lib/enrichment/model-bundle-inspector.
 export const defaultModelRoot = dshHomePath('models')
 // Installers address a bundle by its physical key (the directory the runtime
 // and the loader resolve), not the config-facing tier key.
+/** @param {string} key @param {string} [root] */
 const modelDir = (key, root = defaultModelRoot) => join(root, key)
 
 export const SOURCES = MODEL_SOURCES
 const DEFAULT_ORDER = DEFAULT_SOURCE_ORDER
 
-/** Parse and validate the command line; exported so its rules are testable. */
+/**
+ * Parse and validate the command line.
+ * @param {readonly string[]} argv
+ * @returns {import('./fetch-semantic-model.mjs').SemanticFetchOptions}
+ */
 export function optionsOf(argv) {
+  /** @param {string} name */
   const value = (name) => argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
-  const source = value('source') ?? 'auto'
-  if (source !== 'auto' && !(source in SOURCES)) {
+  const requestedSource = value('source') ?? 'auto'
+  const source =
+    requestedSource === 'auto'
+      ? 'auto'
+      : SEMANTIC_DOWNLOAD_SOURCES.find((entry) => entry === requestedSource)
+  if (source === undefined) {
     throw new Error(
-      `unknown --source=${source}; expected auto or ${Object.keys(SOURCES).join(', ')}`,
+      `unknown --source=${requestedSource}; expected auto or ${Object.keys(SOURCES).join(', ')}`,
     )
   }
   const requested = value('model') ?? DEFAULT_SEMANTIC_MODEL
@@ -87,6 +97,7 @@ export function optionsOf(argv) {
   }
 }
 
+/** @param {import('./fetch-semantic-model.mjs').SemanticFetchOptions} options */
 async function installCliProxy(options) {
   const environment = options.noProxy ? {} : { ...process.env }
   if (!options.noProxy && options.proxy !== undefined) {
@@ -110,7 +121,12 @@ function listModels() {
   }
 }
 
-/** Install one model bundle through the shared transactional installer. */
+/**
+ * Install one model bundle through the shared transactional installer.
+ * @param {import('../lib/enrichment-model-catalog.js').SemanticModelEntry} model
+ * @param {import('./fetch-semantic-model.mjs').SemanticFetchOptions} options
+ * @param {AbortSignal} signal
+ */
 async function install(model, options, signal) {
   const dir = modelDir(model.physicalKey, options.dir)
   process.stderr.write(`installing ${model.key} (${model.physicalKey}) into ${dir}\n`)
@@ -143,7 +159,11 @@ async function install(model, options, signal) {
   }
 }
 
-/** Verify every pinned file with the one shared bundle rule. */
+/**
+ * Verify every pinned file with the one shared bundle rule.
+ * @param {import('../lib/enrichment-model-catalog.js').SemanticModelEntry} model
+ * @param {import('./fetch-semantic-model.mjs').SemanticFetchOptions} options
+ */
 async function verifyOne(model, options) {
   const dir = modelDir(model.physicalKey, options?.dir)
   const inspection = await createBundleInspector().inspect(
@@ -159,6 +179,7 @@ async function verifyOne(model, options) {
   return model.files.length
 }
 
+/** @param {import('./fetch-semantic-model.mjs').SemanticFetchOptions} options */
 async function verifyInstalled(options) {
   const present = []
   for (const model of SEMANTIC_MODELS) {

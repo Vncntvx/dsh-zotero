@@ -2,7 +2,7 @@
 
 # Features
 
-dsh-zotero connects the Zotero library to DSH. The agent searches, reads, and cites literature in conversation, and can write when needed. You browse the whole library and copy citations in the literature panel. The literature trail gathers the papers, extracted passages, and exports from the session for verification. See the [product model](product-model.en.md) for how the three divide the work.
+dsh-zotero connects the Zotero library to DSH. The agent searches, reads, and cites literature in conversation, and can write when needed. You browse the whole library and copy citations in the literature panel. The literature trail gathers the papers, extracted passages, and exports from the session for review. See the [product model](product-model.en.md) for how the three divide the work.
 
 ## Searching and Reading in Conversation
 
@@ -27,7 +27,7 @@ The agent has eight read-only tools. Parameters and error codes are in the [tool
 
 - `zotero_changes` starts from the local library version and reports additions, modifications, and deletions; the Trash counts as a separate block.
 
-Tool results appear as read-only cards in the conversation: collapsed cards show a one-line summary, while expanded cards show items, passages, export text, or a receipt according to the tool type, with copy actions and "Read PDF". Cards display the output already produced by the tool.
+Tool results appear as read-only cards in the conversation: collapsed cards show a one-line summary, while expanded cards show items, passages, export text, or a receipt according to the tool type, with copy actions and "Read PDF".
 
 Research SOP skills add eight on-demand workflows: paper digest, research landscape, citation lineage, evidence synthesis, manuscript reference audit, library governance, publication integrity and literature intake. The model selects one from a short catalog of names and descriptions, then loads its full phased instructions with the `skill` tool; bodies stay out of the standing system prompt. See the [research SOP skill reference](skills.en.md).
 
@@ -47,7 +47,7 @@ DSH's built-in "Trail" tab tracks tool-call execution, while the literature trai
 
 ## Using the Literature Panel
 
-The literature panel lives in the right sidebar, beside the conversation. It appears only when both of these are on:
+The literature panel appears in the right sidebar when both of these are on:
 
 - the `dsh-zotero/library` row under "Included components" is enabled;
 - the component's `rightSidebarEnabled` is on.
@@ -106,7 +106,7 @@ Document parsing is provided by the `dsh-zotero/enrichment` component, shipped w
 - Parsed Markdown is stored in `<outputDir>/<sha256>/`, with the figures it references kept under that directory's `images/` under their original names. Local attachments are cached by size, timestamp, and content fingerprint; URL sources are validated via HEAD requests matching ETag or Last-Modified. Source-index hits reuse existing artifacts directly.
 - When a valid artifact exists, "Parse this PDF" becomes "Read Markdown". Clicking it opens a right-sidebar result tab named after the paper, shows preparation progress, and presents the complete Markdown and all artifact figures with copy and download actions. A failed refresh keeps the previous complete result. For items with several PDFs, "Read PDF" and parsing share a chooser that labels each attachment: existing artifacts open in their result tab, while the others submit that attachment for parsing. Selecting a passage opens a small menu: "Explain" writes the passage and question into the current session draft, while "Copy selection" puts it on the clipboard.
 - The output directory accepts an absolute path or `~/`; relative paths are rejected at save time, and unavailable directories fail with `ZOTERO_ENRICHMENT_OUTPUT_INVALID`.
-- Optional local semantic ranking provides semantic tiers decoupled from physical model versions (`balanced` general & balanced recommended default · backed by Qwen3-0.6B, `lightweight` ultra-lightweight · backed by Granite-97M, `bilingual` Chinese-English · backed by KaLM-0.5B, `english` English long-context · backed by Nomic-137M, `hybrid` multi-vector hybrid · backed by BGE-M3, `academic` classic academic · backed by GTE-Base). Tier configurations stay valid across model updates. The WASM inference runtime ships inside the plugin, and models are downloaded in settings (via HF-Mirror or Hugging Face); both run on 16GB RAM CPU-only machines. When disabled, ranking uses BM25; when enabled but the model is unavailable, queries return `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` with a download prompt. On 20 authored paraphrase regression cases, actual-vector recall@4 is 55–95% across tiers (English uses ten English cases). These are in-sample checks; the development guide records the complete data and scope. The settings UI indicates when semantic search lacks a model or precision mode lacks a token.
+- Optional local semantic ranking provides semantic tiers decoupled from physical model versions (`balanced` general & balanced recommended default · backed by Qwen3-0.6B, `lightweight` ultra-lightweight · backed by Granite-97M, `bilingual` Chinese-English · backed by KaLM-0.5B, `english` English long-context · backed by Nomic-137M, `hybrid` multi-vector hybrid · backed by BGE-M3, `academic` classic academic · backed by GTE-Base). Tier configurations stay valid across model updates. The WASM inference runtime ships inside the plugin, and models are downloaded in settings (via HF-Mirror or Hugging Face); both run on 16GB RAM CPU-only machines. When disabled, ranking uses BM25; when enabled but the model is unavailable, queries return `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` with a download prompt. Across 20 authored paraphrase regression cases, actual-vector recall@4 is 55–95% across tiers (English uses ten English cases). The development guide records the complete data and scope. The settings UI indicates when semantic search lacks a model or precision mode lacks a token.
 
 ## Capabilities and Tools at a Glance
 

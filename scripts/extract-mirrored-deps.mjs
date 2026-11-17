@@ -17,47 +17,10 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mirroredDeclarationsOf } from './shared/harness-packages.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const fixture = join(root, 'tests', 'fixtures', 'harness-mirrored-deps-pin.json')
-
-/**
- * The declarations one pin tag carries, deduplicated per name.
- * @param run - runs one git command in the sibling and returns stdout.
- * @param tag - the `dsh-v<version>` tag.
- * @returns name to the sorted, unique ranges declared across the client packages.
- */
-export function mirroredDeclarationsOf(run, tag) {
-  const packages = run(['ls-tree', '--name-only', '-d', `${tag}:packages/client`])
-    .split('\n')
-    .filter((line) => line.length > 0)
-  const collected = new Map()
-  const declare = (name, range) => {
-    if (typeof range !== 'string') return
-    const list = collected.get(name)
-    if (list === undefined) collected.set(name, new Set([range]))
-    else list.add(range)
-  }
-  for (const pkg of packages) {
-    const manifest = JSON.parse(run(['show', `${tag}:packages/client/${pkg}/package.json`]))
-    for (const section of ['dependencies', 'devDependencies']) {
-      for (const [name, range] of Object.entries(manifest[section] ?? {})) declare(name, range)
-    }
-  }
-  // `@types/*` names live in the monorepo root manifest, not in a client package.
-  const rootManifest = JSON.parse(run(['show', `${tag}:package.json`]))
-  for (const [name, range] of [
-    ...Object.entries(rootManifest.dependencies ?? {}),
-    ...Object.entries(rootManifest.devDependencies ?? {}),
-  ]) {
-    if (name.startsWith('@types/') && !collected.has(name)) declare(name, range)
-  }
-  const declarations = {}
-  for (const name of [...collected.keys()].sort()) {
-    declarations[name] = [...collected.get(name)].sort()
-  }
-  return declarations
-}
 
 if (process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url)) {
   const version = process.argv[2]

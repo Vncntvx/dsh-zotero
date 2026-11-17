@@ -211,6 +211,8 @@ export function serveItemGraph(mock: MockZotero, spec: ItemGraphSpec = {}): void
 export interface SearchPageSpec {
   /** The rows the listing returns. */
   readonly items: readonly WireObject[]
+  /** Offset of the first supplied row; zero for a complete fixture corpus. */
+  readonly offset?: number
   /**
    * The total the header reports; defaults to the row count, and `null` omits
    * the header entirely: the shape a build that does not report totals
@@ -227,7 +229,9 @@ export interface SearchPageSpec {
 
 /**
  * Serve one search listing. The default path matches both `/items` and
- * `/items/top`, which is what a whole-library search asks for.
+ * `/items/top`, which is what a whole-library search asks for. Explicit
+ * start/limit windows slice the supplied corpus. An absent limit returns all
+ * remaining rows, as independently observed against Zotero 11 Local API.
  * @param mock - the server to register on.
  * @param spec - the page to serve.
  */
@@ -240,7 +244,11 @@ export function serveSearchPage(mock: MockZotero, spec: SearchPageSpec): void {
     ...(spec.serverId === null ? {} : versionHeaders(spec.serverId ?? SERVER_ID)),
     ...spec.headers,
   }
-  mock.route('GET', path, (req, res, helpers) => helpers.json([...spec.items], headers))
+  mock.route('GET', path, (_req, _res, helpers, query) => {
+    const start = Number(query.get('start') ?? 0) - (spec.offset ?? 0)
+    const limit = Number(query.get('limit') ?? spec.items.length)
+    helpers.json(start < 0 ? [] : spec.items.slice(start, start + limit), headers)
+  })
 }
 
 /**
