@@ -53,6 +53,7 @@ function mountInspector(detail: ZoteroItemDetailView) {
     >
       <LibraryInspector
         t={mockT}
+        locale={{ getSnapshot: () => ({ active: 'en' }) }}
         inspector={{ phase: 'ready', detail }}
         retry={vi.fn()}
         pageChild={vi.fn()}

@@ -689,6 +689,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     viewStore,
     parse: surfaces.parse,
     parsedDocuments: surfaces.parsedDocuments,
+    // The browser resolves the answer language from this service at draft time.
+    locale: ctx.locale,
     // The parsed tab is address-claimed, so two attachments never share one
     // tab and reopening a document reveals it.
     openParsed: (attachment, title, itemRef) => {
@@ -786,6 +788,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       const parsedFace = (): ParsedDocumentTabFace => ({
         contextMenus: ctx.contextMenus,
         refresh: (address) => surfaces.parsedDocuments.refresh(address),
+        // The browser resolves the answer language from this service at draft time.
+        locale: ctx.locale,
         // The explain request cites the item, so the model can read the rest
         // of the paper through the read tools.
         item: (request, signal) => ctx.remote.zotero.item(request, signal),

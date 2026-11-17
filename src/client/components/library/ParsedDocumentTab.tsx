@@ -17,6 +17,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type { ZoteroItemDetailView, ZoteroLibraryItemRequestView } from '../../../contract.ts'
 import { downloadBlob } from '../../download.ts'
+import { answerLanguageOf, type AnswerLanguageSource } from '../../answer-language.ts'
 import { artifactImageName } from '../../../artifact-images.ts'
 import { extractMarkdownTitleOf, isGenericParsedTitle } from '../../../parsed-title.ts'
 import { parseParsedTabAddress, type ParsedTabTarget } from '../../parsed-tab.ts'
@@ -38,6 +39,11 @@ export type { ParsedArtifactRead } from '../../parsed-documents.ts'
 export interface ParsedDocumentTabFace {
   readonly contextMenus: Pick<ContextMenus, 'register' | 'open' | 'close' | 'active'>
   readonly refresh: (address: string) => void
+  /**
+   * The client locale service. The explain prompt is assembled here, so the
+   * component reads the active language from it as the draft is built.
+   */
+  readonly locale: AnswerLanguageSource
   readonly item?: (
     request: ZoteroLibraryItemRequestView,
     signal?: AbortSignal,
@@ -457,7 +463,10 @@ function ParsedDocumentView(
           ? { kind: 'artifactId', artifactId: target.artifactId }
           : { kind: 'ref', ref: target.ref }
       const draft = [
-        t('parsedExplainPrompt', { source: JSON.stringify(source) }),
+        t('parsedExplainPrompt', {
+          source: JSON.stringify(source),
+          language: answerLanguageOf(props.locale.getSnapshot().active),
+        }),
         result?.ok ? itemInfoTextOf(result.value) : displayTitle,
         target.item ?? '',
         // Keep the excerpt at the end, after the instruction and metadata.

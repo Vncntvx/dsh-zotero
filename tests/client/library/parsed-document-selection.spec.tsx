@@ -69,7 +69,10 @@ describe('parsed passage menu', () => {
     // One card: the instruction asks about the excerpt that closes it, so the
     // composer keeps a single removable block instead of loose text.
     expect(actions.insertQuote).toHaveBeenCalledWith(
-      `${mockT('parsedExplainPrompt', { source: JSON.stringify({ kind: 'ref', ref: REF }) })}\n\nPaper\n\nSelected passage`,
+      `${mockT('parsedExplainPrompt', {
+        source: JSON.stringify({ kind: 'ref', ref: REF }),
+        language: 'English (en)',
+      })}\n\nPaper\n\nSelected passage`,
       { label: mockT('parsedExplain'), title: 'Paper', detail: 'Paper', body: 'Selected passage' },
     )
     expect(actions.insertText).not.toHaveBeenCalled()

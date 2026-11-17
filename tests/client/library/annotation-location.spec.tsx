@@ -35,6 +35,7 @@ it.each([
   render(
     <LibraryInspector
       t={mockT}
+      locale={{ getSnapshot: () => ({ active: 'en' }) }}
       openProtocol={openProtocol}
       inspector={{
         phase: 'ready',
@@ -70,6 +71,7 @@ it.each(['unparseable', 'zotero://user/0/annotation/SHORT'])(
     render(
       <LibraryInspector
         t={mockT}
+        locale={{ getSnapshot: () => ({ active: 'en' }) }}
         inspector={{
           phase: 'ready',
           detail: {

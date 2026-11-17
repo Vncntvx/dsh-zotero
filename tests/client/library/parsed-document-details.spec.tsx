@@ -135,11 +135,22 @@ it('instructs the model to read the full document through zotero_retrieve', asyn
   // or uninterpolated placeholder survives, and the excerpt closes the card.
   expect(draft).toContain('mode="fulltext"')
   expect(draft).toContain(JSON.stringify({ kind: 'ref', ref: REF }))
+  expect(draft).toContain('complete=true')
+  expect(draft).toContain('Answer in English (en)')
   expect(draft).not.toContain('{source}')
+  expect(draft).not.toContain('{language}')
   expect(draft).not.toContain('/full.md')
   expect(draft).toContain(
     'Explain request: read the paper’s complete parsed document before answering.',
   )
+  // These assertions lock in the prompt's answer rules: verification,
+  // no motive analysis, and a fixed paragraph structure.
+  expect(draft).toContain('mode="evidence"')
+  expect(draft).toContain('read the complete document through that handle')
+  expect(draft).toContain('verify it against the document')
+  expect(draft).toContain('Do not analyze the authors’ motives')
+  expect(draft).toContain('clearly separated blocks')
+  expect(draft).toContain('bullet points')
   expect(draft.endsWith('\n\nPassage')).toBe(true)
 })
 

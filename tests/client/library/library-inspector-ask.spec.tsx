@@ -24,6 +24,7 @@ function mountInspector(
     >
       <LibraryInspector
         t={mockT}
+        locale={{ getSnapshot: () => ({ active: 'en' }) }}
         inspector={{ phase: 'ready' as const, detail }}
         retry={vi.fn()}
         pageChild={vi.fn()}

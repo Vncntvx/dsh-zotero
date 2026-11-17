@@ -34,6 +34,7 @@ function mountInspector(
     childStates,
     retryChild,
     inputActions,
+    locale: { getSnapshot: () => ({ active: 'en' }) },
     openFile,
     resolveAttachment:
       resolveAttachment ??
@@ -645,6 +646,13 @@ describe('library inspector', () => {
     // the attachment; the item metadata still rides along.
     expect(inputActions.insertQuote).toHaveBeenCalledWith(
       expect.stringContaining(zh.libraryAskFulltextPrompt.split('{source}')[0]!),
+    )
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(expect.stringContaining('complete=true'))
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('Answer in English (en)'),
+    )
+    expect(inputActions.insertQuote).toHaveBeenCalledWith(
+      expect.stringContaining('verify it against the document'),
     )
     expect(inputActions.insertQuote).toHaveBeenCalledWith(
       expect.stringContaining('zotero://user/0/item/ATTAC001'),

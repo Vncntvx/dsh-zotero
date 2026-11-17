@@ -17,6 +17,7 @@ function inspector() {
   return render(
     <LibraryInspector
       t={mockT}
+      locale={{ getSnapshot: () => ({ active: 'en' }) }}
       inspector={{
         phase: 'ready',
         detail: { ...ITEM_DETAIL, doi: '10.1234/probe', url: 'https://example.org/paper' },

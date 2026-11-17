@@ -60,6 +60,7 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
       },
     }),
     ...face,
+    locale: { getSnapshot: () => ({ active: 'en' }) },
     useContextMenu: () => ({
       getTriggerProps: (target: { kind: string; value: unknown }) => {
         contextMenuTargets.push(target)

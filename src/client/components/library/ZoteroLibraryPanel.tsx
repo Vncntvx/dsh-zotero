@@ -41,6 +41,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
 import type { ParsedDocuments } from '../../parsed-documents.ts'
+import type { AnswerLanguageSource } from '../../answer-language.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -90,6 +91,8 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
    */
   readonly viewStore: LibraryViewStore
   readonly parse?: DocumentParseSurfacePort
+  /** The client locale service, used by the panels to name the answer language. */
+  readonly locale: AnswerLanguageSource
   /** The parsed-document provider, for badge invalidation on commit/discard. */
   readonly parsedDocuments?: ParsedDocuments
   readonly readUrlPdf?: (
@@ -745,6 +748,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   t={t}
                   inspector={feed.inspector}
                   inputActions={inputActions}
+                  locale={props.locale}
                   retry={feed.retryInspector}
                   pageChild={feed.pageChild}
                   childStates={feed.childStates}

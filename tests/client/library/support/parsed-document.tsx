@@ -191,6 +191,7 @@ export async function parsedRuntime(
       sessionId: SESSION,
       refresh: (address: string) => documents.refresh(address),
       documents,
+      locale: { getSnapshot: () => ({ active: 'en' }) },
       item: options.item,
       inputActions: options.actions,
       notify,

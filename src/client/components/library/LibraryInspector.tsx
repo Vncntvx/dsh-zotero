@@ -13,6 +13,7 @@ import type { LibrarySection } from '../../../library-preferences.ts'
 
 import { memo, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
+import { answerLanguageOf, type AnswerLanguageSource } from '../../answer-language.ts'
 import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -80,6 +81,8 @@ interface LibraryInspectorProps {
   readonly retryChild: (kind: ChildKind) => void
   /** The session's input face; present on this session-scope placement. */
   readonly inputActions: InputActions | undefined
+  /** The client locale service; the ask prompt names the active language from it. */
+  readonly locale: AnswerLanguageSource
   /** Opens a local file in the right sidebar reader; undefined when no session can anchor it. */
   readonly openFile: ((path: string) => void) | undefined
   readonly resolveAttachment:
@@ -496,6 +499,7 @@ function LibraryInspectorBody({
   t,
   inspector,
   inputActions,
+  locale,
   openFile,
   resolveAttachment,
   openProtocol,
@@ -627,7 +631,11 @@ function LibraryInspectorBody({
     const instruction =
       attachment === undefined
         ? askPrompt
-        : t('libraryAskFulltextPrompt', { title: detail.title, source })
+        : t('libraryAskFulltextPrompt', {
+            title: detail.title,
+            source,
+            language: answerLanguageOf(locale.getSnapshot().active),
+          })
     const information = [instruction, itemInfoTextOf(detail), attachment?.ref ?? detail.ref]
     if (preferences.preferences?.chatInsertContent === 'referenceAndAbstract') {
       information.push(
