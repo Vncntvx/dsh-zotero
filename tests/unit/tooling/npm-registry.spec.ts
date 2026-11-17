@@ -81,7 +81,7 @@ it('bounds the wait for a published version', async () => {
       delay,
     }),
   ).rejects.toThrow('not visible')
-  expect(fetchImpl).toHaveBeenCalledTimes(6)
+  expect(fetchImpl).toHaveBeenCalledTimes(30)
 })
 
 it('verifies downloaded bytes against the tarball that passed installation smoke', async () => {
@@ -93,6 +93,19 @@ it('verifies downloaded bytes against the tarball that passed installation smoke
   })
   fetchImpl.mockResolvedValueOnce(new Response('different bytes'))
   await expect(registryTarball(metadata, manifest, bytes, fetchImpl)).rejects.toThrow('differs')
+})
+
+it('retries when the registry tarball URL is temporarily unavailable', async () => {
+  const fetchImpl = vi
+    .fn(async () => new Response(bytes))
+    .mockResolvedValueOnce(new Response(null, { status: 404 }))
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+  const delay = vi.fn(async () => {})
+  await expect(
+    registryTarball(metadata, manifest, bytes, { fetchImpl, delay, maxAttempts: 5 }),
+  ).resolves.toEqual(bytes)
+  expect(fetchImpl).toHaveBeenCalledTimes(3)
+  expect(delay).toHaveBeenCalledTimes(2)
 })
 
 it('refuses a substituted tarball host before downloading', async () => {

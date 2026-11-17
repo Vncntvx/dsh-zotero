@@ -15,11 +15,18 @@ export function registryVersion(
     fetchImpl?: typeof fetch
     waitForPublication?: boolean
     delay?: (ms: number) => Promise<unknown>
+    maxAttempts?: number
   },
 ): Promise<RegistryPackage | undefined>
 export function registryTarball(
   metadata: RegistryPackage,
   manifest: { name: string; version: string },
   expectedBytes: Uint8Array,
-  fetchImpl?: typeof fetch,
+  options?:
+    | typeof fetch
+    | {
+        fetchImpl?: typeof fetch
+        delay?: (ms: number) => Promise<unknown>
+        maxAttempts?: number
+      },
 ): Promise<Buffer>

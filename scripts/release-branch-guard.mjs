@@ -44,7 +44,7 @@ export function assertReleaseAdvance({
   }
   if (!sourceDescendsFromPrevious)
     throw new Error(
-      '[release-branch] Refusing to move the release channel backwards or across unrelated history',
+      `[release-branch] Refusing to move the release channel backwards or across unrelated history (HEAD ${sourceSha} does not descend from previous release source ${previous.sourceSha})`,
     )
   if (previous.sourceSha === sourceSha && previous.artifactDigest !== artifactDigest)
     throw new Error('[release-branch] The same source commit produced different release bytes')

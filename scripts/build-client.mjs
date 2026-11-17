@@ -295,8 +295,11 @@ const cssModulesPlugin = {
         cssModules: true,
         minify: true,
       })
-      const names = {}
-      for (const [original, info] of Object.entries(classMap)) names[original] = info.name
+      const names = Object.fromEntries(
+        Object.entries(classMap)
+          .sort(([a], [b]) => a.localeCompare(b, 'en'))
+          .map(([original, info]) => [original, info.name]),
+      )
       // Path-relative id: basename alone collides when two directories
       // ship the same module filename (e.g. `fields.module.css`).
       const id = `${PLUGIN_ID}/${relative(root, args.path).split('\\').join('/')}`

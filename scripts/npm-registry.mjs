@@ -15,17 +15,19 @@ export function assertRegistryArtifact(metadata, manifest, bytes) {
     metadata.version !== manifest.version ||
     !metadata.dist?.integrity?.split(/\s+/).includes(integrity)
   )
-    throw new Error('Registry package differs from the verified artifact; use a new version')
+    throw new Error(
+      `Registry package differs from the verified artifact; use a new version (artifact ${integrity}, registry ${metadata.dist?.integrity ?? 'missing'})`,
+    )
 }
 
 /** Returns the registry metadata for a package version, or undefined on HTTP 404. */
 export async function registryVersion(
   name,
   version,
-  { fetchImpl = fetch, waitForPublication = false, delay = pause } = {},
+  { fetchImpl = fetch, waitForPublication = false, delay = pause, maxAttempts = 30 } = {},
 ) {
   const url = `${registry}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`
-  for (let attempt = 0; ; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await fetchImpl(url, {
       redirect: 'error',
       signal: AbortSignal.timeout(20_000),
@@ -33,7 +35,8 @@ export async function registryVersion(
     if (response.status === 404) {
       await response.body?.cancel()
       if (!waitForPublication) return undefined
-      if (attempt === 5) throw new Error('Published version is not visible on registry.npmjs.org')
+      if (attempt + 1 === maxAttempts)
+        throw new Error('Published version is not visible on registry.npmjs.org')
       await delay(2_000)
       continue
     }
@@ -43,18 +46,37 @@ export async function registryVersion(
 }
 
 /** Downloads the package tarball from the registry and verifies its integrity. */
-export async function registryTarball(metadata, manifest, expectedBytes, fetchImpl = fetch) {
+export async function registryTarball(
+  metadata,
+  manifest,
+  expectedBytes,
+  options = fetch,
+) {
+  const {
+    fetchImpl = typeof options === 'function' ? options : fetch,
+    delay = pause,
+    maxAttempts = 15,
+  } = typeof options === 'object' && options !== null ? options : { fetchImpl: typeof options === 'function' ? options : fetch }
   assertRegistryArtifact(metadata, manifest, expectedBytes)
   const url = new URL(metadata.dist.tarball)
   if (url.origin !== registry) throw new Error('Tarball URL leaves registry.npmjs.org')
-  const response = await fetchImpl(url, {
-    redirect: 'error',
-    signal: AbortSignal.timeout(60_000),
-  })
-  if (!response.ok) throw new Error(`Registry tarball download failed: HTTP ${response.status}`)
-  const bytes = Buffer.from(await response.arrayBuffer())
-  assertRegistryArtifact(metadata, manifest, bytes)
-  return bytes
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await fetchImpl(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(60_000),
+    })
+    if (response.status === 404 || (response.status >= 500 && response.status <= 504)) {
+      await response.body?.cancel()
+      if (attempt + 1 === maxAttempts)
+        throw new Error(`Registry tarball download failed: HTTP ${response.status}`)
+      await delay(2_000)
+      continue
+    }
+    if (!response.ok) throw new Error(`Registry tarball download failed: HTTP ${response.status}`)
+    const bytes = Buffer.from(await response.arrayBuffer())
+    assertRegistryArtifact(metadata, manifest, bytes)
+    return bytes
+  }
 }
 
 async function main() {
