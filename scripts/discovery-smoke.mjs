@@ -18,7 +18,15 @@
  */
 
 import { execFile, execFileSync, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -56,6 +64,62 @@ const DSH = resolveDsh()
 const HOME = argAfter('--home') ?? mkdtempSync(join(tmpdir(), 'dsh-zotero-home-'))
 const PROFILE = 'web' // `dsh web` always boots the web profile
 const ENV = { ...process.env, DSH_HOME: HOME }
+
+async function runDsh(args) {
+  const command = dshCommand(args)
+  try {
+    const result = await execFileAsync(command.command, command.args, {
+      env: ENV,
+      timeout: 10 * 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+    })
+    appendFileSync(join(HOME, 'install.log'), result.stdout + result.stderr)
+  } catch (error) {
+    appendFileSync(join(HOME, 'install.log'), (error.stdout ?? '') + (error.stderr ?? ''))
+    throw error
+  }
+}
+
+/** Resolve and import all four host entries from the consumer's fresh profile. */
+async function verifyInstalledEntries() {
+  const installAnchor = DSH.endsWith('.js')
+    ? join(dirname(dirname(resolve(DSH))), 'package.json')
+    : join(
+        execFileSync('npm', ['root', '--global'], { encoding: 'utf8' }).trim(),
+        '@deepseek-ai/dsh/package.json',
+      )
+  const result = await execFileAsync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `import { createRequire } from 'node:module'
+      import { pathToFileURL } from 'node:url'
+      const installAnchor = ${JSON.stringify(installAnchor)}
+      const require = createRequire(installAnchor)
+      const { Context } = await import(pathToFileURL(require.resolve('@deepseek-ai/cordis')).href)
+      const { PluginPackages, createRuntimeResolution, loadProfileDirectory } = await import(
+        pathToFileURL(require.resolve('@deepseek-ai/dsh-app-boot')).href
+      )
+      const profile = loadProfileDirectory('dsh', process.cwd(), installAnchor)
+      const resolution = await createRuntimeResolution({ installAnchor, profile })
+      const ctx = new Context()
+      try {
+        await ctx.plugin(PluginPackages, { resolution })
+        for (const suffix of ['', '/library', '/scholarly', '/enrichment']) {
+          const name = ${JSON.stringify(PLUGIN_ID)} + suffix
+          const entry = await import(name)
+          if (typeof entry.default !== 'function') throw new Error(name + ' lacks a loadable service')
+          console.log('installed entry ok: ' + name)
+        }
+      } finally {
+        await ctx.fiber.dispose()
+      }`,
+    ],
+    { cwd: join(HOME, 'profiles', PROFILE), env: ENV, timeout: 60_000 },
+  )
+  console.log(result.stdout.trim())
+}
 
 function dshCommand(args) {
   if (DSH.endsWith('.js')) {
@@ -264,8 +328,8 @@ async function pinDocumentsDirectory() {
  * linker, no automatic peers) when the file is absent.
  */
 async function initializeProfile() {
-  const init = dshCommand(['plugin', '--profile', PROFILE, 'version-exemptions'])
-  await execFileAsync(init.command, init.args, { env: ENV })
+  await mkdir(HOME, { recursive: true })
+  await runDsh(['plugin', '--profile', PROFILE, 'version-exemptions'])
 }
 
 async function main() {
@@ -276,13 +340,13 @@ async function main() {
 
   await initializeProfile()
 
-  const add = dshCommand(['plugin', '--profile', PROFILE, 'add', tarball])
-  await execFileAsync(add.command, add.args, { env: ENV })
-  await pinDocumentsDirectory()
+  await runDsh(['plugin', '--profile', PROFILE, 'add', tarball])
+  await verifyInstalledEntries()
+  if (!process.argv.includes('--install-only')) await pinDocumentsDirectory()
 
   // The reserved port can be stolen between reserve and bind; retry the whole
   // serve on EADDRINUSE instead of failing the run on a TOCTOU loss.
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; !process.argv.includes('--install-only') && attempt <= 3; attempt += 1) {
     try {
       await serveOnce(await reservePort())
       break

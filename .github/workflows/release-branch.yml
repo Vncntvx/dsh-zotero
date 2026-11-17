@@ -35,6 +35,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # Builds generated declarations for scripts/*.mjs typechecking before release:check.
+      - name: Build generated artifacts
+        run: npm run build
+
       - name: Run deterministic release gate
         run: npm run release:check
 
@@ -51,8 +55,17 @@ jobs:
           retention-days: 7
 
   web-composition:
+    name: Install and load (${{ matrix.os }})
     needs: quality-gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
 
@@ -84,6 +97,7 @@ jobs:
           npm install --global "@deepseek-ai/dsh@${pinned}" pnpm@11.28.5
 
       - name: Install Chromium
+        if: runner.os == 'Linux'
         run: npx playwright install --with-deps chromium
 
       - name: Download verified release artifact
@@ -95,10 +109,149 @@ jobs:
       - name: Verify release artifact
         run: node scripts/release-artifact.mjs --verify --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
 
-      - name: Run packed Web composition smoke
+      - name: Install verified tarball and load all host entries
         run: |
           tarball="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; import { join } from "node:path"; const dir=join(process.env.RUNNER_TEMP,"release-artifact"); console.log(join(dir,JSON.parse(readFileSync(join(dir,"artifact.json"),"utf8")).tarball))')"
-          npm run smoke:web-composition -- --tarball "$tarball"
+          dsh_cli="$(npm root --global)/@deepseek-ai/dsh/lib/bin.js"
+          if [ "$RUNNER_OS" = Linux ]; then
+            npm run smoke:web-composition -- --tarball "$tarball" --dsh "$dsh_cli" --home "$RUNNER_TEMP/install-smoke"
+          else
+            npm run smoke:discovery -- --install-only --tarball "$tarball" --dsh "$dsh_cli" --home "$RUNNER_TEMP/install-smoke"
+          fi
+
+      - name: Preserve installation failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-smoke-${{ runner.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/install-smoke
+            !${{ runner.temp }}/install-smoke/**/node_modules/**
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
+  npm-release:
+    name: Publish to npm and create GitHub Release
+    # Publishes on version tags; main pushes and manual dispatches only run gates and release-branch updates.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    needs:
+      - quality-gate
+      - web-composition
+
+    steps:
+      - name: Checkout triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js for npm trusted publishing
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.15.0
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Require a trusted-publishing-capable npm
+        run: |
+          NPM_VERSION="$(npm --version)" node -e '
+            const [major, minor, patch] = process.env.NPM_VERSION.split(".").map(Number)
+            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
+              console.error(`npm ${process.env.NPM_VERSION} is too old for trusted publishing (need >= 11.5.1)`)
+              process.exit(1)
+            }
+          '
+
+      - name: Download verified release artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifact-${{ github.sha }}
+          path: ${{ runner.temp }}/release-artifact
+
+      - name: Verify artifact and tag/version agreement
+        run: |
+          node scripts/release-artifact.mjs --verify \
+            --out "$RUNNER_TEMP/release-artifact" \
+            --source-sha "${{ github.sha }}"
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME}"
+          if [ "$tag" != "v$version" ]; then
+            echo "Tag $tag does not match package version $version" >&2
+            exit 1
+          fi
+          provenance_version="$(node -p "require('$RUNNER_TEMP/release-artifact/package/release-provenance.json').packageVersion")"
+          if [ "$provenance_version" != "$version" ]; then
+            echo "Artifact version $provenance_version does not match $version" >&2
+            exit 1
+          fi
+          {
+            echo "VERSION=$version"
+            echo "TARBALL=$(node --input-type=module -e 'import { readFileSync } from "node:fs"; import { join } from "node:path"; const dir=join(process.env.RUNNER_TEMP,"release-artifact"); console.log(join(dir,JSON.parse(readFileSync(join(dir,"artifact.json"),"utf8")).tarball))')"
+            echo "ARTIFACT_DIGEST=$(node -p "require('$RUNNER_TEMP/release-artifact/artifact.json').artifactDigest")"
+            echo "TARBALL_SHA256=$(node -p "require('$RUNNER_TEMP/release-artifact/artifact.json').tarballSha256")"
+          } >> "$GITHUB_ENV"
+
+      - name: Select publication channel
+        run: |
+          dist_tag=latest
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=true
+            prerelease_id="${VERSION#*-}"
+            dist_tag="${prerelease_id%%.*}"
+            if [[ "$dist_tag" = latest || ! "$dist_tag" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+              dist_tag=next
+            fi
+          fi
+          {
+            echo "NPM_DIST_TAG=$dist_tag"
+            echo "PRERELEASE=$prerelease"
+          } >> "$GITHUB_ENV"
+
+      - name: Check whether npm already holds the verified artifact
+        run: node scripts/npm-registry.mjs --check --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Publish the verified tarball to npm (OIDC trusted publishing)
+        if: env.PUBLISH_NEEDED == 'true'
+        run: npm publish "$TARBALL" --access public --tag "$NPM_DIST_TAG"
+
+      - name: Download and verify the public npm tarball
+        run: node scripts/npm-registry.mjs --verify --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          git fetch origin --force --tags >/dev/null 2>&1 || true
+          # Signed tags put the PGP signature in %(contents); stop at it so the
+          # release notes show only the human-written annotation.
+          tag_body="$(git tag -l --format='%(contents)' "$tag" | sed '/^-----BEGIN PGP SIGNATURE-----/,$d')"
+          generated="$(gh api "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="$tag" --jq .body)"
+          {
+            if [ -n "$tag_body" ]; then printf '%s\n\n' "$tag_body"; fi
+            printf '%s\n' "$generated"
+            printf '\n---\n\n**Publication provenance**\n\n'
+            printf -- '- Source commit: `%s`\n' "${{ github.sha }}"
+            printf -- '- artifactDigest: `%s`\n' "$ARTIFACT_DIGEST"
+            printf -- '- tarballSha256: `%s`\n' "$TARBALL_SHA256"
+          } > "$RUNNER_TEMP/release-notes.md"
+          release_flags=()
+          if [ "$PRERELEASE" = true ]; then
+            release_flags+=(--prerelease --latest=false)
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refreshing its notes."
+            gh release edit "$tag" --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
+          else
+            gh release create "$tag" --title "$tag" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
+          fi
 
   publish:
     runs-on: ubuntu-latest

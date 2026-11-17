@@ -1,9 +1,9 @@
 /**
  * Artifact resolution provenance: a registry install is judged by its own
  * declarations and its version, while a sibling checkout linked into
- * `node_modules` is still judged by its build freshness. The import scan reads
- * the same trees the guards read, so its two readings of each file are what
- * keep a spec's counter-example out of the dependency list.
+ * `node_modules` is still judged by its build freshness. Small source trees
+ * exercise the import scan's syntax and traversal rules independently of
+ * repository size.
  * @module tests/unit/harness-artifacts
  */
 
@@ -115,15 +115,28 @@ describe('artifact resolution provenance', () => {
   })
 
   it('never reports a specifier that only appears inside a string fixture', () => {
-    // The focus gate's own spec spells imports out inside template literals.
-    // The scan reads the same tree, so the two readings must agree that those
-    // are fixtures, not dependencies.
-    expect(importedSpecifiers()).toContain('@deepseek-ai/dsh-home-paths')
-    expect(importedSpecifiers().filter((specifier) => specifier.includes('/src/'))).toEqual([
-      '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts',
-      '@deepseek-ai/dsh-client-test-runtime/src/assembly/roster.ts',
-      '@deepseek-ai/dsh-client-test-runtime/src/assembly/test-client.ts',
-      '@deepseek-ai/dsh-client-test-runtime/src/translate.ts',
+    const tests = join(checkout, 'tests', 'unit')
+    mkdirSync(tests, { recursive: true })
+    writeFileSync(
+      join(tests, 'imports.spec.ts'),
+      [
+        'import type { Config } from "@deepseek-ai/fixture-config"',
+        'export { home } from "@deepseek-ai/fixture-home"',
+        'export * from "@deepseek-ai/fixture-exports"',
+        'const load = () => import("@deepseek-ai/fixture-runtime/src/entry.ts")',
+        'const text = "import x from \\"@deepseek-ai/quoted/src/entry.ts\\""',
+        'const example = `import x from "@deepseek-ai/template/src/entry.ts"`',
+        '// import x from "@deepseek-ai/comment/src/entry.ts"',
+        '/* export * from "@deepseek-ai/block-comment/src/entry.ts" */',
+        'const expression = `${import("@deepseek-ai/fixture-expression")}`',
+      ].join('\n'),
+    )
+    expect(importedSpecifiers(checkout)).toEqual([
+      '@deepseek-ai/fixture-config',
+      '@deepseek-ai/fixture-exports',
+      '@deepseek-ai/fixture-expression',
+      '@deepseek-ai/fixture-home',
+      '@deepseek-ai/fixture-runtime/src/entry.ts',
     ])
   })
 
@@ -140,9 +153,15 @@ describe('artifact resolution provenance', () => {
       join(scripts, 'legacy.cts'),
       'const value = import("@deepseek-ai/fixture-dynamic")',
     )
+    mkdirSync(join(checkout, 'src'))
+    writeFileSync(
+      join(checkout, 'src', 'panel.tsx'),
+      'import { Panel } from "@deepseek-ai/fixture-panel"; export const view = <Panel />',
+    )
     expect(importedSpecifiers(checkout)).toEqual([
       '@deepseek-ai/fixture-dynamic',
       '@deepseek-ai/fixture-home',
+      '@deepseek-ai/fixture-panel',
       '@deepseek-ai/fixture-types',
     ])
   })

@@ -173,7 +173,7 @@ Every harness pin change walks this page from the top: check whether upstream no
 - **Type**: security boundary / release constraint.
 - **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
 - **Location**: `scripts/build-state.mjs`, `release-artifact.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
-- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The quality gate creates one artifact with scripts and dev dependencies removed; Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected.
+- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The quality gate creates one artifact with scripts, dev dependencies and development-only overrides removed. Retaining those overrides after removing dev dependencies conflicts with peer ranges and can make `npm pack` fail with `EOVERRIDE`. Fresh Linux, macOS and Windows profiles install the same tarball with the published, exactly pinned CLI and pnpm 11, then import all four host entries from the installed package through the host's public profile resolver. Peer dependencies come from the host installation, so bare Node imports do not represent the runtime. Linux also runs browser Web smoke. Publication consumes the existing artifact. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected.
 - **Review trigger**: build inputs, artifact layout, publication entry, Actions, Node or compiler changes.
 - **Verification**: `build-state.spec.ts`, `release-artifact.spec.ts`, `release-branch.spec.ts`, `release:check`, and smoke against the actual tarball.
 - **Follow-up**: add new build inputs to the digest and new release files to the verified set. Preserve tamper, missing-file, source rollback and credential-isolation checks after tool upgrades.
@@ -455,3 +455,31 @@ A retired entry keeps its original title, retirement date, and replacement mecha
 - **Review trigger**: Changes to the tools pipeline, result wrappers or projectors.
 - **Verification**: `tests/host/result-projection.spec.ts` runs both arms through the real tool execution pipeline and asserts one projector call, with no nested facts or duplicate session identifiers in metadata.
 - **Follow-up**: Review the delivery layer if upstream introduces a retained invocation projection interface; preserve execution tests for both arms.
+
+## DN-44: npm trusted publishing and registry artifact verification
+
+- **Type**: external configuration contract / release constraint.
+- **Location**: `npm-release` in `release-branch.yml`, `scripts/npm-registry.mjs`, and npmjs.com's Trusted publishing settings.
+- **Behavior**: authorize GitHub Actions on npm with user `Vncntvx`, repository `dsh-zotero`, workflow filename `release-branch.yml`, no environment, and direct `npm publish` allowed. Fields and the filename are case-sensitive. A new configuration needs a successful first publication within two days; recreate it if expired. Only version-tag pushes trigger publication. OIDC requires a GitHub-hosted runner, npm ≥ 11.5.1, Node ≥ 22.14.0 and `id-token: write`. Before publication, only an authoritative registry 404 indicates an unreleased version; an existing version must match SHA-512. After publication, verifying the downloaded registry tarball bytes precedes GitHub Release creation. Public packages from public repositories receive provenance automatically.
+- **Prereleases**: npm publication passes an explicit dist-tag: `latest` for stable versions, the first letter-led prerelease identifier (such as `alpha`) for prereleases, and `next` for numeric or `latest` identifiers. GitHub Release creation and updates both use `--prerelease --latest=false`. Prereleases must preserve the stable channel.
+- **Review trigger**: workflow rename, repository migration, adding an environment, or changes to npm authentication or registry protocols.
+- **Verification**: `tests/unit/tooling/npm-registry.spec.ts` covers conflicting digests, lookup failures, visibility waits and download bytes; `release-branch.spec.ts` constrains the installation matrix and publication dependencies. GitHub Actions validates real OIDC and all three runners.
+- **Follow-up**: recreate npm's trusted publisher when bound fields change. Inspect registry state after a post-publication verification failure; changed bytes require a new version.
+
+## DN-45: Import scanner test input size
+
+- **Type**: test performance / CI release constraint.
+- **Location**: `tests/unit/tooling/harness-artifacts.spec.ts` and `importedSpecifiers` in `scripts/harness-state.mjs`.
+- **Behavior**: syntax and traversal cases use isolated temporary directories covering `src`, `tests`, `scripts`, type and dynamic imports, re-exports, TSX, comments and template literals. Real imports inside template expressions must remain visible. Unit tests avoid repeating a complete AST scan over the growing checkout. Repository type checks and test guards retain their existing scope.
+- **Review trigger**: a new scan root, file extension or import syntax, or a parser or coverage-tool upgrade in CI.
+- **Verification**: in failed run `44032316431`, the repository scan took 7586 ms and exceeded the default 5000 ms limit. After the fix, run the focused spec and full `release:check`, preserving every existing gate.
+- **Follow-up**: add small positive and negative cases when scanner rules change. Measure whole-repository scan performance separately from syntax unit tests.
+
+## DN-46: Directory normalization tests must preserve noncanonical input
+
+- **Type**: cross-platform test contract.
+- **Location**: configured model directory cases in `tests/unit/semantic-loader-lifecycle.spec.ts`.
+- **Behavior**: construct raw `..` input with explicit path separators. `path.join` removes `..` before the loader sees it and cannot construct that counterexample. A separate case uses `realpath` to supply an already canonical directory. Neither case depends on macOS's `/var` alias.
+- **Review trigger**: model directory policy, temporary directory layout or platform changes.
+- **Verification**: runs `44034659947` / `44034650470` passed every test but measured Linux branch coverage at 93.59%, below the 93.6% gate. After the fix, run the loader cases and one full release gate, preserving coverage thresholds.
+- **Follow-up**: retain both canonical and noncanonical inputs when directory alias or normalization rules change, so the local directory layout cannot accidentally supply branch coverage.

@@ -34,9 +34,11 @@ jobs:
         run: npm run release:check
 
       - name: Check direct dependency releases
+        continue-on-error: true
         run: npm run deps:check
 
       - name: Check upstream registry updates
+        if: always()
         run: |
           PIN=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-tools']")
           # The harness publishes its mainline under `next`; `npm view <pkg>

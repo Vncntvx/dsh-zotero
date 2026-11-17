@@ -7,9 +7,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
-import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
+import {
+  SemanticEmbedderLoader,
+  semanticUnavailable,
+} from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { SemanticModelTarget } from '../../src/enrichment/semantic/loader.ts'
 import { deferred } from '../helpers/sync.ts'
@@ -38,6 +41,11 @@ function embedderOf(disposed: string[], key: string): Embedder {
 }
 
 describe('SemanticEmbedderLoader lifecycle', () => {
+  it('preserves the semantic-unavailable error identity when already normalized', () => {
+    const error = semanticUnavailable(new Error('model missing'))
+    expect(semanticUnavailable(error)).toBe(error)
+  })
+
   it('preserves a retained inference lease while released scopes stay permanently closed', async () => {
     const dispose = vi.fn(async () => {})
     const loader = new SemanticEmbedderLoader({
@@ -271,15 +279,39 @@ describe('configured model directory validation', () => {
       })
       // The configured root is the same directory spelled with a traversing
       // segment; the reader must open the canonical path.
-      const configuredDir = join(base, 'nested', '..')
+      const configuredDir = `${join(base, 'nested')}${sep}..`
       await loadOnce(loader, {
         spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
-        dir: join(configuredDir, 'qwen3-0.6b'),
+        dir: `${configuredDir}${sep}qwen3-0.6b`,
         configuredDir,
       })
       expect(opened).toEqual([join(await realpath(base), 'qwen3-0.6b')])
       await loader.dispose()
     } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  it('opens an already canonical configured directory without changing its target', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'loader-canonical-dir-'))
+    const opened: SemanticModelTarget[] = []
+    const loader = new SemanticEmbedderLoader({
+      open: async (requested) => {
+        opened.push(requested)
+        return embedderOf([], requested.spec.key)
+      },
+    })
+    try {
+      const configuredDir = await realpath(base)
+      const requested = {
+        spec: tinyModel,
+        dir: join(configuredDir, tinyModel.physicalKey),
+        configuredDir,
+      }
+      await loadOnce(loader, requested)
+      expect(opened).toEqual([requested])
+    } finally {
+      await loader.dispose()
       await rm(base, { recursive: true, force: true })
     }
   })

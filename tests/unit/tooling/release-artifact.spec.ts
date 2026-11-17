@@ -24,6 +24,8 @@ async function artifact(root: string) {
       files: ['lib'],
       scripts: { prepare: 'exit 91' },
       devDependencies: { dangerous: '1.0.0' },
+      peerDependencies: { dangerous: '>=1.0.0' },
+      overrides: { dangerous: '1.0.0' },
     }),
   )
   await writeFile(join(base, 'lib/index.js'), 'export const answer = 42')
@@ -60,6 +62,8 @@ it('packs public declarations and removes install-time code from the checked art
     const manifest = JSON.parse(await readFile(join(verified.stage, 'package.json'), 'utf8'))
     expect(manifest.scripts).toBeUndefined()
     expect(manifest.devDependencies).toBeUndefined()
+    expect(manifest.overrides).toBeUndefined()
+    expect(manifest.peerDependencies).toEqual({ dangerous: '>=1.0.0' })
     expect(verifyReleaseArtifact(out, sha).provenance.files).toHaveProperty('lib/index.d.ts')
   })
 })

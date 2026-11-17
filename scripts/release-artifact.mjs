@@ -41,7 +41,7 @@ function tree(base, prefix = '') {
   return Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b, 'en')))
 }
 export function releaseManifestOf(manifest) {
-  const { scripts: _scripts, devDependencies: _dev, ...release } = manifest
+  const { scripts: _scripts, devDependencies: _dev, overrides: _overrides, ...release } = manifest
   return { ...release, files: [...new Set([...(manifest.files ?? []), provenanceName])] }
 }
 function manifestEntries(manifest) {
@@ -125,6 +125,7 @@ export function verifyReleaseArtifact(out, sourceSha) {
     manifest.version !== provenance.packageVersion ||
     manifest.scripts !== undefined ||
     manifest.devDependencies !== undefined ||
+    manifest.overrides !== undefined ||
     JSON.stringify(files) !== JSON.stringify(provenance.files) ||
     sha256(JSON.stringify(files)) !== provenance.artifactDigest ||
     envelope.artifactDigest !== provenance.artifactDigest

@@ -611,10 +611,8 @@ function checkOverrideNames(manifest, packages) {
 }
 
 /**
- * Collect every `@deepseek-ai/*` specifier this repo imports.
- *
- * Exported for `tests/unit/tooling/harness-state`: the scan's whole job is to ignore
- * the spec's own counter-examples, and only the real tree can prove that.
+ * Collect every `@deepseek-ai/*` import below src, tests and scripts in scanRoot.
+ * Comments and literal examples are excluded; imports inside template expressions count.
  * @returns the sorted, de-duplicated specifiers.
  */
 export function importedSpecifiers(scanRoot = root) {

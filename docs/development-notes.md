@@ -173,7 +173,7 @@
 - **类型**：安全边界 / 发布约束。
 - **状态**：生效中（2026-11-16，pin `0.2.2-rc.3`）。
 - **位置**：`scripts/build-state.mjs`、`release-artifact.mjs`、`release-tar.mjs`、`publish-release-branch.mjs`、`release-branch.yml`。
-- **要点**：完整 build/prepare 成功后，记录源文件、脚本、配置、lockfile、工具链及全部产物的摘要。质量门禁生成去掉脚本与开发依赖的单一产物；Web smoke 消费其 tarball，发布消费其目录。校验同时绑定源 SHA、文件闭集、每个文件摘要、tarball 摘要及包内实际内容。publish 作业检出时不保留凭据，写 token 仅提供给最终推送步骤。目标限于项目 origin 的 release 分支，并以读取到的旧 ref 作为 CAS lease；来源回退和字节变化都会被拒绝。
+- **要点**：完整 build/prepare 成功后，记录源文件、脚本、配置、lockfile、工具链及全部产物的摘要。质量门禁生成去掉脚本、开发依赖与开发用 overrides 的单一产物；移除开发依赖后保留 overrides 会与 peer 范围冲突，导致 `npm pack` 报 `EOVERRIDE`；Linux、macOS、Windows 的干净 profile 用发布版精确 pin 的 CLI 与 pnpm 11 安装同一 tarball，并通过宿主公开的 profile 解析服务从安装位置加载四个宿主入口（peer 由宿主安装提供，裸 Node 导入不能代表实际运行环境），Linux 另跑浏览器 Web smoke；发布消费既有产物。校验同时绑定源 SHA、文件闭集、每个文件摘要、tarball 摘要及包内实际内容。publish 作业检出时不保留凭据，写 token 仅提供给最终推送步骤。目标限于项目 origin 的 release 分支，并以读取到的旧 ref 作为 CAS lease；来源回退和字节变化都会被拒绝。
 - **触发条件**：修改构建输入、产物布局、发布入口、Action、Node 或编译器版本。
 - **验证**：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`；`release:check` 与实际 tarball smoke。
 - **后续处理**：新增构建输入必须进入摘要；新增发布文件必须进入经过验证的文件集合。升级发布工具后保留篡改、漏件、来源回退与凭据隔离测试。
@@ -455,3 +455,31 @@
 - **复核触发**：升级 tools pipeline、调整结果包装或投影时。
 - **验证**：`tests/host/result-projection.spec.ts` 经真实工具执行链，分别断言 inline/file 投影器仅调用一次，元数据没有嵌套 facts 或会话标识副本。
 - **后续动作**：若上游提供可保留的调用级投影接口，按该接口重审交付层；保留两臂的执行链回归。
+
+## DN-44：npm 可信发布与 registry 产物核验
+
+- **类型**：外部配置契约 / 发布约束。
+- **位置**：`release-branch.yml` 的 `npm-release`、`scripts/npm-registry.mjs`、npmjs.com 的 Trusted publishing 配置。
+- **行为**：npm 上授权 GitHub Actions，用户为 `Vncntvx`、仓库为 `dsh-zotero`、workflow 文件名为 `release-branch.yml`、environment 留空，并允许直接 `npm publish`；文件名与字段区分大小写。新配置须在两天内完成首次发布，否则删除后重建。仅版本 tag 的 push 触发发布。OIDC 要求 GitHub 托管 runner、npm ≥ 11.5.1、Node ≥ 22.14.0 与 `id-token: write`。发布前仅权威 registry 的 404 判定为版本未发布；已有版本须核对 SHA-512。发布后下载 registry tarball 校验实际字节，校验通过后创建 GitHub Release；公开仓库与公开包自动生成 provenance。
+- **预发布**：npm 发布必须显式传入 dist-tag：正式版本用 `latest`，预发布用首个字母开头标识（如 `alpha`），纯数字或 `latest` 标识用 `next`。GitHub Release 创建和更新均加 `--prerelease --latest=false`。预发布不能覆盖稳定通道。
+- **复核触发**：workflow 改名、仓库迁移、引入 environment、npm 认证或 registry 协议变化。
+- **验证**：`tests/unit/tooling/npm-registry.spec.ts` 覆盖摘要冲突、查询失败、可见性等待与下载字节；`release-branch.spec.ts` 约束安装矩阵与发布依赖。真实 OIDC 与三个 runner 的结果由 GitHub Actions 验证。
+- **后续动作**：改动绑定字段时重建 npm 可信发布配置；发布后核验失败先检查 registry，内容变更须发布新版本。
+
+## DN-45：导入扫描测试的输入规模
+
+- **类型**：测试性能 / CI 发布约束。
+- **位置**：`tests/unit/tooling/harness-artifacts.spec.ts`、`scripts/harness-state.mjs` 的 `importedSpecifiers`。
+- **行为**：扫描器的语法与遍历用例使用独立临时目录，覆盖 `src`、`tests`、`scripts`、类型与动态导入、re-export、TSX、注释和模板字符串；模板插值中的真实导入必须保留。单测不对不断增长的工作区重复执行完整 AST 扫描。完整仓库的类型检查和测试规范门禁继续按原范围运行。
+- **复核触发**：新增扫描根、文件扩展名、导入语法，或 CI 的解析器与覆盖率工具升级。
+- **验证**：失败运行 `44032316431` 中，全仓库扫描用例耗时 7586 ms，超过默认 5000 ms；修正后运行 focused spec 与完整 `release:check`，保留全部原有门禁。
+- **后续动作**：扫描规则变化时补充小型正反例；如需评估全仓库扫描性能，使用独立测量，不把仓库大小带入语法单测。
+
+## DN-46：目录规范化测试必须保留非规范输入
+
+- **类型**：跨平台测试契约。
+- **位置**：`tests/unit/semantic-loader-lifecycle.spec.ts` 的 configured model directory 用例。
+- **行为**：测试 `..` 规范化时用路径分隔符显式拼出原始输入；`path.join` 会提前消除 `..`，不能用来构造此类反例。另以 `realpath` 构造已规范化目录，独立验证无需改写的路径。两条路径都不依赖 macOS 的 `/var` 别名。
+- **复核触发**：模型目录策略、临时目录布局或运行平台变化。
+- **验证**：运行 `44034659947` / `44034650470` 的测试全通过，但 Linux 分支覆盖率为 93.59%，低于 93.6% 门禁；修正后运行 loader 用例及一次完整发布门禁，覆盖率要求保持原值。
+- **后续动作**：新增目录别名或规范化规则时同时保留规范与非规范输入，避免由本机目录布局偶然覆盖分支。

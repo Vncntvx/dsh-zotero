@@ -323,13 +323,14 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 `.github/workflows/` 下有三个工作流：
 
-- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时由只读质量作业生成单一产物并交给 Web smoke；最终作业只校验并推送预构建 release 分支，只有它获得 `contents: write`；
+- `release-branch.yml`：在 `main` 推送、版本 tag 与手动触发时由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，tag 推送额外触发 `npm-release` 作业，用 OIDC 发布并下载核验 npm tarball，再创建 GitHub Release；最终作业只校验并推送预构建 release 分支。`npm-release` 与最终作业各自获得 `contents: write`（前者还需 `id-token: write`），其余作业只读；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
 - `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
 
 供应链约定：
 
 - 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
+- npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.15.0 自带 npm 11.12.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束，详见 DN-44；
 - `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出发行版领先的直接依赖；版本更新由人工执行，Dependabot 不开版本更新 PR；
 - Dependabot alerts 只用于 CVE 提醒，security updates 关闭；
 - 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；
@@ -352,11 +353,13 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 版本、发行说明与发布动作
 
-版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。
+版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。预发布版本使用 SemVer 写法（如 `1.3.0-alpha.1`），npm 发布时显式选择首个预发布标识作为 dist-tag（此例为 `alpha`；纯数字或 `latest` 标识使用 `next`），GitHub Release 同步标记为 prerelease 且不设为 Latest。正式版本发布到 `latest`。
 
-CI 的 quality gate 只构建一次，生成 `release-artifact-<source SHA>`；Web composition 安装其中的确切 tarball。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
+CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，调用发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
 
-需要向 npm 发布时，从上述成功流水线下载产物，先运行 `node scripts/release-artifact.mjs --verify --out <artifact directory> --source-sha <full source SHA>`，再对 `artifact.json` 指定的 tarball 执行 `npm publish <tarball> --access public`。发布的必须是已通过门禁和 Web smoke 的原文件。随后建立与 `v<version>` 对应的 GitHub Release，正文列出该版本的变更、验证结果与迁移要求，并记录源 SHA、artifactDigest 与 tarballSha256。发布失败先查明 registry 状态；同一版本不覆盖重发，内容变化需新版本与重新验证。
+npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。随后用 OIDC 可信发布把 `artifact.json` 指定的原 tarball 发到 npm（OIDC 认证下公开仓库与公开包默认带 provenance，无需 `--provenance` 或 token），并以 `gh` 创建/更新该 tag 的 GitHub Release，正文含 tag 注释、GitHub 生成的变更说明，以及源 SHA、artifactDigest 与 tarballSha256。`main` 推送与手动触发仅运行门禁与 release 分支推送。发布前直接查询 `registry.npmjs.org`，仅明确的 404 允许发布；已有版本在名称、版本与 SHA-512 integrity 完全一致时跳过，查询失败直接终止。发布后再次查询，并下载公开 tarball 核对其实际字节，成功后才创建 Release；可见性等待有界，失败后可重跑核验。内容变化需新版本与重新验证，`npm-release` 与 `publish` 互不阻塞，可单独重跑。
+
+可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见 DN-44。
 
 本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的 release 分支。
 
