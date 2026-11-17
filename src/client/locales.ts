@@ -30,6 +30,7 @@ export const en = {
   libraryParsePdfNamed: 'Parse PDF: {title}',
   libraryParsePdfAny: 'Parse PDF',
   libraryPickPdfRead: 'Choose a PDF to read',
+  libraryPickPdfAsk: 'Choose a PDF to ask about',
   libraryPickPdf: 'Choose a PDF',
   libraryParseUrl: 'Parse PDF URL',
   libraryParseConfigError: 'Could not read committed parsing settings: {message}',
@@ -110,7 +111,7 @@ export const en = {
   parsedExplain: 'Explain',
   // Model-facing copy stays English in every dictionary.
   parsedExplainPrompt:
-    'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
+    'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart and the returned continuation token until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: 'Copy selection',
 
   parsedUnavailable: 'This parsed result is unavailable. Parse the PDF again.',
@@ -949,7 +950,7 @@ export const en = {
   libraryAskPrompt:
     'Please refer to the paper "{title}" ({ref}) and answer questions based on its contents.',
   libraryAskFulltextPrompt:
-    'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
+    'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart and the returned continuation token until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
 
   libraryMetaDate: 'Date',
   libraryMetaVenue: 'Venue',
@@ -1017,6 +1018,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryParsePdfNamed: '解析 PDF：{title}',
   libraryParsePdfAny: '解析 PDF',
   libraryPickPdfRead: '选择要阅读的 PDF',
+  libraryPickPdfAsk: '选择要提问的 PDF',
   libraryPickPdf: '选择 PDF',
   libraryParseUrl: '解析 PDF URL',
   libraryParseConfigError: '无法读取已提交解析设置：{message}',
@@ -1096,7 +1098,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   parsedExplain: '让模型解释',
   // 模型侧文案在每个字典里保持英文。
   parsedExplainPrompt:
-    'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
+    'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart and the returned continuation token until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: '复制选中内容',
 
   parsedUnavailable: '解析结果不可用，请重新解析这个 PDF。',
@@ -1885,7 +1887,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryAskPrompt: '请围绕文献《{title}》（{ref}）回答我的问题：',
   // 模型侧文案在每个字典里保持英文。
   libraryAskFulltextPrompt:
-    'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
+    'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart and the returned continuation token until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
 
   libraryMetaDate: '日期',
   libraryMetaVenue: '来源',

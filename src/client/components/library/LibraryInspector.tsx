@@ -38,6 +38,7 @@ import type {
   ZoteroChildListingKind,
   ZoteroNoteRowView,
 } from '../../../contract.ts'
+import { artifactIdOf } from '../../../contract.ts'
 import { parseRefIdentity, pdfUrlOf, selectUrlOf } from '../../actions/open-zotero.ts'
 import { webUrlOf } from '../../actions/web-url.ts'
 import type { ParsedDocuments } from '../../parsed-documents.ts'
@@ -51,6 +52,7 @@ import { CommentIcon } from '../CommentIcon.tsx'
 import { LibraryCitationActions, itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { ListingPager } from './ListingPager.tsx'
 import { PdfActions, type PdfParseFace } from './PdfActions.tsx'
+import { PdfPickerDialog } from '../PdfPickerDialog.tsx'
 import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
 import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
@@ -515,6 +517,16 @@ function LibraryInspectorBody({
   )
   const preferences = useLibraryPreferences()
   const [insertError, setInsertError] = useState<string>()
+  const [askPicking, setAskPicking] = useState(false)
+  const [askBusy, setAskBusy] = useState(false)
+  const [askError, setAskError] = useState<string>()
+  const askAbort = useRef<AbortController>()
+  useEffect(
+    () => () => {
+      askAbort.current?.abort()
+    },
+    [],
+  )
   if (inspector === undefined) {
     return (
       <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
@@ -576,24 +588,47 @@ function LibraryInspectorBody({
             : {}),
         }
   const askPrompt = t('libraryAskPrompt', { title: detail.title, ref: detail.ref })
-  const askInChat = () => {
-    if (!inputActions) return
-    // A PDF attachment turns the ask into a read request: the fulltext mode
-    // serves a committed parsed artifact when one exists and Zotero's index
-    // text otherwise, so one attachment ref covers both worlds and the client
-    // never probes which shape it will meet. A record without a PDF keeps the
-    // metadata-only ask; its evidence reads stay addressable by the item ref.
-    // The instruction opens the card, the facts follow, and the ref the model
-    // reads through sits last — the explain card's order without the excerpt.
-    const pdf = pdfs[0]
+  const refSourceOf = (attachment: ZoteroAttachmentRowView) =>
+    JSON.stringify({ kind: 'ref', ref: attachment.ref })
+  /**
+   * Resolves the committed artifact id for an attachment when available,
+   * falling back to the attachment ref on misses or errors.
+   */
+  const askSourceOf = async (
+    attachment: ZoteroAttachmentRowView,
+    signal: AbortSignal,
+  ): Promise<string> => {
+    const face = parsedArtifact
+    if (face?.read === undefined || face.sessionId === '') return refSourceOf(attachment)
+    try {
+      const result = await face.read(
+        {
+          sessionId: face.sessionId,
+          op: 'meta',
+          target: { kind: 'attachment', ref: attachment.ref },
+        },
+        signal,
+      )
+      if (!result.ok || result.value.kind !== 'meta') return refSourceOf(attachment)
+      const artifactId = artifactIdOf(result.value.artifactId)
+      return artifactId === undefined
+        ? refSourceOf(attachment)
+        : JSON.stringify({ kind: 'artifactId', artifactId })
+    } catch {
+      return refSourceOf(attachment)
+    }
+  }
+  const insertAsk = (attachment: ZoteroAttachmentRowView | undefined, source: string): boolean => {
+    if (inputActions === undefined) return false
+    // A PDF attachment turns the ask into a read request; a record without a
+    // PDF keeps the metadata-only ask, addressed by the item ref. The
+    // instruction opens the card, the facts follow, and the ref the model reads
+    // through sits last.
     const instruction =
-      pdf === undefined
+      attachment === undefined
         ? askPrompt
-        : t('libraryAskFulltextPrompt', {
-            title: detail.title,
-            source: JSON.stringify({ kind: 'ref', ref: pdf.ref }),
-          })
-    const information = [instruction, itemInfoTextOf(detail), pdf?.ref ?? detail.ref]
+        : t('libraryAskFulltextPrompt', { title: detail.title, source })
+    const information = [instruction, itemInfoTextOf(detail), attachment?.ref ?? detail.ref]
     if (preferences.preferences?.chatInsertContent === 'referenceAndAbstract') {
       information.push(
         detail.abstract === undefined
@@ -604,7 +639,44 @@ function LibraryInspectorBody({
     if (inputActions.insertQuote(information.join('\n\n'))) {
       inputActions.persistDraft()
       setInsertError(undefined)
-    } else setInsertError(t('libraryInsertFailed'))
+      return true
+    }
+    setInsertError(t('libraryInsertFailed'))
+    return false
+  }
+  const askWithPdf = async (attachment: ZoteroAttachmentRowView) => {
+    askAbort.current?.abort()
+    const abort = new AbortController()
+    askAbort.current = abort
+    setAskBusy(true)
+    setAskError(undefined)
+    try {
+      const source = await askSourceOf(attachment, abort.signal)
+      if (abort.signal.aborted) return
+      if (insertAsk(attachment, source)) setAskPicking(false)
+    } catch (cause) {
+      if (!abort.signal.aborted) setAskError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      if (askAbort.current === abort) askAbort.current = undefined
+      if (!abort.signal.aborted) setAskBusy(false)
+    }
+  }
+  const askInChat = () => {
+    if (inputActions === undefined) return
+    if (pdfs.length === 0) {
+      insertAsk(undefined, askPrompt)
+      return
+    }
+    if (pdfs.length === 1) {
+      const only = pdfs[0]!
+      // Inserts the attachment ref synchronously when enrichment reads are unavailable.
+      if (parsedArtifact?.read === undefined || parsedArtifact.sessionId === '')
+        insertAsk(only, refSourceOf(only))
+      else void askWithPdf(only)
+      return
+    }
+    setAskError(undefined)
+    setAskPicking(true)
   }
   return (
     <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
@@ -633,6 +705,7 @@ function LibraryInspectorBody({
               variant="outline"
               size="sm"
               icon={<IconPlusOutlineRegular size={14} />}
+              disabled={askBusy}
               onClick={askInChat}
               title={t('libraryAskInChat')}
             >
@@ -818,6 +891,24 @@ function LibraryInspectorBody({
             )
           })}
         </ChildSection>
+      )}
+      {pdfs.length > 1 && (
+        <PdfPickerDialog
+          open={askPicking}
+          onClose={() => {
+            if (!askBusy) setAskPicking(false)
+          }}
+          t={t}
+          title={t('libraryPickPdfAsk')}
+          busy={askBusy}
+          {...(askError === undefined ? {} : { error: askError })}
+          options={pdfs.map((attachment) => ({
+            key: attachment.ref,
+            title: attachment.title,
+            action: t('libraryAskInChat'),
+            onSelect: () => void askWithPdf(attachment),
+          }))}
+        />
       )}
     </aside>
   )

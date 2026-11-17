@@ -130,7 +130,10 @@ export interface EvidencePassage extends Pick<
  * fact the canonical result gains arrives here too, and the trail schema's
  * compile-time tie (see `sources/workspace-schema.ts`) keeps the wire in step.
  */
-export type FulltextRead = Omit<ZoteroFulltextRead, 'text' | 'nextStart' | 'spillRef'> & {
+export type FulltextRead = Omit<
+  ZoteroFulltextRead,
+  'text' | 'nextStart' | 'continuation' | 'spillRef'
+> & {
   /** Call ids of the successful fulltext reads that returned this window. */
   readonly callIds: readonly string[]
 }

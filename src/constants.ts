@@ -192,7 +192,8 @@ export const ZOTERO_MAX_EVIDENCE_CHARS = 6000
  * Default characters per `zotero_retrieve` fulltext window. One window plus its
  * JSON envelope stays under the default inline delivery budget (65536 bytes /
  * 4000 tokens). Changing the window or delivery budget can select file delivery.
- * Request successive windows with `nextStart`.
+ * Request successive windows with `nextStart` and the previous window's
+ * `continuation` token.
  */
 export const ZOTERO_FULLTEXT_WINDOW_CHARS = 12_000
 /**

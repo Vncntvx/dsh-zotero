@@ -97,23 +97,27 @@ const RETRIEVE_PARAMETERS = {
     additionalProperties: false,
     properties: {
       kind: { type: 'string', enum: ['ref', 'artifactId'], required: true },
-      ref: { type: 'string', description: 'A zotero:// attachment ref, for kind="ref".' },
+      ref: { type: 'string', description: 'Zotero attachment ref for kind="ref".' },
       artifactId: {
         type: 'string',
-        description: 'An opaque parsed-artifact id, for kind="artifactId".',
+        description: 'Opaque parsed-artifact id for kind="artifactId".',
       },
     },
     description:
-      'Fulltext mode: exactly one source. kind="ref" reads a Zotero attachment by ref; kind="artifactId" reads a stored parsed artifact, including URL-sourced documents, when dsh-zotero/enrichment is composed.',
+      'Fulltext mode: one source. kind="ref" reads a Zotero attachment; kind="artifactId" reads a stored parsed artifact, including URL documents, with enrichment composed.',
   },
   start: {
     type: 'integer',
     default: 0,
-    description: 'Fulltext mode: window start; continue with nextStart.',
+    description: 'Fulltext mode: window start.',
   },
   maxChars: {
     type: 'integer',
-    description: 'Fulltext mode: window characters, bounded by fulltextWindowChars.',
+    description: 'Fulltext mode: window chars, bounded by fulltextWindowChars.',
+  },
+  continuation: {
+    type: 'string',
+    description: 'Fulltext mode: previous window token; required when start > 0.',
   },
 } as const
 
@@ -218,6 +222,7 @@ const FULLTEXT_READ_RECORD = {
     text: { type: 'string', required: true },
     isTruncated: { type: 'boolean', required: true },
     nextStart: { type: 'integer' },
+    continuation: { type: 'string' },
     attachmentRef: { type: 'string' },
     spillRef: {
       type: 'object',
@@ -282,7 +287,7 @@ export const RETRIEVE_SPECIFIED_EMPTY_MESSAGE =
 export const RETRIEVE_SPECIFIED_ONLY_MESSAGE =
   'attachmentRefs is only valid with attachmentPolicy="specified"'
 export const RETRIEVE_MODE_MIXED_MESSAGE =
-  'Evidence-only parameters (ref, query, queryVariants, sources, passages, attachmentPolicy, attachmentRefs) cannot be used with mode="fulltext"; fulltext-only parameters (source, start, maxChars) cannot be used with mode="evidence".'
+  'Evidence-only parameters (ref, query, queryVariants, sources, passages, attachmentPolicy, attachmentRefs) cannot be used with mode="fulltext"; fulltext-only parameters (source, start, maxChars, continuation) cannot be used with mode="evidence".'
 export const RETRIEVE_SOURCE_REQUIRED_MESSAGE =
   'mode="fulltext" requires source with exactly one of ref or artifactId.'
 export const RETRIEVE_MAX_CHARS_MESSAGE =
@@ -352,14 +357,22 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
     const maxChars = args.maxChars ?? config.fulltextWindowChars
     if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > config.fulltextWindowChars)
       invalidArgs(RETRIEVE_MAX_CHARS_MESSAGE)
+    if (args.continuation !== undefined && args.continuation.trim() === '')
+      invalidArgs('continuation must be a non-empty string when provided.')
     return {
       mode: 'fulltext',
       source: fulltextSourceOf(args),
       start,
       maxChars,
+      ...(args.continuation === undefined ? {} : { continuation: args.continuation }),
     }
   }
-  if (args.source !== undefined || args.start !== undefined || args.maxChars !== undefined)
+  if (
+    args.source !== undefined ||
+    args.start !== undefined ||
+    args.maxChars !== undefined ||
+    args.continuation !== undefined
+  )
     invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
   if (typeof args.ref !== 'string' || typeof args.query !== 'string')
     invalidArgs(RETRIEVE_EVIDENCE_REQUIRED_MESSAGE)
@@ -548,7 +561,7 @@ export const NO_CONTENT_TERMS_MESSAGE =
   'The query carried no content words (\u201cthe\u201d, \u201cof\u201d and the like are dropped before scoring), so there was nothing to match; ask with the subject\u2019s own terms.'
 
 export const FULLTEXT_TRUNCATED_REMEDY =
-  'Continue with start=nextStart until isTruncated is false; concatenate the windows in order to obtain the complete document.'
+  'Continue with start=nextStart and the returned continuation token until isTruncated is false; concatenate the windows in order to obtain the complete document.'
 export const FULLTEXT_INPUT_TRUNCATED_REMEDY =
   'The document exceeded maxFulltextChars; the windows above cover only its first bounded portion.'
 export const FULLTEXT_SPILL_NOTE =
@@ -578,7 +591,11 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
         ? 'End of document; this window contains no further text.'
         : '',
       read.inputTruncated ? FULLTEXT_INPUT_TRUNCATED_REMEDY : '',
-      read.isTruncated ? `${FULLTEXT_TRUNCATED_REMEDY} (nextStart=${read.nextStart})` : '',
+      read.isTruncated
+        ? `${FULLTEXT_TRUNCATED_REMEDY} (nextStart=${read.nextStart}${
+            read.continuation === undefined ? '' : `; continuation=${read.continuation}`
+          })`
+        : '',
       read.coverage === undefined ? '' : coverageLineOf(read.coverage),
       read.spillRef === undefined
         ? ''
@@ -710,9 +727,9 @@ export function registerRetrieveTool(
       defineTool({
         name: 'zotero_retrieve',
         description: [
-          'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote it as containing the terms), hybrid = both; matchedFields names text or comment, truncated/sourcesSkipped report coverage; noMatch never means the item is silent on the subject.',
-          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source selects a Zotero attachment ref or a stored artifactId (local or URL sources). Start at start=0 and follow nextStart until isTruncated is false; windows use inline or file delivery per budget; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
-          'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, a specified attachment must provably be this item\u2019s child; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and character budget (a passage charges its text and any annotation comment), and a truncated flag signals omitted evidence.',
+          'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote as carrying the terms), hybrid = both; matchedFields names text or comment, truncated/sourcesSkipped report coverage; noMatch never means the item is silent on the subject.',
+          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source is a Zotero attachment ref or a stored artifactId. Start at start=0; follow nextStart with the returned continuation token until isTruncated is false. Windows may be inline or files; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
+          'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, specified attachments must be this item\u2019s children; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and characters (a passage charges its text and annotation comment); truncated signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,
         output: {

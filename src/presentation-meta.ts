@@ -169,10 +169,13 @@ interface ZoteroSourceAvailabilityView {
  * Provenance and bounds for one fulltext-mode window in the literature trail.
  * Derived from the canonical {@link ZoteroFulltextRead} so a field the window
  * fact must carry cannot be added to one and missed here: the fact drops the
- * payload keys only — the window text, its continuation cursor and the spill
- * handle, which stay in the tool result and never enter a card.
+ * payload keys only — the window text, its continuation cursor and token, and
+ * the spill handle, which stay in the tool result and never enter a card.
  */
-export type ZoteroFulltextReadFact = Omit<ZoteroFulltextRead, 'text' | 'nextStart' | 'spillRef'>
+export type ZoteroFulltextReadFact = Omit<
+  ZoteroFulltextRead,
+  'text' | 'nextStart' | 'continuation' | 'spillRef'
+>
 
 /** The evidence-mode card facts: ranked passages and their bounds. */
 interface ZoteroEvidenceRetrievePresentationMeta {

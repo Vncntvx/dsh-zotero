@@ -3,6 +3,7 @@ import { fulltextIdentityOf } from './fulltext-identity.js'
  * @module dsh-zotero/local/retrieve-fulltext
  */
 
+import { createHash } from 'node:crypto'
 import { mapWithConcurrency } from '../concurrency.js'
 import {
   isNotFoundError,
@@ -23,6 +24,7 @@ import {
   requireSupportedLocalRef,
 } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
+import { asRecord } from '../json.js'
 import type {
   SupportedLocalLibrary,
   ZoteroCoverage,
@@ -300,6 +302,103 @@ export function fulltextWindowOf(
   }
   return { read, boundedText: bounded.text }
 }
+
+/** The message when a continuation window arrives without its token. */
+export const FULLTEXT_CONTINUATION_REQUIRED_MESSAGE =
+  'start > 0 requires the continuation token returned with the previous window; restart at start=0.'
+/** The message when the token cannot describe this read. */
+export const FULLTEXT_CONTINUATION_INVALID_MESSAGE =
+  'The continuation token is malformed; discard the earlier windows and restart at start=0.'
+/** The message when the document changed between two windows. */
+export const FULLTEXT_CONTINUATION_CHANGED_MESSAGE =
+  'The document changed between read windows, so the windows would come from different versions. Discard the earlier text and restart at start=0.'
+
+/**
+ * The identity a continuation chain is bound to: the stored artifact, the
+ * Zotero attachment, or the URL origin. A chain may not switch sources even
+ * when the text hashes agree, because provenance and coverage would mix.
+ */
+function fulltextSourceIdentityOf(document: FulltextDocument): string {
+  if (document.artifact !== undefined) return `artifact:${document.artifact.artifactId}`
+  if (document.attachmentRef !== undefined) return `attachment:${document.attachmentRef}`
+  return `source:${document.sourceKind}:${document.sourceLabel}`
+}
+
+/** The parsed-artifact version facts a continuation is bound to. */
+function fulltextArtifactIdentityOf(document: FulltextDocument): {
+  readonly fingerprint: string
+  readonly generation: string
+} | null {
+  return document.artifact === undefined
+    ? null
+    : { fingerprint: document.artifact.fingerprint, generation: document.artifact.generation }
+}
+
+function fulltextDigestOf(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+/**
+ * Generates a stateless continuation token for a bounded document, binding
+ * source identity, artifact generation, bounded length, and text SHA-256
+ * across consecutive window reads.
+ */
+export function fulltextContinuationOf(document: FulltextDocument, boundedText: string): string {
+  return Buffer.from(
+    JSON.stringify({
+      v: 1,
+      source: fulltextSourceIdentityOf(document),
+      artifact: fulltextArtifactIdentityOf(document),
+      totalChars: boundedText.length,
+      sha256: fulltextDigestOf(boundedText),
+    }),
+    'utf8',
+  ).toString('base64url')
+}
+
+/**
+ * Validates a continuation token against the document's current source,
+ * artifact generation, bounded length, and content digest.
+ */
+export function assertFulltextContinuation(
+  document: FulltextDocument,
+  boundedText: string,
+  token: string,
+): void {
+  if (token.length > 4_096)
+    throw new ZoteroError(FULLTEXT_CONTINUATION_INVALID_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'))
+  } catch {
+    throw new ZoteroError(FULLTEXT_CONTINUATION_INVALID_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  }
+  const record = asRecord(parsed)
+  if (
+    record?.v !== 1 ||
+    typeof record.source !== 'string' ||
+    typeof record.totalChars !== 'number' ||
+    typeof record.sha256 !== 'string' ||
+    record.artifact === undefined
+  )
+    throw new ZoteroError(FULLTEXT_CONTINUATION_INVALID_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  const expectedArtifact = fulltextArtifactIdentityOf(document)
+  const savedArtifact = record.artifact === null ? undefined : asRecord(record.artifact)
+  const artifactMatches =
+    expectedArtifact === null
+      ? record.artifact === null
+      : savedArtifact !== undefined &&
+        savedArtifact.fingerprint === expectedArtifact.fingerprint &&
+        savedArtifact.generation === expectedArtifact.generation
+  if (
+    record.source !== fulltextSourceIdentityOf(document) ||
+    !artifactMatches ||
+    record.totalChars !== boundedText.length ||
+    record.sha256 !== fulltextDigestOf(boundedText)
+  )
+    throw new ZoteroError(FULLTEXT_CONTINUATION_CHANGED_MESSAGE, ZOTERO_UNEXPECTED)
+}
+
 /**
  * One full-text source of a retrieval and what reading it produced. The arms
  * carry exactly what their status can prove: an indexed source has Zotero's

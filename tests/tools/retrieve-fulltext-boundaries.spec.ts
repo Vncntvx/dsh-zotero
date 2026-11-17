@@ -27,11 +27,21 @@ it('maps an artifactId and forwards a valid nonzero character window through the
   }))
   const lookup = vi.fn(async () => ({ kind: 'miss' as const, reason: 'absent' as const }))
   lane.ctx.zotero.setFulltextEnhancer({ lookup, lookupArtifact })
+  const first = await lane.runTool('zotero_retrieve', {
+    mode: 'fulltext',
+    source: { kind: 'artifactId', artifactId: 'a'.repeat(64) },
+    start: 0,
+    maxChars: 6,
+  })
+  expect(first.isError).toBe(false)
+  const continuation = (first.value as { data: { fulltext: { continuation: string } } }).data
+    .fulltext.continuation
   const result = await lane.runTool('zotero_retrieve', {
     mode: 'fulltext',
     source: { kind: 'artifactId', artifactId: 'a'.repeat(64) },
     start: 12,
     maxChars: 6,
+    continuation,
   })
   expect(result.isError).toBe(false)
   expect(asRecord(asRecord(result.value)?.data)?.fulltext).toMatchObject({

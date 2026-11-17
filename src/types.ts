@@ -499,6 +499,11 @@ export interface ZoteroFulltextRead {
   /** Whether another window follows; continue with `nextStart`. */
   isTruncated: boolean
   nextStart?: number
+  /**
+   * The stateless fingerprint token for the next window. Pass it back as
+   * `continuation` with `start=nextStart` to maintain generation consistency.
+   */
+  continuation?: string
   /** Zotero attachment ref behind this read, when one is known. */
   attachmentRef?: string
   /**
@@ -539,6 +544,11 @@ export interface ZoteroFulltextRetrieveRequest extends ZoteroRetrieveRequestBase
   start: number
   /** Maximum characters in one window. */
   maxChars: number
+  /**
+   * The `continuation` token the previous window returned. Required when
+   * `start > 0`; a mismatched source or generation refuses the window.
+   */
+  continuation?: string
 }
 
 export type ZoteroRetrieveRequest = ZoteroEvidenceRetrieveRequest | ZoteroFulltextRetrieveRequest

@@ -150,6 +150,20 @@ describe('mode exclusivity', () => {
     }
   })
 
+  it('refuses a blank continuation token', async () => {
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      start: 0,
+      continuation: '   ',
+    })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect((result.content[0] as { text: string }).text).toContain(
+      'continuation must be a non-empty string when provided.',
+    )
+  })
+
   it('bounds maxChars by fulltextWindowChars', async () => {
     const result = await lane.runTool('zotero_retrieve', {
       mode: 'fulltext',
@@ -408,15 +422,24 @@ describe('fulltext spill', () => {
       'spillStore',
       { saveText },
     )
+    const first = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      start: 0,
+    })
+    expect(first.isError).toBe(false)
+    const firstData = (first.value as { data: { fulltext: { continuation: string } } }).data
+    expect(firstData.fulltext.continuation).toEqual(expect.any(String))
     const result = await lane.runTool('zotero_retrieve', {
       mode: 'fulltext',
       source: { kind: 'ref', ref: REF },
       start: 12,
+      continuation: firstData.fulltext.continuation,
     })
     expect(result.isError).toBe(false)
     const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
     expect(data.fulltext.spillRef).toBeUndefined()
-    expect(saveText).not.toHaveBeenCalled()
+    expect(saveText).toHaveBeenCalledOnce()
   })
 
   it('keeps a document that fits the inline token budget out of spill storage', async () => {

@@ -329,12 +329,37 @@ describe('ModelDownloadManager', () => {
     expect((await manager.verify('balanced', root)).ready).toBe(false)
   }, 15_000)
 
-  it('dispose aborts an in-flight download', async () => {
+  it('dispose aborts the in-flight fetch request', async () => {
     const root = await tempRoot()
-    const manager = managerOf()
+    const requested = deferred<AbortSignal>()
+    const manager = new ModelDownloadManager({
+      client: {
+        // A hanging transfer that only settles when the attempt signal aborts:
+        // the assertion below is about the signal the real client receives.
+        fetch: ((_url, init) =>
+          new Promise((_resolve, reject) => {
+            const signal = init?.signal
+            if (signal === undefined) {
+              reject(new Error('the download client sent no abort signal'))
+              return
+            }
+            requested.resolve(signal)
+            if (signal.aborted) {
+              reject(signal.reason)
+              return
+            }
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+          })) as FetchLike,
+        resolver: async () => [{ address: '93.184.216.34', family: 4 }],
+        dispatcher: () => ({ dispatcher: {}, close: async () => {} }),
+      },
+    })
     const started = await manager.start({ model: 'balanced', modelDir: root })
     expect(started.status).toBe('started')
+    const signal = await requested.promise
+    expect(signal.aborted).toBe(false)
     await manager.dispose()
+    expect(signal.aborted).toBe(true)
     const after = await manager.status('balanced', root)
     expect(after.downloading).toBe(false)
     // The temp download state is reconciled against the disk: nothing ready.

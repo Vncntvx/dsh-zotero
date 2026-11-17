@@ -32,8 +32,11 @@ import {
 import { plainNoteText, truncateText } from '../normalize-context.js'
 import { loadChildRows } from './detail.js'
 import {
+  assertFulltextContinuation,
   attachmentFactOf,
   chunkFulltext,
+  FULLTEXT_CONTINUATION_REQUIRED_MESSAGE,
+  fulltextContinuationOf,
   fetchFulltext,
   fulltextWindowOf,
   isPdfCandidateContentType,
@@ -468,7 +471,8 @@ export async function retrieve(
  * `mode:"fulltext"` reads one document in source order instead of ranking
  * passages. Each call returns one character window of the whole document,
  * which is itself bounded by `maxFulltextChars`; the window size is `maxChars`
- * and the chain continues with `nextStart`. The first window of a long
+ * and the chain continues with `nextStart` plus the previous window's
+ * `continuation` token. The first window of a long
  * document also names a spill copy of the whole bounded text, so a caller that
  * wants every character in one handle can read that instead of walking.
  */
@@ -477,6 +481,10 @@ async function readFulltextMode(
   request: ZoteroFulltextRetrieveRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroFulltextRetrieveResult> {
+  const continuation = request.continuation
+  // Requires a continuation token before source I/O for any offset past start=0.
+  if (request.start > 0 && continuation === undefined)
+    throw new ZoteroError(FULLTEXT_CONTINUATION_REQUIRED_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   const document = await readFulltextDocument(deps, request.source, signal)
   // The window bound is a deployment limit, not only a tool-layer check: a
   // same-process caller bypassing the tool cannot exceed it either.
@@ -486,6 +494,11 @@ async function readFulltextMode(
     request.maxChars,
     deps.limits.maxFulltextChars,
   )
+  if (request.start > 0 && continuation !== undefined)
+    assertFulltextContinuation(document, boundedText, continuation)
+  const nextContinuation = read.isTruncated
+    ? fulltextContinuationOf(document, boundedText)
+    : undefined
   // One spill per read: only the first window pays for it, and only when
   // another window follows. Whether the document is large enough to be worth
   // a handle is the sink's decision (the tool layer prices it against the
@@ -494,7 +507,11 @@ async function readFulltextMode(
     request.start === 0 && read.isTruncated && deps.spill !== undefined
       ? await deps.spill(boundedText)
       : undefined
-  const fulltext: ZoteroFulltextRead = spillRef === undefined ? read : { ...read, spillRef }
+  const fulltext: ZoteroFulltextRead = {
+    ...read,
+    ...(nextContinuation === undefined ? {} : { continuation: nextContinuation }),
+    ...(spillRef === undefined ? {} : { spillRef }),
+  }
   return { mode: 'fulltext', fulltext }
 }
 
