@@ -36,7 +36,7 @@ import type {
 } from './types.js'
 import { citationKeyInfoOf } from './citation-key.js'
 
-export interface ChildPageMeta {
+interface ChildPageMeta {
   readonly total: number
   readonly offset: number
   readonly limit: number
@@ -85,7 +85,7 @@ const CONSUMED_DATA_KEYS: ReadonlySet<string> = new Set([
   'citationKey',
 ])
 
-export function extraFieldsOf(
+function extraFieldsOf(
   data: Record<string, unknown> | undefined,
 ): Record<string, JsonValue> | undefined {
   if (data === undefined) return undefined

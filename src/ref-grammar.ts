@@ -48,7 +48,7 @@ export const REF_PATTERN = new RegExp(
 )
 
 /** The identity fields of one canonical ref; `serverId` is absent when unqualified. */
-export interface RefFields {
+interface RefFields {
   readonly serverId?: string
   readonly libraryType: string
   readonly libraryId: string

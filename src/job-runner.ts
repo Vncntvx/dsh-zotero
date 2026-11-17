@@ -1,3 +1,5 @@
+import { jobStartedMessage, jobPromotedMessage } from './job-messages.js'
+export { jobStartedMessage, jobPromotedMessage } from './job-messages.js'
 /**
  * Generic-job adaptation for long-running Zotero operations:
  * connects heavy domain operations (export, changes) to `ctx.jobs`,
@@ -26,7 +28,12 @@ import type {
 } from '@deepseek-ai/dsh-jobs'
 import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import { TOOL_ABORTED_MESSAGE } from './abort.js'
-import { errorMessageOf, ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
+import {
+  errorMessageOf,
+  ZOTERO_OUTPUT_TOO_LARGE,
+  ZOTERO_UNEXPECTED,
+  ZoteroError,
+} from './errors.js'
 import type { DiagnosticSink } from './diagnostics.js'
 import { FIBER_STATE } from './fiber-state.js'
 import type { ZoteroProgressEvent } from './types.js'
@@ -50,10 +57,6 @@ export const JOBS_UNAVAILABLE_MESSAGE =
 
 export const RUN_IN_BACKGROUND_DISABLED_MESSAGE =
   'run_in_background is disabled in this deployment; run the call in the foreground.'
-
-export function jobStartedMessage(jobId: string): string {
-  return `started background job ${jobId}`
-}
 
 /**
  * Register a tool whose `run_in_background` parameter exists only when this
@@ -128,10 +131,6 @@ const JOB_CANCELLATION_SETTLE_MS = 1000
 interface ZoteroJobOutcome extends JobOutcome {
   /** The thrown producer error, present only on the `failed` arm. */
   readonly error?: unknown
-}
-
-export function jobPromotedMessage(jobId: string, timeoutMs: number): string {
-  return `operation timed out after ${timeoutMs}ms and was promoted to background job ${jobId}`
 }
 
 /** Honest promotion copy when the foreground wait itself failed, not a timeout. */
@@ -281,7 +280,7 @@ export async function executeWithJobs<T>(options: {
   readonly kind?: ZoteroJobTask<T>['kind']
   readonly outputLimitBytes?: number
   readonly run: ZoteroJobTask<T>['run']
-  readonly renderResult: ZoteroJobTask<T>['renderResult']
+  readonly renderResult?: ZoteroJobTask<T>['renderResult']
   readonly runInBackground: boolean
   readonly policy: JobPolicy
 }): Promise<T | JobArmResult> {
@@ -408,28 +407,35 @@ export class ZoteroJobRunner {
               },
               job.id,
             )
+            const shouldPersist = options?.persistAtCompletion?.() ?? true
             const prepared =
-              this.delivery && (options?.persistAtCompletion?.() ?? true)
-                ? await this.delivery
-                    .prepare(
-                      task.exec,
-                      value as JsonValue,
-                      (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
-                      abortController.signal,
-                      job.id,
-                    )
-                    .catch((error: unknown) => {
-                      // A publish failure after the body has settled must not turn a
-                      // completed, already-published job into a failed one.
-                      this.sink?.warn(
-                        'job.delivery',
-                        `${task.label} completed but its result could not be persisted: ${errorMessageOf(error)}`,
-                      )
-                      return undefined
-                    })
+              this.delivery && shouldPersist
+                ? await this.delivery.prepare(
+                    task.exec,
+                    value as JsonValue,
+                    (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+                    abortController.signal,
+                    job.id,
+                  )
                 : undefined
+            // Foreground candidates keep their complete value in waitOrPromote.
+            // A late promotion publishes that value; the registry never receives
+            // a second, unbounded copy of its rendered body during this race.
             const result =
-              prepared?.delivery === 'file' ? prepared.summary : task.renderResult?.(value)
+              !shouldPersist && this.delivery
+                ? undefined
+                : prepared?.delivery === 'file'
+                  ? prepared.summary
+                  : task.renderResult?.(value)
+            if (
+              result !== undefined &&
+              task.outputLimitBytes !== undefined &&
+              new TextEncoder().encode(result).byteLength > task.outputLimitBytes
+            )
+              throw new ZoteroError(
+                'The complete job result exceeds its delivery byte budget; file delivery is required.',
+                ZOTERO_OUTPUT_TOO_LARGE,
+              )
             this.sink?.info('job.outcome', `${task.label} completed`)
             resolveOutcome({
               status: 'completed',
@@ -552,20 +558,13 @@ export class ZoteroJobRunner {
      */
     const publishSettled = async (value: T | undefined): Promise<void> => {
       if (value === undefined || this.delivery === undefined) return
-      try {
-        await this.delivery.prepare(
-          task.exec,
-          value as JsonValue,
-          (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
-          task.exec.signal,
-          id,
-        )
-      } catch (error) {
-        this.sink?.warn(
-          'job.delivery',
-          `${task.label} was promoted but its result could not be persisted: ${errorMessageOf(error)}`,
-        )
-      }
+      await this.delivery.prepare(
+        task.exec,
+        value as JsonValue,
+        (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+        task.exec.signal,
+        id,
+      )
     }
 
     let view: JobView

@@ -2,6 +2,10 @@
 
 # Development notes
 
+<!-- harness-reviewed: 0.2.2-rc.3 -->
+
+Current host contract review: 2026-11-17, pin `0.2.2-rc.3`. DN-1 waiter settlement, DN-2 read and Worker lifecycle, DN-3 publication/deletion exclusion, and DN-4 inventory write generations were checked against current implementations and their tests. Earlier status dates and pins record introduction. On upgrades, review active entries and their evidence before updating this record; the pin writer never replaces that review automatically.
+
 ## Position and scope
 
 This page records critical development constraints, including upstream-contract workarounds, upgrade-triggered migrations, and behavior boundaries that are easy to miss in the code and tests. Each entry explains why the constraint exists, when to review it, how to verify it, and how to converge the implementation when the condition changes. Keep the Chinese and English pages synchronized whenever an entry changes.
@@ -38,7 +42,7 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Type**: Lifecycle / security boundary.
 - **Status**: Active (2026-11-14, pin `0.2.2-rc.2`).
 - **Location**: `artifact-reads.ts`, `parsed-documents.ts`, `archive-worker.ts`.
-- **Behavior**: Each read lease belongs to a real peer, session, original Agent and the store fixed at open. Source generations and output-directory changes leave the old snapshot intact. Browser connections can share browserPeer, so explicit release, one-shot deadlines and resource budgets jointly cover closed pages; peer.signal alone is insufficient. Authorization is checked before and after each read; abandoned leases expire. Candidate and displayed versions own separate Blob URLs, and replacement requires complete preparation.
+- **Behavior**: Each read lease belongs to a real peer, session, original Agent and the store fixed at open. Source generations and output-directory changes leave the old snapshot intact. Browser connections can share browserPeer, so explicit release, one-shot deadlines and resource budgets jointly cover closed pages; peer.signal alone is insufficient. Authorization is checked before and after each read; abandoned leases expire. Candidate and displayed versions own separate Blob URLs, and replacement requires complete preparation. Release immediately removes the active lease and its deadline timer; draining transfers retain their own concurrency slots. Pre-admission cancellations use a separate bounded, expiring registry and consume no preparation slots. Release also revokes same-id requests already awaiting ownership checks.
 - **Worker**: ZIP extraction, reference analysis and content-list semantic validation run in the Worker. The parent validates the closed message and persistence accepts normalized payloads. Cancellation awaits Worker exit before releasing admission. Published execution uses `lib/enrichment/zip-worker.js`, emitted by the normal build/prepare path. The archive admission's concurrency and queue ceiling come from the configured `artifactReader`; `ParseFlight` must receive that live limits policy, because building it with the defaults silently voids both settings.
 - **Review trigger**: Harness resource, peer or invocation upgrades; snapshot policy or artifact format changes; Worker build-path changes.
 - **Verification**: `enrichment-read-snapshots`, `enrichment-read-lifetime`, `enrichment-archive-worker`, `enrichment-archive-admission`, and `parsed-document-*` tests, plus the real JS Worker smoke in `verify:pack`.
@@ -49,7 +53,7 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Type**: security boundary / lifecycle.
 - **Status**: active (2026-11-14, pin `0.2.2-rc.2`).
 - **Location**: `putNormalized` in `src/enrichment/parse-once.ts`, `putSources` in `src/enrichment/parse-document.ts`, `src/enrichment/artifact-management.ts`, `src/enrichment/artifact-target.ts`.
-- **Behavior**: the artifact directory (with `meta.json` as its commit marker) and `sources/index.json` are two independent writes. A crash between them leaves an orphan directory with no index record or a dangling index key pointing at a removed directory; one URL parse also publishes up to three alias keys. The inventory must union both views by cacheKey and deduplicate them. A discard must clear every alias key, the task file, the parse receipts for that generation and the in-memory job state, after invalidating read leases bound to the artifact. `documentArtifact`'s `inspect` accepts only concrete targets, requires a live session and may send a HEAD for URLs, so it cannot enumerate; enumeration goes through `probe` — one batched freshness probe per page (bounded concurrency, one index snapshot per batch) whose per-ref semantics match a single-target `inspect`, still never contacting MinerU. `meta.json`'s `sourceUrl` keeps the complete canonical URL (matching the index's `stamp.url`) to recover an orphan target, but it never enters `identity`, receipts, wire results or display fields; list rows carry only `origin/…`. Revisit all three whenever `artifactMetaSchema`, the `parse-once` commit order, or the artifact/index publication order changes.
+- **Behavior**: the artifact directory (with `meta.json` as its commit marker) and `sources/index.json` are two independent writes. A crash between them leaves an orphan directory with no index record or a dangling index key pointing at a removed directory; one URL parse also publishes up to three alias keys. The inventory must union both views by cacheKey and deduplicate them. A discard must clear every alias key, the task file, the parse receipts for that generation and the in-memory job state, after invalidating read leases bound to the artifact. Deletion first reserves that generation, aborts and drains all related parsing, then removes storage. In-flight admissions retain revocation markers, so a stale receipt read cannot replay successfully after deletion finishes. A first orphan with no `sources/` directory must still be removable by safely creating the index lock directory. `documentArtifact`'s `inspect` accepts only concrete targets, requires a live session and may send a HEAD for URLs, so it cannot enumerate; enumeration goes through `probe` — one batched freshness probe per page (bounded concurrency, one index snapshot per batch) whose per-ref semantics match a single-target `inspect`, still never contacting MinerU. `meta.json`'s `sourceUrl` keeps the complete canonical URL (matching the index's `stamp.url`) to recover an orphan target, but it never enters `identity`, receipts, wire results or display fields; list rows carry only `origin/…`. Revisit all three whenever `artifactMetaSchema`, the `parse-once` commit order, or the artifact/index publication order changes.
 - **Review trigger**: artifact schema, parse commit flow, source-index structure, list/discard endpoint changes, or harness storage/file-lock upgrades.
 - **Verification**: `tests/host/enrichment-artifact-management.spec.ts` (three-state union, alias dedup, complete cleanup), `tests/host/enrichment-artifact-target.spec.ts` (attachment/URL/orphan target recovery), `tests/unit/enrichment-parsed-manager-wire.spec.ts` (no complete URL on the wire), `tests/host/enrichment-parse-document.spec.ts` (identity redaction), `tests/host/enrichment-artifact-metadata.spec.ts` (lease-free meta/probe and batched freshness).
 - **Follow-up**: if an atomic transaction for the artifact directory and index becomes available, the directory enumeration and `orphan`/`broken` states can be dropped and the discard reduced to one transaction; keep the regressions that complete URLs never enter the wire and that a discard refreshes open parsed tabs.
@@ -68,13 +72,13 @@ An upstream-contract workaround must also state the current symptom, current wor
 
 - **Type**: other development constraint (npm CLI behaviour).
 - **Status**: active (2026-11-15, npm 12).
-- **Location**: `smokeArchiveWorker` in `scripts/smoke-archive-worker.mjs`, `prepareReleaseArtifact` in `scripts/release-artifact.mjs`, and `tests/unit/tooling/release-artifact.spec.ts`.
-- **Behavior**: `npm publish --dry-run` runs `prepublishOnly` with `npm_config_dry_run=true`, and a nested `npm pack` inherits that environment and writes no archive at all, so smoke or artifact preparation fails with a missing tarball. The child environment strips that one variable so nested packs always write a real tarball; every other npm setting is inherited unchanged.
-- **Review trigger**: run `npm publish --dry-run` again when the release gate's script chain changes, the npm major moves, or packaging flows gain child processes.
+- **Location**: `smokeArchiveWorker` in `scripts/smoke-archive-worker.mjs`.
+- **Behavior**: `npm publish --dry-run` runs `prepublishOnly` with `npm_config_dry_run=true`. The smoke's nested `npm pack` inherits that environment and produces zero tarballs, so `verify:pack` fails with "npm pack did not produce exactly one tarball". The smoke removes that variable from the child environment so the nested pack produces a real tarball; every other npm setting is inherited unchanged.
+- **Review trigger**: run `npm publish --dry-run` again when the release gate's script chain changes, the npm major moves, or this smoke gains another child process.
 - **Verification**: `npm publish --dry-run` completes, and its log carries both `archive-worker pack smoke ok` and `verify-pack ok`; a standalone `npm run release:check` still passes.
-- **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup but keep the assertion that nested packs need a real tarball.
+- **Follow-up**: if npm stops passing dry-run to lifecycle children, or offers an explicit opt-out, delete the environment cleanup and keep the assertion that the smoke produces one real tarball.
 
-## DN-7: The semantic-ranking runtime ships inside the package, never as a dependency
+## DN-7: The semantic-ranking runtime ships inside the package
 
 - **Type**: Compatibility / install policy.
 - **Status**: Active (2026-11-15, pnpm 11 `strictDepBuilds`).
@@ -124,7 +128,7 @@ An upstream-contract workaround must also state the current symptom, current wor
 - **Type**: security/performance boundary.
 - **Status**: in effect (2026-11-15).
 - **Location**: `lookupArtifact`/`lookupArtifactFrom` in `src/enrichment/service.ts`; `resolveArtifactTarget` in `src/enrichment/artifact-target.ts`.
-- **Behavior**: `lookupArtifact` is the only entry for an opaque artifactId. It hits a read-through cache keyed by `(artifactId, contentFingerprint, parseGeneration, store.writes)`; on a miss it reads the source index and one `meta.json` to recover the concrete source and **never stats or HEADs that source**. The reason is that an artifactId addresses the local artifact, not "does the source still exist": a parsed URL document stays readable offline (the source check was paid at parse time), and deleting the local attachment does not invalidate the artifact. Reading by item ref (`lookup`) still keeps one stat/HEAD, because that path reads Zotero's index text.
+- **Behavior**: `lookupArtifact` is the only entry for an opaque artifactId. It hits a read-through cache keyed by `(artifactId, contentFingerprint, parseGeneration, store.writes)`; on a miss it reads the source index and one `meta.json` to recover the concrete source. An artifactId addresses the local artifact, so a parsed URL document remains readable offline after its parse-time source check, and deleting the local attachment does not invalidate it. Reading by item ref (`lookup`) still performs one stat/HEAD because that path reads Zotero's index text.
 - **Review trigger**: when the artifact lifecycle changes (for example artifacts are reclaimed with their source), or when upstream asks an id-addressed read to verify source freshness too.
 - **Verification**: `tests/host/enrichment-service.spec.ts` asserts an artifactId hit issues no HEAD, an unknown id is a fault, and the answer carries the real source facts.
 - **Follow-up**: if the product decides a vanished source invalidates the artifact, add one budgeted probe in `resolveArtifactTarget` and turn this entry into a probe policy.
@@ -168,8 +172,8 @@ Every harness pin change walks this page from the top: check whether upstream no
 
 - **Type**: security boundary / release constraint.
 - **Status**: active (2026-11-16, pin `0.2.2-rc.3`).
-- **Location**: `scripts/build-client.mjs`, `build-state.mjs`, `release-artifact.mjs`, `release-branch-guard.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
-- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The client build sorts CSS module export names to ensure bit-for-bit reproducible bundles; the quality gate creates one artifact with scripts, dev dependencies and overrides removed (avoiding npm Arborist EOVERRIDE conflicts between direct peer dependencies and overrides in isolated package builds); Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected, and an already matching release branch is idempotently skipped.
+- **Location**: `scripts/build-state.mjs`, `release-artifact.mjs`, `release-tar.mjs`, `publish-release-branch.mjs`, and `release-branch.yml`.
+- **Behavior**: a successful complete build/prepare records digests for the sources, scripts, configuration, lockfile, toolchain and every emitted file. The quality gate creates one artifact with scripts and dev dependencies removed; Web smoke consumes its tarball and publication consumes its directory. Verification binds the source SHA, closed file set, individual digests, tarball digest and packed contents. The publish job checks out without credentials, and the write token reaches only the final push step. Publication targets the project's origin release branch and uses the observed old ref as a CAS lease; source rollbacks and byte changes are rejected.
 - **Review trigger**: build inputs, artifact layout, publication entry, Actions, Node or compiler changes.
 - **Verification**: `build-state.spec.ts`, `release-artifact.spec.ts`, `release-branch.spec.ts`, `release:check`, and smoke against the actual tarball.
 - **Follow-up**: add new build inputs to the digest and new release files to the verified set. Preserve tamper, missing-file, source rollback and credential-isolation checks after tool upgrades.
@@ -208,8 +212,8 @@ Every harness pin change walks this page from the top: check whether upstream no
 
 - **Type**: Zotero protocol / concurrency and security constraint.
 - **Status**: Active (2026-11-16).
-- **Location**: `write-auth.ts`, `write-authorization-budget.ts`, `write-operation.ts`, `local/write-keyed-batch.ts`, `local/write-trash-graph.ts`, `write-plan.ts`.
-- **Behavior**: Zotero consumes a single-use key at authentication. Authorization through completed dispatch must be exclusive. The service retains the operation gate and prompt budget across transport rebuilds. The 15-minute deadline starts after approval and includes queueing and authorization; it must preserve a dispatched write's unknown commit state. Native POST accepts existing key/version entries with PATCH merge semantics, at most 50 objects, each committed independently. Dependency layers must settle before their parents. Every receipt proves its index, identity, version and submitted fields; missing or contradictory proof never permits resending. Revocation atomically removes the credentials secret. Approval documents retain complete values and isolate their Markdown syntax.
+- **Location**: `write-auth.ts`, `write-authorization-budget.ts`, `write-operation.ts`, `local/write-keyed-batch.ts`, `local/write-trash-graph.ts`, `write-plan.ts`, `local/write-content-proof.ts`.
+- **Behavior**: Zotero consumes a single-use key at authentication. Authorization through completed dispatch must be exclusive. The service retains the operation gate and prompt budget across transport rebuilds. The 15-minute deadline starts after approval and includes queueing and authorization; it must preserve a dispatched write's unknown commit state. Native POST accepts existing key/version entries with PATCH merge semantics, at most 50 objects, each committed independently. Dependency layers must settle before their parents. Every receipt proves its index, identity, version and all submitted fields; missing or contradictory proof returns `committed-unverified` and never permits resending. Notes compare HTML structure, allowing only verified Zotero envelopes, control-character removal and equivalent HTML parsing. Tags and collections compare as sets; personal-library relation URIs normalize to local identity. Saved-search PATCH reads back and verifies the name, complete conditions and version. Revocation atomically removes the credentials secret. If credentials revocation fails during 401 recovery, preserve `ZOTERO_WRITE_UNAUTHORIZED` with both the original refusal and storage error as causes, and stop authorization and dispatch. Approval documents retain complete values and isolate their Markdown syntax. A custom plan-review response always declines the current write and returns its exact text as `declined.feedback` in canonical output, rendered content and presentation, even if the same answer also selects Apply. Collection creation, note updates and collection-membership updates first use read-only `preflightWrite` to reject known invalid targets. Execution rechecks after approval instead of writing from the earlier snapshot. Collection and saved-search PATCH/DELETE share `local/write-record.ts` for authorization, version preconditions, 404 refusals and uncertain-commit receipts; each domain retains its field handling and saved-state verification.
 - **Review trigger**: A Zotero write, grant-consumption or rate-limit protocol change; a credentials atomic-interface change; changes to graph ordering or approval rendering.
 - **Verification**: `batch-one-time-grant`, `trash`, `restore-items`, `write-operation`, `write-authorization-budget`, `write-auth`, `plan-literal-values`. Protocol evidence comes from the installed Zotero `server_localAPI.js` implementation of `writeMultipleObjects`, authentication and authorize.
 - **Follow-up**: Recheck per-object transactions and grant consumption during upgrades. Retain partial-conflict, missing-receipt, queued cancellation, total-deadline and rebuild-serialization regressions.
@@ -218,11 +222,72 @@ Every harness pin change walks this page from the top: check whether upstream no
 
 - **Type**: Local-file integrity / resource ownership constraint.
 - **Status**: Active (2026-11-16).
-- **Location**: `enrichment/model-bundle-inspector.ts`, `model-fs.ts`, `semantic/bundle.ts`, `tokenizer.ts`, `batching.ts`, `session.ts`, `vector-cache.ts`, `evidence-query.ts`.
+- **Location**: `enrichment/model-bundle-inspector.ts`, `regular-file.ts`, `semantic/bundle.ts`, `tokenizer.ts`, `batching.ts`, `session.ts`, `vector-cache.ts`, `evidence-query.ts`.
 - **Behavior**: Installation, status and loading share exact catalog inspection. Manifest reads cap at 64 KiB before allocation; pinned paths and parent directories reject symlinks. Runtime readers hash the actual byte snapshot consumed by ONNX and JSON parsers, bounded by pinned size. The process verification cache holds at most 16 identities and is cleared on component teardown. Queries and paraphrases cap at 2,000 characters before source I/O; embedding text including its prefix caps at 131,072 characters before encode. One cache generation admits one inference batch at a time. Padded batches split at 32,768 tokens without dropping rows or repeating encoding. Cache identity includes the complete model contract, including tier and token window.
 - **Review trigger**: Catalog windows or dimensions, tokenizer allocation, runtime byte-buffer ownership, inference concurrency, or file inspection changes.
-- **Verification**: `semantic-bundle`, `semantic-open-ownership`, `semantic-admission-budget`, `semantic-vector-cache`, `semantic-diagnostic-retry`, and `evidence-query-admission`. Tests use tiny real files and controlled session outputs; no repository test loads a model.
+- **Verification**: `semantic-bundle`, `semantic-open-ownership`, `semantic-admission-budget`, `semantic-vector-cache`, and `evidence-query-admission`. Tests use tiny real files and controlled session outputs; no repository test loads a model.
 - **Follow-up**: Preserve exact-byte loading and bounded admission when changing the runtime; measure real model memory and recall manually before changing these limits.
+
+## DN-21: Complete result delivery and bounded retention
+
+- **Type**: Result integrity / lifecycle and resource constraint.
+- **Status**: Active (2026-11-16).
+- **Location**: `result-delivery.ts`, `result-receipt.ts`, `job-runner.ts`, `write-bounds.ts`, `scholarly/fulltext/store.ts`.
+- **Behavior**: Oversized results require a complete attachment and a bounded receipt. Storage failure fails explicitly; background jobs cannot substitute full or truncated bodies. Foreground promotion publishes one attachment, and unpromoted candidates do not copy their bodies into job outcomes. Receipts retain the latest 128 deliveries per session and 1,024 globally by publication time; call/job aliases expire together. Host-owned attachments remain available to historical session references after receipt eviction. Invalid receipts are individually backed up and isolated. Unmount closes admission and waits at most five seconds. Accepted publications retain domain handles until settlement, then close them; late producers that have not entered publication fail explicitly. Browse cards retain a complete prefix of at most 20 rows within a 6 KiB row budget, counting JSON separators. Actual page counts and continuation remain intact; `omitted` reports hidden rows without changing canonical results. Every write checks scalar bounds before plan assembly and service approval, and encoded HTTP bodies are limited to 1 MiB without truncation. Scholarly text expires from memory and disk after seven days; writes reclaim old records to maintain 256 entries and 128 MiB.
+- **Review trigger**: Changes to host attachment collection, domain closure, job outcomes, write bounds or cache lifetimes.
+- **Verification**: `result-persistence`, `result-retention`, `result-unmount`, `result-jobs`, `export-delivery`, `write-bounds`, `fulltext-cache`.
+- **Follow-up**: Recheck file ownership when the host offers reference-counted collection. Preserve failure, deadline, restart-ordering and late-settlement regressions.
+
+## DN-22: Disclosure acknowledgement belongs to one component mount
+
+- **Type**: Component authorization / upstream lifecycle constraint.
+- **Status**: Active (2026-11-16, pin `0.2.2-rc.3`).
+- **Location**: `component-enablement.ts`, `remote.ts`, `client/enable-notice.ts`, `client/status-probe.ts`.
+- **Behavior**: Each scholarly/enrichment service construction generates a random UUID, isolated by the Cordis `ctx.root` identity. Status exposes only current mounts; an older mount's cleanup cannot revoke its successor. The browser persists that identity as its acknowledgement, so re-enabling while offline, restarting the host and switching hosts all disclose again. Only the explicit acknowledgement button accepts; Escape and backdrop clicks keep the notice open. Identity is read once per served period. A failed read still discloses and acceptance lasts only for the current browser session. Status probes have a 30-second deadline; disposal cancels them and rejects late results.
+- **Review trigger**: Cordis root identity, component remounts, status endpoints, plugin-manager state or disclosure wording changes; specifically review upstream's experimental `ctx.root` contract.
+- **Verification**: `component-enablement`, `enable-notice-epochs`, `enable-notice-storage`, `enable-notice`, `status-probe` and client `apply` cover host isolation, offline re-enabling, old cleanup, storage refusal, stale asynchronous responses and explicit acceptance.
+- **Follow-up**: Migrate to a stable upstream component-mount identity if published and remove this WeakMap. Preserve cross-host, offline re-enable and cleanup-race regressions.
+
+## DN-23: Private artifact roots and content digests
+
+- **Type**: Evidence integrity / local filesystem boundary.
+- **Status**: Active (2026-11-16).
+- **Location**: `enrichment/safe-directory-path.ts`, `output-dir.ts`, `artifact-schema.ts`, `artifact-store.ts`.
+- **Behavior**: POSIX artifact roots must belong to the current user and deny group/other writes. Shared temporary roots cannot directly hold artifacts; owned private children are allowed. Ancestors must belong to this user or root, or have sticky protection; every ancestor writable by other users must have sticky protection. New directories use 0700. Windows ACLs are not inferred from POSIX uid/mode. Committed metadata records SHA-256 for Markdown, the optional content list and every image; reads verify digests and existing byte/character bounds. Private roots prevent another account from forging index, metadata and document together; digests detect equal-length replacement of committed files. Older artifacts missing digests fail explicitly without migration or silent repair.
+- **Review trigger**: Directory admission, OS permissions, cache formats, file I/O or image metadata changes.
+- **Verification**: `enrichment-output-dir`, `enrichment-artifact-format`, `enrichment-artifact-store` cover shared roots, foreign ownership, unsafe ancestors, sticky temporary parents and equal-length text/image tampering.
+- **Follow-up**: Preserve both ownership checks and content digests. Native Windows ACL admission requires platform verification; POSIX tests do not establish it.
+
+## DN-24: Upstream mirrors, static registration and search-fold equivalence
+
+- **Type**: Upstream contract / upgrade verification.
+- **Status**: Active (2026-11-16, Harness pin `0.2.2-rc.3`; Zotero 10.0.2-beta.9 source contract, reverified against 11.0-beta.4+045d52044).
+- **Location**: `fiber-state.ts`, `service.ts`'s `LOGGER_LEVEL` and dynamic write registration, `typert.ts`, `wire-schemas.ts`, `search-text.ts`, `scripts/verify-zotero-search.mjs`.
+- **Behavior**: Cordis const enums have no runtime object to import. FiberState and LoggerLevel use type-anchored numeric mirrors; the exhaustiveness table catches added states. The Typert generator requires a monorepo layout, so this standalone package derives host members and the browser namespace from one strict descriptor table and registers its manifest once. Write tools register dynamically because panel `tools.execute` supplies no toolSet; `when` cannot replace registration ownership. Search folding must be compared with the actual Zotero mapping, formatting-tag expression and normalizeForSearch together in `chrome/content/zotero/xpcom/utilities_internal.js`. Environment reuse is DN-14, graph and non-atomic writes are DN-19, and external resource ownership is DN-11.
+- **Review trigger**: Harness pins, Cordis state/logger enums, tool execution semantics, Typert generator layout, Zotero upgrades or changes to `search-text.ts`.
+- **Verification**: `npm run typecheck`, `typert-parity`, client Remote contracts and write-policy tests. After every Zotero upgrade run `node scripts/verify-zotero-search.mjs --archive /Applications/Zotero.app/Contents/Resources/app/omni.ja --report /tmp/zotero-search-equivalence.json`; other platforms can pass `--source <extracted utilities_internal.js>`. It extracts actual definitions, compares every Unicode scalar plus fixed and deterministic mixed corpora, and records source/mirror digests. The current 1,132,075 cases agree without network access.
+- **Follow-up**: Delete mirrors when runtime enums become available; migrate when standalone Typert generation is supported; reassess dynamic registration if panel execution gains a toolSet. On a search mismatch inspect the actual source version, update the mirror and independent regression samples, then rerun. Never generate expected results from the mirror.
+
+## DN-25: Fulltext index listings and library cursors use independent counters
+
+- **Type**: Zotero protocol / integrity constraint.
+- **Status**: Active (2026-11-16).
+- **Location**: `local/changes-domain.ts`, `changes-contract.ts`, `docs/tools.md`.
+- **Behavior**: The installed server_localAPI.js FullText GET requires since and filters SQL by FI.version. A library transaction counter cannot stand in for it. Explicit fulltext requests use since=0 to read the complete index listing, report index versions and issue no library delta cursor. A derived trash split requires both input listings to be complete; missing live rows never prove deletion.
+- **Review trigger**: Zotero FullText SQL, cursor types or trash fallback changes.
+- **Verification**: `changes` checks since=0, independent versions and incomplete derivations; the live read-only GET returned 579 valid entries. Protocol source is `chrome/content/zotero/xpcom/server/server_localAPI.js` inside Zotero app/omni.ja.
+- **Follow-up**: If upstream unifies counters or provides a separate fulltext cursor, add it against verified protocol evidence. Preserve counter separation and completeness regressions.
+
+## DN-26: Durable trail state stores facts consumed by the fold
+
+- **Export location constraint**: Domain, presentation and trail share `ZoteroExportItem`: text bounds appear together or are both absent. Wire rejects incomplete, negative, fractional, empty or reversed spans; replay decoding drops invalid location rows. Presentation never emits half a pair. `source-export-locations`, tool output schemas and client selectors cover this boundary.
+- **Type**: Persistent format / projection lifecycle.
+- **Status**: Active (2026-11-16).
+- **Location**: `session-projection/source-ledger.ts`, `sources/event-ledger.ts`, `sources/model.ts`.
+- **Behavior**: Projection state version 3 contains only the chunked ledger and removes unused inheritedEventCount. Its strict schema refuses obsolete extra fields; the host rebuilds current state by replaying session events. Inherited events still fold normally. Search tools forbid includeTrashed, so trail occurrences no longer declare that unavailable capability. Production reads use the incremental SourceWorkspaceIndex; tests read the actual projection instead of retaining a separate full replay implementation.
+- **Review trigger**: Persistent fields, strict schemas, event retention or projection versions change.
+- **Verification**: `source-ledger-projection`, `source-projection-incremental`, `source-ledger`, `source-page` cover replay, inherited events, stable snapshots and complete paging.
+- **Follow-up**: Bump stateVersion with every format change and verify host event replay. Every new persistent field requires an actual consumer.
 
 ## Retired entries
 
@@ -237,3 +302,156 @@ A retired entry keeps its original title, retirement date, and replacement mecha
 - **Review trigger**: revisit when `zotero_retrieve` fulltext mode or `lookupArtifact` semantics change, when the Host's `insertText` / `insertQuote` semantics change, when the Host offers an instruction-card container, or when fulltext windows move to file delivery. Verify then that the model still reaches the whole document, the composer still holds one removable block, and the trail still records the window read.
 - **Verification**: `tests/tools/retrieve-fulltext.spec.ts` asserts inline delivery and mode exclusivity; `tests/local/retrieve/retrieve-fulltext.spec.ts` asserts lossless window joining, artifactId addressing, miss/fault and truncation; `tests/host/source-ledger-fulltext.spec.ts` asserts the trail fact; `tests/client/library/parsed-document-details.spec.tsx` and `parsed-document-selection.spec.tsx` assert the draft names `mode="fulltext"` and `source`, carries no path or leftover placeholder, and does not use `insertText`; `tests/host/enrichment-artifact-metadata.spec.ts` asserts the wire no longer carries `full.md`.
 - **Follow-up**: retirement note — the original "if the model gains a tool that reads an artifact by id, drop `documentPath`" condition is now satisfied. If the Host ever prevents model-initiated tool calls, re-audit the "draft instructs the model to call a tool" entry point and the trail-visibility verification with it.
+
+## DN-27: Close tool parameter names before execution
+
+- **Type**: Host contract / parameter integrity.
+- **Location**: `define-tool.ts`, `parameter-correction.ts`, and every local and scholarly tool definition.
+- **Behavior**: The rc.3 parameter DSL produces an open root object. The shared constructor advertises `additionalProperties: false` and uses the host's `validateJsonSchemaValue` and `ToolArgsError` to reject unknown root names before any tool executes. The host's `defineTool` still validates declared values; field validation is not reimplemented. Unique approximate matches cover both missing required and optional names, without guessing ambiguous matches. Dynamic background parameters are available only while actually registered.
+- **Review trigger**: Host tool DSL, pipeline or argument-error upgrades; new tools or dynamic parameters.
+- **Verification**: `tool-parameter-closure` checks all 30 actual registrations and refusals without side effects. `parameter-correction` checks hints through the real pipeline. Local and scholarly behavior tests cover accepted execution.
+- **Follow-up**: Use the native capability when the host exposes closed parameter roots, remove the local root-name refusal branch, and retain real-call and unknown-optional-key regressions.
+
+## DN-28: Helper ratchets track current line counts
+
+- **Type**: Test infrastructure / regression gate.
+- **Location**: `scripts/test-lint.mjs`, `scripts/test-lint.d.mts`, `tests/README.md`.
+- **Behavior**: Each existing helper baseline must equal its current measured line count. Shrinking a file without lowering its baseline also fails, preventing later growth back into old headroom. Deleted files require removal of their entries; new helpers cannot enter the existing baseline.
+- **Review trigger**: Splitting or shrinking an existing helper, or changing line measurement or gate baselines.
+- **Verification**: `tests/unit/tooling/test-lint.spec.ts` covers an unchanged baseline after shrinkage, successful synchronized lowering, refusal of subsequent growth, and stale paths.
+- **Follow-up**: Keep lowering baselines when splitting helpers and retain independent tests of the gate itself.
+
+## DN-29: Public test support and registry entry differences
+
+- **Type**: Upstream assembly constraint / dependency pin.
+- **Location**: `tests/helpers/lanes/host-lane.ts`, `tests/client/helpers/mock-translate.ts`, `scripts/test-lint.mjs`, `scripts/harness-state.mjs`.
+- **Behavior**: The host lane uses public `executeModelToolFixture`, retaining the actual pipeline, call id, agent and signal. Locale fixtures use the explicitly exported and published `dsh-client-test-runtime/src/translate.ts` without copying its algorithm. That translation entry and the three independent whole-client assembly entries have an exact test-support source allowlist; the package explicitly publishes them, and exports, files and actual paths are verified. The rc.3 full runtime root imports loader-only `/client` artifacts. `client-test-platform.mjs` maps those entries to explicitly published production source using each package's declaration path and fails when the source contract or file is missing. Vitest deduplication prevents its nested Vitest 4 from splitting this repository's Vitest 5 runtime. The slot-runtime and resource composition tests now create, use and dispose public `SlotTestRuntime`; migration of the entry's recording fake remains incomplete. A separate resource case executes the physical compiled bundle to retain publication coverage. The pin script adds exact harness overrides from direct declarations and the current lock closure before npm regenerates the lock.
+- **Review trigger**: Test-support, client module loader, runner or pin-writer changes.
+- **Verification**: Actual host/tool calls; `harness-state` tests pin new direct and transitive packages; `test-lint` proves the pure entry is published and other source paths remain refused; locale, client DOM and complete release checks.
+- **Follow-up**: Remove published-source mapping and the corresponding entry exceptions when upstream provides directly executable ESM `/client` entries. Preserve real assembly, payload validation and unified disposal; local doubles serve explicit fault injection only.
+
+## DN-30: Client platform contracts and UI verification follow the pin
+
+- **Type**: Host browser module contract / version review.
+- **Location**: `client-graph-authority.mjs`, `build-client.mjs`, `harness-state.mjs`, `shared/harness-doc-pin.mjs`, `smoke-parsed-ui.mjs`.
+- **Behavior**: Browser externals have one source. With a sibling checkout, the gate parses the pin tag's actual `PLATFORM_MODULES` TypeScript AST and rejects each unavailable external; comments, strings and dynamic spreads cannot prove availability. Registry-only checks without a sibling retain fixed-input guard tests and cannot claim an upstream platform read occurred. Manual Chromium verification reuses `pinnedHarness` / `pinThemeSheets` instead of carrying a version literal. The rc.3 theme was exercised across two sizes, light/dark themes and three production components, totaling 12 layouts. The production `ParseDocumentDialog` fixture must receive the merged host translator, rather than the removed locale fallback. Component mount failures record DOM, browser errors and screenshots. The pin writer synchronizes README badges, installation requirements and skill commands; check mode refuses stale examples. Dated historical constraints retain their original verification version.
+- **Review trigger**: Host platform, dependency pin, external-module or UI fixture changes.
+- **Verification**: `client-graph-authority` mutation tests remove every external; `harness-doc-pin` covers stale/missing markers and idempotence; `harness:check` reads the actual tag; `smoke-parsed-ui.mjs` reports layouts, browser errors and generation replacement behavior.
+- **Follow-up**: Repeat platform, token snapshot and Chromium checks on upgrades. Keep failure screenshots and runtime errors visible instead of substituting an old theme or silent mock.
+
+## DN-31: Hard model deadlines are proved by worker exit
+
+- **Type**: Local inference / lifecycle and resource ownership.
+- **Location**: `enrichment/semantic/loader.ts`, `worker-embedder.ts`, `model-worker.ts`, `worker-runtime.ts`, `session.ts`.
+- **Behavior**: Each model instance’s bundle verification, tokenizer and ONNX session belong to a separate thread. The 180-second opening and 120-second inference deadlines terminate the thread. Opening fails only after confirmed exit, so serialized model switches can continue. Caller cancellation preserves its original reason; late replies are still consumed and cleaned up. The last scope aborts an unowned opening, and abandoned queued targets never open. Returned vectors are checked for count, Float32 type, dimension and finite values. A terminated resident is explicitly unavailable; the next scope opens a fresh instance, while an old scope cannot borrow a replacement model.
+- **Review trigger**: ONNX/WASM, Node Worker, opening/inference deadlines, model switching or vector-cache lease changes.
+- **Verification**: `semantic-worker-lifecycle` uses real threads with uncooperative loops and message channels, without models or network access, to verify actual exit, queue recovery, cancellation/late replies, malformed vectors and reopening. Existing loader/ownership tests retain fixed-instance lease coverage. Pack smoke executes the emitted worker from a real npm tarball and verifies a missing bundle is refused before runtime loading.
+- **Follow-up**: Reassess isolation if ONNX provides provable hard cancellation and complete resource release. Do not substitute a race that leaves a stalled runtime alive. Actual model speed and quality measurements remain separate manual acceptance; protocol tests are not model-quality evidence.
+
+## DN-32: Parse failure receipts and durable task recovery
+
+- **Type**: Redaction / durable task recovery.
+- **Location**: `enrichment/parse-target.ts`, `transport.ts`, `parse-once.ts`, `artifact-store.ts`, `parse-jobs.ts`, `service.ts`.
+- **Storage**: Session operation receipts and generation pointers live at the independent `$DSH_HOME/zotero-receipts/parse-jobs/` root. Artifact `outputDir` changes cannot move them. `enrichment-receipt-location` uses real disk to verify the original receipt remains readable after changing directories and remounting; restarting the same operationId under different configuration stays an explicit conflict.
+- **Behavior**: Redact URLs, paths and credentials from the complete error before bounding it to 256 characters. Long messages retain their diagnostic beginning and recovery instruction at the end. Uploaded and not-yet-uploaded tasks expire after 24 hours; an explicit parse removes an expired task and submits afresh. Poll exhaustion removes the resumable receipt. Invalid JSON or a failed task schema is removed before treating the task as absent; read/delete permission and I/O errors remain explicit. Idempotent replay after restart returns `joined` or `completed`, never a fictional newly started job.
+- **Review trigger**: Error formatting, task persistence, MinerU retention, polling budgets or replay protocol changes.
+- **Verification**: `enrichment-parse-failure-receipt` checks POSIX, Windows and UNC paths, persisted content and long fake-IP guidance. `enrichment-task-recovery` covers expired uploads, resubmission after poll exhaustion, corrupt records and failed removal permissions. The persistence spec verifies replay creates no new job.
+- **Follow-up**: Review the 24-hour bound when MinerU retention or its protocol changes. Preserve explicit submission: ordinary reads cannot upload as a side effect of recovery.
+
+## DN-33: Admission evidence and measurement scope
+
+- **Type**: Model quality / research evidence provenance.
+- **Location**: `semantic/model-profiles.ts`, `scripts/semantic-calibration/*admission*`, `tests/fixtures/semantic-admission/`.
+- **Behavior**: All six models were actually encoded through the production worker on 2026-11-17. Raw vectors, full model identities, input digests, runtime environment and per-case measurements are archived together. Automated tests recompute policies from those vectors without running models. The authored regression set has 24 cases, including 20 paraphrases and four controls; English uses 12 and ten respectively. Paraphrase and full-set BM25 denominators stay distinct. Margins are fixed policy limits, not independently fitted optima. The same vectors reproduce two unrelated hits under hybrid's old 0.461 floor; the corrected 0.509118 floor keeps this set's recall unchanged and removes its answer-removed control hits.
+- **Review trigger**: Model revision, tokenizer/prefix, pooling, runtime, dataset text, floor or margin changes.
+- **Verification**: `semantic-admission-measurement.spec.ts` checks file digests and recomputes every cosine, ranking, metric and profile. Mutations cover stale digests, duplicate keys, invalid dimensions and synthetic markers. The historical logistic runtime-report is separate diagnostic metadata and does not prove current policies.
+- **Follow-up**: Re-measure with prepare-admission → encode-admission → measure-admission. Review proposals and support limits before updating policies and all archived evidence. This small same-set regression does not establish real extraction, external annotation, heldout effectiveness or production false-positive guarantees; product claims must retain that scope.
+
+## DN-34: React hook gates and script type checking
+
+- **Type**: Development constraint / regression boundary.
+- **Location**: `eslint.config.mjs`, `tsconfig.scripts.json`, `scripts/harness-state.mjs`.
+- **Behavior**: Client source and browser tests run `rules-of-hooks` and `exhaustive-deps`; every warning fails `lint:hooks`, which the release gate must invoke. Babel parses TypeScript and JSX without TypeScript 7's removed Compiler API; `.ts` retains its non-JSX parsing semantics. Capability decisions belong at component boundaries and cannot change the hook sequence inside a component. Mutable sources tied to a session or connection retain their scope identity while their contents update.
+- **Scripts**: The model-download CLI implementation runs under `checkJs`. Upstream dependency discovery parses syntax trees across JS/TS module variants in `src/`, `tests/`, and `scripts/`; comments and quoted examples never become dependencies.
+- **Review trigger**: React, ESLint, Babel or TypeScript upgrades; new script calls to host APIs; capability gates or persistence timing changes.
+- **Verification**: `tests/unit/tooling/react-hooks.spec.ts`, `harness-artifacts.spec.ts`, client tests, `npm run lint:hooks`, and `npm run typecheck`.
+- **Follow-up**: Add implementations of new standalone CLIs calling host APIs to script type checking. Retain conditional-hook, missing-dependency, and generic-arrow counterexamples when upgrading the parser.
+
+## DN-35: Isolate browser declarations from host execution types
+
+- **Type**: Type boundary / test ownership.
+- **Location**: `types.ts`, `write-call.ts`, `job-kinds.ts`, `error-codes.ts`, `fulltext-spill.ts`, `result-contract.ts`, `tsconfig.client*.json`, `scripts/client-declarations.mjs`.
+- **Behavior**: Shared DTOs import no host execution context, augment no host `JobKindMap`, and reference no fulltext implementation through the spill callback. Host entries own write approval context and job kinds. Browser source compiles without Node globals; browser tests compile in a separate program with Node test-platform types. The declaration gate inspects actual compiler-resolved files and refuses host jobs/tools/agent root entries and local host execution modules independently of `skipLibCheck`. Client jobs use their public type directly; connection, which declares no Context property, is obtained through Cordis strict service lookup.
+- **Tests**: The host pipeline produces four scholarly write receipts and compares them exactly with archived JSON. Browser tests replay their complete content and meta without merging both Context worlds into one program. Updating the capture requires explicitly running the capture spec with `DSH_CAPTURE_SCHOLARLY_RECEIPTS=1`; ordinary tests only compare.
+- **Review trigger**: Host imports, Context augmentation or implementation references in shared types; tool output changes; TypeScript or host jobs contract upgrades.
+- **Verification**: `client-declarations.spec.ts` checks the real browser graph and rejects an actual compiler program importing host job kinds; scholarly receipt capture, browser receipt and write-card tests; `npm run typecheck`.
+- **Follow-up**: Keep shared contracts separate from execution. Cross-boundary tests verify host production and browser replay against the same exactly compared capture.
+
+## DN-36: Default annotations in tool schemas
+
+- **Type**: Upstream contract.
+- **Location**: `tools/search.ts`, `tools/retrieve.ts`, and pinned `dsh-tools/src/schema.ts`.
+- **Behavior**: Harness defines `default` as a non-validating JSON annotation and never fills arguments from it. Tools apply their business defaults and validate mutually exclusive arguments by presence; omitted retrieve mode currently means evidence. `Object.hasOwn` cannot distinguish model input from a future validator's inserted own properties and cannot provide compatibility with default filling.
+- **Review trigger**: Harness schema authoring or argument-validator upgrades.
+- **Verification**: Real search and retrieve-fulltext pipeline cases cover omitted `tagMatch`, omitted mode, fulltext argument exclusivity and invalid ranges.
+- **Follow-up**: If upstream changes default semantics, update default annotations affecting exclusivity and normalization together and verify them in the upgrade. Current code must not assume filling behavior.
+
+## DN-37: Style gates inspect CSS semantics
+
+- **Type**: Development constraint / presentation boundary.
+- **Location**: `scripts/shared/css-syntax.mjs`, `scripts/style-guard.mjs`, `tests/unit/tooling/style-syntax.spec.ts`.
+- **Behavior**: CSSTree parses rules, declarations, values, selectors and media conditions through one authority. Tokenization preserves offsets and recognizes CSS escapes; comments, semicolons and brackets inside strings never split structures. Literal typography is checked inside var fallbacks and calc and must use host scale values. Color checks include named colors, modern functions and var fallbacks; transparent and currentColor retain their structural meaning. A media exception must definitely reject the opposite capability; OR and not cannot widen hover or touch-font exceptions. Motion restricted to no-preference is valid; otherwise reduced motion must actually disable each transition/animation across the whole subject and media scope.
+- **Review trigger**: New CSS syntax, host style rules or CSSTree upgrades.
+- **Verification**: Existing style-guard tests and style-syntax counterexamples cover escapes, structure, named colors, relative typography, logical borders, corner longhands and media logic; `npm run style:check`.
+- **Follow-up**: Extend the shared parser with paired valid and bypass cases; never widen policy exceptions merely to restore a passing gate.
+
+## DN-38: Dependency and runtime release identity
+
+- **Type**: Supply provenance / release boundary.
+- **Location**: `scripts/shared/onnxruntime-release.json`, `onnxruntime-LICENSE`, `vendor-onnxruntime.mjs`, `harness-state.mjs`, `published-declarations.mjs`, `verify-pack.mjs`.
+- **Behavior**: The independent ONNX 1.31.1 anchor uses the official npm tarball's SHA-512 metadata. The actual archive passes that SRI before extracting SHA-256 identities for three assets. The corresponding upstream license is acquired and hashed separately. Vendoring and pack verification compare the independent anchor, so changing assets together with generated provenance still fails. Upgrades require reacquiring and reviewing the upstream archive and license; never derive a new anchor from the installation tree. Direct runtime dependencies use exact versions. Installation claims cover the release-checked closure, and the host still checks future transitive resolutions. Vendored harness versions come from the immutable pin tag; lock resolutions must equal the declared floor, not merely satisfy a wider range.
+- **Declarations**: Every packed static import, export and import-type dependency requires consumer dependencies, optionalDependencies or peers; dev dependencies cannot fulfill that contract. Missing client artifacts, corrupt manifests, missing tags and missing files inside existing tags have separate diagnostics; retired harness names fail the gate.
+- **Review trigger**: ONNX, harness, runtime dependency or published declaration upgrades.
+- **Verification**: Coordinated asset/provenance tampering and license-content cases; real temporary Git pin/working-tree divergence; lock-version counterexamples; declaration dependency checks and actual `verify:pack`.
+- **Follow-up**: Refresh independent source evidence before running the full release gate. Review version, SRI, file hashes and license together.
+
+## DN-39: Trail PDF leases and client ownership
+
+- Type: lifecycle constraint. Location: `src/client/url-pdf-readers.ts`.
+- Behaviour: catalog version 2 persists file refs only, with at most 256 entries. Leases belong to the current browser session. Replacing an address takes ownership of the new lease before releasing the old one; late release completion cannot remove the replacement. Detaching catalog metadata retains cleanup ownership. Concurrent disposal shares one cleanup result.
+- Review trigger: host tab restoration or reading-file lease protocol changes.
+- Verification: replacement, persistence refusal, restoration and concurrent disposal cases in `tests/client/library/pdf-reader-lifetime.spec.ts`.
+- Follow-up: adopt cross-session lease ownership only when the host defines that protocol; preserve session ownership until then.
+
+## DN-40: Private host route adapter for the deliverable action
+
+- Type: upstream presentation adapter. Location: `DeliverableZoteroAction.tsx`.
+- Behaviour: the pinned `deliverables.file.actions` owner supplies no file path. The button accepts only `api/present.open` with exactly one `sessionId`, positive integer `seq` and nonnegative integer `index`, then resolves the delivered file through ChatSnapshot. The client logger reports unsupported routes or coordinates. The file context menu remains available. This adapter is not a public host URL contract.
+- Review trigger: harness pin, present-open route or slot owner props changes.
+- Verification: `tests/client/deliverables/`; run `npm run smoke:web-composition` before release.
+- Follow-up: adopt a public file path or identity once supplied upstream, and remove the parser and this constraint.
+
+## DN-41: Versions covered by client platform validation
+
+- Type: version validation boundary. Location: platform module table, harness pin and browser composition probe.
+- Behaviour: named exports, types and the real SlotTestRuntime are verified against the exact pin. The `engines.dsh` interval does not demonstrate testing of every host version in that interval. Every release and host upgrade requires `npm run smoke:web-composition`, with its report and console errors retained.
+- Review trigger: host upgrade, platform dependency or client value import changes.
+- Verification: `harness:check`, real client runtime tests, `smoke:web-composition` and feature DOM tests cover their respective boundaries. The browser probe does not replace acceptance of every business control.
+- Follow-up: extend measured coverage when the host publishes a cross-version contract matrix; report only the versions actually tested.
+
+## DN-42: Button style ownership and content-row layout
+
+- Type: upstream control layout adapter. Location: `ContentButton.tsx`, `IconButton.module.css` and `control-style-ownership.mjs`.
+- Behaviour: the pinned Button exposes fixed block sizes `md` and `sm`, with no intrinsic-content-height option. Multiline literature rows use ContentButton; its sole host override is native `style.height="auto"`. The title, metadata and content padding determine row height, while the host supplies type, horizontal padding, corners, hover and focus. Single-line attachments, section headers and ordinary actions use the host Button directly and retain its native height. Selection decoration belongs to the item frame. Shared IconButton adapter styles own icon geometry and narrow-container icon seats; business styles override neither their colours nor geometry.
+- Review trigger: a host content-height or icon-button API, control size changes, or a new control wrapper.
+- Verification: the style gate follows JSX imports and className bindings into CSS rules, refusing feature control geometry, fill, typography and colour overrides. Unresolved dynamic CSS classes fail explicitly. ContentButton permits only `height:auto`; the icon adapter permits only its dimensions and corners. Negative cases cover both restricted adapters. Browser acceptance must exercise long titles, compact density, PDF badges and narrow panels.
+- Follow-up: adopt corresponding host layout APIs when supplied, remove the restricted exceptions, and preserve the feature ownership gate.
+
+## DN-43: Result projection and host snapshots
+
+- **Type**: Upstream contract constraint.
+- **Location**: `src/result-delivery.ts` and `createSuccessResult` in the host tools pipeline.
+- **Behavior**: The host copies and freezes tool values before validation and projection. A WeakMap keyed by the original result cannot carry facts into the final projector. Inline delivery computes facts once in the final `presentationMeta`; file delivery computes them once after deciding a file is required and retains them in its receipt. Event metadata expands a single copy of the facts.
+- **Review trigger**: Changes to the tools pipeline, result wrappers or projectors.
+- **Verification**: `tests/host/result-projection.spec.ts` runs both arms through the real tool execution pipeline and asserts one projector call, with no nested facts or duplicate session identifiers in metadata.
+- **Follow-up**: Review the delivery layer if upstream introduces a retained invocation projection interface; preserve execution tests for both arms.

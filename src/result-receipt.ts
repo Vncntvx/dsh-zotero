@@ -11,6 +11,20 @@ import { isRecord } from './json.js'
 /** One parsed receipt line: the persisted-result announcement a file block carries. */
 export type ResultReceipt = Record<string, unknown>
 
+export const RESULT_RECEIPT_REQUIRED_KEYS = [
+  'delivery',
+  'version',
+  'tool',
+  'sessionId',
+  'callId',
+  'summary',
+  'createdAt',
+  'file',
+] as const
+export const RESULT_FILE_REQUIRED_KEYS = ['attachmentId', 'name', 'bytes'] as const
+const RECEIPT_KEYS = new Set<string>([...RESULT_RECEIPT_REQUIRED_KEYS, 'jobId', 'facts'])
+const FILE_KEYS = new Set<string>(RESULT_FILE_REQUIRED_KEYS)
+
 /**
  * Parse one text block as a persisted-result announcement.
  * @param text - the text block's content.
@@ -21,10 +35,50 @@ export function parseReceiptLine(text: string): ResultReceipt | undefined {
   try {
     const value: unknown = JSON.parse(text.slice(RESULT_RECEIPT_PREFIX.length).split('\n')[0]!)
     if (!isRecord(value)) return undefined
+    if (
+      !RESULT_RECEIPT_REQUIRED_KEYS.every((key) => Object.hasOwn(value, key)) ||
+      Object.keys(value).some((key) => !RECEIPT_KEYS.has(key))
+    )
+      return undefined
     if (value['delivery'] !== 'file' || value['version'] !== 1) return undefined
-    if (typeof value['tool'] !== 'string' || !value['tool'].startsWith('zotero_')) return undefined
+    if (
+      typeof value['tool'] !== 'string' ||
+      !value['tool'].startsWith('zotero_') ||
+      value['tool'].length > 64
+    )
+      return undefined
+    if (
+      typeof value['sessionId'] !== 'string' ||
+      !value['sessionId'] ||
+      typeof value['callId'] !== 'string' ||
+      !value['callId']
+    )
+      return undefined
+    if (
+      typeof value['summary'] !== 'string' ||
+      value['summary'].length > 256 ||
+      !Number.isSafeInteger(value['createdAt']) ||
+      (value['createdAt'] as number) < 0
+    )
+      return undefined
+    if (value['jobId'] !== undefined && typeof value['jobId'] !== 'string') return undefined
+    if (value['facts'] !== undefined && !isRecord(value['facts'])) return undefined
     if (!isRecord(value['file'])) return undefined
-    if (typeof value['file']['attachmentId'] !== 'string') return undefined
+    const file = value['file']
+    if (
+      !RESULT_FILE_REQUIRED_KEYS.every((key) => Object.hasOwn(file, key)) ||
+      Object.keys(file).some((key) => !FILE_KEYS.has(key))
+    )
+      return undefined
+    if (
+      typeof file['attachmentId'] !== 'string' ||
+      !file['attachmentId'] ||
+      typeof file['name'] !== 'string' ||
+      !file['name'] ||
+      !Number.isSafeInteger(file['bytes']) ||
+      (file['bytes'] as number) < 0
+    )
+      return undefined
     return value
   } catch {
     return undefined

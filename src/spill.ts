@@ -87,7 +87,7 @@ export async function trySpillToolOutput(
   try {
     return await spillStore.saveText(save)
   } catch (error: unknown) {
-    ctx.logger?.warn?.(`spillStore: failed to save ${exec.name} output: ${String(error)}`)
+    ctx.logger.warn(`spillStore: failed to save ${exec.name} output: ${String(error)}`)
     return undefined
   }
 }

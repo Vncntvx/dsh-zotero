@@ -48,7 +48,18 @@ function exportItemsOf(value: unknown): ExportDocumentItem[] {
     const entryIndex = numberField(entry, 'entryIndex')
     const start = numberField(entry, 'start')
     const end = numberField(entry, 'end')
-    items.push({
+    if (entry['start'] !== undefined || entry['end'] !== undefined) {
+      if (
+        start === undefined ||
+        end === undefined ||
+        !Number.isSafeInteger(start) ||
+        !Number.isSafeInteger(end) ||
+        start < 0 ||
+        end <= start
+      )
+        continue
+    }
+    const item: Omit<ExportDocumentItem, 'start' | 'end'> = {
       ref,
       ...(exportKey === undefined ? {} : { exportKey }),
       ...(citationKey === undefined ? {} : { citationKey }),
@@ -63,9 +74,8 @@ function exportItemsOf(value: unknown): ExportDocumentItem[] {
           }),
       ...(title === undefined ? {} : { title }),
       ...(entryIndex === undefined ? {} : { entryIndex }),
-      ...(start === undefined ? {} : { start }),
-      ...(end === undefined ? {} : { end }),
-    })
+    }
+    items.push(start === undefined || end === undefined ? item : { ...item, start, end })
   }
   return items
 }

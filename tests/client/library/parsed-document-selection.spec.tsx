@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 /** Host Menu interaction over a snapshot of the user's passage. */
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { documentRead, parsedRuntime, composer, REF } from './support/parsed-document.tsx'
 import {
-  computeSelectionAnchor,
   extractSelectionMarkdown,
   extractMarkdownTitle,
   serializeNodeToMarkdown,
@@ -13,7 +12,7 @@ import {
 import { mockT } from '../helpers/mock-translate.ts'
 import { clipboardWrites } from '../setup.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 beforeEach(() => {
   vi.stubGlobal('Range', Range)
   Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
@@ -30,28 +29,29 @@ afterEach(async () => {
   for (const runtime of owned.splice(0)) await runtime.dispose()
   vi.restoreAllMocks()
 })
-function select() {
+async function select() {
   const range = document.createRange()
   range.selectNodeContents(screen.getByText('Selected passage'))
   window.getSelection()!.removeAllRanges()
   window.getSelection()!.addRange(range)
-  act(() => {
+  await act(async () => {
     document.dispatchEvent(new Event('selectionchange'))
   })
+  await screen.findByRole('menu')
 }
 async function mount() {
   const actions = composer()
-  const runtime = parsedRuntime(documentRead('Selected passage'))
+  const runtime = await parsedRuntime(documentRead('Selected passage'))
   owned.push(runtime)
-  runtime.mount({ actions })
+  const view = runtime.mount({ actions })
   await act(async () => {})
-  return { actions, runtime }
+  return { actions, runtime, view }
 }
 
 describe('parsed passage menu', () => {
   it('copies the saved passage after DOM selection is gone', async () => {
     const { runtime } = await mount()
-    select()
+    await select()
     window.getSelection()!.removeAllRanges()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedCopySelection') }))
     await act(async () => {})
@@ -62,7 +62,7 @@ describe('parsed passage menu', () => {
 
   it('inserts the whole request as one quote card', async () => {
     const { actions } = await mount()
-    select()
+    await select()
     window.getSelection()!.removeAllRanges()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
     await act(async () => {})
@@ -70,6 +70,7 @@ describe('parsed passage menu', () => {
     // composer keeps a single removable block instead of loose text.
     expect(actions.insertQuote).toHaveBeenCalledWith(
       `${mockT('parsedExplainPrompt', { source: JSON.stringify({ kind: 'ref', ref: REF }) })}\n\nPaper\n\nSelected passage`,
+      { label: mockT('parsedExplain'), title: 'Paper', detail: 'Paper', body: 'Selected passage' },
     )
     expect(actions.insertText).not.toHaveBeenCalled()
     expect(actions.persistDraft).toHaveBeenCalledOnce()
@@ -77,17 +78,17 @@ describe('parsed passage menu', () => {
 
   it('dismisses on Escape from the focused host menu', async () => {
     await mount()
-    select()
+    await select()
     const item = screen.getByRole('menuitem', { name: mockT('parsedExplain') })
     item.focus()
     fireEvent.keyDown(item, { key: 'Escape' })
-    expect(screen.queryByRole('menu')).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   })
 
   it('keeps rejected insertion visible without sending a message', async () => {
     const { actions } = await mount()
     actions.insertQuote.mockReturnValue(false)
-    select()
+    await select()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
     await act(async () => {})
     expect(screen.getByRole('alert').textContent).toBe(mockT('libraryInsertFailed'))
@@ -95,7 +96,8 @@ describe('parsed passage menu', () => {
   })
 
   it('suppresses the menu during drag selection until pointerup', async () => {
-    await mount()
+    const { runtime } = await mount()
+    const open = vi.spyOn(runtime.contextMenus, 'open')
     const target = screen.getByText('Selected passage')
     fireEvent.pointerDown(target, { button: 0 })
     const range = document.createRange()
@@ -105,12 +107,13 @@ describe('parsed passage menu', () => {
     act(() => {
       document.dispatchEvent(new Event('selectionchange'))
     })
+    expect(open).not.toHaveBeenCalled()
     expect(screen.queryByRole('menu')).toBeNull()
 
     act(() => {
       fireEvent.pointerUp(document)
     })
-    expect(screen.getByRole('menu')).not.toBeNull()
+    expect(await screen.findByRole('menu')).not.toBeNull()
   })
 
   it('cancels the menu without opening on pointercancel', async () => {
@@ -133,8 +136,9 @@ describe('parsed passage menu', () => {
   })
 
   it('suppresses the menu during keyboard selection until keyup', async () => {
-    await mount()
-    fireEvent.keyDown(document, { key: 'Shift' })
+    const { runtime } = await mount()
+    const open = vi.spyOn(runtime.contextMenus, 'open')
+    fireEvent.keyDown(screen.getByText('Selected passage'), { key: 'Shift' })
     const range = document.createRange()
     range.selectNodeContents(screen.getByText('Selected passage'))
     window.getSelection()!.removeAllRanges()
@@ -142,82 +146,13 @@ describe('parsed passage menu', () => {
     act(() => {
       document.dispatchEvent(new Event('selectionchange'))
     })
+    expect(open).not.toHaveBeenCalled()
     expect(screen.queryByRole('menu')).toBeNull()
 
     act(() => {
       fireEvent.keyUp(document, { key: 'Shift' })
     })
-    expect(screen.getByRole('menu')).not.toBeNull()
-  })
-
-  it('computes adaptive anchor point from the active ending line of multi-line selection', () => {
-    const range = document.createRange()
-    vi.spyOn(range, 'getBoundingClientRect').mockReturnValue({
-      left: 20,
-      right: 700,
-      top: 50,
-      bottom: 250,
-      width: 680,
-      height: 200,
-    } as DOMRect)
-    vi.spyOn(range, 'getClientRects').mockReturnValue({
-      length: 2,
-      item: (i: number) =>
-        i === 0
-          ? ({ left: 20, right: 650, top: 50, bottom: 80, width: 630, height: 30 } as DOMRect)
-          : ({ left: 20, right: 180, top: 220, bottom: 250, width: 160, height: 30 } as DOMRect),
-      [Symbol.iterator]: function* () {
-        yield { left: 20, right: 650, top: 50, bottom: 80, width: 630, height: 30 } as DOMRect
-        yield { left: 20, right: 180, top: 220, bottom: 250, width: 160, height: 30 } as DOMRect
-      },
-    } as unknown as DOMRectList)
-
-    const anchor = computeSelectionAnchor(range)
-    // The active line is line 2 (right: 180). focalX = 180, menuWidth = 160 => x = 180 - 80 = 100
-    // Rather than being stuck at bbox.left (20), x is adaptively positioned around 100
-    expect(anchor.point.x).toBe(100)
-    expect(anchor.side).toBe('top')
-    expect(anchor.point.y).toBe(220)
-  })
-
-  it('clamps anchor horizontal coordinate to stay within viewport bounds', () => {
-    const range = document.createRange()
-    vi.spyOn(range, 'getBoundingClientRect').mockReturnValue({
-      left: 750,
-      right: 790,
-      top: 100,
-      bottom: 120,
-      width: 40,
-      height: 20,
-    } as DOMRect)
-    vi.spyOn(range, 'getClientRects').mockReturnValue([
-      { left: 750, right: 790, top: 100, bottom: 120, width: 40, height: 20 } as DOMRect,
-    ] as unknown as DOMRectList)
-
-    // With window.innerWidth = 800, menuWidth = 160, margin = 16:
-    // maximum x = 800 - 160 - 16 = 624
-    const anchor = computeSelectionAnchor(range)
-    expect(anchor.point.x).toBeLessThanOrEqual(window.innerWidth - 160 - 16)
-    expect(anchor.point.x).toBeGreaterThanOrEqual(16)
-  })
-
-  it('places menu below when there is insufficient space above', () => {
-    const range = document.createRange()
-    vi.spyOn(range, 'getBoundingClientRect').mockReturnValue({
-      left: 50,
-      right: 200,
-      top: 10,
-      bottom: 30,
-      width: 150,
-      height: 20,
-    } as DOMRect)
-    vi.spyOn(range, 'getClientRects').mockReturnValue([
-      { left: 50, right: 200, top: 10, bottom: 30, width: 150, height: 20 } as DOMRect,
-    ] as unknown as DOMRectList)
-
-    const anchor = computeSelectionAnchor(range)
-    expect(anchor.side).toBe('bottom')
-    expect(anchor.point.y).toBe(30)
+    expect(await screen.findByRole('menu')).not.toBeNull()
   })
 
   it('extracts Markdown with preserved KaTeX formulas and text formatting', () => {
@@ -321,4 +256,60 @@ describe('the selection markdown serializer', () => {
     expect(extractMarkdownTitle('# Title')).toBe('Title')
     expect(extractMarkdownTitle('no heading')).toBeUndefined()
   })
+})
+
+it.each([false, true])(
+  'uses the actual focus end of a multiline selection (backwards=%s)',
+  async (backwards) => {
+    const { runtime } = await mount()
+    const open = vi.spyOn(runtime.contextMenus, 'open')
+    const node = screen.getByText('Selected passage')
+    vi.spyOn(Range.prototype, 'getClientRects').mockReturnValue([
+      { left: 40, right: 80, top: 10, bottom: 30, width: 40, height: 20 },
+      { left: 90, right: 200, top: 40, bottom: 60, width: 110, height: 20 },
+    ] as unknown as DOMRectList)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.setBaseAndExtent(node, backwards ? 1 : 0, node, backwards ? 0 : 1)
+    await act(async () => document.dispatchEvent(new Event('selectionchange')))
+    await screen.findByRole('menu')
+    expect(open).toHaveBeenCalledWith(
+      { kind: 'zoteroSelection', value: { owner: expect.any(String), text: 'Selected passage' } },
+      backwards ? { x: 40, y: 30 } : { x: 200, y: 60 },
+    )
+  },
+)
+
+it('shares one popup with other feature targets', async () => {
+  const { runtime } = await mount()
+  await select()
+  const run = vi.fn()
+  const dispose = runtime.contextMenus.register({
+    target: 'url',
+    id: 'other-feature',
+    order: 0,
+    resolve: () => [{ id: 'other', label: 'Other feature', run }],
+  })
+  await act(async () =>
+    runtime.contextMenus.open(
+      { kind: 'url', value: { sessionId: 'test' as never, url: 'https://example.org' } },
+      { x: 400, y: 300 },
+    ),
+  )
+  await screen.findByRole('menuitem', { name: 'Other feature' })
+  expect(screen.queryByRole('menuitem', { name: mockT('parsedExplain') })).toBeNull()
+  expect(screen.getAllByRole('menu')).toHaveLength(1)
+  dispose()
+})
+
+it('withdraws the captured selection action and closes its popup on unmount', async () => {
+  const { runtime, view } = await mount()
+  await select()
+  const target = runtime.contextMenus.active.getSnapshot()!
+  view.unmount()
+  const resolution = runtime.contextMenus.resolve(target)
+  await resolution.ready
+  expect(resolution.source.getSnapshot()).toEqual([])
+  resolution.dispose()
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
 })

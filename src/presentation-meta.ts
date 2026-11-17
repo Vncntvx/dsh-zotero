@@ -11,6 +11,7 @@
  * @module dsh-zotero/presentation-meta
  */
 
+import type { ZoteroExportItem } from './types.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { asJsonValue } from './json.js'
 import { formatCreatorsList } from './creators.js'
@@ -48,6 +49,8 @@ export const MAX_PRESENTATION_EVIDENCE_CHARS = 400
 const MAX_PRESENTATION_EVIDENCE_PASSAGES = 4
 /** Bounded export-ref entries the projection itemizes; the rest count into `refsOmitted`. */
 const MAX_PRESENTATION_EXPORT_REFS = 20
+export const MAX_PRESENTATION_BROWSE_ROWS = 20
+export const MAX_PRESENTATION_BROWSE_ROWS_BYTES = 6144
 const MAX_PRESENTATION_BATCH_ROWS = 20
 
 /**
@@ -64,8 +67,6 @@ interface ZoteroSearchPresentationRow {
   readonly ref: string
   readonly title: string
   readonly creatorSummary: string
-  readonly authors?: readonly string[]
-  readonly venue?: string
   readonly year?: number
   readonly itemType: string
   readonly citationKey?: string
@@ -204,20 +205,7 @@ type ZoteroRetrievePresentationMeta =
 type RetrieveProjectionInput = ZoteroRetrieveResult
 
 /** One bounded export document item: the ref with its format-local key, display title, and located entry. */
-interface ZoteroExportPresentationItem {
-  readonly ref: string
-  readonly exportKey?: string
-  readonly citationKey?: string
-  readonly citationKeySource?: 'native' | 'extra'
-  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
-  /** The item's title for display, when the entry carried one. */
-  readonly title?: string
-  /** The located entry's index within the parsed CSL JSON array. */
-  readonly entryIndex?: number
-  /** The located entry's text span within the original batch body (text formats). */
-  readonly start?: number
-  readonly end?: number
-}
+type ZoteroExportPresentationItem = Readonly<ZoteroExportItem>
 
 interface ZoteroExportPresentationMeta {
   readonly format: string
@@ -265,6 +253,27 @@ function libraryOfScope(scope: SearchProjectionInput['scope']): SupportedLocalLi
   return supportedLibraryOfRef(scope.ref)
 }
 
+/** Retain complete browse rows within the card budget; the canonical page stays intact. */
+export function projectBrowseMeta<
+  T extends { readonly items: readonly unknown[]; readonly returned: number },
+>(value: T) {
+  const items: T['items'][number][] = []
+  let bytes = 2
+  for (const row of value.items) {
+    if (items.length === MAX_PRESENTATION_BROWSE_ROWS) break
+    const size = presentationMetaBytes(row) + (items.length === 0 ? 0 : 1)
+    if (bytes + size > MAX_PRESENTATION_BROWSE_ROWS_BYTES) break
+    items.push(row)
+    bytes += size
+  }
+  return {
+    ...value,
+    items,
+    displayed: items.length,
+    omitted: Math.max(0, value.returned - items.length),
+  }
+}
+
 /**
  * Project one search result into card-sized facts. Rows are bounded by both
  * a logical cap and a row-bytes allowance, so a normal page projects whole
@@ -284,12 +293,6 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
       ref: item.ref,
       title: truncateChars(item.title, MAX_PRESENTATION_SEARCH_TITLE_CHARS),
       creatorSummary: truncateChars(item.creatorSummary, MAX_PRESENTATION_SEARCH_CREATOR_CHARS),
-      ...(item.authors === undefined
-        ? {}
-        : { authors: item.authors.slice(0, 3).map((author) => truncateChars(author, 60)) }),
-      ...(item.venue === undefined
-        ? {}
-        : { venue: truncateChars(item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
       ...(item.year === undefined ? {} : { year: item.year }),
       itemType: item.itemType,
       ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
@@ -306,7 +309,7 @@ export function projectSearchMeta(value: SearchProjectionInput): ZoteroSearchPre
         ? {}
         : { bestAttachmentType: item.bestAttachmentType }),
     }
-    const rowBytes = Buffer.byteLength(JSON.stringify(row), 'utf8')
+    const rowBytes = new TextEncoder().encode(JSON.stringify(row)).byteLength
     // The first row always fits; later rows stop once the allowance is spent.
     if (items.length > 0 && bytes + rowBytes > MAX_PRESENTATION_SEARCH_ROWS_BYTES) break
     items.push(row)
@@ -484,6 +487,24 @@ export function projectRetrieveMeta(
       mode: 'fulltext',
       fulltextRead: {
         sourceKind: read.sourceKind,
+        ...(read.item === undefined
+          ? {}
+          : {
+              item: {
+                ...read.item,
+                title: truncateChars(read.item.title, MAX_PRESENTATION_GET_TITLE_CHARS),
+                creatorSummary: truncateChars(
+                  read.item.creatorSummary,
+                  MAX_PRESENTATION_GET_CREATORS_CHARS,
+                ),
+                ...(read.item.venue === undefined
+                  ? {}
+                  : { venue: truncateChars(read.item.venue, MAX_PRESENTATION_GET_VENUE_CHARS) }),
+              },
+            }),
+        ...(read.attachmentContentType === undefined
+          ? {}
+          : { attachmentContentType: read.attachmentContentType }),
         sourceLabel: read.sourceLabel,
         textFormat: read.textFormat,
         ...(read.artifact === undefined ? {} : { artifact: read.artifact }),
@@ -566,17 +587,7 @@ export function projectExportMeta(
     readonly locale?: string
     readonly citations?: readonly { readonly ref: string; readonly text: string }[]
     readonly text?: string
-    readonly items?: readonly {
-      readonly ref: string
-      readonly exportKey?: string
-      readonly citationKey?: string
-      readonly citationKeySource?: 'native' | 'extra'
-      readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
-      readonly title?: string
-      readonly entryIndex?: number
-      readonly start?: number
-      readonly end?: number
-    }[]
+    readonly items?: readonly ZoteroExportPresentationItem[]
   },
   refs: readonly string[],
 ): ZoteroExportPresentationMeta {
@@ -596,46 +607,68 @@ export function projectExportMeta(
     return { ...base, count: value.citations?.length ?? 0 }
   }
   if (value.items === undefined) return base
-  const items = value.items.slice(0, MAX_PRESENTATION_EXPORT_REFS).map((item) => ({
-    ref: item.ref,
-    ...(item.exportKey === undefined ? {} : { exportKey: item.exportKey }),
-    ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
-    ...(item.citationKeySource === undefined ? {} : { citationKeySource: item.citationKeySource }),
-    ...(item.citationKeyConflict === undefined
-      ? {}
-      : { citationKeyConflict: item.citationKeyConflict }),
-    ...(item.title === undefined ? {} : { title: item.title }),
-    ...(item.entryIndex === undefined ? {} : { entryIndex: item.entryIndex }),
-    ...(item.start === undefined ? {} : { start: item.start }),
-    ...(item.end === undefined ? {} : { end: item.end }),
-  }))
+  const items = value.items
+    .slice(0, MAX_PRESENTATION_EXPORT_REFS)
+    .map((item): ZoteroExportPresentationItem => {
+      const base = {
+        ref: item.ref,
+        ...(item.exportKey === undefined ? {} : { exportKey: item.exportKey }),
+        ...(item.citationKey === undefined ? {} : { citationKey: item.citationKey }),
+        ...(item.citationKeySource === undefined
+          ? {}
+          : { citationKeySource: item.citationKeySource }),
+        ...(item.citationKeyConflict === undefined
+          ? {}
+          : { citationKeyConflict: item.citationKeyConflict }),
+        ...(item.title === undefined ? {} : { title: item.title }),
+        ...(item.entryIndex === undefined ? {} : { entryIndex: item.entryIndex }),
+      }
+      return item.start === undefined || item.end === undefined
+        ? base
+        : { ...base, start: item.start, end: item.end }
+    })
   return { ...base, items }
 }
 
 /** The UTF-8 byte size of one JSON projection. */
-export function presentationMetaBytes(meta: Record<string, unknown>): number {
-  return Buffer.byteLength(JSON.stringify(meta), 'utf8')
+export function presentationMetaBytes(meta: unknown): number {
+  const encoded = JSON.stringify(meta)
+  return encoded === undefined ? 0 : new TextEncoder().encode(encoded).byteLength
 }
 
 /**
  * Enforce the shared byte budget. A projection that fits returns unchanged;
  * an over-budget one drops its detail keys (keeping the summary facts) and
- * records `detailOmitted`. No per-field truncation is invented here, and the
- * complete data stays in the canonical result.
+ * records `detailOmitted`. If summary fields alone exceed the budget, retain
+ * complete fields that fit, prioritizing scalar counts and flags. Full values
+ * stay in the canonical result; identities and strings are never cut in half.
  * @param meta - one projector's output.
  * @param detailKeys - the keys holding per-item detail rows or long values.
  * @returns the bounded projection.
  */
 export function boundedPresentationMeta(meta: unknown, detailKeys: readonly string[]): JsonValue {
-  // Every projector produces a plain object; non-object inputs (defensive
-  // arm) pass through untouched.
-  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return meta as JsonValue
+  if (presentationMetaBytes(meta) <= MAX_PRESENTATION_META_BYTES) return meta as JsonValue
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta))
+    return { detailOmitted: true }
   const record = meta as Record<string, unknown>
-  if (presentationMetaBytes(record) <= MAX_PRESENTATION_META_BYTES) return meta as JsonValue
   const reduced: Record<string, JsonValue> = { detailOmitted: true }
   for (const [key, value] of Object.entries(record)) {
     const json = asJsonValue(value)
-    if (!detailKeys.includes(key) && json !== undefined) reduced[key] = json
+    if (key !== 'detailOmitted' && !detailKeys.includes(key) && json !== undefined)
+      reduced[key] = json
+  }
+  if (presentationMetaBytes(reduced) > MAX_PRESENTATION_META_BYTES) {
+    const bounded: Record<string, JsonValue> = { detailOmitted: true }
+    const entries = Object.entries(reduced).sort((left, right) => {
+      const scalar = (value: JsonValue) =>
+        value === null || typeof value === 'number' || typeof value === 'boolean'
+      return Number(scalar(right[1])) - Number(scalar(left[1]))
+    })
+    for (const [key, value] of entries) {
+      bounded[key] = value
+      if (presentationMetaBytes(bounded) > MAX_PRESENTATION_META_BYTES) delete bounded[key]
+    }
+    return bounded
   }
   // Structural widening only: every kept value already entered through a
   // JsonValue-typed projector; TypeScript has no index-signature way to

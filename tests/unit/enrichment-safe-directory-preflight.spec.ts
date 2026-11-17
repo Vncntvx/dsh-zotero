@@ -20,7 +20,7 @@ function filesystem() {
     },
     stat: async (path) => {
       if (!directories.has(path)) throw absent(path)
-      return { isDirectory: () => true }
+      return { isDirectory: () => true, mode: 0o700, uid: 1000 }
     },
     access: async (path) => {
       if (!directories.has(path)) throw absent(path)

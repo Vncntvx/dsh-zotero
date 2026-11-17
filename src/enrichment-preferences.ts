@@ -37,6 +37,8 @@ export interface EnrichmentPreferences {
   readonly artifactReader: ArtifactReaderPreferences
   /** Which MinerU API to use. Independent of whether a token is configured. */
   readonly mode: EnrichmentMode
+  /** MinerU free PDF OCR language code; the service validates its supported vocabulary. */
+  readonly ocrLanguage: string
   /** Credential-reference name for the precise-API token (a name, never the value). */
   readonly mineruTokenRef: string
   /** Absolute output directory; empty means the harness default is resolved at runtime. */
@@ -57,11 +59,12 @@ export interface EnrichmentPreferences {
   readonly semanticIdleTimeoutMs: number
 }
 
-export type EnrichmentPreferenceKey = keyof EnrichmentPreferences
+type EnrichmentPreferenceKey = keyof EnrichmentPreferences
 
 export const ENRICHMENT_DEFAULTS: EnrichmentPreferences = Object.freeze({
   artifactReader: ARTIFACT_READER_DEFAULTS,
   mode: 'free',
+  ocrLanguage: 'ch',
   mineruTokenRef: ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru,
   outputDir: '',
   enableSemanticSearch: false,
@@ -82,6 +85,8 @@ export const ENRICHMENT_PREFERENCE_KEYS = Object.keys(
  * canonical safety are checked by the host on first use. Kept dependency-free
  * so the browser controller and the host schema share one rule.
  */
+export const ENRICHMENT_OCR_LANGUAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/
+
 export const ENRICHMENT_OUTPUT_DIR_PATTERN = /^(?:$|~(?:\/|$)|\/|[A-Za-z]:[\\/]|\\\\)/
 
 /** Whether a configured output-dir value has an allowed absolute shape. */
@@ -102,13 +107,15 @@ export function enrichmentPreferencesOf(
   const validators: Record<EnrichmentPreferenceKey, (value: unknown) => boolean> = {
     artifactReader: () => true,
     mode: (value) => (ENRICHMENT_MODE_CHOICES as readonly unknown[]).includes(value),
+    ocrLanguage: (value) =>
+      typeof value === 'string' && ENRICHMENT_OCR_LANGUAGE_PATTERN.test(value),
     mineruTokenRef: (value) => typeof value === 'string',
-    outputDir: (value) => typeof value === 'string',
+    outputDir: (value) => typeof value === 'string' && isEnrichmentOutputDirPath(value),
     enableSemanticSearch: (value) => typeof value === 'boolean',
     semanticModel: (value) => (SEMANTIC_MODEL_KEYS as readonly unknown[]).includes(value),
     semanticDownloadSource: (value) =>
       (SEMANTIC_DOWNLOAD_SOURCES as readonly unknown[]).includes(value),
-    semanticModelDir: (value) => typeof value === 'string',
+    semanticModelDir: (value) => typeof value === 'string' && isEnrichmentOutputDirPath(value),
     semanticIdleTimeoutMs: (value) =>
       typeof value === 'number' && Number.isSafeInteger(value) && value >= 0,
   }

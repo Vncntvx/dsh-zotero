@@ -1,3 +1,4 @@
+import { componentEnablementsOf } from './component-enablement.js'
 /**
  * The dsh-zotero host Remote service (wire namespace `zotero`, cordis key
  * {@link ZOTERO_STATUS_SERVICE_KEY}; the `zotero` key is the research
@@ -120,10 +121,9 @@ const POWERSHELL_LAUNCHER_SCRIPT =
   "$ErrorActionPreference = 'Stop'; $p = New-Object System.Diagnostics.ProcessStartInfo; $p.UseShellExecute = $true; $p.FileName = $env:DSH_ZOTERO_PROTOCOL_URL; [System.Diagnostics.Process]::Start($p) | Out-Null"
 
 /** Pre-encoded PowerShell script payload avoiding runtime re-encoding. */
-export const POWERSHELL_LAUNCHER_BASE64 = Buffer.from(
-  POWERSHELL_LAUNCHER_SCRIPT,
-  'utf16le',
-).toString('base64')
+const POWERSHELL_LAUNCHER_BASE64 = Buffer.from(POWERSHELL_LAUNCHER_SCRIPT, 'utf16le').toString(
+  'base64',
+)
 
 /** Options for launching a native zotero:// protocol deep link. */
 export interface OpenProtocolOptions {
@@ -248,7 +248,10 @@ export class ZoteroRuntime extends TypertRemoteService {
         diagnosis: ZOTERO_NOT_COMPOSED_MESSAGE,
       }
     }
-    return toStatusView(status, sourceProjection)
+    return {
+      ...toStatusView(status, sourceProjection),
+      componentEpochs: componentEnablementsOf(this.ctx),
+    }
   }
 
   /**

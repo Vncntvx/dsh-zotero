@@ -1,7 +1,7 @@
 /**
  * The `zotero_browse` row shapes, discriminated once for both halves.
  *
- * The browse output is a seven-arm union: the model reads it through
+ * The valid browse output has seven row shapes: the model reads it through
  * `renderBrowse`, and the Chat card reads the same rows off the tool's
  * presentation projection. The classification order is the contract, because
  * which field identifies a row decides what every reader calls it, so it
@@ -11,18 +11,17 @@
  *
  * The reader is total and defensive in the same way the rest of the
  * presentation layer is: a row missing the field that identifies it still
- * yields a classified row with safe fallbacks, never a throw and never a
- * guessed identity.
+ * yields an explicit unknown row with its complete JSON, without guessing its identity.
  * @module dsh-zotero/browse-rows
  */
 
 import { asRecord, asString, asStringArray } from './json.js'
 import type { ZoteroBrowseKind } from './types.js'
+import { refFieldsOf } from './ref-grammar.js'
 
 /**
- * The seven arms a browse row can land in, in the order the tool's output
- * schema enumerates them. That is *not* the order `browseRowOf` tests them,
- * since the saved-search arm is that function's fallback and is tried last.
+ * The seven valid row kinds plus an explicit unknown kind for malformed input.
+ * The two readers render every kind; unknown rows preserve their complete value.
  *
  * Two independent guards keep a new arm from shipping half-wired. The
  * `BROWSE_ROW_ARMS_COMPLETE` assertion below fails the build if an arm is added
@@ -40,6 +39,7 @@ export const BROWSE_ROW_ARMS = [
   'itemType',
   'field',
   'creatorType',
+  'unknown',
 ] as const
 
 /**
@@ -67,7 +67,7 @@ export function isBrowseKind(value: string | undefined): value is ZoteroBrowseKi
 
 /**
  * Build-time proof that this list and the `BrowseRow` union agree. It has no
- * runtime effect; if an eighth arm is added, the `never` no longer holds and the
+ * runtime effect; if another arm is added, the `never` no longer holds and the
  * file stops compiling, which is the moment to add it here.
  */
 const BROWSE_ROW_ARMS_COMPLETE: Exclude<
@@ -80,6 +80,7 @@ void BROWSE_ROW_ARMS_COMPLETE
 
 /** One classified browse row. Which arm a row lands in says which field identified it. */
 export type BrowseRow =
+  | { readonly kind: 'unknown'; readonly raw: string }
   | {
       readonly kind: 'library'
       /** The library's display name; falls back to its own identity when unnamed. */
@@ -124,7 +125,7 @@ export type BrowseRow =
       readonly localized: string | null
     }
 
-/** The seven arms, as a union of their discriminants. */
+/** The classified arms, including unknown input. */
 type BrowseRowKind = BrowseRow['kind']
 
 function countOf(value: Record<string, unknown>, key: string): number | null {
@@ -174,14 +175,10 @@ export function browseRowOf(value: unknown): BrowseRow {
   const creatorType = asString(row['creatorType'])
   if (creatorType !== undefined) return { kind: 'creatorType', creatorType, localized }
 
-  // The schema's remaining arm, and the only one with no field of its own: a
-  // saved search is identified by carrying a name and a ref. A row that names
-  // neither still renders: it falls back to its own JSON, so nothing is silently dropped.
-  // The original value is stringified, not the normalized record: a non-record
-  // input has no fields to lose, and echoing back `{}` would discard the very
-  // thing the reader needed to see.
-  const name = asString(row['name']) ?? (ref === '' ? JSON.stringify(value) : ref)
   const conditions = row['conditions']
+  if (!Array.isArray(conditions) && refFieldsOf(ref)?.kind !== 'search')
+    return { kind: 'unknown', raw: JSON.stringify(value) ?? String(value) }
+  const name = asString(row['name']) ?? (ref === '' ? JSON.stringify(value) : ref)
   return {
     kind: 'savedSearch',
     name,

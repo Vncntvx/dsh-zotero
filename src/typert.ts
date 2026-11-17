@@ -12,11 +12,9 @@
  * The strict registry is the Host Gateway's preferred resolution path for
  * `zotero/status` and needs no `@Remote` markers.
  *
- * Invocations come from `status-codec.ts` (host zod factories); the client half
- * mounts its own codecs in `client/status-codec.ts`. Both arms materialize the
- * same strict schemas from the client-safe `wire-schemas.ts`. Structural
- * endpoint identity is shared through `contract.ts`; only the codec arm differs
- * by side. The service key spells {@link ZOTERO_STATUS_SERVICE_KEY}, the same
+ * Both halves register the same lazy invocation descriptors from the
+ * client-safe `wire-schemas.ts`. Structural endpoint identity is shared
+ * through `contract.ts`. The service key spells {@link ZOTERO_STATUS_SERVICE_KEY}, the same
  * constant the host Remote service and the invocation descriptor use.
  *
  * The manifest declares the `zoteroLibrary` service of the separate
@@ -24,8 +22,10 @@
  * composed service at runtime, so with the row disabled nothing answers, but
  * the declaration stays here because the manifest is one static contribution
  * per package. The browser-side `whileServed('library')` watch
- * (`client/index.ts`) is therefore the only gate that keeps the panels from
- * calling unbound endpoints.
+ * (`client/index.ts`) mounts library panel surfaces only while the row is served.
+ * The core SourcesTab has a separate URL PDF action gate: its live library
+ * preference snapshot must exist and permit URL PDF reading before dispatch.
+ * Turning the library row off revokes that snapshot and blocks the core action.
  * @module dsh-zotero/typert
  */
 
@@ -36,35 +36,12 @@ import type {
 import type { TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 import {
-  ZOTERO_DIAGNOSTICS_METHOD,
-  ZOTERO_LIBRARY_BROWSE_METHOD,
-  ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
-  ZOTERO_LIBRARY_EXPORT_METHOD,
-  ZOTERO_LIBRARY_ITEM_METHOD,
-  ZOTERO_LIBRARY_SEARCH_METHOD,
-  ZOTERO_LIBRARY_SERVICE_KEY,
-  ZOTERO_LIBRARY_WRITE_METHOD,
-  ZOTERO_OPEN_PROTOCOL_METHOD,
   ZOTERO_REMOTE_PACKAGE,
-  ZOTERO_REPORT_CLIENT_ERROR_METHOD,
-  ZOTERO_RESOLVE_ATTACHMENT_METHOD,
-  ZOTERO_REVOKE_WRITE_GRANT_METHOD,
-  ZOTERO_STATUS_METHOD,
   ZOTERO_STATUS_SERVICE_KEY,
-  ZOTERO_SOURCE_PAGE_METHOD,
-  ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
-  ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
-  ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
-  ZOTERO_SEMANTIC_MODEL_DELETE_METHOD,
-  ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
-  ZOTERO_START_DOCUMENT_PARSE_METHOD,
-  ZOTERO_DOCUMENT_ARTIFACT_METHOD,
-  ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
-  ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
-  ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
+  ZOTERO_LIBRARY_SERVICE_KEY,
   ZOTERO_ENRICHMENT_SERVICE_KEY,
 } from './contract.js'
-import { ZOTERO_INVOCATIONS } from './status-codec.js'
+import { ZOTERO_COMMON_INVOCATIONS } from './wire-schemas.js'
 
 /** Invocation codecs are the sole schema registry authority. */
 function schemaFactories(): TypertSchemaFactory[] {
@@ -85,13 +62,29 @@ function schemaFactories(): TypertSchemaFactory[] {
         },
       })
   }
-  for (const invocation of ZOTERO_INVOCATIONS) {
+  for (const invocation of ZOTERO_COMMON_INVOCATIONS) {
     if (invocation.invocation.kind === 'context') add(invocation.invocation.codec)
     for (const parameter of invocation.parameters) add(parameter.codec)
     if (invocation.uplink) add(invocation.uplink.codec)
     add(invocation.result)
   }
   return [...schemas.values()]
+}
+
+function membersOf(service: string) {
+  const typeName = (codec: TypertCodec): string => {
+    if (codec.mode !== 'strict')
+      throw new Error('Every Zotero wire type requires a named strict codec.')
+    return codec.typeSymbol.slice(codec.typeSymbol.indexOf('#') + 1)
+  }
+  return ZOTERO_COMMON_INVOCATIONS.filter((entry) => entry.service === service).map((entry) => ({
+    kind: 'method' as const,
+    name: entry.method,
+    signature: `${entry.method}(${[
+      ...entry.parameters.map((param) => `${param.name}: ${typeName(param.codec)}`),
+      ...(entry.cancellation ? [`${entry.cancellation.parameter}: AbortSignal`] : []),
+    ].join(', ')}): Promise<${typeName(entry.result)}>`,
+  }))
 }
 
 /** The zotero namespace's host manifest (strict codecs owned by this half). */
@@ -106,47 +99,7 @@ export const TYPERT_MANIFEST: TypertContribution = {
         exportName: 'ZoteroRuntime',
         description: 'Serves live Zotero connectivity facts to the dedicated web tab.',
         tags: [],
-        members: [
-          {
-            kind: 'method',
-            name: ZOTERO_STATUS_METHOD,
-            signature: 'status(signal: AbortSignal): Promise<ZoteroStatusView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_RESOLVE_ATTACHMENT_METHOD,
-            signature:
-              'resolveAttachment(ref: string, signal: AbortSignal): Promise<ZoteroAttachmentLocationView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_DIAGNOSTICS_METHOD,
-            signature: 'diagnostics(signal: AbortSignal): Promise<ZoteroDiagnosticsView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_REPORT_CLIENT_ERROR_METHOD,
-            signature:
-              'reportClientError(report: ZoteroClientErrorReport, signal: AbortSignal): Promise<ZoteroReportResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_OPEN_PROTOCOL_METHOD,
-            signature:
-              'openProtocol(url: string, signal: AbortSignal): Promise<ZoteroOpenProtocolResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_REVOKE_WRITE_GRANT_METHOD,
-            signature: 'revokeWriteGrant(signal: AbortSignal): Promise<ZoteroWriteGrantRevokeView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SOURCE_PAGE_METHOD,
-            signature:
-              'sourcePage(request: ZoteroSourcePageRequestView, signal: AbortSignal): Promise<ZoteroSourcePageResultView>',
-          },
-        ],
+        members: membersOf(ZOTERO_STATUS_SERVICE_KEY),
         types: [],
       },
       {
@@ -155,68 +108,7 @@ export const TYPERT_MANIFEST: TypertContribution = {
         description:
           'Serves the optional enrichment component: explicit session-owned document parsing, artifact receipts, and local semantic-model management. Answers only while the component row is composed.',
         tags: [],
-        members: [
-          {
-            kind: 'method',
-            name: ZOTERO_START_DOCUMENT_PARSE_METHOD,
-            signature:
-              'startDocumentParse(request: ZoteroStartDocumentParseRequestView, signal: AbortSignal): Promise<ZoteroStartDocumentParseResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_DOCUMENT_ARTIFACT_METHOD,
-            signature:
-              'documentArtifact(request: ZoteroDocumentArtifactRequestView, signal: AbortSignal): Promise<ZoteroDocumentArtifactResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
-            signature:
-              'documentParseReceipt(request: ZoteroDocumentParseReceiptRequestView, signal: AbortSignal): Promise<ZoteroDocumentParseReceiptResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
-            signature:
-              'listParsedDocuments(request: ZoteroListParsedDocumentsRequestView, signal: AbortSignal): Promise<ZoteroListParsedDocumentsResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
-            signature:
-              'discardParsedDocument(request: ZoteroDiscardParsedDocumentRequestView, signal: AbortSignal): Promise<ZoteroDiscardParsedDocumentResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SEMANTIC_MODEL_STATUS_METHOD,
-            signature:
-              'semanticModelStatus(request: ZoteroSemanticModelStatusRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelStatusResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD,
-            signature:
-              'downloadSemanticModel(request: ZoteroSemanticModelDownloadRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelDownloadResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD,
-            signature:
-              'cancelSemanticModelDownload(request: ZoteroSemanticModelCancelRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelCancelResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SEMANTIC_MODEL_DELETE_METHOD,
-            signature:
-              'deleteSemanticModel(request: ZoteroSemanticModelDeleteRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelDeleteResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD,
-            signature:
-              'verifySemanticModel(request: ZoteroSemanticModelVerifyRequestView, signal: AbortSignal): Promise<ZoteroSemanticModelStatusResultView>',
-          },
-        ],
+        members: membersOf(ZOTERO_ENRICHMENT_SERVICE_KEY),
         types: [],
       },
       {
@@ -224,67 +116,12 @@ export const TYPERT_MANIFEST: TypertContribution = {
         exportName: 'ZoteroLibraryService',
         description: 'Serves library panel listings, user PDF reads, and approved mutations.',
         tags: [],
-        members: [
-          {
-            kind: 'method',
-            name: 'releaseUrlPdf',
-            signature:
-              'releaseUrlPdf(request: { lease: string }, signal: AbortSignal): Promise<{ released: true }>',
-          },
-          {
-            kind: 'method',
-            name: 'readUrlPdf',
-            signature:
-              'readUrlPdf(request: { ref: string }, signal: AbortSignal): Promise<ZoteroUrlPdfView>',
-          },
-          {
-            kind: 'method',
-            name: 'collectionPath',
-            signature:
-              'collectionPath(request: ZoteroCollectionPathRequestView, signal: AbortSignal): Promise<ZoteroCollectionPathResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_BROWSE_METHOD,
-            signature:
-              'browse(request: ZoteroLibraryBrowseRequestView, signal: AbortSignal): Promise<ZoteroLibraryBrowseResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_SEARCH_METHOD,
-            signature:
-              'search(request: ZoteroLibrarySearchRequestView, signal: AbortSignal): Promise<ZoteroSearchResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_ITEM_METHOD,
-            signature:
-              'item(request: ZoteroLibraryItemRequestView, signal: AbortSignal): Promise<ZoteroItemDetailView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_CHILD_PAGE_METHOD,
-            signature:
-              'childPage(request: ZoteroLibraryChildPageRequestView, signal: AbortSignal): Promise<ZoteroChildPageView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_EXPORT_METHOD,
-            signature:
-              'export(request: ZoteroLibraryExportRequestView, signal: AbortSignal): Promise<ZoteroLibraryExportResultView>',
-          },
-          {
-            kind: 'method',
-            name: ZOTERO_LIBRARY_WRITE_METHOD,
-            signature:
-              'write(request: ZoteroLibraryWriteRequestView, signal: AbortSignal): Promise<ZoteroLibraryWriteResultView>',
-          },
-        ],
+        members: membersOf(ZOTERO_LIBRARY_SERVICE_KEY),
         types: [],
       },
     ],
     events: [],
     objects: [],
   },
-  invocations: ZOTERO_INVOCATIONS,
+  invocations: ZOTERO_COMMON_INVOCATIONS,
 }

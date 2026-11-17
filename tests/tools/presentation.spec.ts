@@ -29,6 +29,14 @@ describe('tool presentation', () => {
 
   it('declares a pending card for every tool', () => {
     expect(
+      definition('zotero_get_batch').presentCall!({ refs: ['zotero://user/0/item/ABCD1234'] }),
+    ).toMatchObject({ kind: 'read', rawInput: '1 refs' })
+    expect(
+      definition('zotero_match_references').presentCall!({
+        references: [{ inputId: 'a', title: 'Paper' }],
+      }),
+    ).toMatchObject({ kind: 'read', rawInput: '1 references' })
+    expect(
       definition('zotero_search').presentCall!({ query: 'attention', scope: { kind: 'library' } }),
     ).toEqual({
       card: 'generic',

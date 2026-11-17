@@ -8,7 +8,7 @@
 export const DEFAULT_CREATOR_TYPE = 'author'
 
 /** The creator fields a display name needs. */
-export interface CreatorDisplayInput {
+interface CreatorDisplayInput {
   readonly creatorType?: string
   readonly name?: string
   readonly firstName?: string

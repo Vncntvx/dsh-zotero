@@ -18,12 +18,14 @@ function renderAction(props: {
   readonly actionUrl: string
   readonly useChat: UseChat
   readonly onOpenLibrary?: () => void
+  readonly reportContractMismatch?: (url: string) => void
 }) {
   const full = {
     ...props,
     t: mockT,
     available: true,
     pending: false,
+    reportContractMismatch: props.reportContractMismatch ?? vi.fn(),
     onAction: vi.fn(),
   } as unknown as DeliverableZoteroActionProps
   return render(<DeliverableZoteroAction {...full} />)
@@ -47,16 +49,22 @@ function snapshot(): ChatSnapshot {
 it('reads deliveries from a typed turn projection when nodes are empty', () => {
   const state = snapshot()
   expect(state.order).toEqual([])
-  expect(resolveDeliverablePath('seq=10&index=0', state)).toBe('/workspace/papers.bib')
-  expect(resolveDeliverablePath('seq=10&index=1', state)).toBe('/workspace/package.json')
-  expect(resolveDeliverablePath('seq=10&index=2', state)).toBeUndefined()
+  expect(resolveDeliverablePath('api/present.open?sessionId=test&seq=10&index=0', state)).toBe(
+    '/workspace/papers.bib',
+  )
+  expect(resolveDeliverablePath('api/present.open?sessionId=test&seq=10&index=1', state)).toBe(
+    '/workspace/package.json',
+  )
+  expect(
+    resolveDeliverablePath('api/present.open?sessionId=test&seq=10&index=2', state),
+  ).toBeUndefined()
   for (const query of [
-    'seq=10',
+    'api/present.open?sessionId=test&seq=10',
     'index=0',
-    'seq=10&index=0&seq=10',
-    'seq=10&index=0&index=1',
-    'seq=-1&index=0',
-    'seq=10&index=-1',
+    'api/present.open?sessionId=test&seq=10&index=0&seq=10',
+    'api/present.open?sessionId=test&seq=10&index=0&index=1',
+    'api/present.open?sessionId=test&seq=-1&index=0',
+    'api/present.open?sessionId=test&seq=10&index=-1',
   ]) {
     expect(resolveDeliverablePath(query, state)).toBeUndefined()
   }
@@ -71,7 +79,7 @@ it('opens the library for a projected bibliography file', () => {
   const state = snapshot()
   const open = vi.fn()
   renderAction({
-    actionUrl: 'seq=10&index=0',
+    actionUrl: 'api/present.open?sessionId=test&seq=10&index=0',
     useChat: useChatOf(state),
     onOpenLibrary: open,
   })
@@ -85,7 +93,10 @@ it('does not offer a bibliography action for ordinary JSON', () => {
     isBibliographyDeliverable({ path: 'citations.json', description: 'exported CSL JSON' }),
   ).toBe(true)
   const state = snapshot()
-  renderAction({ actionUrl: 'seq=10&index=1', useChat: useChatOf(state) })
+  renderAction({
+    actionUrl: 'api/present.open?sessionId=test&seq=10&index=1',
+    useChat: useChatOf(state),
+  })
   expect(screen.queryByRole('button')).toBeNull()
 })
 
@@ -98,7 +109,7 @@ it('shows a subscribed delivery appended after its original turn ends', () => {
   const useChat = <T,>(select: (state: ChatSnapshot) => T) =>
     select(useSyncExternalStore(projection.subscribe, projection.snapshot))
 
-  renderAction({ actionUrl: 'seq=13&index=0', useChat })
+  renderAction({ actionUrl: 'api/present.open?sessionId=test&seq=13&index=0', useChat })
   expect(screen.queryByRole('button')).toBeNull()
 
   act(() => {
@@ -117,3 +128,16 @@ it('shows a subscribed delivery appended after its original turn ends', () => {
 function useChatOf(state: ChatSnapshot) {
   return <T,>(select: (snapshot: ChatSnapshot) => T) => select(state)
 }
+
+it('reports a changed host route instead of silently hiding a broken action', () => {
+  const reportContractMismatch = vi.fn()
+  renderAction({
+    actionUrl: 'api/changed-route?sessionId=test&seq=10&index=0',
+    useChat: useChatOf(snapshot()),
+    reportContractMismatch,
+  })
+  expect(reportContractMismatch).toHaveBeenCalledWith(
+    'api/changed-route?sessionId=test&seq=10&index=0',
+  )
+  expect(screen.queryByRole('button')).toBeNull()
+})

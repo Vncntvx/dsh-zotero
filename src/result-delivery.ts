@@ -1,6 +1,14 @@
-/** Bounded tool values backed by immutable Harness files and durable receipts. */
+import { receiptSchema, type DeliveredResult } from './result-contract.js'
+export { fileSchema, receiptSchema, isFileAttachmentRef } from './result-contract.js'
+/**
+ * Complete tool values backed by standard Harness attachments and durable receipts.
+ * The spill-policy preview cannot replace this envelope: browsers download its
+ * versioned JSON, nested calls forward its FileBlock, and job_output reattaches
+ * it after restart. Both paths use the harness token estimator; optional
+ * whole-document text spills remain owned by spill.ts.
+ */
 import type { Context } from '@deepseek-ai/cordis'
-import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { isAttachmentError, type FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
@@ -14,6 +22,7 @@ import type { ResolvedConfig } from './config.js'
 import { RESULT_RECEIPT_PREFIX } from './constants.js'
 import { ZOTERO_OUTPUT_TOO_LARGE, errorMessageOf, ZoteroError } from './errors.js'
 import { asRecord } from './json.js'
+import { RESULT_RECEIPT_REQUIRED_KEYS, RESULT_FILE_REQUIRED_KEYS } from './result-receipt.js'
 import type { DiagnosticSink } from './diagnostics.js'
 
 /** A broken producer cannot hold plugin teardown forever. */
@@ -32,46 +41,15 @@ export async function resultReceiptKey(...coordinates: string[]): Promise<string
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-/**
- * The one file-attachment shape both the delivery writer and the result read
- * route accept: the delivery persists receipts shaped by this schema, and the
- * read route narrows event payloads through the same definition, so the two
- * ends cannot drift apart on what counts as a readable attachment.
- */
-export const fileSchema = z
-  .object({
-    attachmentId: z.string().min(1),
-    name: z.string().min(1),
-    bytes: z.number().int().nonnegative(),
-  })
-  .strict()
-
-/** Narrow an unknown block payload to the FileAttachmentRef the delivery writes. */
-export function isFileAttachmentRef(value: unknown): value is FileAttachmentRef {
-  return fileSchema.safeParse(value).success
-}
-
-const receiptSchema = z
-  .object({
-    delivery: z.literal('file'),
-    version: z.literal(1),
-    tool: z.string().max(64),
-    sessionId: z.string(),
-    callId: z.string(),
-    jobId: z.string().optional(),
-    summary: z.string().max(256),
-    file: fileSchema,
-    facts: z.record(z.string(), z.json()).optional(),
-  })
-  .strict()
 const resultDomain = defineDomain({
   name: 'zotero_results',
   version: 1,
   layout: 'per-record',
+  invalidRecords: 'backup-and-skip',
   tables: { receipts: domainTable(receiptSchema) },
 })
 type Receipt = z.infer<typeof receiptSchema>
-export type DeliveredResult = { delivery: 'inline'; data: JsonValue } | Receipt
+export type { DeliveredResult } from './result-contract.js'
 
 /** A registration transform applied to one tool definition before it is registered. */
 export type ToolWrapper = (definition: ToolDefinition) => ToolDefinition
@@ -163,15 +141,22 @@ export function renderDelivered(
     : [
         {
           type: 'text',
-          text: `${RESULT_RECEIPT_PREFIX}${JSON.stringify(value)}\nFull versioned JSON is in the attached file. Parse with run_code Node file APIs for long fields; line-based read previews may truncate individual lines.`,
+          text: receiptText(JSON.stringify(value)),
         },
         { type: 'file', attachment: value.file as FileAttachmentRef },
       ]
 }
 
+function receiptText(canonical: string): string {
+  return `${RESULT_RECEIPT_PREFIX}${canonical}\nFull versioned JSON is in the attached file. Parse with run_code Node file APIs for long fields; line-based read previews may truncate individual lines.`
+}
+
 export class ResultDelivery {
   private facility?: unknown
   private domain?: Promise<Domain<typeof resultDomain>>
+  private readonly domains = new Set<Promise<Domain<typeof resultDomain>>>()
+  private stopping = false
+  private committing = Promise.resolve()
   private readonly pending = new Set<Promise<unknown>>()
   private readonly outputs = new Map<string, ToolDefinition['output']>()
   /**
@@ -186,26 +171,35 @@ export class ResultDelivery {
     private readonly diagnostics?: DiagnosticSink,
   ) {
     ctx.effect(() => async () => {
-      if (this.pending.size > 0) {
+      this.stopping = true
+      const cleanup = (async () => {
+        // Accepted producers retain their storage handles until they settle.
+        // A late producer can finish its receipt without writing to a closed table.
+        while (this.pending.size > 0) await Promise.allSettled([...this.pending])
+        await Promise.all([...this.domains].map(async (opening) => (await opening).close()))
+      })()
+      {
         let timer: ReturnType<typeof setTimeout> | undefined
         const deadline = new Promise<'timeout'>((resolve) => {
           timer = setTimeout(() => resolve('timeout'), RESULT_DELIVERY_DRAIN_MS)
           timer.unref?.()
         })
-        const drained = Promise.allSettled([...this.pending]).then(() => 'drained' as const)
-        const outcome = await Promise.race([drained, deadline])
-        if (timer !== undefined) clearTimeout(timer)
-        if (outcome === 'timeout') {
-          const count = this.pending.size
-          this.pending.clear()
-          this.diagnostics?.warn(
-            'delivery.drain.timeout',
-            'Result delivery cleanup stopped waiting for producers that did not settle.',
-            { pending: count, deadlineMs: RESULT_DELIVERY_DRAIN_MS },
-          )
+        try {
+          const outcome = await Promise.race([cleanup.then(() => 'drained' as const), deadline])
+          if (outcome === 'timeout') {
+            this.diagnostics?.warn(
+              'delivery.drain.timeout',
+              'Result delivery cleanup exceeded its deadline; accepted producers retain their storage until settlement.',
+              { pending: this.pending.size, deadlineMs: RESULT_DELIVERY_DRAIN_MS },
+            )
+            void cleanup.catch((error) =>
+              this.diagnostics?.warn('delivery.drain.failed', errorMessageOf(error)),
+            )
+          }
+        } finally {
+          if (timer !== undefined) clearTimeout(timer)
         }
       }
-      if (this.domain) await (await this.domain).close()
     })
   }
   track<T>(promise: Promise<T>): Promise<T> {
@@ -217,6 +211,7 @@ export class ResultDelivery {
     return promise
   }
   private async receipts() {
+    this.assertActive()
     // The facility is resolved per call and the opened domain is cached
     // against it: a storageDomain replacement must be picked up instead of
     // pinning a handle to a facility that was disposed with its own fiber.
@@ -230,7 +225,9 @@ export class ResultDelivery {
       this.facility = facility
       const opening = facility.open(resultDomain)
       this.domain = opening
+      this.domains.add(opening)
       void opening.catch(() => {
+        this.domains.delete(opening)
         if (this.domain === opening) {
           this.domain = undefined
           this.facility = undefined
@@ -247,16 +244,20 @@ export class ResultDelivery {
     jobId?: string,
     facts?: JsonValue,
   ): Promise<DeliveredResult> {
-    const dedupeKey = `${exec.agent?.session?.header.id ?? ''}:${exec.callId}`
+    this.assertActive()
+    const dedupeKey = JSON.stringify([exec.agent?.session?.header.id, exec.callId])
     const running = this.publishing.get(dedupeKey)
     if (running) return await running
-    const task = this.publish(exec, data, render, signal, jobId, facts)
+    const task = this.track(this.publish(exec, data, render, signal, jobId, facts))
     this.publishing.set(dedupeKey, task)
     try {
       return await task
     } finally {
       if (this.publishing.get(dedupeKey) === task) this.publishing.delete(dedupeKey)
     }
+  }
+  private assertActive(): void {
+    if (this.stopping) throw new ToolContextUnavailableError('Result delivery is stopping.')
   }
   private async publish(
     exec: ToolExecution,
@@ -303,13 +304,23 @@ export class ResultDelivery {
         outputFile: record.outputFile,
         delivered: record.delivered === true,
       })
-    const file =
-      existing?.file ??
-      (await attachments.saveFileStream({
-        name: `${exec.name}-result.json`,
-        signal,
-        data: jsonBytes({ version: 1, tool: exec.name, request: exec.arguments, data }, signal),
-      }))
+    let file = existing?.file
+    if (file === undefined) {
+      try {
+        file = await attachments.saveFileStream({
+          name: `${exec.name}-result.json`,
+          signal,
+          data: jsonBytes({ version: 1, tool: exec.name, request: exec.arguments, data }, signal),
+        })
+      } catch (error) {
+        if (isAttachmentError(error) && error.code === 'ATTACHMENT_FILES_UNSUPPORTED')
+          throw new ZoteroError(
+            'This result exceeds the inline budget, and the configured attachment backend cannot store complete files. Configure a file-capable attachment backend and repeat the read.',
+            ZOTERO_OUTPUT_TOO_LARGE,
+          )
+        throw error
+      }
+    }
     // Publication is settle-once-begun from here: saveFileStream itself cleans
     // up a mid-stream abort (staged temp files), but once the file is
     // published the attachment store has no way to reclaim it, so the receipt
@@ -325,37 +336,46 @@ export class ResultDelivery {
       callId: exec.callId,
       ...(jobId ? { jobId } : {}),
       summary: `${exec.name}: full result persisted (${file.bytes} bytes).`,
+      createdAt: existing?.createdAt ?? Date.now(),
       file,
       ...(asRecord(projection) ? { facts: projection } : {}),
     })
-    const fits = () => {
-      const content = renderDelivered(receipt, render)
+    const fits = (): boolean => {
+      const canonical = JSON.stringify(receipt)
+      const content: ContentBlock[] = [
+        { type: 'text', text: receiptText(canonical) },
+        { type: 'file', attachment: receipt.file as FileAttachmentRef },
+      ]
       return (
-        estimateContent([{ type: 'text', text: JSON.stringify(receipt) }]) <=
-          config.maxInlineResultTokens &&
+        estimateContent([{ type: 'text', text: canonical }]) <= config.maxInlineResultTokens &&
         estimateContent(content) <= config.maxInlineResultTokens &&
-        new TextEncoder().encode(JSON.stringify(receipt)).byteLength <=
-          config.maxInlineResultBytes &&
+        new TextEncoder().encode(canonical).byteLength <= config.maxInlineResultBytes &&
         new TextEncoder().encode(JSON.stringify(content)).byteLength <= config.maxInlineResultBytes
       )
     }
-    // Only previews may be omitted; ownership, file and completeness facts survive.
+    let fitsBudget = fits()
+    // Preview omission never removes ownership, file, provenance or completeness facts.
     for (const field of ['items', 'notesPreview', 'annotationsPreview']) {
-      if (fits()) break
+      if (fitsBudget) break
       if (receipt.facts?.[field] !== undefined) {
         delete receipt.facts[field]
         receipt.facts.detailOmitted = true
+        fitsBudget = fits()
       }
     }
-    if (!fits()) {
+    if (!fitsBudget) {
       throw new ZoteroError(
         'Result reference exceeds the configured inline budget.',
         ZOTERO_OUTPUT_TOO_LARGE,
       )
     }
-    await table.put(key, receipt)
-    if (jobId) await table.put(await resultReceiptKey('job', sessionId, jobId), receipt)
-    await this.pruneReceipts(sessionId)
+    const commit = this.committing.then(async () => {
+      await table.put(key, receipt)
+      if (jobId) await table.put(await resultReceiptKey('job', sessionId, jobId), receipt)
+      await this.pruneTable(table, sessionId)
+    })
+    this.committing = commit.catch(() => {})
+    await commit
     return receipt
   }
   wrap(definition: ToolDefinition): ToolDefinition {
@@ -379,16 +399,17 @@ export class ResultDelivery {
             {
               type: 'object',
               additionalProperties: false,
-              required: ['delivery', 'version', 'tool', 'summary', 'file', 'sessionId', 'callId'],
+              required: [...RESULT_RECEIPT_REQUIRED_KEYS],
               properties: {
                 delivery: { type: 'string', const: 'file' },
                 version: { type: 'integer', const: 1 },
                 tool: { type: 'string' },
                 summary: { type: 'string' },
+                createdAt: { type: 'integer' },
                 file: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['attachmentId', 'name', 'bytes'],
+                  required: [...RESULT_FILE_REQUIRED_KEYS],
                   properties: {
                     attachmentId: { type: 'string' },
                     name: { type: 'string' },
@@ -410,15 +431,22 @@ export class ResultDelivery {
             : output.render(args, value),
         presentationMeta: (args, value) => {
           if (!isDelivered(value)) return output.presentationMeta?.(args, value) ?? {}
-          if (value.delivery === 'file') return { ...value.facts, ...value } as JsonValue
+          if (value.delivery === 'file')
+            return {
+              ...(asRecord(value.facts) ?? {}),
+              delivery: 'file',
+              file: value.file,
+            } as JsonValue
           const meta = asRecord(output.presentationMeta?.(args, value.data)) ?? {}
-          // The bounded projector is the single budget: a delivered inline
-          // result adds only its delivery shape, never the rendered body.
+          // The host snapshots the delivered value before projection. Evaluate
+          // inline facts here; file publication computes its facts after the
+          // inline arm has been ruled out, so neither arm evaluates twice.
           return { ...meta, delivery: 'inline' } as JsonValue
         },
       },
-      execute: (args, exec) =>
-        this.track(
+      execute: (args, exec) => {
+        this.assertActive()
+        return this.track(
           (async () => {
             const value = (await definition.execute(args, exec)) as JsonValue
             if (
@@ -433,8 +461,6 @@ export class ResultDelivery {
               value,
               (data) => output.render(args, data),
               exec.signal,
-              undefined,
-              output.presentationMeta?.(args, value),
             )
             if (exec.parent && delivered.delivery === 'file')
               exec.deferContext(
@@ -445,25 +471,48 @@ export class ResultDelivery {
               )
             return delivered
           })(),
-        ),
+        )
+      },
     }
   }
   async receipt(sessionId: string, callId: string): Promise<Receipt | undefined> {
     return (await this.receipts()).get(await resultReceiptKey(sessionId, callId))
   }
 
-  /** Retain only recent session receipts; old durable attachments cannot be reclaimed by this API. */
+  /** FIFO retention counts deliveries, keeping their call and job aliases together. */
   async pruneReceipts(sessionId: string, max = 128): Promise<number> {
     const table = await this.receipts()
-    const entries = [...table.entries()].filter(
-      ([, value]) => asRecord(value)?.sessionId === sessionId,
-    )
-    if (entries.length <= max) return 0
-    const remove = entries.slice(0, entries.length - max).map(([key]) => key)
-    const deleteMany = (
-      table as unknown as { deleteMany?: (keys: readonly string[]) => Promise<number> }
-    ).deleteMany
-    return deleteMany === undefined ? 0 : await deleteMany(remove)
+    return this.pruneTable(table, sessionId, max)
+  }
+  private async pruneTable(
+    table: Awaited<ReturnType<ResultDelivery['receipts']>>,
+    sessionId: string,
+    max = 128,
+  ): Promise<number> {
+    const deliveries = new Map<string, { sessionId: string; createdAt: number; keys: string[] }>()
+    for (const [key, receipt] of table.entries()) {
+      const identity = JSON.stringify([receipt.sessionId, receipt.callId])
+      let entry = deliveries.get(identity)
+      if (entry === undefined) {
+        entry = { sessionId: receipt.sessionId, createdAt: receipt.createdAt, keys: [] }
+        deliveries.set(identity, entry)
+      }
+      entry.keys.push(key)
+    }
+    const ordered = [...deliveries].sort((a, b) => a[1].createdAt - b[1].createdAt)
+    const sessionDeliveries = ordered
+      .filter(([, entry]) => entry.sessionId === sessionId)
+      .map(([key]) => key)
+    const remove = new Set(sessionDeliveries.slice(0, Math.max(0, sessionDeliveries.length - max)))
+    let remaining = deliveries.size - remove.size
+    for (const [identity] of ordered) {
+      if (remaining <= 1024) break
+      if (remove.has(identity)) continue
+      remove.add(identity)
+      remaining -= 1
+    }
+    const keys = [...remove].flatMap((identity) => deliveries.get(identity)!.keys)
+    return keys.length === 0 ? 0 : await table.deleteMany(keys)
   }
   installJobs(): void {
     this.ctx.on('tools/post-execute', async (exec, result, next) => {
@@ -495,10 +544,12 @@ export class ResultDelivery {
           // twin. Reconcile by the job id the receipt itself carries instead of
           // dropping the re-attach — the write domain's reconcile-never-retry
           // discipline applied to the delivery side.
-          receipt = [...table.entries()].find(([, candidate]) => {
-            const record = asRecord(candidate)
-            return record?.jobId === jobId && record?.sessionId === session
-          })?.[1] as Receipt | undefined
+          for (const [, candidate] of table.entries()) {
+            if (candidate.jobId === jobId && candidate.sessionId === session) {
+              receipt = candidate
+              break
+            }
+          }
         }
       } catch (error) {
         this.ctx.logger?.warn?.(

@@ -7,7 +7,7 @@ export interface CitationKeyConflict {
   readonly extra: string
 }
 
-export interface CitationKeyInfo {
+interface CitationKeyInfo {
   readonly citationKey?: string
   readonly citationKeySource?: CitationKeySource
   readonly citationKeyConflict?: CitationKeyConflict

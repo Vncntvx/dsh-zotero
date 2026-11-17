@@ -87,9 +87,10 @@ export function useLibraryChildFeed(
     [face, inspectorTicketOf, selectedRef, setInspector],
   )
 
+  const childOffsetOf = useCallback((kind: ChildKind) => childOffsets.current[kind] ?? 0, [])
   return {
     childStates,
-    childOffsetOf: (kind: ChildKind) => childOffsets.current[kind] ?? 0,
+    childOffsetOf,
     pageChild,
     reset,
   }

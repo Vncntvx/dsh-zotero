@@ -23,8 +23,6 @@ export const HARNESS_DENIAL_NAME = 'ApprovalError'
  */
 export const HARNESS_DENIAL_CODES = ['APPROVAL_REJECTED', 'APPROVAL_CANCELLED'] as const
 
-export type HarnessDenialCode = (typeof HARNESS_DENIAL_CODES)[number]
-
 /**
  * Classify one tool execution result as a user decline or a real failure.
  * A decline is proven only by the harness's structured approval identity: a

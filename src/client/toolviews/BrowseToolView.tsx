@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /**
  * Dedicated toolview cards for browsing and sync:
  * `zotero_browse` and `zotero_changes`.
@@ -63,6 +64,8 @@ function shortRef(ref: string): string | null {
 function browseRowView(row: BrowseRow, index: number): BrowseRowView {
   const key = `${row.kind}-${index}`
   switch (row.kind) {
+    case 'unknown':
+      return { key, name: row.raw, detail: null, ref: null, depth: 0 }
     case 'library':
       return { key, name: row.name, detail: row.libraryId, ref: null, depth: 0 }
     case 'collection':
@@ -151,11 +154,16 @@ function ChangesBody({
 
       <div className={css.cardList} data-changes-sections>
         {changes.changed.map((section) => (
-          <div key={section.key} className={css.itemCard} data-changes-kind={section.key}>
-            <div className={css.itemHeader}>
-              <span className={css.itemTitle}>{t(section.label)}</span>
-              <Tag tone="neutral">{countOfLabel(section.total, section.entries.length, t)}</Tag>
-            </div>
+          <ToolItemRow
+            key={section.key}
+            data-changes-kind={section.key}
+            title={<>{t(section.label)}</>}
+            trailing={
+              <>
+                <Tag tone="neutral">{countOfLabel(section.total, section.entries.length, t)}</Tag>
+              </>
+            }
+          >
             {section.entries.map((entry) => (
               <div key={entry.key} className={css.itemMeta} data-changes-entry>
                 <span>{entry.key}</span>
@@ -169,7 +177,7 @@ function ChangesBody({
                 {t('toolChangesFulltextCaveat')}
               </div>
             )}
-          </div>
+          </ToolItemRow>
         ))}
       </div>
 
@@ -182,17 +190,22 @@ function ChangesBody({
           </span>
           <div className={css.cardList}>
             {changes.deleted.map((section) => (
-              <div key={section.key} className={css.itemCard} data-changes-kind={section.key}>
-                <div className={css.itemHeader}>
-                  <span className={css.itemTitle}>{t(section.label)}</span>
-                  <Tag tone="neutral">{countOfLabel(section.total, section.keys.length, t)}</Tag>
-                </div>
+              <ToolItemRow
+                key={section.key}
+                data-changes-kind={section.key}
+                title={<>{t(section.label)}</>}
+                trailing={
+                  <>
+                    <Tag tone="neutral">{countOfLabel(section.total, section.keys.length, t)}</Tag>
+                  </>
+                }
+              >
                 {section.keys.map((key) => (
                   <div key={key} className={css.itemMeta} data-changes-entry>
                     <span>{key}</span>
                   </div>
                 ))}
-              </div>
+              </ToolItemRow>
             ))}
           </div>
         </div>
@@ -259,6 +272,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
     changes,
     job,
     detailOmitted,
+    omitted,
     rawText,
   } = useMemo(() => {
     const raw = (resultTextOf(block) ?? '').trim()
@@ -278,6 +292,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
     let empty = false
     let next: number | null = null
     let browseDetailOmitted = false
+    let omittedRows = 0
     let changesView: ChangesMetaView | null = null
     let job: JobArmView | null = null
 
@@ -321,7 +336,8 @@ export function BrowseToolView(props: BrowseToolViewProps) {
         sum = t('toolTitleBrowse')
       }
       rowViews = (browse?.rows ?? []).map(browseRowView)
-      empty = browse?.rows != null && browse.rows.length === 0
+      empty = browse?.rows != null && browse.rows.length === 0 && browse.returned === 0
+      omittedRows = browse?.omitted ?? 0
       next = browse?.nextOffset ?? null
       browseDetailOmitted = browse?.detailOmitted === true
     }
@@ -343,6 +359,7 @@ export function BrowseToolView(props: BrowseToolViewProps) {
       changes: changesView,
       job,
       detailOmitted: browseDetailOmitted,
+      omitted: omittedRows,
       rawText: raw,
     }
   }, [block, isChanges, t])
@@ -409,20 +426,22 @@ export function BrowseToolView(props: BrowseToolViewProps) {
             {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
             <div className={css.cardList}>
               {rows.map((row) => (
-                <div
+                <ToolItemRow
                   key={row.key}
-                  className={css.itemCard}
                   data-browse-row={row.key}
                   data-depth={row.depth > 0 ? Math.min(row.depth, MAX_BROWSE_DEPTH) : undefined}
+                  title={<>{row.name}</>}
+                  trailing={<>{row.detail !== null && <Tag tone="neutral">{row.detail}</Tag>}</>}
                 >
-                  <div className={css.itemHeader}>
-                    <span className={css.itemTitle}>{row.name}</span>
-                    {row.detail !== null && <Tag tone="neutral">{row.detail}</Tag>}
-                  </div>
                   {row.ref !== null && <div className={css.itemMeta}>{row.ref}</div>}
-                </div>
+                </ToolItemRow>
               ))}
             </div>
+            {omitted > 0 && (
+              <div className={css.coverageNotice}>
+                {t('toolBrowseOmittedRows', { count: omitted })}
+              </div>
+            )}
             {nextOffset !== null && (
               <div className={css.coverageNotice}>
                 {t('toolBrowseNextPage', { offset: nextOffset })}

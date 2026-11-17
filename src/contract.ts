@@ -8,8 +8,8 @@ import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
  *
  * Boundary codecs are defined elsewhere. The strict wire schemas and the one
  * shared invocation list live once in `src/wire-schemas.ts` (client-safe: only
- * `zod` and this module's types); the host manifest (`src/status-codec.ts`) and
- * the client Remote face (`src/client/status-codec.ts`) both alias that list
+ * `zod` and this module's types); the host manifest and client Remote face
+ * both consume that list
  * instead of materializing their own descriptors. `zod` stays a platform module
  * the shell serves.
  *
@@ -22,12 +22,45 @@ import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
  * @module dsh-zotero/contract
  */
 
-import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroErrorCode } from './errors.js'
-import type { ZoteroExportFormat, ZoteroSortField } from './types.js'
+import type { InvocationDescriptor, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ZoteroErrorCode } from './error-codes.js'
+import type {
+  ZoteroBrowseKind,
+  ZoteroSearchScope,
+  ZoteroInclude,
+  ZoteroExportFormat,
+  ZoteroSortField,
+} from './types.js'
 import type { SourceWorkspace } from './sources/model.js'
 import type { SourceFilter } from './sources/filters.js'
 import { ZOTERO_SETTINGS_NAMESPACE, ZOTERO_ENRICHMENT_SERVICE_KEY } from './settings-namespace.js'
+
+/** Shared parse and URL-PDF boundary identities. */
+export const ZOTERO_URL_PDF_TYPE_SYMBOL = 'dsh-zotero#ZoteroUrlPdfView'
+export const ZOTERO_START_DOCUMENT_PARSE_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroStartDocumentParseRequestView'
+export const ZOTERO_START_DOCUMENT_PARSE_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroStartDocumentParseResultView'
+export const ZOTERO_DOCUMENT_ARTIFACT_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDocumentArtifactRequestView'
+export const ZOTERO_DOCUMENT_ARTIFACT_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDocumentArtifactResultView'
+export const ZOTERO_DOCUMENT_PARSE_RECEIPT_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDocumentParseReceiptRequestView'
+export const ZOTERO_DOCUMENT_PARSE_RECEIPT_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDocumentParseReceiptResultView'
+export const ZOTERO_LIST_PARSED_DOCUMENTS_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroListParsedDocumentsRequestView'
+export const ZOTERO_LIST_PARSED_DOCUMENTS_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroListParsedDocumentsResultView'
+export const ZOTERO_DISCARD_PARSED_DOCUMENT_REQUEST_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDiscardParsedDocumentRequestView'
+export const ZOTERO_DISCARD_PARSED_DOCUMENT_RESULT_TYPE_SYMBOL =
+  'dsh-zotero#ZoteroDiscardParsedDocumentResultView'
+export const ZOTERO_RELEASE_URL_PDF_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ReleaseUrlPdfRequest'
+export const ZOTERO_PDF_RELEASE_RESULT_TYPE_SYMBOL = 'dsh-zotero#PdfReleaseResult'
+export const ZOTERO_READ_URL_PDF_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ReadUrlPdfRequest'
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /**
@@ -57,7 +90,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'zotero/source-page-stale': { readonly code: ZoteroErrorCode }
     'zotero/url-pdf': { readonly code: ZoteroErrorCode }
     'zotero/jobs/unavailable': { readonly code: ZoteroErrorCode }
-    'zotero/jobs/background-disabled': { readonly code: ZoteroErrorCode }
     'zotero/jobs/limit-reached': { readonly code: ZoteroErrorCode }
     'zotero/enrichment': { readonly code: ZoteroErrorCode }
     'zotero/scholarly': { readonly code: ZoteroErrorCode }
@@ -84,8 +116,7 @@ export type SupportedLocalLibrary = PersonalLibrary | GroupLibrary
  * `/items/trash` listing; the model-facing tool schema does not include it.
  */
 export type ZoteroResolvedScope =
-  | { kind: 'library'; library: PersonalLibrary }
-  | { kind: 'library'; library: GroupLibrary }
+  | { kind: 'library'; library: SupportedLocalLibrary }
   | { kind: 'publications'; library: PersonalLibrary }
   | { kind: 'collection'; ref: string; name: string }
   | { kind: 'savedSearch'; ref: string; name: string }
@@ -97,6 +128,8 @@ export const ZOTERO_SOURCE_PROJECTION_FAILED = 'ZOTERO_SOURCE_PROJECTION_FAILED'
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string
+  /** Fresh per-application mount identities for component egress disclosures. */
+  readonly componentEpochs?: { readonly scholarly?: string; readonly enrichment?: string }
   /** Composition state of the full-session literature-trail projection. */
   readonly sourceProjection:
     | { readonly state: 'not-composed' }
@@ -921,8 +954,7 @@ export function zoteroSemanticModelDeleteInvocation(
 }
 
 /** The browse kinds the library panel lists; the tool-facing kinds stay tool-only. */
-export type ZoteroLibraryBrowseKind =
-  'libraries' | 'collections' | 'savedSearches' | 'tags' | 'itemTypes'
+export type ZoteroLibraryBrowseKind = Exclude<ZoteroBrowseKind, 'itemFields'>
 
 /** A panel browse request: one bounded listing of a navigation endpoint. */
 export interface ZoteroLibraryBrowseRequestView {
@@ -997,12 +1029,7 @@ export interface ZoteroLibraryBrowseResultView {
 }
 
 /** The item-set scopes the panel lists; `trash` is panel-only and absent from the tool scopes. */
-export type ZoteroLibrarySearchScopeView =
-  | { kind: 'library' }
-  | { kind: 'publications' }
-  | { kind: 'collection'; refOrName: string }
-  | { kind: 'savedSearch'; refOrName: string }
-  | { kind: 'trash' }
+export type ZoteroLibrarySearchScopeView = ZoteroSearchScope
 
 /** Sort fields the panel offers; the domain union is the one source. */
 export type ZoteroLibrarySortField = ZoteroSortField
@@ -1068,7 +1095,7 @@ export interface ZoteroSearchResultView {
 }
 
 /** The child listings an item detail serves and pages through. */
-export type ZoteroChildListingKind = 'notes' | 'attachments' | 'annotations'
+export type ZoteroChildListingKind = ZoteroInclude
 
 /** A panel item-detail request: one ref plus the child kinds to include. */
 export interface ZoteroLibraryItemRequestView {
@@ -1381,7 +1408,7 @@ export type ZoteroLibraryWriteRequestView =
       }
     >
 export interface ZoteroLibraryWriteResultView {
-  readonly kind: 'applied' | 'partial' | 'declined' | 'committed-unverified' | 'failed'
+  readonly kind: 'applied' | 'restored' | 'partial' | 'declined' | 'committed-unverified' | 'failed'
   readonly message: string
   readonly code?: string
 }
@@ -1516,6 +1543,16 @@ export interface ZoteroUrlPdfView {
   readonly path: string
   readonly lease: string
 }
+
+export interface ZoteroReadUrlPdfRequestView {
+  readonly ref: string
+}
+export interface ZoteroReleaseUrlPdfRequestView {
+  readonly lease: string
+}
+export interface ZoteroPdfReleaseResultView {
+  readonly released: true
+}
 export function zoteroReadUrlPdfInvocation(
   param: InvocationDescriptor['parameters'][number]['codec'],
   result: InvocationDescriptor['result'],
@@ -1556,4 +1593,98 @@ export function zoteroSemanticModelVerifyInvocation(
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
     result,
   }
+}
+
+/** Typed wire methods; both client endpoint and namespace maps derive from this face. */
+export interface ZoteroRemoteContract {
+  startDocumentParse: (
+    request: ZoteroStartDocumentParseRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroStartDocumentParseResultView>>
+  documentArtifact: (
+    request: ZoteroDocumentArtifactRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroDocumentArtifactResultView>>
+  documentParseReceipt: (
+    request: ZoteroDocumentParseReceiptRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroDocumentParseReceiptResultView>>
+  listParsedDocuments: (
+    request: ZoteroListParsedDocumentsRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroListParsedDocumentsResultView>>
+  discardParsedDocument: (
+    request: ZoteroDiscardParsedDocumentRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroDiscardParsedDocumentResultView>>
+  semanticModelStatus: (
+    request: ZoteroSemanticModelStatusRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
+  downloadSemanticModel: (
+    request: ZoteroSemanticModelDownloadRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSemanticModelDownloadResultView>>
+  cancelSemanticModelDownload: (
+    request: ZoteroSemanticModelCancelRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSemanticModelCancelResultView>>
+  deleteSemanticModel: (
+    request: ZoteroSemanticModelDeleteRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSemanticModelDeleteResultView>>
+  verifySemanticModel: (
+    request: ZoteroSemanticModelVerifyRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSemanticModelStatusResultView>>
+  sourcePage: (
+    request: ZoteroSourcePageRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSourcePageResultView>>
+  releaseUrlPdf: (
+    request: ZoteroReleaseUrlPdfRequestView,
+  ) => Promise<RemoteResult<ZoteroPdfReleaseResultView>>
+  readUrlPdf: (
+    request: ZoteroReadUrlPdfRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroUrlPdfView>>
+  write: (
+    request: ZoteroLibraryWriteRequestView,
+  ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
+  status: (signal?: AbortSignal) => Promise<RemoteResult<ZoteroStatusView>>
+  resolveAttachment: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
+  diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
+  reportClientError: (
+    report: ZoteroClientErrorReport,
+  ) => Promise<RemoteResult<ZoteroReportResultView>>
+  openProtocol: (url: string) => Promise<RemoteResult<ZoteroOpenProtocolResultView>>
+  revokeWriteGrant: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
+  collectionPath: (
+    request: ZoteroCollectionPathRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroCollectionPathResultView>>
+  browse: (
+    request: ZoteroLibraryBrowseRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroLibraryBrowseResultView>>
+  search: (
+    request: ZoteroLibrarySearchRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroSearchResultView>>
+  item: (
+    request: ZoteroLibraryItemRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroItemDetailView>>
+  childPage: (
+    request: ZoteroLibraryChildPageRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroChildPageView>>
+  export: (
+    request: ZoteroLibraryExportRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroLibraryExportResultView>>
+}
+
+export type ZoteroRemoteEndpointMap = {
+  [Method in keyof ZoteroRemoteContract as `zotero/${Method}`]: ZoteroRemoteContract[Method]
 }

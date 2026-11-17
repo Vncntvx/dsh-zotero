@@ -19,6 +19,7 @@ describe('enrichment preferences', () => {
     expect(enrichmentPreferencesOf({})).toEqual({
       artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'free',
+      ocrLanguage: 'ch',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '',
       enableSemanticSearch: false,
@@ -31,6 +32,7 @@ describe('enrichment preferences', () => {
     expect(ENRICHMENT_PREFERENCE_KEYS).toEqual([
       'artifactReader',
       'mode',
+      'ocrLanguage',
       'mineruTokenRef',
       'outputDir',
       'enableSemanticSearch',
@@ -94,4 +96,16 @@ describe('enrichment preferences', () => {
       enrichmentPreferencesOf({ semanticDownloadSource: 'modelscope' as never }),
     ).toThrow('Invalid enrichment preference: semanticDownloadSource')
   })
+
+  it.each(['outputDir', 'semanticModelDir'] as const)(
+    'refuses relative or malformed %s in the shared preferences boundary',
+    (key) => {
+      for (const path of ['relative/path', '~other/path', 'C:relative'])
+        expect(() => enrichmentPreferencesOf({ [key]: path })).toThrow(
+          `Invalid enrichment preference: ${key}`,
+        )
+      for (const path of ['', '/tmp/private', '~/private', 'C:\\private', '\\\\server\\share'])
+        expect(enrichmentPreferencesOf({ [key]: path })[key]).toBe(path)
+    },
+  )
 })

@@ -18,11 +18,12 @@ describe('browseRowOf', () => {
     const ROWS: Record<(typeof BROWSE_ROW_ARMS)[number], unknown> = {
       library: { library: { type: 'user', id: 0 }, name: 'My Library' },
       collection: { path: ['Reading'], ref: 'r1', depth: 0 },
-      savedSearch: { ref: 's1', name: 'Unread' },
+      savedSearch: { ref: 'zotero://user/0/search/SS123456', name: 'Unread' },
       tag: { tag: 'quantum' },
       itemType: { itemType: 'book' },
       field: { field: 'archive' },
       creatorType: { creatorType: 'author' },
+      unknown: { ref: 'zotero://user/0/collection/COLL0001', name: 'Missing path' },
     }
     expect(BROWSE_ROW_ARMS.map((arm) => browseRowOf(ROWS[arm]).kind)).toEqual([...BROWSE_ROW_ARMS])
   })
@@ -142,9 +143,14 @@ describe('browseRowOf', () => {
     // could have seen is discarded on the way to the card.
     for (const value of [undefined, 'nonsense', [], 7]) {
       const row = browseRowOf(value)
-      expect(row.kind).toBe('savedSearch')
-      expect(row.kind === 'savedSearch' && row.name).toBe(JSON.stringify(value))
+      expect(row.kind).toBe('unknown')
+      expect(row.kind === 'unknown' && row.raw).toBe(JSON.stringify(value) ?? String(value))
     }
+  })
+
+  it('does not rename a collection missing its path as a saved search', () => {
+    const row = { ref: 'zotero://user/0/collection/COLL0001', name: 'Collection' }
+    expect(browseRowOf(row)).toEqual({ kind: 'unknown', raw: JSON.stringify(row) })
   })
 })
 

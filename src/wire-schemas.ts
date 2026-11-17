@@ -1,3 +1,22 @@
+import type * as Contract from './contract.js'
+import { isLiteralSearchTag } from './search-tags.js'
+import type { ZoteroRemoteContract } from './contract.js'
+import {
+  ZOTERO_URL_PDF_TYPE_SYMBOL,
+  ZOTERO_START_DOCUMENT_PARSE_REQUEST_TYPE_SYMBOL,
+  ZOTERO_START_DOCUMENT_PARSE_RESULT_TYPE_SYMBOL,
+  ZOTERO_DOCUMENT_ARTIFACT_REQUEST_TYPE_SYMBOL,
+  ZOTERO_DOCUMENT_ARTIFACT_RESULT_TYPE_SYMBOL,
+  ZOTERO_DOCUMENT_PARSE_RECEIPT_REQUEST_TYPE_SYMBOL,
+  ZOTERO_DOCUMENT_PARSE_RECEIPT_RESULT_TYPE_SYMBOL,
+  ZOTERO_LIST_PARSED_DOCUMENTS_REQUEST_TYPE_SYMBOL,
+  ZOTERO_LIST_PARSED_DOCUMENTS_RESULT_TYPE_SYMBOL,
+  ZOTERO_DISCARD_PARSED_DOCUMENT_REQUEST_TYPE_SYMBOL,
+  ZOTERO_DISCARD_PARSED_DOCUMENT_RESULT_TYPE_SYMBOL,
+  ZOTERO_RELEASE_URL_PDF_REQUEST_TYPE_SYMBOL,
+  ZOTERO_PDF_RELEASE_RESULT_TYPE_SYMBOL,
+  ZOTERO_READ_URL_PDF_REQUEST_TYPE_SYMBOL,
+} from './contract.js'
 import { ARTIFACT_IMAGE_NAME_PATTERN } from './artifact-images.js'
 import { ARCHIVE_MAX_IMAGES } from './artifact-images.js'
 import {
@@ -69,8 +88,7 @@ import {
  * The wire boundary's single source: every zod schema the `zotero` namespace
  * validates with, and the one shared invocation list both halves register.
  * `ZOTERO_COMMON_INVOCATIONS` names lazy schemas through
- * `strictCodec()`; the host manifest aliases it in `src/status-codec.ts` and
- * the browser face aliases it in `src/client/status-codec.ts`. Neither half
+ * `strictCodec()`; the host manifest and browser face consume that list directly. Neither half
  * imports the other's module or builds its own descriptor list, so the two
  * sides cannot disagree about a boundary.
  *
@@ -140,7 +158,6 @@ import {
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_EXPORT_FORMATS,
-  ZOTERO_ITEMKEY_BATCH,
   ZOTERO_SORT_FIELDS,
   ZOTERO_ITEMIZED_EXPORT_FORMATS,
   ZOTERO_YEAR_MAX,
@@ -160,7 +177,7 @@ function lazySchema<S extends z.ZodType>(factory: () => S): z.ZodLazy<S> {
  */
 export const zoteroLibrarySortSchema = lazySchema(() =>
   z.enum(ZOTERO_SORT_FIELDS as [ZoteroLibrarySortField, ...ZoteroLibrarySortField[]]),
-)
+) satisfies z.ZodType<Contract.ZoteroLibrarySortField>
 
 /**
  * Wrap a wire schema in the strict codec arm Typert expects. The codec
@@ -188,6 +205,10 @@ export const zoteroStatusSchema = lazySchema(() =>
   z
     .object({
       providerId: z.string(),
+      componentEpochs: z
+        .object({ scholarly: z.uuid().optional(), enrichment: z.uuid().optional() })
+        .strict()
+        .optional(),
       sourceProjection: z.discriminatedUnion('state', [
         z.object({ state: z.literal('not-composed') }).strict(),
         z.object({ state: z.literal('pending') }).strict(),
@@ -216,7 +237,7 @@ export const zoteroStatusSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroStatusView>
 
 /** Wire schema: resolveAttachment parameter (a non-empty string ref). */
 export const zoteroRefSchema = lazySchema(() => z.string().min(1))
@@ -234,12 +255,12 @@ export const zoteroAttachmentLocationSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroAttachmentLocationView>
 
 /** Wire schema: the write-grant revocation result (strict). */
 export const zoteroWriteGrantRevokeSchema = lazySchema(() =>
   z.object({ removed: z.boolean() }).strict(),
-)
+) satisfies z.ZodType<Contract.ZoteroWriteGrantRevokeView>
 
 /** Wire schema: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
 export const zoteroDiagnosticsSchema = lazySchema(() =>
@@ -269,7 +290,7 @@ export const zoteroDiagnosticsSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroDiagnosticsView>
 
 /** Wire schema: reportClientError parameter (surface + message required, stacks optional). */
 export const zoteroClientErrorReportSchema = lazySchema(() =>
@@ -282,12 +303,12 @@ export const zoteroClientErrorReportSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroClientErrorReport>
 
 /** Wire schema: reportClientError result (the ring sequence the report was assigned). */
 export const zoteroReportResultSchema = lazySchema(() =>
   z.object({ seq: z.number() }).strict().readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroReportResultView>
 
 /** Wire schema: openProtocol parameter (a string starting with zotero://). */
 export const zoteroProtocolUrlSchema = lazySchema(() =>
@@ -302,7 +323,7 @@ export const zoteroOpenProtocolResultSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroOpenProtocolResultView>
 
 export const zoteroSourcePageTargetSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
@@ -321,7 +342,7 @@ export const zoteroSourcePageTargetSchema = lazySchema(() =>
       .strict(),
     z.object({ kind: z.literal('session'), rows: z.literal('exports') }).strict(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroSourcePageTarget>
 
 export const zoteroSourcePageRequestSchema = lazySchema(() =>
   z
@@ -378,7 +399,7 @@ export const zoteroPersonalLibrarySchema = lazySchema(() =>
     .object({ type: z.literal('user'), id: z.literal(0) })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.PersonalLibrary>
 
 /** Wire schema: one supported local library (canonical personal or a group). */
 export const zoteroLibrarySchema = lazySchema(() =>
@@ -389,7 +410,7 @@ export const zoteroLibrarySchema = lazySchema(() =>
       .strict()
       .readonly(),
   ]),
-)
+) satisfies z.ZodType<Contract.SupportedLocalLibrary>
 
 /** Wire schema: the resolved scope a search result echoes back. */
 export const zoteroResolvedScopeSchema = lazySchema(() =>
@@ -415,7 +436,7 @@ export const zoteroResolvedScopeSchema = lazySchema(() =>
       .strict()
       .readonly(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroResolvedScope>
 
 /** Wire schema: browse request (one bounded navigation listing). */
 export const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
@@ -431,7 +452,7 @@ export const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryBrowseRequestView>
 
 /** Wire schema: browse result rows, discriminated by `kind` unlike the domain union. */
 export const zoteroSavedSearchConditionSchema = lazySchema(() =>
@@ -443,7 +464,7 @@ export const zoteroSavedSearchConditionSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroSavedSearchConditionView>
 
 /** Wire schema: one collection row, shared by browse listings and path breadcrumbs. */
 export const zoteroCollectionRowSchema = lazySchema(() =>
@@ -460,7 +481,7 @@ export const zoteroCollectionRowSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroCollectionRowView>
 
 export const zoteroLibraryBrowseItemSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
@@ -491,7 +512,7 @@ export const zoteroLibraryBrowseItemSchema = lazySchema(() =>
       .strict()
       .readonly(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryBrowseItemView>
 
 /** Wire schema: browse result (the requested page of one navigation listing). */
 export const zoteroLibraryBrowseResultSchema = lazySchema(() =>
@@ -514,7 +535,7 @@ export const zoteroLibraryBrowseResultSchema = lazySchema(() =>
       { message: 'Navigation results require a library version.' },
     )
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryBrowseResultView>
 
 /** Wire schema: search request scope (the panel's scope set, including trash). */
 export const zoteroLibrarySearchScopeSchema = lazySchema(() =>
@@ -540,7 +561,7 @@ export const zoteroLibrarySearchScopeSchema = lazySchema(() =>
       .strict()
       .readonly(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroLibrarySearchScopeView>
 
 /**
  * The library panel's item-list filters: one schema for the wire request and
@@ -551,7 +572,10 @@ export const zoteroLibraryFiltersSchema = lazySchema(() =>
   z
     .object({
       itemTypes: z.array(z.string().min(1)).readonly().optional(),
-      tags: z.array(z.string().min(1)).readonly().optional(),
+      tags: z
+        .array(z.string().refine(isLiteralSearchTag, 'Expected a non-blank literal tag without ||'))
+        .readonly()
+        .optional(),
       tagMatch: z.enum(['all', 'any']).optional(),
       yearFrom: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
       yearTo: z.number().int().min(ZOTERO_YEAR_MIN).max(ZOTERO_YEAR_MAX).optional(),
@@ -577,7 +601,7 @@ export const zoteroLibrarySearchRequestSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibrarySearchRequestView>
 
 /** Wire schema: one item row of a listing (the domain's compact hit, mirrored). */
 export const zoteroSearchItemSchema = lazySchema(() =>
@@ -599,7 +623,7 @@ export const zoteroSearchItemSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroSearchItemView>
 
 /** Wire schema: search result (paged primary hits only; no note supplement crosses). */
 export const zoteroSearchResultSchema = lazySchema(() =>
@@ -615,7 +639,7 @@ export const zoteroSearchResultSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroSearchResultView>
 
 /** Wire schema: one child listing's page window. */
 const childPageSchema = lazySchema(() =>
@@ -646,7 +670,7 @@ export const zoteroLibraryItemRequestSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryItemRequestView>
 
 /** Wire schema: one child listing the detail view serves. */
 export function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRowsView<T>> {
@@ -673,7 +697,7 @@ export const zoteroNoteRowSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroNoteRowView>
 
 export const zoteroAnnotationRowSchema = lazySchema(() =>
   z
@@ -688,7 +712,7 @@ export const zoteroAnnotationRowSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroAnnotationRowView>
 
 export const zoteroAttachmentRowSchema = lazySchema(() =>
   z
@@ -699,7 +723,7 @@ export const zoteroAttachmentRowSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroAttachmentRowView>
 
 /** Wire schema: one paged child-listing request. */
 export const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
@@ -712,7 +736,7 @@ export const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryChildPageRequestView>
 
 /** Wire schema: one child page, discriminated by the kind it carries. */
 export const zoteroChildPageSchema = lazySchema(() =>
@@ -730,7 +754,7 @@ export const zoteroChildPageSchema = lazySchema(() =>
       .strict()
       .readonly(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroChildPageView>
 
 /** Wire schema: the item detail view (panel include set applied, absent sets stay absent). */
 export const zoteroItemDetailSchema = lazySchema(() =>
@@ -777,14 +801,14 @@ export const zoteroItemDetailSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroItemDetailView>
 
 /** Wire schema: the export formats, derived from the domain's one ordered array. */
 export const zoteroLibraryExportFormatSchema = lazySchema(() =>
   z.enum(
     ZOTERO_EXPORT_FORMATS as [ZoteroLibraryExportFormatView, ...ZoteroLibraryExportFormatView[]],
   ),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryExportFormatView>
 
 /** Wire schema: the translator export formats, derived from the sibling array. */
 export const zoteroLibraryItemizedExportFormatSchema = lazySchema(() =>
@@ -794,14 +818,13 @@ export const zoteroLibraryItemizedExportFormatSchema = lazySchema(() =>
 )
 
 /**
- * Wire schema: library export request. The refs bound is Zotero's own
- * `itemKey` per-request cap: the configured `maxExportRefs` gate runs in the
- * host service, where the live config is read.
+ * Wire schema: library export request. The live maxExportRefs policy belongs
+ * to the host service; transport batches are an independent domain concern.
  */
 export const zoteroLibraryExportRequestSchema = lazySchema(() =>
   z
     .object({
-      refs: z.array(z.string().min(1)).min(1).max(ZOTERO_ITEMKEY_BATCH).readonly(),
+      refs: z.array(z.string().min(1)).min(1).readonly(),
       format: zoteroLibraryExportFormatSchema,
       style: z.string().min(1).optional(),
       locale: z.string().min(1).optional(),
@@ -976,13 +999,20 @@ export const zoteroLibraryWriteRequestSchema = lazySchema(() =>
 export const zoteroLibraryWriteResultSchema = lazySchema(() =>
   z
     .object({
-      kind: z.enum(['applied', 'partial', 'declined', 'committed-unverified', 'failed']),
+      kind: z.enum([
+        'applied',
+        'restored',
+        'partial',
+        'declined',
+        'committed-unverified',
+        'failed',
+      ]),
       message: z.string(),
       code: z.string().optional(),
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroLibraryWriteResultView>
 
 export const zoteroCollectionPathRequestSchema = lazySchema(() =>
   z
@@ -993,7 +1023,7 @@ export const zoteroCollectionPathRequestSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroCollectionPathRequestView>
 export const zoteroCollectionPathResultSchema = lazySchema(() =>
   z
     .object({
@@ -1003,7 +1033,7 @@ export const zoteroCollectionPathResultSchema = lazySchema(() =>
     })
     .strict()
     .readonly(),
-)
+) satisfies z.ZodType<Contract.ZoteroCollectionPathResultView>
 
 export const ZOTERO_STATUS_RESULT_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
 
@@ -1020,7 +1050,7 @@ export const zoteroReadUrlPdfRequestSchema = lazySchema(() =>
       }, 'Expected a qualified local attachment ref'),
     })
     .strict(),
-)
+) satisfies z.ZodType<Contract.ZoteroReadUrlPdfRequestView>
 export const zoteroUrlPdfSchema = lazySchema(() =>
   z
     .object({
@@ -1032,8 +1062,10 @@ export const zoteroUrlPdfSchema = lazySchema(() =>
     })
     .strict(),
 ) satisfies z.ZodType<ZoteroUrlPdfView>
-export const ZOTERO_URL_PDF_CODEC = strictCodec('dsh-zotero#ZoteroUrlPdfView', zoteroUrlPdfSchema)
-export const zoteroReleaseUrlPdfSchema = lazySchema(() => z.object({ lease: z.uuid() }).strict())
+export const ZOTERO_URL_PDF_CODEC = strictCodec(ZOTERO_URL_PDF_TYPE_SYMBOL, zoteroUrlPdfSchema)
+export const zoteroReleaseUrlPdfSchema = lazySchema(() =>
+  z.object({ lease: z.uuid() }).strict(),
+) satisfies z.ZodType<Contract.ZoteroReleaseUrlPdfRequestView>
 
 // The directory reaches the filesystem, so the wire carries the same shape
 // rule the settings schema enforces: absolute, `~/...`, a drive, or a UNC path.
@@ -1191,7 +1223,7 @@ export const zoteroParseTargetSchema = lazySchema(() =>
       })
       .strict(),
   ]),
-)
+) satisfies z.ZodType<Contract.ZoteroParseTargetView>
 
 export const zoteroStartDocumentParseRequestSchema = lazySchema(() =>
   z
@@ -1512,60 +1544,58 @@ export const zoteroDiscardParsedDocumentResultSchema = lazySchema(() =>
   ]),
 ) satisfies z.ZodType<ZoteroDiscardParsedDocumentResultView>
 
-export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze([
-  zoteroDocumentParseInvocation(
+/** Exhaustive typed method registry; Host metadata and browser contributions consume it. */
+export const ZOTERO_INVOCATION_BY_METHOD = Object.freeze({
+  startDocumentParse: zoteroDocumentParseInvocation(
     ZOTERO_START_DOCUMENT_PARSE_METHOD,
     strictCodec(
-      'dsh-zotero#ZoteroStartDocumentParseRequestView',
+      ZOTERO_START_DOCUMENT_PARSE_REQUEST_TYPE_SYMBOL,
       zoteroStartDocumentParseRequestSchema,
     ),
     strictCodec(
-      'dsh-zotero#ZoteroStartDocumentParseResultView',
+      ZOTERO_START_DOCUMENT_PARSE_RESULT_TYPE_SYMBOL,
       zoteroStartDocumentParseResultSchema,
     ),
   ),
-  zoteroDocumentParseInvocation(
+  documentArtifact: zoteroDocumentParseInvocation(
     ZOTERO_DOCUMENT_ARTIFACT_METHOD,
-    strictCodec(
-      'dsh-zotero#ZoteroDocumentArtifactRequestView',
-      zoteroDocumentArtifactRequestSchema,
-    ),
-    strictCodec('dsh-zotero#ZoteroDocumentArtifactResultView', zoteroDocumentArtifactResultSchema),
+    strictCodec(ZOTERO_DOCUMENT_ARTIFACT_REQUEST_TYPE_SYMBOL, zoteroDocumentArtifactRequestSchema),
+    strictCodec(ZOTERO_DOCUMENT_ARTIFACT_RESULT_TYPE_SYMBOL, zoteroDocumentArtifactResultSchema),
   ),
-  zoteroDocumentParseInvocation(
+  documentParseReceipt: zoteroDocumentParseInvocation(
     ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD,
     strictCodec(
-      'dsh-zotero#ZoteroDocumentParseReceiptRequestView',
+      ZOTERO_DOCUMENT_PARSE_RECEIPT_REQUEST_TYPE_SYMBOL,
       zoteroDocumentParseReceiptRequestSchema,
     ),
     strictCodec(
-      'dsh-zotero#ZoteroDocumentParseReceiptResultView',
+      ZOTERO_DOCUMENT_PARSE_RECEIPT_RESULT_TYPE_SYMBOL,
       zoteroDocumentParseReceiptResultSchema,
     ),
   ),
-  zoteroDocumentParseInvocation(
+  listParsedDocuments: zoteroDocumentParseInvocation(
     ZOTERO_LIST_PARSED_DOCUMENTS_METHOD,
     strictCodec(
-      'dsh-zotero#ZoteroListParsedDocumentsRequestView',
+      ZOTERO_LIST_PARSED_DOCUMENTS_REQUEST_TYPE_SYMBOL,
       zoteroListParsedDocumentsRequestSchema,
     ),
     strictCodec(
-      'dsh-zotero#ZoteroListParsedDocumentsResultView',
+      ZOTERO_LIST_PARSED_DOCUMENTS_RESULT_TYPE_SYMBOL,
       zoteroListParsedDocumentsResultSchema,
     ),
   ),
-  zoteroDocumentParseInvocation(
+  discardParsedDocument: zoteroDocumentParseInvocation(
     ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
     strictCodec(
-      'dsh-zotero#ZoteroDiscardParsedDocumentRequestView',
+      ZOTERO_DISCARD_PARSED_DOCUMENT_REQUEST_TYPE_SYMBOL,
       zoteroDiscardParsedDocumentRequestSchema,
     ),
     strictCodec(
-      'dsh-zotero#ZoteroDiscardParsedDocumentResultView',
+      ZOTERO_DISCARD_PARSED_DOCUMENT_RESULT_TYPE_SYMBOL,
       zoteroDiscardParsedDocumentResultSchema,
     ),
   ),
-  zoteroSemanticModelStatusInvocation(
+  semanticModelStatus: zoteroSemanticModelStatusInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL,
       zoteroSemanticModelStatusRequestSchema,
@@ -1575,7 +1605,7 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
       zoteroSemanticModelStatusResultSchema,
     ),
   ),
-  zoteroSemanticModelDownloadInvocation(
+  downloadSemanticModel: zoteroSemanticModelDownloadInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL,
       zoteroSemanticModelDownloadRequestSchema,
@@ -1585,7 +1615,7 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
       zoteroSemanticModelDownloadResultSchema,
     ),
   ),
-  zoteroSemanticModelCancelInvocation(
+  cancelSemanticModelDownload: zoteroSemanticModelCancelInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL,
       zoteroSemanticModelCancelRequestSchema,
@@ -1595,7 +1625,7 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
       zoteroSemanticModelCancelResultSchema,
     ),
   ),
-  zoteroSemanticModelDeleteInvocation(
+  deleteSemanticModel: zoteroSemanticModelDeleteInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_DELETE_REQUEST_TYPE_SYMBOL,
       zoteroSemanticModelDeleteRequestSchema,
@@ -1605,7 +1635,7 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
       zoteroSemanticModelDeleteResultSchema,
     ),
   ),
-  zoteroSemanticModelVerifyInvocation(
+  verifySemanticModel: zoteroSemanticModelVerifyInvocation(
     strictCodec(
       ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL,
       zoteroSemanticModelVerifyRequestSchema,
@@ -1615,64 +1645,69 @@ export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object
       zoteroSemanticModelStatusResultSchema,
     ),
   ),
-  zoteroSourcePageInvocation(
+  sourcePage: zoteroSourcePageInvocation(
     strictCodec(ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL, zoteroSourcePageRequestSchema),
     strictCodec(ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL, zoteroSourcePageResultSchema),
   ),
-  zoteroReleaseUrlPdfInvocation(
-    strictCodec('dsh-zotero#ReleaseUrlPdfRequest', zoteroReleaseUrlPdfSchema),
+  releaseUrlPdf: zoteroReleaseUrlPdfInvocation(
+    strictCodec(ZOTERO_RELEASE_URL_PDF_REQUEST_TYPE_SYMBOL, zoteroReleaseUrlPdfSchema),
     strictCodec(
-      'dsh-zotero#PdfReleaseResult',
+      ZOTERO_PDF_RELEASE_RESULT_TYPE_SYMBOL,
       lazySchema(() => z.object({ released: z.literal(true) }).strict()),
     ),
   ),
-  zoteroReadUrlPdfInvocation(
-    strictCodec('dsh-zotero#ReadUrlPdfRequest', zoteroReadUrlPdfRequestSchema),
+  readUrlPdf: zoteroReadUrlPdfInvocation(
+    strictCodec(ZOTERO_READ_URL_PDF_REQUEST_TYPE_SYMBOL, zoteroReadUrlPdfRequestSchema),
     ZOTERO_URL_PDF_CODEC,
   ),
-  zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC),
-  zoteroResolveAttachmentInvocation(
+  status: zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC),
+  resolveAttachment: zoteroResolveAttachmentInvocation(
     strictCodec(ZOTERO_REF_PARAM_TYPE_SYMBOL, zoteroRefSchema),
     strictCodec(ZOTERO_RESOLVE_ATTACHMENT_TYPE_SYMBOL, zoteroAttachmentLocationSchema),
   ),
-  zoteroDiagnosticsInvocation(strictCodec(ZOTERO_DIAGNOSTICS_TYPE_SYMBOL, zoteroDiagnosticsSchema)),
-  zoteroReportClientErrorInvocation(
+  diagnostics: zoteroDiagnosticsInvocation(
+    strictCodec(ZOTERO_DIAGNOSTICS_TYPE_SYMBOL, zoteroDiagnosticsSchema),
+  ),
+  reportClientError: zoteroReportClientErrorInvocation(
     strictCodec(ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL, zoteroClientErrorReportSchema),
     strictCodec(ZOTERO_REPORT_RESULT_TYPE_SYMBOL, zoteroReportResultSchema),
   ),
-  zoteroOpenProtocolInvocation(
+  openProtocol: zoteroOpenProtocolInvocation(
     strictCodec(ZOTERO_OPEN_PROTOCOL_PARAM_TYPE_SYMBOL, zoteroProtocolUrlSchema),
     strictCodec(ZOTERO_OPEN_PROTOCOL_RESULT_TYPE_SYMBOL, zoteroOpenProtocolResultSchema),
   ),
-  zoteroRevokeWriteGrantInvocation(
+  revokeWriteGrant: zoteroRevokeWriteGrantInvocation(
     strictCodec(ZOTERO_WRITE_GRANT_REVOKE_TYPE_SYMBOL, zoteroWriteGrantRevokeSchema),
   ),
-  zoteroCollectionPathInvocation(
+  collectionPath: zoteroCollectionPathInvocation(
     strictCodec(ZOTERO_COLLECTION_PATH_REQUEST_TYPE_SYMBOL, zoteroCollectionPathRequestSchema),
     strictCodec(ZOTERO_COLLECTION_PATH_RESULT_TYPE_SYMBOL, zoteroCollectionPathResultSchema),
   ),
-  zoteroLibraryBrowseInvocation(
+  browse: zoteroLibraryBrowseInvocation(
     strictCodec(ZOTERO_LIBRARY_BROWSE_REQUEST_TYPE_SYMBOL, zoteroLibraryBrowseRequestSchema),
     strictCodec(ZOTERO_LIBRARY_BROWSE_RESULT_TYPE_SYMBOL, zoteroLibraryBrowseResultSchema),
   ),
-  zoteroLibrarySearchInvocation(
+  search: zoteroLibrarySearchInvocation(
     strictCodec(ZOTERO_LIBRARY_SEARCH_REQUEST_TYPE_SYMBOL, zoteroLibrarySearchRequestSchema),
     strictCodec(ZOTERO_LIBRARY_SEARCH_RESULT_TYPE_SYMBOL, zoteroSearchResultSchema),
   ),
-  zoteroLibraryItemInvocation(
+  item: zoteroLibraryItemInvocation(
     strictCodec(ZOTERO_LIBRARY_ITEM_REQUEST_TYPE_SYMBOL, zoteroLibraryItemRequestSchema),
     strictCodec(ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL, zoteroItemDetailSchema),
   ),
-  zoteroLibraryChildPageInvocation(
+  childPage: zoteroLibraryChildPageInvocation(
     strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL, zoteroLibraryChildPageRequestSchema),
     strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL, zoteroChildPageSchema),
   ),
-  zoteroLibraryExportInvocation(
+  export: zoteroLibraryExportInvocation(
     strictCodec(ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL, zoteroLibraryExportRequestSchema),
     strictCodec(ZOTERO_LIBRARY_EXPORT_RESULT_TYPE_SYMBOL, zoteroLibraryExportResultSchema),
   ),
-  zoteroLibraryWriteInvocation(
+  write: zoteroLibraryWriteInvocation(
     strictCodec(ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL, zoteroLibraryWriteRequestSchema),
     strictCodec(ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL, zoteroLibraryWriteResultSchema),
   ),
-])
+} satisfies Record<keyof ZoteroRemoteContract, InvocationDescriptor>)
+export const ZOTERO_COMMON_INVOCATIONS: readonly InvocationDescriptor[] = Object.freeze(
+  Object.values(ZOTERO_INVOCATION_BY_METHOD),
+)

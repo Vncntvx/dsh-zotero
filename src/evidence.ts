@@ -424,7 +424,7 @@ function termFrequency(tokens: readonly string[]): Map<string, number> {
  * passages reuses this, so N paraphrases cost N scoring passes and exactly
  * one tokenization of the corpus.
  */
-export interface PreparedCorpus {
+interface PreparedCorpus {
   /** The corpus's own texts, in caller order. */
   readonly texts: readonly string[]
   /**

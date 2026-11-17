@@ -60,25 +60,29 @@ export const libraryGovernance: ResearchSop = {
     {
       tool: 'zotero_batch_items',
       args: { update: [{ ref: EXAMPLE_REF, addTags: ['reviewed'], removeTags: ['to-review'] }] },
-      requires: 'Root agent, explicit user write request and both approvals',
+      requires:
+        'Local core, writeEnabled=true, root agent, explicit user write request and both approvals',
       purpose: 'One reviewed batch of tag/membership changes',
     },
     {
       tool: 'zotero_update_item',
       args: { ref: EXAMPLE_REF, set: { title: 'User-confirmed corrected title' } },
-      requires: 'Root agent, verified field discrepancy and both approvals',
+      requires:
+        'Local core, writeEnabled=true, root agent, verified field discrepancy and both approvals',
       purpose: 'Scalar metadata correction outside batch update',
     },
     {
       tool: 'zotero_create_collection',
       args: { name: 'User-confirmed collection' },
-      requires: 'Root agent, explicit directory creation and both approvals',
+      requires:
+        'Local core, writeEnabled=true, root agent, explicit directory creation and both approvals',
       purpose: 'Create a confirmed destination',
     },
     {
       tool: 'zotero_delete_library_tags',
       args: { tags: ['user-confirmed-obsolete-tag'] },
-      requires: 'Root agent, exact observed tag, explicit library-wide deletion and both approvals',
+      requires:
+        'Local core, writeEnabled=true, root agent, exact observed tag, explicit library-wide deletion and both approvals',
       purpose: 'Library-wide deletion only after blast-radius review',
     },
   ],

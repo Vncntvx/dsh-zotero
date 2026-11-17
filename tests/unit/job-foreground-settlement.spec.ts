@@ -1,6 +1,6 @@
 /** Terminal values survive cleanup races and missing producer values fail explicitly. */
 import { expect, it, vi } from 'vitest'
-import { ZoteroJobRunner } from '../../src/job-runner.js'
+import { ZoteroJobRunner, isJobArm } from '../../src/job-runner.js'
 import { fakeExec, OWNER, registryOf } from '../helpers/job-runner-fixtures.js'
 
 it('returns the completed value when owner cleanup already removed the registry record', async () => {
@@ -39,3 +39,28 @@ it('refuses a completed producer with no value at the job boundary', async () =>
     message: 'The completed Zotero job produced no value.',
   })
 })
+
+it('fails a job exceeding its delivery budget instead of truncating its complete result', async () => {
+  const jobs = await registryOf()
+  jobs.agentOf(OWNER)
+  const runner = new ZoteroJobRunner(jobs.registry)
+  const job = runner.start({
+    label: 'large result',
+    exec: fakeExec(),
+    run: async () => '字'.repeat(100),
+    outputLimitBytes: 200,
+    renderResult: (value) => value,
+  })
+  expect(await job.done).toMatchObject({
+    status: 'failed',
+    error: { code: 'ZOTERO_OUTPUT_TOO_LARGE' },
+  })
+  expect(jobs.registry.read(job.id, fakeExec().agent!.id).result).toBeUndefined()
+})
+
+it.each([null, undefined, 'background', 1])(
+  'does not mistake a non-object result for a job arm',
+  (value) => {
+    expect(isJobArm(value)).toBe(false)
+  },
+)

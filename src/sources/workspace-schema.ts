@@ -54,13 +54,13 @@ const searchOccurrenceSchema = lazySchema(() =>
       callId: z.string().min(1),
       query: z.string().optional(),
       mode: z.enum(['metadata', 'everything']),
+      itemLevel: z.enum(['top', 'all']),
       scope: sourceScopeSchema,
       library: supportedLibrarySchema.optional(),
       itemTypes: z.array(z.string()),
       tags: z.array(z.string()),
       tagMatch: z.enum(['all', 'any']).optional(),
       excludeTags: z.array(z.string()),
-      includeTrashed: z.boolean(),
       returned: z.number().int().nonnegative(),
       total: z.number().int().nonnegative().optional(),
       noteMatches: z.number().int().nonnegative().optional(),
@@ -94,6 +94,8 @@ const evidencePassageSchema = lazySchema(() =>
       end: z.number().int().nonnegative().optional(),
       pageLabel: z.string().optional(),
       attachmentRef: z.string().optional(),
+      matchKind: z.enum(['lexical', 'semantic', 'hybrid']).optional(),
+      matchedFields: z.array(z.enum(['text', 'comment'])).optional(),
       callIds: z.array(z.string()),
     })
     .strict()
@@ -134,6 +136,17 @@ const fulltextReadSchema = lazySchema(() =>
     .object({
       sourceKind: z.enum(['attachment', 'url']),
       sourceLabel: z.string(),
+      item: z
+        .object({
+          ref: z.string().min(1),
+          title: z.string(),
+          creatorSummary: z.string(),
+          year: z.number().optional(),
+          venue: z.string().optional(),
+        })
+        .strict()
+        .optional(),
+      attachmentContentType: z.string().optional(),
       textFormat: z.enum(['markdown', 'text']),
       artifact: artifactProvenanceSchema.optional(),
       coverage: coverageSchema.optional(),
@@ -168,21 +181,30 @@ export const FULLTEXT_READ_SCHEMA_MATCHES_MODEL: Exclude<
   ? true
   : false = true
 
-const exportDocumentItemSchema = lazySchema(() =>
-  z
-    .object({
-      ref: z.string(),
-      exportKey: z.string().optional(),
-      citationKey: z.string().optional(),
-      citationKeySource: z.enum(['native', 'extra']).optional(),
-      citationKeyConflict: z.object({ native: z.string(), extra: z.string() }).strict().optional(),
-      title: z.string().optional(),
-      entryIndex: z.number().int().nonnegative().optional(),
-      start: z.number().int().nonnegative().optional(),
-      end: z.number().int().nonnegative().optional(),
-    })
-    .strict(),
-)
+const exportDocumentItemSchema = lazySchema(() => {
+  const fields = {
+    ref: z.string(),
+    exportKey: z.string().optional(),
+    citationKey: z.string().optional(),
+    citationKeySource: z.enum(['native', 'extra']).optional(),
+    citationKeyConflict: z.object({ native: z.string(), extra: z.string() }).strict().optional(),
+    title: z.string().optional(),
+    entryIndex: z.number().int().nonnegative().optional(),
+  }
+  return z.union([
+    z.object(fields).strict(),
+    z
+      .object({
+        ...fields,
+        start: z.number().int().nonnegative(),
+        end: z.number().int().nonnegative(),
+      })
+      .strict()
+      .refine((span) => span.end > span.start, {
+        message: 'Export text locations require a nonempty ordered span.',
+      }),
+  ])
+})
 
 const exportArtifactSchema = lazySchema(() =>
   z
@@ -276,6 +298,7 @@ export const sourceItemSchema = lazySchema(() =>
       fulltextReads: z.array(fulltextReadSchema),
       fulltextReadsTotal: z.number().int().nonnegative(),
       bestAttachment: attachmentHintSchema.optional(),
+      readAttachment: attachmentHintSchema.optional(),
       attachment: attachmentSchema.optional(),
       retrievalFacts: retrievalFactsSchema.optional(),
       retrievalSummary: retrievalSummarySchema.optional(),
@@ -290,11 +313,14 @@ export const sourceItemSchema = lazySchema(() =>
 export const sourceWorkspaceSchema = lazySchema(() =>
   z
     .object({
+      detailsDeferred: z.literal(true).optional(),
+      detailsRevision: z.number().int().nonnegative().optional(),
       sources: z.array(sourceItemSchema),
       sourceTotal: z.number().int().nonnegative(),
       exports: z.array(exportArtifactSchema),
       exportTotal: z.number().int().nonnegative(),
       exportOperations: operationFactsSchema,
+      searchOperations: operationFactsSchema,
       omittedRows: z.number().int().nonnegative(),
       filterCounts: z
         .object({

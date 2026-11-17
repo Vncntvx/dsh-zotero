@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_REMOTE } from '../../src/client/remote.ts'
-import { ZOTERO_STATUS_RESULT_CODEC } from '../../src/client/status-codec.ts'
+import { ZOTERO_STATUS_RESULT_CODEC } from '../../src/wire-schemas.ts'
 import {
   ZOTERO_CLIENT_ERROR_REPORT_TYPE_SYMBOL,
   ZOTERO_DIAGNOSTICS_TYPE_SYMBOL,

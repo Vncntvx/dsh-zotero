@@ -1,14 +1,14 @@
+import type { ContextMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** One complete parsed-document resource, with host-owned controls and selection menus. */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   Button,
   IconCheckOutlineRegular,
   IconCopyOutlineRegular,
+  IconSparkleRegular,
   IconDownloadOutlineRegular,
   IconRefreshOutlineRegular,
-  IconSparkleRegular,
   MarkdownText,
-  Menu,
   TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -36,6 +36,7 @@ import css from './parsed-document.module.css'
 
 export type { ParsedArtifactRead } from '../../parsed-documents.ts'
 export interface ParsedDocumentTabFace {
+  readonly contextMenus: Pick<ContextMenus, 'register' | 'open' | 'close' | 'active'>
   readonly refresh: (address: string) => void
   readonly item?: (
     request: ZoteroLibraryItemRequestView,
@@ -93,75 +94,6 @@ export function ParsedDocumentTab(props: ParsedDocumentTabProps) {
   return <ParsedDocumentView {...props} key={address} target={target} address={address} />
 }
 
-interface SelectionMenu {
-  readonly text: string
-  readonly point: { readonly x: number; readonly y: number }
-  readonly side?: 'bottom' | 'top'
-  readonly focus: HTMLElement | null
-}
-
-export function computeSelectionAnchor(
-  range: Range,
-  cursor?: { readonly x: number; readonly y: number } | null,
-): { readonly point: { readonly x: number; readonly y: number }; readonly side: 'bottom' | 'top' } {
-  const rawRects =
-    typeof range.getClientRects === 'function'
-      ? Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0)
-      : []
-  const fallback =
-    typeof range.getBoundingClientRect === 'function'
-      ? range.getBoundingClientRect()
-      : ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 } as DOMRect)
-  const selection = typeof window !== 'undefined' ? window.getSelection() : null
-  const isBackward =
-    selection !== null &&
-    range.startContainer === selection.focusNode &&
-    range.startOffset === selection.focusOffset
-
-  const activeRect =
-    rawRects.length > 0 ? (isBackward ? rawRects[0] : rawRects[rawRects.length - 1]) : fallback
-
-  const top = activeRect.top ?? (activeRect.bottom !== undefined ? activeRect.bottom - 20 : 0)
-  const bottom = activeRect.bottom ?? top + 20
-  const left = activeRect.left ?? 0
-  const right = activeRect.right ?? left + (activeRect.width ?? 100)
-
-  const menuWidth = 160
-  const menuHeight = 84
-  const margin = 16
-
-  let focalX: number
-  if (
-    cursor !== undefined &&
-    cursor !== null &&
-    cursor.x >= 0 &&
-    cursor.y >= top - 40 &&
-    cursor.y <= bottom + 40
-  ) {
-    focalX = cursor.x
-  } else {
-    focalX = isBackward ? left : right
-  }
-
-  const viewportWidth =
-    (typeof window !== 'undefined' ? window.innerWidth : 0) ||
-    document.documentElement?.clientWidth ||
-    800
-  const viewportHeight =
-    (typeof window !== 'undefined' ? window.innerHeight : 0) ||
-    document.documentElement?.clientHeight ||
-    600
-
-  const x = Math.max(margin, Math.min(focalX - menuWidth / 2, viewportWidth - menuWidth - margin))
-
-  const spaceAbove = top
-  const spaceBelow = viewportHeight - bottom
-  const preferTop = spaceAbove >= menuHeight + 20 || spaceBelow < menuHeight + 20
-  const side: 'bottom' | 'top' = preferTop ? 'top' : 'bottom'
-  const y = side === 'top' ? top : bottom
-
-  return { point: { x, y }, side }
-}
 export function serializeTableToMarkdown(table: Element): string {
   const rows = Array.from(table.querySelectorAll('tr'))
   if (rows.length === 0) return ''
@@ -317,7 +249,8 @@ function ParsedDocumentView(
     },
     t,
   )
-  const [menu, setMenu] = useState<SelectionMenu>()
+  const selectionOwner = useId()
+  const { contextMenus } = props
   const [insertError, setInsertError] = useState<string>()
   const documentRef = useRef<HTMLDivElement>(null)
   const escape = useRef(new AbortController())
@@ -348,92 +281,145 @@ function ParsedDocumentView(
     escape.current = abort
     return () => abort.abort()
   }, [address])
+  // Registration effects run after render has installed the current actions below.
+  const selectionActions = useRef<{
+    explain(text: string): void
+    copy(text: string): void
+    enabled: boolean
+  }>()
+  useEffect(
+    () =>
+      contextMenus.register({
+        target: 'zoteroSelection',
+        id: `zotero.selection.${selectionOwner}`,
+        order: 80,
+        resolve: (selection) =>
+          selection.owner !== selectionOwner
+            ? []
+            : [
+                {
+                  id: 'explain',
+                  label: t('parsedExplain'),
+                  icon: { key: 'zotero.selection.explain' },
+                  disabled: !selectionActions.current!.enabled,
+                  run: () => selectionActions.current!.explain(selection.text),
+                },
+                {
+                  id: 'copy',
+                  label: t('parsedCopySelection'),
+                  icon: { key: 'zotero.selection.copy' },
+                  run: () => selectionActions.current!.copy(selection.text),
+                },
+              ],
+      }),
+    [contextMenus, selectionOwner, t, inputActions],
+  )
   useEffect(() => {
-    let pointerSelecting = false
-    let keyboardSelecting = false
-
-    const update = (cursor?: { readonly x: number; readonly y: number } | null) => {
+    let pointerSelecting = false,
+      keyboardSelecting = false
+    let previous:
+      { text: string; start: Node; offset: number; end: Node; endOffset: number } | undefined
+    const closeOwned = () => {
+      const active = contextMenus.active.getSnapshot()
+      if (active?.kind === 'zoteroSelection' && active.value.owner === selectionOwner)
+        contextMenus.close()
+    }
+    const update = (point?: { x: number; y: number }) => {
       if (pointerSelecting || keyboardSelecting) return
       const selection = window.getSelection()
-      if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
       const range = selection.getRangeAt(0)
       if (!documentRef.current?.contains(range.commonAncestorContainer)) return
       const text = extractSelectionMarkdown(range)
-      if (text === '') return
-      const { point, side } = computeSelectionAnchor(range, cursor)
-      setMenu({
+      if (!text) return
+      if (
+        previous?.text === text &&
+        previous.start === range.startContainer &&
+        previous.offset === range.startOffset &&
+        previous.end === range.endContainer &&
+        previous.endOffset === range.endOffset
+      )
+        return
+      previous = {
         text,
-        point,
-        side,
-        focus:
-          window.document.activeElement instanceof HTMLElement
-            ? window.document.activeElement
-            : null,
-      })
-    }
-    const hide = () => setMenu(undefined)
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest('[role="menu"]')) return
-      hide()
-      if (event.button !== 0) return
-      pointerSelecting = true
-    }
-    const onPointerUp = (event: PointerEvent) => {
-      if (pointerSelecting) {
-        pointerSelecting = false
-        update({ x: event.clientX, y: event.clientY })
+        start: range.startContainer,
+        offset: range.startOffset,
+        end: range.endContainer,
+        endOffset: range.endOffset,
       }
+      const rects = Array.from(range.getClientRects()).filter(
+        (rect) => rect.width > 0 && rect.height > 0,
+      )
+      const backwards =
+        selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset
+      const rect = (backwards ? rects[0] : rects.at(-1)) ?? range.getBoundingClientRect()
+      contextMenus.open(
+        { kind: 'zoteroSelection', value: { owner: selectionOwner, text } },
+        point ?? { x: backwards ? rect.left : rect.right, y: rect.bottom },
+      )
     }
-    const onPointerCancel = () => {
+    const pointerDown = (event: PointerEvent) => {
+      if (
+        event.button !== 0 ||
+        !(event.target instanceof Node) ||
+        !documentRef.current?.contains(event.target)
+      )
+        return
+      pointerSelecting = true
+      previous = undefined
+      closeOwned()
+    }
+    const pointerUp = (event: PointerEvent) => {
+      if (!pointerSelecting) return
+      pointerSelecting = false
+      update({ x: event.clientX, y: event.clientY })
+    }
+    const cancel = () => {
       pointerSelecting = false
       keyboardSelecting = false
-      hide()
+      closeOwned()
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onPointerCancel()
-        return
-      }
-      if (event.target instanceof Element && event.target.closest('[role="menu"]')) return
-      if (event.key === 'Shift' || event.shiftKey) {
+    const keyDown = (event: KeyboardEvent) => {
+      const selection = window.getSelection()
+      if (
+        (event.key === 'Shift' || event.shiftKey) &&
+        ((event.target instanceof Node && documentRef.current?.contains(event.target)) ||
+          (selection?.rangeCount &&
+            documentRef.current?.contains(selection.getRangeAt(0).commonAncestorContainer)))
+      ) {
         keyboardSelecting = true
-        hide()
+        previous = undefined
+        closeOwned()
       }
     }
-    const onKeyUp = (event: KeyboardEvent) => {
+    const keyUp = (event: KeyboardEvent) => {
       if (keyboardSelecting && (event.key === 'Shift' || !event.shiftKey)) {
         keyboardSelecting = false
         update()
       }
     }
-
-    const onSelectionChange = () => {
-      if (pointerSelecting || keyboardSelecting) return
-      update()
-    }
-
-    window.document.addEventListener('selectionchange', onSelectionChange)
-    window.document.addEventListener('pointerdown', onPointerDown, true)
-    window.document.addEventListener('pointerup', onPointerUp, true)
-    window.document.addEventListener('pointercancel', onPointerCancel, true)
-    window.document.addEventListener('keydown', onKeyDown)
-    window.document.addEventListener('keyup', onKeyUp)
-    window.addEventListener('scroll', hide, true)
-    window.addEventListener('resize', hide)
-    window.addEventListener('blur', hide)
+    const selectionChanged = () => update()
+    // A layout change invalidates the captured document range; close only this reader's target.
+    window.addEventListener('scroll', closeOwned, true)
+    window.addEventListener('resize', closeOwned)
+    window.document.addEventListener('selectionchange', selectionChanged)
+    window.document.addEventListener('pointerdown', pointerDown, true)
+    window.document.addEventListener('pointerup', pointerUp, true)
+    window.document.addEventListener('pointercancel', cancel, true)
+    window.document.addEventListener('keydown', keyDown)
+    window.document.addEventListener('keyup', keyUp)
     return () => {
-      window.document.removeEventListener('selectionchange', onSelectionChange)
-      window.document.removeEventListener('pointerdown', onPointerDown, true)
-      window.document.removeEventListener('pointerup', onPointerUp, true)
-      window.document.removeEventListener('pointercancel', onPointerCancel, true)
-      window.document.removeEventListener('keydown', onKeyDown)
-      window.document.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('scroll', hide, true)
-      window.removeEventListener('resize', hide)
-      window.removeEventListener('blur', hide)
+      window.removeEventListener('scroll', closeOwned, true)
+      window.removeEventListener('resize', closeOwned)
+      window.document.removeEventListener('selectionchange', selectionChanged)
+      window.document.removeEventListener('pointerdown', pointerDown, true)
+      window.document.removeEventListener('pointerup', pointerUp, true)
+      window.document.removeEventListener('pointercancel', cancel, true)
+      window.document.removeEventListener('keydown', keyDown)
+      window.document.removeEventListener('keyup', keyUp)
+      closeOwned()
     }
-  }, [])
+  }, [contextMenus, selectionOwner])
 
   const extractedTitle = useMemo(
     () =>
@@ -450,7 +436,7 @@ function ParsedDocumentView(
       (!hasGenericLabel ? document!.metadata.targetLabel : '') ||
       target.title ||
       t('tabParsedFallback')
-  const explain = async (selection: SelectionMenu) => {
+  const explain = async (selection: { text: string }) => {
     if (inputActions === undefined) return
     const signal = escape.current.signal
     try {
@@ -480,7 +466,14 @@ function ParsedDocumentView(
         .filter(Boolean)
         .join('\n\n')
       // Keep the request in the Host's single removable quote card.
-      if (!inputActions.insertQuote(draft)) {
+      if (
+        !inputActions.insertQuote(draft, {
+          label: t('parsedExplain'),
+          title: displayTitle,
+          detail: document?.metadata.targetLabel,
+          body: selection.text,
+        })
+      ) {
         setInsertError(t('libraryInsertFailed'))
         return
       }
@@ -498,6 +491,11 @@ function ParsedDocumentView(
     resource.status === 'loading' ||
     (resource.value?.phase === 'preparing' && resource.status !== 'failed')
   const progress = resource.value?.progress
+  selectionActions.current = {
+    explain: (text) => void explain({ text }),
+    copy: (text) => copy.copyText(text),
+    enabled: inputActions !== undefined,
+  }
   return (
     <section className={css.surface} aria-labelledby={titleId}>
       <header className={css.toolbar}>
@@ -611,38 +609,6 @@ function ParsedDocumentView(
         </footer>
       )}
       {parseSurface.dialog}
-      {menu !== undefined && (
-        <Menu
-          open
-          anchor={null}
-          portal
-          contextual
-          autoFocus
-          side={menu.side ?? 'bottom'}
-          anchorPoint={menu.point}
-          returnFocus={() => menu.focus}
-          onClose={() => setMenu(undefined)}
-          items={[
-            {
-              id: 'explain',
-              label: t('parsedExplain'),
-              icon: <IconSparkleRegular size={14} />,
-              disabled: inputActions === undefined,
-            },
-            {
-              id: 'copy',
-              label: t('parsedCopySelection'),
-              icon: <IconCopyOutlineRegular size={14} />,
-            },
-          ]}
-          onSelect={(id) => {
-            const selected = menu
-            setMenu(undefined)
-            if (id === 'copy') copy.copyText(selected.text)
-            else void explain(selected)
-          }}
-        />
-      )}
     </section>
   )
 }

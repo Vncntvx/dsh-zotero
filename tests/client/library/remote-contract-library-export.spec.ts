@@ -21,14 +21,12 @@ const PARITY_CASES: readonly ParityCase[] = [
     valid: { refs: ['zotero://user/0/item/ITEMKEY1'], format: 'bibtex' },
     incomplete: [{ format: 'bibtex' }, { refs: ['r'] }],
     malformed: [
-      // The refs list is bounded on both ends: at least one ref, at most
-      // Zotero's itemKey request cap (50).
+      // The wire requires refs; the live host policy owns the export count.
       { refs: [], format: 'bibtex' },
       { refs: [''], format: 'bibtex' },
       { refs: ['r'], format: 'bibtex', style: '' },
       { refs: ['r'], format: 'bibtex', locale: '' },
       { refs: 'r', format: 'bibtex' },
-      { refs: Array.from({ length: 51 }, () => 'r'), format: 'citation' },
     ],
     undeclared: [{ refs: ['r'], format: 'bibtex', sessionId: 'session-1' }],
     badEnum: [

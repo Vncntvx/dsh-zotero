@@ -20,6 +20,7 @@ describe('resolveEnrichmentConfig', () => {
     expect(resolveEnrichmentConfig()).toEqual({
       artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'free',
+      ocrLanguage: 'ch',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '',
       enableSemanticSearch: false,
@@ -44,6 +45,7 @@ describe('resolveEnrichmentConfig', () => {
     ).toEqual({
       artifactReader: ARTIFACT_READER_DEFAULTS,
       mode: 'pro',
+      ocrLanguage: 'ch',
       mineruTokenRef: 'MINERU_API_TOKEN',
       outputDir: '/tmp/parsed',
       enableSemanticSearch: true,

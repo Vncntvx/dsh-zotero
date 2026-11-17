@@ -9,6 +9,7 @@
  * @module dsh-zotero/export-mapping
  */
 
+import type { ZoteroExportItem } from './types.js'
 import { bibtexFieldOf, scanBibtexToken } from './export-items.js'
 import { asRecord, asString } from './json.js'
 import { citationKeyInfoOf } from './citation-key.js'
@@ -28,21 +29,7 @@ interface BatchEntry {
 }
 
 /** The per-document item of one export call: the ref plus its located entry. */
-interface LocatedExportItem {
-  readonly ref: string
-  /** The batch body's real key (BibTeX/BibLaTeX citation key, CSL JSON id). */
-  readonly exportKey?: string
-  readonly citationKey?: string
-  readonly citationKeySource?: 'native' | 'extra'
-  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
-  /** The item's title for display, when the entry carried one. */
-  readonly title?: string
-  /** The located entry's index within the parsed CSL JSON array. */
-  readonly entryIndex?: number
-  /** The located entry's text span within the trimmed batch body (text formats). */
-  readonly start?: number
-  readonly end?: number
-}
+type LocatedExportItem = Readonly<ZoteroExportItem>
 
 /** The start of one entry: `@type{` in letters, anywhere in the body. */
 const ENTRY_START = /@[A-Za-z]+\{/g
@@ -408,16 +395,16 @@ function locateRisFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
   for (const record of splitRisRecords(text)) {
     if (record.key !== undefined) byId.set(record.key, record)
   }
-  return refs.map((ref) => {
+  return refs.map((ref): LocatedExportItem => {
     const formattedRef = formatRef(ref)
     const match = byId.get(ref.key)
     const title = match === undefined ? undefined : RIS_TITLE.exec(match.text)?.[1]
-    return {
+    const item = {
       ref: formattedRef,
       ...(match?.key !== undefined ? { exportKey: match.key } : {}),
       ...(title !== undefined ? { title } : {}),
-      ...(match !== undefined ? { start: match.start, end: match.end } : {}),
     }
+    return match === undefined ? item : { ...item, start: match.start, end: match.end }
   })
 }
 

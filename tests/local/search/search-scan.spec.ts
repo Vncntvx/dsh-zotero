@@ -1,5 +1,5 @@
 /**
- * The `zotero_search` client-side note-body scan: the `itemType=note` listing
+ * The `zotero_search` host-side note-body scan: the `itemType=note` listing
  * the provider reads after a metadata search, the folding and term matching it
  * applies locally, the collection and tag filters it re-checks against the
  * scan rows, the parent-membership lookups that resolve child notes, and the
@@ -253,7 +253,9 @@ describe('search: note-content scan', () => {
   })
 
   it('skips the scan for later pages, saved searches, empty queries, and non-note type filters', async () => {
-    serveSearchPage(mock, { items: [searchHit()], total: 1 })
+    mock.route('GET', '/api/users/0/items/top', (_req, _res, h, query) =>
+      h.json(Number(query.get('start') ?? 0) === 0 ? [searchHit()] : [], { 'Total-Results': '1' }),
+    )
     serveJson(mock, '/api/users/0/searches', SEARCHES, { 'Last-Modified-Version': '7' })
     serveSearchPage(mock, {
       items: [searchHit()],

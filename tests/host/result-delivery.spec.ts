@@ -1,4 +1,6 @@
+import { serveExportText } from '../helpers/server/export.ts'
 /** Result delivery through the real pipeline: inline versus persisted-file publication. */
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -61,15 +63,35 @@ it.each(['absent', 'disk', 'index'])('fails explicitly when persistence is %s', 
       },
     },
   )
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20_000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20_000))
   const result = await lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',
   })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).not.toContain('x'.repeat(100))
+})
+
+it('reports a stable domain refusal when the attachment backend cannot persist complete files', async () => {
+  lane = await setupHostLane(
+    { maxInlineResultTokens: 1000 },
+    {
+      compose: async (ctx) => {
+        resultStorage(ctx).save.mockRejectedValue(
+          new AttachmentError('file persistence unsupported', 'ATTACHMENT_FILES_UNSUPPORTED'),
+        )
+      },
+    },
+  )
+  serveExportText(lane.mock, 'complete'.repeat(5000))
+  const result = await lane.runTool('zotero_export', {
+    refs: ['zotero://user/0/item/ABCD1234'],
+    format: 'ris',
+  })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result)).toContain('ZOTERO_OUTPUT_TOO_LARGE')
+  expect(JSON.stringify(result.content)).toContain('file-capable attachment backend')
+  expect(JSON.stringify(result)).not.toContain('complete'.repeat(100))
 })
 
 it('also applies the token budget to canonical values hidden by a short renderer', async () => {

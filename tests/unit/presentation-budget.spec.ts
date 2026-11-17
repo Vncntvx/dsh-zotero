@@ -53,7 +53,15 @@ describe('boundedPresentationMeta', () => {
       {
         format: 'bibtex',
         text: 'raw',
-        items: [{ ref: 'zotero://user/0/item/AAAAAAA1', exportKey: 'a1', title: filler, start: 0 }],
+        items: [
+          {
+            ref: 'zotero://user/0/item/AAAAAAA1',
+            exportKey: 'a1',
+            title: filler,
+            start: 0,
+            end: 3,
+          },
+        ],
       },
       ['zotero://user/0/item/AAAAAAA1'],
     )
@@ -69,8 +77,28 @@ describe('boundedPresentationMeta', () => {
     expect(presentationMetaBytes(exact)).toBe(MAX_PRESENTATION_META_BYTES)
     expect(boundedPresentationMeta(exact, [])).toEqual(exact)
     const over = { count: 1, title: 't'.repeat(slack + 1) }
-    // No detail keys were declared, so the overflow keeps every fact and only records the flag.
-    expect(boundedPresentationMeta(over, [])).toEqual({ detailOmitted: true, ...over })
+    expect(boundedPresentationMeta(over, [])).toEqual({ detailOmitted: true, count: 1 })
+  })
+
+  it('bounds oversized summary strings and nested scopes while preserving counts and canonical input', () => {
+    const meta = {
+      normalizedQuery: '查'.repeat(100_000),
+      scope: { kind: 'collection', name: '名'.repeat(100_000) },
+      returned: 3,
+      total: 12,
+      queryWasEmpty: false,
+      items: [],
+    }
+    const bounded = boundedPresentationMeta(meta, ['items'])
+    expect(presentationMetaBytes(bounded)).toBeLessThanOrEqual(MAX_PRESENTATION_META_BYTES)
+    expect(bounded).toEqual({ detailOmitted: true, returned: 3, total: 12, queryWasEmpty: false })
+    expect(meta.normalizedQuery).toHaveLength(100_000)
+    expect(meta.scope.name).toHaveLength(100_000)
+  })
+
+  it('also bounds defensive arrays and primitive values', () => {
+    expect(boundedPresentationMeta('x'.repeat(100_000), [])).toEqual({ detailOmitted: true })
+    expect(boundedPresentationMeta(['x'.repeat(100_000)], [])).toEqual({ detailOmitted: true })
   })
 })
 
