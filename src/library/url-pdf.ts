@@ -156,7 +156,14 @@ export class UrlPdfReader {
     } catch (error) {
       if (signal.aborted || controller.signal.aborted) throw combined.reason
       if (timeout.aborted) throw failure('TIMEOUT', 'The PDF download exceeded 60 seconds.')
-      if (error instanceof PublicAddressError) throw failure('FORBIDDEN_TARGET', error.message)
+      if (error instanceof PublicAddressError) {
+        if (error.reason === 'resolution-failed')
+          throw failure(
+            'NETWORK',
+            'The PDF hostname could not be resolved. Check the local DNS proxy and retry explicitly.',
+          )
+        throw failure('FORBIDDEN_TARGET', error.message)
+      }
       if (error instanceof ResponseTooLargeError)
         throw failure('TOO_LARGE', 'The PDF exceeds the 32 MiB reading limit.')
       if (error instanceof ZoteroError) throw error

@@ -1,3 +1,4 @@
+import { createStatusProbe } from './status-probe.ts'
 import { ParsedDocuments } from './parsed-documents.ts'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMenu.tsx'
@@ -56,7 +57,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 // resolved attachments in the right sidebar.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  IconSparkleRegular,
+  IconCopyOutlineRegular,
+  writeClipboard,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
 import { ScholarlySettingsSection } from './ScholarlySettingsSection.tsx'
 import { EnrichmentSettingsSection } from './EnrichmentSettingsSection.tsx'
@@ -68,6 +73,7 @@ import {
   ENRICHMENT_EGRESS_ACK_KEY,
   SCHOLARLY_RETRIEVAL_ACK_KEY,
   clientAcknowledgement,
+  withEnableEpoch,
 } from './enable-notice.ts'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
@@ -158,6 +164,7 @@ const NS = 'zotero'
  */
 export const inject = [
   'locale',
+  'contextMenus',
   'slots',
   'remote',
   'remote.credentials',
@@ -324,14 +331,25 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   // the shell rather than the settings page, so a disclosure can appear
   // wherever the switch was flipped.
   const noticeArbiter = new EnableNoticeArbiter()
+  const epochSource = (
+    component: 'enrichment' | 'scholarly',
+    source: import('./enable-notice.ts').NamespaceStatusSource,
+  ) =>
+    withEnableEpoch(source, async () => {
+      const result = await probe()
+      if (!result.ok) throw result.error
+      return result.value.componentEpochs?.[component]
+    })
+  const enrichmentEpoch = epochSource('enrichment', enrichmentCard.inject().hooks.enrichmentCard)
+  const scholarlyEpoch = epochSource('scholarly', scholarlyCard.inject().hooks.scholarlyCard)
   const enrichmentNotice = new EnableNoticeController(
-    enrichmentCard.inject().hooks.enrichmentCard,
+    enrichmentEpoch,
     'enrichmentEnableNotice',
     clientAcknowledgement(ENRICHMENT_EGRESS_ACK_KEY),
     noticeArbiter,
   )
   const scholarlyNotice = new EnableNoticeController(
-    scholarlyCard.inject().hooks.scholarlyCard,
+    scholarlyEpoch,
     'scholarlyEnableNotice',
     clientAcknowledgement(SCHOLARLY_RETRIEVAL_ACK_KEY),
     noticeArbiter,
@@ -340,6 +358,8 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     () => () => {
       enrichmentNotice.dispose()
       scholarlyNotice.dispose()
+      enrichmentEpoch.dispose()
+      scholarlyEpoch.dispose()
     },
     'dsh-zotero: enable notice state',
   )
@@ -764,6 +784,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
     const PARSED_TAB_ID = `${ZOTERO_REMOTE_PACKAGE}#parsed`
     const disposeParsedTab = ctx.effect(() => {
       const parsedFace = (): ParsedDocumentTabFace => ({
+        contextMenus: ctx.contextMenus,
         refresh: (address) => surfaces.parsedDocuments.refresh(address),
         // The explain request cites the item, so the model can read the rest
         // of the paper through the read tools.
@@ -990,7 +1011,11 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
           id: `${REGISTRANT}.deliverables.action`,
           locale: NS,
           registrant: REGISTRANT,
-          inject: openLibraryFace,
+          inject: () => ({
+            ...openLibraryFace(),
+            reportContractMismatch: (url: string) =>
+              ctx.logger.warn('Unsupported deliverables.file.actions URL contract: %s', url),
+          }),
         },
         DeliverableZoteroAction,
       ),
@@ -1024,6 +1049,19 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         ),
     )
 
+    const disposeSelectionIcons = ctx.slots.inject('contextMenu.icon', () => {
+      const disposers = [
+        ctx.slots.register(
+          { name: 'contextMenu.icon', key: 'zotero.selection.copy', registrant: REGISTRANT },
+          () => createElement(IconCopyOutlineRegular, { size: 14 }),
+        ),
+        ctx.slots.register(
+          { name: 'contextMenu.icon', key: 'zotero.selection.explain', registrant: REGISTRANT },
+          () => createElement(IconSparkleRegular, { size: 14 }),
+        ),
+      ]
+      return () => disposers.forEach((dispose) => dispose())
+    })
     const disposeContextIcon = ctx.slots.inject('contextMenu.icon', () =>
       ctx.slots.register(
         {
@@ -1121,6 +1159,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeMenus()
       void menuFiber.dispose()
       disposeContextIcon()
+      disposeSelectionIcons()
       disposeDocumentUnpreviewable()
       disposeDocumentActions()
       disposeDeliverableAction()
@@ -1223,15 +1262,9 @@ function registerUi(ctx: ClientContext): void {
   // it directly. Concurrent probes share one in-flight call: multiple consumers
   // can ask in the same tick, and one status read per tick is the product
   // behavior, not a workaround.
-  let inFlightProbe: Promise<RemoteResult<ZoteroStatusView>> | undefined
-  const probe = (): Promise<RemoteResult<ZoteroStatusView>> => {
-    if (inFlightProbe !== undefined) return inFlightProbe
-    const task = ctx.remote.zotero.status().finally(() => {
-      if (inFlightProbe === task) inFlightProbe = undefined
-    })
-    inFlightProbe = task
-    return task
-  }
+  const statusProbe = createStatusProbe((signal) => ctx.remote.zotero.status(signal))
+  const probe = statusProbe.probe
+  ctx.effect(() => () => statusProbe.dispose())
   // One registry owns every reading-file lease, whichever surface opened the
   // file: the lease lives until the reader tab that holds it closes.
   const pdfReaders = createPdfReaderRegistry({
@@ -1271,11 +1304,12 @@ function registerUi(ctx: ClientContext): void {
       ),
     'dsh-zotero: parsed document resources',
   )
+  const connection: DocumentParseClientContext['connection'] = ctx.get('connection')
   const parse = createDocumentParseSurface(
     {
       remote: ctx.remote,
-      jobs: ctx.jobs as unknown as DocumentParseClientContext['jobs'],
-      connection: (ctx as unknown as Pick<DocumentParseClientContext, 'connection'>).connection,
+      jobs: ctx.jobs,
+      connection,
       configForms: ctx.configForms,
     },
     {

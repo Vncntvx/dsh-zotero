@@ -11,7 +11,7 @@ import type { LibrarySection } from '../../../library-preferences.ts'
  * @module dsh-zotero/client/components/library/LibraryInspector
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -137,13 +137,12 @@ function CopyableMetaRow({
                   <IconCopyOutlineRegular size={12} />
                 )
               }
-              aria-label={value}
+              aria-label={`${copied ? t('copied') : t('copy')} ${label}`}
               title={copied ? t('copied') : `${value} (${t('copy')})`}
               onClick={(e) => {
                 e.stopPropagation()
                 copyText(value)
               }}
-              className={css.metaCopyBtn}
             />
             {webUrl !== undefined && (
               <IconButton
@@ -156,7 +155,6 @@ function CopyableMetaRow({
                   e.stopPropagation()
                   window.open(webUrl, '_blank', 'noopener,noreferrer')
                 }}
-                className={css.metaCopyBtn}
               />
             )}
           </div>
@@ -282,12 +280,12 @@ function AttachmentItem({
   )
 
   return (
-    <li>
+    <li className={canOpen ? css.childFrame : undefined}>
       {canOpen ? (
         <Button
           variant="ghost"
           size="sm"
-          className={clsx(css.childRow, css.childRowSeat)}
+          className={css.childRowSeat}
           onClick={handleOpen}
           disabled={resolving}
           aria-label={attachment.title}
@@ -490,7 +488,9 @@ function AnnotationItem({
   )
 }
 
-export function LibraryInspector({
+export const LibraryInspector = memo(LibraryInspectorBody)
+
+function LibraryInspectorBody({
   t,
   inspector,
   inputActions,
@@ -856,22 +856,24 @@ function ChildSection({
   const [open, setOpen] = useDisclosure(section, itemRef, defaultOpen)
   return (
     <section className={css.section}>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={css.sectionHeaderSeat}
-        aria-expanded={open}
-        aria-label={
-          open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
-        }
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <h4 className={css.sectionTitle}>{title}</h4>
-        <IconChevronDownOutlineRegular
-          size={12}
-          className={clsx(css.toggleChevron, open && css.toggleChevronOpen)}
-        />
-      </Button>
+      <h4 className={css.sectionHeading}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={css.sectionHeaderSeat}
+          aria-expanded={open}
+          aria-label={
+            open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
+          }
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <span className={css.sectionTitle}>{title}</span>
+          <IconChevronDownOutlineRegular
+            size={12}
+            className={clsx(css.toggleChevron, open && css.toggleChevronOpen)}
+          />
+        </Button>
+      </h4>
       {open && (
         <>
           <ul className={css.childList}>{children}</ul>
@@ -1027,18 +1029,20 @@ function DetailDisclosure({
   const [open, setOpen] = useDisclosure(section, itemRef)
   return (
     <section className={css.section}>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={css.sectionHeaderSeat}
-        aria-expanded={open}
-        aria-label={
-          open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
-        }
-        onClick={() => setOpen((v) => !v)}
-      >
-        <h4 className={css.sectionTitle}>{title}</h4>
-      </Button>
+      <h4 className={css.sectionHeading}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={css.sectionHeaderSeat}
+          aria-expanded={open}
+          aria-label={
+            open ? t('librarySectionCollapse', { title }) : t('librarySectionExpand', { title })
+          }
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className={css.sectionTitle}>{title}</span>
+        </Button>
+      </h4>
       {open && children}
     </section>
   )

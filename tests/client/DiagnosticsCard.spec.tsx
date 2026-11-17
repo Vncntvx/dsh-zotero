@@ -99,8 +99,7 @@ describe('DiagnosticsCard', () => {
         diagnostics={diagnostics}
       />,
     )
-    await waitFor(() => expect(container.querySelector('[data-zotero-diagnostics]')).toBeTruthy())
-    expect(container.textContent).toContain('tool.result')
+    await waitFor(() => expect(container.textContent).toContain('tool.result'))
     expect(container.textContent).toContain('×3')
     expect(container.textContent).toContain('transport.built')
     // Newest first: the tool outcome appears before the transport line.

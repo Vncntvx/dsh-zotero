@@ -86,6 +86,15 @@ function mountTree(
 }
 
 describe('collection tree navigation', () => {
+  it('does not replay a completed focus request when a tree publication arrives', () => {
+    const { props, rerender } = mountTree()
+    const rows = screen.getAllByRole('treeitem')
+    fireEvent.keyDown(rows[0]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rows[1])
+    act(() => rows[0]!.focus())
+    rerender(<LibraryTree {...props} flatTree={[...props.flatTree]} />)
+    expect(document.activeElement).toBe(rows[0])
+  })
   it('moves the tab stop to the remaining root when a focused child is removed', () => {
     const { props, rerender } = mountTree()
     const rows = screen.getAllByRole('treeitem')

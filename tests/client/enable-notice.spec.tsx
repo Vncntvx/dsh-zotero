@@ -220,6 +220,27 @@ describe('EnableNoticeController', () => {
 })
 
 describe('EnrichmentEnableNotice', () => {
+  it('requires the explicit acknowledgement action instead of accepting Escape or the backdrop', () => {
+    const source = namespaceStatusSourceOf('ready')
+    const { controller, face, acknowledgement } = controllerOf('enrichmentEnableNotice', source)
+    try {
+      mountEnrichmentNotice(face())
+      const dialog = screen.getByRole('dialog')
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.getByRole('dialog')).toBe(dialog)
+      const mask = dialog.parentElement?.querySelector('[aria-hidden="true"]')
+      expect(mask).toBeTruthy()
+      fireEvent.click(mask!)
+      expect(screen.getByRole('dialog')).toBe(dialog)
+      expect(acknowledgement.read()).toBe(false)
+      expect(screen.getAllByRole('button')).toHaveLength(1)
+      fireEvent.click(screen.getByRole('button', { name: zh.enrichmentEnableNoticeConfirm }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(acknowledgement.read()).toBe(true)
+    } finally {
+      controller.dispose()
+    }
+  })
   it('renders the disclosure and dismisses it from the primary action', () => {
     const source = namespaceStatusSourceOf()
     const { controller, face } = controllerOf('enrichmentEnableNotice', source)

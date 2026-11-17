@@ -16,9 +16,16 @@ export function createParseRuntimeStub() {
     observe: () => () => {},
     kill: async () => ({ ok: true, value: { outcome: 'requested' } }),
   }
+  const connection = {
+    state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} },
+  }
   return {
     jobs,
-    connection: { state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} } },
+    get: (name: string) => {
+      if (name !== 'connection') throw new Error(`Missing client fixture service: ${name}`)
+      return connection
+    },
+    connection,
   }
 }
 

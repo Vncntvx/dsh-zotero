@@ -107,8 +107,10 @@ describe('model operation generation binding', () => {
     // The old reply finally arrives with a stale path: it must not publish.
     oldReply.resolve({ ok: true, value: statusResult({ ready: true, path: '/models/a' }) })
     await older
-    // Let the coalesced refresh for the new target settle.
-    await vi.waitFor(() => expect(port.semanticModelStatus).toHaveBeenCalledTimes(2))
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    expect(port.semanticModelStatus).toHaveBeenCalledOnce()
+    await face.checkModelStatus()
+    expect(port.semanticModelStatus).toHaveBeenCalledTimes(2)
     expect(stateOf(face).semanticModelState.path).not.toBe('/models/a')
     expect(stateOf(face).semanticModelState.ready).toBe(false)
   })

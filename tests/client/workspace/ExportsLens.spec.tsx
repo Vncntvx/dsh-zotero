@@ -23,7 +23,7 @@ import {
   sanitizeFileStem,
 } from '../../../src/client/export-formats.ts'
 import { ExportSections, sectionTextOf } from '../../../src/client/components/ExportSections.tsx'
-import { incompleteExportsNoteOf } from '../../../src/client/components/operations.ts'
+import { operationsNoteOf } from '../../../src/client/components/operations.ts'
 import { ExportsPage } from '../../../src/client/components/workspace/ExportsPage.tsx'
 import { zh } from '../../../src/client/locales.ts'
 import { bibTexKeysOf, citeCommandOf } from '../../../src/sources/bibtex.js'
@@ -149,12 +149,10 @@ describe('formatLabelOf', () => {
   })
 })
 
-describe('incompleteExportsNoteOf', () => {
+describe('operationsNoteOf', () => {
   it('joins only the non-zero counts and stays empty when all exports succeeded', () => {
-    expect(incompleteExportsNoteOf({ running: 1, failed: 2, stopped: 0 }, t)).toBe(
-      '进行中 1 · 失败 2',
-    )
-    expect(incompleteExportsNoteOf({ running: 0, failed: 0, stopped: 0 }, t)).toBe('')
+    expect(operationsNoteOf({ running: 1, failed: 2, stopped: 0 }, t)).toBe('进行中 1 · 失败 2')
+    expect(operationsNoteOf({ running: 0, failed: 0, stopped: 0 }, t)).toBe('')
   })
 })
 

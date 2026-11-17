@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /**
  * Dedicated toolview card for `zotero_export`.
  * Renders formatted citations or BibTeX code blocks with one-click copy and item attribution.
@@ -168,19 +169,23 @@ export function ExportToolView(props: ExportToolViewProps) {
                 <span className={css.sectionTitle}>{t('lensSources')}</span>
                 <div className={css.cardList}>
                   {items.map((item) => (
-                    <div key={item.ref} className={css.itemCard}>
-                      <div className={css.itemHeader}>
-                        <span className={css.itemTitle}>{item.title || item.ref}</span>
-                        <ZoteroLocateActions
-                          title={item.title}
-                          itemRef={item.ref}
-                          t={t}
-                          variant="link"
-                          className={linkCss.linkDense}
-                          openProtocol={client.openProtocol}
-                        />
-                      </div>
-                      <div className={css.itemMeta}>{t('toolRefLine', { ref: item.ref })}</div>
+                    <ToolItemRow
+                      key={item.ref}
+                      title={<>{item.title || item.ref}</>}
+                      trailing={
+                        <>
+                          <ZoteroLocateActions
+                            title={item.title}
+                            itemRef={item.ref}
+                            t={t}
+                            variant="link"
+                            className={linkCss.linkDense}
+                            openProtocol={client.openProtocol}
+                          />
+                        </>
+                      }
+                      meta={<>{t('toolRefLine', { ref: item.ref })}</>}
+                    >
                       {item.exportKey && (
                         <div className={css.itemMeta}>
                           {t('toolExportKeyLine', { key: item.exportKey })}
@@ -195,7 +200,7 @@ export function ExportToolView(props: ExportToolViewProps) {
                         </div>
                       )}
                       <CitationKeyConflictNotice conflict={item.citationKeyConflict} t={t} />
-                    </div>
+                    </ToolItemRow>
                   ))}
                 </div>
               </div>

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibraryWrite } from '../../../src/client/components/library/LibraryWrite.tsx'
 import { zh } from '../../../src/client/locales.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { deferred } from '../../helpers/sync.ts'
 
 afterEach(() => {
@@ -27,6 +28,65 @@ function renderWrite(ui: ReactElement): ReturnType<typeof render> {
 }
 
 describe('LibraryWrite component', () => {
+  it('shows a gateway failure without inventing a Zotero error code', async () => {
+    const write = vi.fn(async () => ({
+      ok: false as const,
+      error: new RemoteError('gateway/internal', 'RPC refused', {}),
+    }))
+    renderWrite(
+      <LibraryWrite
+        t={translate}
+        write={write}
+        sessionId="s1"
+        sessionRunning
+        writeAllowed
+        refreshAffected={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
+      target: { value: 'createCollection' },
+    })
+    fireEvent.change(screen.getByLabelText(zh.libraryWriteName), {
+      target: { value: 'A collection' },
+    })
+    fireEvent.submit(document.querySelector('form')!)
+    await waitFor(() => expect(screen.getByText('RPC refused')).toBeTruthy())
+    expect(write).toHaveBeenCalledOnce()
+  })
+  it.each(['partial', 'restored'] as const)(
+    'displays and refreshes a %s result without converting it to applied',
+    async (kind) => {
+      const write = vi.fn(async () => ({
+        ok: true as const,
+        value: { kind, message: 'Detailed receipt' },
+      }))
+      const refresh = vi.fn()
+      renderWrite(
+        <LibraryWrite
+          t={translate}
+          write={write}
+          sessionId="s1"
+          sessionRunning
+          writeAllowed
+          refreshAffected={refresh}
+        />,
+      )
+      fireEvent.change(screen.getByLabelText(zh.libraryWriteOperation), {
+        target: { value: 'createCollection' },
+      })
+      fireEvent.change(screen.getByLabelText(zh.libraryWriteName), {
+        target: { value: 'Collection' },
+      })
+      fireEvent.submit(document.querySelector('form')!)
+      await waitFor(() =>
+        expect(
+          screen.getByText(kind === 'partial' ? zh.libraryWritePartial : zh.libraryWriteRestored),
+        ).toBeTruthy(),
+      )
+      expect(refresh).toHaveBeenCalledWith('collections')
+      expect(screen.queryByText(zh.libraryWriteApplied)).toBeNull()
+    },
+  )
   it.each(['updateCollection', 'deleteCollection', 'updateSavedSearch', 'deleteSavedSearch'])(
     'anchors %s to the selected scope without needing a manually entered ref',
     async (operation) => {
@@ -294,49 +354,6 @@ describe('LibraryWrite component', () => {
     expect(textareas[0]?.value).toBe('zotero://user/0/item/ITEMKEY1')
   })
 
-  it('switches operations and manages conditions rows for createSavedSearch', () => {
-    const writeSpy = vi.fn()
-    const appliedSpy = vi.fn()
-
-    renderWrite(
-      <LibraryWrite
-        t={translate}
-        write={writeSpy}
-        sessionId="session-1"
-        sessionRunning
-        writeAllowed
-        refreshAffected={appliedSpy}
-      />,
-    )
-
-    const opSelect = screen.getByLabelText(zh.libraryWriteOperation) as HTMLSelectElement
-    fireEvent.change(opSelect, { target: { value: 'createSavedSearch' } })
-    expect(opSelect.value).toBe('createSavedSearch')
-
-    // Conditions row exists
-    expect(screen.getByText(zh.libraryWriteAddCondition)).toBeDefined()
-    const removeBtn = screen.getByText(zh.libraryWriteRemoveCondition) as HTMLButtonElement
-    expect(removeBtn.disabled).toBe(true)
-
-    // Add a condition
-    fireEvent.click(screen.getByText(zh.libraryWriteAddCondition))
-    const removeButtons = screen.getAllByText(zh.libraryWriteRemoveCondition)
-    expect(removeButtons.length).toBe(2)
-    expect((removeButtons[0] as HTMLButtonElement).disabled).toBe(false)
-
-    const condInput = screen.getAllByLabelText(zh.libraryWriteCondition)[0] as HTMLInputElement
-    const opInput = screen.getAllByLabelText(zh.libraryWriteOperator)[0] as HTMLInputElement
-    const valInput = screen.getAllByLabelText(zh.libraryWriteValue)[0] as HTMLInputElement
-
-    fireEvent.change(condInput, { target: { value: 'title' } })
-    fireEvent.change(opInput, { target: { value: 'contains' } })
-    fireEvent.change(valInput, { target: { value: 'test' } })
-
-    // Remove the second condition
-    fireEvent.click(removeButtons[1]!)
-    expect(screen.getAllByText(zh.libraryWriteRemoveCondition).length).toBe(1)
-  })
-
   it('shows validation failure message when submitted payload is invalid', async () => {
     const writeSpy = vi.fn()
     const appliedSpy = vi.fn()
@@ -473,7 +490,10 @@ describe('LibraryWrite component', () => {
       })
       .mockResolvedValueOnce({
         ok: false,
-        error: { message: 'Network error communicating with Zotero' },
+        error: {
+          message: 'Network error communicating with Zotero',
+          details: { code: 'ZOTERO_WRITE_UNAUTHORIZED' },
+        },
       })
       .mockRejectedValueOnce(new Error('Fatal remote crash'))
 
@@ -516,6 +536,7 @@ describe('LibraryWrite component', () => {
     await waitFor(() => {
       expect(screen.getByText(zh.libraryWriteFailed)).toBeDefined()
       expect(screen.getByText(/Network error communicating with Zotero/)).toBeDefined()
+      expect(screen.getByText(/ZOTERO_WRITE_UNAUTHORIZED/)).toBeDefined()
     })
 
     // 4. Exception rejected

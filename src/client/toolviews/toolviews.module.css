@@ -29,9 +29,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: var(--dsh-content-font-size-secondary);
   font-weight: 400;
-  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  line-height: var(--dsw-font-markdown-base-line-height);
   color: var(--dsw-alias-label-tertiary);
   transition: color 120ms var(--ds-ease-in-out);
 }
@@ -49,9 +49,9 @@
   flex: none;
   margin-left: 6px;
   white-space: nowrap;
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: var(--dsh-content-font-size-secondary);
   font-weight: 400;
-  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  line-height: var(--dsw-font-markdown-base-line-height);
   color: var(--dsw-alias-label-tertiary);
   transition: color 120ms var(--ds-ease-in-out);
 }
@@ -186,8 +186,8 @@
 }
 
 .evidenceText {
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  font-size: var(--dsh-content-font-size-secondary);
+  line-height: calc(var(--dsw-font-s-14-line-height) + var(--dsh-content-font-delta));
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
   word-break: break-word;

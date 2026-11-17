@@ -29,10 +29,14 @@ describe('parsed manager sheet responsive contracts', () => {
   it('collapses the URL parse entry to an icon seat instead of squeezing its label', () => {
     // Below the ladder step the label hides and the button pins to the icon
     // seat; the accessible name stays on the button in either form.
-    const ladder = sheet.slice(sheet.indexOf('@container (max-width: 360px)'))
-    expect(ladder).toMatch(/\.urlParseLabel\s*\{[^}]*display:\s*none/)
-    expect(ladder).toMatch(/\.urlParseCompact\.urlParseCompact\s*\{[^}]*width:\s*28px/)
-    expect(ladder).toMatch(/\.urlParseCompact\.urlParseCompact\s*\{[^}]*padding-inline:\s*0/)
+    const adapter = readFileSync(
+      new URL('../../../src/client/components/IconButton.module.css', import.meta.url),
+      'utf8',
+    )
+    const ladder = adapter.slice(adapter.indexOf('@container (max-width: 360px)'))
+    expect(ladder).toMatch(/\.responsiveLabel\s*\{[^}]*display:\s*none/)
+    expect(ladder).toMatch(/\.responsiveButton\.responsiveButton\s*\{[^}]*width:\s*28px/)
+    expect(ladder).toMatch(/\.responsiveButton\.responsiveButton\s*\{[^}]*padding-inline:\s*0/)
   })
 
   it('keeps row metadata ellipsis-truncated at every width', () => {

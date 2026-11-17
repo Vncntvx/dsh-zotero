@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resultReceipt } from '../../helpers/result-receipts.ts'
 /** Persisted file facts survive projection, while body actions require a verified read. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -22,7 +23,7 @@ const facts = {
   refsOmitted: 0,
   requested: 1,
 }
-const receipt = {
+const receipt = resultReceipt({
   delivery: 'file',
   version: 1,
   tool: 'zotero_export',
@@ -31,7 +32,7 @@ const receipt = {
   summary: 'Stored',
   sessionId: 's',
   callId: 'origin',
-}
+})
 function block(text = JSON.stringify(receipt)) {
   return settled({
     call: { name: 'job_output', argsRaw: '{"job_id":"job"}' },

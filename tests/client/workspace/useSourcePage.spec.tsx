@@ -36,6 +36,7 @@ function pageOf(offset: number, total = 5): ZoteroSourcePageResultView {
       exports: [],
       exportTotal: 0,
       exportOperations: { running: 0, failed: 0, stopped: 0 },
+      searchOperations: { running: 0, failed: 0, stopped: 0 },
       omittedRows: 0,
       filterCounts: {
         all: total,

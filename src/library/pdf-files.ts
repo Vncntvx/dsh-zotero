@@ -15,7 +15,10 @@ export class PdfReadingFiles {
    * directory unless a test supplies its own, so an abandoned-directory reap
    * can be driven without inspecting the shared one.
    */
-  constructor(private readonly root: string = tmpdir()) {}
+  constructor(
+    private readonly root: string = tmpdir(),
+    private readonly ownerUid: () => number | undefined = () => process.getuid?.(),
+  ) {}
 
   /** Only this plugin's private directories belonging to exited processes are reclaimed. */
   private async removeAbandoned(): Promise<void> {
@@ -32,7 +35,10 @@ export class PdfReadingFiles {
       const path = join(this.root, entry.name)
       try {
         const info = await lstat(path)
-        if (info.isDirectory() && info.uid === process.getuid?.())
+        const uid = this.ownerUid()
+        // Windows uses the current user's TEMP directory and has no POSIX uid.
+        // POSIX temp roots are shared, so their owner check remains mandatory.
+        if (info.isDirectory() && (uid === undefined || info.uid === uid))
           await rm(path, { recursive: true, force: true })
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -71,11 +77,12 @@ export class PdfReadingFiles {
       throw error
     }
   }
-  async release(lease: string): Promise<void> {
+  async release(lease: string): Promise<boolean> {
     const directory = this.files.get(lease)
-    if (!directory) return
+    if (!directory) return false
     await rm(directory, { recursive: true, force: true })
     this.files.delete(lease)
+    return true
   }
   async dispose(): Promise<void> {
     this.disposed = true

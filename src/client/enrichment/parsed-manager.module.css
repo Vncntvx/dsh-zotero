@@ -44,7 +44,7 @@
  * contract, and a squeezed label lines out of its fixed-height box (the
  * misaligned stack this sheet once shipped). Buttons keep their natural
  * width; the search is the row's only shrinking part, and the compact
- * toolbar swaps the URL label for an icon-only seat (`.urlParseCompact`).
+ * toolbar swaps the URL label for an icon-only seat (the shared responsive action adapter).
  * Doubled like `IconButton.module.css` to outrank the host sheet's own
  * `.button` without relying on injection order. */
 .textSeat.textSeat {
@@ -58,10 +58,6 @@
   display: block;
   flex: none;
   color: var(--dsw-alias-label-tertiary);
-}
-
-.urlParseLabel {
-  white-space: nowrap;
 }
 
 .search {
@@ -305,22 +301,6 @@
 @container (max-width: 520px) {
   .surface {
     padding: 8px 8px 16px;
-  }
-}
-
-/* The compact toolbar: the URL entry keeps its action but drops its label,
- * the way the Host's own job rows collapse a text trigger to an icon seat —
- * a squeezed label lines out of the Button's fixed height instead. */
-@container (max-width: 360px) {
-  .urlParseLabel {
-    display: none;
-  }
-
-  .urlParseCompact.urlParseCompact {
-    width: 28px;
-    min-width: 28px;
-    padding-inline: 0;
-    justify-content: center;
   }
 }
 

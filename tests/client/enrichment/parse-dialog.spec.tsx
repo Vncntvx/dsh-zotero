@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 /** Real host Modal/Input/Button rendering with controlled transport and jobs ports. */
 import { StrictMode } from 'react'
+import { en } from '../../../src/client/locales.ts'
+import { makeTranslate } from '../helpers/mock-translate.ts'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ParseDocumentDialog } from '../../../src/client/enrichment/ParseDocumentDialog.tsx'
-import {
-  parseEn,
-  parseTranslate,
-  type ParseTranslate,
-} from '../../../src/client/enrichment/parse-locales.ts'
+import { parseEn, type ParseTranslate } from '../../../src/client/enrichment/parse-locales.ts'
 import {
   observable,
   PARSE_JOB,
@@ -48,8 +46,7 @@ function mount(
     jobs: boundary.jobs,
     capabilities,
     selection,
-    locale: 'en' as const,
-    ...(options.t === undefined ? {} : { t: options.t }),
+    t: options.t ?? makeTranslate(en),
     onClose: () => {
       open = false
       rerender()
@@ -362,9 +359,9 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     expect(screen.getByText(parseEn.parseReconnectHint)).toBeDefined()
   })
 
-  it('uses a host-provided translator instead of the locale default', async () => {
-    mount({ t: parseTranslate('en') })
+  it('uses the host-provided translator for every rendered label', async () => {
+    mount({ t: makeTranslate({ ...en, parseTitle: 'Host title' }) })
     await settle()
-    expect(screen.getByRole('dialog', { name: parseEn.parseTitle })).toBeDefined()
+    expect(screen.getByRole('dialog', { name: 'Host title' })).toBeDefined()
   })
 })

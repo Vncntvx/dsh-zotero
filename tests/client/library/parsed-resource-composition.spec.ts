@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /** The public resource service retains prepared documents across tab body remounts. */
-import { Context, Service } from '@deepseek-ai/cordis'
+import { createRequire } from 'node:module'
+import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import * as store from '@deepseek-ai/dsh-client-store'
-import type { RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
 import { expect, it, vi } from 'vitest'
 import {
   ParsedDocuments,
@@ -13,14 +13,8 @@ import { observable } from '../enrichment/support/parse-ports.ts'
 import { deferred } from '../../helpers/sync.ts'
 
 it('opens once, keeps its Blob while pinned, and releases it after the final holder leaves', async () => {
-  const ctx = new Context()
-  class Slots extends Service {
-    constructor(ctx: Context) {
-      super(ctx, 'slots')
-    }
-    provideRoot(_source: RootStandardSourceContribution) {}
-  }
-  await ctx.plugin(Slots)
+  const runtime = await SlotTestRuntime.create()
+  const ctx = runtime.ctx
   // Supply the shell loader to execute the installed browser bundle unchanged.
   let resources:
     Pick<typeof import('@deepseek-ai/dsh-client-resources/client'), 'apply' | 'inject'> | undefined
@@ -35,7 +29,12 @@ it('opens once, keeps its Blob while pinned, and releases it after the final hol
       },
     },
   })
-  await import('@deepseek-ai/dsh-client-resources/client')
+  // Resolve the public entry physically: this case verifies the emitted loader
+  // bundle, while normal jsdom imports use its published production source.
+  const bundlePath = createRequire(import.meta.url).resolve(
+    '@deepseek-ai/dsh-client-resources/client',
+  )
+  await import(/* @vite-ignore */ bundlePath)
   if (resources === undefined) throw new Error('Resource bundle did not register')
   await ctx.plugin(resources)
   const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:held')
@@ -83,7 +82,7 @@ it('opens once, keeps its Blob while pinned, and releases it after the final hol
   } finally {
     detach?.()
     pin.abort()
-    await ctx.fiber.dispose()
+    await runtime.dispose()
     created.mockRestore()
     revoked.mockRestore()
   }

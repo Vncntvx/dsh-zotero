@@ -14,14 +14,14 @@ import { deferred } from '../../helpers/sync.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { clipboardWrites } from '../setup.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
   cleanup()
   for (const runtime of owned.splice(0)) await runtime.dispose()
   vi.restoreAllMocks()
 })
-const mount = (read: Parameters<typeof parsedRuntime>[0]) => {
-  const runtime = parsedRuntime(read)
+const mount = async (read: Parameters<typeof parsedRuntime>[0]) => {
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount()
   return runtime
@@ -39,7 +39,7 @@ describe('complete parsed-document delivery', () => {
       async (request, signal) =>
         request.op === 'page' ? await tail.promise : await base(request, signal),
     )
-    mount(read)
+    await mount(read)
     await ready()
     expect(screen.queryByText('Title')).toBeNull()
     expect(screen.getByRole('status')).toBeDefined()
@@ -56,7 +56,7 @@ describe('complete parsed-document delivery', () => {
 
   it('retains the last complete version if a refresh fails', async () => {
     const read = documentRead('# First')
-    const runtime = mount(read)
+    const runtime = await mount(read)
     await ready()
     read.mockImplementation(async (request) =>
       request.op === 'release'
@@ -72,7 +72,7 @@ describe('complete parsed-document delivery', () => {
 
   it('refreshes from a new source generation and rejects a mismatching page', async () => {
     const first = documentRead('# First')
-    mount(first)
+    await mount(first)
     await ready()
     const second = documentRead('# Second' + 'x'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS))
     first.mockImplementation(async (request, signal) => {
@@ -89,7 +89,7 @@ describe('complete parsed-document delivery', () => {
 
   it('binds the host refresh command and downloads the complete original', async () => {
     const read = documentRead('Suo <sup>a</sup>')
-    const runtime = mount(read)
+    const runtime = await mount(read)
     await ready()
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
@@ -103,7 +103,7 @@ describe('complete parsed-document delivery', () => {
   })
 
   it('does not change hook order when each permission changes', async () => {
-    const runtime = mount(documentRead('# Access'))
+    const runtime = await mount(documentRead('# Access'))
     await ready()
     for (const action of [
       'zotero/documentArtifact',
@@ -127,7 +127,7 @@ describe('complete parsed-document delivery', () => {
       ok: true,
       value: request.op === 'release' ? { kind: 'released' } : { kind: 'missing' },
     }))
-    mount(read)
+    await mount(read)
     await ready()
     expect(screen.getByRole('alert').textContent).toContain('missing or expired')
     expect(read.mock.calls.at(-1)![0]).toMatchObject({ op: 'release' })
@@ -140,7 +140,7 @@ describe('complete parsed-document delivery', () => {
     delete (globalThis.crypto as { randomUUID?: () => string }).randomUUID
     try {
       const read = documentRead('# Prepared')
-      mount(read)
+      await mount(read)
       await ready()
       expect(screen.getAllByRole('heading').some((h) => h.textContent?.includes('Paper'))).toBe(
         true,
@@ -165,7 +165,7 @@ describe('complete parsed-document delivery', () => {
     read.mockImplementation(async (request) =>
       request.op === 'open' ? await pending.promise : { ok: true, value: { kind: 'released' } },
     )
-    const runtime = mount(read)
+    const runtime = await mount(read)
     await ready()
     cleanup()
     const disposing = runtime.dispose()
@@ -185,7 +185,7 @@ describe('complete parsed-document delivery', () => {
 
 describe('artifact-addressed parsed result', () => {
   it('offers reparse through the artifact handle for a URL-sourced document', async () => {
-    const runtime = parsedRuntime(documentRead('# Resource'))
+    const runtime = await parsedRuntime(documentRead('# Resource'))
     owned.push(runtime)
     runtime.mount({
       parse: true,

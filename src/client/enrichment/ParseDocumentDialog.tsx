@@ -13,13 +13,12 @@ import {
   documentParseText,
   type DocumentParseCapabilities,
   type DocumentParseJobs,
-  type DocumentParseOperation,
   type DocumentParseRemote,
   type DocumentParseSelection,
   type DocumentParseState,
   type ParseSnapshotSource,
 } from './parse-controller.ts'
-import { parseTranslate, type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
+import { type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
 import css from './parse.module.css'
 
 export interface ParseDocumentDialogProps {
@@ -29,18 +28,7 @@ export interface ParseDocumentDialogProps {
   readonly jobs: DocumentParseJobs | undefined
   readonly capabilities: ParseSnapshotSource<DocumentParseCapabilities>
   readonly onClose: () => void
-  /** Persist an accepted operation for reopening, including admission after this view closes. */
-  readonly onOperation?: (
-    operation: DocumentParseOperation,
-    selection: DocumentParseSelection,
-  ) => void
-  readonly locale?: 'zh' | 'en'
-  /** Persist the ID before RPC send; an intent is not an admission verdict. */
-  readonly onOperationIntent?: (
-    operation: Pick<DocumentParseOperation, 'operationId'>,
-    selection: DocumentParseSelection,
-  ) => void
-  readonly t?: ParseTranslate
+  readonly t: ParseTranslate
 }
 
 /** The dialog states the byte cap in human units, not as a raw byte integer. */
@@ -52,34 +40,25 @@ function formatLimit(bytes: number): string {
 /** The only start action is a user form submission; opening only inspects artifacts. */
 export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   const { remote, jobs, capabilities, selection, open, onClose } = props
-  const operationListener = useRef(props.onOperation)
-  const intentListener = useRef(props.onOperationIntent)
-  operationListener.current = props.onOperation
-  intentListener.current = props.onOperationIntent
   const controller = useMemo(
-    () =>
-      new DocumentParseController(
-        remote,
-        jobs,
-        capabilities,
-        (operation, selected) => operationListener.current?.(operation, selected),
-        (operation, selected) => intentListener.current?.(operation, selected),
-      ),
+    () => new DocumentParseController(remote, jobs, capabilities),
     [remote, jobs, capabilities],
   )
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-  const t = useMemo(() => props.t ?? parseTranslate(props.locale ?? 'zh'), [props.t, props.locale])
+  const t = props.t
   const formId = useId()
   const inputId = useId()
   const hintId = useId()
   const targetKey = JSON.stringify(selection)
+  const latestSelection = useRef(selection)
+  latestSelection.current = selection
   // The receipt carries a bounded preview; the dialog keeps it behind an
   // explicit toggle instead of turning the form into a document reader.
   const [previewOpen, setPreviewOpen] = useState(false)
 
   useEffect(() => controller.connect(), [controller])
   useEffect(() => {
-    if (open) controller.open(selection)
+    if (open) controller.open(latestSelection.current)
     else controller.close()
     return () => controller.close()
   }, [controller, open, targetKey])

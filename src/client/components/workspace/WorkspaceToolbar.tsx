@@ -18,6 +18,7 @@ import {
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../../sources/model.js'
 import { buildInfoOf } from '../../build-info.ts'
+import { operationsNoteOf } from '../operations.ts'
 import { writeStatusLabel } from '../write-label.ts'
 import { IconButton } from '../IconButton.tsx'
 import { connectionDiagnosisOf, type ConnectionView } from './connection.ts'
@@ -44,6 +45,7 @@ export function WorkspaceToolbar<TLens extends string = string>({
   lensTabItems,
 }: WorkspaceToolbarProps<TLens>) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const searchNote = workspace === undefined ? '' : operationsNoteOf(workspace.searchOperations, t)
   const failed =
     connection.kind === 'unavailable' ||
     connection.kind === 'remote-error' ||
@@ -99,12 +101,7 @@ export function WorkspaceToolbar<TLens extends string = string>({
   ]
 
   return (
-    <div
-      className={css.toolbar}
-      role="status"
-      aria-live="polite"
-      aria-busy={connection.kind === 'loading'}
-    >
+    <div className={css.toolbar}>
       <div className={css.toolbarLeft}>
         <StateDot
           state={
@@ -115,7 +112,12 @@ export function WorkspaceToolbar<TLens extends string = string>({
                 : 'error'
           }
         />
-        <span className={css.statusText}>
+        <span
+          className={css.statusText}
+          role="status"
+          aria-live="polite"
+          aria-busy={connection.kind === 'loading'}
+        >
           {connection.kind === 'loading' && t('checking')}
           {connection.kind === 'connected' && t('statusConnectedNote')}
           {failed && t('statusUnavailable')}
@@ -141,6 +143,11 @@ export function WorkspaceToolbar<TLens extends string = string>({
           </>
         )}
 
+        {searchNote !== '' && (
+          <span className={css.metricsPill} role="status" aria-label={t('searchOperationsLabel')}>
+            {t('searchOperationsLabel')}: {searchNote}
+          </span>
+        )}
         {!failed && workspace !== undefined && workspace.sources.length > 0 && (
           <>
             <span className={css.toolbarDivider} />

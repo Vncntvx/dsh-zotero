@@ -181,7 +181,6 @@ describe('useDiagnosticsFeed', () => {
 
   it('stringifies a non-Error throw into the error arm', async () => {
     const diagnostics = vi.fn(async (): Promise<RemoteResult<ZoteroDiagnosticsView>> => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error -- the branch under test
       throw 'bare feed failure'
     })
     const box: FeedBox = { current: undefined }

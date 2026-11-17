@@ -235,3 +235,15 @@ describe('EnrichmentSettingsSection', () => {
     expect(link.getAttribute('href')).toBe('https://mineru.net')
   })
 })
+
+it('edits the OCR language, resets its override and disables it in pro mode', () => {
+  const harness = mountHarness({ value: { ocrLanguage: 'en' } })
+  const input = screen.getByLabelText(zh.enrichmentOcrLanguage) as HTMLInputElement
+  expect(input.value).toBe('en')
+  fireEvent.change(input, { target: { value: 'ch' } })
+  expect(harness.snapshot().ocrLanguage.text).toBe('ch')
+  fireEvent.click(within(input.parentElement!).getByRole('button', { name: zh.reset }))
+  expect(harness.snapshot().ocrLanguage.text).toBe('ch')
+  fireEvent.click(screen.getByRole('tab', { name: zh.enrichmentModePro }))
+  expect(input.disabled).toBe(true)
+})

@@ -13,7 +13,6 @@ import { normalizeRefKey } from '../../sources/evidence-match.js'
 import type { ExportArtifact, ExportDocumentItem } from '../../sources/model.js'
 
 export {
-  filterCountsOf,
   filterSources,
   hasIssue,
   type SourceFilter,
@@ -256,7 +255,7 @@ function documentsOf(artifact: ExportArtifact):
 export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly ExportSection[] {
   const sections: ExportSectionDraft[] = []
   const sectionByFormat = new Map<string, ExportSectionDraft>()
-  const documentByKey = new Map<string, ExportedDocument>()
+  const documentByKey = new Map<string, { index: number; document: ExportedDocument }>()
   for (const artifact of exports) {
     let section = sectionByFormat.get(artifact.format)
     if (section === undefined) {
@@ -273,11 +272,12 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
       const key = `${document.format}|${document.ref}`
       const existing = documentByKey.get(key)
       if (existing === undefined) {
-        documentByKey.set(key, document)
+        documentByKey.set(key, { index: section.documents.length, document })
         section.documents.push(document)
       } else {
+        const previous = existing.document
         const merged: ExportedDocument = {
-          ...existing,
+          ...previous,
           ...(document.title === undefined ? {} : { title: document.title }),
           ...(document.exportKey === undefined ? {} : { exportKey: document.exportKey }),
           ...(document.citationKey === undefined ? {} : { citationKey: document.citationKey }),
@@ -288,13 +288,13 @@ export function exportSectionsOf(exports: readonly ExportArtifact[]): readonly E
             ? {}
             : { citationKeyConflict: document.citationKeyConflict }),
           text: document.text,
-          callIds: [...existing.callIds, ...document.callIds],
+          callIds: [...previous.callIds, ...document.callIds],
           ...(document.latestExportedAt === undefined
             ? {}
             : { latestExportedAt: document.latestExportedAt }),
         }
-        documentByKey.set(key, merged)
-        section.documents[section.documents.indexOf(existing)] = merged
+        documentByKey.set(key, { index: existing.index, document: merged })
+        section.documents[existing.index] = merged
       }
     }
     if (resolved.unresolved.length > 0) {

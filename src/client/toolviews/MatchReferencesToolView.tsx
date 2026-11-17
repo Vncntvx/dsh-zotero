@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /** Compact card for local reference reconciliation results. */
 
 import { useMemo } from 'react'
@@ -88,11 +89,16 @@ export function MatchReferencesToolView(props: Props) {
         ) : view.rows.length > 0 ? (
           <div className={css.cardList}>
             {view.rows.map((row) => (
-              <div className={css.itemCard} data-match-row key={row.inputId}>
-                <div className={css.itemHeader}>
-                  <span className={css.itemTitle}>{row.inputId}</span>
-                  <span className={css.itemMeta}>{row.status}</span>
-                </div>
+              <ToolItemRow
+                data-match-row
+                key={row.inputId}
+                title={<>{row.inputId}</>}
+                trailing={
+                  <>
+                    <span className={css.itemMeta}>{row.status}</span>
+                  </>
+                }
+              >
                 {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
                 {row.candidates.map((candidate, index) => (
                   <div key={`${candidate.ref ?? ''}-${index}`}>
@@ -124,7 +130,7 @@ export function MatchReferencesToolView(props: Props) {
                       )}
                   </div>
                 ))}
-              </div>
+              </ToolItemRow>
             ))}
             {view.raw && (
               <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />

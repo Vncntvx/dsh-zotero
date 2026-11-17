@@ -78,6 +78,24 @@ function mountPicker(
 }
 
 describe('tag picker request lifetime', () => {
+  it.each(['close', 'switch', 'unmount'] as const)(
+    'aborts an unneeded tag page on %s',
+    async (action) => {
+      const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
+      const browse = vi.fn<LibraryFeedFace['browse']>().mockReturnValue(pending.promise)
+      const picker = mountPicker(browse)
+      picker.toggle()
+      const signal = browse.mock.calls[0]?.[1]
+      expect(signal?.aborted).toBe(false)
+      if (action === 'close') picker.toggle()
+      else if (action === 'switch') picker.selectLibrary({ type: 'group', id: 123 })
+      else picker.unmount()
+      expect(signal?.aborted).toBe(true)
+      await act(async () => pending.resolve(tagPage('abandoned')))
+      expect(picker.onError).not.toHaveBeenCalled()
+      expect(screen.queryByRole('option', { name: 'abandoned' })).toBeNull()
+    },
+  )
   it('toggles a selected tag without losing the other filters', async () => {
     const picker = mountPicker(vi.fn().mockResolvedValue(tagPage('alpha')), { yearFrom: 2020 })
     picker.toggle()
@@ -104,13 +122,17 @@ describe('tag picker request lifetime', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.libraryLoadMore })))
     expect(screen.getByRole('option', { name: 'alpha' })).toBeTruthy()
     expect(screen.getByRole('option', { name: 'beta' })).toBeTruthy()
-    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 1 }))
+    expect(browse).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 1 }),
+      expect.any(AbortSignal),
+    )
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: ' fil ' } })
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: ' filtered ' } })
     expect(browse).toHaveBeenCalledTimes(2)
     await act(async () => vi.advanceTimersByTimeAsync(200))
     expect(browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ q: 'filtered', match: 'contains', offset: 0 }),
+      expect.any(AbortSignal),
     )
     expect(screen.queryByRole('option', { name: 'alpha' })).toBeNull()
     expect(screen.getByRole('option', { name: 'filtered' })).toBeTruthy()
@@ -159,6 +181,7 @@ describe('tag picker request lifetime', () => {
     expect(await screen.findByRole('option', { name: 'group-tag' })).toBeTruthy()
     expect(browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ library: { type: 'group', id: 123 } }),
+      expect.any(AbortSignal),
     )
   })
 
@@ -307,4 +330,89 @@ describe('tag picker popover', () => {
     await act(async () => vi.runAllTimersAsync())
     expect(browse).toHaveBeenCalledTimes(1)
   })
+})
+
+it('supports roving focus, navigation, typeahead, selection and Escape restoration', async () => {
+  const page = tagPage('alpha')
+  if (!page.ok) throw new Error('fixture')
+  const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue({
+    ok: true,
+    value: {
+      ...page.value,
+      items: ['alpha', 'beta', 'bravo', 'gamma'].map((tag) => ({ kind: 'tag' as const, tag })),
+    },
+  })
+  const picker = mountPicker(browse)
+  picker.toggle()
+  const alpha = await screen.findByRole('option', { name: 'alpha' })
+  const beta = screen.getByRole('option', { name: 'beta' })
+  const gamma = screen.getByRole('option', { name: 'gamma' })
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(alpha)
+  expect(alpha.tabIndex).toBe(0)
+  expect(beta.tabIndex).toBe(-1)
+  fireEvent.keyDown(alpha, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(beta)
+  fireEvent.keyDown(beta, { key: ' ' })
+  expect(beta.getAttribute('aria-selected')).toBe('true')
+  fireEvent.keyDown(beta, { key: 'End' })
+  expect(document.activeElement).toBe(gamma)
+  fireEvent.keyDown(gamma, { key: 'Home' })
+  expect(document.activeElement).toBe(alpha)
+  fireEvent.keyDown(alpha, { key: 'b' })
+  expect(document.activeElement).toBe(beta)
+  fireEvent.keyDown(beta, { key: 'b' })
+  expect(document.activeElement).toBe(screen.getByRole('option', { name: 'bravo' }))
+  fireEvent.keyDown(document.activeElement!, { key: 'Enter' })
+  expect(screen.getByRole('option', { name: 'bravo' }).getAttribute('aria-selected')).toBe('true')
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+  expect(screen.queryByRole('listbox')).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: zh.libraryFilterTags }))
+})
+
+it('supports upward entry and wrapping while ignoring unrelated and modified keys', async () => {
+  const page = tagPage('alpha')
+  if (!page.ok) throw new Error('fixture')
+  const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue({
+    ok: true,
+    value: {
+      ...page.value,
+      items: ['alpha', 'beta', 'bravo'].map((tag) => ({ kind: 'tag' as const, tag })),
+    },
+  })
+  mountPicker(browse).toggle()
+  const alpha = await screen.findByRole('option', { name: 'alpha' })
+  const beta = screen.getByRole('option', { name: 'beta' }),
+    bravo = screen.getByRole('option', { name: 'bravo' })
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(bravo)
+  fireEvent.keyDown(bravo, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(alpha)
+  fireEvent.keyDown(alpha, { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(bravo)
+  fireEvent.keyDown(bravo, { key: 'Home' })
+  fireEvent.keyDown(alpha, { key: 'b', ctrlKey: true })
+  fireEvent.keyDown(alpha, { key: 'Tab' })
+  expect(document.activeElement).toBe(alpha)
+  fireEvent.keyDown(screen.getByRole('listbox'), { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(alpha)
+  fireEvent.keyDown(alpha, { key: 'b' })
+  fireEvent.keyDown(beta, { key: 'r' })
+  expect(document.activeElement).toBe(bravo)
+  fireEvent.keyDown(bravo, { key: 'z' })
+  expect(document.activeElement).toBe(bravo)
+})
+
+it('leaves focus in an empty search instead of targeting a missing option', async () => {
+  const page = tagPage('alpha')
+  if (!page.ok) throw new Error('fixture')
+  mountPicker(
+    vi
+      .fn<LibraryFeedFace['browse']>()
+      .mockResolvedValue({ ok: true, value: { ...page.value, items: [] } }),
+  ).toggle()
+  await screen.findByText(zh.libraryEmptyList)
+  const search = screen.getByRole('searchbox')
+  fireEvent.keyDown(search, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(search)
 })

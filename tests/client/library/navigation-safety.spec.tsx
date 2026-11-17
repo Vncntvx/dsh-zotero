@@ -45,7 +45,11 @@ it.each([
   const open = vi.spyOn(window, 'open').mockImplementation(() => null)
   try {
     mountInspector({ ...ITEM_DETAIL, url })
-    expect(screen.getByRole('button', { name: url })).toBeTruthy()
+    expect(
+      screen
+        .getByRole('button', { name: `${mockT('copy')} ${mockT('libraryMetaUrl')}` })
+        .getAttribute('title'),
+    ).toContain(url)
     expect(screen.queryByRole('button', { name: `${url} (${mockT('openInZotero')})` })).toBeNull()
     expect(open).not.toHaveBeenCalled()
   } finally {

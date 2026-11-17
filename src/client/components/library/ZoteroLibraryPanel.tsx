@@ -18,7 +18,7 @@ import {
  * @module dsh-zotero/client/components/library/ZoteroLibraryPanel
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -301,6 +301,16 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // conversation this tab belongs to, so file reads and write approvals anchor
   // to it — never to whatever session happens to sit first in the host list.
   const sessionRunning = props.useSession((snapshot) => snapshot.running && !snapshot.removed)
+  const {
+    resolveAttachment,
+    readUrlPdf: readUrlPdfRequest,
+    trackPdf,
+    forgetPdf,
+    releaseUrlPdf,
+    bindRefresh,
+  } = props
+  const { refresh, clearPosition, selectScope: selectFeedScope } = feed
+  const tab = tabInfo?.tab
   // A removed session owns no view; the panel unmounts in the same batch, so
   // this is best effort — the plugin teardown clears whatever it misses.
   useEffect(() => {
@@ -315,7 +325,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
         setCleanupError(String(error))
       }
     }
-  }, [sessionRemoved, props.sessionId])
+  }, [sessionRemoved, props.sessionId, props.viewStore])
   const cwd = props.useSessions((snapshot) => snapshot.byId[props.sessionId]?.cwd)
   const client = props.useZoteroClient()
   // The write entry answers the session resource: `zotero/write` carries the
@@ -351,77 +361,111 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const enrichmentMounted = parseSurface.mounted
   // Local-file reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
-  const openFile = (path: string): void => {
-    try {
-      if (!tabInfo?.tab.actions) throw new Error(t('libraryNoSessionForOpen'))
-      tabInfo.tab.actions.openResource(fileAddressFor(props.sessionId, cwd, path), {
-        destination: accepted.preferences?.localPdfOpenTarget === 'float' ? 'float' : 'sidebar',
-      })
-    } catch (error) {
-      // The harness refuses with this message when no session surface
-      // is mounted; map it to the panel's hint. Other errors rethrow.
-      if (error instanceof Error && error.message.includes(NO_SESSION_SURFACE_REFUSAL)) {
-        throw new Error(t('libraryNoSessionForOpen'))
+  const openFile = useCallback(
+    (path: string): void => {
+      try {
+        if (!tabInfo?.tab.actions) throw new Error(t('libraryNoSessionForOpen'))
+        tabInfo.tab.actions.openResource(fileAddressFor(props.sessionId, cwd, path), {
+          destination: accepted.preferences?.localPdfOpenTarget === 'float' ? 'float' : 'sidebar',
+        })
+      } catch (error) {
+        // Map the harness's no-session refusal to the panel hint; rethrow other errors.
+        if (error instanceof Error && error.message.includes(NO_SESSION_SURFACE_REFUSAL)) {
+          throw new Error(t('libraryNoSessionForOpen'))
+        }
+        throw error
       }
-      throw error
-    }
-  }
+    },
+    [tabInfo?.tab.actions, t, props.sessionId, cwd, accepted.preferences?.localPdfOpenTarget],
+  )
 
-  const readPdf = async (ref: string): Promise<void> => {
-    if (!tabInfo?.tab || sessionRemoved) throw new Error(t('libraryNoSessionForOpen'))
-    const location = await props.resolveAttachment(ref)
-    if (!location.ok) throw new Error(location.error.message)
-    if (location.value.kind === 'file') {
-      if (accepted.preferences?.localPdfOpenTarget === 'zotero') {
-        const { pdfUrlOf } = await import('../../actions/open-zotero.ts')
-        const url = pdfUrlOf(ref)
-        if (!url || !canOpenProtocol || !(await client.openProtocol(url)))
-          throw new Error(t('libraryPdfReaderUnavailable'))
-      } else if (location.value.path) openFile(location.value.path)
-      else throw new Error(t('pdfFileNotFound'))
-      return
-    }
-    if (!accepted.preferences?.allowUrlPdfRead) throw new Error(t('libraryUrlPdfDisabled'))
-    if (!canReadUrlPdf || !props.readUrlPdf) throw new Error(t('libraryPdfReaderUnavailable'))
-    const pdf = await props.readUrlPdf({ ref }, tabInfo.tab.signal)
-    if (!pdf.ok) throw pdf.error
-    const address = fileAddressFor(props.sessionId, cwd, pdf.value.path)
-    try {
-      tabInfo.tab.signal.throwIfAborted()
-      props.trackPdf?.(address, pdf.value.lease, pdf.value.ref)
-      tabInfo.tab.actions.openResource(address, {
-        destination: accepted.preferences.urlPdfOpenTarget,
-      })
-    } catch (error) {
-      props.forgetPdf?.(address)
-      await props.releaseUrlPdf?.(pdf.value.lease)
-      throw error
-    }
-  }
+  const readPdf = useCallback(
+    async (ref: string): Promise<void> => {
+      if (!tab || sessionRemoved) throw new Error(t('libraryNoSessionForOpen'))
+      const location = await resolveAttachment(ref)
+      if (!location.ok) throw new Error(location.error.message)
+      if (location.value.kind === 'file') {
+        if (accepted.preferences?.localPdfOpenTarget === 'zotero') {
+          const { pdfUrlOf } = await import('../../actions/open-zotero.ts')
+          const url = pdfUrlOf(ref)
+          if (!url || !canOpenProtocol || !(await client.openProtocol(url)))
+            throw new Error(t('libraryPdfReaderUnavailable'))
+        } else if (location.value.path) openFile(location.value.path)
+        else throw new Error(t('pdfFileNotFound'))
+        return
+      }
+      if (!accepted.preferences?.allowUrlPdfRead) throw new Error(t('libraryUrlPdfDisabled'))
+      if (!canReadUrlPdf || !readUrlPdfRequest) throw new Error(t('libraryPdfReaderUnavailable'))
+      const pdf = await readUrlPdfRequest({ ref }, tab.signal)
+      if (!pdf.ok) throw pdf.error
+      const address = fileAddressFor(props.sessionId, cwd, pdf.value.path)
+      try {
+        tab.signal.throwIfAborted()
+        trackPdf?.(address, pdf.value.lease, pdf.value.ref)
+        tab.actions.openResource(address, {
+          destination: accepted.preferences.urlPdfOpenTarget,
+        })
+      } catch (error) {
+        forgetPdf?.(address)
+        await releaseUrlPdf?.(pdf.value.lease)
+        throw error
+      }
+    },
+    [
+      tab,
+      sessionRemoved,
+      t,
+      resolveAttachment,
+      accepted.preferences,
+      canOpenProtocol,
+      client,
+      openFile,
+      canReadUrlPdf,
+      readUrlPdfRequest,
+      props.sessionId,
+      cwd,
+      trackPdf,
+      forgetPdf,
+      releaseUrlPdf,
+    ],
+  )
 
   // Bind the right-sidebar native refresh command to invalidate the panel feed.
   useEffect(() => {
-    if (!tabInfo?.tab || sessionRemoved) return
-    return props.bindRefresh?.(props.sessionId, tabInfo.tab.id, feed.refresh, () => {
-      if (!feed.clearPosition()) throw new Error(t('libraryPositionResetFailed'))
+    if (!tab || sessionRemoved) return
+    return bindRefresh?.(props.sessionId, tab.id, refresh, () => {
+      if (!clearPosition()) throw new Error(t('libraryPositionResetFailed'))
     })
-  }, [props.bindRefresh, props.sessionId, tabInfo?.tab?.id, feed.refresh, sessionRemoved])
+  }, [bindRefresh, props.sessionId, tab, refresh, clearPosition, sessionRemoved, t])
   useEffect(() => {
-    if (!tabInfo?.tab?.actions?.bindCommands) return
-    return tabInfo.tab.actions.bindCommands({
+    if (!tab?.actions?.bindCommands) return
+    return tab.actions.bindCommands({
       refresh: () => {
-        feed.refresh()
+        refresh()
       },
     })
-  }, [tabInfo?.tab?.actions, feed])
+  }, [tab?.actions, refresh])
 
-  const handleSelectScope = (selection: Parameters<typeof feed.selectScope>[0]) => {
-    feed.selectScope(selection)
-  }
-
-  const handleSelectItem = (ref: string | undefined) => {
-    feed.selectItem(ref)
-  }
+  const returnToLibrary = useCallback(() => selectFeedScope({ kind: 'library' }), [selectFeedScope])
+  const parsedArtifact = useMemo(
+    () =>
+      props.parse !== undefined && canReadArtifact
+        ? {
+            sessionId: props.sessionId,
+            read: props.parse.remote.documentArtifact,
+            revision: parseSurface.revision,
+            documents: props.parsedDocuments,
+          }
+        : undefined,
+    [props.parse, canReadArtifact, props.sessionId, parseSurface.revision, props.parsedDocuments],
+  )
+  const inspectorArtifact = useMemo(
+    () =>
+      parsedArtifact && props.openParsed
+        ? { ...parsedArtifact, open: props.openParsed }
+        : undefined,
+    [parsedArtifact, props.openParsed],
+  )
 
   // Diagnostics are read-only facts, so the menu renders them as heading rows.
   const diagnosticMenuItems: MenuEntry[] = useMemo(() => {
@@ -443,8 +487,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     return items
   }, [probeState.data, t])
 
+  const preferencesValue = useMemo(() => ({ ...accepted, memory }), [accepted, memory])
   return (
-    <LibraryPreferencesContext.Provider value={{ ...accepted, memory }}>
+    <LibraryPreferencesContext.Provider value={preferencesValue}>
       <div className={css.panel}>
         {cleanupError && <p role="alert">{t('libraryPositionError', { message: cleanupError })}</p>}
         {/* Two rows: the query the reader is asking, then the surface's own
@@ -607,7 +652,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   identityOf={feed.identityOf}
                   toggleCollection={feed.toggleCollection}
                   selection={feed.selection}
-                  selectScope={handleSelectScope}
+                  selectScope={feed.selectScope}
                   rootLane={feed.treeLane(undefined)}
                   treeLane={feed.treeLane}
                   loadMoreTree={feed.loadMoreTree}
@@ -637,13 +682,13 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   scrollKey={JSON.stringify([
                     'list',
                     feed.scopeKey,
-                    feed.q,
+                    feed.listQuery,
                     feed.sort,
                     feed.direction,
                     feed.filters,
                     feed.offset,
                   ])}
-                  returnToLibrary={() => feed.selectScope({ kind: 'library' })}
+                  returnToLibrary={returnToLibrary}
                   filtered={
                     feed.q !== '' ||
                     Object.values(feed.filters).some((value) =>
@@ -658,20 +703,11 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   offset={feed.offset}
                   gotoOffset={feed.gotoOffset}
                   selectedRef={feed.selectedRef}
-                  selectItem={handleSelectItem}
+                  selectItem={feed.selectItem}
                   retry={feed.retryList}
                   useContextMenu={props.useContextMenu}
                   localizedItemTypes={itemTypes.localized}
-                  parsedArtifact={
-                    props.parse !== undefined && canReadArtifact
-                      ? {
-                          sessionId: props.sessionId,
-                          read: props.parse.remote.documentArtifact,
-                          revision: parseSurface.revision,
-                          documents: props.parsedDocuments,
-                        }
-                      : undefined
-                  }
+                  parsedArtifact={parsedArtifact}
                 />
               </div>
               <div
@@ -720,19 +756,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
                   exportItem={canExport ? props.export : undefined}
                   localizedItemTypes={itemTypes.localized}
-                  {...(props.parse !== undefined &&
-                  canReadArtifact &&
-                  props.openParsed !== undefined
-                    ? {
-                        parsedArtifact: {
-                          sessionId: props.sessionId,
-                          read: props.parse.remote.documentArtifact,
-                          revision: parseSurface.revision,
-                          documents: props.parsedDocuments,
-                          open: props.openParsed,
-                        },
-                      }
-                    : {})}
+                  parsedArtifact={inspectorArtifact}
                 />
               </div>
             </div>

@@ -201,8 +201,8 @@ export function SourceInspector({
         <div className={css.section}>
           <h3 className={css.sectionLabel} data-inspector-panel="evidence">
             {t('groundingPassagesTitle')}
-            {selected.evidence.length > 0 && (
-              <span className={css.detailTabCount}>{selected.evidence.length}</span>
+            {selected.evidenceTotal > 0 && (
+              <span className={css.detailTabCount}>{selected.evidenceTotal}</span>
             )}
           </h3>
           <SourceEvidence
@@ -220,8 +220,8 @@ export function SourceInspector({
         <div className={css.section}>
           <h3 className={css.sectionLabel} data-inspector-panel="exports">
             {t('panelExports')}
-            {selected.exports.length > 0 && (
-              <span className={css.detailTabCount}>{selected.exports.length}</span>
+            {selected.exportsTotal > 0 && (
+              <span className={css.detailTabCount}>{selected.exportsTotal}</span>
             )}
           </h3>
           <SourceExports item={selected} t={t} pager={exportsPager} />

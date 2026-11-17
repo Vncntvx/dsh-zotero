@@ -1,5 +1,12 @@
 /** Session-bound UI composition for explicit document parsing. */
-import { useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
@@ -313,18 +320,29 @@ export function useDocumentParseSurface(
     (port?.deployment ?? ABSENT_SOURCE).getSnapshot,
   )
   const { sessionId, sessionAllowed, readAllowed, startAllowed, cancelAllowed } = access
-  const next: DocumentParseCapabilities = {
-    ...deployment,
-    sessionAllowed,
-    readAllowed,
-    startAllowed,
-    cancelAllowed,
-  }
-  const capabilities = useMemo(() => capabilitySource(next), [port, sessionId])
-  useLayoutEffect(
-    () => capabilities.update(next),
-    [capabilities, deployment, sessionAllowed, readAllowed, startAllowed, cancelAllowed],
+  const next = useMemo<DocumentParseCapabilities>(
+    () => ({
+      ...deployment,
+      sessionAllowed,
+      readAllowed,
+      startAllowed,
+      cancelAllowed,
+    }),
+    [deployment, sessionAllowed, readAllowed, startAllowed, cancelAllowed],
   )
+  const scope = useRef<{
+    port: typeof port
+    sessionId: string
+    source: ReturnType<typeof capabilitySource>
+  }>()
+  if (
+    scope.current === undefined ||
+    scope.current.port !== port ||
+    scope.current.sessionId !== sessionId
+  )
+    scope.current = { port, sessionId, source: capabilitySource(next) }
+  const capabilities = scope.current.source
+  useLayoutEffect(() => capabilities.update(next), [capabilities, next])
   useLayoutEffect(() => {
     if (!sessionAllowed) port?.clearSession(sessionId)
   }, [port, sessionId, sessionAllowed])
@@ -333,17 +351,22 @@ export function useDocumentParseSurface(
   // A finished parse changes which artifact exists; the inspector's derived
   // rows re-probe on this counter instead of polling.
   const [revision, setRevision] = useState(0)
-  const select = (selection: DocumentParseSelection) => {
-    setSelection({ ...selection, operation: port?.recall(selection) })
-    setOpen(true)
-  }
-  const openAttachment = port
-    ? (attachment: ZoteroAttachmentRowView) => {
-        const ref = attachmentParseRef(attachment.ref)
-        if (!ref || !sessionAllowed) return
-        select({ sessionId, target: { kind: 'attachment', ref }, label: attachment.title })
-      }
-    : undefined
+  const select = useCallback(
+    (selection: DocumentParseSelection) => {
+      setSelection({ ...selection, operation: port?.recall(selection) })
+      setOpen(true)
+    },
+    [port],
+  )
+  const selectAttachment = useCallback(
+    (attachment: ZoteroAttachmentRowView) => {
+      const ref = attachmentParseRef(attachment.ref)
+      if (!ref || !sessionAllowed) return
+      select({ sessionId, target: { kind: 'attachment', ref }, label: attachment.title })
+    },
+    [sessionAllowed, sessionId, select],
+  )
+  const openAttachment = port ? selectAttachment : undefined
   const openUrl = port
     ? () => {
         if (!sessionAllowed) return

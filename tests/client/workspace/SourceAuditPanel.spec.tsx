@@ -43,6 +43,100 @@ afterEach(() => {
 })
 
 describe('SourceAuditPanel component', () => {
+  it('expires cached previews and keeps oversized citations out of the cache', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      const text = '@article{large,' + 'x'.repeat(140_000) + '}'
+      const exportCitation = vi.fn(async (request: ZoteroLibraryExportRequestView) => ({
+        ok: true as const,
+        value: {
+          format: 'bibtex' as const,
+          text: request.refs[0]!.includes('LARGE001') ? text : BIBTEX_RESULT.text,
+        },
+      }))
+      const first = sourceOf({ key: 'first', ref: 'zotero://user/0/item/FIRST001' })
+      const large = sourceOf({ key: 'large', ref: 'zotero://user/0/item/LARGE001' })
+      const view = render(
+        <SourceAuditPanel item={first} t={t} canExport exportCitation={exportCitation} />,
+      )
+      await act(async () => {})
+      view.rerender(
+        <SourceAuditPanel item={large} t={t} canExport exportCitation={exportCitation} />,
+      )
+      await act(async () => {})
+      clock.mockReturnValue(32_000)
+      view.rerender(
+        <SourceAuditPanel item={first} t={t} canExport exportCitation={exportCitation} />,
+      )
+      await act(async () => {})
+      view.rerender(
+        <SourceAuditPanel item={large} t={t} canExport exportCitation={exportCitation} />,
+      )
+      await act(async () => {})
+      expect(exportCitation).toHaveBeenCalledTimes(4)
+      expect(screen.getByText(text)).toBeTruthy()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('evicts old previews when the cache exceeds its aggregate text budget', async () => {
+    const exportCitation = exportStub({
+      format: 'bibtex',
+      text: '@article{entry,' + 'x'.repeat(12_000) + '}',
+    })
+    const items = Array.from({ length: 12 }, (_, index) =>
+      sourceOf({
+        key: `source-${index}`,
+        ref: `zotero://user/0/item/ROW${String(index).padStart(5, '0')}`,
+      }),
+    )
+    const view = render(
+      <SourceAuditPanel item={items[0]!} t={t} canExport exportCitation={exportCitation} />,
+    )
+    await act(async () => {})
+    for (const item of items.slice(1)) {
+      view.rerender(
+        <SourceAuditPanel item={item} t={t} canExport exportCitation={exportCitation} />,
+      )
+      await act(async () => {})
+    }
+    view.rerender(
+      <SourceAuditPanel item={items[0]!} t={t} canExport exportCitation={exportCitation} />,
+    )
+    await act(async () => {})
+    expect(exportCitation).toHaveBeenCalledTimes(13)
+  })
+  it('reuses a bounded citation preview when returning to the same source and invalidates a changed source', async () => {
+    const exportCitation = exportStub()
+    const first = sourceOf({ key: 'first', ref: 'zotero://user/0/item/FIRST001', lastTouchedAt: 1 })
+    const second = sourceOf({
+      key: 'second',
+      ref: 'zotero://user/0/item/SECOND01',
+      lastTouchedAt: 2,
+    })
+    const view = render(
+      <SourceAuditPanel item={first} t={t} canExport exportCitation={exportCitation} />,
+    )
+    await screen.findByText(/@article\{authoritative2024,/)
+    view.rerender(
+      <SourceAuditPanel item={second} t={t} canExport exportCitation={exportCitation} />,
+    )
+    await act(async () => {})
+    view.rerender(<SourceAuditPanel item={first} t={t} canExport exportCitation={exportCitation} />)
+    await act(async () => {})
+    expect(exportCitation).toHaveBeenCalledTimes(2)
+    view.rerender(
+      <SourceAuditPanel
+        item={{ ...first, lastTouchedAt: 3 }}
+        t={t}
+        canExport
+        exportCitation={exportCitation}
+      />,
+    )
+    await act(async () => {})
+    expect(exportCitation).toHaveBeenCalledTimes(3)
+  })
   it('renders and copies only the authoritative remote citation', async () => {
     const exportCitation = exportStub()
     const item = sourceOf({

@@ -49,10 +49,11 @@ it('keeps complete private bytes until their lease is released', async () => {
   const file = await store.stage(bytes, new AbortController().signal)
   expect(await readFile(file.path, 'utf8')).toBe('%PDF-1.7\nbody')
   expect((await stat(file.path)).mode & 0o777).toBe(0o600)
-  await store.release(file.lease)
+  expect(await store.release(file.lease)).toBe(true)
   await expect(stat(file.path)).rejects.toMatchObject({ code: 'ENOENT' })
   // A repeated release is a no-op, not an error.
-  await store.release(file.lease)
+  expect(await store.release(file.lease)).toBe(false)
+  expect(await store.release('never-created')).toBe(false)
 })
 
 it('removes every reading file on plugin disposal', async () => {
@@ -86,6 +87,30 @@ it('reclaims only directories whose owning process is gone', async () => {
   const names = await readdir(root)
   expect(names).not.toContain(basename(abandoned))
   expect(names).toContain(basename(live))
+})
+
+it('reclaims an exited reader without POSIX uid support while retaining a live reader', async () => {
+  const root = await rootOf()
+  const abandoned = join(root, `dsh-zotero-pdf-${deadPid()}-AbC123`)
+  const live = join(root, `dsh-zotero-pdf-${process.pid}-Live42`)
+  await mkdir(abandoned)
+  await mkdir(live)
+  const store = new PdfReadingFiles(root, () => undefined)
+  stores.push(store)
+  await store.stage(bytes, new AbortController().signal)
+  expect(await readdir(root)).not.toContain(basename(abandoned))
+  expect(await readdir(root)).toContain(basename(live))
+})
+
+it('retains a directory whose POSIX owner differs from the current user', async () => {
+  const root = await rootOf()
+  const abandoned = join(root, `dsh-zotero-pdf-${deadPid()}-AbC123`)
+  await mkdir(abandoned)
+  const owner = (await stat(abandoned)).uid
+  const store = new PdfReadingFiles(root, () => owner + 1)
+  stores.push(store)
+  await store.stage(bytes, new AbortController().signal)
+  expect(await readdir(root)).toContain(basename(abandoned))
 })
 
 it('retries the reap after a failed pass instead of latching the failure', async () => {

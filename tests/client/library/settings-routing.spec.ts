@@ -18,10 +18,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 async function routing() {
-  localStorage.setItem(
-    'dsh-zotero:url-pdf-readers:1',
-    JSON.stringify([[address, { lease: 'old-lease', ref }]]),
-  )
+  localStorage.setItem('dsh-zotero:url-pdf-readers:2', JSON.stringify([[address, { ref }]]))
   const world = fakeWorld()
   world.libraryScope.publish({ value: { allowUrlPdfRead: true } })
   const originalStatus = world.status

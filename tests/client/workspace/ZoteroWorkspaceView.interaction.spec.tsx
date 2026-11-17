@@ -12,7 +12,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { zh } from '../../../src/client/locales.ts'
-import { filterCountsOf } from '../../../src/client/sources/selectors.ts'
+import { filterCountsOf } from '../../helpers/source-filter-counts.ts'
 import type { ConnectionView } from '../../../src/client/components/workspace/connection.ts'
 import { mixedFixture } from '../helpers/source-fixtures-collections.ts'
 import { singleFixture } from '../helpers/source-fixtures-gallery.ts'

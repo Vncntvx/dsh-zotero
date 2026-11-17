@@ -86,9 +86,65 @@ describe('EnrichmentFormController model operations', () => {
     face.edit('semanticModel', 'bilingual')
     face.edit('semanticModelDir', '/custom/models')
     face.resetField('semanticModelDir')
-    // Editing a draft is a form-validation fact only; no wire call fires from
-    // the keystrokes themselves.
+    // Await the owned microtask boundary so scheduled RPCs cannot escape the assertion.
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
     expect(port.semanticModelStatus).not.toHaveBeenCalled()
+  })
+
+  it('does not refresh an uncommitted model target after a rejected save', async () => {
+    const port = modelPortOf()
+    const scope = fakeScope({ rejectWrites: true })
+    const controller = new EnrichmentFormController(scope, credentialPort(), port)
+    controllers.push(controller)
+    const face = controller.inject()
+    face.edit('semanticModel', 'bilingual')
+    face.edit('semanticModelDir', '/custom/models')
+    await face.save()
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    expect(port.semanticModelStatus).not.toHaveBeenCalled()
+    expect(scope.writes).toEqual([])
+  })
+
+  it('keeps observed state when an unrelated settings save is rejected', async () => {
+    const port = modelPortOf()
+    const scope = fakeScope({ rejectWrites: true })
+    const controller = new EnrichmentFormController(scope, credentialPort(), port)
+    controllers.push(controller)
+    const face = controller.inject()
+    await face.checkModelStatus()
+    const observed = face.hooks.enrichmentCard.getSnapshot().semanticModelState
+    face.edit('outputDir', '/custom/artifacts')
+    await face.save()
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    expect(port.semanticModelStatus).toHaveBeenCalledOnce()
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModelState).toEqual(observed)
+  })
+
+  it('refreshes the committed target once after an accepted save', async () => {
+    const port = modelPortOf()
+    const { face } = controllerOf(port)
+    face.edit('semanticModel', 'bilingual')
+    face.edit('semanticModelDir', '/custom/models')
+    await face.save()
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    expect(port.semanticModelStatus).toHaveBeenCalledOnce()
+    expect(port.semanticModelStatus).toHaveBeenCalledWith(
+      {
+        model: 'bilingual',
+        modelDir: '/custom/models',
+      },
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('does not turn an external commit into a read of a conflicting draft target', async () => {
+    const port = modelPortOf()
+    const { face, scope } = controllerOf(port)
+    face.edit('semanticModel', 'bilingual')
+    scope.publish({ value: { semanticModel: 'academic' } })
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    expect(port.semanticModelStatus).not.toHaveBeenCalled()
+    expect(face.hooks.enrichmentCard.getSnapshot().semanticModel.text).toBe('bilingual')
   })
 
   it('is a no-op without a model port, without throwing', async () => {

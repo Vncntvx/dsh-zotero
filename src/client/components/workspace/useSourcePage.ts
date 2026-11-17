@@ -77,6 +77,9 @@ export function useSourcePage(
     /** The list's exact total; the pager reports whether rows remain. */
     readonly total: number
     readonly enabled?: boolean
+    /** Load the first deferred body page when the user opens its workspace. */
+    readonly eager?: boolean
+    readonly revision?: number
   },
 ): SourcePager {
   const { sessionId, target, currentServerId, offset, total } = options
@@ -84,7 +87,8 @@ export function useSourcePage(
   // The list identity a page belongs to: the caller's list plus the count of
   // rows already accepted. An offset change means the view's head grew or the
   // filter moved, so the accepted pages no longer continue that list.
-  const key = JSON.stringify([sessionId, target, currentServerId, offset])
+  const eager = options.eager === true && offset === 0 && total > 0
+  const key = JSON.stringify([sessionId, target, currentServerId, offset, options.revision])
   const [state, setState] = useState<PagerState>(EMPTY_STATE)
   const [click, setClick] = useState(0)
   const revisionRef = useRef<number>()
@@ -132,7 +136,7 @@ export function useSourcePage(
   useEffect(() => {
     inflightRef.current?.abort()
     inflightRef.current = undefined
-    if (!enabled || call === undefined || sessionId === undefined || click === 0) return
+    if (!enabled || call === undefined || sessionId === undefined || (click === 0 && !eager)) return
     const controller = new AbortController()
     inflightRef.current = controller
     const revision = revisionRef.current
@@ -146,7 +150,11 @@ export function useSourcePage(
         : (accepted[accepted.length - 1]?.offset ?? 0) +
             (accepted[accepted.length - 1]?.limit ?? 0),
     )
-    setState((previous) => ({ ...previous, key, loading: true, error: undefined }))
+    setState((previous) =>
+      previous.key === key
+        ? { ...previous, loading: true, error: undefined }
+        : { key, pages: [], loading: true, attempt: click },
+    )
     void (async () => {
       try {
         const result = await call(
@@ -193,7 +201,7 @@ export function useSourcePage(
     }
     // The refs carry the settled state, so the cycle stays click-driven.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [call, click, currentServerId, enabled, key, sessionId, offset])
+  }, [call, click, currentServerId, enabled, key, sessionId, offset, eager])
 
   return {
     pages,

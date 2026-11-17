@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 /**
  * File action rendered inside `deliverables.file.actions` for bibliography deliverables.
  * Clicking reveals the Zotero library panel in the right sidebar.
@@ -14,7 +15,24 @@ export interface DeliverableZoteroActionProps
   extends
     PropsRuntime<'deliverables.file.actions'>,
     PropsLocale<'zotero'>,
-    InjectFace<{ readonly onOpenLibrary: () => void }> {}
+    InjectFace<{
+      readonly onOpenLibrary: () => void
+      readonly reportContractMismatch: (url: string) => void
+    }> {}
+
+/** Pin-reviewed upstream route adapter; every unsupported shape is reported by the slot. */
+export function supportsDeliverableActionUrl(actionUrl: string | undefined): boolean {
+  if (!actionUrl || !/^(?:\/)?api\/present\.open\?/.test(actionUrl)) return false
+  const params = new URLSearchParams(actionUrl.slice(actionUrl.indexOf('?') + 1))
+  return (
+    ['seq', 'index', 'sessionId'].every((key) => params.getAll(key).length === 1) &&
+    (params.get('sessionId')?.length ?? 0) > 0 &&
+    /^[1-9][0-9]*$/.test(params.get('seq') ?? '') &&
+    /^(?:0|[1-9][0-9]*)$/.test(params.get('index') ?? '') &&
+    Number.isSafeInteger(Number(params.get('seq'))) &&
+    Number.isSafeInteger(Number(params.get('index')))
+  )
+}
 
 /**
  * Resolves the delivered file metadata (path and optional description) from actionUrl coordinates.
@@ -23,34 +41,15 @@ export function resolveDeliverableFile(
   actionUrl: string | undefined,
   snapshot: ChatSnapshot | undefined,
 ): DeliverableFileMeta | undefined {
-  if (!actionUrl || !snapshot) return undefined
-  try {
-    const query = actionUrl.includes('?') ? actionUrl.split('?')[1] : actionUrl
-    const params = new URLSearchParams(query)
-    const seqStr = params.get('seq')
-    const indexStr = params.get('index')
-    if (seqStr === null || indexStr === null) return undefined
-    const seq = Number(seqStr)
-    const index = Number(indexStr)
-    if (
-      !/^[0-9]+$/.test(seqStr) ||
-      !/^[0-9]+$/.test(indexStr) ||
-      !Number.isSafeInteger(seq) ||
-      !Number.isSafeInteger(index) ||
-      seq < 1 ||
-      index < 0 ||
-      params.getAll('seq').length !== 1 ||
-      params.getAll('index').length !== 1
-    )
-      return undefined
-
-    for (const turnId of snapshot.timeline.turnOrder) {
-      const presented = snapshot.timeline.turns.get(turnId)?.data.get('deliverables')?.presented
-      const match = presented?.find((p) => p.seq === seq && p.index === index)
-      if (match?.path) return { path: match.path, description: match.description }
-    }
-  } catch {
+  if (!supportsDeliverableActionUrl(actionUrl) || !snapshot || actionUrl === undefined)
     return undefined
+  const params = new URLSearchParams(actionUrl.slice(actionUrl.indexOf('?') + 1))
+  const seq = Number(params.get('seq')),
+    index = Number(params.get('index'))
+  for (const turnId of snapshot.timeline.turnOrder) {
+    const presented = snapshot.timeline.turns.get(turnId)?.data.get('deliverables')?.presented
+    const match = presented?.find((entry) => entry.seq === seq && entry.index === index)
+    if (match?.path) return { path: match.path, description: match.description }
   }
   return undefined
 }
@@ -66,7 +65,10 @@ export function resolveDeliverablePath(
 }
 
 export function DeliverableZoteroAction(props: DeliverableZoteroActionProps) {
-  const { actionUrl, t, useChat, onOpenLibrary } = props
+  const { actionUrl, t, useChat, onOpenLibrary, reportContractMismatch } = props
+  useEffect(() => {
+    if (!supportsDeliverableActionUrl(actionUrl)) reportContractMismatch(actionUrl)
+  }, [actionUrl, reportContractMismatch])
   const file = useChat((snapshot) => resolveDeliverableFile(actionUrl, snapshot), shallowEqual)
 
   if (!isBibliographyDeliverable(file)) return null

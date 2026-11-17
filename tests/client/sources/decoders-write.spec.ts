@@ -12,6 +12,10 @@ describe('writeMetaOf', () => {
   it('decodes restoration as its own outcome with actual success and failure counts', () => {
     expect(writeMetaOf({ kind: 'restored', restoredCount: 2, failedCount: 1 })).toMatchObject({
       kind: 'restored',
+      createdCount: null,
+      updatedCount: null,
+      unverifiedCount: null,
+      alreadyPresentCount: null,
       restoredCount: 2,
       failedCount: 1,
     })
@@ -28,6 +32,10 @@ describe('writeMetaOf', () => {
     ).toEqual({
       kind: 'applied',
       addedCount: 2,
+      createdCount: null,
+      updatedCount: null,
+      unverifiedCount: null,
+      alreadyPresentCount: null,
       restoredCount: null,
       failedCount: null,
       removedCount: 1,
@@ -38,6 +46,10 @@ describe('writeMetaOf', () => {
   it('reads the deleted count a library-wide tag delete reported', () => {
     expect(writeMetaOf({ kind: 'deleted', deletedCount: 3 })).toEqual({
       kind: 'deleted',
+      createdCount: null,
+      updatedCount: null,
+      unverifiedCount: null,
+      alreadyPresentCount: null,
       restoredCount: null,
       failedCount: null,
       addedCount: null,
@@ -54,6 +66,10 @@ describe('writeMetaOf', () => {
       writeMetaOf({ kind: 'committed-unverified', reason: 'commit-unknown', key: 'NOTE1234' }),
     ).toEqual({
       kind: 'committed-unverified',
+      createdCount: null,
+      updatedCount: null,
+      unverifiedCount: null,
+      alreadyPresentCount: null,
       restoredCount: null,
       failedCount: null,
       addedCount: null,
@@ -65,6 +81,10 @@ describe('writeMetaOf', () => {
   it('reads a declined arm as carrying no applied fact', () => {
     expect(writeMetaOf({ kind: 'declined' })).toEqual({
       kind: 'declined',
+      createdCount: null,
+      updatedCount: null,
+      unverifiedCount: null,
+      alreadyPresentCount: null,
       restoredCount: null,
       failedCount: null,
       addedCount: null,
@@ -79,6 +99,10 @@ describe('writeMetaOf', () => {
     for (const meta of [{}, { kind: 7 }, { kind: 'surprise' }]) {
       expect(writeMetaOf(meta)).toEqual({
         kind: 'applied',
+        createdCount: null,
+        updatedCount: null,
+        unverifiedCount: null,
+        alreadyPresentCount: null,
         restoredCount: null,
         failedCount: null,
         addedCount: null,

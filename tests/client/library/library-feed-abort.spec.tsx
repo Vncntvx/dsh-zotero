@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ITEM_DETAIL, searchPage } from '../helpers/library-panel-harness.tsx'
 import { deferred } from '../../helpers/sync.ts'
 import { setupLibraryFeed as setup } from '../helpers/library-feed-harness.ts'
+import { readLibraryState } from '../../../src/client/components/library/library-storage.ts'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -14,6 +15,64 @@ afterEach(() => {
 })
 
 describe('feed read cancellation', () => {
+  it.each(['visibilitychange', 'pagehide'])(
+    'flushes pending query text on %s and reports storage refusal',
+    async (event) => {
+      vi.useFakeTimers()
+      const { result } = setup()
+      await act(async () => {})
+      act(() => result.current.setQ('unsaved query'))
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('storage refused')
+      })
+      if (event === 'visibilitychange') {
+        act(() => document.dispatchEvent(new Event('visibilitychange')))
+        expect(result.current.storageError).toBeUndefined()
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+        act(() => document.dispatchEvent(new Event('visibilitychange')))
+      } else act(() => window.dispatchEvent(new Event('pagehide')))
+      expect(result.current.storageError).toContain('storage refused')
+    },
+  )
+  it('persists a burst of query edits once after debounce and flushes an unfinished draft on close', async () => {
+    vi.useFakeTimers()
+    const { result, unmount } = setup()
+    await act(async () => {})
+    const write = vi.spyOn(Storage.prototype, 'setItem')
+    for (const q of ['q', 'qu', 'que', 'quer', 'query']) act(() => result.current.setQ(q))
+    expect(write).not.toHaveBeenCalled()
+    await act(async () => vi.advanceTimersByTimeAsync(300))
+    expect(write).toHaveBeenCalledOnce()
+    expect(readLibraryState('S1', 'session-1')?.q).toBe('query')
+    act(() => result.current.setQ('query unfinished'))
+    expect(write).toHaveBeenCalledOnce()
+    unmount()
+    expect(readLibraryState('S1', 'session-1')?.q).toBe('query unfinished')
+  })
+
+  it('keeps unrelated pane inputs stable while the raw query changes', async () => {
+    vi.useFakeTimers()
+    const { result } = setup()
+    await act(async () => {})
+    act(() => result.current.setQ('typing draft'))
+    const before = result.current
+    act(() => result.current.setQ('typing another character'))
+    for (const key of [
+      'flatTree',
+      'treeLane',
+      'loadMoreTree',
+      'retryTree',
+      'selectScope',
+      'selectItem',
+      'retryList',
+      'retryInspector',
+      'pageChild',
+      'retryChild',
+      'list',
+      'listQuery',
+    ] as const)
+      expect(result.current[key], key).toBe(before[key])
+  })
   it('debounces a changed query at offset zero and rejects the old list response', async () => {
     vi.useFakeTimers()
     const stale = deferred<any>()

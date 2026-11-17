@@ -19,10 +19,7 @@ function operationsLabelsOf(operations: OperationFacts, t: TranslateNS<'zotero'>
   return labels
 }
 
-/** The non-zero non-successful export counts as one middot-joined note. */
-export function incompleteExportsNoteOf(
-  operations: OperationFacts,
-  t: TranslateNS<'zotero'>,
-): string {
+/** Non-successful operation counts as one middot-joined note. */
+export function operationsNoteOf(operations: OperationFacts, t: TranslateNS<'zotero'>): string {
   return joinNonEmpty(...operationsLabelsOf(operations, t))
 }

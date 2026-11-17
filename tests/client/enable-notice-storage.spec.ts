@@ -56,7 +56,7 @@ describe('the egress acknowledgement', () => {
     expect(first.open()).toBe(true)
     first.controller.dismiss()
     expect(first.open()).toBe(false)
-    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('1')
+    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('enabled-test-epoch')
     first.controller.dispose()
 
     const second = noticeOf('enrichmentEnableNotice', ENRICHMENT_EGRESS_ACK_KEY)
@@ -67,7 +67,7 @@ describe('the egress acknowledgement', () => {
   it('revokes the acknowledgement when the component is turned off', () => {
     const notice = noticeOf('enrichmentEnableNotice', ENRICHMENT_EGRESS_ACK_KEY)
     notice.controller.dismiss()
-    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('1')
+    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('enabled-test-epoch')
 
     notice.source.publish('unavailable')
     expect(notice.open()).toBe(false)
@@ -105,7 +105,7 @@ describe('the egress acknowledgement', () => {
     const scholarly = noticeOf('scholarlyEnableNotice', SCHOLARLY_RETRIEVAL_ACK_KEY)
     scholarly.controller.dismiss()
     scholarly.controller.dispose()
-    expect(localStorage.getItem(SCHOLARLY_RETRIEVAL_ACK_KEY)).toBe('1')
+    expect(localStorage.getItem(SCHOLARLY_RETRIEVAL_ACK_KEY)).toBe('enabled-test-epoch')
     expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBeNull()
 
     // The enrichment component's disclosure is still owed in this browser.

@@ -10,7 +10,7 @@ import { ParsedDocuments } from '../../../src/client/parsed-documents.ts'
 import { observable } from '../enrichment/support/parse-ports.ts'
 import type { ParsedArtifactRead } from '../../../src/client/parsed-documents.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
   cleanup()
   for (const runtime of owned.splice(0)) await runtime.dispose()
@@ -45,7 +45,7 @@ it.each(['offset', 'length', 'total'] as const)(
       }
       return result
     })
-    const runtime = parsedRuntime(read)
+    const runtime = await parsedRuntime(read)
     owned.push(runtime)
     runtime.mount()
     await tick()
@@ -79,7 +79,7 @@ it.each(['identity', 'size', 'decode'] as const)(
         }
       return result
     })
-    const runtime = parsedRuntime(read)
+    const runtime = await parsedRuntime(read)
     owned.push(runtime)
     runtime.mount()
     await tick()
@@ -96,7 +96,7 @@ it('reports a wire cleanup refusal, and rejects an invalid resource address with
       ? { ok: false, error: new RemoteError('gateway/internal', 'release denied', {}) }
       : await base(request, signal),
   )
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount()
   await tick()
@@ -116,7 +116,7 @@ it('reports a wire cleanup refusal, and rejects an invalid resource address with
 
 it('does no source I/O before access is granted and supports repeated refresh commands', async () => {
   const read = documentRead('# Granted')
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read, undefined, false)
   owned.push(runtime)
   runtime.access.publish(false)
   runtime.mount()

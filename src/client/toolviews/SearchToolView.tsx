@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /**
  * Dedicated toolview card for `zotero_search`.
  * Renders literature search hits, metadata badges, notes matches, and Zotero open links.
@@ -95,42 +96,50 @@ export function SearchToolView(props: SearchToolViewProps) {
               <>
                 <div className={css.cardList}>
                   {rows.map((row) => (
-                    <div key={row.ref} className={css.itemCard}>
-                      <div className={css.itemHeader}>
-                        {row.year !== undefined && <Tag tone="neutral">{row.year}</Tag>}
-                        {row.itemType !== undefined && <Tag tone="info">{row.itemType}</Tag>}
-                        {row.bestAttachmentType && <Tag tone="danger">{t('badgePdf')}</Tag>}
-                        <span className={css.itemTitle}>
+                    <ToolItemRow
+                      key={row.ref}
+                      title={
+                        <>
                           {row.title}
                           {row.citationKey !== undefined ? ` [@${row.citationKey}]` : ''}
-                        </span>
-                      </div>
+                        </>
+                      }
+                      leading={
+                        <>
+                          {row.year !== undefined && <Tag tone="neutral">{row.year}</Tag>}
+                          {row.itemType !== undefined && <Tag tone="info">{row.itemType}</Tag>}
+                          {row.bestAttachmentType && <Tag tone="danger">{t('badgePdf')}</Tag>}
+                        </>
+                      }
+                      actions={
+                        <>
+                          {row.bestAttachmentRef && (
+                            <PdfReadButton
+                              attachmentRef={row.bestAttachmentRef}
+                              onOpenFile={props.openFile}
+                              resolveAttachment={client.resolveAttachment}
+                              label={t('readPdf')}
+                              t={t}
+                              variant="link"
+                              className={linkCss.linkDense}
+                            />
+                          )}
+                          <ZoteroLocateActions
+                            title={row.title}
+                            itemRef={row.ref}
+                            t={t}
+                            variant="link"
+                            className={linkCss.linkDense}
+                            openProtocol={client.openProtocol}
+                          />
+                        </>
+                      }
+                    >
                       {row.creatorSummary && (
                         <div className={css.itemMeta}>{row.creatorSummary}</div>
                       )}
                       <CitationKeyConflictNotice conflict={row.citationKeyConflict} t={t} />
-                      <div className={css.itemActions}>
-                        {row.bestAttachmentRef && (
-                          <PdfReadButton
-                            attachmentRef={row.bestAttachmentRef}
-                            onOpenFile={props.openFile}
-                            resolveAttachment={client.resolveAttachment}
-                            label={t('readPdf')}
-                            t={t}
-                            variant="link"
-                            className={linkCss.linkDense}
-                          />
-                        )}
-                        <ZoteroLocateActions
-                          title={row.title}
-                          itemRef={row.ref}
-                          t={t}
-                          variant="link"
-                          className={linkCss.linkDense}
-                          openProtocol={client.openProtocol}
-                        />
-                      </div>
-                    </div>
+                    </ToolItemRow>
                   ))}
                 </div>
                 {omitted > 0 && (

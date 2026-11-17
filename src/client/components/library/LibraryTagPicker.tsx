@@ -8,9 +8,17 @@
  * @module dsh-zotero/client/components/library/LibraryTagPicker
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
-import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   Button,
@@ -49,12 +57,15 @@ export function LibraryTagPicker({
 }): ReactNode {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [activeTag, setActiveTag] = useState<string>()
+  const typeAhead = useRef({ text: '', at: 0 })
   const [rows, setRows] = useState<readonly string[]>([])
   const [nextOffset, setNextOffset] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const selected = useMemo(() => new Set(value.tags ?? []), [value.tags])
   const seq = useRef(0)
   const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const requestAbort = useRef<AbortController>()
   /** The library the current rows were loaded for; a switch invalidates them. */
   const rowsLibrary = useRef<SupportedLocalLibrary>()
   const triggerRef = useRef<HTMLDivElement>(null)
@@ -65,17 +76,23 @@ export function LibraryTagPicker({
   const anchorName = `--zotero-tags-${useId().replaceAll(':', '')}`
 
   const requestPage = (search: string, offset: number, append: boolean): void => {
+    requestAbort.current?.abort()
+    const controller = new AbortController()
+    requestAbort.current = controller
     const ticket = seq.current + 1
     seq.current = ticket
     setLoading(true)
     void face
-      .browse({
-        kind: 'tags',
-        library,
-        offset,
-        limit: LIBRARY_PAGE_SIZE,
-        ...(search !== '' ? { q: search, match: 'contains' } : {}),
-      })
+      .browse(
+        {
+          kind: 'tags',
+          library,
+          offset,
+          limit: LIBRARY_PAGE_SIZE,
+          ...(search !== '' ? { q: search, match: 'contains' } : {}),
+        },
+        controller.signal,
+      )
       .then((result) => {
         if (seq.current !== ticket) return
         setLoading(false)
@@ -104,9 +121,19 @@ export function LibraryTagPicker({
     setLoading(false)
     return () => {
       seq.current += 1
+      requestAbort.current?.abort()
       if (debounce.current !== undefined) clearTimeout(debounce.current)
     }
   }, [library.type, library.id])
+
+  useEffect(() => {
+    if (open && enabled) return
+    seq.current += 1
+    requestAbort.current?.abort()
+    if (debounce.current !== undefined) clearTimeout(debounce.current)
+    debounce.current = undefined
+    setLoading(false)
+  }, [open, enabled])
 
   // The panel is portaled, so it must be named as an inside target explicitly.
   useDismissOnOutsidePointer(triggerRef, open, setOpen, panelRef)
@@ -167,25 +194,73 @@ export function LibraryTagPicker({
     current.change({ ...current.value, tags: Array.from(next) })
   }, [])
 
+  const activeOption = rows.includes(activeTag ?? '')
+    ? activeTag
+    : (rows.find((tag) => selected.has(tag)) ?? rows[0])
+  const focusOption = (index: number): void => {
+    if (rows.length === 0) return
+    const bounded = (index + rows.length) % rows.length
+    setActiveTag(rows[bounded])
+    panelRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]')[bounded]?.focus()
+  }
+  const onOptionsKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>): void => {
+    const index = rows.indexOf(activeOption ?? '')
+    const target = event.target instanceof Element ? event.target.closest('[role="option"]') : null
+    if (!target) return
+    let next: number | undefined
+    if (event.key === 'ArrowDown') next = index + 1
+    else if (event.key === 'ArrowUp') next = index - 1
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = rows.length - 1
+    else if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault()
+      if (activeOption !== undefined) toggleTag(activeOption)
+      return
+    } else if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const now = performance.now()
+      const previous = typeAhead.current
+      const character = event.key.toLocaleLowerCase()
+      const text =
+        now - previous.at > 700 || [...previous.text].every((letter) => letter === character)
+          ? character
+          : previous.text + character
+      typeAhead.current = { text, at: now }
+      for (let step = 1; step <= rows.length; step++) {
+        const candidate = (index + step) % rows.length
+        if (rows[candidate]?.toLocaleLowerCase().startsWith(text)) {
+          next = candidate
+          break
+        }
+      }
+    }
+    if (next !== undefined) {
+      event.preventDefault()
+      focusOption(next)
+    }
+  }
+
   const options = useMemo(
     () =>
       rows.map((tag) => (
         <li key={tag} role="presentation">
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant={selected.has(tag) ? 'toolbar' : 'ghost'}
             role="option"
             aria-selected={selected.has(tag)}
-            className={clsx(css.tagOption, selected.has(tag) && css.tagOptionSelected)}
+            tabIndex={tag === activeOption ? 0 : -1}
+            onFocus={() => setActiveTag(tag)}
+            className={css.tagOption}
             onClick={() => toggleTag(tag)}
           >
             <span className={css.tagOptionLabel}>{tag}</span>
             {selected.has(tag) && (
               <IconCheckOutlineRegular size={14} className={css.tagCheckIcon} />
             )}
-          </button>
+          </Button>
         </li>
       )),
-    [rows, selected, toggleTag],
+    [rows, selected, toggleTag, activeOption],
   )
 
   return (
@@ -219,12 +294,19 @@ export function LibraryTagPicker({
               aria-label={t('librarySearchTags')}
               value={query}
               onChange={(event) => search(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  focusOption(event.key === 'ArrowDown' ? 0 : rows.length - 1)
+                }
+              }}
               autoFocus
             />
             <ul
               className={css.tagOptions}
               role="listbox"
               aria-multiselectable="true"
+              onKeyDown={onOptionsKeyDown}
               aria-label={t('libraryFilterTags')}
             >
               {options}

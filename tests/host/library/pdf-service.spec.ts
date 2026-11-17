@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ZoteroLibraryService } from '../../../src/library/service.js'
 import type { ZoteroService } from '../../../src/service.js'
@@ -72,28 +73,44 @@ it('refuses disabled permission before any download', async () => {
   expect(resolveAttachment).not.toHaveBeenCalled()
   expect(vi.mocked(publicFetch)).not.toHaveBeenCalled()
 })
+it('keeps unknown lease release idempotent and records a debug diagnostic', async () => {
+  const { service, ctx } = await boot()
+  const debug = vi.spyOn(ctx.logger, 'debug').mockImplementation(() => {})
+  const request = { lease: randomUUID() }
+  await expect(service.releaseUrlPdf(request, new AbortController().signal)).resolves.toEqual({
+    released: true,
+  })
+  await expect(service.releaseUrlPdf(request, new AbortController().signal)).resolves.toEqual({
+    released: true,
+  })
+  expect(debug).toHaveBeenCalledTimes(2)
+  expect(debug).toHaveBeenCalledWith('pdf.release.unknown-lease')
+})
 it('refuses a missing filesystem before any download', async () => {
   const { service } = await boot(false)
-  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toThrow(
-    'filesystem',
-  )
+  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
+    code: 'zotero/file-unreadable',
+    details: { code: 'ZOTERO_FILE_UNREADABLE' },
+  })
   expect(vi.mocked(publicFetch)).not.toHaveBeenCalled()
 })
 it('removes a staged file if the filesystem cannot map its host path', async () => {
   const { service, ctx } = await boot()
   const mapping = vi.spyOn(ctx.fs, 'processPathFromHostPath').mockReturnValue(undefined)
-  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toThrow(
-    'cannot read host PDF',
-  )
+  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
+    code: 'zotero/file-unreadable',
+    details: { code: 'ZOTERO_FILE_UNREADABLE' },
+  })
   await expect(stat(mapping.mock.calls[0]![0])).rejects.toMatchObject({ code: 'ENOENT' })
 })
 it('refuses a filesystem mapping to different bytes and removes the temporary file', async () => {
   const { service, ctx } = await boot()
   const mapping = vi.spyOn(ctx.fs, 'processPathFromHostPath')
   vi.spyOn(ctx.fs, 'fileUrl').mockReturnValue('file:///different.pdf')
-  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toThrow(
-    'verified mapping',
-  )
+  await expect(service.readUrlPdf({ ref }, new AbortController().signal)).rejects.toMatchObject({
+    code: 'zotero/file-unreadable',
+    details: { code: 'ZOTERO_FILE_UNREADABLE' },
+  })
   await expect(stat(mapping.mock.calls[0]![0])).rejects.toMatchObject({ code: 'ENOENT' })
 })
 it('rechecks permission after staging instead of exposing bytes after revocation', async () => {

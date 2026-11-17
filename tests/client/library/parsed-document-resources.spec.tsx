@@ -8,7 +8,7 @@ import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { parsedArtifactTabAddress, parsedTabAddress } from '../../../src/client/parsed-tab.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
   cleanup()
   for (const runtime of owned.splice(0)) await runtime.dispose()
@@ -17,8 +17,8 @@ afterEach(async () => {
 const tick = async () => {
   await act(async () => {})
 }
-function mount(read = documentRead('# Resource')) {
-  const runtime = parsedRuntime(read)
+async function mount(read = documentRead('# Resource')) {
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount()
   return runtime
@@ -26,7 +26,7 @@ function mount(read = documentRead('# Resource')) {
 
 it('revokes displayed bytes, cancels preparation and prepares afresh after access returns', async () => {
   const read = documentRead('# Resource')
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   act(() => runtime.access.publish(false))
   await tick()
@@ -40,7 +40,7 @@ it('revokes displayed bytes, cancels preparation and prepares afresh after acces
 
 it('refuses an over-budget candidate and preserves the previous complete version', async () => {
   const read = documentRead('# Resource')
-  mount(read)
+  await mount(read)
   await tick()
   const base = documentRead('# Replacement')
   read.mockImplementation(async (request, signal) => {
@@ -67,7 +67,7 @@ it('invalidates a late opening when a newer refresh is requested', async () => {
   const base = documentRead('# Stale')
   const read = documentRead('# Fresh')
   read.mockImplementationOnce(async () => await pending.promise)
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   act(() =>
     runtime.documents.refresh(
@@ -95,7 +95,7 @@ it('keeps successful content available and reports a lease cleanup refusal', asy
     if (request.op === 'release') throw new Error('cleanup refused')
     return await base(request, signal)
   })
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   expect(screen.getByRole('heading', { name: 'Resource' })).toBeDefined()
   expect(runtime.failures).toHaveBeenCalledWith(
@@ -105,7 +105,7 @@ it('keeps successful content available and reports a lease cleanup refusal', asy
 
 it('starts a new preparation when a committed generation is reported without polling', async () => {
   const read = documentRead('# Resource')
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   read.mockImplementation(documentRead('# Committed'))
   act(() => runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001'))
@@ -121,7 +121,7 @@ it('matches a committed attachment structurally even when its tab address carrie
     ref: 'zotero://user/0/attachment/PDF00001',
     title: 'Real Title',
   })
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount({ address: titled, title: 'Real Title' })
   await tick()
@@ -133,7 +133,7 @@ it('matches a committed attachment structurally even when its tab address carrie
 
 it('reports a browser decode failure in the active locale and retains the complete document', async () => {
   const read = documentRead('# Complete')
-  const runtime = parsedRuntime(read, {
+  const runtime = await parsedRuntime(read, {
     translate: (key) => zh[key],
     decode: async () => {
       throw new Error('corrupt PNG')
@@ -161,7 +161,7 @@ it('reports a browser decode failure in the active locale and retains the comple
 
 it('coalesces simultaneous refresh commands into one replacement', async () => {
   const read = documentRead('# Resource')
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   act(() => {
     runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001')
@@ -174,7 +174,7 @@ it('coalesces simultaneous refresh commands into one replacement', async () => {
 
 it('ignores unchanged grants and committed notices while access is denied', async () => {
   const read = documentRead('# Resource')
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   act(() => runtime.access.publish(true))
   await tick()
@@ -202,7 +202,7 @@ it('reclaims a prepared candidate closed while the Host release is pending', asy
   })
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:candidate')
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await entered.promise
   cleanup()
   const disposed = runtime.dispose()
@@ -214,7 +214,7 @@ it('reclaims a prepared candidate closed while the Host release is pending', asy
 
 it('discards an open artifact by id and refreshes only its tab', async () => {
   const read = documentRead('# Resource')
-  const runtime = mount(read)
+  const runtime = await mount(read)
   await tick()
   const before = read.mock.calls.filter(([request]) => request.op === 'open').length
   act(() => runtime.documents.discarded('parsed-session', 'b'.repeat(64)))
@@ -224,7 +224,7 @@ it('discards an open artifact by id and refreshes only its tab', async () => {
 
 it('opens an artifact-addressed resource with an opaque target', async () => {
   const read = documentRead('# Resource')
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   const abort = new AbortController()
   const iterator = runtime.documents
@@ -245,7 +245,7 @@ it('opens an artifact-addressed resource with an opaque target', async () => {
 
 it('reparses an artifact-addressed document through its own opaque target', async () => {
   const read = documentRead('# Resource')
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount({
     address: parsedArtifactTabAddress({ sessionId: 'parsed-session', artifactId: 'a'.repeat(64) }),
@@ -261,7 +261,7 @@ it('reports a thrown non-error as the failure text', async () => {
   read.mockImplementation(async () => {
     throw 'gateway blip'
   })
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   runtime.mount()
   await tick()

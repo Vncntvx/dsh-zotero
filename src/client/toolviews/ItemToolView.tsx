@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /**
  * Dedicated toolview card for `zotero_get`.
  * Renders paper metadata, publication venues, attachments, and Zotero open links.
@@ -201,15 +202,40 @@ export function ItemToolView(props: ItemToolViewProps) {
 
         return (
           <>
-            <div className={css.itemCard}>
-              <div className={css.itemHeader}>
-                {getItemView?.year !== null && getItemView?.year !== undefined && (
-                  <Tag tone="neutral">{getItemView.year}</Tag>
-                )}
-                {getItemView?.bestAttachment && <Tag tone="danger">{t('badgePdf')}</Tag>}
-                <span className={css.itemTitle}>{getItemView?.title ?? ref}</span>
-              </div>
-
+            <ToolItemRow
+              title={<>{getItemView?.title ?? ref}</>}
+              leading={
+                <>
+                  {getItemView?.year !== null && getItemView?.year !== undefined && (
+                    <Tag tone="neutral">{getItemView.year}</Tag>
+                  )}
+                  {getItemView?.bestAttachment && <Tag tone="danger">{t('badgePdf')}</Tag>}
+                </>
+              }
+              actions={
+                <>
+                  {getItemView?.bestAttachment?.ref && (
+                    <PdfReadButton
+                      attachmentRef={getItemView.bestAttachment.ref}
+                      onOpenFile={props.openFile}
+                      resolveAttachment={client.resolveAttachment}
+                      label={t('readPdf')}
+                      t={t}
+                      variant="link"
+                      className={linkCss.linkDense}
+                    />
+                  )}
+                  <ZoteroLocateActions
+                    title={getItemView?.title}
+                    itemRef={ref}
+                    t={t}
+                    variant="link"
+                    className={linkCss.linkDense}
+                    openProtocol={client.openProtocol}
+                  />
+                </>
+              }
+            >
               {getItemView?.creators && <div className={css.itemMeta}>{getItemView.creators}</div>}
               {getItemView?.venue && <div className={css.itemMeta}>{getItemView.venue}</div>}
               {getItemView?.citationKey && (
@@ -259,29 +285,7 @@ export function ItemToolView(props: ItemToolViewProps) {
                     </div>
                   ),
               )}
-
-              <div className={css.itemActions}>
-                {getItemView?.bestAttachment?.ref && (
-                  <PdfReadButton
-                    attachmentRef={getItemView.bestAttachment.ref}
-                    onOpenFile={props.openFile}
-                    resolveAttachment={client.resolveAttachment}
-                    label={t('readPdf')}
-                    t={t}
-                    variant="link"
-                    className={linkCss.linkDense}
-                  />
-                )}
-                <ZoteroLocateActions
-                  title={getItemView?.title}
-                  itemRef={ref}
-                  t={t}
-                  variant="link"
-                  className={linkCss.linkDense}
-                  openProtocol={client.openProtocol}
-                />
-              </div>
-            </div>
+            </ToolItemRow>
 
             {previewSection(t(CHILD_KIND_LABEL.note), notePreviews)}
             {previewSection(t(CHILD_KIND_LABEL.annotation), annotationPreviews)}

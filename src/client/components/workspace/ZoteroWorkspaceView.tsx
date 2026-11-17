@@ -204,6 +204,8 @@ export function ZoteroWorkspaceView({
   // so a session that fits the window never issues a request.
   const sourcesPager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'sources', filter },
     offset: visible.length,
     total: counts[filter],
@@ -211,6 +213,8 @@ export function ZoteroWorkspaceView({
   })
   const evidencePager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'source', key: selectedKey ?? '', rows: 'evidence' },
     offset: selectedItem?.evidence.length ?? 0,
     total: selectedItem?.evidenceTotal ?? 0,
@@ -218,6 +222,8 @@ export function ZoteroWorkspaceView({
   })
   const sourceExportsPager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'source', key: selectedKey ?? '', rows: 'exports' },
     offset: selectedItem?.exports.length ?? 0,
     total: selectedItem?.exportsTotal ?? 0,
@@ -225,6 +231,8 @@ export function ZoteroWorkspaceView({
   })
   const searchesPager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'source', key: selectedKey ?? '', rows: 'searches' },
     offset: selectedItem?.searches.length ?? 0,
     total: selectedItem?.searchesTotal ?? 0,
@@ -232,6 +240,8 @@ export function ZoteroWorkspaceView({
   })
   const fulltextPager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'source', key: selectedKey ?? '', rows: 'fulltext' },
     offset: selectedItem?.fulltextReads.length ?? 0,
     total: selectedItem?.fulltextReadsTotal ?? 0,
@@ -239,6 +249,8 @@ export function ZoteroWorkspaceView({
   })
   const sessionExportsPager = useSourcePage(sourcePage, {
     sessionId,
+    eager: workspace.detailsDeferred === true,
+    revision: workspace.detailsRevision,
     target: { kind: 'session', rows: 'exports' },
     offset: workspace.exports.length,
     total: workspace.exportTotal,

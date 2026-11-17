@@ -13,7 +13,7 @@ import type { ZoteroAttachmentLocationView } from '../contract.js'
 /**
  * Cordis Service plugin providing `ctx.zoteroLibrary` and its Typert remote
  * endpoints: browse, collection path, search, item detail, citation/BibTeX
- * export, and approved writes.
+ * export, approved writes, and URL PDF read/release.
  *
  * @module dsh-zotero/library/service
  */
@@ -27,7 +27,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { isOwnConfigFiber } from '../service-lifecycle.js'
-import { domainCall, invalid, ZoteroError } from '../errors.js'
+import { domainCall, invalid, ZoteroError, ZOTERO_FILE_UNREADABLE } from '../errors.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
 import { executeLibraryWrite } from '../library-write.js'
 import {
@@ -141,15 +141,26 @@ export class ZoteroLibraryService extends TypertRemoteService {
         'ZOTERO_URL_PDF_DISABLED',
       )
     const fs = this.ctx.get('fs')
-    if (!fs) throw new Error('The host filesystem required for PDF reading is unavailable.')
+    if (!fs)
+      throw new ZoteroError(
+        'The host filesystem required for PDF reading is unavailable.',
+        ZOTERO_FILE_UNREADABLE,
+      )
     const pdf = await this.urlPdf.read(attachment, signal)
     const file = await this.pdfFiles.stage(pdf.data, signal)
     try {
       const mapped = fs.processPathFromHostPath(file.path)
-      if (!mapped) throw new Error('The session filesystem cannot read host PDF files.')
+      if (!mapped)
+        throw new ZoteroError(
+          'The session filesystem cannot read host PDF files.',
+          ZOTERO_FILE_UNREADABLE,
+        )
       const target = await fs.resolve(mapped, { signal })
       if (fs.fileUrl(target) !== pathToFileURL(file.path).href)
-        throw new Error('The session filesystem has no verified mapping for this PDF.')
+        throw new ZoteroError(
+          'The session filesystem has no verified mapping for this PDF.',
+          ZOTERO_FILE_UNREADABLE,
+        )
       signal.throwIfAborted()
       if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
         throw new ZoteroError('URL PDF reading permission was revoked.', 'ZOTERO_URL_PDF_DISABLED')
@@ -172,7 +183,8 @@ export class ZoteroLibraryService extends TypertRemoteService {
   ): Promise<{ released: true }> {
     signal.throwIfAborted()
     return domainCall(async () => {
-      await this.pdfFiles.release(zoteroReleaseUrlPdfSchema.parse(request).lease)
+      if (!(await this.pdfFiles.release(zoteroReleaseUrlPdfSchema.parse(request).lease)))
+        this.ctx.logger.debug('pdf.release.unknown-lease')
       return { released: true }
     })
   }

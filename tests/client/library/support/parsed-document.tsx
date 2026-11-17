@@ -1,3 +1,4 @@
+import { contextMenuRuntime } from '../../helpers/context-menu-runtime.tsx'
 /** Production provider and component; only remote bytes and framework seats are controlled. */
 import { useSyncExternalStore } from 'react'
 import { render } from '@testing-library/react'
@@ -131,11 +132,13 @@ export function composer() {
   }
 }
 
-export function parsedRuntime(
+export async function parsedRuntime(
   read: ParsedArtifactRead,
   options?: ConstructorParameters<typeof ParsedDocuments>[3],
+  initialAccess = true,
 ) {
-  const access = observable(true)
+  const menu = await contextMenuRuntime()
+  const access = observable(initialAccess)
   const failures = vi.fn()
   const documents = new ParsedDocuments(read, () => access, failures, {
     decode: async () => {},
@@ -184,6 +187,7 @@ export function parsedRuntime(
   ): ParsedDocumentTabProps =>
     ({
       t: mockT,
+      contextMenus: menu.menus,
       sessionId: SESSION,
       refresh: (address: string) => documents.refresh(address),
       documents,
@@ -230,6 +234,7 @@ export function parsedRuntime(
         : {}),
     }) as unknown as ParsedDocumentTabProps & Parameters<typeof ParsedDocumentTitle>[0]
   return {
+    contextMenus: menu.menus,
     source,
     access,
     documents,
@@ -243,7 +248,7 @@ export function parsedRuntime(
       render(<ParsedDocumentTab {...props(options)} />),
     async dispose() {
       abort.abort()
-      await settled
+      await Promise.all([settled, menu.dispose()])
     },
   }
 }

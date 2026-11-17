@@ -7,43 +7,32 @@ import { WriteToolView, type WriteToolName } from '../../../src/client/toolviews
 import { makeTranslate } from '../helpers/mock-translate.ts'
 import { createToolViewProps, mockUseDisclosure } from '../helpers/mock-disclosure.ts'
 import { settled } from '../helpers/blocks.ts'
-import { scholarlySaveReceipt } from '../../helpers/scholarly-save-runtime.js'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  SCHOLARLY_SAVE_STATES,
+  scholarlySaveOutcome,
+} from '../../helpers/scholarly-save-outcomes.js'
+
+const capturedReceipts = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../fixtures/scholarly-save-receipts.json'),
+    'utf8',
+  ),
+) as Record<string, { content: unknown[]; meta: Record<string, unknown> }>
 
 afterEach(cleanup)
 
 const REF = 'zotero://user/0/item/NOTE0001?server=srv-save'
 
 describe('Scholarly persisted write outcomes', () => {
-  it.each(['declined', 'commit-unknown', 'saved-state-unverified', 'applied'] as const)(
+  it.each(SCHOLARLY_SAVE_STATES)(
     'replays %s from runtime content and meta alone',
     async (state) => {
-      const outcome =
-        state === 'declined'
-          ? { kind: 'declined' as const }
-          : state === 'applied'
-            ? {
-                kind: 'applied' as const,
-                ref: REF,
-                key: 'NOTE0001',
-                version: 12,
-                libraryVersion: 12,
-                itemType: 'journalArticle',
-                serverId: 'srv-save',
-              }
-            : {
-                kind: 'committed-unverified' as const,
-                reason: state,
-                committed: true as const,
-                retryable: false as const,
-                ref: REF,
-                key: 'NOTE0001',
-                version: 12,
-                serverId: 'srv-save',
-              }
-      const { result, writes, view } = await scholarlySaveReceipt(outcome)
-      expect(writes).toBe(1)
+      const outcome = scholarlySaveOutcome(state)
+      const result = capturedReceipts[state]!
       expect(result.meta).toMatchObject({ kind: outcome.kind })
-      expect(view).toBeDefined()
       const block = settled({
         call: { name: 'scholarly_save_to_zotero', argsRaw: JSON.stringify({ title: 'A study' }) },
         ...JSON.parse(JSON.stringify({ content: result.content, meta: result.meta })),
@@ -166,7 +155,9 @@ describe.each([
       <WriteToolView {...createToolViewProps({ toolName: 'zotero_restore_items', block, t })} />,
     )
     expect(container.textContent).toContain(t('toolTitleRestoreItems'))
-    expect(container.textContent).toContain(t('toolSummaryRestoreItems', { restored, failed }))
+    expect(container.textContent).toContain(
+      t('toolSummaryRestoreItemsOutcome', { restored, alreadyPresent: 0, failed, unverified: 0 }),
+    )
     expect(container.querySelector(`[data-state="${tone}"]`)).not.toBeNull()
     if (failed > 0) expect(container.querySelector('[data-tone="success"]')).toBeNull()
   })

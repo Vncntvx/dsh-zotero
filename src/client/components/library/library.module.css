@@ -337,36 +337,7 @@
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxs-12);
-  cursor: pointer;
-  box-sizing: border-box;
   text-align: left;
-  transition:
-    background 120ms var(--ds-ease-in-out),
-    color 120ms var(--ds-ease-in-out);
-}
-
-.tagOption:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-@media (hover: hover) {
-  .tagOption:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.tagOptionSelected {
-  color: var(--dsw-alias-state-business-primary);
-  font-weight: 500;
 }
 
 .tagOptionLabel {
@@ -799,50 +770,18 @@
   gap: 2px;
 }
 
-/* The quiet item row is a multi-line list row, not a one-line control: the
- * host Button's size classes pin its height and centre a single label, so the
- * row restores its own row geometry. Doubled selectors outrank those size
- * classes, the same convention as the workspace's `.backSeat`. */
-.itemRow {
+/* Selection belongs to the list seat; ContentButton owns the intrinsic
+ * multiline height while the inner content owns its spacing. */
+.itemSeat {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-  text-align: left;
 }
 
-.itemRow.itemRow {
-  height: auto;
-  gap: 1px;
-  padding: 6px 8px 6px 10px;
-  justify-content: flex-start;
-  align-items: flex-start;
-}
-
-/* Compact density keeps its tighter seat; the row still grows with the title,
- * so the setting stays a real difference between the two row heights. */
-.itemRow.itemRowCompact {
-  gap: 0;
-  padding-top: 3px;
-  padding-bottom: 3px;
-}
-
-/* The PDF detection badge owns the row's right edge; the row's own padding
- * keeps every line clear of it, so the title never lands under the badge. */
-.itemRow.itemRowHasPdf {
-  padding-right: 44px;
-}
-
-/* The current row: the strongest interaction fill plus the panel's 2px primary
- * rail — the same pair the collection tree uses. Selection is persistent state,
- * so neither rule sits under the hover capability query; the rail is painted
- * absolutely so it neither changes the row's box nor reads as a border. */
-.itemRow.itemRowSelected {
+.itemSeatSelected {
   background: var(--dsw-alias-interactive-bg-hover-accent);
+  border-radius: var(--dsw-radius-sm);
 }
 
-.itemRowSelected::before {
+.itemSeatSelected::before {
   content: '';
   position: absolute;
   inset-block: 6px;
@@ -852,15 +791,31 @@
   background: var(--dsw-alias-state-business-primary);
 }
 
-/* Hovering another row never paints over the current row's own fill. */
-@media (hover: hover) {
-  .itemRow.itemRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
+.itemRow {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  text-align: left;
+}
 
-  .itemRow.itemRowSelected:hover {
-    background: var(--dsw-alias-interactive-bg-hover-accent);
-  }
+.itemRowContent {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 1px;
+  padding-block: 6px;
+}
+
+.itemRowContentCompact {
+  gap: 0;
+  padding-block: 3px;
+}
+
+.itemRowContentHasPdf {
+  padding-inline-end: 36px;
 }
 
 .pdfBadge {
@@ -1233,16 +1188,6 @@
   flex: none;
 }
 
-.metaCopyBtn {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-@media (hover: hover) {
-  .metaCopyBtn:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
 .section {
   display: flex;
   flex-direction: column;
@@ -1256,6 +1201,10 @@
 .inspectorHead + .section {
   padding-top: 12px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.sectionHeading {
+  margin: 0;
 }
 
 .sectionTitle {
@@ -1320,11 +1269,15 @@
   min-width: 0;
 }
 
-/* The clickable attachment row is a host Button; this keeps the row layout.
- * Its explicit width must absorb the negative inline margins, or the bleed
- * would land on the left edge only. */
-.childRowSeat.childRowSeat {
-  width: calc(100% + 16px);
+/* The frame owns its surface; the host control retains its own dimensions and type. */
+.childFrame {
+  margin-inline: -8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+.childRowSeat {
+  display: flex;
+  width: 100%;
   justify-content: space-between;
   text-align: left;
 }
@@ -1350,14 +1303,11 @@
   min-width: 0;
 }
 
-/* Collapsible child section header: the host Button plus its seat. The seat
- * drops the host's own inline padding so every section title starts on the
- * same column as the block's body text. */
-.sectionHeaderSeat.sectionHeaderSeat {
+/* The host Button owns section-header spacing; this class arranges the heading and chevron. */
+.sectionHeaderSeat {
   width: 100%;
   justify-content: space-between;
   text-align: left;
-  padding-inline: 0;
 }
 
 .sectionHeaderSeat .sectionTitle {
@@ -1564,8 +1514,8 @@
   resize: vertical;
 }
 
-.writeSelect:focus,
-.writeTextarea:focus {
+.writeSelect:focus-visible,
+.writeTextarea:focus-visible {
   outline: var(--dsw-focus-ring-width, 1px) solid
     var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;

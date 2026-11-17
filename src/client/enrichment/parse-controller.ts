@@ -219,14 +219,6 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
     private readonly remote: DocumentParseRemote,
     private readonly jobs: DocumentParseJobs | undefined,
     private readonly capabilities: ParseSnapshotSource<DocumentParseCapabilities>,
-    private readonly onOperation?: (
-      operation: DocumentParseOperation,
-      selection: DocumentParseSelection,
-    ) => void,
-    private readonly onOperationIntent?: (
-      operation: Pick<DocumentParseOperation, 'operationId'>,
-      selection: DocumentParseSelection,
-    ) => void,
   ) {
     const capability = capabilities.getSnapshot()
     this.state = {
@@ -352,7 +344,6 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
       operationId,
       action,
     }
-    const acceptedSelection = { ...this.selection, target: { ...this.selection.target } }
     const epoch = this.epoch
     const sequence = ++this.startSequence
     this.terminalRead = undefined
@@ -372,7 +363,6 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
       checking: false,
     })
     try {
-      this.onOperationIntent?.({ operationId }, acceptedSelection)
       // Closing the modal must not cancel admission or the accepted host job.
       const result = typedRemoteResult(await this.remote.startDocumentParse(request))
       const operation: DocumentParseOperation = {
@@ -380,9 +370,7 @@ export class DocumentParseController implements ParseSnapshotSource<DocumentPars
         generation: result.generation,
         jobId: result.jobId,
       }
-      // Admission can outlive this view. Give the composition root the original
-      // identity even after close, target change or unmount; never restart it.
-      this.onOperation?.(operation, acceptedSelection)
+      // The remote wrapper owns admission identity even after this view closes.
       if (!this.current(epoch) || sequence !== this.startSequence) return
       this.patch({ operation, submitting: false })
       if (this.state.open) {

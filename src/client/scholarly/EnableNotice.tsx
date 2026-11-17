@@ -37,7 +37,6 @@ export function ScholarlyEnableNotice({
       title={t('scholarlyEnableNoticeTitle')}
       description={t('scholarlyEnableNoticeDescription')}
       confirmLabel={t('scholarlyEnableNoticeConfirm')}
-      closeLabel={t('scholarlyEnableNoticeClose')}
       onDismiss={dismiss}
     />
   )

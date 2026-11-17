@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { ContentButton } from '../ContentButton.tsx'
+import { memo, useEffect, useRef, useState } from 'react'
 import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
 import preferenceCss from '../../library-settings.module.css'
 /**
@@ -82,6 +83,9 @@ export function useParsedArtifacts(
   const prevRevision = useRef<number | undefined>(parsedArtifact?.revision)
   const prevProbeRevision = useRef(0)
   const documents = parsedArtifact?.documents
+  const read = parsedArtifact?.read
+  const sessionId = parsedArtifact?.sessionId
+  const revision = parsedArtifact?.revision
 
   useEffect(() => {
     if (documents === undefined) return
@@ -90,21 +94,17 @@ export function useParsedArtifacts(
 
   useEffect(() => {
     const probeRevision = documents?.probeRevision.getSnapshot() ?? 0
-    if (
-      prevRevision.current !== parsedArtifact?.revision ||
-      prevProbeRevision.current !== probeRevision
-    ) {
+    if (prevRevision.current !== revision || prevProbeRevision.current !== probeRevision) {
       cacheRef.current.clear()
-      prevRevision.current = parsedArtifact?.revision
+      prevRevision.current = revision
       prevProbeRevision.current = probeRevision
     }
 
-    if (!parsedArtifact?.read || !items || items.length === 0) {
+    if (read === undefined || sessionId === undefined || !items || items.length === 0) {
       setParsedRefs(new Set())
       return
     }
 
-    const { sessionId, read } = parsedArtifact
     const cache = cacheRef.current
 
     const candidates = items
@@ -158,7 +158,7 @@ export function useParsedArtifacts(
     return () => {
       abort.abort()
     }
-  }, [items, parsedArtifact?.sessionId, parsedArtifact?.read, parsedArtifact?.revision, probeEpoch])
+  }, [items, sessionId, read, revision, documents?.probeRevision, probeEpoch])
 
   return parsedRefs
 }
@@ -179,7 +179,24 @@ function selectionLabelOf(selection: LibrarySelection, t: TranslateNS<'zotero'>)
   }
 }
 
-export function LibraryItemList({
+export const LibraryItemList = memo(function LibraryItemList(props: LibraryItemListProps) {
+  return props.useContextMenu === undefined ? (
+    <LibraryItemListBody {...props} />
+  ) : (
+    <LibraryItemListWithContextMenu {...props} useContextMenu={props.useContextMenu} />
+  )
+})
+
+function LibraryItemListWithContextMenu(
+  props: LibraryItemListProps & {
+    readonly useContextMenu: NonNullable<LibraryItemListProps['useContextMenu']>
+  },
+) {
+  const contextMenu = props.useContextMenu()
+  return <LibraryItemListBody {...props} contextMenu={contextMenu} />
+}
+
+function LibraryItemListBody({
   t,
   scrollKey = 'list',
   filtered,
@@ -193,15 +210,16 @@ export function LibraryItemList({
   selectedRef,
   selectItem,
   retry,
-  useContextMenu,
+  contextMenu,
   parsedArtifact,
   localizedItemTypes,
-}: LibraryItemListProps) {
+}: Omit<LibraryItemListProps, 'useContextMenu'> & {
+  readonly contextMenu?: ReturnType<NonNullable<LibraryItemListProps['useContextMenu']>>
+}) {
   const scroll = useLibraryScroll(scrollKey, list.phase === 'ready')
   const { preferences } = useLibraryPreferences()
   const compact = preferences?.listDensity === 'compact'
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
-  const contextMenu = typeof useContextMenu === 'function' ? useContextMenu() : undefined
   const parsedRefs = useParsedArtifacts(
     list.phase === 'ready' ? list.items : undefined,
     parsedArtifact,
@@ -284,46 +302,54 @@ export function LibraryItemList({
               const creators = creatorsOf(item)
               const venue = item.venue !== undefined && item.venue !== '' ? item.venue : undefined
               return (
-                <li key={item.ref}>
-                  <Button
+                <li
+                  key={item.ref}
+                  className={clsx(css.itemSeat, isSelected && css.itemSeatSelected)}
+                >
+                  <ContentButton
                     size={compact ? 'sm' : 'md'}
                     variant="ghost"
                     {...triggerProps}
-                    className={clsx(
-                      css.itemRow,
-                      isSelected && css.itemRowSelected,
-                      compact && css.itemRowCompact,
-                      hasPdf && css.itemRowHasPdf,
-                    )}
+                    className={css.itemRow}
                     aria-current={isSelected || undefined}
                     onClick={() => selectItem(isSelected ? undefined : item.ref)}
                   >
                     <span
                       className={clsx(
-                        preferenceCss.rowTitle,
-                        preferences?.titleLines === 1
-                          ? preferenceCss.oneLine
-                          : preferenceCss.twoLines,
+                        css.itemRowContent,
+                        compact && css.itemRowContentCompact,
+                        hasPdf && css.itemRowContentHasPdf,
                       )}
-                      title={item.title}
                     >
-                      {item.title}
-                    </span>
-                    <span className={css.itemMeta}>
-                      {item.year !== undefined && <span className={css.itemYear}>{item.year}</span>}
-                      <span className={css.itemType}>
-                        {itemTypeLabelOf(item.itemType, localizedItemTypes, t)}
+                      <span
+                        className={clsx(
+                          preferenceCss.rowTitle,
+                          preferences?.titleLines === 1
+                            ? preferenceCss.oneLine
+                            : preferenceCss.twoLines,
+                        )}
+                        title={item.title}
+                      >
+                        {item.title || item.ref}
                       </span>
-                      {venue !== undefined && (
-                        <span className={css.itemVenue} title={venue}>
-                          {venue}
+                      <span className={css.itemMeta}>
+                        {item.year !== undefined && (
+                          <span className={css.itemYear}>{item.year}</span>
+                        )}
+                        <span className={css.itemType}>
+                          {itemTypeLabelOf(item.itemType, localizedItemTypes, t)}
                         </span>
-                      )}
-                      {creators !== '' && (
-                        <span className={css.itemCreator} title={creators}>
-                          {creators}
-                        </span>
-                      )}
+                        {venue !== undefined && (
+                          <span className={css.itemVenue} title={venue}>
+                            {venue}
+                          </span>
+                        )}
+                        {creators !== '' && (
+                          <span className={css.itemCreator} title={creators}>
+                            {creators}
+                          </span>
+                        )}
+                      </span>
                     </span>
                     {/* A detection badge, not an absence claim: the search
                      * index's best-attachment pick names a PDF when one is
@@ -343,7 +369,7 @@ export function LibraryItemList({
                         </span>
                       </div>
                     )}
-                  </Button>
+                  </ContentButton>
                 </li>
               )
             })}

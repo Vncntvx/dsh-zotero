@@ -101,7 +101,7 @@ export function ParsePdfAction({
         setProbes(new Map(attachments.map((attachment) => [attachment.ref, { kind: 'absent' }])))
       })
     return () => {
-      epoch.current++
+      epoch.current += 1
       abort.abort()
     }
     // `attachmentKey` stands in for the array identity the wire compares.

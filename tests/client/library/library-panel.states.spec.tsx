@@ -324,7 +324,7 @@ describe('lane states', () => {
       expect(screen.getByRole('heading', { name: 'Sparse' })).toBeTruthy()
     })
     // Only the type row renders; nothing else, and no truncation note.
-    expect(screen.queryByText(zh.libraryMetaCreators)).toBeNull()
+    expect(screen.queryByText('作者')).toBeNull()
     expect(screen.queryByText(zh.libraryMetaAbstract)).toBeNull()
     expect(screen.queryByText(zh.libraryAbstractTruncated)).toBeNull()
   })

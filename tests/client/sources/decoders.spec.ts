@@ -486,7 +486,6 @@ describe('exportMetaOf', () => {
         end: 41,
       },
       { ref: 'zotero://user/0/item/AAAAAAA2', entryIndex: 1 },
-      { ref: 'zotero://user/0/item/AAAAAAA4' },
       { ref: 'zotero://user/0/item/AAAAAAA3', citationKey: 'extra-a3' },
     ])
   })

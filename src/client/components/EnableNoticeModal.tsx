@@ -11,6 +11,7 @@
 
 import type { ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import css from './EnableNoticeModal.module.css'
 
 /** Props of the disclosure modal. */
 export interface EnableNoticeModalProps {
@@ -19,7 +20,6 @@ export interface EnableNoticeModalProps {
   readonly title: string
   readonly description: string
   readonly confirmLabel: string
-  readonly closeLabel: string
   /** Accept the disclosure: close the modal for this enable period. */
   readonly onDismiss: () => void
 }
@@ -34,21 +34,19 @@ export function EnableNoticeModal({
   title,
   description,
   confirmLabel,
-  closeLabel,
   onDismiss,
 }: EnableNoticeModalProps): ReactNode {
   return (
-    <Modal
-      open={open}
-      onClose={onDismiss}
-      title={title}
-      description={description}
-      closeLabel={closeLabel}
-      footer={
-        <Button variant="primary" onClick={onDismiss}>
-          {confirmLabel}
-        </Button>
-      }
-    />
+    <Modal open={open} onClose={() => {}} title={title} headless>
+      <div className={css.content}>
+        <h2 className={css.title}>{title}</h2>
+        <p className={css.description}>{description}</p>
+        <div className={css.actions}>
+          <Button variant="primary" onClick={onDismiss} data-modal-autofocus>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }

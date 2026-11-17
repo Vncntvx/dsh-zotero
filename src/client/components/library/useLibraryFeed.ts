@@ -59,6 +59,7 @@ import { librarySessionKeyOf } from './library-view-store.ts'
 import type { ChildKind, ChildLoadState, LibraryFeedFace } from './library-feed-types.ts'
 
 const SEARCH_DEBOUNCE_MS = 300
+const LOADING_LIST: LibraryListState = Object.freeze({ phase: 'loading' })
 
 const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachments', 'annotations']
 
@@ -91,6 +92,8 @@ export interface LibraryFeed {
   readonly scopeKey: string
   readonly selectScope: (selection: LibrarySelection) => void
   readonly q: string
+  /** Query committed to the list request, excluding the current typing draft. */
+  readonly listQuery: string
   readonly setQ: (q: string) => void
   readonly filters: LibraryFilters
   readonly setFilters: (filters: LibraryFilters) => void
@@ -227,6 +230,11 @@ export function useLibraryFeed(
   const restoredServer = useRef<string>()
   const restoredSession = useRef<string>()
   const viewIdentity = librarySessionKeyOf(serverId, sessionId)
+  const persistence = useMemo(
+    () => ({ viewIdentity, query: '', state: undefined as LibraryStoredState | undefined }),
+    [viewIdentity],
+  )
+  persistence.query = q
   /** The exact state last written, keyed by instance so a switch re-persists. */
   const lastPersisted = useRef<{ serverId: string; serialized: string }>()
   const [hydratedView, setHydratedView] = useState<string>()
@@ -261,7 +269,14 @@ export function useLibraryFeed(
     selection: { value: selection, update: setSelection },
     identityOf,
   })
-  const { flatTree, savedSearches } = navigation
+  const {
+    flatTree,
+    savedSearches,
+    cancelLocate,
+    loadMore: loadMoreNavigation,
+    retryTree: retryNavigation,
+    locate: locateNavigation,
+  } = navigation
   const reloadCachedTree = navigation.refresh
   const refreshSavedLane = navigation.refreshSaved
 
@@ -368,7 +383,8 @@ export function useLibraryFeed(
       prefixes: navigation.prefixes,
       library: currentLibrary,
       selection,
-      q,
+      // Persist the debounced query so typing updates storage once per pause.
+      q: debouncedQ,
       sort,
       direction,
       offset,
@@ -383,6 +399,7 @@ export function useLibraryFeed(
       narrowPane,
     }
     const serialized = JSON.stringify(persistedState)
+    persistence.state = persistedState
     if (
       lastPersisted.current?.serverId === serverId &&
       lastPersisted.current.serialized === serialized
@@ -428,12 +445,10 @@ export function useLibraryFeed(
     memory,
     visible,
     storageError,
-    q,
-    childStates,
+    debouncedQ,
     navigation.prefixes,
     currentLibrary,
     selection,
-    debouncedQ,
     sort,
     direction,
     offset,
@@ -441,10 +456,25 @@ export function useLibraryFeed(
     filters,
     selectedRef,
     narrowPane,
+    persistence,
   ])
 
   useEffect(() => {
-    const flush = () => memory?.flushScrollSave()
+    const flush = () => {
+      const state = persistence.state
+      if (serverId !== undefined && state !== undefined && state.q !== persistence.query) {
+        const latest = { ...state, q: persistence.query }
+        try {
+          writeLibraryState(serverId, sessionId, latest)
+          persistence.state = latest
+          if (memory?.serverId === serverId && memory.sessionId === sessionId)
+            memory.snapshot = latest
+        } catch (error) {
+          setStorageError(laneFailureOf(error))
+        }
+      }
+      memory?.flushScrollSave()
+    }
     if (!active || !visible) {
       flush()
       return
@@ -459,7 +489,7 @@ export function useLibraryFeed(
       window.removeEventListener('pagehide', flush)
       flush()
     }
-  }, [active, visible, serverId, sessionId, memory])
+  }, [active, visible, serverId, sessionId, memory, persistence])
 
   // The debounced query drives requests; the raw input drives the text box.
   useEffect(() => {
@@ -521,7 +551,7 @@ export function useLibraryFeed(
     const controller = new AbortController()
     const ticket = ++seq.current.list
     if (q !== debouncedQ) {
-      setList({ phase: 'loading' })
+      setList(LOADING_LIST)
       controller.abort()
       return
     }
@@ -535,7 +565,7 @@ export function useLibraryFeed(
       filters,
     }
     setListOwner(requestIdentity)
-    setList({ phase: 'loading' })
+    setList(LOADING_LIST)
     void face
       .search(listRequestOf(query), controller.signal)
       .then((result) => {
@@ -560,6 +590,7 @@ export function useLibraryFeed(
     filters,
     refreshToken,
     listRetry,
+    requestIdentity,
   ])
 
   // The inspector: one detail per selected row, all child kinds included.
@@ -611,7 +642,7 @@ export function useLibraryFeed(
         setInspector({ phase: 'error', message: laneFailureOf(error) })
       })
     return () => controller.abort()
-  }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren])
+  }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren, memory?.childPages])
 
   /**
    * Open or close one branch. Refs may arrive in alias spellings, so
@@ -634,13 +665,13 @@ export function useLibraryFeed(
 
   const toggleCollection = useCallback(
     (ref: string) => {
-      navigation.cancelLocate()
+      cancelLocate()
       const lane = navigation.treeLane(ref)
       if (lane?.phase === 'ready' && lane.total === 0) return
       const key = objectIdentity(ref, serverId)
       setBranchOpen(ref, ![...expanded].some((item) => objectIdentity(item, serverId) === key))
     },
-    [expanded, navigation, serverId, setBranchOpen],
+    [expanded, navigation, serverId, setBranchOpen, cancelLocate],
   )
 
   /**
@@ -685,7 +716,7 @@ export function useLibraryFeed(
         setNarrowPaneState(pane)
         return
       }
-      navigation.cancelLocate()
+      cancelLocate()
       setSelection(next.kind === 'collection' && row ? { ...next, path: row.path } : next)
       if (
         preferences.scopeChangeBehavior === 'clear' ||
@@ -700,7 +731,15 @@ export function useLibraryFeed(
       if (containerRef !== undefined) setBranchOpen(containerRef, true)
       setNarrowPaneState(pane)
     },
-    [rewindList, selection, serverId, flatTree, setBranchOpen, preferences.scopeChangeBehavior],
+    [
+      rewindList,
+      selection,
+      serverId,
+      flatTree,
+      setBranchOpen,
+      preferences.scopeChangeBehavior,
+      cancelLocate,
+    ],
   )
 
   const setSort = useCallback(
@@ -769,13 +808,64 @@ export function useLibraryFeed(
     }
   }, [libraries, currentLibrary, selectLibrary])
 
+  const selectItem = useCallback(
+    (ref: string | undefined) => {
+      seq.current.inspector += 1
+      setSelectedRef(ref)
+      resetChildren()
+      if (ref !== undefined) setNarrowPaneState('inspector')
+      else setInspector(undefined)
+    },
+    [resetChildren],
+  )
+  const retryList = useCallback(() => setListRetry((value) => value + 1), [])
+  const retryInspector = useCallback(() => setInspectorRetry((value) => value + 1), [])
+  const loadMoreTree = useCallback(
+    (ref: string | undefined) => {
+      void loadMoreNavigation(ref)
+    },
+    [loadMoreNavigation],
+  )
+  const retryTree = useCallback(
+    (ref: string | undefined) => {
+      void retryNavigation(ref)
+    },
+    [retryNavigation],
+  )
+  const locate = useCallback(() => {
+    setNarrowPaneState('tree')
+    void locateNavigation()
+  }, [locateNavigation])
+  const pageChildWithMemory = useCallback(
+    (kind: ChildKind, offset: number) => {
+      if (memory && selectedRef) {
+        if (memory.childPages?.ref !== selectedRef)
+          memory.childPages = { ref: selectedRef, offsets: {} }
+        memory.childPages.offsets[kind] = offset
+      }
+      pageChild(kind, offset)
+    },
+    [memory, selectedRef, pageChild],
+  )
+  const childOffsetOf = childFeed.childOffsetOf
+  const retryChild = useCallback(
+    (kind: ChildKind) =>
+      pageChild(
+        kind,
+        memory?.childPages?.ref === selectedRef
+          ? (memory?.childPages?.offsets[kind] ?? 0)
+          : childOffsetOf(kind),
+      ),
+    [memory, selectedRef, pageChild, childOffsetOf],
+  )
+
   return {
     storageError,
     clearPosition: () => {
       seq.current.list += 1
       seq.current.inspector += 1
       resetChildren()
-      navigation.cancelLocate()
+      cancelLocate()
       resetLibraryState(PERSONAL_LIBRARY)
       if (memory) {
         memory.cancelScrollSave()
@@ -801,12 +891,8 @@ export function useLibraryFeed(
     expanded: navigation.expanded,
     identityOf,
     toggleCollection,
-    loadMoreTree: (ref) => {
-      void navigation.loadMore(ref)
-    },
-    retryTree: (ref) => {
-      void navigation.retryTree(ref)
-    },
+    loadMoreTree,
+    retryTree,
     treeLane: navigation.treeLane,
     savedSearches,
     loadMoreSavedSearches: () => {
@@ -815,60 +901,36 @@ export function useLibraryFeed(
     retrySavedSearches: () => {
       void navigation.retrySaved()
     },
-    locate: () => {
-      setNarrowPaneState('tree')
-      void navigation.locate()
-    },
+    locate,
     locatedRef: navigation.locatedRef,
     locateError: navigation.locateError,
     selection,
     scopeKey,
     selectScope,
     q,
+    listQuery: debouncedQ,
     setQ,
     filters,
     setFilters,
     sort,
     direction,
     setSort,
-    list: listOwner === requestIdentity ? list : { phase: 'loading' },
+    list: listOwner === requestIdentity ? list : LOADING_LIST,
     offset,
     gotoOffset,
     narrowPane,
     setNarrowPane,
     selectedRef,
-    selectItem: (ref) => {
-      seq.current.inspector += 1
-      setSelectedRef(ref)
-      resetChildren()
-      if (ref !== undefined) {
-        setNarrowPaneState('inspector')
-      } else {
-        setInspector(undefined)
-      }
-    },
+    selectItem,
     inspector,
     refreshToken,
     refresh,
     refreshAffected,
     retryLibraries: () => setLibraryRetry((value) => value + 1),
-    retryList: () => setListRetry((value) => value + 1),
-    retryInspector: () => setInspectorRetry((value) => value + 1),
-    pageChild: (kind, offset) => {
-      if (memory && selectedRef) {
-        if (memory.childPages?.ref !== selectedRef)
-          memory.childPages = { ref: selectedRef, offsets: {} }
-        memory.childPages.offsets[kind] = offset
-      }
-      pageChild(kind, offset)
-    },
+    retryList,
+    retryInspector,
+    pageChild: pageChildWithMemory,
     childStates,
-    retryChild: (kind) =>
-      pageChild(
-        kind,
-        memory?.childPages && memory.childPages.ref === selectedRef
-          ? (memory.childPages.offsets[kind] ?? 0)
-          : childFeed.childOffsetOf(kind),
-      ),
+    retryChild,
   }
 }

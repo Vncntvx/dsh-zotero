@@ -8,12 +8,12 @@ import { describe, expect, it } from 'vitest'
 import type { SourceItem } from '../../../src/sources/model.js'
 import {
   exportSectionsOf,
-  filterCountsOf,
   filterSources,
   hasIssue,
   sourceExportsOf,
 } from '../../../src/client/sources/selectors.ts'
 import { artifactOf, passageOf, sourceOf } from '../helpers/source-fixtures.ts'
+import { filterCountsOf } from '../../helpers/source-filter-counts.ts'
 
 const SOURCES: readonly SourceItem[] = [
   sourceOf({ key: 'a', ref: 'zotero://user/0/item/A', firstSeenAt: 3, lastTouchedAt: 3 }),
@@ -68,7 +68,7 @@ describe('sourceExportsOf', () => {
     expect(exportSectionsOf([batch])[0]?.documents.map((doc) => doc.exportKey)).toEqual(['a', 'b'])
   })
 
-  it('omits a batch body whose boundary is only half recorded', () => {
+  it('omits a batch body whose recorded span is empty', () => {
     const refA = 'zotero://user/0/item/AAAAAAA1'
     const refB = 'zotero://user/0/item/BBBBBBB2'
     const text = '@article{a,\n title={A}\n}\n\n@article{b,\n title={B}\n}'
@@ -77,9 +77,13 @@ describe('sourceExportsOf', () => {
       text,
       items: [
         { ref: refA, exportKey: 'a', start: 0, end: text.indexOf('@article{b,') },
-        // The provider records both bounds or neither; half a boundary cannot
-        // claim a span, so the body stays hidden instead of leaking the tail.
-        { ref: refB, exportKey: 'b', start: text.indexOf('@article{b,') },
+        // An invalid span cannot claim the remainder of the shared batch body.
+        {
+          ref: refB,
+          exportKey: 'b',
+          start: text.indexOf('@article{b,'),
+          end: text.indexOf('@article{b,'),
+        },
       ],
     })
     expect(sourceExportsOf([batch], refA)[0]?.text).toBe('@article{a,\n title={A}\n}')

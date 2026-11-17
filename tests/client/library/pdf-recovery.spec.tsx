@@ -55,7 +55,7 @@ it('retains only the source ref across unload and never downloads on restoration
   expect(dismiss).toHaveBeenCalledOnce()
   inventory.set([])
   await restored.dispose()
-  expect(localStorage.getItem('dsh-zotero:url-pdf-readers:1')).toBe('[]')
+  expect(localStorage.getItem('dsh-zotero:url-pdf-readers:2')).toBeNull()
 })
 it('keeps a restored source while session metadata is still loading', async () => {
   const storage = new Map<string, string>()
@@ -113,7 +113,7 @@ it('shows reload failure without dismissing or allowing duplicate downloads', as
   expect(reload).toHaveBeenCalledTimes(1)
 })
 it('reports corrupt recovery storage instead of silently losing source identities', async () => {
-  localStorage.setItem('dsh-zotero:url-pdf-readers:1', '{corrupt')
+  localStorage.setItem('dsh-zotero:url-pdf-readers:2', '{corrupt')
   const report = vi.fn()
   const registry = createPdfReaderRegistry({
     inventory: createSnapshotStore([]),

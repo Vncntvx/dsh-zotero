@@ -596,10 +596,14 @@ export function useParsedTitleMeta(
   address: string,
   target: ParsedTabTarget | undefined,
 ): ParsedTitleMeta {
-  // The parsed target is rebuilt per render; only its identity matters here.
-  const stableTarget = useMemo(
-    () => target,
-    [target?.sessionId, target?.ref, target?.artifactId, target?.title, target?.item],
+  // Title subscriptions follow the target's scalar identity across render allocations.
+  const { sessionId, ref, artifactId, title, item } = target ?? {}
+  const stableTarget = useMemo<ParsedTabTarget | undefined>(
+    () =>
+      sessionId === undefined || ref === undefined || title === undefined
+        ? undefined
+        : { sessionId, ref, artifactId, title, item },
+    [sessionId, ref, artifactId, title, item],
   )
   const [snapshot, setSnapshot] = useState<ParsedTitleMeta>(() => documents.titleSnapshot(address))
   useEffect(() => {

@@ -52,10 +52,12 @@ it('declares one deliverables key whose value the production reader accepts', ()
   expect(data?.presented).toEqual([
     { path: '/workspace/papers.bib', description: 'exported BibTeX', seq: 4, index: 0 },
   ])
-  expectTypeOf(resolveDeliverableFile('seq=4&index=0', state)).toEqualTypeOf<
-    DeliverableFileMeta | undefined
-  >()
-  expect(resolveDeliverableFile('seq=4&index=0', state)).toMatchObject({
+  expectTypeOf(
+    resolveDeliverableFile('api/present.open?sessionId=test&seq=4&index=0', state),
+  ).toEqualTypeOf<DeliverableFileMeta | undefined>()
+  expect(
+    resolveDeliverableFile('api/present.open?sessionId=test&seq=4&index=0', state),
+  ).toMatchObject({
     path: '/workspace/papers.bib',
     description: 'exported BibTeX',
   })
@@ -89,7 +91,9 @@ it('keeps a late delivery on its owning turn after that turn closes', () => {
   expect(after.timeline.turns.get(1)?.data.get('deliverables')?.presented).toEqual([
     { path: '/workspace/late.bib', seq: 4, index: 0 },
   ])
-  expect(resolveDeliverableFile('seq=4&index=0', after)).toMatchObject({
+  expect(
+    resolveDeliverableFile('api/present.open?sessionId=test&seq=4&index=0', after),
+  ).toMatchObject({
     path: '/workspace/late.bib',
   })
 

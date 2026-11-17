@@ -30,8 +30,8 @@
 
 .diagnosisMessage {
   margin: 0;
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  font-size: var(--dsh-content-font-size-secondary);
+  line-height: calc(var(--dsw-font-s-14-line-height) + var(--dsh-content-font-delta));
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

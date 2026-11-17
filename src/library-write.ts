@@ -109,6 +109,7 @@ export async function executeLibraryWrite(
       : result.isError
         ? 'failed'
         : kind === 'declined' ||
+            kind === 'restored' ||
             kind === 'partial' ||
             kind === 'failed' ||
             kind === 'committed-unverified'

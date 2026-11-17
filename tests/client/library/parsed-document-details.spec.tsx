@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Document identity, citation and recoverable explanation failures. */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -13,7 +13,7 @@ import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
 import type { ZoteroItemDetailView } from '../../../src/contract.ts'
 
-const owned: ReturnType<typeof parsedRuntime>[] = []
+const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
   cleanup()
   for (const runtime of owned.splice(0)) await runtime.dispose()
@@ -22,19 +22,22 @@ afterEach(async () => {
 const tick = async () => {
   await act(async () => {})
 }
-function select() {
+async function select() {
   Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
     configurable: true,
-    value: () => ({ left: 12, bottom: 30 }),
+    value: () => new DOMRect(12, 10, 88, 20),
   })
   const range = document.createRange()
   range.selectNodeContents(screen.getByText('Passage'))
   window.getSelection()!.removeAllRanges()
   window.getSelection()!.addRange(range)
-  act(() => document.dispatchEvent(new Event('selectionchange')))
+  await act(async () => document.dispatchEvent(new Event('selectionchange')))
+  await screen.findByRole('menu')
 }
-async function fixture(options: Parameters<ReturnType<typeof parsedRuntime>['props']>[0] = {}) {
-  const runtime = parsedRuntime(documentRead('Passage'))
+async function fixture(
+  options: Parameters<Awaited<ReturnType<typeof parsedRuntime>>['props']>[0] = {},
+) {
+  const runtime = await parsedRuntime(documentRead('Passage'))
   owned.push(runtime)
   runtime.mount(options)
   await tick()
@@ -54,7 +57,7 @@ it('names a tab from presentation parameters while keeping its resource address 
 
 it('resolves a generic tab title through the lease-free metadata read alone', async () => {
   const read = documentRead('Passage', { title: 'Real Paper Title' })
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   await tick()
   const streamOpens = read.mock.calls.filter(([request]) => request.op === 'open').length
@@ -67,7 +70,7 @@ it('resolves a generic tab title through the lease-free metadata read alone', as
 
 it('keeps a denied session title local and resolves it only after read access returns', async () => {
   const read = documentRead('Passage', { title: 'Protected title' })
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   act(() => runtime.access.publish(false))
   render(<ParsedDocumentTitle {...runtime.props({ title: 'PDF' })} documents={runtime.documents} />)
@@ -84,7 +87,7 @@ it('starts a fresh metadata read on regrant while the revoked request is still s
   const read = documentRead('Passage', { title: 'Current title' })
   const oldReply = deferred<Awaited<ReturnType<typeof read>>>()
   read.mockImplementationOnce(async () => await oldReply.promise)
-  const runtime = parsedRuntime(read)
+  const runtime = await parsedRuntime(read)
   owned.push(runtime)
   render(<ParsedDocumentTitle {...runtime.props({ title: 'PDF' })} documents={runtime.documents} />)
   await tick()
@@ -113,7 +116,7 @@ it('cites item metadata and its reference in an explanation', async () => {
   const actions = composer()
   const item = vi.fn(async () => ({ ok: true as const, value: ITEM_DETAIL }))
   await fixture({ actions, item, itemRef: ITEM_DETAIL.ref })
-  select()
+  await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()
   expect(item).toHaveBeenCalledWith({ ref: ITEM_DETAIL.ref, include: [] }, expect.any(AbortSignal))
@@ -124,7 +127,7 @@ it('cites item metadata and its reference in an explanation', async () => {
 it('instructs the model to read the full document through zotero_retrieve', async () => {
   const actions = composer()
   await fixture({ actions })
-  select()
+  await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()
   const draft = actions.insertQuote.mock.calls[0]![0] as string
@@ -147,7 +150,7 @@ it('addresses a URL-sourced document by artifact id in the explanation', async (
     actions,
     address: `dsh-resource://zotero-parsed/artifact/parsed-session/${artifactId}`,
   })
-  select()
+  await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()
   const draft = actions.insertQuote.mock.calls[0]![0] as string
@@ -166,7 +169,7 @@ it.each(['remote', 'throw', 'plain'] as const)(
       throw new RemoteError('gateway/internal', 'Remote unavailable', {})
     }
     await fixture({ actions, item, itemRef: ITEM_DETAIL.ref })
-    select()
+    await select()
     fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
     await tick()
     expect(screen.getByRole('alert').textContent).toContain(
@@ -186,7 +189,7 @@ it('keeps a structured item refusal in place', async () => {
       error: new RemoteError('gateway/internal', 'Item permission denied', {}),
     }),
   })
-  select()
+  await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()
   expect(screen.getByRole('alert').textContent).toContain('Item permission denied')
@@ -201,7 +204,7 @@ it('does not write a late explanation after its document is closed', async () =>
     itemRef: ITEM_DETAIL.ref,
     item: async () => await pending.promise,
   })
-  select()
+  await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   cleanup()
   await runtime.dispose()
@@ -225,20 +228,21 @@ it('ignores selections outside the document and dismisses an existing menu on pa
   window.getSelection()!.addRange(range)
   act(() => document.dispatchEvent(new Event('selectionchange')))
   expect(screen.queryByRole('menu')).toBeNull()
-  select()
+  await select()
   expect(screen.getByRole('menu')).toBeDefined()
   act(() => window.dispatchEvent(new Event('resize')))
-  expect(screen.queryByRole('menu')).toBeNull()
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
 })
 
 it('ignores a whitespace selection and keeps copy available when no composer is present', async () => {
   await fixture()
-  select()
+  await select()
   expect(
     screen.getByRole('menuitem', { name: mockT('parsedExplain') }).hasAttribute('disabled'),
   ).toBe(true)
   expect(screen.getByRole('menuitem', { name: mockT('parsedCopySelection') })).toBeDefined()
   act(() => window.dispatchEvent(new Event('scroll')))
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   const passage = screen.getByText('Passage')
   passage.append(document.createTextNode('   '))
   const range = document.createRange()

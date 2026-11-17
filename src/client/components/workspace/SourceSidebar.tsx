@@ -280,7 +280,7 @@ export function SourceSidebar({
               item={item}
               index={index}
               selected={item.key === selectedKey}
-              focused={index === selection.focusIndex}
+              focused={index === Math.max(0, Math.min(selection.focusIndex, visible.length - 1))}
               setOptionRef={setOptionRef}
               onSelect={handleItemSelect}
               t={t}

@@ -42,6 +42,29 @@ afterEach(() => {
 })
 
 describe('SourceSidebar component', () => {
+  it('retains a reachable tab stop after the visible list shrinks below the old focus index', () => {
+    const item = sourceOf({ key: 'remaining', title: 'Remaining item' })
+    const setSelection = vi.fn()
+    render(
+      <SourceSidebar
+        workspace={workspaceOf([item])}
+        filter="all"
+        counts={DEFAULT_COUNTS}
+        visible={[item]}
+        selection={{ key: 'removed', focusIndex: 9 }}
+        selectedKey="remaining"
+        setFilter={vi.fn()}
+        setSelection={setSelection}
+        setMobilePane={vi.fn()}
+        onOpenEvidence={vi.fn()}
+        t={t}
+      />,
+    )
+    const option = screen.getByRole('option')
+    expect(option.getAttribute('tabindex')).toBe('0')
+    fireEvent.keyDown(option, { key: 'ArrowDown' })
+    expect(setSelection).toHaveBeenCalledWith({ key: 'remaining', focusIndex: 0 })
+  })
   it('renders filter pills and handles pill selection', () => {
     const setFilter = vi.fn()
     const item1 = sourceOf({ key: 'item-1', title: 'First Item' })

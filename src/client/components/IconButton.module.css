@@ -32,14 +32,22 @@
   height: 28px;
 }
 
-@media (hover: hover) {
-  .iconButton.iconButton:hover:not(:disabled) {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .iconButton.iconButton {
     transition: none;
+  }
+}
+
+/* The labelled action keeps the native Button seat until its container narrows. */
+@container (max-width: 360px) {
+  .responsiveLabel {
+    display: none;
+  }
+
+  .responsiveButton.responsiveButton {
+    width: 28px;
+    min-width: 28px;
+    padding-inline: 0;
+    justify-content: center;
   }
 }

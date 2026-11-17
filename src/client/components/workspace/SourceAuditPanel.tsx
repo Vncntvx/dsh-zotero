@@ -40,6 +40,9 @@ const CITATION_TABS: readonly [
   { id: 'gbt7714', key: 'gbt7714Format' },
 ]
 
+const CITATION_CACHE_MS = 30_000
+const CITATION_CACHE_BYTES = 128 * 1024
+
 type CitationState =
   | { readonly key: string; readonly format: CitationTab; readonly phase: 'loading' }
   | {
@@ -104,6 +107,13 @@ export function SourceAuditPanel({
   const citationCopyFeedback = useCopyFeedback(`${item.key}-cite-${format}`)
   const refCopyFeedback = useCopyFeedback(`${item.key}-ref`)
   const request = useMemo(() => citationRequestOf(item.ref, format), [item.ref, format])
+  const { exporter, entries: cache } = useMemo(
+    () => ({
+      exporter: exportCitation,
+      entries: new Map<string, { text?: string; expires: number; bytes: number }>(),
+    }),
+    [exportCitation],
+  )
 
   useEffect(() => {
     let current = true
@@ -116,21 +126,45 @@ export function SourceAuditPanel({
         current = false
       }
     }
-    if (exportCitation === undefined) {
+    if (exporter === undefined) {
       settle({ key: item.key, format, phase: 'unavailable' })
       return () => {
         current = false
       }
     }
+    const cacheKey = JSON.stringify([item.key, item.lastTouchedAt, request])
+    const cached = cache.get(cacheKey)
+    if (cached !== undefined && cached.expires > Date.now()) {
+      cache.delete(cacheKey)
+      cache.set(cacheKey, cached)
+      settle(
+        cached.text === undefined
+          ? { key: item.key, format, phase: 'empty' }
+          : { key: item.key, format, phase: 'ready', text: cached.text },
+      )
+      return () => {
+        current = false
+      }
+    }
+    cache.delete(cacheKey)
     settle({ key: item.key, format, phase: 'loading' })
-    void exportCitation(request).then(
+    void exporter(request).then(
       (result) => {
-        if (!current) return
         if (!result.ok) {
           settle({ key: item.key, format, phase: 'error', message: messageOf(result.error) })
           return
         }
         const text = citationTextOf(format, result.value)
+        const bytes = new TextEncoder().encode(text ?? '').byteLength
+        if (bytes <= CITATION_CACHE_BYTES) {
+          cache.set(cacheKey, { text, bytes, expires: Date.now() + CITATION_CACHE_MS })
+          let total = [...cache.values()].reduce((sum, entry) => sum + entry.bytes, 0)
+          for (const [key, entry] of cache) {
+            if (cache.size <= 16 && total <= CITATION_CACHE_BYTES) break
+            cache.delete(key)
+            total -= entry.bytes
+          }
+        }
         settle(
           text === undefined
             ? { key: item.key, format, phase: 'empty' }
@@ -144,7 +178,7 @@ export function SourceAuditPanel({
     return () => {
       current = false
     }
-  }, [canExport, exportCitation, format, item.key, request])
+  }, [canExport, exporter, format, item.key, item.lastTouchedAt, request, cache])
 
   const activeCitationState: CitationState =
     citationState?.key === item.key && citationState.format === format

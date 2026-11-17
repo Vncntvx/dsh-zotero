@@ -55,6 +55,7 @@ import {
   isEnrichmentOutputDirPath,
   ENRICHMENT_MODE_CHOICES,
   ENRICHMENT_DEFAULTS,
+  ENRICHMENT_OCR_LANGUAGE_PATTERN,
 } from '../enrichment-preferences.ts'
 import {
   isSemanticModelKey,
@@ -208,6 +209,7 @@ export interface EnrichmentCardState extends SettingsFormShell {
   /** Namespace lifecycle from the shared settings form; `available` is its boolean face. */
   readonly namespaceStatus: NamespaceStatus
   readonly mode: SettingsFieldState
+  readonly ocrLanguage: SettingsFieldState
   readonly mineruTokenRef: SettingsFieldState
   readonly outputDir: SettingsFieldState
   readonly mineruToken: EnrichmentSecretFieldState
@@ -309,6 +311,14 @@ function semanticModelDirFieldSpec(): SettingsFieldSpec {
 function fieldSpecs(): SettingsFieldSpec[] {
   return [
     modeFieldSpec(),
+    {
+      field: 'ocrLanguage',
+      format: (value) => (typeof value === 'string' ? value : ENRICHMENT_DEFAULTS.ocrLanguage),
+      parse: (text) => {
+        const code = text.trim()
+        return ENRICHMENT_OCR_LANGUAGE_PATTERN.test(code) ? { kind: 'set', value: code } : undefined
+      },
+    },
     credentialRefFieldSpec(ENRICHMENT_REFERENCE_FIELD),
     outputDirFieldSpec(),
     booleanFieldSpec('enableSemanticSearch'),
@@ -428,11 +438,11 @@ export class EnrichmentFormController {
   }
 
   /** Re-compare the target and immediately invalidate stale state. */
-  private reconcileTarget(): void {
+  private reconcileTarget(refresh = true): void {
     if (this.disposed) return
     this.invalidate()
     this.publish()
-    this.scheduleRefresh()
+    if (refresh) this.scheduleRefresh()
   }
 
   /** Coalesce rapid target changes into one serialized status refresh. */
@@ -443,7 +453,24 @@ export class EnrichmentFormController {
       this.refreshScheduled = false
       if (this.disposed) return
       const target = this.parseTarget()
-      if (target !== undefined) void this.runStatusCheck(target)
+      const value = this.form.getSnapshot().value
+      const committed = parseSemanticModelTarget(
+        typeof value?.semanticModel === 'string'
+          ? value.semanticModel
+          : ENRICHMENT_DEFAULTS.semanticModel,
+        typeof value?.semanticDownloadSource === 'string'
+          ? value.semanticDownloadSource
+          : ENRICHMENT_DEFAULTS.semanticDownloadSource,
+        typeof value?.semanticModelDir === 'string' ? value.semanticModelDir : '',
+      )
+      if (
+        target !== undefined &&
+        committed !== undefined &&
+        target.model === committed.model &&
+        target.source === committed.source &&
+        target.normalizedDir === committed.normalizedDir
+      )
+        void this.runStatusCheck(target)
     })
   }
 
@@ -455,6 +482,7 @@ export class EnrichmentFormController {
       ...shell,
       namespaceStatus: this.form.getSnapshot().status,
       mode: this.model.field('mode'),
+      ocrLanguage: this.model.field('ocrLanguage'),
       mineruTokenRef: this.model.field(ENRICHMENT_REFERENCE_FIELD),
       outputDir: this.model.field('outputDir'),
       enableSemanticSearch: this.model.field('enableSemanticSearch'),
@@ -488,20 +516,15 @@ export class EnrichmentFormController {
       edit: (field, text) => {
         actions.edit(field, text)
         if (field === ENRICHMENT_REFERENCE_FIELD) actions.edit(ENRICHMENT_SECRET_KEY, '')
-        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget()
+        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget(false)
       },
       resetField: (field) => {
         actions.resetField(field)
         if (field === ENRICHMENT_REFERENCE_FIELD) actions.edit(ENRICHMENT_SECRET_KEY, '')
-        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget()
+        if (MODEL_TARGET_FIELDS.includes(field)) this.reconcileTarget(false)
       },
-      save: () => {
-        const settled = actions.save()
-        // A save acceptance re-compares the target on settlement; the form's
-        // publish event also reconciles external/late updates via onFormPublished.
-        void Promise.resolve(settled).then(() => this.reconcileTarget())
-        return settled
-      },
+      // Only an accepted form publication reconciles the committed target.
+      save: () => actions.save(),
       discard: () => {
         actions.discard()
         this.reconcileTarget()

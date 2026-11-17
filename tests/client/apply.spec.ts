@@ -23,6 +23,7 @@ import { fakeScope } from './helpers/fake-scope.ts'
 import type { ZoteroLibraryPanelFace } from '../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import type { ZoteroProbeFace } from '../../src/client/components/plugin/faces.ts'
 import { searchResult } from '../helpers/library-fixtures.ts'
+import { snapshotWhen } from '../helpers/sync.ts'
 
 // The page imports primitive icons; stub them with the shared DOM face so
 // this wiring-level spec does not load the real bundle (katex css, shiki, …).
@@ -31,6 +32,7 @@ describe('the browser-half entry', () => {
   it('declares the services it consumes', () => {
     expect(inject).toEqual([
       'locale',
+      'contextMenus',
       'slots',
       'remote',
       'remote.credentials',
@@ -100,6 +102,7 @@ describe('the browser-half entry', () => {
       'sidebar.right.tab.document.actions',
       'sidebar.right.tab.document.unpreviewable',
       'contextMenu.icon',
+      'contextMenu.icon',
     ])
   })
 
@@ -115,7 +118,10 @@ describe('the browser-half entry', () => {
       const entry = world.registered.find((item) => item.options.id === id)
       expect(entry, `${id} should be registered`).toBeDefined()
       const inject = entry!.options.inject as () => {
-        hooks: Record<string, { getSnapshot(): { open: boolean } }>
+        hooks: Record<
+          string,
+          { getSnapshot(): { open: boolean }; subscribe(listener: () => void): () => void }
+        >
         dismiss(): void
       }
       return inject()
@@ -130,10 +136,13 @@ describe('the browser-half entry', () => {
     // of the component named by its hook, not the other component's.
     world.enrichmentScope.publish({ status: 'unavailable' })
     world.scholarlyScope.publish({ status: 'ready' })
+    await snapshotWhen(scholarly.hooks.scholarlyEnableNotice!, (state) => state.open)
     expect(enrichment.hooks.enrichmentEnableNotice!.getSnapshot().open).toBe(false)
     expect(scholarly.hooks.scholarlyEnableNotice!.getSnapshot().open).toBe(true)
 
     world.enrichmentScope.publish({ status: 'ready' })
+    scholarly.dismiss()
+    await snapshotWhen(enrichment.hooks.enrichmentEnableNotice!, (state) => state.open)
     expect(enrichment.hooks.enrichmentEnableNotice!.getSnapshot().open).toBe(true)
   })
 

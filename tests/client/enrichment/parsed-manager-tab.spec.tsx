@@ -258,11 +258,10 @@ describe('parsed document manager tab', () => {
     await screen.findByText(TITLE)
     // The compact toolbar hides the label through CSS, never unmounts it: the
     // accessible name cannot drift between the wide and narrow toolbars, and
-    // the glyph rides inside the button instead of the icon seat.
+    // the glyph uses the host Button icon seat.
     const button = screen.getByRole('button', { name: en.libraryParseUrl })
     expect(button.getAttribute('aria-label')).toBe(en.libraryParseUrl)
-    const label = within(button).getByText(en.libraryParseUrl)
-    expect(label.className).toContain('urlParseLabel')
+    expect(within(button).getByText(en.libraryParseUrl)).toBeDefined()
     expect(button.querySelector('[class*="urlParseGlyph"]')).not.toBeNull()
   })
 

@@ -10,7 +10,7 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourceWorkspace } from '../../../sources/model.js'
-import { incompleteExportsNoteOf } from '../operations.ts'
+import { operationsNoteOf } from '../operations.ts'
 import { ExportSections } from '../ExportSections.tsx'
 import { SourcePageControls } from './SourcePageControls.tsx'
 import type { SourcePager } from './useSourcePage.ts'
@@ -25,7 +25,7 @@ interface ExportsPageProps {
 
 /** The exports page: format sections and the incomplete-operations note. */
 export function ExportsPage({ workspace, pager, t }: ExportsPageProps) {
-  const incomplete = incompleteExportsNoteOf(workspace.exportOperations, t)
+  const incomplete = operationsNoteOf(workspace.exportOperations, t)
   return (
     <div className={css.exportsPage}>
       {workspace.exports.length === 0 && <p className={css.note}>{t('exportsEmptyNote')}</p>}

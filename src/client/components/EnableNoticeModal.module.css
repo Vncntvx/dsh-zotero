@@ -1,0 +1,21 @@
+.content {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.title {
+  margin: 0;
+  font: var(--dsw-font-base-strong-16);
+}
+
+.description {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

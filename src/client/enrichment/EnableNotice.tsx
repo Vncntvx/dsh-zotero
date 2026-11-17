@@ -36,7 +36,6 @@ export function EnrichmentEnableNotice({
       title={t('enrichmentEnableNoticeTitle')}
       description={t('enrichmentEnableNoticeDescription')}
       confirmLabel={t('enrichmentEnableNoticeConfirm')}
-      closeLabel={t('enrichmentEnableNoticeClose')}
       onDismiss={dismiss}
     />
   )

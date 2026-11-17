@@ -152,20 +152,12 @@ export function parseHarness(
   options: {
     remote?: DocumentParseRemote
     capabilities?: Partial<DocumentParseCapabilities>
-    onOperation?: ConstructorParameters<typeof DocumentParseController>[3]
-    onOperationIntent?: ConstructorParameters<typeof DocumentParseController>[4]
   } = {},
 ) {
   const remote = options.remote ?? parseRemote()
   const capability = observable(parseCapabilities(options.capabilities))
   const boundary = parseJobs()
-  const controller = new DocumentParseController(
-    remote,
-    boundary.jobs,
-    capability,
-    options.onOperation,
-    options.onOperationIntent,
-  )
+  const controller = new DocumentParseController(remote, boundary.jobs, capability)
   const sync = progress()
   controller.subscribe(sync.notify)
   return {

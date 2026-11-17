@@ -1,6 +1,7 @@
 /**
- * Domain↔wire mappings for the library panel's five Remote endpoints
- * (browse, search, item detail, child page, export). The
+ * Domain↔wire mappings for the library panel's nine Remote endpoints
+ * (browse, collection path, search, item detail, child page, export, write,
+ * readUrlPdf, releaseUrlPdf). The
  * browser panel speaks the contract views (`src/contract.ts`); the service
  * speaks the domain records (`src/types.ts`). These pure functions are where
  * the two shapes meet on the host half, and fields the panel does not render
@@ -64,7 +65,7 @@ export function browseRequestOf(view: ZoteroLibraryBrowseRequestView): ZoteroBro
     kind: view.kind,
     ...(view.library !== undefined ? { library: view.library } : {}),
     ...(view.parentRef !== undefined ? { parentRef: view.parentRef } : {}),
-    ...(view.q !== undefined && view.q !== '' ? { q: view.q } : {}),
+    ...(view.q === undefined ? {} : { q: view.q }),
     ...(view.match !== undefined ? { match: view.match } : {}),
     offset: view.offset,
     limit: view.limit,
@@ -284,8 +285,8 @@ export function exportRequestOf(view: ZoteroLibraryExportRequestView): ZoteroExp
 }
 
 /**
- * Domain child page → wire view. `pageMetaOf` guarantees every served page
- * carries its window, so the wire view requires `limit`.
+ * Domain child page → wire view. The fetched page carries its window, so the
+ * wire view requires `limit`.
  */
 export function childPageViewOf(page: ZoteroChildPage): ZoteroChildPageView {
   switch (page.kind) {
@@ -410,34 +411,11 @@ function rowsViewOf<T, V>(
 
 /** Domain item detail → wire view; relations/version/serverId/extraFields stay host-side. */
 export function itemViewOf(detail: ZoteroItemDetail): ZoteroItemDetailView {
-  const notes = rowsViewOf(detail.notes, (row): ZoteroNoteRowView => ({
-    ref: row.ref,
-    text: row.text,
-    truncated: row.truncated,
-    ...(row.parentRef !== undefined ? { parentRef: row.parentRef } : {}),
-  }))
-  const annotations = rowsViewOf(detail.annotations, (row): ZoteroAnnotationRowView => ({
-    ref: row.ref,
-    type: row.type,
-    text: row.text,
-    ...(row.comment !== undefined ? { comment: row.comment } : {}),
-    ...(row.color !== undefined ? { color: row.color } : {}),
-    ...(row.pageLabel !== undefined ? { pageLabel: row.pageLabel } : {}),
-    ...(row.parentRef !== undefined ? { parentRef: row.parentRef } : {}),
-  }))
-  const attachments = rowsViewOf(detail.attachments, (row): ZoteroAttachmentRowView => ({
-    ref: row.ref,
-    title: row.title,
-    contentType: row.contentType,
-  }))
-  const bestAttachment: ZoteroAttachmentRowView | undefined =
-    detail.bestAttachment === undefined
-      ? undefined
-      : {
-          ref: detail.bestAttachment.ref,
-          title: detail.bestAttachment.title,
-          contentType: detail.bestAttachment.contentType,
-        }
+  const notes = rowsViewOf(detail.notes, noteRowOf)
+  const annotations = rowsViewOf(detail.annotations, annotationRowOf)
+  const attachments = rowsViewOf(detail.attachments, attachmentRowOf)
+  const bestAttachment =
+    detail.bestAttachment === undefined ? undefined : attachmentRowOf(detail.bestAttachment)
   return {
     ref: detail.ref,
     itemType: detail.itemType,

@@ -114,7 +114,6 @@ export function searchOccurrenceOf(
     tags: string[]
     tagMatch?: 'all' | 'any'
     excludeTags?: string[]
-    includeTrashed?: boolean
     returned: number
     total: number
     noteMatches: number
@@ -123,12 +122,12 @@ export function searchOccurrenceOf(
   return {
     callId: 's1',
     mode: 'metadata',
+    itemLevel: 'top',
     scope: { kind: 'library', library: { type: 'user', id: 0 } },
     itemTypes: [],
     tags: [],
     tagMatch: 'all',
     excludeTags: [],
-    includeTrashed: false,
     returned: 1,
     total: 1,
     ...overrides,

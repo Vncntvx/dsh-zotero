@@ -67,14 +67,13 @@ export const libraryEn = {
   libraryInsertFailed: 'The editor did not accept the insertion. Your draft has not been replaced.',
   libraryAbstractMissing: 'Abstract: not available in this record.',
   libraryInsertedAbstractTruncated: 'Abstract (truncated in the retrieved record):',
-  libraryPdfLoad: 'Load PDF',
+
   libraryPdfReload: 'Reload PDF',
   libraryPdfSourceMissing:
     'PDF source information is unavailable. Open the attachment from the literature panel.',
   libraryUrlPdfDisabled: 'Enable URL PDF reading in Literature panel settings.',
   libraryPdfReaderUnavailable: 'The host PDF reader is unavailable.',
   libraryPdfDownloadError: 'Could not read this PDF: {message}',
-  libraryPdfReadingTarget: 'Read PDF · {target}',
 }
 export const libraryZh: Record<keyof typeof libraryEn, string> = {
   librarySectionAttachments: '附件',
@@ -138,11 +137,10 @@ export const libraryZh: Record<keyof typeof libraryEn, string> = {
   libraryInsertFailed: '编辑器未接受插入，原有草稿未被替换。',
   libraryAbstractMissing: '摘要：当前条目未提供。',
   libraryInsertedAbstractTruncated: '摘要（当前返回内容已截断）：',
-  libraryPdfLoad: '加载 PDF',
+
   libraryPdfReload: '重新载入 PDF',
   libraryPdfSourceMissing: 'PDF 来源信息不可用，请从文献面板中的附件重新打开。',
   libraryUrlPdfDisabled: '请在文献面板设置中开启 URL PDF 阅读。',
   libraryPdfReaderUnavailable: '宿主 PDF 阅读器不可用。',
   libraryPdfDownloadError: '无法阅读此 PDF：{message}',
-  libraryPdfReadingTarget: '阅读 PDF · {target}',
 }

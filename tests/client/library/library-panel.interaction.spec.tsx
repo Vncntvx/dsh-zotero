@@ -151,14 +151,14 @@ describe('the paginator walks both ways and refresh reruns every lane', () => {
     mountPanel()
     const row = (await screen.findAllByText('FlashAttention-2'))[0]!.closest('button')!
     expect(row.getAttribute('aria-current')).toBeNull()
-    expect(row.className).not.toContain('itemRowSelected')
+    expect(row.getAttribute('aria-current')).not.toBe('true')
     act(() => {
       row.click()
     })
     await waitFor(() => {
       expect(row.getAttribute('aria-current')).toBe('true')
     })
-    expect(row.className).toContain('itemRowSelected')
+    expect(row.getAttribute('aria-current')).toBe('true')
     // The plugin language names the type; the venue and the structured author
     // list replace the upstream summary the row used to print verbatim.
     expect(within(row).getByText(zh.libraryItemTypeConferencePaper)).toBeTruthy()

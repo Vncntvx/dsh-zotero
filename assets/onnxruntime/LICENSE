@@ -1,17 +1,3 @@
-The generated files in assets/onnxruntime/<version>/ are unmodified build
-artifacts of ONNX Runtime's JavaScript packages, copied from the pinned
-`onnxruntime-web` dev dependency by scripts/vendor-onnxruntime.mjs:
-
-  - ort.node.min.mjs            (onnxruntime-web, dist/ort.node.min.mjs)
-  - ort-wasm-simd-threaded.mjs  (onnxruntime-web, dist/ort-wasm-simd-threaded.mjs)
-  - ort-wasm-simd-threaded.wasm (onnxruntime-web, dist/ort-wasm-simd-threaded.wasm)
-
-The plugin also depends on `onnxruntime-common` from npm, which provides the
-`onnxruntime-common` module the vendored entry imports. Both packages come from
-the ONNX Runtime project: https://github.com/microsoft/onnxruntime
-
-They are distributed under the MIT License:
-
 MIT License
 
 Copyright (c) Microsoft Corporation

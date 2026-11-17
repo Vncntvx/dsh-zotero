@@ -1,3 +1,4 @@
+import { ResponsiveActionButton } from '../components/ResponsiveActionButton.tsx'
 /**
  * The parsed-document manager: one session-scoped right-sidebar tab that lists
  * every committed artifact and owns open / reparse / discard actions. The list
@@ -230,7 +231,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     loadFirst(abort.signal)
     return () => {
       abort.abort()
-      if (listGeneration.current === generation) listGeneration.current++
+      if (listGeneration.current === generation) listGeneration.current += 1
     }
   }, [loadFirst, revision, parseSurface.revision])
 
@@ -425,17 +426,15 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
               onClick={() => setQuery('')}
             />
           )}
-          <Button
+          <ResponsiveActionButton
             variant="outline"
             size="sm"
-            className={clsx(css.textSeat, css.urlParseCompact)}
-            aria-label={props.t('libraryParseUrl')}
+            className={css.textSeat}
+            label={props.t('libraryParseUrl')}
+            icon={<IconLinkOutlineRegular size={13} className={css.urlParseGlyph} />}
             disabled={parseSurface.openUrl === undefined}
             onClick={() => parseSurface.openUrl?.()}
-          >
-            <IconLinkOutlineRegular size={13} className={css.urlParseGlyph} />
-            <span className={css.urlParseLabel}>{props.t('libraryParseUrl')}</span>
-          </Button>
+          />
           <Button
             variant="outline"
             size="sm"

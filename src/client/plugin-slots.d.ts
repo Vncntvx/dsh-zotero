@@ -46,6 +46,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
   interface ContextMenuTargetMap {
+    zoteroSelection: { readonly owner: string; readonly text: string }
     zoteroItem: {
       readonly ref: string
       readonly title: string

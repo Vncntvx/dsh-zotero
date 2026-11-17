@@ -8,7 +8,7 @@ import { useLibraryPreferences, useLibraryScroll } from '../../library-preferenc
  */
 
 import clsx from 'clsx'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   observeElementRect,
   useVirtualizer,
@@ -126,7 +126,9 @@ function closingBranchesOf(
   return closing
 }
 
-export function LibraryTree({
+export const LibraryTree = memo(LibraryTreeBody)
+
+function LibraryTreeBody({
   t,
   locatedRef,
   flatTree,
@@ -166,16 +168,23 @@ export function LibraryTree({
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocus = useRef<string>()
   const treeItems = treeVirtualizer.getVirtualItems()
-  const focus = (ref: string | undefined) => {
-    if (ref === undefined) return
-    setFocused(ref)
-    pendingFocus.current = ref
-    const index = flatTree.findIndex((entry) => entry.row.ref === ref)
-    if (index >= 0) treeVirtualizer.scrollToIndex(index, { align: 'auto' })
-    // Focus immediately when the row is mounted; the effect below is the
-    // catch-up for a row the scroll or a later expansion has not mounted yet.
-    buttons.current.get(ref)?.focus()
-  }
+  const focus = useCallback(
+    (ref: string | undefined) => {
+      if (ref === undefined) return
+      setFocused(ref)
+      pendingFocus.current = ref
+      const index = flatTree.findIndex((entry) => entry.row.ref === ref)
+      if (index >= 0) treeVirtualizer.scrollToIndex(index, { align: 'auto' })
+      // Focus immediately when the row is mounted; the effect below is the
+      // catch-up for a row the scroll or a later expansion has not mounted yet.
+      const button = buttons.current.get(ref)
+      if (button !== undefined) {
+        pendingFocus.current = undefined
+        button.focus()
+      }
+    },
+    [flatTree, treeVirtualizer],
+  )
   const focusRef = flatTree.some(({ row }) => row.ref === focused) ? focused : flatTree[0]?.row.ref
   useEffect(() => {
     if (focused !== undefined && focusRef !== focused) setFocused(focusRef)
@@ -202,7 +211,7 @@ export function LibraryTree({
     const button = buttons.current.get(locatedRef)
     button?.scrollIntoView?.({ block: 'nearest' })
     focus(locatedRef)
-  }, [locatedRef])
+  }, [locatedRef, focus])
   /** A served child listing outranks Zotero's count; an unreported count keeps the expander. */
   const hasNoChildren = (
     row: FlatCollectionRow['row'],

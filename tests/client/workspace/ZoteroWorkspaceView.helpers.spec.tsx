@@ -40,6 +40,7 @@ function pageFixture(item?: SourceItem): ZoteroSourcePageResultView {
       exports: [],
       exportTotal: 0,
       exportOperations: { running: 0, failed: 0, stopped: 0 },
+      searchOperations: { running: 0, failed: 0, stopped: 0 },
       omittedRows: 0,
       filterCounts: { all: 1, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
       evidencePassageTotal: 0,

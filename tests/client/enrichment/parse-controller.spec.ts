@@ -1,5 +1,5 @@
 /** Module behaviours for admission, observation lifetime and the retry protocol. */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { typedRemoteResult } from '../../../src/client/enrichment/parse-controller.ts'
 import { deferred } from '../../helpers/sync.ts'
@@ -119,13 +119,11 @@ describe('document parse observation lifetime', () => {
   })
 
   it.each(['close', 'switch', 'dispose'] as const)(
-    'publishes late admission with its original selection after %s',
+    'keeps late admission detached after %s without restarting or cancelling',
     async (change) => {
       const start = deferred<RemoteResult<ZoteroStartDocumentParseResultView>>()
-      const onOperation = vi.fn()
       const world = harness({
         remote: parseRemote({ startDocumentParse: () => start.promise }),
-        onOperation,
       })
       world.controller.open(PARSE_SELECTION)
       await world.settled()
@@ -140,7 +138,9 @@ describe('document parse observation lifetime', () => {
       }
       start.resolve({ ok: true, value: { ...operation, status: 'started' } })
       await submitting
-      expect(onOperation).toHaveBeenCalledExactlyOnceWith(operation, PARSE_SELECTION)
+      expect(world.remote.startDocumentParse).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ target: PARSE_SELECTION.target, sessionId: PARSE_SESSION }),
+      )
       expect(world.jobs.observe).not.toHaveBeenCalled()
       expect(world.jobs.kill).not.toHaveBeenCalled()
       if (change === 'switch') expect(world.controller.getSnapshot().operation).toBeUndefined()
@@ -217,24 +217,18 @@ describe('document parse observation lifetime', () => {
 })
 
 describe('document parse retry protocol', () => {
-  it('persists the intent before RPC and recovers ambiguous admission with receipt only after remount', async () => {
-    const onOperationIntent = vi.fn()
-    const onOperation = vi.fn()
+  it('recovers ambiguous admission with the original operation ID and receipt only after remount', async () => {
     const remote = parseRemote({
       startDocumentParse: async (request) => {
-        expect(onOperationIntent).toHaveBeenCalledExactlyOnceWith(
-          { operationId: request.operationId },
-          PARSE_SELECTION,
-        )
+        expect(first.controller.getSnapshot().operation?.operationId).toBe(request.operationId)
         throw new Error('Connection lost after send')
       },
     })
-    const first = harness({ remote, onOperationIntent, onOperation })
+    const first = harness({ remote })
     first.controller.open(PARSE_SELECTION)
     await first.settled()
     await first.controller.submit()
     const operation = first.controller.getSnapshot().operation!
-    expect(onOperation).not.toHaveBeenCalled()
     first.dispose()
     const second = harness({ remote })
     second.controller.open({ ...PARSE_SELECTION, operation })

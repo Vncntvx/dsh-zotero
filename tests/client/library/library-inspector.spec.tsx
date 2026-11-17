@@ -206,7 +206,7 @@ describe('library inspector', () => {
       url: 'https://example.com/paper',
     })
 
-    const urlButton = screen.getByRole('button', { name: 'https://example.com/paper' })
+    const urlButton = screen.getByRole('button', { name: `${zh.copy} ${zh.libraryMetaUrl}` })
     expect(urlButton).toBeTruthy()
     fireEvent.click(urlButton)
     expect(writeText).toHaveBeenCalledWith('https://example.com/paper')
@@ -223,7 +223,7 @@ describe('library inspector', () => {
       doi: '10.1038/s41467-023-38203-3',
     })
 
-    const doiButton = screen.getByRole('button', { name: '10.1038/s41467-023-38203-3' })
+    const doiButton = screen.getByRole('button', { name: `${zh.copy} ${zh.libraryMetaDoi}` })
     expect(doiButton).toBeTruthy()
     fireEvent.click(doiButton)
     expect(writeText).toHaveBeenCalledWith('10.1038/s41467-023-38203-3')

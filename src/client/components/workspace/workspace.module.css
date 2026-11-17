@@ -603,8 +603,8 @@
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font-style: italic;
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  font-size: var(--dsh-content-font-size-secondary);
+  line-height: calc(var(--dsw-font-s-14-line-height) + var(--dsh-content-font-delta));
   overflow-wrap: anywhere;
 }
 

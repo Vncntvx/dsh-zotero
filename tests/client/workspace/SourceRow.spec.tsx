@@ -129,8 +129,14 @@ describe('badgesOf', () => {
 describe('CopyButton', () => {
   it('copies the value, shows the caller label, and swaps to the copied label briefly', async () => {
     vi.useFakeTimers()
-    render(<CopyButton value="zotero://user/0/item/A" label={zh.copyRef} copiedLabel={zh.copied} />)
-    expect(screen.getByText(zh.copyRef)).toBeDefined()
+    render(
+      <CopyButton
+        value="zotero://user/0/item/A"
+        label={'Copy test value'}
+        copiedLabel={zh.copied}
+      />,
+    )
+    expect(screen.getByText('Copy test value')).toBeDefined()
     fireEvent.click(screen.getByRole('button'))
     expect(writeClipboard).toHaveBeenCalledWith('zotero://user/0/item/A')
     // The copied flag lands on the clipboard promise, not on the click.
@@ -139,16 +145,16 @@ describe('CopyButton', () => {
     act(() => {
       vi.advanceTimersByTime(1600)
     })
-    expect(screen.getByText(zh.copyRef)).toBeDefined()
+    expect(screen.getByText('Copy test value')).toBeDefined()
     vi.useRealTimers()
   })
 
   it('stays on the action label when the clipboard write is denied', async () => {
     vi.mocked(writeClipboard).mockRejectedValueOnce(new Error('clipboard denied'))
-    render(<CopyButton value="x" label={zh.copyRef} copiedLabel={zh.copied} />)
+    render(<CopyButton value="x" label={'Copy test value'} copiedLabel={zh.copied} />)
     fireEvent.click(screen.getByRole('button'))
     await act(async () => {})
-    expect(screen.getByText(zh.copyRef)).toBeDefined()
+    expect(screen.getByText('Copy test value')).toBeDefined()
     expect(screen.queryByText(zh.copied)).toBeNull()
     vi.useRealTimers()
   })
@@ -163,7 +169,7 @@ describe('CopyButton', () => {
       .mockImplementationOnce(
         async () => await new Promise<void>((resolve) => (resolveSecond = resolve)),
       )
-    render(<CopyButton value="x" label={zh.copyRef} copiedLabel={zh.copied} />)
+    render(<CopyButton value="x" label={'Copy test value'} copiedLabel={zh.copied} />)
     fireEvent.click(screen.getByRole('button'))
     fireEvent.click(screen.getByRole('button'))
     // The first click resolves late with success, but its epoch is stale:

@@ -1,3 +1,4 @@
+import { ToolItemRow } from './ToolItemRow.tsx'
 /** Compact per-ref result card for `zotero_get_batch`. */
 
 import { useMemo } from 'react'
@@ -76,20 +77,25 @@ export function GetBatchToolView(props: Props) {
         ) : view.rows.length > 0 ? (
           <div className={css.cardList}>
             {view.rows.map((row, index) => (
-              <div className={css.itemCard} data-batch-row key={`${row.ref}-${index}`}>
-                <div className={css.itemHeader}>
-                  <span className={css.itemTitle}>{row.title ?? row.ref}</span>
-                  <span className={css.itemMeta}>
-                    {row.status === 'ok'
-                      ? (row.citationKey ?? t('toolGetBatchRowOk'))
-                      : (row.code ?? t('toolGetBatchRowError'))}
-                  </span>
-                </div>
+              <ToolItemRow
+                data-batch-row
+                key={`${row.ref}-${index}`}
+                title={<>{row.title ?? row.ref}</>}
+                trailing={
+                  <>
+                    <span className={css.itemMeta}>
+                      {row.status === 'ok'
+                        ? (row.citationKey ?? t('toolGetBatchRowOk'))
+                        : (row.code ?? t('toolGetBatchRowError'))}
+                    </span>
+                  </>
+                }
+              >
                 {row.status === 'error' && row.message && (
                   <div className={css.coverageNotice}>{row.message}</div>
                 )}
                 <div className={css.itemMeta}>{row.ref}</div>
-              </div>
+              </ToolItemRow>
             ))}
           </div>
         ) : view.raw ? (

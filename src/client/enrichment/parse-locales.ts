@@ -91,16 +91,8 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseOffline: '重新连接宿主后即可查看或提交解析。',
 }
 
-export const parseLocales = { zh: parseZh, en: parseEn }
 export type ParseLocaleKey = keyof typeof parseEn
 export type ParseTranslate = (
   key: ParseLocaleKey,
   parameters?: Readonly<Record<string, string | number>>,
 ) => string
-
-export function parseTranslate(locale: keyof typeof parseLocales): ParseTranslate {
-  return (key, parameters) =>
-    parseLocales[locale][key].replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-      String(parameters?.[name] ?? placeholder),
-    )
-}

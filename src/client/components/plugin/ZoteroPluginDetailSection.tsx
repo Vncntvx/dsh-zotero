@@ -37,12 +37,20 @@ export function ZoteroPluginDetailSection({
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
+  return <ZoteroPluginDetailMatched t={t} probe={probe} useZoteroClient={useZoteroClient} />
+}
+
+function ZoteroPluginDetailMatched({
+  t,
+  probe,
+  useZoteroClient,
+}: Omit<ZoteroPluginDetailSectionProps, 'subject'>): ReactNode {
   const client = useZoteroClient()
   return (
     <ZoteroSurfaceBoundary
       t={t}
       surface="detail"
-      resetKey={pkgName}
+      resetKey={ZOTERO_REMOTE_PACKAGE}
       report={client.reportClientError}
     >
       <ZoteroPluginDetailSectionBody t={t} probe={probe} />
