@@ -517,6 +517,7 @@ export function projectRetrieveMeta(
         start: read.start,
         end: read.end,
         isTruncated: read.isTruncated,
+        spillAvailable: read.spillAvailable,
         ...(read.attachmentRef === undefined ? {} : { attachmentRef: read.attachmentRef }),
       },
     }

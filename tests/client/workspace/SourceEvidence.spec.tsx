@@ -357,6 +357,7 @@ describe('SourceEvidence component', () => {
           start: 0,
           end: 12_000,
           isTruncated: true,
+          spillAvailable: false,
           callIds: ['fulltext-read'],
         },
       ],
@@ -384,6 +385,29 @@ describe('SourceEvidence component', () => {
     expect(screen.queryByText(t('evidenceNotRetrieved'))).toBeNull()
   })
 
+  it('names the whole-document handle on a complete read', () => {
+    const item = sourceOf({
+      fulltextReads: [
+        {
+          sourceKind: 'attachment' as const,
+          sourceLabel: 'zotero://user/0/attachment/EFGH5678',
+          textFormat: 'markdown' as const,
+          totalChars: 40_000,
+          inputTruncated: false,
+          start: 0,
+          end: 40_000,
+          isTruncated: false,
+          spillAvailable: true,
+          callIds: ['complete-read'],
+        },
+      ],
+    })
+    render(<SourceEvidence item={item} t={t} />)
+    // A complete read reports the handle, not an upcoming window.
+    expect(screen.getByText(t('fulltextReadSpillAvailable'))).toBeDefined()
+    expect(screen.queryByText(t('fulltextReadWindowed'))).toBeNull()
+  })
+
   it('names a URL-sourced window by its kind and keeps the origin off the sentence', () => {
     const item = sourceOf({
       fulltextReads: [
@@ -396,6 +420,7 @@ describe('SourceEvidence component', () => {
           start: 0,
           end: 900,
           isTruncated: false,
+          spillAvailable: false,
           callIds: ['url-read'],
         },
       ],
@@ -418,6 +443,7 @@ describe('SourceEvidence component', () => {
       start: 0,
       end: 12_000,
       isTruncated: true,
+      spillAvailable: false,
       callIds: ['w1'],
     }
     const second = { ...first, start: 12_000, end: 24_000, callIds: ['w2'] }
@@ -446,6 +472,7 @@ describe('SourceEvidence component', () => {
         start: 0,
         end: 12_000,
         isTruncated: true,
+        spillAvailable: false,
         callIds: ['r1'],
       },
       expectBounded: true,
@@ -462,6 +489,7 @@ describe('SourceEvidence component', () => {
         start: 36_000,
         end: 40_000,
         isTruncated: false,
+        spillAvailable: false,
         callIds: ['r2'],
       },
       expectBounded: true,
@@ -478,6 +506,7 @@ describe('SourceEvidence component', () => {
         start: 0,
         end: 900,
         isTruncated: false,
+        spillAvailable: false,
         callIds: ['r3'],
       },
       expectBounded: false,
@@ -525,6 +554,7 @@ describe('SourceEvidence component', () => {
       start: 0,
       end: 12_000,
       isTruncated: true,
+      spillAvailable: false,
       callIds: ['w1'],
     }
     const second = { ...first, start: 12_000, end: 24_000, isTruncated: true, callIds: ['w2'] }

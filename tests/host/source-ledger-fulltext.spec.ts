@@ -42,6 +42,7 @@ function fulltextResult(overrides: Partial<ZoteroFulltextRead> = {}): ZoteroRetr
       text: 'x'.repeat(12_000),
       isTruncated: true,
       nextStart: 12_000,
+      spillAvailable: false,
       attachmentRef: REF,
       ...overrides,
     },

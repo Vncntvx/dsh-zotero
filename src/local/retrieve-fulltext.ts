@@ -254,7 +254,10 @@ export function fulltextWindowOf(
   start: number,
   maxChars: number,
   maxFulltextChars: number,
-): { readonly read: import('../types.js').ZoteroFulltextRead; readonly boundedText: string } {
+): {
+  readonly read: Omit<import('../types.js').ZoteroFulltextRead, 'spillAvailable'>
+  readonly boundedText: string
+} {
   const bounded = truncateText(document.text, maxFulltextChars)
   const totalChars = bounded.text.length
   if (Math.floor(start) > totalChars || start < 0) {
@@ -281,7 +284,7 @@ export function fulltextWindowOf(
     end += end - offset === 1 ? 1 : -1
   }
   const isTruncated = end < totalChars
-  const read: import('../types.js').ZoteroFulltextRead = {
+  const read: Omit<import('../types.js').ZoteroFulltextRead, 'spillAvailable'> = {
     sourceKind: document.sourceKind,
     ...(document.item === undefined ? {} : { item: document.item }),
     ...(document.attachmentContentType === undefined

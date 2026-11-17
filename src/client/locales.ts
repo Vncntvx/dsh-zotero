@@ -632,6 +632,7 @@ export const en = {
   fulltextReadCard:
     'Read the {format} document from {source}: characters {start}–{end} of {total}.',
   fulltextReadWindowed: 'More windows follow in this document read.',
+  fulltextReadSpillAvailable: 'A one-handle copy of the complete document was provided.',
   fulltextReadBounded: 'The document reached the configured full-text character bound.',
   fulltextCoverageIndexed: 'Zotero indexed {indexed} of {total} characters.',
   fulltextCoverageComplete: 'Zotero reports this document fully indexed.',
@@ -1574,6 +1575,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   fulltextFormatText: '索引文本',
   fulltextReadCard: '已读取{source}的{format}：第 {start}–{end} 字符，共 {total} 字符。',
   fulltextReadWindowed: '这是文档读取中的一个窗口，后续还有窗口。',
+  fulltextReadSpillAvailable: '已提供整篇文档的一次性读取句柄。',
   fulltextReadBounded: '文档达到配置的全文字符上限。',
   fulltextCoverageIndexed: 'Zotero 已索引 {indexed} / {total} 字符。',
   fulltextCoverageComplete: 'Zotero 报告该文档已完整索引。',

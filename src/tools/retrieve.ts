@@ -55,7 +55,7 @@ const RETRIEVE_PARAMETERS = {
     type: 'string',
     enum: ['evidence', 'fulltext'],
     default: 'evidence',
-    description: 'evidence (default): ranked passages. fulltext: whole document in windows.',
+    description: 'evidence (default): ranked passages. fulltext: whole document.',
   },
   ref: {
     type: 'string',
@@ -68,29 +68,29 @@ const RETRIEVE_PARAMETERS = {
   queryVariants: {
     type: 'array',
     items: { type: 'string' },
-    description: `Evidence mode: extra phrasings (at most ${ZOTERO_MAX_QUERY_VARIANTS}); best score per passage wins.`,
+    description: `Evidence mode: extra phrasings (up to ${ZOTERO_MAX_QUERY_VARIANTS}); best score wins.`,
   },
   sources: {
     type: 'array',
     items: { type: 'string', enum: ['annotation', 'note', 'abstract', 'fulltext'] },
     default: ALL_SOURCES,
-    description: 'Evidence mode: sources to gather; unavailable ones appear in sourcesSkipped.',
+    description: 'Evidence mode: sources to gather; unavailable ones are in sourcesSkipped.',
   },
   passages: {
     type: 'integer',
     default: DEFAULT_PASSAGES,
-    description: 'Evidence mode: 1..maxEvidencePassages; larger values fail.',
+    description: 'Evidence mode: 1..maxEvidencePassages.',
   },
   attachmentPolicy: {
     type: 'string',
     enum: ['best', 'allIndexed', 'specified'],
     default: 'best',
-    description: 'Evidence mode: best, allIndexed, or specified attachmentRefs.',
+    description: 'Evidence mode: best, allIndexed, or specified.',
   },
   attachmentRefs: {
     type: 'array',
     items: { type: 'string' },
-    description: 'Evidence mode, specified: same-library refs; repeats read once, capped.',
+    description: 'Evidence mode, specified: same-library refs; repeats read once.',
   },
   source: {
     type: 'object',
@@ -104,7 +104,12 @@ const RETRIEVE_PARAMETERS = {
       },
     },
     description:
-      'Fulltext mode: one source. kind="ref" reads a Zotero attachment; kind="artifactId" reads a stored parsed artifact, including URL documents, with enrichment composed.',
+      'Fulltext mode: one source. kind="ref" reads an attachment; kind="artifactId" reads a stored parsed artifact, including URL documents.',
+  },
+  complete: {
+    type: 'boolean',
+    description:
+      'Fulltext mode: read the whole bounded document once; returns its text or a spillRef. Excludes start, maxChars, and continuation.',
   },
   start: {
     type: 'integer',
@@ -233,6 +238,7 @@ const FULLTEXT_READ_RECORD = {
         retrievalHint: { type: 'string', required: true },
       },
     },
+    spillAvailable: { type: 'boolean', required: true },
   },
 } as const
 
@@ -287,7 +293,9 @@ export const RETRIEVE_SPECIFIED_EMPTY_MESSAGE =
 export const RETRIEVE_SPECIFIED_ONLY_MESSAGE =
   'attachmentRefs is only valid with attachmentPolicy="specified"'
 export const RETRIEVE_MODE_MIXED_MESSAGE =
-  'Evidence-only parameters (ref, query, queryVariants, sources, passages, attachmentPolicy, attachmentRefs) cannot be used with mode="fulltext"; fulltext-only parameters (source, start, maxChars, continuation) cannot be used with mode="evidence".'
+  'Evidence-only parameters (ref, query, queryVariants, sources, passages, attachmentPolicy, attachmentRefs) cannot be used with mode="fulltext"; fulltext-only parameters (source, complete, start, maxChars, continuation) cannot be used with mode="evidence".'
+export const RETRIEVE_COMPLETE_MIXED_MESSAGE =
+  'complete cannot be combined with start, maxChars, or continuation.'
 export const RETRIEVE_SOURCE_REQUIRED_MESSAGE =
   'mode="fulltext" requires source with exactly one of ref or artifactId.'
 export const RETRIEVE_MAX_CHARS_MESSAGE =
@@ -352,6 +360,15 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
       args.attachmentRefs !== undefined
     )
       invalidArgs(RETRIEVE_MODE_MIXED_MESSAGE)
+    if (args.complete === true) {
+      if (
+        args.start !== undefined ||
+        args.maxChars !== undefined ||
+        args.continuation !== undefined
+      )
+        invalidArgs(RETRIEVE_COMPLETE_MIXED_MESSAGE)
+      return { mode: 'fulltext', source: fulltextSourceOf(args), complete: true }
+    }
     const start = args.start ?? 0
     if (!Number.isInteger(start) || start < 0) invalidArgs(RETRIEVE_START_MESSAGE)
     const maxChars = args.maxChars ?? config.fulltextWindowChars
@@ -369,6 +386,7 @@ function buildRequest(args: RetrieveArgs, config: ResolvedConfig): ZoteroRetriev
   }
   if (
     args.source !== undefined ||
+    args.complete !== undefined ||
     args.start !== undefined ||
     args.maxChars !== undefined ||
     args.continuation !== undefined
@@ -566,6 +584,8 @@ export const FULLTEXT_INPUT_TRUNCATED_REMEDY =
   'The document exceeded maxFulltextChars; the windows above cover only its first bounded portion.'
 export const FULLTEXT_SPILL_NOTE =
   'The whole bounded document is also saved in spill storage; read it through that handle instead of walking every window.'
+export const FULLTEXT_COMPLETE_SPILL_NOTE =
+  'The complete document is in the handle above; read it through that handle.'
 
 /** One line describing Zotero's own indexing coverage of a full-text source. */
 function coverageLineOf(coverage: ZoteroCoverage): string {
@@ -583,9 +603,15 @@ function coverageLineOf(coverage: ZoteroCoverage): string {
 export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): ContentBlock[] {
   if (value.mode === 'fulltext') {
     const read = value.fulltext
+    // A complete read covers the whole bounded document and carries its text
+    // through the spill handle instead of repeating it inline.
+    const completeRead =
+      read.spillAvailable && !read.isTruncated && read.start === 0 && read.end === read.totalChars
     const header = [
       `Full text of ${read.sourceLabel} (${read.textFormat}; ${read.sourceKind} source)`,
-      `Characters ${read.start}–${read.end} of ${read.totalChars}; isTruncated: ${read.isTruncated}.`,
+      completeRead
+        ? `Characters 0–${read.totalChars} of ${read.totalChars}; complete read.`
+        : `Characters ${read.start}–${read.end} of ${read.totalChars}; isTruncated: ${read.isTruncated}.`,
       read.totalChars === 0 ? 'This source contains no readable text.' : '',
       read.totalChars > 0 && read.start === read.totalChars
         ? 'End of document; this window contains no further text.'
@@ -599,11 +625,19 @@ export function renderRetrieve(_args: RetrieveArgs, value: RetrieveOutput): Cont
       read.coverage === undefined ? '' : coverageLineOf(read.coverage),
       read.spillRef === undefined
         ? ''
-        : `${spilledNoticeOf(read.spillRef, read.spillRef.bytes - (read.end - read.start)).trimEnd()} ${FULLTEXT_SPILL_NOTE}`,
+        : `${spilledNoticeOf(
+            read.spillRef,
+            completeRead ? read.spillRef.bytes : read.spillRef.bytes - (read.end - read.start),
+          ).trimEnd()} ${completeRead ? FULLTEXT_COMPLETE_SPILL_NOTE : FULLTEXT_SPILL_NOTE}`,
     ].filter((line) => line !== '')
     // The blank line separates the header from the document text and must
-    // survive the empty-line filter above.
-    return [{ type: 'text', text: `${header.join('\n')}\n\n${read.text}` }]
+    // survive the empty-line filter above. A complete read has no inline text.
+    return [
+      {
+        type: 'text',
+        text: completeRead ? header.join('\n') : `${header.join('\n')}\n\n${read.text}`,
+      },
+    ]
   }
   const lines = [
     `Evidence for ${value.ref} (${value.evidence.length} passage${value.evidence.length === 1 ? '' : 's'})`,
@@ -728,8 +762,8 @@ export function registerRetrieveTool(
         name: 'zotero_retrieve',
         description: [
           'mode="evidence": rank passages from one item\u2019s annotations, notes, abstract and full-text chunks against a query; matchKind: lexical = own words carry the query, semantic = meaning only (never quote as carrying the terms), hybrid = both; matchedFields names text or comment, truncated/sourcesSkipped report coverage; noMatch never means the item is silent on the subject.',
-          'mode="fulltext": read one document (bounded by maxFulltextChars) in source order via character windows; source is a Zotero attachment ref or a stored artifactId. Start at start=0; follow nextStart with the returned continuation token until isTruncated is false. Windows may be inline or files; the first may name a spillRef for the whole text. Parsed Markdown is preferred for refs; Zotero index text is reported as text. Reads never start a parse or upload.',
-          'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes contribute every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs, specified attachments must be this item\u2019s children; unavailable sources are skipped into sourcesSkipped; results are capped by passage count and characters (a passage charges its text and annotation comment); truncated signals omitted evidence.',
+          'mode="fulltext": read one document (bounded by maxFulltextChars); source is an attachment ref or stored artifactId. complete=true reads it whole in one call and returns the text or a spillRef; complete excludes start, maxChars, and continuation. Otherwise read windows from start=0, following nextStart and the continuation token until isTruncated is false. Windows may be inline or files; the first may name a whole-text spillRef. Parsed Markdown is preferred; Zotero index text is reported as text. Reads never start a parse or upload.',
+          'Evidence mode: queryVariants adds phrasings (best score per passage wins); a note item contributes its own body and child notes every chunk (chunkIndex/chunkCount locate each); attachmentPolicy picks best (default), allIndexed, or specified via attachmentRefs (this item\u2019s children); results are capped by passage count and characters; truncated signals omitted evidence.',
         ].join(' '),
         parameters: RETRIEVE_PARAMETERS,
         output: {

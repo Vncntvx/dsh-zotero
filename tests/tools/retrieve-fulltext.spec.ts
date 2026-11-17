@@ -23,11 +23,13 @@ import {
   fulltextHit,
 } from '../helpers/retrieve-fixtures.js'
 import {
+  RETRIEVE_COMPLETE_MIXED_MESSAGE,
   RETRIEVE_EVIDENCE_REQUIRED_MESSAGE,
   RETRIEVE_MAX_CHARS_MESSAGE,
   RETRIEVE_MODE_MIXED_MESSAGE,
   RETRIEVE_SOURCE_REQUIRED_MESSAGE,
   RETRIEVE_START_MESSAGE,
+  FULLTEXT_COMPLETE_SPILL_NOTE,
   FULLTEXT_TRUNCATED_REMEDY,
 } from '../../src/tools/retrieve.js'
 
@@ -465,5 +467,86 @@ describe('fulltext spill', () => {
     const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
     expect(data.fulltext.spillRef).toBeUndefined()
     expect(saveText).not.toHaveBeenCalled()
+  })
+})
+
+describe('complete reads', () => {
+  it('reads the whole short document in one call', async () => {
+    installEnhancer(MARKDOWN)
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      complete: true,
+    })
+    expect(result.isError).toBe(false)
+    const data = (
+      result.value as {
+        data: { fulltext: { text: string; isTruncated: boolean; spillAvailable: boolean } }
+      }
+    ).data
+    expect(data.fulltext).toMatchObject({
+      text: MARKDOWN,
+      isTruncated: false,
+      spillAvailable: false,
+    })
+    expect(JSON.stringify(result.content)).toContain(MARKDOWN)
+  })
+
+  it('renders the spill handle for a long complete read without repeating the body', async () => {
+    const longText = 'z'.repeat(20_000)
+    installEnhancer(longText)
+    const saveText = vi.fn(async (save: { content: string }) => ({
+      locator: 'spill://session/complete.md',
+      bytes: save.content.length,
+      retrievalHint: 'Read it from spill storage.',
+    }))
+    ;(lane.ctx as unknown as { provide(name: string, value: unknown): void }).provide(
+      'spillStore',
+      { saveText },
+    )
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      complete: true,
+    })
+    expect(result.isError).toBe(false)
+    const data = (
+      result.value as {
+        data: { fulltext: { text: string; spillRef?: unknown; spillAvailable: boolean } }
+      }
+    ).data
+    expect(data.fulltext).toMatchObject({
+      text: '',
+      spillAvailable: true,
+      spillRef: { locator: 'spill://session/complete.md' },
+    })
+    const rendered = (result.content[0] as { text: string }).text
+    expect(rendered).toContain('spill://session/complete.md')
+    expect(rendered).toContain(FULLTEXT_COMPLETE_SPILL_NOTE)
+    expect(rendered).toContain('complete read')
+    expect(rendered).not.toContain(longText)
+  })
+
+  it('rejects complete with window parameters', async () => {
+    installEnhancer(MARKDOWN)
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      complete: true,
+      start: 0,
+    })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_COMPLETE_MIXED_MESSAGE)
+  })
+
+  it('rejects complete in evidence mode', async () => {
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'evidence',
+      ref: itemRef(RETRIEVE_PARENT.key),
+      query: 'x',
+      complete: true,
+    })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(RETRIEVE_MODE_MIXED_MESSAGE)
   })
 })

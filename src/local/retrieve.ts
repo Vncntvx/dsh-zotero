@@ -58,8 +58,10 @@ import type {
   ZoteroEvidenceRetrieveRequest,
   ZoteroEvidenceRetrieveResult,
   ZoteroFulltextRead,
+  ZoteroFulltextRetrieveCompleteRequest,
   ZoteroFulltextRetrieveRequest,
   ZoteroFulltextRetrieveResult,
+  ZoteroFulltextRetrieveWindowRequest,
   ZoteroRetrieveRequest,
   ZoteroRetrieveResult,
 } from '../types.js'
@@ -435,6 +437,9 @@ export async function retrieve(
   signal?: AbortSignal,
 ): Promise<ZoteroRetrieveResult> {
   if (request.mode === 'fulltext') {
+    if ('complete' in request) {
+      return await readFulltextComplete(deps, request, signal)
+    }
     if (
       !Number.isSafeInteger(request.start) ||
       request.start < 0 ||
@@ -478,7 +483,7 @@ export async function retrieve(
  */
 async function readFulltextMode(
   deps: FulltextDeps,
-  request: ZoteroFulltextRetrieveRequest,
+  request: ZoteroFulltextRetrieveWindowRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroFulltextRetrieveResult> {
   const continuation = request.continuation
@@ -511,6 +516,35 @@ async function readFulltextMode(
     ...read,
     ...(nextContinuation === undefined ? {} : { continuation: nextContinuation }),
     ...(spillRef === undefined ? {} : { spillRef }),
+    spillAvailable: spillRef !== undefined,
+  }
+  return { mode: 'fulltext', fulltext }
+}
+
+/**
+ * Read the whole bounded document in one call. The result carries the complete
+ * text when it fits the inline budget, or a whole-document spill handle when
+ * the sink returned one; the text is then omitted so the same characters do
+ * not appear twice. `isTruncated` is false because this read covers the entire
+ * bounded document; `inputTruncated` still reports the `maxFulltextChars` cut.
+ */
+async function readFulltextComplete(
+  deps: FulltextDeps,
+  request: ZoteroFulltextRetrieveCompleteRequest,
+  signal?: AbortSignal,
+): Promise<ZoteroFulltextRetrieveResult> {
+  const document = await readFulltextDocument(deps, request.source, signal)
+  const { read, boundedText } = fulltextWindowOf(
+    document,
+    0,
+    deps.limits.maxFulltextChars,
+    deps.limits.maxFulltextChars,
+  )
+  const spillRef = deps.spill === undefined ? undefined : await deps.spill(boundedText)
+  const fulltext: ZoteroFulltextRead = {
+    ...read,
+    ...(spillRef === undefined ? {} : { text: '', spillRef }),
+    spillAvailable: spillRef !== undefined,
   }
   return { mode: 'fulltext', fulltext }
 }

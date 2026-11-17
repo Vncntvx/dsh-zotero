@@ -220,6 +220,7 @@ describe('the panel wire schemas derive from the domain constants', () => {
       start: 0,
       end: 100,
       isTruncated: true,
+      spillAvailable: false,
       callIds: ['c1'],
     }
     expect(

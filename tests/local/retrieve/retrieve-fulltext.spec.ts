@@ -44,10 +44,14 @@ afterEach(async () => {
 
 const WINDOW_CHARS = 8
 
-function providerOf(server: MockZotero, enhancer?: FulltextEnhancer): LocalApiProvider {
+function providerOf(
+  server: MockZotero,
+  enhancer?: FulltextEnhancer,
+  limits: Partial<typeof PROVIDER_LIMITS> = {},
+): LocalApiProvider {
   return new LocalApiProvider({
     client: testHttpClient(server.baseUrl),
-    limits: () => PROVIDER_LIMITS,
+    limits: () => ({ ...PROVIDER_LIMITS, ...limits }),
     fulltextEnhancer: () => enhancer,
   })
 }
@@ -517,5 +521,110 @@ describe('mode:"fulltext" spill', () => {
     expect(spill).toHaveBeenCalledOnce()
     expect(spill).toHaveBeenCalledWith(markdown)
     expect(result.fulltext?.spillRef).toBeUndefined()
+  })
+})
+
+describe('mode:"fulltext" complete reads', () => {
+  it('returns the whole bounded document in one call when the sink declines a handle', async () => {
+    const server = await boot()
+    const result = await providerOf(server, enhancerOf(hit(markdown))).retrieve(
+      {
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+        complete: true,
+      },
+      undefined,
+      async () => undefined,
+    )
+    expect(result.fulltext).toMatchObject({
+      start: 0,
+      end: markdown.length,
+      totalChars: markdown.length,
+      inputTruncated: false,
+      isTruncated: false,
+      spillAvailable: false,
+      text: markdown,
+    })
+    expect(result.fulltext?.nextStart).toBeUndefined()
+    expect(result.fulltext?.continuation).toBeUndefined()
+  })
+
+  it('carries the whole document through one spill handle and omits the duplicate text', async () => {
+    const server = await boot()
+    const longText = 'x'.repeat(20_000)
+    const spill = vi.fn(async () => ({
+      locator: 'spill://doc/complete.md',
+      bytes: longText.length,
+      retrievalHint: 'Read it from spill storage.',
+    }))
+    const result = await providerOf(server, enhancerOf(hit(longText))).retrieve(
+      {
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+        complete: true,
+      },
+      undefined,
+      spill,
+    )
+    expect(spill).toHaveBeenCalledOnce()
+    expect(spill).toHaveBeenCalledWith(longText)
+    expect(result.fulltext).toMatchObject({
+      start: 0,
+      end: longText.length,
+      totalChars: longText.length,
+      inputTruncated: false,
+      isTruncated: false,
+      spillAvailable: true,
+      text: '',
+      spillRef: {
+        locator: 'spill://doc/complete.md',
+        bytes: longText.length,
+        retrievalHint: 'Read it from spill storage.',
+      },
+    })
+  })
+
+  it('reports the maxFulltextChars bound on a complete read', async () => {
+    const server = await boot()
+    const result = await providerOf(server, enhancerOf(hit('abcdefghij')), {
+      maxFulltextChars: 4,
+    }).retrieve({
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+      complete: true,
+    })
+    expect(result.fulltext).toMatchObject({
+      start: 0,
+      end: 4,
+      totalChars: 4,
+      inputTruncated: true,
+      isTruncated: false,
+      spillAvailable: false,
+      text: 'abcd',
+    })
+  })
+
+  it('reads a stored artifact by opaque id through lookupArtifact', async () => {
+    const server = await boot()
+    const enhancer = enhancerOf({
+      ...hit(markdown),
+      sourceKind: 'attachment',
+      sourceLabel: attachmentRef(RETRIEVE_ATTACHMENT.key),
+      attachmentRef: attachmentRef(RETRIEVE_ATTACHMENT.key),
+    })
+    const result = await providerOf(server, enhancer).retrieve({
+      mode: 'fulltext',
+      source: { kind: 'artifactId', artifactId: artifactIdOf('e'.repeat(64))! },
+      complete: true,
+    })
+    expect(result.fulltext).toMatchObject({
+      sourceKind: 'attachment',
+      textFormat: 'markdown',
+      start: 0,
+      end: markdown.length,
+      text: markdown,
+    })
+    expect(enhancer.lookupArtifact).toHaveBeenCalledWith('e'.repeat(64), undefined)
+    expect(enhancer.lookup).not.toHaveBeenCalled()
   })
 })

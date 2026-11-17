@@ -123,12 +123,13 @@ export interface EvidencePassage extends Pick<
 }
 
 /**
- * One window of a complete-document read, folded as its own trail fact. It
- * never carries the text itself: the tool result holds the text, the trail
- * holds what the session proved was read and where. Derived from the
- * canonical {@link ZoteroFulltextRead} — the payload keys only — so a window
- * fact the canonical result gains arrives here too, and the trail schema's
- * compile-time tie (see `sources/workspace-schema.ts`) keeps the wire in step.
+ * One read of a complete document, folded as its own trail fact. The text and
+ * spill handle stay in the tool result; the trail records what the session
+ * proved was read and where. `spillAvailable` is the one spill-related fact the
+ * trail carries, marking a complete first window without exposing a host path.
+ * Derived from the canonical {@link ZoteroFulltextRead} using only its payload
+ * keys, so new canonical fields arrive here too; the compile-time tie to the
+ * trail schema (see `sources/workspace-schema.ts`) keeps the wire in step.
  */
 export type FulltextRead = Omit<
   ZoteroFulltextRead,

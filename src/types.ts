@@ -508,9 +508,16 @@ export interface ZoteroFulltextRead {
   attachmentRef?: string
   /**
    * A one-handle copy of the whole bounded document in the host spill store,
-   * present on the first window of a long read when a store is available.
+   * present on the first window of a long read when a store is available, and
+   * on a complete read whenever a store returned one.
    */
   spillRef?: { readonly locator: string; readonly bytes: number; readonly retrievalHint: string }
+  /**
+   * Whether this read produced a whole-document spill handle. The handle's
+   * locator stays in the tool result; this boolean is safe to project into the
+   * literature trail, where it explains why a first-window fact is complete.
+   */
+  spillAvailable: boolean
 }
 
 interface ZoteroRetrieveRequestBase {
@@ -536,10 +543,25 @@ export interface ZoteroEvidenceRetrieveRequest extends ZoteroRetrieveRequestBase
   attachmentRefs?: ZoteroObjectRef[]
 }
 
-export interface ZoteroFulltextRetrieveRequest extends ZoteroRetrieveRequestBase {
+/** The fulltext-mode base: one document, addressed by an attachment or artifact. */
+interface ZoteroFulltextRetrieveBase extends ZoteroRetrieveRequestBase {
   mode: 'fulltext'
   /** The document to read: a Zotero attachment ref or an opaque artifact id. */
   source: ZoteroFulltextSource
+}
+
+/** Read the whole bounded document in one call instead of walking windows. */
+export interface ZoteroFulltextRetrieveCompleteRequest extends ZoteroFulltextRetrieveBase {
+  /**
+   * Read the complete bounded document once. The result carries the whole text
+   * when it fits the inline budget, or a whole-document `spillRef` when the
+   * host spill store returned one; there is no window cursor.
+   */
+  complete: true
+}
+
+/** Read one character window of the document. */
+export interface ZoteroFulltextRetrieveWindowRequest extends ZoteroFulltextRetrieveBase {
   /** Character offset of the first window. */
   start: number
   /** Maximum characters in one window. */
@@ -550,6 +572,9 @@ export interface ZoteroFulltextRetrieveRequest extends ZoteroRetrieveRequestBase
    */
   continuation?: string
 }
+
+export type ZoteroFulltextRetrieveRequest =
+  ZoteroFulltextRetrieveCompleteRequest | ZoteroFulltextRetrieveWindowRequest
 
 export type ZoteroRetrieveRequest = ZoteroEvidenceRetrieveRequest | ZoteroFulltextRetrieveRequest
 

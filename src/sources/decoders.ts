@@ -195,6 +195,8 @@ function fulltextReadOf(value: unknown): Omit<FulltextRead, 'callIds'> | null {
   const end = countField(value, 'end')
   const inputTruncated = boolField(value, 'inputTruncated')
   const isTruncated = boolField(value, 'isTruncated')
+  // Older facts predate this field; default them to false.
+  const spillAvailable = boolField(value, 'spillAvailable') ?? false
   if (
     sourceLabel === undefined ||
     totalChars === undefined ||
@@ -245,6 +247,7 @@ function fulltextReadOf(value: unknown): Omit<FulltextRead, 'callIds'> | null {
     start,
     end,
     isTruncated,
+    spillAvailable,
     ...(attachmentRef === undefined ? {} : { attachmentRef }),
   }
 }

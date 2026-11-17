@@ -179,6 +179,7 @@ export function SourceEvidence({
                 })}
               </p>
               {read.isTruncated && <p className={css.note}>{t('fulltextReadWindowed')}</p>}
+              {read.spillAvailable && <p className={css.note}>{t('fulltextReadSpillAvailable')}</p>}
               {read.inputTruncated && <p className={css.note}>{t('fulltextReadBounded')}</p>}
               {read.coverage !== undefined && (
                 <p className={css.note}>

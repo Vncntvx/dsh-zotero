@@ -149,7 +149,7 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 ## zotero_retrieve
 
 输出字段（按结果臂）： `artifact`、`attachmentContentType`、`attachmentRef`、`attachments`、`coverage`、`evidence`、`fulltext`、`mode`、`noMatch`、`queryTerms`、`rankedRoutes`、`ref`、`sourcesSkipped`、`textFormat`、`truncated`。
-两个互斥模式：`evidence` 从单篇文献的多数据源提取与查询相关的原文片段并排序（核心词面 BM25；启用文档解析组件的本地语义检索后经词面+语义双路线 RRF 融合，每段标注 `matchKind`）；`fulltext` 按字符窗口顺序读取一篇文档（受 `maxFulltextChars` 约束），不排序、不切块，解析 Markdown 命中时优先使用，未命中回退 Zotero 索引文本。
+两个互斥模式：`evidence` 从单篇文献的多数据源提取与查询相关的原文片段并排序（核心词面 BM25；启用文档解析组件的本地语义检索后经词面+语义双路线 RRF 融合，每段标注 `matchKind`）；`fulltext` 读取一篇文档（受 `maxFulltextChars` 约束），不排序、不切块，解析 Markdown 命中时优先使用，未命中回退 Zotero 索引文本。`fulltext` 的 `complete=true` 一次读取整篇有界文档并返回正文或整篇 spill 句柄；省略时按字符窗口顺序读取。
 
 ### 参数
 
@@ -164,13 +164,14 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 | `attachmentPolicy` | string   | `"best"`   | `evidence` 模式：全文附件选取策略 `best`、`allIndexed`、`specified`                                                                                                                                                                           |
 | `attachmentRefs`   | string[] | —          | `evidence` 模式且 `attachmentPolicy="specified"` 时的附件 ref 列表                                                                                                                                                                            |
 | `source`           | object   | —          | `fulltext` 模式：恰好一个来源。`kind="ref"` 用 `ref` 指定 Zotero 附件；`kind="artifactId"` 用 64 位小写十六进制 `artifactId` 指定已解析产物（格式不符按参数错误拒绝）                                                                         |
+| `complete`         | boolean  | —          | `fulltext` 模式：一次读取整篇有界文档；结果为完整正文或整篇 `spillRef` 句柄。与 `start`、`maxChars`、`continuation` 互斥                                                                                                                      |
 | `start`            | integer  | `0`        | `fulltext` 模式：本次窗口的起始字符偏移                                                                                                                                                                                                       |
 | `maxChars`         | integer  | —          | `fulltext` 模式：每个窗口字符数，缺省取 `fulltextWindowChars`，不得超过它                                                                                                                                                                     |
 | `continuation`     | string   | —          | `fulltext` 模式：上一窗口返回的续读令牌；`start > 0` 时必填。来源或解析代际变化时拒绝续读                                                                                                                                                     |
 
 ### 输出
 
-返回结构包含：`mode`；`evidence` 模式含 `ref`、`attachmentRef`、`attachmentContentType`、`coverage`、`attachments`、`evidence`（段落列表，每项含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`、`rankedRoutes`、`noMatch`；`fulltext` 模式只含 `mode` 与 `fulltext`（`sourceKind`、`sourceLabel`、`item`、`attachmentContentType`、`textFormat`、`artifact`、`coverage`、`totalChars`、`inputTruncated`、`start`、`end`、`text`、`isTruncated`、`nextStart`、`continuation`、`attachmentRef`、`spillRef`），不携带任何 evidence 侧字段（无 `ref`、`evidence`、`truncated`、`sourcesSkipped`、`queryTerms`、`noMatch`、`rankedRoutes`）。
+返回结构包含：`mode`；`evidence` 模式含 `ref`、`attachmentRef`、`attachmentContentType`、`coverage`、`attachments`、`evidence`（段落列表，每项含 source、sourceRef、attachmentRef、text、chunkIndex、chunkCount、comment、pageLabel、`matchKind`、matchedFields）、`truncated`、`sourcesSkipped`、`queryTerms`、`rankedRoutes`、`noMatch`；`fulltext` 模式只含 `mode` 与 `fulltext`（`sourceKind`、`sourceLabel`、`item`、`attachmentContentType`、`textFormat`、`artifact`、`coverage`、`totalChars`、`inputTruncated`、`start`、`end`、`text`、`isTruncated`、`nextStart`、`continuation`、`attachmentRef`、`spillRef`、`spillAvailable`），不携带任何 evidence 侧字段（无 `ref`、`evidence`、`truncated`、`sourcesSkipped`、`queryTerms`、`noMatch`、`rankedRoutes`）。
 
 ### 说明
 
@@ -179,13 +180,14 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 - 不可用或未建立索引的来源记入 `sourcesSkipped`；`noMatch` 不表示"该条目没有相关内容"；
 - 批注内容将高亮原文与用户评论一并纳入排序，`matchedFields` 标注匹配来源为 `text` 或 `comment`；语义命中的段落不标注字段（措辞无重合）；
 - 多附件策略下，未索引的附件明确标注为 `unindexed`，未读取的附件标注为 `unread`；
-- `fulltext` 模式从 `start=0` 开始，按 `nextStart` 并携带上一窗口返回的 `continuation` 令牌续读直到 `isTruncated` 为 `false`；`start > 0` 须携带该令牌；来源标识、字符数或文本摘要不一致时拒绝续读以确保代际一致。`totalChars`、`start`、`end`、`nextStart` 均按 UTF-16 码元计数，窗口边界不拆分代理对；请求 1 码元且窗口从代理对开始时会返回完整的 2 码元。顺序拼接即完整文档（`inputTruncated` 为 `true` 时覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 使用索引文本，`source.kind="artifactId"` 命中失败时返回明确错误。解析产物窗口没有 `coverage`；索引文本窗口带 Zotero 自身的索引覆盖率。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`），给出整篇有界文本的一次性取值句柄。默认窗口和交付预算下结果走内联交付，增大窗口或调低内联预算时可能落为 file 交付，文件保留完整窗口与后续位置。读取使用已有来源；解析、下载和上传由独立操作触发。
+- `fulltext` 的 `complete=true` 一次读取整篇有界文档：文档在交付预算内时返回完整正文；超出时由宿主 spill 存储给出整篇句柄（`spillRef`），此时 `text` 为空且 `spillAvailable` 为 `true`。`complete` 与 `start`、`maxChars`、`continuation` 互斥。省略 `complete` 时从 `start=0` 开始，按 `nextStart` 并携带上一窗口返回的 `continuation` 令牌续读直到 `isTruncated` 为 `false`；`start > 0` 须携带该令牌；来源标识、字符数或文本摘要不一致时拒绝续读以确保代际一致。`totalChars`、`start`、`end`、`nextStart` 均按 UTF-16 码元计数，窗口边界不拆分代理对；请求 1 码元且窗口从代理对开始时会返回完整的 2 码元。顺序拼接即完整文档（`inputTruncated` 为 `true` 时覆盖 `maxFulltextChars` 允许的有界部分）。`textFormat` 为 `markdown` 时来自解析产物，为 `text` 时来自 Zotero 全文索引；未命中产物时 `source.kind="ref"` 使用索引文本，`source.kind="artifactId"` 命中失败时返回明确错误。解析产物窗口没有 `coverage`；索引文本窗口带 Zotero 自身的索引覆盖率。首窗口在还有后续窗口、文档较长且宿主提供 spill 存储时会带 `spillRef`（`locator`、`bytes`、`retrievalHint`）与 `spillAvailable: true`，给出整篇有界文本的一次性取值句柄。默认窗口和交付预算下结果走内联交付，增大窗口或调低内联预算时可能落为 file 交付，文件保留完整窗口与后续位置。读取使用已有来源；解析、下载和上传由独立操作触发。
 
 ### 示例
 
 ```text
 zotero_retrieve(mode="evidence", ref="zotero://user/0/item/ABCD1234", query="attention mechanism", sources=["annotation", "fulltext"], passages=6)
 zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/attachment/EFGH5678"}, start=0)
+zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/attachment/EFGH5678"}, complete=true)
 ```
 
 ---

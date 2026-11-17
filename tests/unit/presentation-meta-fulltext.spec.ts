@@ -22,6 +22,7 @@ function fulltextResult(): ZoteroFulltextRetrieveResult {
       text: 'x'.repeat(12_000),
       isTruncated: true,
       nextStart: 12_000,
+      spillAvailable: false,
     },
   }
 }
@@ -47,6 +48,7 @@ describe('fulltext projection', () => {
       start: 0,
       end: 12_000,
       isTruncated: true,
+      spillAvailable: false,
     })
     expect(JSON.stringify(meta.fulltextRead)).not.toContain('xxxx')
     // The arm carries nothing evidence-shaped: no count, sources, budget flag,

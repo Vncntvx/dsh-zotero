@@ -155,6 +155,7 @@ const fulltextReadSchema = lazySchema(() =>
       start: z.number().int().nonnegative(),
       end: z.number().int().nonnegative(),
       isTruncated: z.boolean(),
+      spillAvailable: z.boolean(),
       attachmentRef: z.string().optional(),
       callIds: z.array(z.string()),
     })
