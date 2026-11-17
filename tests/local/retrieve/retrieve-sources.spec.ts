@@ -57,6 +57,54 @@ afterEach(async () => {
 })
 
 describe('retrieve source selection', () => {
+  it('rejects an oversized evidence request before admitting source reads', async () => {
+    await expect(provider.retrieve(retrieveRequest({ passages: 1_000_000 }))).rejects.toMatchObject(
+      { code: ZOTERO_INVALID_ARGUMENT },
+    )
+    expect(mock.requests).toHaveLength(0)
+  })
+  it('returns unused attachment quotas to the sole source with readable text', async () => {
+    const keys = Array.from({ length: 16 }, (_, index) => `A${String(index).padStart(7, '0')}`)
+    serveItemGraph(mock, {
+      parent: RETRIEVE_PARENT,
+      children: keys.map((key) => attachment({ key })),
+      annotations: null,
+      serverId: null,
+    })
+    const content = `${'generic prose '.repeat(2000)}needle beyond the former sixteenth-share cutoff`
+    serveFulltext(mock, keys[0]!, {
+      content,
+      indexedChars: content.length,
+      totalChars: content.length,
+    })
+    const result = await provider.retrieve(
+      retrieveRequest({ sources: ['fulltext'], attachmentPolicy: 'allIndexed', query: 'needle' }),
+    )
+    expect(result.evidence.some((entry) => entry.text.includes('needle'))).toBe(true)
+    expect(result.attachments?.filter((entry) => entry.status === 'unindexed')).toHaveLength(15)
+    expect(result.attachments?.find((entry) => entry.status === 'indexed')?.inputTruncated).toBe(
+      false,
+    )
+  })
+
+  it('redistributes a short source’s unused budget to a longer source', async () => {
+    serveItemGraph(mock, {
+      parent: RETRIEVE_PARENT,
+      children: [attachment({ key: 'SHORT001' }), attachment({ key: 'LONG0001' })],
+      annotations: null,
+      serverId: null,
+    })
+    serveFulltext(mock, 'SHORT001', { content: 'short' })
+    serveFulltext(mock, 'LONG0001', { content: `${'word '.repeat(9)}needle ${'tail '.repeat(20)}` })
+    const limited = createProvider(mock, { maxFulltextChars: 64 })
+    const result = await limited.retrieve(
+      retrieveRequest({ sources: ['fulltext'], attachmentPolicy: 'allIndexed', query: 'needle' }),
+    )
+    expect(result.evidence.some((entry) => entry.text.includes('needle'))).toBe(true)
+    expect(
+      result.attachments?.find((entry) => entry.ref.includes('SHORT001'))?.inputTruncated,
+    ).toBe(false)
+  })
   it('fetches lazily per source: abstract-only evidence needs just the parent', async () => {
     serveJson(mock, `${apiPath()}/items/${ITEM_KEY}`, RETRIEVE_PARENT)
     const result = await provider.retrieve(retrieveRequest({ sources: ['abstract'], passages: 1 }))
@@ -156,7 +204,7 @@ describe('retrieve source selection', () => {
       indexedChars: 30,
       totalChars: 30,
     })
-    const result = await provider.retrieve(
+    const result = await createProvider(mock, { maxEvidencePassages: 10 }).retrieve(
       retrieveRequest({
         sources: ['fulltext'],
         query: 'tiling flash',

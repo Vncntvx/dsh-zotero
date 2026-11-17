@@ -3,12 +3,11 @@
  */
 
 import { ALL_CHANGES_INCLUDES } from '../changes-contract.js'
-import { isNonNegativeSafeInteger, parseNonNegativeSafeInteger } from '../json.js'
+import { isNonNegativeSafeInteger } from '../json.js'
+import { normalizedServerId } from './identity.js'
 import type { SupportedLocalLibrary, ZoteroChangesCursor, ZoteroChangesInclude } from '../types.js'
 
-export function numericHeader(headers: Headers, name: string): number | undefined {
-  return parseNonNegativeSafeInteger(headers.get(name))
-}
+export { numericHeader } from './wire.js'
 
 export function isVersion(value: unknown): value is number {
   return isNonNegativeSafeInteger(value)
@@ -37,7 +36,7 @@ export function cursorLibraryMismatchMessage(
 
 /** A response identity is usable only when it is a non-blank string. */
 export function observedServerId(value: string | null | undefined): string | undefined {
-  return value !== null && value !== undefined && value.trim() !== '' ? value : undefined
+  return normalizedServerId(value)
 }
 
 /**

@@ -25,7 +25,8 @@ import {
   setPage,
 } from './pagination.js'
 import { serverIdFromHeaders } from './identity.js'
-import { fetchItemKeyBatches } from './item-batch.js'
+import { fetchItemKeyBatches, ItemBatchVersionDriftError } from './item-batch.js'
+import { assertLiteralSearchTags } from './search-query.js'
 import { parseRef, libraryPrefix } from '../refs.js'
 import { resolveScope, ScopeDirectory, type ResolvedScopeResult } from './scope-directory.js'
 import { publicationsItemsPath } from './scope-paths.js'
@@ -65,6 +66,36 @@ import { buildSearchParams } from './search-query.js'
  */
 export const INCLUDE_TRASHED_SCOPE_MESSAGE = 'includeTrashed is only allowed with library scope.'
 
+function searchResultOf(
+  scope: ZoteroResolvedScope,
+  request: ZoteroSearchRequest,
+  items: ZoteroSearchItem[],
+  total: number,
+  nextOffset: number | undefined,
+): ZoteroSearchResult {
+  const normalizedQuery = request.query?.trim() ?? ''
+  return {
+    scope,
+    items,
+    total,
+    offset: request.offset,
+    returned: items.length,
+    normalizedQuery,
+    queryWasEmpty: normalizedQuery === '',
+    ...(items.length === 0
+      ? {
+          nextActions: [
+            'Try a DOI',
+            'Shorten the title',
+            'Add an author surname',
+            'Search a collection scope',
+          ],
+        }
+      : {}),
+    ...(nextOffset === undefined ? {} : { nextOffset }),
+  }
+}
+
 export async function runSearch(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits; searchCaches: SearchIndexCaches },
   directory: ScopeDirectory,
@@ -75,6 +106,25 @@ export async function runSearch(
   if (request.includeTrashed && request.scope.kind !== 'library') {
     throw new ZoteroError(INCLUDE_TRASHED_SCOPE_MESSAGE, ZOTERO_INVALID_ARGUMENT)
   }
+  if (
+    (request.yearFrom !== undefined &&
+      (!Number.isInteger(request.yearFrom) ||
+        request.yearFrom < ZOTERO_YEAR_MIN ||
+        request.yearFrom > ZOTERO_YEAR_MAX)) ||
+    (request.yearTo !== undefined &&
+      (!Number.isInteger(request.yearTo) ||
+        request.yearTo < ZOTERO_YEAR_MIN ||
+        request.yearTo > ZOTERO_YEAR_MAX)) ||
+    (request.yearFrom !== undefined &&
+      request.yearTo !== undefined &&
+      request.yearFrom > request.yearTo)
+  ) {
+    throw new ZoteroError(
+      `The year range must be an ordered closed interval between ${ZOTERO_YEAR_MIN} and ${ZOTERO_YEAR_MAX}.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  }
+  assertLiteralSearchTags(request)
   const scope = await resolveScope(directory, request.scope, request.library, {
     signal,
     itemLevel: request.itemLevel,
@@ -112,7 +162,13 @@ export async function runSearch(
   const apiTotal = requireTotalResults(headers, 'items top listing')
   // A server-paged listing that answers an in-range page with no rows has
   // breached the total it just reported; `nextOffsetOrFail` fails loud.
-  const nextOffset = nextOffsetOrFail(request.offset, items.length, apiTotal, 'search results')
+  const nextOffset = nextOffsetOrFail(
+    request.offset,
+    items.length,
+    apiTotal,
+    'search results',
+    request.limit,
+  )
   // Zotero's index never searches note bodies, so the first page of a
   // queried search lists client-side note-content matches in `supplemental`,
   // a separate list beside the paged primary results, up to the primary
@@ -212,27 +268,8 @@ export async function runSearch(
   }
   // Omit (rather than null) the pagination cursor on the final page, so the
   // result stays a pure lossless-JSON value for the tool output snapshot.
-  const result: ZoteroSearchResult = {
-    scope: scope.resolved,
-    items,
-    total: apiTotal,
-    offset: request.offset,
-    returned: items.length,
-    normalizedQuery: request.query?.trim() ?? '',
-    queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
-    ...(items.length === 0
-      ? {
-          nextActions: [
-            'Try a DOI',
-            'Shorten the title',
-            'Add an author surname',
-            'Search a collection scope',
-          ],
-        }
-      : {}),
-  }
+  const result = searchResultOf(scope.resolved, request, items, apiTotal, nextOffset)
   if (supplemental !== undefined) result.supplemental = supplemental
-  if (nextOffset !== undefined) result.nextOffset = nextOffset
   return result
 }
 
@@ -260,24 +297,6 @@ async function exactFilteredSearch(
   signal: AbortSignal | undefined,
   options: ZoteroSearchOptions,
 ): Promise<ZoteroSearchResult> {
-  if (
-    (request.yearFrom !== undefined &&
-      (!Number.isInteger(request.yearFrom) ||
-        request.yearFrom < ZOTERO_YEAR_MIN ||
-        request.yearFrom > ZOTERO_YEAR_MAX)) ||
-    (request.yearTo !== undefined &&
-      (!Number.isInteger(request.yearTo) ||
-        request.yearTo < ZOTERO_YEAR_MIN ||
-        request.yearTo > ZOTERO_YEAR_MAX)) ||
-    (request.yearFrom !== undefined &&
-      request.yearTo !== undefined &&
-      request.yearFrom > request.yearTo)
-  ) {
-    throw new ZoteroError(
-      `The year range must be an ordered closed interval between ${ZOTERO_YEAR_MIN} and ${ZOTERO_YEAR_MAX}.`,
-      ZOTERO_INVALID_ARGUMENT,
-    )
-  }
   const library = libraryOfResolvedScope(scope.resolved)
   const includeTrashed = request.includeTrashed === true || scope.resolved.kind === 'trash'
   const indexKey = searchIndexKeyOf(scope, request, options.cacheGeneration)
@@ -333,29 +352,14 @@ async function exactFilteredSearch(
     const pageKeys = filtered
       .slice(request.offset, request.offset + request.limit)
       .map((candidate) => candidate.key)
-    const shaped = (items: ZoteroSearchItem[]): ZoteroSearchResult => {
-      const nextOffset = nextOffsetOf(request.offset, items.length, filtered.length)
-      return {
-        scope: scope.resolved,
+    const shaped = (items: ZoteroSearchItem[]): ZoteroSearchResult =>
+      searchResultOf(
+        scope.resolved,
+        request,
         items,
-        total: filtered.length,
-        offset: request.offset,
-        returned: items.length,
-        normalizedQuery: request.query?.trim() ?? '',
-        queryWasEmpty: request.query?.trim() === undefined || request.query.trim() === '',
-        ...(items.length === 0
-          ? {
-              nextActions: [
-                'Try a DOI',
-                'Shorten the title',
-                'Add an author surname',
-                'Search a collection scope',
-              ],
-            }
-          : {}),
-        ...(nextOffset === undefined ? {} : { nextOffset }),
-      }
-    }
+        filtered.length,
+        nextOffsetOf(request.offset, items.length, filtered.length),
+      )
     if (rows !== undefined && pageKeys.every((key) => rows.has(key))) {
       // Fresh-scan fast path: the page's rows are the scan's own download, so
       // the result is self-consistent with the index by construction and the
@@ -363,14 +367,21 @@ async function exactFilteredSearch(
       // nothing left to prove.
       return shaped(pageKeys.map((key) => rows.get(key)!))
     }
-    const { byKey, libraryVersion } = await searchRowsByKeys(
-      deps,
-      library,
-      pageIndex.serverId,
-      pageKeys,
-      includeTrashed,
-      signal,
-    )
+    let pageRows: Awaited<ReturnType<typeof searchRowsByKeys>>
+    try {
+      pageRows = await searchRowsByKeys(
+        deps,
+        library,
+        pageIndex.serverId,
+        pageKeys,
+        includeTrashed,
+        signal,
+      )
+    } catch (error) {
+      if (error instanceof ItemBatchVersionDriftError) return undefined
+      throw error
+    }
+    const { byKey, libraryVersion } = pageRows
     const drifted =
       (pageIndex.libraryVersion !== undefined &&
         libraryVersion !== undefined &&
@@ -527,7 +538,6 @@ async function scanFilteredIndex(
               year: candidate.year,
               hasAttachment: parentSet.has(candidate.key),
             })),
-      attachmentIndexed: wantParents,
       ...(scanned.serverId !== undefined ? { serverId: scanned.serverId } : {}),
       ...(scanned.libraryVersion !== undefined ? { libraryVersion: scanned.libraryVersion } : {}),
       fetchedAt: Date.now(),

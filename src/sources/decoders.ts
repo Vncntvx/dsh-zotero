@@ -1,9 +1,11 @@
+import { parseRefIdentity } from './source-capabilities.js'
 /**
  * The meta decoding layer of the session source model for the search, get,
  * get-batch, match-references, children, retrieve, attachment, and browse
  * projections: each tool's presentation projection read off a settled block.
- * Export, write, and sync (changes/job) projections own their decoders in
- * `export-decoder.ts`, `write-decoder.ts`, and `sync-decoder.ts`. The shapes
+ * Export projections use this directory's `export-decoder.ts`. Tool-card
+ * write and sync decoders live in `src/client/sources/`; writes never enter
+ * the trail. The shapes
  * are the current wire shapes (session logs are per-session snapshots, so no
  * legacy projection versions are carried); reads are defensive, so an absent
  * or malformed field degrades to nothing instead of crashing the panel. Only
@@ -202,11 +204,38 @@ function fulltextReadOf(value: unknown): Omit<FulltextRead, 'callIds'> | null {
     isTruncated === undefined
   )
     return null
+  const rawItem = value.item
+  let item: FulltextRead['item']
+  if (rawItem !== undefined) {
+    if (!isRecord(rawItem)) return null
+    const ref = stringField(rawItem, 'ref'),
+      title = stringField(rawItem, 'title'),
+      creatorSummary = stringField(rawItem, 'creatorSummary')
+    if (
+      !ref ||
+      parseRefIdentity(ref)?.kind !== 'item' ||
+      title === undefined ||
+      creatorSummary === undefined
+    )
+      return null
+    const year = numberField(rawItem, 'year'),
+      venue = stringField(rawItem, 'venue')
+    item = {
+      ref,
+      title,
+      creatorSummary,
+      ...(year === undefined ? {} : { year }),
+      ...(venue === undefined ? {} : { venue }),
+    }
+  }
+  const attachmentContentType = stringField(value, 'attachmentContentType')
   const artifact = artifactOf(value['artifact'])
   const coverage = decodeCoverage(value['coverage'])
   const attachmentRef = stringField(value, 'attachmentRef')
   return {
     sourceKind,
+    ...(item === undefined ? {} : { item }),
+    ...(attachmentContentType === undefined ? {} : { attachmentContentType }),
     sourceLabel,
     textFormat,
     ...(artifact === undefined ? {} : { artifact }),
@@ -250,6 +279,7 @@ interface BrowseMetaView {
   readonly total: number | null
   readonly nextOffset: number | null
   readonly rows: readonly BrowseRow[] | null
+  readonly omitted: number
   /** True when the meta budget dropped the detail rows behind these facts. */
   readonly detailOmitted: boolean
 }
@@ -265,6 +295,10 @@ export function browseMetaOf(meta: Record<string, unknown>): BrowseMetaView {
     total: numberField(meta, 'total') ?? null,
     nextOffset: nextOffset ?? null,
     rows,
+    omitted: Math.max(
+      0,
+      (numberField(meta, 'returned') ?? rows?.length ?? 0) - (rows?.length ?? 0),
+    ),
     detailOmitted: detailOmittedOf(meta),
   }
 }

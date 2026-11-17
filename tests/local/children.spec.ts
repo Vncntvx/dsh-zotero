@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZOTERO_INVALID_ARGUMENT, ZOTERO_INVALID_REF, ZOTERO_UNEXPECTED } from '../../src/errors.js'
-import { attachmentTargetKindMessage } from '../../src/local/detail.js'
+import { attachmentTypeMessage } from '../../src/errors.js'
 import { type LocalApiProvider } from '../../src/local/provider.js'
 import { expectedKindRefMessage, parseRef } from '../../src/refs.js'
 import type { ZoteroGetRequest } from '../../src/types.js'
@@ -214,7 +214,7 @@ describe('children', () => {
     await zoteroError(
       provider.getItem(childrenRequest('zotero://user/0/attachment/ABCD1234')),
       ZOTERO_INVALID_ARGUMENT,
-      attachmentTargetKindMessage('journalArticle'),
+      attachmentTypeMessage('journalArticle'),
     )
   })
 

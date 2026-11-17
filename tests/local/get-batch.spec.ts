@@ -18,6 +18,28 @@ const detail = (ref: string): ZoteroItemDetail => ({
 })
 
 describe('getBatch', () => {
+  it.each([{ children: true }, { attachments: true }])(
+    'rejects attachment expansion before invoking any per-ref reader',
+    async (include) => {
+      let reads = 0
+      await expect(
+        getBatch(
+          async () => {
+            reads++
+            return detail('unexpected')
+          },
+          {
+            refs: [
+              parseRef('zotero://user/0/item/AAAA1111'),
+              parseRef('zotero://user/0/attachment/BBBB2222'),
+            ],
+            include,
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'ZOTERO_INVALID_ARGUMENT' })
+      expect(reads).toBe(0)
+    },
+  )
   it('preserves input order and isolates a not-found failure', async () => {
     const refs = ['AAAA1111', 'BBBB2222', 'CCCC3333'].map((key) =>
       parseRef(`zotero://user/0/item/${key}`),

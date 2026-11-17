@@ -45,7 +45,7 @@ function authorsOf(input: ZoteroMatchReferenceInput): string[] {
 
 function candidateOf(
   detail: ZoteroSearchItem,
-  method: string,
+  method: ZoteroMatchReferenceCandidate['matchMethod'],
   confidence: 'high' | 'medium' | 'low',
 ): ZoteroMatchReferenceCandidate {
   return {
@@ -72,17 +72,35 @@ function fieldDiffOf(
   candidate: ZoteroMatchReferenceCandidate,
 ): ZoteroMatchReferenceResult['fieldDiff'] {
   const diff: NonNullable<ZoteroMatchReferenceResult['fieldDiff']> = {}
-  const add = (field: string, expected: unknown, actual: unknown): void => {
-    if (expected === undefined || actual === undefined) return
-    if (!deepEqualJson(expected as JsonValue, actual as JsonValue)) {
-      diff[field] = { input: expected as never, zotero: actual as never }
-    }
+  const changed = <T extends JsonValue>(
+    expected: T | undefined,
+    actual: T | undefined,
+  ): { input: T; zotero: T } | undefined => {
+    if (expected === undefined || actual === undefined || deepEqualJson(expected, actual))
+      return undefined
+    return { input: expected, zotero: actual }
   }
-  add('title', clean(input.title), candidate.title)
-  add('doi', normalizeDoiForAlignment(clean(input.doi)), normalizeDoiForAlignment(candidate.doi))
-  add('year', input.year, candidate.year)
-  add('authors', input.authors ? authorsOf(input) : undefined, candidate.authors)
-  add('venue', clean(input.venue), candidate.venue)
+  const title = changed(clean(input.title), candidate.title)
+  const doi = changed(
+    normalizeDoiForAlignment(clean(input.doi)),
+    normalizeDoiForAlignment(candidate.doi),
+  )
+  const year = changed(input.year, candidate.year)
+  const inputAuthors = input.authors ? authorsOf(input) : undefined
+  const normalizedAuthors = (authors: readonly string[] | undefined) =>
+    authors?.map(normalizeAuthorForAlignment)
+  const authors = deepEqualJson(
+    normalizedAuthors(inputAuthors),
+    normalizedAuthors(candidate.authors),
+  )
+    ? undefined
+    : changed(inputAuthors, candidate.authors)
+  const venue = changed(clean(input.venue), candidate.venue)
+  if (title) diff.title = title
+  if (doi) diff.doi = doi
+  if (year) diff.year = year
+  if (authors) diff.authors = authors
+  if (venue) diff.venue = venue
   return Object.keys(diff).length === 0 ? undefined : diff
 }
 
@@ -265,16 +283,15 @@ export async function matchReferences(
                 : titleCanMatch && (yearMatch || (authorMatch && inputAuthors.length > 0))
                   ? ('medium' as const)
                   : ('low' as const)
+          const method: ZoteroMatchReferenceCandidate['matchMethod'] = doiMatch
+            ? 'doi'
+            : keyMatch
+              ? 'citationKey'
+              : 'titleFingerprint'
           return {
             detail,
             score,
-            method: doiMatch
-              ? 'doi'
-              : keyMatch
-                ? 'citationKey'
-                : titleCanMatch
-                  ? 'titleFingerprint'
-                  : 'none',
+            method,
             confidence,
           }
         })

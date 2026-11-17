@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   OBJECT_NOT_FOUND_MESSAGE,
@@ -41,7 +42,6 @@ import { progress } from '../../helpers/sync.js'
 let mock: MockZotero
 let client: ZoteroWriteHttpClient
 
-const SERVER_ID = 'srv-id-for-tests-01'
 const API_KEY = 'placeholder-local-write-key'
 
 /** A documented-shape batch answer for one created note. */

@@ -417,6 +417,21 @@ describe('zotero_retrieve fulltext render', () => {
     expect(text).toContain('window body')
   })
 
+  it('states explicitly when a source contains no readable text', () => {
+    expect(
+      render(
+        value({
+          totalChars: 0,
+          start: 0,
+          end: 0,
+          text: '',
+          isTruncated: false,
+          nextStart: undefined,
+        }),
+      ),
+    ).toContain('This source contains no readable text.')
+  })
+
   it('omits the continuation line on the final window', () => {
     const text = render(
       value({ isTruncated: false, nextStart: undefined, start: 28_000, end: 40_000 }) as never,

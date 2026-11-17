@@ -23,6 +23,7 @@ import type {
   ZoteroStartDocumentParseResultView,
 } from '../../../src/contract.js'
 import { EnrichmentService } from '../../../src/enrichment/index.js'
+import { DiskParseJobPersistence } from '../../../src/enrichment/parse-jobs.js'
 import type { EnrichmentConfig } from '../../../src/enrichment/config.js'
 import { MineruClient } from '../../../src/enrichment/transport.js'
 import { setupHostLane } from '../../helpers/lanes/host-lane.js'
@@ -215,13 +216,11 @@ export async function endpointFixture(
     versionHeaders(),
   )
   const outputDir = join(root, 'parsed')
-  const config = {
-    outputDir,
-    ...options.config,
-  } satisfies EnrichmentConfig
+  const config = { outputDir, ...options.config } satisfies EnrichmentConfig
   const enrichmentFiber = ctx.plugin((enrichmentCtx) => {
     new EnrichmentService(enrichmentCtx, config, {
       client: http.client,
+      parsePersistence: new DiskParseJobPersistence(async () => root),
       ...(options.store ? { store: async () => options.store! } : {}),
     })
   })

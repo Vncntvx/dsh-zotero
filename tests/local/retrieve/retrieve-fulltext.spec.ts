@@ -97,6 +97,8 @@ describe('mode:"fulltext" windows', () => {
       nextStart: WINDOW_CHARS,
       attachmentRef: attachmentRef(RETRIEVE_ATTACHMENT.key),
     })
+    expect(result.fulltext?.item?.ref).toBe(`zotero://user/0/item/${RETRIEVE_PARENT.key}`)
+    expect(result.fulltext?.attachmentContentType).toBe('application/pdf')
     expect(result.fulltext?.artifact?.artifactId).toBe('a'.repeat(64))
     expect(enhancer.lookup).toHaveBeenCalledOnce()
   })
@@ -146,18 +148,19 @@ describe('mode:"fulltext" windows', () => {
     expect(result.fulltext?.text).toBe((FULLTEXT_PAYLOAD.content as string).slice(0, WINDOW_CHARS))
   })
 
-  it('clamps a window past the configured bound at the domain layer', async () => {
+  it('rejects an oversized window at the domain layer before source I/O', async () => {
     // A same-process caller can reach the provider without the tool; the
     // window limit is a deployment bound the domain enforces itself.
     const server = await boot()
-    const result = await providerOf(server, enhancerOf(hit(markdown))).retrieve({
-      mode: 'fulltext',
-      source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
-      start: 0,
-      maxChars: PROVIDER_LIMITS.fulltextWindowChars + 1,
-    })
-    expect(result.fulltext?.end).toBeLessThanOrEqual(PROVIDER_LIMITS.fulltextWindowChars)
-    expect(result.fulltext?.text).toBe(markdown.slice(0, PROVIDER_LIMITS.fulltextWindowChars))
+    await expect(
+      providerOf(server, enhancerOf(hit(markdown))).retrieve({
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: attachmentRef(RETRIEVE_ATTACHMENT.key) },
+        start: 0,
+        maxChars: PROVIDER_LIMITS.fulltextWindowChars + 1,
+      }),
+    ).rejects.toMatchObject({ code: ZOTERO_INVALID_ARGUMENT })
+    expect(server.requests).toHaveLength(0)
   })
 
   it('rejects a start beyond the document at the domain layer', async () => {

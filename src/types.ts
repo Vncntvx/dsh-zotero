@@ -6,15 +6,10 @@
  * instance's identity as a provenance qualifier
  * (`?server=<Zotero-Server-ID>`). Everything in this module is a plain
  * lossless-JSON-safe DTO; tool `execute` bodies return these values directly.
- * The one exception is {@link ZoteroWriteCall}, which carries the asking tool
- * run (agent, signal, tool name, call id) into the seam and never crosses the
- * wire.
  * @module dsh-zotero/types
  */
 
-import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type {} from '@deepseek-ai/dsh-jobs'
 import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
 import type { ArtifactId } from './contract.js'
 import type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
@@ -31,15 +26,8 @@ import type {
 export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolvedScope }
 export { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
 import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
-import type { ZoteroErrorCode } from './errors.js'
+import type { ZoteroErrorCode } from './error-codes.js'
 import type { CitationKeyConflict, CitationKeySource } from './citation-key.js'
-
-declare module '@deepseek-ai/dsh-jobs' {
-  interface JobKindMap {
-    zotero: 'zotero'
-    scholarly: 'scholarly'
-  }
-}
 
 /** A progress event emitted by a domain operation (e.g. export, changes). */
 export interface ZoteroProgressEvent {
@@ -54,8 +42,6 @@ export type ZoteroCapability =
   | 'search'
   | 'metadata'
   | 'attachments'
-  /** Reserved for providers exposing raw full-text access; retrieval itself uses `retrieve`. */
-  | 'fulltext'
   | 'citation'
   | 'browse'
   /** Ranked evidence across a work's sources; not synonymous with raw fulltext access. */
@@ -307,15 +293,14 @@ export interface ZoteroMatchReferenceCandidate {
   ref: string
   citationKey?: string
   citationKeySource?: CitationKeySource
-  exportKey?: string
   title: string
   authors?: string[]
   year?: number
   doi?: string
   venue?: string
   citationKeyConflict?: CitationKeyConflict
-  matchMethod: string
-  confidence: string
+  matchMethod: 'doi' | 'citationKey' | 'titleFingerprint'
+  confidence: 'high' | 'medium' | 'low'
 }
 
 export interface ZoteroMatchReferenceResult {
@@ -325,7 +310,13 @@ export interface ZoteroMatchReferenceResult {
   reason?: string
   selected?: ZoteroMatchReferenceCandidate
   candidates?: ZoteroMatchReferenceCandidate[]
-  fieldDiff?: Record<string, { input: JsonValue; zotero: JsonValue }>
+  fieldDiff?: {
+    title?: { input: string; zotero: string }
+    doi?: { input: string; zotero: string }
+    year?: { input: number; zotero: number }
+    authors?: { input: string[]; zotero: string[] }
+    venue?: { input: string; zotero: string }
+  }
 }
 
 export interface ZoteroMatchReferencesRequest {
@@ -475,21 +466,33 @@ export type ZoteroFulltextSource =
   | { readonly kind: 'artifactId'; readonly artifactId: ArtifactId }
 
 /** One bounded window of a document's complete text in source order. */
+/** Verified parent-item metadata associated with a complete document read. */
+export interface ZoteroFulltextItem {
+  readonly ref: string
+  readonly title: string
+  readonly creatorSummary: string
+  readonly year?: number
+  readonly venue?: string
+}
+
 export interface ZoteroFulltextRead {
   /** The kind of source the window was read from. */
   sourceKind: 'attachment' | 'url'
   /** Display label using an attachment ref or URL origin. */
   sourceLabel: string
+  /** Proven parent identity; absent for URL sources and standalone attachments. */
+  item?: ZoteroFulltextItem
+  attachmentContentType?: string
   textFormat: ZoteroFulltextFormat
   /** Exact parsed artifact used by a parsed-source hit; absent for Zotero index text. */
   artifact?: ZoteroArtifactProvenance
   /** Zotero's own indexing coverage; absent for parsed artifacts. */
   coverage?: ZoteroCoverage
-  /** Total characters in the bounded document. */
+  /** Total UTF-16 code units in the bounded document. */
   totalChars: number
   /** Whether `maxFulltextChars` cut the document before windowing. */
   inputTruncated: boolean
-  /** Character span [start, end) of this window in the bounded document. */
+  /** UTF-16 span [start, end); neither edge splits a surrogate pair. */
   start: number
   end: number
   text: string
@@ -745,7 +748,7 @@ export interface ZoteroExportRequest {
  * order belongs to Zotero, and citation keys are generated in the export
  * context.
  */
-export interface ZoteroExportItem {
+export type ZoteroExportItem = {
   /** The formatted `zotero://` ref the entry was exported for. */
   ref: string
   /**
@@ -761,11 +764,10 @@ export interface ZoteroExportItem {
   title?: string
   /** The located entry's index within the parsed CSL JSON array. */
   entryIndex?: number
-  /** The located entry's start offset within the original batch body. */
-  start?: number
-  /** The located entry's end offset (exclusive) within the original batch body. */
-  end?: number
-}
+} & (
+  | { readonly start: number; readonly end: number }
+  | { readonly start?: never; readonly end?: never }
+)
 
 /**
  * The text-only export result: the rendered output for the requested items
@@ -813,11 +815,6 @@ export type ZoteroExportResult =
   | Extract<ZoteroExportTextResult, { format: 'csv' }>
   | (Extract<ZoteroExportTextResult, { format: ZoteroItemizedExportFormat }> & {
       items: ZoteroExportItem[]
-      /**
-       * The raw-metadata batch behind citekey and field alignment failed; the
-       * body is complete but the per-document facts cover only what arrived.
-       */
-      metadataIncomplete?: true
     })
 
 /** Raw fulltext payload from `GET /items/<attachmentKey>/fulltext`. */
@@ -1500,7 +1497,7 @@ export interface ZoteroRestoreItemResult {
   children?: { ref: string }[]
 }
 export interface ZoteroRestoreItemsResult {
-  kind: 'restored'
+  kind: 'restored' | 'partial' | 'failed'
   restored: ZoteroRestoreItemResult[]
   unverified: ZoteroWriteCommittedUnverified[]
   failed: ZoteroBatchOperationFailure[]
@@ -1515,38 +1512,6 @@ export interface ZoteroRestoreItemsResult {
 export type ZoteroWriteRisk = 'mutation' | 'recoverable-delete' | 'irreversible-delete'
 
 /**
- * Who is asking for one write, and the plan the user reviews.
- *
- * The gate lives at the `ctx.zotero` seam, so a write cannot reach the domain
- * without a call like this: the service runs the session approval policy
- * (`ctx.approval.request`, where `never` auto-rejects) and then asks the user
- * with {@link ZoteroWriteCall.plan} on every write, and fails closed when no
- * channel can answer. `plan` is the caller's deterministic markdown, so what
- * the user approves is exactly what the service passes on. `exec` is
- * structurally the fields the asks need (agent, signal, tool name, call id),
- * so a tool's `ToolRunContext` satisfies it directly and a test can build one.
- *
- * The approval request carries `toolName`/`callId` so the audit pair links to
- * the already-logged tool call. The plan-review intent deliberately carries
- * **no `callId`**: that field names a logged invocation whose arguments hold
- * the reviewed plan, and a write tool's arguments hold the note body or the
- * tag list, so naming the call would send the client's plan panel after a
- * document that does not exist.
- */
-export interface ZoteroWriteCall {
-  /** The asking tool run: agent routes the asks, signal cancels them, name/callId audit the approval. */
-  readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name' | 'callId'>
-  /** The plan markdown the user reviews; it must describe exactly this request. */
-  readonly plan: string
-  /**
-   * The blast radius the approval prompt states. Only deletions set it: a
-   * destructive write must not open with the same sentence an additive one
-   * uses, because the first prompt is read without the plan detail.
-   */
-  readonly risk?: ZoteroWriteRisk
-}
-
-/**
  * The outcome when the user answers the plan-review card without approving.
  * Nothing was written, nothing was contacted beyond the approval channel,
  * and the tool returns this instead of an error. Declining is a normal
@@ -1554,6 +1519,8 @@ export interface ZoteroWriteCall {
  */
 export interface ZoteroWriteDeclined {
   kind: 'declined'
+  /** User-requested changes from the plan review; no write was approved. */
+  feedback?: string
 }
 
 export type ZoteroCreateNoteCommittedOutcome =
@@ -1590,6 +1557,15 @@ export type ZoteroDeleteLibraryTagsOutcome =
   ZoteroDeleteLibraryTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined
 
+/** Read-only checks required before asking the user to approve these writes. */
+export type ZoteroWritePreflight =
+  | { readonly operation: 'createCollection'; readonly request: ZoteroCreateCollectionRequest }
+  | { readonly operation: 'updateNote'; readonly request: ZoteroUpdateNoteRequest }
+  | {
+      readonly operation: 'updateItemCollections'
+      readonly request: ZoteroUpdateItemCollectionsRequest
+    }
+
 /**
  * The storage side of the `ctx.zotero` seam. Providers declare which
  * capabilities they safely support; the service gates every domain call on
@@ -1611,6 +1587,8 @@ export interface ZoteroProvider {
    *   is never mistaken for a connectivity problem.
    */
   status(signal?: AbortSignal): Promise<ZoteroStatus>
+  /** Read-only validation; never obtains a write grant or dispatches a mutation. */
+  preflightWrite?(request: ZoteroWritePreflight, signal?: AbortSignal): Promise<void>
   /**
    * Discover candidates in the requested scope.
    * @param request - scope, mode, filters, sort, and pagination.
@@ -1678,7 +1656,7 @@ export interface ZoteroProvider {
   retrieve?(
     request: ZoteroFulltextRetrieveRequest,
     signal?: AbortSignal,
-    spill?: import('./local/retrieve-fulltext.js').FulltextSpillSink,
+    spill?: import('./fulltext-spill.js').FulltextSpillSink,
   ): Promise<ZoteroFulltextRetrieveResult>
   /**
    * Export citations or formatted output for the requested items.

@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { markdownToNoteHtml } from '../../src/local/note-format.js'
 
 describe('blocks', () => {
+  it('keeps URL emphasis markers literal while formatting the link label', () => {
+    expect(markdownToNoteHtml('[**paper**](https://example.org/a**b**c)')).toBe(
+      '<p><a href="https://example.org/a**b**c"><strong>paper</strong></a></p>',
+    )
+    expect(markdownToNoteHtml('[paper](https://example.org/a`b`$x$)')).toBe(
+      '<p><a href="https://example.org/a`b`$x$">paper</a></p>',
+    )
+  })
+
+  it('preserves ordered-list starts at both supported nesting levels', () => {
+    expect(markdownToNoteHtml('4. fourth\n5. fifth\n  7. seventh')).toBe(
+      '<ol start="4"><li>fourth</li><li>fifth<ol start="7"><li>seventh</li></ol></li></ol>',
+    )
+  })
+
+  it('keeps a shorter triple-backtick run inside a four-backtick fenced block', () => {
+    expect(markdownToNoteHtml('````md\n```ts\n**literal**\n```\n````\n\nafter')).toBe(
+      '<pre><code>```ts\n**literal**\n```</code></pre>\n<p>after</p>',
+    )
+  })
   it('renders blank-line-separated paragraphs and joins soft-wrapped lines', () => {
     expect(markdownToNoteHtml('first para\nstill first\n\nsecond para')).toBe(
       '<p>first para still first</p>\n<p>second para</p>',

@@ -11,6 +11,22 @@ import { item } from '../helpers/server/objects.ts'
 import { serveItemGraph } from '../helpers/server/serve.ts'
 
 let lane: HostLane | undefined
+it('corrects a misspelled optional filter before executing a valid search', async () => {
+  lane = await setupHostLane({})
+  const result = await lane.runTool('zotero_search', {
+    query: 'attention',
+    excludeTag: ['archived'],
+  })
+  expect(result.isError).toBe(true)
+  expect(result.content.at(-1)).toEqual({
+    type: 'text',
+    text: parameterCorrectionHint('zotero_search', {
+      input: 'excludeTag',
+      expected: 'excludeTags',
+    }),
+  })
+  expect(lane.mock.requests).toEqual([])
+})
 afterEach(async () => {
   await lane?.ctx.fiber.dispose()
   await lane?.teardown()

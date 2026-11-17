@@ -23,7 +23,6 @@ it('reuses the accepted candidate set across offsets and isolates a new scan ide
         return key % 2 === 0 ? 2024 : 2010
       },
     })),
-    attachmentIndexed: false,
     fetchedAt: 0,
   }
   const first = filteredCandidatesOf(index, request)
@@ -38,7 +37,6 @@ it('reuses the accepted candidate set across offsets and isolates a new scan ide
 it('retains four recent variants and evicts the least recently used projection', () => {
   const index: FilteredIndex = {
     candidates: [{ key: 'one', year: 2024, hasAttachment: true }],
-    attachmentIndexed: true,
     fetchedAt: 0,
   }
   const first = filteredCandidatesOf(index, request)

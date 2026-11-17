@@ -216,6 +216,19 @@ export function parseAttachmentFileUrl(
   target: URL,
   platform: NodeJS.Platform = process.platform,
 ): ParsedAttachmentLocation {
+  try {
+    for (const segment of target.pathname.split('/')) {
+      const decoded = decodeURIComponent(segment)
+      if (decoded.includes('/') || decoded.includes('\\') || decoded.includes('\0'))
+        throw new Error('Encoded path separators and NUL are not valid attachment locations.')
+    }
+  } catch (cause) {
+    throw new ZoteroError(
+      'Zotero returned an invalid encoded attachment file location.',
+      ZOTERO_FILE_UNREADABLE,
+      { cause },
+    )
+  }
   const host = target.host
   const rawPathname = target.pathname
 

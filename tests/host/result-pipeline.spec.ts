@@ -1,3 +1,4 @@
+import { serveExportText } from '../helpers/server/export.ts'
 /** Nested calls and result policy use the standard pipeline, with bounded values. */
 import { afterEach, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -22,9 +23,7 @@ it('forwards a standard file context on nested PTC dispatch without copying the 
       },
     },
   )
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20000))
   const pipeline = new ToolExecutionPipeline(lane.ctx)
   const parent = await pipeline.prepare({
     callId: ToolCallId('parent'),
@@ -72,7 +71,7 @@ it('does not publish a file handle that itself exceeds the configured budget', a
       },
     },
   )
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) => helpers.text('body'))
+  serveExportText(lane.mock, 'body')
   const result = await lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',
@@ -91,9 +90,7 @@ it('waits for a pending publication during teardown instead of aborting it', asy
     await release.promise
     return put(...args)
   })
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20000))
   const reading = lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',
@@ -182,22 +179,4 @@ it('completes the receipt write once the file is stored, even when cancelled aft
   expect(receipt).toMatchObject({ delivery: 'file' })
   expect(storage.put).toHaveBeenCalledTimes(1)
   expect(controller.signal.aborted).toBe(true)
-})
-
-it('bounds session receipt retention even when a storage adapter lacks deleteMany', async () => {
-  let storage: ReturnType<typeof resultStorage> | undefined
-  lane = await setupHostLane(
-    {},
-    {
-      compose: async (ctx) => {
-        storage = resultStorage(ctx)
-      },
-    },
-  )
-  if (storage === undefined) throw new Error('storage fixture missing')
-  for (let i = 0; i < 129; i += 1) storage.receipts.set(`receipt-${i}`, { sessionId: 'session' })
-  const delivery = new ResultDelivery(lane.ctx, () => resolveConfig({}))
-  await expect(delivery.pruneReceipts('session', 128)).resolves.toBe(0)
-  await lane.teardown()
-  lane = undefined
 })

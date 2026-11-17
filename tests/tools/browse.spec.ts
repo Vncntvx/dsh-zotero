@@ -19,6 +19,8 @@ import {
   PERSONAL_LIBRARY_MESSAGE,
 } from '../../src/tools/validate.js'
 import { type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
+import { collectionRow } from '../helpers/server/objects.js'
+import { MAX_PRESENTATION_META_BYTES } from '../../src/presentation-meta.js'
 
 let lane: HostLane
 let runTool: HostLane['runTool']
@@ -33,6 +35,35 @@ afterEach(async () => {
 })
 
 describe('zotero_browse validation', () => {
+  it('keeps fifty canonical rows while its actual presentation pipeline retains a bounded prefix', async () => {
+    const rows = Array.from({ length: 50 }, (_, index) =>
+      collectionRow({
+        key: `COLL${String(index).padStart(4, '0')}`,
+        data: { name: `Collection ${index}`, parentCollection: false },
+      }),
+    )
+    const serve = (
+      _req: unknown,
+      _res: unknown,
+      h: { json: (value: unknown, headers: Record<string, string>) => void },
+    ) => h.json(rows, { 'Total-Results': '50', 'Last-Modified-Version': '8' })
+    lane.mock.route('GET', '/api/users/0/collections', serve)
+    lane.mock.route('GET', '/api/users/0/collections/top', serve)
+    const result = await runTool('zotero_browse', { kind: 'collections', limit: 50 })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({
+      delivery: 'inline',
+      data: {
+        returned: 50,
+        items: rows.map((row) => expect.objectContaining({ name: row.data.name })),
+      },
+    })
+    expect(result.meta).toMatchObject({ returned: 50, displayed: 20, omitted: 30 })
+    expect(result.meta).not.toHaveProperty('detailOmitted')
+    expect(Buffer.byteLength(JSON.stringify(result.meta), 'utf8')).toBeLessThanOrEqual(
+      MAX_PRESENTATION_META_BYTES,
+    )
+  })
   it('rejects malformed libraries, ranges, and kinds through execute', async () => {
     const cases = [
       // The parameter schema rejects these two shapes before the tool's own

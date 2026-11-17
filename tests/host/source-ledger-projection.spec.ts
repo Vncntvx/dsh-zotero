@@ -20,7 +20,6 @@ describe('the projection lifecycle', () => {
     const { definition } = createSourceLedgerProjection()
     const initial = definition.init({} as never, 0 as never)
     expect(initial).toEqual({
-      inheritedEventCount: 0,
       ledger: { blockChunks: [], pending: {}, recorded: {} },
     })
 

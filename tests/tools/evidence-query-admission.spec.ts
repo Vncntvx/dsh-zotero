@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { queryTextsOf } from '../../src/local/evidence-ranker.ts'
 import { queryVariantsOf } from '../../src/tools/query-variants.ts'
 import { createScholarlyReadTool } from '../../src/scholarly/tools/read.ts'
-import { createMockHost, createMockHttp } from '../scholarly/fixtures.ts'
+import { createMockHost, createMockHttp } from '../helpers/scholarly-runtime.ts'
 import { setupHostLane } from '../helpers/lanes/host-lane.ts'
 
 const long = 'q'.repeat(2001)

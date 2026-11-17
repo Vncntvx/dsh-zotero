@@ -1,3 +1,5 @@
+import { createSourceLedgerProjection } from '../../src/session-projection/source-ledger.ts'
+import { workspaceOf } from './support/source-ledger-view.js'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 /**
  * A `mode:"fulltext"` retrieve settles as its own literature-trail fact: the
@@ -10,12 +12,12 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyLedgerState,
   foldLedgerEvent,
-  workspaceOf,
   type SourceLedgerState,
 } from '../../src/sources/event-ledger.js'
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
 import { projectRetrieveMeta } from '../../src/presentation-meta.js'
 import type { ZoteroFulltextRead, ZoteroRetrieveResult } from '../../src/types.js'
+import { fulltextHit } from '../helpers/retrieve-fixtures.js'
 import { createEventFactory } from './support/source-ledger-events.js'
 
 const event = createEventFactory()
@@ -105,13 +107,20 @@ describe('fulltext reads in the literature trail', () => {
       }),
       event('tool/result', {
         message: { toolCallId: 'artifact-read', content: [] },
-        meta: projectRetrieveMeta(fulltextResult(), ['annotation', 'note', 'abstract', 'fulltext']),
+        meta: projectRetrieveMeta(
+          fulltextResult({
+            sourceKind: 'url',
+            sourceLabel: 'https://example.org',
+            attachmentRef: undefined,
+          }),
+          ['annotation', 'note', 'abstract', 'fulltext'],
+        ),
       }),
     ])
     const workspace = workspaceOf(state)
-    expect(workspace.sources[0]!.ref).toBe(artifactId)
+    expect(workspace.sources[0]!.ref).toBe(`artifact:${artifactId}`)
     // The row's title is the window's safe source label, not the hex id.
-    expect(workspace.sources[0]!.title).toBe(REF)
+    expect(workspace.sources[0]!.title).toBe('https://example.org')
     expect(workspace.sources[0]!.fulltextReads).toHaveLength(1)
     expect(sourceWorkspaceSchema.safeParse(workspace).success).toBe(true)
   })
@@ -127,6 +136,12 @@ describe('fulltext reads in the literature trail', () => {
       workspaceOf(fulltextState(meta as unknown as Record<string, unknown>)),
     )
     expect(parsed.success).toBe(true)
+    if (!parsed.success) throw parsed.error
+    expect(parsed.data.sources[0]!.fulltextReads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ start: 0, end: 12_000, callIds: ['fulltext-read'] }),
+      ]),
+    )
   })
 
   it('merges repeated identical windows under one fact with both call ids', () => {
@@ -140,19 +155,49 @@ describe('fulltext reads in the literature trail', () => {
       event('tool/call', {
         callId: 'w1',
         name: 'zotero_retrieve',
-        arguments: JSON.stringify({ mode: 'fulltext', ref: REF }),
+        arguments: JSON.stringify({ mode: 'fulltext', source: { kind: 'ref', ref: REF } }),
       }),
       event('tool/result', { message: { toolCallId: 'w1', content: [] }, meta }),
       event('tool/call', {
         callId: 'w2',
         name: 'zotero_retrieve',
-        arguments: JSON.stringify({ mode: 'fulltext', ref: REF }),
+        arguments: JSON.stringify({ mode: 'fulltext', source: { kind: 'ref', ref: REF } }),
       }),
       event('tool/result', { message: { toolCallId: 'w2', content: [] }, meta }),
     ]
     const workspace = workspaceOf(fold(state))
     expect(workspace.sources[0]!.fulltextReads).toHaveLength(1)
     expect(workspace.sources[0]!.fulltextReads[0]!.callIds).toEqual(['w1', 'w2'])
+  })
+
+  it.each([
+    {
+      name: 'reversed offsets',
+      changes: { start: 12_000, end: 1 },
+      issue: 'at or after its start',
+    },
+    {
+      name: 'artifact on plain text',
+      changes: { textFormat: 'text', artifact: fulltextHit('text', REF).provenance },
+      issue: 'identifies Markdown',
+    },
+    { name: 'unknown fields', changes: { unsupported: true }, issue: 'Unrecognized key' },
+  ])('refuses $name at the fulltext wire boundary', ({ changes, issue }) => {
+    const meta = projectRetrieveMeta(fulltextResult(), [
+      'annotation',
+      'note',
+      'abstract',
+      'fulltext',
+    ])
+    const workspace = workspaceOf(fulltextState(meta as unknown as Record<string, unknown>))
+    const source = workspace.sources[0]!
+    const result = sourceWorkspaceSchema.safeParse({
+      ...workspace,
+      sources: [{ ...source, fulltextReads: [{ ...source.fulltextReads[0], ...changes }] }],
+    })
+    expect(result.success).toBe(false)
+    if (result.success) throw new Error('Invalid fulltext fact passed the wire boundary')
+    expect(result.error.issues.map((entry) => entry.message).join(' ')).toContain(issue)
   })
 
   it('does not fold a malformed fulltextRead fact', () => {
@@ -179,20 +224,30 @@ describe('fulltext reads in the literature trail', () => {
         event('tool/call', {
           callId: 'w1',
           name: 'zotero_retrieve',
-          arguments: JSON.stringify({ mode: 'fulltext', ref: REF, start: 0 }),
+          arguments: JSON.stringify({
+            mode: 'fulltext',
+            source: { kind: 'ref', ref: REF },
+            start: 0,
+          }),
         }),
         event('tool/result', { message: { toolCallId: 'w1', content: [] }, meta: first }),
         event('tool/call', {
           callId: 'w2',
           name: 'zotero_retrieve',
-          arguments: JSON.stringify({ mode: 'fulltext', ref: REF, start: 12_000 }),
+          arguments: JSON.stringify({
+            mode: 'fulltext',
+            source: { kind: 'ref', ref: REF },
+            start: 12_000,
+          }),
         }),
         event('tool/result', { message: { toolCallId: 'w2', content: [] }, meta: second }),
       ]),
     )
-    expect(workspace.sources[0]!.fulltextReads.map((read) => [read.start, read.end])).toEqual([
-      [0, 12_000],
-      [12_000, 24_000],
+    expect(
+      workspace.sources[0]!.fulltextReads.map((read) => [read.start, read.end, read.callIds]),
+    ).toEqual([
+      [0, 12_000, ['w1']],
+      [12_000, 24_000, ['w2']],
     ])
   })
 
@@ -213,13 +268,21 @@ describe('fulltext reads in the literature trail', () => {
         event('tool/call', {
           callId: 'w1',
           name: 'zotero_retrieve',
-          arguments: JSON.stringify({ mode: 'fulltext', ref: REF, start: 0 }),
+          arguments: JSON.stringify({
+            mode: 'fulltext',
+            source: { kind: 'ref', ref: REF },
+            start: 0,
+          }),
         }),
         event('tool/result', { message: { toolCallId: 'w1', content: [] }, meta: partial }),
         event('tool/call', {
           callId: 'w2',
           name: 'zotero_retrieve',
-          arguments: JSON.stringify({ mode: 'fulltext', ref: REF, start: 0 }),
+          arguments: JSON.stringify({
+            mode: 'fulltext',
+            source: { kind: 'ref', ref: REF },
+            start: 0,
+          }),
         }),
         event('tool/result', { message: { toolCallId: 'w2', content: [] }, meta: complete }),
       ]),
@@ -277,4 +340,58 @@ describe('the wire schema refuses a row the projection could not produce', () =>
     }
     expect(sourceWorkspaceSchema.safeParse(workspace).success).toBe(false)
   })
+})
+
+it('merges a fulltext attachment read into its proved parent and preserves PDF and server identity in the broadcast', () => {
+  const parent = 'zotero://user/0/item/ABCD1234'
+  const attachment = `${REF}?server=S1`
+  const result = fulltextResult({
+    attachmentRef: attachment,
+    attachmentContentType: 'application/pdf',
+    item: {
+      ref: `${parent}?server=S1`,
+      title: 'Proved parent title',
+      creatorSummary: 'A. Researcher',
+      year: 2026,
+      venue: 'Journal',
+    },
+  })
+  const state = fold([
+    event('tool/call', {
+      callId: 'parent',
+      name: 'zotero_get',
+      arguments: JSON.stringify({ ref: parent }),
+    }),
+    event('tool/result', {
+      message: { toolCallId: 'parent', content: [] },
+      meta: { title: 'Earlier title' },
+    }),
+    event('tool/call', {
+      callId: 'read',
+      name: 'zotero_retrieve',
+      arguments: JSON.stringify({ mode: 'fulltext', source: { kind: 'ref', ref: REF } }),
+    }),
+    event('tool/result', {
+      message: { toolCallId: 'read', content: [] },
+      meta: projectRetrieveMeta(result, []),
+    }),
+  ])
+  const workspace = workspaceOf(state, 'S1')
+  expect(workspace.sources).toHaveLength(1)
+  expect(workspace.sources[0]).toMatchObject({
+    title: 'Proved parent title',
+    creators: 'A. Researcher',
+    year: 2026,
+    venue: 'Journal',
+    evidenceMatch: 'verified',
+    serverIds: ['S1'],
+    fulltextReadsTotal: 1,
+    readAttachment: { ref: attachment, contentType: 'application/pdf' },
+  })
+  const wire = createSourceLedgerProjection().definition.wire.view({ ledger: state })
+  expect(wire.sources[0]?.readAttachment).toEqual({
+    ref: attachment,
+    contentType: 'application/pdf',
+  })
+  expect(sourceWorkspaceSchema.safeParse(wire).success).toBe(true)
 })

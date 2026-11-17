@@ -9,6 +9,7 @@
  * @module dsh-zotero/sources/model
  */
 
+import type { ZoteroExportItem } from '../types.js'
 import type { SourceFilterCounts } from './filters.js'
 import type { EvidenceItem } from '../evidence-item.js'
 
@@ -71,6 +72,7 @@ export interface SearchOccurrence {
   readonly query?: string
   /** The search's mode argument: metadata-only or full text. */
   readonly mode: 'metadata' | 'everything'
+  readonly itemLevel: 'top' | 'all'
   /** The normalized scope argument (library, collection, or saved search). */
   readonly scope: SourceScope
   readonly library?: SupportedLocalLibrary
@@ -80,7 +82,6 @@ export interface SearchOccurrence {
   readonly tags: readonly string[]
   readonly tagMatch?: 'all' | 'any'
   readonly excludeTags: readonly string[]
-  readonly includeTrashed: boolean
   /**
    * Hits this episode's pages returned to the agent. Continuation pages of one
    * folded episode only ever add to it: the episode counts what it retrieved,
@@ -115,6 +116,8 @@ export interface EvidencePassage extends Pick<
   readonly pageLabel?: string
   /** The annotation passage's parent attachment ref; lets the jump target the annotation's own PDF. */
   readonly attachmentRef?: string
+  readonly matchKind?: EvidenceItem['matchKind']
+  readonly matchedFields?: EvidenceItem['matchedFields']
   /** Call ids of the successful retrieves that returned this passage. */
   readonly callIds: readonly string[]
 }
@@ -148,24 +151,7 @@ export interface SourceAttachment {
 }
 
 /** One exported document inside a translator-format artifact. */
-export interface ExportDocumentItem {
-  /** The formatted `zotero://` ref the entry was exported for. */
-  readonly ref: string
-  /** Translator's BibTeX/BibLaTeX entry key or CSL JSON id. */
-  readonly exportKey?: string
-  /** Zotero's native citation key or the value parsed from `extra`. */
-  readonly citationKey?: string
-  readonly citationKeySource?: 'native' | 'extra'
-  readonly citationKeyConflict?: { readonly native: string; readonly extra: string }
-  /** The item's title for display, when the entry carried one. */
-  readonly title?: string
-  /** The located entry's index within the parsed CSL JSON array. */
-  readonly entryIndex?: number
-  /** The located entry's start offset within the trimmed batch body. */
-  readonly start?: number
-  /** The located entry's end offset (exclusive) within the trimmed batch body. */
-  readonly end?: number
-}
+export type ExportDocumentItem = Readonly<ZoteroExportItem>
 
 /** The export facts of one successful artifact. */
 export interface ExportArtifact {
@@ -266,6 +252,8 @@ export interface SourceItem {
   readonly fulltextReadsTotal: number
   /** Zotero's attachment selection (search/get facts); never a resolved location. */
   readonly bestAttachment?: AttachmentHint
+  /** The exact local attachment behind the latest complete-document read. */
+  readonly readAttachment?: AttachmentHint
   /** The resolved location from a successful zotero_get location request. */
   readonly attachment?: SourceAttachment
   /** Aggregated retrieval facts of the successful zotero_retrieve calls. */
@@ -286,6 +274,10 @@ export interface SourceItem {
 
 /** The aggregated session sources plus session-wide facts. */
 export interface SourceWorkspace {
+  /** Broadcasts carry summaries; complete row bodies are read through sourcePage. */
+  readonly detailsDeferred?: true
+  /** Settled-ledger revision invalidating previously fetched body pages. */
+  readonly detailsRevision?: number
   /**
    * The stable union of successful search hits and directly referenced items,
    * windowed to the workspace cap in transcript order.
@@ -299,6 +291,8 @@ export interface SourceWorkspace {
   readonly exportTotal: number
   /** Non-successful export calls only; never rendered as results. */
   readonly exportOperations: OperationFacts
+  /** Ref-less searches still report running, failed and stopped outcomes. */
+  readonly searchOperations: OperationFacts
   /** Search rows the bounded presentation projections did not itemize. */
   readonly omittedRows: number
   /** Per-filter item counts over ALL sources, computed before the window. */

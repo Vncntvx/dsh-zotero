@@ -2,7 +2,24 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoteroHttpClient } from '../../src/http-client.js'
 import { ZOTERO_UNEXPECTED } from '../../src/errors.js'
-import { readPagesConcurrentlyFolded } from '../../src/local/pagination.js'
+import { nextOffsetOrFail, readPagesConcurrentlyFolded } from '../../src/local/pagination.js'
+
+it.each([
+  [0, 3, 2, 10],
+  [10, 2, 11, 10],
+  [0, 3, 20, 2],
+])(
+  'rejects a server page outside its declared total or requested window (%s, %s, %s, %s)',
+  (offset, count, total, limit) => {
+    expect(() => nextOffsetOrFail(offset, count, total, 'listing', limit)).toThrow(
+      'beyond the reported window',
+    )
+  },
+)
+
+it('accepts an empty out-of-range page as the end of a listing', () => {
+  expect(nextOffsetOrFail(10, 0, 3, 'listing', 10)).toBeUndefined()
+})
 
 function rowsOf(total: number): { key: string }[] {
   return Array.from({ length: total }, (_, index) => ({

@@ -13,6 +13,37 @@ afterEach(async () => {
 })
 
 describe('zotero_get_batch', () => {
+  it.each([{ children: true }, { attachments: true }, { children: false, attachments: true }])(
+    'rejects mixed attachment refs and %j before any request',
+    async (include) => {
+      const result = await lane.runTool('zotero_get_batch', {
+        refs: ['zotero://user/0/item/AAAA1111', 'zotero://user/0/attachment/BBBB2222'],
+        include,
+      })
+      expect(result.isError).toBe(true)
+      expect((result.content[0] as { text: string }).text).toContain(
+        'Split item and attachment refs',
+      )
+      expect(lane.mock.requests).toEqual([])
+    },
+  )
+
+  it('reads mixed item and attachment metadata with explicit false child flags', async () => {
+    lane.mock.route('GET', /^\/api\/users\/0\/items\/[A-Z0-9]+$/, (req, _res, h) => {
+      const key = req.url?.split('?')[0].split('/').at(-1) ?? ''
+      h.json(
+        item({ key, data: { itemType: key === 'BBBB2222' ? 'attachment' : 'book', title: key } }),
+      )
+    })
+    const result = expectValue(
+      await lane.runTool('zotero_get_batch', {
+        refs: ['zotero://user/0/item/AAAA1111', 'zotero://user/0/attachment/BBBB2222'],
+        include: { children: false, attachments: false },
+      }),
+      'zotero_get_batch',
+    )
+    expect(result.value).toMatchObject({ counts: { requested: 2, succeeded: 2, failed: 0 } })
+  })
   it('registers and returns ordered per-ref results with an isolated failure', async () => {
     expect(lane.tool('zotero_get_batch')).toBeDefined()
     lane.mock.route('GET', /^\/api\/users\/0\/items\/[A-Z0-9]+$/, (req, res, helpers) => {

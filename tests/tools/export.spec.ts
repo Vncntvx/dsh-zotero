@@ -1,3 +1,4 @@
+import { serveExportText } from '../helpers/server/export.ts'
 /**
  * The `zotero_export` tool surface: citation pairing and caller ordering,
  * style and locale pass-through, verbatim bibliography text, bibtex
@@ -15,6 +16,7 @@ import {
 } from '../../src/tools/export.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { citationRow } from '../helpers/server/objects.js'
+import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 let lane: HostLane
 let mock: HostLane['mock']
@@ -31,6 +33,44 @@ afterEach(async () => {
 })
 
 describe('zotero_export tool', () => {
+  it.each(['citation', 'bibliography', 'bibtex', 'biblatex', 'ris', 'csljson', 'csv'])(
+    'rejects repeated item refs for %s before provider access',
+    async (format) => {
+      const result = await runTool('zotero_export', {
+        format,
+        refs: ['zotero://user/0/item/AAAA1111', 'zotero://user/0/item/AAAA1111?server=instance'],
+      })
+      expect(result.isError).toBe(true)
+      expect((result.content[0] as { text: string }).text).toContain('refs must be unique')
+      expect(mock.requests).toEqual([])
+    },
+  )
+
+  it('requires both text offsets or neither in the actual registered output schema', () => {
+    const schema = lane.tool('zotero_export')!.output.schema
+    for (const item of [
+      { ref: 'zotero://user/0/item/AAAA1111', start: 0 },
+      { ref: 'zotero://user/0/item/AAAA1111', end: 6 },
+    ])
+      expect(
+        validateJsonSchemaValue(
+          schema,
+          { delivery: 'inline', data: { format: 'bibtex', text: 'abcdef', items: [item] } },
+          '',
+        ),
+      ).not.toEqual([])
+    for (const item of [
+      { ref: 'zotero://user/0/item/AAAA1111', start: 0, end: 6 },
+      { ref: 'zotero://user/0/item/AAAA1111', entryIndex: 0 },
+    ])
+      expect(
+        validateJsonSchemaValue(
+          schema,
+          { delivery: 'inline', data: { format: 'bibtex', text: 'abcdef', items: [item] } },
+          '',
+        ),
+      ).toEqual([])
+  })
   it('registers and exposes its schema to the assembly', () => {
     expect(lane.tool('zotero_export')).toBeDefined()
     expect(lane.ctx.tools.schemas().some((schema) => schema.name === 'zotero_export')).toBe(true)
@@ -91,7 +131,7 @@ describe('zotero_export tool', () => {
   })
 
   it('renders opaque bibliography text verbatim', async () => {
-    mock.route('GET', '/api/users/0/items', (req, res, helpers) => helpers.text('entry-a\nentry-b'))
+    serveExportText(mock, 'entry-a\nentry-b')
     const result = expectValue(
       await runTool('zotero_export', {
         refs: ['zotero://user/0/item/ABCD1234'],
@@ -314,11 +354,18 @@ describe('zotero_export tool', () => {
     expect(mock.requests).toEqual([])
   })
 
-  it('declares itself concurrency-safe for valid arguments', () => {
+  it('allows concurrent reads and serializes exports that publish a workspace file', () => {
     expect(
       lane
         .tool('zotero_export')!
         .isConcurrencySafe?.({ refs: ['zotero://user/0/item/ABCD1234'], format: 'bibtex' }),
     ).toBe(true)
+    expect(
+      lane.tool('zotero_export')!.isConcurrencySafe?.({
+        refs: ['zotero://user/0/item/ABCD1234'],
+        format: 'bibtex',
+        outputFile: 'references.bib',
+      }),
+    ).toBe(false)
   })
 })

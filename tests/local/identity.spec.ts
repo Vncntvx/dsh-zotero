@@ -38,6 +38,15 @@ import {
 } from '../helpers/server/objects.js'
 import { serveJson, serveStatus } from '../helpers/server/serve.js'
 import { deferred } from '../helpers/sync.js'
+import { normalizedServerId, serverIdFromHeaders } from '../../src/local/identity.js'
+import { observedServerId } from '../../src/local/changes-cursor.js'
+
+it('normalizes both reported identities and persisted fallback claims', () => {
+  expect(serverIdFromHeaders(new Headers({ 'Zotero-Server-ID': ' S1 ' }))).toBe('S1')
+  expect(serverIdFromHeaders(new Headers(), ' S1 ')).toBe('S1')
+  expect(observedServerId(' S1 ')).toBe('S1')
+  expect(normalizedServerId(' \t ')).toBeUndefined()
+})
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProviderType

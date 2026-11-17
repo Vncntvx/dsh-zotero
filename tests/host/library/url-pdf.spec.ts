@@ -84,6 +84,19 @@ it.each([
   })
   expect(fetch).toHaveBeenCalledTimes(1)
 })
+it('classifies transient DNS failure as a network error with actionable recovery', async () => {
+  const { reader, dependencies } = setup({
+    resolver: async () => {
+      throw new Error('EAI_AGAIN')
+    },
+  })
+  await expect(reader.read(attachment, signal())).rejects.toMatchObject({
+    code: 'ZOTERO_URL_PDF_NETWORK',
+    message: expect.stringContaining('Check the local DNS proxy and retry'),
+  })
+  expect(dependencies.dispatcher).not.toHaveBeenCalled()
+  expect(dependencies.fetch).not.toHaveBeenCalled()
+})
 it('refuses private DNS answers before creating a dispatcher', async () => {
   const { reader, dependencies } = setup({
     resolver: async () => [{ address: '192.168.1.10', family: 4 }],

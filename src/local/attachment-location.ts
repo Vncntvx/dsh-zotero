@@ -5,6 +5,7 @@
  * @module dsh-zotero/local/attachment-location
  */
 
+import { attachmentTypeMessage } from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { ZOTERO_NO_ATTACHMENT, ZoteroError } from '../errors.js'
@@ -44,11 +45,6 @@ export function notAWebLocationMessage(key: string): string {
 /** The model-facing message for a file attachment whose reported location is unusable. */
 export function noUsableFileLocationMessage(key: string): string {
   return `Zotero reported no usable file location for attachment ${key}.`
-}
-
-/** The model-facing message for a target that is a different item type than the ref claims. */
-export function attachmentTypeMessage(itemType: string): string {
-  return `The referenced object is a ${itemType}, not an attachment.`
 }
 
 /** The model-facing message for an item ref with no attachment of any kind to resolve. */

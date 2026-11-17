@@ -30,7 +30,7 @@ import {
   previewBatchItems,
   type DeleteItemPreview,
 } from '../../src/tools/batch-items.js'
-import { presentBatchItemsResultView } from '../../src/tools/write-present.js'
+import { presentBatchItemsResultView } from '../../src/write-present.js'
 import type { ZoteroService } from '../../src/service.js'
 
 const ITEM_REF_1 = 'zotero://user/0/item/ITEMABC1'

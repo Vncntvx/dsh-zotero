@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
 import { searchHit } from '../helpers/server/objects.js'
 import { MATCH_REFERENCES_MAX } from '../../src/local/match-references-domain.js'
@@ -14,6 +14,38 @@ afterEach(async () => {
 })
 
 describe('zotero_match_references', () => {
+  it.each([
+    {
+      selected: {
+        ref: 'zotero://user/0/item/ABCD1234',
+        title: 'Paper',
+        matchMethod: 'doi',
+        confidence: 'unproven',
+      },
+    },
+    { selected: { title: 'Paper', matchMethod: 'doi', confidence: 'high' } },
+    {
+      candidates: [
+        {
+          ref: 'zotero://user/0/item/ABCD1234',
+          title: 'Paper',
+          matchMethod: 'guessed',
+          confidence: 'high',
+        },
+      ],
+    },
+    { fieldDiff: { year: { zotero: 2024 } } },
+  ])('rejects malformed matching evidence before rendering it as a match', async (invalid) => {
+    const producer = vi.spyOn(lane.ctx.zotero, 'matchReferences').mockResolvedValueOnce({
+      items: [{ inputId: 'reference', status: 'matched', ...invalid }],
+    } as never) // Deliberately malformed external producer at the output-contract boundary.
+    const result = await lane.runTool('zotero_match_references', {
+      references: [{ inputId: 'reference', title: 'Paper' }],
+    })
+    expect(producer).toHaveBeenCalledOnce()
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain('returned invalid output')
+  })
   it('matches DOI against the local metadata listing and returns its stable ref and citekey', async () => {
     lane.mock.route('GET', /^\/api\/users\/0\/items(\/top)?$/, (req, res, helpers, search) => {
       const query = search.get('q')

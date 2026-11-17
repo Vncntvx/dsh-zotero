@@ -39,13 +39,8 @@ function getRequestOf(ref: ZoteroObjectRef, request: ZoteroGetBatchRequest): Zot
   }
 }
 
-/** Read up to 50 refs within the provider's bulk-read concurrency budget. */
-export async function getBatch(
-  getItem: (request: ZoteroGetRequest, signal?: AbortSignal) => Promise<ZoteroItemDetail>,
-  request: ZoteroGetBatchRequest,
-  signal?: AbortSignal,
-  concurrency: number = CONCURRENCY,
-): Promise<ZoteroGetBatchResult> {
+/** Validate the entire request before starting any per-ref read. */
+export function assertGetBatchRequest(request: ZoteroGetBatchRequest): void {
   if (request.refs.length === 0)
     throw new ZoteroError('refs must list at least one Zotero ref', 'ZOTERO_INVALID_ARGUMENT')
   if (request.refs.length > MAX_BATCH) {
@@ -65,6 +60,24 @@ export async function getBatch(
     }
     seen.add(formatted)
   }
+  if (
+    (request.include?.children === true || request.include?.attachments === true) &&
+    request.refs.some((ref) => ref.kind === 'attachment')
+  )
+    throw new ZoteroError(
+      'Attachment refs cannot request children or attachments. Split item and attachment refs into separate calls; read attachment refs without these include flags.',
+      'ZOTERO_INVALID_ARGUMENT',
+    )
+}
+
+/** Read up to 50 refs within the provider's bulk-read concurrency budget. */
+export async function getBatch(
+  getItem: (request: ZoteroGetRequest, signal?: AbortSignal) => Promise<ZoteroItemDetail>,
+  request: ZoteroGetBatchRequest,
+  signal?: AbortSignal,
+  concurrency: number = CONCURRENCY,
+): Promise<ZoteroGetBatchResult> {
+  assertGetBatchRequest(request)
 
   const items = await mapWithConcurrency(
     request.refs,

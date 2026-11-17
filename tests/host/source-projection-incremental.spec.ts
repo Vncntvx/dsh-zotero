@@ -162,6 +162,10 @@ describe('the incremental literature-trail fold', () => {
     expect(applySpy).toHaveBeenCalledTimes(40)
     const workspace = session.view()
     expect(workspace.sources).toHaveLength(40)
+    expect(workspace.detailsDeferred).toBe(true)
+    expect(workspace.sources[0]?.searches).toEqual([])
+    expect(workspace.sources[0]?.searchesTotal).toBeGreaterThan(0)
+    expect(session.full().sources[0]?.searches.length).toBeGreaterThan(0)
     expect(sourceWorkspaceSchema.safeParse(workspace).success).toBe(true)
   })
 
@@ -357,10 +361,10 @@ describe('the incremental literature-trail fold', () => {
     expect(counts).toEqual({ 50: 100, 100: 200, 200: 400, 400: 800 })
   })
 
-  it('keeps the fork-inherited prefix length on the state it initialized', () => {
+  it('folds inherited events while keeping only durable ledger state', () => {
     const session = trail(3)
     session.fold(searchEvents('c1', [REF('AAAA1111')]))
-    expect(session.state().inheritedEventCount).toBe(3)
+    expect(Object.keys(session.state())).toEqual(['ledger'])
     expect(session.view().sources).toHaveLength(1)
   })
 })

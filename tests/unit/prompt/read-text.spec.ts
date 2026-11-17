@@ -16,7 +16,7 @@ const config = {
 }
 
 const fullCaps =
-  'Tool caps (set on the dsh-zotero configuration page): zotero_search limit up to 50, zotero_retrieve passages up to 40, zotero_browse limit up to 30, and zotero_export refs up to 20. Exceeding a cap errors, so choose limits within these bounds. On the first result page (offset 0) of library/collection scopes, note-body matches are listed separately in supplemental (up to 100 notes scanned), outside the paged total; saved-search scopes never scan note bodies.'
+  'Page, passage, and reference caps (set on the dsh-zotero configuration page): zotero_search limit up to 50, zotero_retrieve passages up to 40, zotero_browse limit up to 30, and zotero_export refs up to 20. Each listed cap rejects requests above its bound. On the first result page (offset 0) of library/collection scopes, note-body matches are listed separately in supplemental (up to 100 notes scanned), outside the paged total; saved-search scopes never scan note bodies.'
 
 describe('readRoutingTextOf', () => {
   it('renders the canonical route when every read tool is admitted', () => {

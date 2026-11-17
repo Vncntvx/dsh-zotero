@@ -1,3 +1,4 @@
+import { documentedLiteral, UNPARSED_DEFAULT } from './support/doc-literals.ts'
 /**
  * Configuration and tool-contract docs checked against the schemas that own
  * them. Documentation drift is a contract bug here: a settings table that
@@ -138,7 +139,7 @@ describe('configuration docs agree with the schemas', () => {
     }
   })
 
-  it('prints the schema default for every numeric and boolean field', () => {
+  it('checks documented numeric, boolean, string, array and object defaults against schemas', () => {
     // A table row that says 9 where the schema says 8 is a wrong instruction;
     // prose cells (`configured default`, `—`) are skipped, and quoted strings
     // are compared as JSON so an enum default is checked too.
@@ -158,37 +159,21 @@ describe('configuration docs agree with the schemas', () => {
           const literal = /^`([^`]*)`$/.exec(cell)
           if (literal === null) continue
           const raw = literal[1]!
-          if (typeof expected === 'boolean') {
-            if (raw !== 'true' && raw !== 'false') continue
-            compared += 1
-            if ((raw === 'true') !== expected) {
-              violations.push(
-                `${path} ${field}: table says ${raw}, schema default is ${String(expected)}`,
-              )
-            }
+          const actual = documentedLiteral(raw, typeof expected === 'string')
+          if (actual === UNPARSED_DEFAULT) {
+            violations.push(`${path} ${field}: default cell is not a supported literal: ${raw}`)
             continue
           }
-          if (typeof expected === 'number') {
-            if (!/^-?\d+(\.\d+)?$/.test(raw)) continue
-            compared += 1
-            if (Number(raw) !== expected) {
-              violations.push(
-                `${path} ${field}: table says ${raw}, schema default is ${String(expected)}`,
-              )
-            }
-            continue
-          }
-          if (typeof expected === 'string' && raw.startsWith('"') && raw.endsWith('"')) {
-            compared += 1
-            if (JSON.parse(raw) !== expected) {
-              violations.push(`${path} ${field}: table says ${raw}, schema default is ${expected}`)
-            }
-          }
+          compared += 1
+          if (JSON.stringify(actual) !== JSON.stringify(expected))
+            violations.push(
+              `${path} ${field}: table says ${JSON.stringify(actual)}, schema default is ${JSON.stringify(expected)}`,
+            )
         }
       }
       // The guard that the scan still compares something: a parser that
       // matched no row would pass every case above.
-      expect(compared, `${path} matched no default rows`).toBeGreaterThan(30)
+      expect(compared, `${path} matched no default rows`).toBeGreaterThan(50)
       expect(violations).toEqual([])
     }
   })
@@ -261,7 +246,7 @@ describe('the documentation set stays complete', () => {
     // see it, and a client branching on it waits forever.
     const sources = readdirSync(new URL('src/', REPO_ROOT), { recursive: true })
       .filter((name): name is string => typeof name === 'string' && /\.tsx?$/.test(name))
-      .filter((name) => name !== 'errors.ts' && name !== 'contract.ts')
+      .filter((name) => name !== 'errors.ts' && name !== 'error-codes.ts' && name !== 'contract.ts')
       .map((name) => readFileSync(new URL(`src/${name}`, REPO_ROOT), 'utf8'))
       .join('\n')
     // A code built through a template is still produced: the URL PDF arm
@@ -303,6 +288,12 @@ describe('the documentation set stays complete', () => {
     expect(enTools).toContain(`${ZOTERO_READ_TOOL_NAMES.length} read tools`)
     expect(enTools).toContain(`${ZOTERO_WRITE_TOOL_NAMES.length} write tools`)
 
+    for (const path of ['docs/skills.md', 'docs/skills.en.md']) {
+      const names = [...docOf(path).matchAll(/^\|\s*`(zotero-[^`]+)`\s*\|/gm)]
+        .map((match) => match[1])
+        .sort()
+      expect(names, path).toEqual([...CORE_SOPS, ...SCHOLARLY_SOPS].map((sop) => sop.name).sort())
+    }
     const words = ['zero', 'one', 'two', 'three', 'four', 'five']
     expect(docOf('docs/product-model.md')).toContain(
       `核心组件持有 ${CORE_SOPS.length} 个，学术检索组件持有 ${SCHOLARLY_SOPS.length} 个`,

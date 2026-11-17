@@ -1,9 +1,8 @@
 /**
  * The model-facing parameter correction hint.
  *
- * A rejected call already names the missing required property; what the
- * pipeline cannot know is which misspelled argument the model sent instead.
- * This module pairs the two names and appends one hint block to the error
+ * A rejected call names missing or undeclared properties. This module pairs
+ * a misspelling with a missing declared name and appends one hint block to the error
  * result. It runs as a `tools/post-execute` listener so every plugin tool —
  * core read, core write, and scholarly — gets the same treatment without
  * wrapping fifteen independent registrations.
@@ -123,8 +122,8 @@ function closestParameterName(input: string, candidates: readonly string[]): str
 }
 
 /**
- * Pair one undeclared argument with the missing required parameter it
- * misspells. Ambiguity yields no hint: a wrong suggestion costs the model the
+ * Pair one undeclared argument with a missing declared parameter. Required
+ * parameters take precedence; optional misspellings also receive hints. Ambiguity yields no hint: a wrong suggestion costs the model the
  * retry the hint exists to save.
  * @param parameters - the tool's declared parameter schema.
  * @param argumentsValue - the arguments the model sent.
@@ -140,18 +139,22 @@ export function parameterCorrectionOf(
   const args = asRecord(argumentsValue)
   const schema = asRecord(parameters)
   const properties = asRecord(schema?.properties)
-  if (!args || !properties || !Array.isArray(schema?.required)) return undefined
+  if (!args || !properties || (schema?.required !== undefined && !Array.isArray(schema.required)))
+    return undefined
 
-  const missingRequired = schema.required.filter(
+  const missingRequired = (Array.isArray(schema?.required) ? schema.required : []).filter(
     (name): name is string =>
       typeof name === 'string' && !Object.hasOwn(args, name) && Object.hasOwn(properties, name),
   )
-  if (missingRequired.length === 0) return undefined
+  const candidates =
+    missingRequired.length > 0
+      ? missingRequired
+      : Object.keys(properties).filter((name) => !Object.hasOwn(args, name))
 
   let correction: ParameterCorrection | undefined
   for (const input of Object.keys(args)) {
     if (Object.hasOwn(properties, input)) continue
-    const expected = closestParameterName(input, missingRequired)
+    const expected = closestParameterName(input, candidates)
     if (expected === undefined) continue
     if (correction !== undefined) return undefined
     correction = { input, expected }

@@ -179,6 +179,8 @@ describe('changes', () => {
     const result = await diff(at(42, SERVER_ID, ['fulltext']))
     expect(result.cursor).toBeUndefined()
     expect(result.libraryChanged).toBeUndefined()
+    const fulltext = mock.requests.find((request) => request.pathname.endsWith('/fulltext'))
+    expect(fulltext?.search.get('since')).toBe('0')
   })
 
   it('reads the item space as three endpoints, the partition the API describes', async () => {
@@ -235,7 +237,7 @@ describe('changes', () => {
     expect(result.changed.items).toHaveLength(3)
     expect(result.totals?.items).toBe(9)
     expect(result.truncated).toBe(true)
-    // The cap is a display concern only: the read was whole, so the cursor stands.
+    // The upstream read was whole, so its cursor stands despite bounded model-visible lists.
     expect(result.cursor?.version).toBe(50)
   })
 
@@ -533,6 +535,34 @@ describe('changes', () => {
     expect(result.changed.trashedItems).toEqual([{ key: 'TRSH1234', version: 48 }])
     expect(result.unobservable).toBeUndefined()
   })
+
+  it('withholds a derived trash split when a truncated live half would mislabel live items', async () => {
+    serveJson(mock, `${apiPath()}/items/top`, { TOP12345: 45 }, versionHeaders(SERVER_ID, 50))
+    mock.route('GET', `${apiPath()}/items`, (_req, _res, h, query) => {
+      const all = query.get('includeTrashed') === '1'
+      h.json(all ? { TOP12345: 45, LIVEMISS: 46, TRSH1234: 48 } : { TOP12345: 45 }, {
+        ...versionHeaders(SERVER_ID, 50),
+        'Total-Results': all ? '3' : '2',
+      })
+    })
+    serveStatus(mock, `${apiPath()}/items/trash`, 404, 'Not found')
+    const result = await diff(at(42, SERVER_ID, ['items']))
+    expect(result.changed.items).toEqual([{ key: 'TOP12345', version: 45 }])
+    expect(result.changed.trashedItems).toBeUndefined()
+    expect(result.totals?.trashedItems).toBeUndefined()
+    expect(result.cursor).toBeUndefined()
+    expect(result.unobservable).toContainEqual({ kind: 'items', reason: 'unreadable' })
+  })
+
+  it.each([-1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid cursor version %s before making a request',
+    async (version) => {
+      await expect(diff({ ...at(42), version })).rejects.toMatchObject({
+        code: 'ZOTERO_INVALID_ARGUMENT',
+      })
+      expect(mock.requests).toHaveLength(0)
+    },
+  )
 
   it('reports a versionless library as an empty, cursor-less diff', async () => {
     routeItems(mock, {

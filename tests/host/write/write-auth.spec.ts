@@ -1,3 +1,7 @@
+import {
+  WRITE_SERVER_ID as SERVER_ID,
+  SECOND_SERVER_ID as OTHER_SERVER_ID,
+} from '../../helpers/server/keys.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import type { CredentialRecord } from '@deepseek-ai/dsh-credentials'
@@ -10,8 +14,6 @@ import { MockZotero } from '../../helpers/mock-zotero.js'
 import { testWriteClient } from '../../helpers/test-clients.js'
 import { deferred } from '../../helpers/sync.js'
 
-const SERVER_ID = 'srv-auth-spec-0001'
-const OTHER_SERVER_ID = 'srv-other-00002'
 const ISSUED_KEY = 'K'.repeat(32)
 const AUTHORIZE_PATH = '/api/local/authorize'
 

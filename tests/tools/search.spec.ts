@@ -9,7 +9,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   EXCLUDE_TAGS_LITERAL_MESSAGE,
-  INCLUDE_TRASHED_SCOPE_MESSAGE,
   ITEM_TYPES_LITERAL_MESSAGE,
   noteBodyMatchesMessage,
   renderSearch,
@@ -409,7 +408,7 @@ describe('zotero_search validation', () => {
     const cases = [
       {
         args: { includeTrashed: true, scope: { kind: 'collection', refOrName: 'x' } },
-        contains: INCLUDE_TRASHED_SCOPE_MESSAGE,
+        contains: 'includeTrashed" is not a declared property',
       },
       { args: { library: { type: 'user', id: 1 } }, contains: PERSONAL_LIBRARY_MESSAGE },
       { args: { library: { type: 'group', id: 0 } }, contains: GROUP_ID_MESSAGE },

@@ -1,3 +1,4 @@
+import { workspaceOf } from './support/source-ledger-view.js'
 /**
  * The host event fold's defensive arms: malformed and partial session events
  * are skipped or read at position zero, a settled error replays into the
@@ -12,12 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import {
-  emptyLedgerState,
-  factsOf,
-  foldLedgerEvent,
-  workspaceOf,
-} from '../../src/sources/event-ledger.js'
+import { emptyLedgerState, factsOf, foldLedgerEvent } from '../../src/sources/event-ledger.js'
 import { REF, foldEvents, searchMetaOf } from './support/source-ledger-arms.js'
 
 describe('the event fold defensive arms', () => {

@@ -8,11 +8,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import {
-  probeSeparationOf,
-  semanticEvidenceRanker,
-  RANKER_CALIBRATION_PROBES,
-} from '../../src/enrichment/semantic/ranker.ts'
+import { semanticEvidenceRanker } from '../../src/enrichment/semantic/ranker.ts'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { AdmissionRules } from '../../src/enrichment/semantic/admission.ts'
@@ -59,29 +55,33 @@ function scoringEmbedder(): Embedder {
   return embedderOf(table)
 }
 
-describe('probeSeparationOf (diagnostic only)', () => {
-  it('measures separation without being a production gate', async () => {
-    const table: Record<string, readonly number[]> = {}
-    RANKER_CALIBRATION_PROBES.forEach((probe, index) => {
-      const direction = axis(index, RANKER_CALIBRATION_PROBES.length)
-      table[probe.query] = direction
-      for (const related of probe.related) table[related] = direction
-    })
-    const embedder = embedderOf(
-      table,
-      axis(RANKER_CALIBRATION_PROBES.length, RANKER_CALIBRATION_PROBES.length + 1),
-    )
-    const separation = await probeSeparationOf(embedder)
-    expect(separation.weakestSame).toBe(1)
-    expect(separation.strongestCross).toBe(0)
-    // Cached per embedder; a second call does no work.
-    const embed = vi.spyOn(embedder, 'embed')
-    await probeSeparationOf(embedder)
-    expect(embed).not.toHaveBeenCalled()
-  })
-})
-
 describe('semanticEvidenceRanker with measured admission', () => {
+  it('embeds every distinct source once and retains semantic-only hits beyond lexical candidates', async () => {
+    const embedder = embedderOf(
+      { question: axis(0), 'meaning without shared words': axis(0) },
+      axis(1),
+    )
+    const embed = vi.spyOn(embedder, 'embed')
+    const ranker = semanticEvidenceRanker({
+      embedder: async () => embedder,
+      profile: () => rulesOf(),
+    })
+    const chunks = [
+      ...Array.from({ length: 100 }, (_, index) => ({
+        text: `question distractor ${index}`,
+        index,
+      })),
+      { text: 'meaning without shared words', index: 100 },
+      { text: 'meaning without shared words', index: 101 },
+    ]
+    const result = await ranker.rank({ query: 'question', chunks })
+    expect(
+      result.matches.filter((match) => match.matchKind === 'semantic').map((match) => match.index),
+    ).toEqual([100, 101])
+    expect(
+      embed.mock.calls.filter(([, side]) => side === 'document').flatMap(([texts]) => texts),
+    ).toHaveLength(101)
+  })
   it('fuses a calibrated semantic hit with the lexical route', async () => {
     const ranker = semanticEvidenceRanker({
       embedder: async () => scoringEmbedder(),

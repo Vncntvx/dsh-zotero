@@ -1,13 +1,11 @@
 /**
  * The host-side event fold of the literature trail: a compact, JSON-only
- * record of the session's Zotero tool outcomes, replayed through the same
- * workspace builder the browser fallback uses.
+ * record of the session's Zotero tool outcomes, consumed by the incremental
+ * source projection.
  *
- * State holds the settled outcome facts (arguments, result content, meta), not
- * the rendered workspace, because the workspace builder owns the aggregation
- * rules and must not be duplicated. The facts are bounded by the session's own
- * tool output: full texts that exceed the inline budget are already spilled by
- * the tools, so a block carries a locator rather than the full text.
+ * State holds arguments and presentation facts. Only exports and valid durable
+ * receipts retain content blocks; other tool bodies already live in the
+ * session event log. The incremental workspace index owns aggregation.
  * @module dsh-zotero/sources/event-ledger
  */
 
@@ -16,8 +14,6 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { asRecord, asString } from '../json.js'
-import { buildSourceWorkspace } from './ledger.js'
-import type { SourceWorkspace } from './model.js'
 import { receiptOf } from './receipt.js'
 import type { SettledToolBlock, ToolBlockLike } from './block-types.js'
 
@@ -66,9 +62,8 @@ export interface SourceLedgerState {
 /** One append copies at most this many facts. */
 const BLOCK_CHUNK_SIZE = 256
 
-/** The projection state: the fold plus the fork-inherited prefix length. */
+/** The projection state: the complete durable fold. */
 export interface SourceLedgerProjectionState {
-  readonly inheritedEventCount: number
   readonly ledger: SourceLedgerState
 }
 
@@ -187,7 +182,9 @@ export function settledBlockOf(fact: LedgerBlockFact): SettledToolBlock {
 /** Whether a settled block belongs in the trail. */
 function belongsInTrail(block: SettledToolBlock): boolean {
   if (isTrailTool(block.name)) return true
-  return block.name === 'job_output' && receiptOf(block) !== null
+  if (block.name !== 'job_output') return false
+  const receipt = receiptOf(block)
+  return typeof receipt?.tool === 'string' && isTrailTool(receipt.tool)
 }
 
 /**
@@ -219,7 +216,10 @@ function record(
     name: block.name,
     argsRaw: block.call?.argsRaw ?? '',
     callTime: block.callTime ?? block.time,
-    content: blocksAsContent(block.content),
+    content:
+      block.name === 'zotero_export' || receiptOf(block) !== null
+        ? blocksAsContent(block.content)
+        : [],
     isError: block.isError,
     ...(block.error === undefined ? {} : { error: block.error }),
     ...(block.meta === undefined ? {} : { meta: block.meta as JsonValue }),
@@ -357,31 +357,4 @@ export function pendingBlocksOf(state: SourceLedgerState): readonly ToolBlockLik
     args: PartialArguments.fromText(call.argsRaw),
     subCalls: [],
   }))
-}
-
-/**
- * The blocks a workspace build replays: settled outcomes plus the calls still
- * waiting, which the reducer counts as running operations.
- * @param state - the fold state.
- * @returns the ordered blocks.
- */
-export function blocksOf(state: SourceLedgerState): readonly ToolBlockLike[] {
-  return [...factsOf(state).map(settledBlockOf), ...pendingBlocksOf(state)]
-}
-
-/**
- * Build the rendered workspace from the current fold in one pass.
- *
- * The host projection does not call this: it keeps a
- * `SourceWorkspaceIndex` per session state chain and folds only the new
- * blocks, because a per-event full replay is quadratic in the session length.
- * This one-shot form serves callers that hold the whole block list once.
- * @param state - the fold state.
- * @param currentServerId - connected instance id, when the caller knows it.
- * @returns the aggregated workspace.
- */
-export function workspaceOf(state: SourceLedgerState, currentServerId?: string): SourceWorkspace {
-  return buildSourceWorkspace(blocksOf(state), {
-    ...(currentServerId === undefined ? {} : { currentServerId }),
-  })
 }

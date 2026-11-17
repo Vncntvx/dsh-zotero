@@ -1,3 +1,4 @@
+import { serveExportText } from '../helpers/server/export.ts'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { JobId } from '@deepseek-ai/dsh-jobs'
@@ -28,9 +29,7 @@ it('reuses one body across repeated owned job_output calls', async () => {
   )
   const jobs = await composeRealJobs(lane.ctx)
   jobs.agentOf('test-session')
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20_000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20_000))
   const start = await lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',
@@ -111,15 +110,11 @@ it('does not rewrite another plugin’s job output', async () => {
   const result = await lane.runTool('job_output', { job_id: id })
   expect(result.content).toEqual([{ type: 'text', text: 'other' }])
 })
-it('delivers a completed zotero job when no storage facility is composed', async () => {
-  // Receipt lookup is an enhancement: without storageDomain the job's own
-  // result must still be delivered, not turned into a tool failure.
+it('fails a background result explicitly when complete file delivery is unavailable', async () => {
   lane = await setupHostLane()
   const jobs = await composeRealJobs(lane.ctx)
   jobs.agentOf('test-session')
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20_000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20_000))
   const start = await lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',
@@ -127,26 +122,10 @@ it('delivers a completed zotero job when no storage facility is composed', async
   })
   expect(start.isError).toBe(false)
   const jobId = jobIdOf(start)
-  expect((await jobs.settled(JobId(jobId), 'test-session')).status).toBe('completed')
-  lane.ctx.tools.register(
-    defineTool({
-      name: 'job_output',
-      description: 'External job consumer',
-      parameters: { job_id: { type: 'string', required: true } },
-      output: {
-        schema: {
-          type: 'object',
-          properties: { status: { type: 'string', required: true } },
-          additionalProperties: false,
-        },
-        render: () => [{ type: 'text', text: 'completed' }],
-      },
-      execute: async () => ({ status: 'completed' }),
-    }),
-  )
-  const result = await lane.runTool('job_output', { job_id: jobId })
-  expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ status: 'completed' })
+  const settled = await jobs.settled(JobId(jobId), 'test-session')
+  expect(settled.status).toBe('failed')
+  expect(settled.detail).toContain('Complete result delivery requires')
+  expect(jobs.registry.read(JobId(jobId), SessionId('test-session')).result).toBeUndefined()
 })
 it('still re-attaches job output through the per-call receipt when the job-key receipt is missing', async () => {
   let storage: ReturnType<typeof resultStorage> | undefined
@@ -160,9 +139,7 @@ it('still re-attaches job output through the per-call receipt when the job-key r
   )
   const jobs = await composeRealJobs(lane.ctx)
   jobs.agentOf('test-session')
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('x'.repeat(20_000)),
-  )
+  serveExportText(lane.mock, 'x'.repeat(20_000))
   const start = await lane.runTool('zotero_export', {
     refs: ['zotero://user/0/item/ABCD1234'],
     format: 'ris',

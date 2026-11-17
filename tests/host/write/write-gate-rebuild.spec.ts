@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { ZoteroWriteCall } from '../../../src/types.js'
+import type { ZoteroWriteCall } from '../../../src/write-call.js'
 import { commitLive, setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
 import { deferred } from '../../helpers/sync.js'
 import { ApprovingQuestions, resetApprovalStub, StubApproval } from '../../helpers/approval-stub.js'

@@ -1,7 +1,8 @@
+import { workspaceOf } from './support/source-ledger-view.js'
 /** Current Harness cancellation codes agree in both literature-trail folds. */
 import { describe, expect, it } from 'vitest'
 import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
-import { emptyLedgerState, foldLedgerEvent, workspaceOf } from '../../src/sources/event-ledger.js'
+import { emptyLedgerState, foldLedgerEvent } from '../../src/sources/event-ledger.js'
 import { createEventFactory } from './support/source-ledger-events.js'
 
 const ref = 'zotero://user/0/item/ABCD1234'

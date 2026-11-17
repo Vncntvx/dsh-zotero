@@ -7,7 +7,7 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import { streamSessionLogZip } from '@deepseek-ai/dsh-session-log-export'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, writeFile, readdir, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -34,6 +34,39 @@ async function boot() {
     delivery: new ResultDelivery(ctx, () => resolveConfig({ maxInlineResultTokens: 1000 })),
   }
 }
+it('quarantines one invalid disk receipt while retaining readable results and admitting new delivery', async () => {
+  root = await mkdtemp(join(tmpdir(), 'zotero-invalid-receipt-'))
+  const directory = join(root, 'storage', 'zotero_results', 'receipts')
+  await mkdir(directory, { recursive: true })
+  const invalid = JSON.stringify({
+    version: 1,
+    record: {
+      delivery: 'file',
+      version: 1,
+      summary: 'missing ownership and file',
+    },
+  })
+  await writeFile(join(directory, 'corrupt.json'), invalid)
+  const world = await boot()
+  const receipt = await world.delivery.prepare(
+    {
+      name: 'zotero_export',
+      callId: 'new-call',
+      arguments: { format: 'ris' },
+      agent: { session: { header: { id: 'origin' } } },
+    } as unknown as ToolExecution,
+    { text: 'x'.repeat(20_000) },
+    () => [],
+    new AbortController().signal,
+  )
+  expect(receipt.delivery).toBe('file')
+  expect(await world.delivery.receipt('origin', 'new-call')).toEqual(receipt)
+  const entries = await readdir(directory)
+  expect(entries).not.toContain('corrupt.json')
+  const backup = entries.find((name) => name.startsWith('corrupt.json.bak.'))
+  expect(backup).toBeDefined()
+  expect(await readFile(join(directory, backup!), 'utf8')).toBe(invalid)
+})
 it('reopens persisted results after a host restart and streams the same file into a session ZIP', async () => {
   root = await mkdtemp(join(tmpdir(), 'zotero-persist-'))
   const first = await boot()

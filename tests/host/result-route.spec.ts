@@ -1,3 +1,4 @@
+import { resultReceipt } from '../helpers/result-receipts.ts'
 /** A result is addressable by a recorded event, never a client-supplied file ID. */
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -27,15 +28,16 @@ async function setup() {
       data: { format: 'csv', text: '\ufeff"标题","a,b"\n"多行\n末尾",尾\n' },
     }),
   })
-  const receipt = {
+  const receipt = resultReceipt({
     delivery: 'file' as const,
     version: 1 as const,
     tool: 'zotero_export',
     sessionId: 'original',
     callId: 'call',
     summary: 'Stored',
+    createdAt: 0,
     file,
-  }
+  })
   const content = renderDelivered(receipt, () => [])
   const readEvent = vi.fn(async () => ({
     target: { type: 'tool/result', data: { message: { content, toolCallId: 'call' } } },
@@ -99,6 +101,7 @@ it('reads the persisted receipt of an original background acknowledgement', asyn
     sessionId: 'original',
     callId: 'call',
     jobId: 'job',
+    createdAt: 0,
     summary: 'Stored',
     file,
   })

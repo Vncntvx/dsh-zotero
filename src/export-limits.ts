@@ -10,6 +10,20 @@
  * of reading config; it owns only the wording.
  * @module dsh-zotero/export-limits
  */
+import type { ZoteroObjectRef } from './types.js'
+
+/** All export formats count the same unique item identities; never silently deduplicate. */
+export function assertUniqueExportRefs(
+  refs: readonly ZoteroObjectRef[],
+  fail: (message: string) => never,
+): void {
+  const seen = new Set<string>()
+  for (const ref of refs) {
+    const identity = `${ref.library.type}/${ref.library.id}/item/${ref.key}`
+    if (seen.has(identity)) fail(`refs must be unique; duplicate item: zotero://${identity}`)
+    seen.add(identity)
+  }
+}
 
 /** The model-facing message for a refs list past the configured cap. */
 export function exportRefsOverCapMessage(maxExportRefs: number, requested: number): string {

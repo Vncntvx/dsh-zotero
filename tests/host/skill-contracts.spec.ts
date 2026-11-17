@@ -12,6 +12,7 @@ import ScholarlyService from '../../src/scholarly/service.js'
 import { CORE_SOPS } from '../../src/skills/core.js'
 import {
   EXTERNAL_AUTHORIZATION_RULE,
+  WRITE_AVAILABILITY_RULE,
   SOP_CONTRACT_RULES,
   recipesOf,
   skillRegistration,
@@ -19,6 +20,7 @@ import {
 } from '../../src/skills/definition.js'
 import { SCHOLARLY_SOPS } from '../../src/skills/scholarly.js'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
+import { ZOTERO_WRITE_TOOL_NAMES } from '../helpers/tool-names.js'
 
 // This is a host-composition spec: use the host lane rather than scholarly support.
 import { isCompositionDependent } from './support/composition-dependent-parameters.js'
@@ -149,6 +151,19 @@ describe('research SOP contracts', () => {
       expect(CJK.test(sop.description), `${sop.name}: description is English-only`).toBe(false)
       for (const keyword of sop.triggerKeywords)
         expect(CJK.test(keyword), `${sop.name}/${keyword}: English-only keyword`).toBe(false)
+    }
+  })
+
+  it('keeps all write recipes conditional when writes are disabled', async () => {
+    lane = await setupHostLane({ writeEnabled: false })
+    const writeTools = new Set<string>([...ZOTERO_WRITE_TOOL_NAMES, 'scholarly_save_to_zotero'])
+    for (const sop of SOPS) {
+      expect(skillRegistration(sop).content).toContain(WRITE_AVAILABILITY_RULE)
+      for (const recipe of recipesOf(sop)) {
+        if (!writeTools.has(recipe.tool)) continue
+        expect(recipe.requires, `${sop.name}/${recipe.tool}`).toContain('writeEnabled')
+        expect(lane.ctx.tools.get(recipe.tool), recipe.tool).toBeUndefined()
+      }
     }
   })
 

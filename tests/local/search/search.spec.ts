@@ -121,7 +121,7 @@ describe('encodeExcludeTag', () => {
 
 describe('search: library scope', () => {
   it('searches /items/top with server-side pagination and a Total-Results header', async () => {
-    serveSearchPage(mock, { items: [searchHit()], total: 25 })
+    serveSearchPage(mock, { items: [searchHit()], total: 25, offset: 10 })
     const result = await provider.search(
       request({ query: 'flash', offset: 10, limit: 5 }),
       undefined,

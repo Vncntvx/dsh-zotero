@@ -49,7 +49,7 @@ registerHooks({
         shortCircuit: true,
         source: `
           export const DEFAULT_SEMANTIC_MODEL = 'balanced';
-          export const DEFAULT_SEMANTIC_MODEL_ROOT = '~/.dsh/models';
+          export const SEMANTIC_DOWNLOAD_SOURCES = ['hf-mirror', 'huggingface'];
           export const SEMANTIC_MODELS = [${JSON.stringify(fixture.model)}];
           export const SEMANTIC_MODEL_KEYS = ['balanced'];
           export const semanticModelOf = () => SEMANTIC_MODELS[0];

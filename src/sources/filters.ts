@@ -36,9 +36,9 @@ export function hasIssue(item: SourceItem): boolean {
  */
 const SOURCE_FILTER_PREDICATES = {
   pdf: (item: SourceItem) => hasPdf(item),
-  retrieved: (item: SourceItem) => item.retrievalFacts !== undefined,
-  evidence: (item: SourceItem) => item.evidence.length > 0,
-  exported: (item: SourceItem) => item.exports.length > 0,
+  retrieved: (item: SourceItem) => item.retrievalFacts !== undefined || item.fulltextReadsTotal > 0,
+  evidence: (item: SourceItem) => item.evidenceTotal > 0,
+  exported: (item: SourceItem) => item.exportsTotal > 0,
   issues: (item: SourceItem) => hasIssue(item),
 } as const satisfies Record<Exclude<SourceFilter, 'all'>, (item: SourceItem) => boolean>
 
@@ -74,9 +74,6 @@ export function sourceFilterMaskOf(item: SourceItem): number {
 }
 
 /** The filter ids in their bar order, derived from the predicate table. */
-const FILTER_IDS = Object.keys(SOURCE_FILTER_PREDICATES) as Array<
-  keyof typeof SOURCE_FILTER_PREDICATES
->
 
 /**
  * Narrow the sources to one filter. Callers pass whatever list they render —
@@ -103,15 +100,4 @@ export interface SourceFilterCounts {
   readonly evidence: number
   readonly exported: number
   readonly issues: number
-}
-
-/** Count the sources matching each filter in one pass. */
-export function filterCountsOf(sources: readonly SourceItem[]): SourceFilterCounts {
-  const counts = { all: sources.length, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 }
-  for (const item of sources) {
-    for (const id of FILTER_IDS) {
-      if (SOURCE_FILTER_PREDICATES[id](item)) counts[id] += 1
-    }
-  }
-  return counts
 }

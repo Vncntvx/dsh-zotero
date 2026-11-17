@@ -240,6 +240,7 @@ describe('MinerU durable tasks', () => {
 
   it('resumes polling after an interrupted read without resubmitting or reuploading', async () => {
     const store = await storeOf()
+    const interrupted = new AbortController()
     let finish = false
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === 'POST')
@@ -248,7 +249,8 @@ describe('MinerU durable tasks', () => {
           data: { task_id: 'task-1', file_url: 'https://oss.example/u?Signature=secret' },
         })
       if (init?.method === 'PUT') return new Response(null)
-      if (url.includes('/agent/parse/task-1'))
+      if (url.includes('/agent/parse/task-1')) {
+        if (!finish) interrupted.abort(new Error('caller interrupted the parse'))
         return json({
           code: 0,
           data: {
@@ -257,12 +259,16 @@ describe('MinerU durable tasks', () => {
             markdown_url: finish ? 'https://cdn.example/full.md' : '',
           },
         })
+      }
       return new Response('# A short valid document')
     })
     const client = clientOf(fetch)
     await expect(
-      parseOnce(input, { client, store, flight: new ParseFlight(), timing }),
-    ).rejects.toThrow('did not finish')
+      parseOnce(
+        { ...input, signal: interrupted.signal },
+        { client, store, flight: new ParseFlight(), timing },
+      ),
+    ).rejects.toThrow('caller interrupted the parse')
     const receipt = await readFile(join(store.root, 'tasks', `${cacheKeyOf(input)}.json`), 'utf8')
     expect(JSON.parse(receipt)).toMatchObject({ taskId: 'task-1', uploaded: true })
     expect(receipt).not.toContain('Signature')
@@ -399,7 +405,7 @@ describe('MinerU durable tasks', () => {
 })
 
 describe('MinerU task expiration and results', () => {
-  it('clears an expired upload receipt without uploading or creating a replacement task', async () => {
+  it('clears an expired receipt even when its replacement submission fails', async () => {
     const store = await storeOf()
     await store.putTask(cacheKeyOf(input), {
       taskId: 'old',
@@ -407,11 +413,14 @@ describe('MinerU task expiration and results', () => {
       uploaded: false,
       uploadUrl: 'https://oss.example/u',
     })
-    const fetch = vi.fn(async () => new Response(null))
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json({ code: -100, msg: 'Replacement submission refused' }),
+    )
     await expect(
       parseOnce(input, { client: clientOf(fetch), store, flight: new ParseFlight(), timing }),
-    ).rejects.toThrow('expired')
-    expect(fetch).not.toHaveBeenCalled()
+    ).rejects.toThrow('Replacement submission refused')
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(await store.getTask(cacheKeyOf(input))).toBeUndefined()
   })
 

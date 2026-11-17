@@ -112,6 +112,8 @@ function isHttpUrl(value: string): boolean {
  */
 export function pdfCapabilityOf(item: SourceItem): PdfCapability | null {
   const candidates: AttachmentCandidate[] = []
+  if (item.readAttachment !== undefined)
+    candidates.push({ ref: item.readAttachment.ref, contentType: item.readAttachment.contentType })
   if (item.attachment !== undefined) {
     candidates.push({
       ref: item.attachment.ref,

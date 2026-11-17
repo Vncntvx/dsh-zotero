@@ -1,3 +1,4 @@
+import { fulltextIdentityOf } from './fulltext-identity.js'
 /**
  * @module dsh-zotero/local/retrieve-fulltext
  */
@@ -10,6 +11,7 @@ import {
   ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NO_FULLTEXT,
+  ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
 import { chunkText, type EvidenceChunk } from '../evidence.js'
@@ -41,18 +43,7 @@ import type { EvidenceRanker } from './evidence-ranker.js'
 
 export { isPdfCandidateContentType } from './fulltext-enhancer.js'
 
-/**
- * Persist one bounded whole document so a model can read it through a single
- * handle instead of walking every window. The tool layer supplies it from the
- * host spill store; the domain only decides when a document is large enough
- * to be worth one. Returning undefined means no store was available, which
- * leaves the window chain as the only read path.
- */
-export type FulltextSpillSink = (
-  text: string,
-) => Promise<
-  { readonly locator: string; readonly bytes: number; readonly retrievalHint: string } | undefined
->
+import type { FulltextSpillSink } from '../fulltext-spill.js'
 
 /**
  * The full-text deps. `enhancer` is the optional document-enrichment slot the
@@ -99,6 +90,8 @@ export interface FulltextDocument {
   readonly sourceKind: 'attachment' | 'url'
   /** Display label using an attachment ref or URL origin. */
   readonly sourceLabel: string
+  readonly item?: import('../types.js').ZoteroFulltextItem
+  readonly attachmentContentType?: string
   readonly artifact?: Extract<FulltextLookupResult, { kind: 'hit' }>['provenance']
   readonly coverage?: import('../types.js').ZoteroCoverage
   readonly attachmentRef?: string
@@ -200,13 +193,22 @@ export async function readFulltextDocument(
         ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
       )
     }
+    if (outcome.sourceKind === 'attachment' && outcome.attachmentRef === undefined)
+      throw new ZoteroError(
+        'The parsed attachment artifact has no attachment identity.',
+        ZOTERO_UNEXPECTED,
+      )
+    const identity =
+      outcome.attachmentRef === undefined
+        ? {}
+        : await fulltextIdentityOf(deps.client, outcome.attachmentRef, signal)
     return {
       text: outcome.text,
       textFormat: outcome.format,
       sourceKind: outcome.sourceKind,
       sourceLabel: outcome.sourceLabel,
       artifact: outcome.provenance,
-      ...(outcome.attachmentRef === undefined ? {} : { attachmentRef: outcome.attachmentRef }),
+      ...identity,
     }
   }
   const ref = requireSupportedLocalRef(parseSupportedRef(source.ref, ['attachment']))
@@ -227,6 +229,7 @@ export async function readFulltextDocument(
   if (outcome.status === 'unindexed') {
     throw new ZoteroError(NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT)
   }
+  const identity = await fulltextIdentityOf(deps.client, attachmentRef, signal)
   return {
     text: outcome.text,
     textFormat: outcome.textFormat,
@@ -234,13 +237,13 @@ export async function readFulltextDocument(
     sourceLabel: attachmentRef,
     ...(outcome.artifact === undefined ? {} : { artifact: outcome.artifact }),
     ...(outcome.coverage === undefined ? {} : { coverage: outcome.coverage }),
-    attachmentRef,
+    ...identity,
   }
 }
 
 /**
- * Apply the call's input bound, then take one exact character window.
- * Character slicing keeps consecutive windows losslessly joinable through
+ * Apply the call's input bound, then take a UTF-16 window without splitting a surrogate pair.
+ * Consecutive windows remain losslessly joinable through
  * `nextStart`. The bounded whole text rides out with the window so the caller
  * can offer a one-handle copy without re-truncating.
  */
@@ -259,10 +262,29 @@ export function fulltextWindowOf(
     )
   }
   const offset = Math.min(Math.floor(start), totalChars)
-  const end = Math.min(totalChars, offset + Math.max(1, Math.floor(maxChars)))
+  if (
+    offset > 0 &&
+    /[\uDC00-\uDFFF]/.test(bounded.text[offset]!) &&
+    /[\uD800-\uDBFF]/.test(bounded.text[offset - 1]!)
+  ) {
+    throw new ZoteroError('start must not split a UTF-16 surrogate pair.', ZOTERO_INVALID_ARGUMENT)
+  }
+  let end = Math.min(totalChars, offset + Math.max(1, Math.floor(maxChars)))
+  if (
+    end < totalChars &&
+    /[\uD800-\uDBFF]/.test(bounded.text[end - 1]!) &&
+    /[\uDC00-\uDFFF]/.test(bounded.text[end]!)
+  ) {
+    // A one-code-unit window beginning with a pair must still advance.
+    end += end - offset === 1 ? 1 : -1
+  }
   const isTruncated = end < totalChars
   const read: import('../types.js').ZoteroFulltextRead = {
     sourceKind: document.sourceKind,
+    ...(document.item === undefined ? {} : { item: document.item }),
+    ...(document.attachmentContentType === undefined
+      ? {}
+      : { attachmentContentType: document.attachmentContentType }),
     sourceLabel: document.sourceLabel,
     textFormat: document.textFormat,
     ...(document.artifact === undefined ? {} : { artifact: document.artifact }),
@@ -310,13 +332,11 @@ export function chunkFulltext(
   perSourceChars: number,
   limits: LocalApiLimits,
 ): {
-  readonly bounded: string
   readonly inputTruncated: boolean
   readonly chunks: readonly EvidenceChunk[]
 } {
   const bounded = truncateText(text, perSourceChars)
   return {
-    bounded: bounded.text,
     inputTruncated: bounded.truncated,
     chunks: chunkText(bounded.text, limits.fulltextChunkWords, limits.maxEvidenceChars),
   }
@@ -378,12 +398,11 @@ export function attachmentFactOf(
  * Three bounds meet here, all of them about the call rather than the work:
  * at most the configured `retrieveAttachmentCap` attachments are read at all
  * (the rest report `unread` instead of silently vanishing), the whole call
- * accepts at most `maxFulltextChars` characters, split evenly across the
- * sources it reads, so no single file can starve the others and the result
+ * accepts at most `maxFulltextChars` code units, shared among sources with text.
+ * Short sources return unused quota to longer ones, so no source can starve the others and the result
  * does not depend on which read finished first, and an unindexed member
- * degrades alone rather than failing the call. Each file is chunked as it
- * arrives, so its full text is released instead of being held for a ranking
- * pass at the end.
+ * degrades alone rather than failing the call. Workers retain only a bounded
+ * prefix per source until the deterministic allocation, then release it after chunking.
  */
 export async function readFulltextSources(
   deps: FulltextDeps,
@@ -393,11 +412,10 @@ export async function readFulltextSources(
   signal: AbortSignal | undefined,
 ): Promise<FulltextSource[]> {
   const read = candidates.slice(0, deps.limits.retrieveAttachmentCap)
-  const perSourceChars = Math.max(1, Math.floor(deps.limits.maxFulltextChars / read.length))
-  const results = await mapWithConcurrency(
+  const loaded = await mapWithConcurrency(
     read,
     deps.limits.graphConcurrency,
-    async (candidate, poolSignal): Promise<FulltextSource> => {
+    async (candidate, poolSignal) => {
       const base = {
         key: candidate.key,
         ...(candidate.contentType !== undefined ? { contentType: candidate.contentType } : {}),
@@ -419,20 +437,46 @@ export async function readFulltextSources(
         },
         poolSignal,
       )
-      if (outcome.status === 'unindexed') return { ...base, status: 'unindexed' }
-      const chunked = chunkFulltext(outcome.text, perSourceChars, deps.limits)
+      if (outcome.status === 'unindexed') return { ...base, outcome, inputTruncated: false }
+      const bounded = truncateText(outcome.text, deps.limits.maxFulltextChars)
       return {
         ...base,
-        status: 'indexed',
-        textFormat: outcome.textFormat,
-        ...(outcome.artifact === undefined ? {} : { artifact: outcome.artifact }),
-        ...(outcome.coverage === undefined ? {} : { coverage: outcome.coverage }),
-        inputTruncated: chunked.inputTruncated,
-        chunks: chunked.chunks,
+        outcome: { ...outcome, text: bounded.text },
+        inputTruncated: bounded.truncated,
       }
     },
     { signal },
   )
+  const quotas = new Map<number, number>()
+  const contributors = loaded
+    .flatMap((source, index) =>
+      source.outcome.status === 'indexed' && source.outcome.text.length > 0
+        ? [{ index, length: source.outcome.text.length }]
+        : [],
+    )
+    .sort((a, b) => a.length - b.length || a.index - b.index)
+  let remaining = deps.limits.maxFulltextChars
+  for (let index = 0; index < contributors.length; index++) {
+    const source = contributors[index]!
+    const quota = Math.min(source.length, Math.floor(remaining / (contributors.length - index)))
+    quotas.set(source.index, quota)
+    remaining -= quota
+  }
+  const results = loaded.map((source, index): FulltextSource => {
+    const { outcome, key, contentType } = source
+    const base = { key, ...(contentType === undefined ? {} : { contentType }) }
+    if (outcome.status === 'unindexed') return { ...base, status: 'unindexed' }
+    const chunked = chunkFulltext(outcome.text, quotas.get(index) ?? 0, deps.limits)
+    return {
+      ...base,
+      status: 'indexed',
+      textFormat: outcome.textFormat,
+      ...(outcome.artifact === undefined ? {} : { artifact: outcome.artifact }),
+      ...(outcome.coverage === undefined ? {} : { coverage: outcome.coverage }),
+      inputTruncated: source.inputTruncated === true || chunked.inputTruncated,
+      chunks: chunked.chunks,
+    }
+  })
   return [
     ...results,
     ...candidates.slice(deps.limits.retrieveAttachmentCap).map((candidate): FulltextSource => ({

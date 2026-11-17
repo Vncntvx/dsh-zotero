@@ -9,7 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import type { HostLane } from '../helpers/lanes/host-lane.js'
-import { setupHostLane } from '../helpers/lanes/host-lane.js'
+import { setupHostLane, commitLive } from '../helpers/lanes/host-lane.js'
+import { resultStorage } from '../helpers/result-storage.js'
 import { serveFulltext, serveItemGraph } from '../helpers/server/serve.js'
 import { attachmentRef, itemRef } from '../helpers/server/keys.js'
 import type { FulltextEnhancer } from '../../src/local/fulltext-enhancer.js'
@@ -203,6 +204,47 @@ describe('mode exclusivity', () => {
 })
 
 describe('fulltext delivery', () => {
+  it('preserves a configured 20000-character window and its continuation in file delivery', async () => {
+    await commitLive(lane, { fulltextWindowChars: 20_000 })
+    const stored = resultStorage(lane.ctx)
+    const text = '完整窗口内容'.repeat(4000)
+    installEnhancer(text)
+    const result = await lane.runTool('zotero_retrieve', {
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: REF },
+      start: 0,
+    })
+    expect(result.isError).toBe(false)
+    const receipt = result.value as { delivery: string; file: { attachmentId: string } }
+    expect(receipt.delivery).toBe('file')
+    const bytes = stored.files.get(receipt.file.attachmentId)
+    expect(bytes).toBeDefined()
+    const saved = JSON.parse(new TextDecoder().decode(bytes)) as {
+      data: {
+        fulltext: {
+          text: string
+          start: number
+          end: number
+          nextStart: number
+          isTruncated: boolean
+        }
+      }
+    }
+    expect(saved.data.fulltext).toMatchObject({
+      text: text.slice(0, 20_000),
+      start: 0,
+      end: 20_000,
+      nextStart: 20_000,
+      isTruncated: true,
+    })
+    expect(result.content.some((block) => block.type === 'file')).toBe(true)
+  })
+
+  it('explains before a call that noMatch does not establish absence from the document', () => {
+    expect(lane.tool('zotero_retrieve')!.description).toContain(
+      'noMatch never means the item is silent on the subject',
+    )
+  })
   it('delivers a window inline and renders the continuation instruction', async () => {
     installEnhancer(MARKDOWN)
     const result = await lane.runTool('zotero_retrieve', {

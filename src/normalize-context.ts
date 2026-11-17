@@ -47,7 +47,8 @@ export function plainNoteText(value: unknown): string {
 }
 
 export function truncateText(text: string, max: number): { text: string; truncated: boolean } {
-  return text.length > max
-    ? { text: text.slice(0, max), truncated: true }
-    : { text, truncated: false }
+  if (text.length <= max) return { text, truncated: false }
+  let end = max
+  if (end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) && /[\uDC00-\uDFFF]/.test(text[end]!)) end--
+  return { text: text.slice(0, end), truncated: true }
 }

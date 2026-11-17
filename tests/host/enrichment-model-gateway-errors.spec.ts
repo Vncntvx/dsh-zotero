@@ -71,7 +71,7 @@ async function setupGateway() {
 
   const fs = {
     realpath: vi.fn(async (path: string) => path),
-    stat: vi.fn(async () => ({ isDirectory: () => true })),
+    stat: vi.fn(async () => ({ isDirectory: () => true, mode: 0o700, uid: 1000 })),
     access: vi.fn(async () => {
       throw new Error('fixture model directory is not writable')
     }),

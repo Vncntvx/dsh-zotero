@@ -23,6 +23,29 @@ const invalidArguments: ToolExecutionResult = {
 }
 
 describe('parameterCorrectionOf', () => {
+  it('pairs a misspelled optional key after required values were supplied', () => {
+    expect(
+      parameterCorrectionOf(
+        {
+          type: 'object',
+          properties: { query: { type: 'string' }, excludeTags: { type: 'array' } },
+          required: ['query'],
+        },
+        { query: 'attention', excludeTag: ['archived'] },
+        invalidArguments,
+      ),
+    ).toEqual({ input: 'excludeTag', expected: 'excludeTags' })
+  })
+
+  it('can suggest a declared optional name when the schema has no required list', () => {
+    expect(
+      parameterCorrectionOf(
+        { type: 'object', properties: { excludeTags: { type: 'array' } } },
+        { excludeTag: ['archived'] },
+        invalidArguments,
+      ),
+    ).toEqual({ input: 'excludeTag', expected: 'excludeTags' })
+  })
   it('pairs one undeclared argument with the missing required parameter', () => {
     expect(parameterCorrectionOf(parameters, { ref: 'x' }, invalidArguments)).toEqual({
       input: 'ref',

@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ZoteroHttpClient } from '../../../src/http-client.js'
 import { ZOTERO_UNEXPECTED } from '../../../src/errors.js'
+import { parseRef } from '../../../src/refs.js'
 import { runSearch } from '../../../src/local/search-domain.js'
 import { createSearchIndexCaches } from '../../../src/local/search-index.js'
 import { ScopeDirectory } from '../../../src/local/scope-directory.js'
@@ -428,10 +429,11 @@ describe('exact panel filters', () => {
   })
 
   it('rejects inverted year bounds and cancellation without returning a partial total', async () => {
-    const { search } = setup()
+    const { search, getJson } = setup()
     await expect(search({ yearFrom: 2024, yearTo: 2023 })).rejects.toMatchObject({
       code: 'ZOTERO_INVALID_ARGUMENT',
     })
+    expect(getJson).not.toHaveBeenCalled()
     const controller = new AbortController()
     controller.abort()
     await expect(search({ hasAttachment: true }, controller.signal)).rejects.toThrow()
@@ -522,6 +524,44 @@ describe('exact panel filters', () => {
 })
 
 describe('trash-scope filtered pages', () => {
+  it('rescans once when individual cached-page reads span different library versions', async () => {
+    const env = setup()
+    await env.search({ includeTrashed: true, yearFrom: 2023, yearTo: 2023 })
+    const before = env.listingStarts().length
+    const read = env.getJson.getMockImplementation()!
+    env.getJson.mockImplementation(async (...args) => {
+      const response = await read(...args)
+      if (args[0].endsWith('/items/ITEM0101')) response.headers.set('Last-Modified-Version', '8')
+      return response
+    })
+    const result = await env.search({
+      includeTrashed: true,
+      yearFrom: 2023,
+      yearTo: 2023,
+      offset: 1,
+    })
+    expect(result.items.map((item) => parseRef(item.ref).key)).toEqual(['ITEM0101', 'ITEM0102'])
+    expect(env.listingStarts().length).toBe(before * 2)
+  })
+
+  it('fails with an explicit code after the single rescan still cannot produce a consistent page', async () => {
+    const env = setup(1001)
+    const read = env.getJson.getMockImplementation()!
+    env.getJson.mockImplementation(async (...args) => {
+      const response = await read(...args)
+      if (args[0].endsWith('/items/ITEM0001')) response.headers.set('Last-Modified-Version', '8')
+      return response
+    })
+    await expect(
+      env.search({ includeTrashed: true, yearFrom: 2020, yearTo: 2020 }),
+    ).rejects.toMatchObject({
+      code: ZOTERO_UNEXPECTED,
+      message: 'The library changed while a filtered search page was served; retry the request.',
+    })
+    const singles = env.getJson.mock.calls.filter(([path]) => /\/items\/[A-Z0-9]{8}$/.test(path))
+    expect(singles).toHaveLength(10)
+  })
+
   it('serves a fresh trash-filtered page from the scan rows without re-reading keys', async () => {
     const env = setup(250)
     const result = await env.search({ includeTrashed: true, yearFrom: 2023, yearTo: 2023 })

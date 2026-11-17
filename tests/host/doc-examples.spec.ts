@@ -263,7 +263,7 @@ function docDefaultOf(cell: string | undefined): unknown {
   // Required markers and prose ("config cap") are not defaults.
   if (/^(✓|required|必填|config cap|配置上限)$/.test(value)) return UNPARSED
   try {
-    return JSON.parse(value)
+    return JSON.parse(asJsonLiteral(value))
   } catch {
     return UNPARSED
   }
@@ -337,10 +337,8 @@ describe('documented tool calls match the tool schemas', () => {
   })
 
   it('names only declared parameters', () => {
-    // The compiled parameter schema is an open object, so an unknown argument
-    // passes the host's validator and is then ignored at execution time: a
-    // docs example with `itemType` where the tool wants `itemTypes` reads as
-    // a working filter and silently is none.
+    // Check names separately so documentation failures name the exact misspelling;
+    // the registered closed schema also refuses these at execution.
     const violations: string[] = []
     for (const example of examples) {
       const tool = ctx.tools.get(example.call)
@@ -356,6 +354,87 @@ describe('documented tool calls match the tool schemas', () => {
       }
     }
     expect(violations).toEqual([])
+  })
+
+  it('documents every output discriminator arm in each tool section', () => {
+    const armsOf = (value: unknown): string[] => {
+      if (value === null || typeof value !== 'object') return []
+      const schema = value as {
+        oneOf?: unknown[]
+        properties?: Record<string, { const?: unknown; enum?: unknown[] }>
+      }
+      if (schema.oneOf) return [...new Set(schema.oneOf.flatMap(armsOf))]
+      const properties = schema.properties ?? {}
+      if (properties.delivery?.const === 'inline') return armsOf(properties.data)
+      if (properties.delivery?.const === 'file') return []
+      return ['kind', 'mode'].flatMap((name) => {
+        const field = properties[name]
+        return field === undefined
+          ? []
+          : [field.const, ...(field.enum ?? [])].filter(
+              (entry): entry is string => typeof entry === 'string',
+            )
+      })
+    }
+    const violations: string[] = []
+    for (const file of ['docs/tools.md', 'docs/tools.en.md']) {
+      const text = readFileSync(new URL(file, REPO_ROOT), 'utf8')
+      for (const name of ALL_TOOL_NAMES) {
+        const heading = new RegExp(`^#{2,3} ${name}\\s*$`, 'm').exec(text)
+        if (heading === null) throw new Error(`Missing ${name}`)
+        const section = text
+          .slice(heading.index + heading[0].length)
+          .split(/^#{2,3} (?:zotero_|scholarly_)/m)[0]!
+        const arms = armsOf(ctx.tools.get(name)!.output.schema)
+        for (const arm of arms)
+          if (!section.includes(arm)) violations.push(`${file} ${name}: missing output arm ${arm}`)
+        if (
+          arms.includes('committed-unverified') &&
+          !/(?:不可重试|不得重试|do not retry|must not retry|never retry|not retryable)/i.test(
+            section,
+          )
+        )
+          violations.push(
+            `${file} ${name}: committed-unverified must explain that the committed write cannot be retried`,
+          )
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('documents every canonical output field in both tool guides', () => {
+    const fieldsOf = (value: unknown): string[] => {
+      if (value === null || typeof value !== 'object') return []
+      const schema = value as { oneOf?: unknown[]; properties?: Record<string, unknown> }
+      if (Array.isArray(schema.oneOf)) return [...new Set(schema.oneOf.flatMap(fieldsOf))].sort()
+      const properties = schema.properties ?? {}
+      const delivery = properties.delivery as { const?: unknown } | undefined
+      if (delivery?.const === 'inline') return fieldsOf(properties.data)
+      if (delivery?.const === 'file') return [] // The shared delivery section documents the receipt envelope.
+      return Object.keys(properties).sort()
+    }
+    for (const file of ['docs/tools.md', 'docs/tools.en.md']) {
+      const text = readFileSync(new URL(file, REPO_ROOT), 'utf8')
+      for (const name of ALL_TOOL_NAMES) {
+        const heading = new RegExp(`^#{2,3} ${name}\\s*$`, 'm').exec(text)
+        expect(heading, `${file}: ${name} heading`).not.toBeNull()
+        const section = text
+          .slice(heading!.index + heading![0].length)
+          .split(/^#{2,3} (?:zotero_|scholarly_)/m)[0]!
+        const inventory = section
+          .split('\n')
+          .find(
+            (line) =>
+              line.startsWith('输出字段（按结果臂）') ||
+              line.startsWith('Output fields by result arm'),
+          )
+        expect(inventory, `${file}: ${name} output inventory`).toBeDefined()
+        const documented = [...(inventory ?? '').matchAll(/`([A-Za-z][A-Za-z0-9]*)`/g)]
+          .map((match) => match[1])
+          .sort()
+        expect(documented, `${file}: ${name}`).toEqual(fieldsOf(ctx.tools.get(name)!.output.schema))
+      }
+    }
   })
 
   it('documents exactly the declared parameters in the tool reference', () => {

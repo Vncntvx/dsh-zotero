@@ -1,3 +1,4 @@
+import { serveExportText } from '../helpers/server/export.ts'
 /**
  * The `zotero_export` tool surface: citation pairing and caller ordering,
  * style and locale pass-through, verbatim bibliography text, bibtex
@@ -9,12 +10,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  JOBS_UNAVAILABLE_MESSAGE,
-  RUN_IN_BACKGROUND_DISABLED_MESSAGE,
-  jobPromotedMessage,
-  jobStartedMessage,
-} from '../../src/job-runner.js'
+import { jobPromotedMessage, jobStartedMessage } from '../../src/job-runner.js'
 import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.js'
 import { resultStorage } from '../helpers/result-storage.js'
 import { expectValue, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.js'
@@ -59,8 +55,8 @@ describe('zotero_export jobs', () => {
       })
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
-      expect((result.content[0] as { text: string }).text).toBe(
-        `Error: invalid arguments: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
+      expect((result.content[0] as { text: string }).text).toContain(
+        'run_in_background" is not a declared property',
       )
       expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
@@ -73,10 +69,10 @@ describe('zotero_export jobs', () => {
       })
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
-      expect((result.content[0] as { text: string }).text).toBe(
-        `Error: ${JOBS_UNAVAILABLE_MESSAGE}`,
+      expect((result.content[0] as { text: string }).text).toContain(
+        'run_in_background" is not a declared property',
       )
-      expect(result.error?.info).toMatchObject({ code: 'TOOL_CONTEXT_UNAVAILABLE' })
+      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
 
     it('starts a background job and returns immediately when run_in_background is requested', async () => {
@@ -175,7 +171,7 @@ describe('zotero_export jobs', () => {
 
     it('keeps a large inline export inside the presentation budget without shipping its body', async () => {
       const body = 'TY  - JOUR\n' + 'x'.repeat(12_000)
-      lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) => helpers.text(body))
+      serveExportText(lane.mock, body)
 
       const result = await Promise.resolve(
         runTool('zotero_export', {
@@ -236,9 +232,7 @@ describe('zotero_export jobs', () => {
     })
 
     it('writes export to outputFile without publishing a deliverable', async () => {
-      lane.mock.route('GET', '/api/users/0/items', (req, res, helpers) =>
-        helpers.text('@article{A2023,\n  title={Paper A}\n}'),
-      )
+      serveExportText(lane.mock, '@article{A2023,\n  title={Paper A}\n}')
       const appendedEvents: Array<{ type: string; data: unknown }> = []
       const fakeSession = {
         header: { id: 'session-deliv', cwd: '/workspace' },
@@ -293,7 +287,11 @@ describe('zotero_export jobs', () => {
         if (search.get('format') === 'csv') {
           return helpers.text(mockCsv)
         }
-        return helpers.raw(400, {}, '')
+        return helpers.json(
+          (search.get('itemKey') ?? '')
+            .split(',')
+            .map((key) => ({ key, data: { key, itemType: 'journalArticle', title: 'CSV item' } })),
+        )
       })
 
       const result = expectValue(

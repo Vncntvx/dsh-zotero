@@ -1,4 +1,5 @@
 /** Cancel, revoke, expire and dispose real owned read leases. */
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { artifactReadsFixture, type ArtifactReadsFixture } from './support/artifact-reads.ts'
 import { deferred } from '../helpers/sync.ts'
@@ -24,6 +25,46 @@ describe('document read lifetime', () => {
     await host.release(first.requestId)
     host.limits({ maxBytes: 1 })
     await expect(host.open()).rejects.toMatchObject({ code: 'ZOTERO_PROVIDER_UNAVAILABLE' })
+  })
+
+  it('immediately reuses released preparation capacity without retaining lease timers', async () => {
+    const host = await fixture()
+    host.limits({ maxOpen: 1 })
+    vi.useFakeTimers()
+    const baseline = vi.getTimerCount()
+    for (let index = 0; index < 130; index++) {
+      const opened = await host.open()
+      await host.release(opened.requestId)
+      expect(vi.getTimerCount()).toBe(baseline)
+    }
+    expect((await host.open()).kind).toBe('opened')
+  })
+
+  it('revokes a duplicate open already awaiting ownership when its lease is released', async () => {
+    const host = await fixture()
+    const opened = await host.open()
+    const duplicate = host.open(opened.requestId)
+    const checked = expect(duplicate).rejects.toMatchObject({ code: 'ZOTERO_NOT_FOUND' })
+    await host.release(opened.requestId)
+    await checked
+    expect(host.reads).toHaveBeenCalledOnce()
+  })
+
+  it('keeps pre-admission cancellations in an independent bounded budget', async () => {
+    const host = await fixture()
+    host.limits({ maxOpen: 1 })
+    vi.useFakeTimers()
+    const cancelled = Array.from({ length: 64 }, () => randomUUID())
+    for (const id of cancelled) await host.release(id)
+    await expect(host.release(randomUUID())).rejects.toMatchObject({
+      code: 'ZOTERO_PROVIDER_UNAVAILABLE',
+      message: expect.stringContaining('cancelled document requests'),
+    })
+    await expect(host.open(cancelled[0]!)).rejects.toMatchObject({ code: 'ZOTERO_NOT_FOUND' })
+    const opened = await host.open()
+    await host.release(opened.requestId)
+    await vi.advanceTimersByTimeAsync(120_001)
+    await expect(host.release(randomUUID())).resolves.toEqual({ kind: 'released' })
   })
 
   it('expires an abandoned opening response using a single deadline', async () => {

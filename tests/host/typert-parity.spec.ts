@@ -1,12 +1,5 @@
 /**
- * The hand-written typert manifest against the services it describes.
- *
- * The workspace generator cannot run in this repository (it reads a pnpm
- * workspace layout and `tsconfig.host.json`/`tsconfig.client.json` under
- * `packages/**`), so `src/typert.ts` is written by hand. Nothing else checks
- * that its `members[].name` list still names the methods the gateway will
- * actually look up: a renamed or deleted endpoint would keep compiling and
- * fail at call time with "method not found".
+ * Check descriptor-derived Typert members against the actual services.
  *
  * Two invariants ride here. Every wire method a service exposes is declared,
  * and every declared member is a method the service exposes. A prototype
@@ -18,6 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { TYPERT_MANIFEST } from '../../src/typert.js'
+import { ZOTERO_INVOCATION_BY_METHOD } from '../../src/wire-schemas.js'
 import { ZoteroRuntime } from '../../src/remote.js'
 import { ZoteroLibraryService } from '../../src/library/service.js'
 import { EnrichmentService } from '../../src/enrichment/service.js'
@@ -68,7 +62,11 @@ function prototypeMembers(klass: { prototype: object }): string[] {
     .sort()
 }
 
-describe('the hand-written typert manifest matches the services it describes', () => {
+describe('the typert manifest matches the services it describes', () => {
+  it('keys every invocation by the method it actually dispatches', () => {
+    for (const [method, invocation] of Object.entries(ZOTERO_INVOCATION_BY_METHOD))
+      expect(invocation.method).toBe(method)
+  })
   it('declares exactly the wire methods each service exposes', () => {
     const violations: string[] = []
     for (const service of TYPERT_MANIFEST.model.services) {

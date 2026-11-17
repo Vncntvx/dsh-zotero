@@ -72,6 +72,7 @@ interface VersionsPage {
   readonly total: number
   /** The read covered the whole range rather than a build-imposed slice of it. */
   readonly complete: boolean
+  readonly derived?: boolean
   readonly serverId?: string
   readonly version?: number
 }
@@ -123,6 +124,7 @@ async function resolveTrashRead(
       entries: trashEntries,
       total: trashEntries.length,
       complete: allRead.value.complete && live.value.complete,
+      derived: true,
       ...(allRead.value.serverId !== undefined ? { serverId: allRead.value.serverId } : {}),
       ...(allRead.value.version !== undefined ? { version: allRead.value.version } : {}),
     },
@@ -245,9 +247,13 @@ async function readItemSpace(
     // top/trash digests, and withhold only the derived child split unless
     // both whole reads prove it.
     changed.items = display(top.value.entries)
-    changed.trashedItems = display(trash.value.entries)
     totals.items = top.value.total
-    totals.trashedItems = trash.value.total
+    if (!trash.value.derived || trash.value.complete) {
+      changed.trashedItems = display(trash.value.entries)
+      totals.trashedItems = trash.value.total
+    } else {
+      recordUnobservable('items', 'unreadable')
+    }
     if (live.value.complete && top.value.complete) {
       const topKeys = new Set(top.value.entries.map((entry) => entry.key))
       const childEntries = live.value.entries.filter((entry) => !topKeys.has(entry.key))
@@ -297,6 +303,11 @@ export async function changes(
     throw new ZoteroError('include must list at least one resource kind', ZOTERO_INVALID_ARGUMENT)
   }
   const since = request.since
+  if (since !== undefined && !isVersion(since.version))
+    throw new ZoteroError(
+      'since.version must be a non-negative safe integer',
+      ZOTERO_INVALID_ARGUMENT,
+    )
 
   // A version is a counter of one library's transactions, so a cursor only
   // means something in the library it came from. The instance claim is
@@ -465,7 +476,8 @@ export async function changes(
   ): Promise<ResourceRead> => {
     const payload = await attempt(async () => {
       const params = new URLSearchParams()
-      params.set('since', String(since.version))
+      // Fulltext has an independent counter and requires since=0 for a full listing.
+      params.set('since', versioned ? String(since.version) : '0')
       params.set('format', 'versions')
       if (options?.includeTrashed) {
         params.set('includeTrashed', '1')

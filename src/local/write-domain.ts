@@ -28,6 +28,7 @@
  * @module dsh-zotero/local/write-domain
  */
 
+import { numericHeader } from './wire.js'
 import { ZOTERO_LIBRARY_VERSION_HEADER } from '../constants.js'
 import {
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
@@ -43,13 +44,7 @@ import {
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
 } from '../errors.js'
-import {
-  asRecord,
-  asString,
-  isNonNegativeSafeInteger,
-  isObjectKey,
-  parseNonNegativeSafeInteger,
-} from '../json.js'
+import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
 import {
   formatRef,
   isRefString,
@@ -69,6 +64,7 @@ import {
 } from '../write-item-rules.js'
 import { receiptOfCommitUnknown, settleCreate } from './write-verdicts.js'
 import { proveItemRead } from './write-item-proof.js'
+import { submittedFieldsMatch } from './write-content-proof.js'
 import type { ItemSnapshot, WriteDomainDeps } from './write-deps.js'
 import type { WriteAuthorizer } from '../write-auth.js'
 import {
@@ -123,19 +119,36 @@ export async function withWriteKey<T>(
   signal: AbortSignal | undefined,
   send: (apiKey: string) => Promise<T>,
 ): Promise<T> {
+  const revokeRefusedGrant = async (key: string, refusal: unknown): Promise<void> => {
+    try {
+      await deps.authorizer.invalidate(serverId, key)
+    } catch (storageError) {
+      throw new ZoteroError(
+        'Zotero rejected the write key (401), and credentials storage could not revoke the rejected grant. Restore credentials storage before authorizing again.',
+        ZOTERO_WRITE_UNAUTHORIZED,
+        {
+          cause: new AggregateError(
+            [refusal, storageError],
+            'Write authorization refusal and credential revocation failure',
+            { cause: refusal },
+          ),
+        },
+      )
+    }
+  }
   return deps.authorizer.exclusive(signal, async () => {
     const first = await deps.authorizer.keyFor(serverId, signal)
     try {
       return await send(first.key)
     } catch (error) {
       if (!isWriteUnauthorized(error)) throw error
-      await deps.authorizer.invalidate(serverId, first.key)
+      await revokeRefusedGrant(first.key, error)
       const second = await deps.authorizer.keyFor(serverId, signal)
       try {
         return await send(second.key)
       } catch (retried) {
         if (isWriteUnauthorized(retried)) {
-          await deps.authorizer.invalidate(serverId, second.key)
+          await revokeRefusedGrant(second.key, retried)
           throw new ZoteroError(WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE, ZOTERO_WRITE_UNAUTHORIZED, {
             cause: retried,
           })
@@ -274,7 +287,7 @@ export function mergeTagList(
  * write will target. Only the operation's reader requires list state;
  * child items legitimately omit collections in Zotero's JSON.
  */
-async function readItem<S>(
+export async function readItemForWrite<S>(
   deps: WriteDomainDeps,
   ref: ZoteroObjectRef,
   serverId: string,
@@ -342,7 +355,7 @@ export async function readRecordForWrite(
   return {
     data,
     version,
-    libraryVersion: parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER)),
+    libraryVersion: numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER),
     serverId: observed ?? serverId,
   }
 }
@@ -417,7 +430,7 @@ export async function withItemStateWrite<S, T>(
 ): Promise<T> {
   const serverId = await ensureServerId(deps, signal)
   const ref = requireWritableRefAtServer(item, ['item'], serverId)
-  const snapshot = await readItem(deps, ref, serverId, readState, signal)
+  const snapshot = await readItemForWrite(deps, ref, serverId, readState, signal)
   // The read pins the serving instance and always reports it, so the write
   // carries the identity the item was actually read under.
   const send = (body: Record<string, unknown>): Promise<{ libraryVersion: number }> =>
@@ -542,7 +555,7 @@ export async function createItem(
     ):
       | { savedTitle: string | undefined; savedTags: string[]; savedCollections: string[] }
       | undefined => {
-      if (asString(data.itemType) !== checked.itemType) return undefined
+      if (!submittedFieldsMatch(data, entry)) return undefined
       const savedTags = tagsOf(data)
       const savedCollections = strictCollectionKeysOf(data)
       if (savedTags === undefined || savedCollections === undefined) return undefined

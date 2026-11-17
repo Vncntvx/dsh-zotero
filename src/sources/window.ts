@@ -6,7 +6,7 @@
  */
 
 import { ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS } from '../constants.js'
-import type { SourceItem } from './model.js'
+import type { SourceItem, SourceWorkspace } from './model.js'
 
 /**
  * Cut one item's row lists to the wire cap.
@@ -30,4 +30,33 @@ export function windowedItem(item: SourceItem): SourceItem {
     return item
   }
   return { ...item, searches, evidence, exports, fulltextReads }
+}
+
+/** Cache the compact broadcast view; complete rows stay behind the sourcePage endpoint. */
+export function createSourceWireView(): (
+  workspace: SourceWorkspace,
+  revision?: number,
+) => SourceWorkspace {
+  const items = new WeakMap<SourceItem, SourceItem>()
+  const views = new WeakMap<SourceWorkspace, SourceWorkspace>()
+  return (workspace, revision) => {
+    const previous = views.get(workspace)
+    if (previous !== undefined && previous.detailsRevision === revision) return previous
+    const sources = workspace.sources.map((item) => {
+      const cached = items.get(item)
+      if (cached !== undefined) return cached
+      const summary = { ...item, searches: [], evidence: [], exports: [], fulltextReads: [] }
+      items.set(item, summary)
+      return summary
+    })
+    const compact = {
+      ...workspace,
+      detailsDeferred: true as const,
+      ...(revision === undefined ? {} : { detailsRevision: revision }),
+      sources,
+      exports: [],
+    }
+    views.set(workspace, compact)
+    return compact
+  }
 }

@@ -291,6 +291,8 @@ async function browseCollections(
   const serverId = observedServerId ?? parentServerId
   const total = requireTotalResults(headers, 'collections')
   const rows = requireArrayBody(json, 'collections')
+  const libraryVersion = requireLibraryVersionHeader(headers, 'collections')
+  const next = nextOffsetOrFail(request.offset, rows.length, total, 'collections', request.limit)
   // Ancestor names resolve in parallel: each row's chain is its own TTL-cached
   // walk, and a page of siblings shares most ancestors after the first fetch.
   const resolved = await Promise.all(
@@ -326,12 +328,12 @@ async function browseCollections(
   // a page-local re-sort of a server-paged window would order each page
   // internally while scrambling the sequence across pages.
   return browsePage('collections', {
-    libraryVersion: requireLibraryVersionHeader(headers, 'collections'),
+    libraryVersion,
     items,
     total,
     offset: request.offset,
     // Server-paged: an in-range page with no rows contradicts the total.
-    next: nextOffsetOrFail(request.offset, items.length, total, 'collections'),
+    next,
     library,
     ...(serverId !== undefined ? { serverId } : {}),
   })
@@ -356,6 +358,14 @@ async function browseSavedSearches(
   const serverId = serverIdFromHeaders(headers)
   const rawRows = requireArrayBody(json, 'saved searches')
   const total = requireTotalResults(headers, 'saved searches')
+  const libraryVersion = requireLibraryVersionHeader(headers, 'saved searches')
+  const next = nextOffsetOrFail(
+    request.offset,
+    rawRows.length,
+    total,
+    'saved searches',
+    request.limit,
+  )
   const entries: ScopeNameEntry[] = []
   const condByKey = new Map<string, ZoteroSavedSearchCondition[]>()
   for (const row of rawRows) {
@@ -384,11 +394,11 @@ async function browseSavedSearches(
   // listing, and a page-local re-sort of a server-paged window would order
   // each page internally while scrambling the sequence across pages.
   return browsePage('savedSearches', {
-    libraryVersion: requireLibraryVersionHeader(headers, 'saved searches'),
+    libraryVersion,
     items,
     total,
     offset: request.offset,
-    next: nextOffsetOrFail(request.offset, items.length, total, 'saved searches'),
+    next,
     library,
     ...(serverId !== undefined ? { serverId } : {}),
   })
@@ -479,7 +489,7 @@ async function browseTags(
     offset: request.offset,
     // Measured on the raw rows: a malformed row throws rather than being
     // dropped, so raw and normalized row counts agree here.
-    next: nextOffsetOrFail(request.offset, rawRows.length, total, 'tags'),
+    next: nextOffsetOrFail(request.offset, rawRows.length, total, 'tags', request.limit),
     library,
     ...(serverId !== undefined ? { serverId } : {}),
   })

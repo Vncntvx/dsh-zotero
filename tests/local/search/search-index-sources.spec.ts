@@ -40,7 +40,6 @@ describe('searchIndexKeyOf defaults', () => {
       mode: 'metadata',
       itemLevel: 'top',
       tagMatch: 'all',
-      attachmentIndexed: false,
       cacheGeneration: 0,
     })
   })

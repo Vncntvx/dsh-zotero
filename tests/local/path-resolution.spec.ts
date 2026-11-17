@@ -20,6 +20,19 @@ import {
 } from '../../src/local/path-resolution.js'
 import { zoteroError } from '../helpers/server/assert.js'
 
+it.each([
+  'file:///tmp/a%b.pdf',
+  'file:///tmp/a%zz.pdf',
+  'file://server/share/a%.pdf',
+  'file://wsl.localhost/Ubuntu/a%zz.pdf',
+  'file:///C:/a%2F..%2Fetc/file.pdf',
+  'file:///tmp/a%00.pdf',
+])('rejects an invalid encoded attachment location with its domain code (%s)', (url) => {
+  expect(() => parseAttachmentFileUrl(new URL(url))).toThrow(
+    expect.objectContaining({ code: ZOTERO_FILE_UNREADABLE }),
+  )
+})
+
 describe('isWsl and appendWslEnv', () => {
   it('detects WSL when WSL_DISTRO_NAME is set', () => {
     expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' }, 'linux')).toBe(true)

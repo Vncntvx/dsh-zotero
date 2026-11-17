@@ -24,9 +24,12 @@ import type { SupportedLocalLibrary } from '../types.js'
  * unclaimable when the claim is not also stored.
  */
 export function serverIdFromHeaders(headers: Headers, fallback?: string): string | undefined {
-  const value = headers.get(ZOTERO_SERVER_ID_HEADER)
-  if (value !== null && value.trim() !== '') return value
-  return fallback !== undefined && fallback.trim() !== '' ? fallback : undefined
+  return normalizedServerId(headers.get(ZOTERO_SERVER_ID_HEADER)) ?? normalizedServerId(fallback)
+}
+
+/** Normalize the identity at both header and persisted-cursor boundaries. */
+export function normalizedServerId(value: string | null | undefined): string | undefined {
+  return value?.trim() || undefined
 }
 
 /**

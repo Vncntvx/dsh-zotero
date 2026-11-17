@@ -1,6 +1,7 @@
+import { serveExportText } from '../helpers/server/export.ts'
 import { sandboxFixture } from '../helpers/sandbox-paths.ts'
 import { tmpdir } from 'node:os'
-/** Export completion includes file publication and spill. */
+/** Export completion includes atomic file publication and durable result delivery. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
@@ -41,9 +42,7 @@ function prepare(
   lane.ctx.provide('sandboxPolicy', { defaultMode: 'workspace-write', resolve: policy } as never)
   new SandboxedFileSystem(lane.ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
   lane.ctx.provide('workingDirectory', { ensure: async () => directory } as never)
-  lane.mock.route('GET', '/api/users/0/items', (_req, _res, helpers) =>
-    helpers.text('TY  - JOUR\n' + 'x'.repeat(17_000)),
-  )
+  serveExportText(lane.mock, 'TY  - JOUR\n' + 'x'.repeat(17_000))
   if (!lane.ctx.get('attachments')) resultStorage(lane.ctx)
   const saveText = vi.fn(async () => ({
     locator: 'spill://export',
@@ -62,7 +61,7 @@ function prepare(
             refs: ['zotero://user/0/item/ABCD1234'],
             format: 'ris',
             outputFile,
-            run_in_background: background,
+            ...(background ? { run_in_background: true } : {}),
           }),
         },
       ],
@@ -110,7 +109,7 @@ it.each([false, true])(
   },
 )
 
-it('keeps a published export completed when result persistence fails', async () => {
+it('reports failed result delivery while preserving an already published export file', async () => {
   const storage = resultStorage(lane.ctx)
   storage.save.mockRejectedValueOnce(new Error('store unavailable'))
   const jobs: RealJobs = await composeRealJobs(lane.ctx)
@@ -121,13 +120,15 @@ it('keeps a published export completed when result persistence fails', async () 
 
   const jobId = jobIdOf(batch)
   const outcome = await jobs.settled(JobId(jobId), caller)
-  expect(outcome.status).toBe('completed')
-  expect(jobs.registry.read(JobId(jobId), caller).result).toContain('TY  - JOUR')
+  expect(outcome.status).toBe('failed')
+  expect(outcome.detail).toContain('store unavailable')
+  expect(jobs.registry.read(JobId(jobId), caller).result).toBeUndefined()
+  expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
   expect(append).not.toHaveBeenCalled()
   expect(
     lane.ctx.zotero.diagnostics
       .snapshot(50)
-      .entries.some((entry) => entry.event === 'job.delivery'),
+      .entries.some((entry) => entry.event === 'job.outcome' && entry.level === 'error'),
   ).toBe(true)
 })
 

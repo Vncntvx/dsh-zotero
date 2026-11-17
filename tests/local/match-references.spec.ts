@@ -34,6 +34,20 @@ const hit = (overrides: Partial<ZoteroSearchItem> = {}): ZoteroSearchItem => ({
   ...overrides,
 })
 
+it('does not report author formatting as a reference correction', async () => {
+  const output = await matchReferences(
+    domainDeps(async () => result([hit()])),
+    {
+      references: [
+        { inputId: 'formatted', title: 'A Reference Title', authors: ['Dao, Tri'], year: 2024 },
+      ],
+      includeFieldDiff: true,
+    },
+  )
+  expect(output.items[0]?.status).toBe('matched')
+  expect(output.items[0]?.fieldDiff?.authors).toBeUndefined()
+})
+
 function result(items: ZoteroSearchItem[], total = items.length, offset = 0): ZoteroSearchResult {
   return {
     scope: { kind: 'library', library: { type: 'user', id: 0 } },

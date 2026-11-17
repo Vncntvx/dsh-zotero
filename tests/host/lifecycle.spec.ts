@@ -137,7 +137,7 @@ describe('prompt section', () => {
     expect(section!.text).toContain('zotero_search limit up to 20')
     expect(section!.text).toContain('zotero_retrieve passages up to 4')
     expect(section!.text).toContain('zotero_export refs up to 50')
-    expect(section!.text).toContain('Exceeding a cap errors')
+    expect(section!.text).toContain('Each listed cap rejects requests above its bound.')
     expect(section!.text).toContain('supplemental')
   })
 

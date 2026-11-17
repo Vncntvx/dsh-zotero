@@ -10,6 +10,7 @@
  * @module dsh-zotero/local/detail
  */
 
+import { attachmentTypeMessage } from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
@@ -77,14 +78,6 @@ interface ChildRowNeeds {
 }
 
 /**
- * The model-facing message for an attachment ref whose target is another item
- * type. Annotations hang off attachments, so the model has to re-aim the ref.
- */
-export function attachmentTargetKindMessage(itemType: string): string {
-  return `The referenced object is a ${itemType}, not an attachment; annotations hang off attachment refs.`
-}
-
-/**
  * Refuse an attachment ref unless the served row is itself an attachment. A
  * row with no itemType cannot be confirmed, which is a different failure from
  * a known other type and must not read as a blank type name.
@@ -96,7 +89,7 @@ export function assertAttachmentTarget(itemType: string, key: string): void {
   throw new ZoteroError(
     itemType === ''
       ? `The referenced object ${key} could not be confirmed as an attachment.`
-      : attachmentTargetKindMessage(itemType),
+      : attachmentTypeMessage(itemType),
     ZOTERO_INVALID_ARGUMENT,
   )
 }
@@ -497,11 +490,7 @@ export async function getChildPage(
     )
     return {
       kind: 'annotations',
-      page: childCollection(
-        partitioned.annotations,
-        deps.limits.maxAnnotationRecords,
-        pageMetaOf(fetched),
-      ),
+      page: childCollection(partitioned.annotations, deps.limits.maxAnnotationRecords, fetched),
     }
   }
   const fetched = await fetchChildPage(deps, {
@@ -534,7 +523,7 @@ export async function getChildPage(
         : ['annotation'],
   )
   const partitioned = partitionChildren(fetched.rows, ctx, deps.limits.maxNoteChars, kinds)
-  const meta = pageMetaOf(fetched)
+  const meta = fetched
   switch (request.kind) {
     case 'notes':
       return {
@@ -557,26 +546,6 @@ export async function getChildPage(
       }
     default:
       return assertNever(request.kind)
-  }
-}
-
-/** The page metadata one fetched child page reports. */
-function pageMetaOf(fetched: {
-  total: number
-  offset: number
-  limit: number
-  nextOffset?: number
-}): {
-  total: number
-  offset: number
-  limit: number
-  nextOffset?: number
-} {
-  return {
-    total: fetched.total,
-    offset: fetched.offset,
-    limit: fetched.limit,
-    ...(fetched.nextOffset !== undefined ? { nextOffset: fetched.nextOffset } : {}),
   }
 }
 

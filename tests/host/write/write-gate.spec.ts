@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * The write gate lives at the `ctx.zotero` seam, not in a tool.
  *
@@ -27,8 +28,9 @@ import {
   ZOTERO_CAPABILITY_UNAVAILABLE,
   ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
 } from '../../../src/errors.js'
-import type { ZoteroWriteCall } from '../../../src/types.js'
+import type { ZoteroWriteCall } from '../../../src/write-call.js'
 import { setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
+import { itemJson } from '../../helpers/write-domain-fixtures.js'
 import { MockZotero } from '../../helpers/mock-zotero.js'
 import { zoteroError } from '../../helpers/provider-harness.js'
 import {
@@ -38,7 +40,6 @@ import {
   StubApproval,
 } from '../../helpers/approval-stub.js'
 
-const SERVER_ID = 'srv-write-gate-001'
 const NEW_KEY = 'GATENOTE'
 
 /** The selected labels per ask, consumed in order; empty means "Apply". */
@@ -232,6 +233,19 @@ describe('the write gate at the service seam', () => {
     const lane = await bootLane({ writeEnabled: true })
     serveWrites(lane.mock)
     const item = { library: { type: 'user', id: 0 }, kind: 'item', key: 'ITEMABC1' } as const
+    lane.mock.route('GET', '/api/users/0/items/ITEMABC1', (_req, _res, h) =>
+      h.json(itemJson('ITEMABC1', 7, { collections: [] }), {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '7',
+      }),
+    )
+    lane.mock.route('GET', '/api/users/0/collections/top', (_req, _res, h) =>
+      h.json([], {
+        'Zotero-Server-ID': SERVER_ID,
+        'Last-Modified-Version': '7',
+        'Total-Results': '0',
+      }),
+    )
     const collection = 'zotero://user/0/collection/COLL1234'
     // One plan string per seam method, answered with Cancel in order.
     const plans = [
@@ -282,8 +296,8 @@ describe('the write gate at the service seam', () => {
 
     expect(results).toEqual(plans.map(() => ({ kind: 'declined' })))
     expect(asks.map((ask) => ask.questions[0]?.detail)).toEqual(plans)
-    // A declined plan settles before any local API contact.
-    expect(lane.mock.requests).toHaveLength(0)
+    // Read-only preflight is allowed; a declined plan cannot obtain a grant or mutate.
+    expect(lane.mock.requests.every((request) => request.method === 'GET')).toBe(true)
   })
 })
 

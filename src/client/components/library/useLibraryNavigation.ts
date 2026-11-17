@@ -93,6 +93,8 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
   const { serverId, library } = options.instance
   const { expanded, setExpanded } = options.expansion
   const { prefixes } = options.restore
+  const activationPrefixes = useRef(prefixes)
+  activationPrefixes.current = prefixes
   const selection = options.selection.value
   const updateSelection = options.selection.update
   const [lanes, setLanes] = useState<ReadonlyMap<string, NavigationLane<Row>>>(new Map())
@@ -246,25 +248,29 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
   )
 
   useEffect(() => {
+    const pendingReads = pending.current
     live.current = active
-    generation.current++
-    pending.current.clear()
+    generation.current += 1
+    pendingReads.clear()
     queue.current = []
     state.current.clear()
     setLanes(new Map())
     if (active) {
-      void load(undefined, prefixes[''] ?? 0)
-      void load(SAVED, prefixes[SAVED] ?? 0)
+      void load(undefined, activationPrefixes.current[''] ?? 0)
+      void load(SAVED, activationPrefixes.current[SAVED] ?? 0)
     }
     return () => {
-      generation.current++
+      generation.current += 1
       live.current = false
       queue.current = []
-      pending.current.clear()
+      pendingReads.clear()
     }
   }, [active, serverId, library, load])
 
-  const lane = (ref?: string) => lanes.get(ref === SAVED ? SAVED : keyOf(ref))
+  const lane = useCallback(
+    (ref?: string) => lanes.get(ref === SAVED ? SAVED : keyOf(ref)),
+    [lanes, keyOf],
+  )
   const root = lanePageOf(lane())
 
   /**
@@ -408,7 +414,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
    * re-proven. Saved-search writes use {@link refreshSaved} instead.
    */
   const rebuild = useCallback(() => {
-    generation.current++
+    generation.current += 1
     pending.current.clear()
     const counts = new Map(
       [...state.current].map(([key, value]) => [
@@ -454,6 +460,27 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
       ),
     [lanes],
   )
+  const cancelLocate = useCallback(() => {
+    locationGeneration.current++
+  }, [])
+  const treeLane = useCallback(
+    (ref?: string) => lane(ref) as NavigationLane<CollectionRowView> | undefined,
+    [lane],
+  )
+  const loadMore = useCallback(
+    (ref?: string) => load(ref, (lanePageOf(lane(ref))?.rows.length ?? 0) + 1),
+    [load, lane],
+  )
+  const retryTree = useCallback(
+    (ref?: string) =>
+      load(ref, prefixes[keyOf(ref)] ?? 0, state.current.get(keyOf(ref))?.phase === 'ready'),
+    [load, prefixes, keyOf],
+  )
+  const loadMoreSaved = useCallback(
+    () => load(SAVED, (lanePageOf(lane(SAVED))?.rows.length ?? 0) + 1),
+    [load, lane],
+  )
+  const retrySaved = useCallback(() => load(SAVED, prefixes[SAVED] ?? 0), [load, prefixes])
   return {
     flatTree,
     expanded: expandedRefs,
@@ -462,16 +489,13 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
     locate,
     refresh: rebuild,
     refreshSaved,
-    cancelLocate: () => {
-      locationGeneration.current++
-    },
-    treeLane: (ref?: string) => lane(ref) as NavigationLane<CollectionRowView> | undefined,
+    cancelLocate,
+    treeLane,
     savedSearches: (lane(SAVED) ?? { phase: 'loading' }) as NavigationLane<SavedSearchRowView>,
-    loadMore: (ref?: string) => load(ref, (lanePageOf(lane(ref))?.rows.length ?? 0) + 1),
-    retryTree: (ref?: string) =>
-      load(ref, prefixes[keyOf(ref)] ?? 0, state.current.get(keyOf(ref))?.phase === 'ready'),
-    loadMoreSaved: () => load(SAVED, (lanePageOf(lane(SAVED))?.rows.length ?? 0) + 1),
-    retrySaved: () => load(SAVED, prefixes[SAVED] ?? 0),
+    loadMore,
+    retryTree,
+    loadMoreSaved,
+    retrySaved,
     prefixes: persistedPrefixes,
   }
 }

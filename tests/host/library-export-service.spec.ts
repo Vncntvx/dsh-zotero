@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroLibraryService } from '../../src/library/service.js'
 import type { Options } from '../../src/config.js'
 import { exportRefsOverCapMessage } from '../../src/export-limits.js'
+import { zoteroLibraryExportRequestSchema } from '../../src/wire-schemas.js'
 import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_INVALID_REF,
@@ -49,6 +50,21 @@ async function setupExportService(
 }
 
 describe('the zoteroLibrary export endpoint', () => {
+  it('accepts more than one transport batch when the live export policy allows it', async () => {
+    const { lane, service } = await setupExportService({ maxExportRefs: 100 })
+    const refs = Array.from(
+      { length: 60 },
+      (_, index) => `zotero://user/0/item/ITEM${String(index).padStart(4, '0')}`,
+    )
+    const request = zoteroLibraryExportRequestSchema.parse({ refs, format: 'citation' })
+    const exported = vi.spyOn(lane.ctx.zotero, 'exportText').mockResolvedValue({
+      format: 'citation',
+      citations: refs.map((ref) => ({ ref, text: 'Citation' })),
+    })
+    expect((await service.export(request, LIVE_SIGNAL)).format).toBe('citation')
+    expect(exported.mock.calls[0]?.[0].refs).toHaveLength(60)
+  })
+
   it('forwards one item ref and maps a translator export back to the wire view', async () => {
     const { lane, service } = await setupExportService()
     const domainResult: ZoteroExportTextResult = {

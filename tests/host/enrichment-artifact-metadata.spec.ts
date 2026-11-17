@@ -1,6 +1,6 @@
 /** Lease-free metadata and batched freshness probes over committed artifacts. */
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ParsedArtifactStore } from '../../src/enrichment/artifact-store.ts'
@@ -16,7 +16,10 @@ import { ARTIFACT, CACHE_KEY, SOURCE_RECORD } from './support/enrichment-artifac
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.ts'
 import { artifactIdOf } from '../../src/contract.ts'
 import { attachmentRef } from '../helpers/server/keys.ts'
-import { ENRICHMENT_DEFAULTS } from '../../src/enrichment-preferences.ts'
+import {
+  ENRICHMENT_DEFAULTS,
+  ENRICHMENT_DOCUMENT_LIMITS,
+} from '../../src/enrichment-preferences.ts'
 
 const REF = attachmentRef()
 const SIGNAL = new AbortController().signal
@@ -140,6 +143,7 @@ describe('batched attachment freshness probe', () => {
     options: {
       stamp?: { kind: 'file'; size: number; mtimeMs: number }
       indexedRefs?: readonly string[]
+      mode?: 'free' | 'pro'
     } = {},
   ): Promise<ProbedWorld> {
     const dir = await mkdtemp(join(tmpdir(), 'zotero-probe-'))
@@ -148,7 +152,10 @@ describe('batched attachment freshness probe', () => {
     const info = await stat(path)
     const resolveAttachment = memoryResolveAttachment(path)
     const store = new ParsedArtifactStore('/root', memoryFiles().deps)
-    await store.put(CACHE_KEY, ARTIFACT)
+    await store.put(CACHE_KEY, {
+      ...ARTIFACT,
+      meta: { ...ARTIFACT.meta, mode: options.mode ?? 'pro' },
+    })
     const stamp = options.stamp ?? { kind: 'file' as const, size: info.size, mtimeMs: info.mtimeMs }
     for (const ref of options.indexedRefs ?? [REF])
       await store.putSources([sourceKeyOf(ref)], { ...SOURCE_RECORD, cacheKey: CACHE_KEY, stamp })
@@ -162,6 +169,30 @@ describe('batched attachment freshness probe', () => {
       },
     }
   }
+
+  it.each(['free', 'pro'] as const)(
+    'uses the stored %s mode byte limit independently of live configuration',
+    async (mode) => {
+      const world = await probedWorld({ mode })
+      try {
+        await truncate(world.path, ENRICHMENT_DOCUMENT_LIMITS.free.maxBytes + 1)
+        const info = await stat(world.path)
+        await world.store.putSources([sourceKeyOf(REF)], {
+          ...SOURCE_RECORD,
+          stamp: { kind: 'file', size: info.size, mtimeMs: info.mtimeMs },
+        })
+        const result = await probeAttachments(
+          world.deps,
+          { ...config, mode: mode === 'free' ? 'pro' : 'free' },
+          { sessionId: 's1', op: 'probe', refs: [REF] },
+          SIGNAL,
+        )
+        expect(result.results).toEqual([{ ref: REF, state: mode === 'free' ? 'missing' : 'ready' }])
+      } finally {
+        await world.cleanup()
+      }
+    },
+  )
 
   it('marks a probed row ready when the source still matches its stamp', async () => {
     const world = await probedWorld()

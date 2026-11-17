@@ -5,6 +5,7 @@
  * @module tests/provider/get
  */
 
+import { attachmentTypeMessage } from '../../src/errors.js'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -16,7 +17,6 @@ import {
   ZOTERO_UNEXPECTED,
 } from '../../src/errors.js'
 import {
-  attachmentTypeMessage,
   missingAttachmentFileMessage,
   missingLinkedUrlMessage,
   noAttachmentToResolveMessage,

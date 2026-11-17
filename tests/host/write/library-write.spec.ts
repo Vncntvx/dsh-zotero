@@ -1,3 +1,5 @@
+import { validateJsonSchemaValue, type ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
+import { libraryWriteCases } from '../support/library-write-cases.ts'
 /** Panel mutations retain the tool policy, approval gate and single dispatch. */
 import { Context, Service } from '@deepseek-ai/cordis'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -122,6 +124,9 @@ describe('panel write gateway', () => {
     ['declined', false, 'declined'],
     ['committed-unverified', false, 'committed-unverified'],
     ['applied', false, 'applied'],
+    ['restored', false, 'restored'],
+    ['partial', false, 'partial'],
+    ['failed', false, 'failed'],
     ['conflict', true, 'failed'],
   ])('preserves %s settlement and never retries', async (kind, isError, expected) => {
     const host = await boot()
@@ -237,3 +242,35 @@ describe('panel write gateway', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 })
+
+it.each(libraryWriteCases)(
+  'dispatches $operation once to $tool with schema-valid arguments',
+  async (entry) => {
+    const host = await boot()
+    const execute = vi
+      .spyOn(host.ctx.tools, 'execute')
+      .mockResolvedValue(
+        toolBatchResult({ isError: false, meta: { kind: 'applied' }, content: [] }),
+      )
+    await executeLibraryWrite(
+      host.ctx,
+      {
+        sessionId: request.sessionId,
+        operation: entry.operation,
+        args: entry.args,
+      } as ZoteroLibraryWriteRequestView,
+      signal(),
+    )
+    expect(execute).toHaveBeenCalledTimes(1)
+    const call = execute.mock.calls[0]?.[0].calls[0]
+    expect(call?.name).toBe(entry.tool)
+    const args = JSON.parse(call!.arguments)
+    expect(args).toEqual('dispatched' in entry ? entry.dispatched : entry.args)
+    const tool = host.ctx.tools.get(entry.tool)
+    expect(tool).toBeDefined()
+    expect(
+      validateJsonSchemaValue(tool!.parameters as unknown as ObjectJsonSchema, args, ''),
+    ).toEqual([])
+    expect(host.mock.requests).toHaveLength(0)
+  },
+)

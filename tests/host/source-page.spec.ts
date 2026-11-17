@@ -14,7 +14,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { blocksOf, emptyLedgerState, foldLedgerEvent } from '../../src/sources/event-ledger.js'
+import { blockCountOf, emptyLedgerState, foldLedgerEvent } from '../../src/sources/event-ledger.js'
 import { readSourcePage } from '../../src/source-page.js'
 import { normalizeRefKey } from '../../src/sources/evidence-match.js'
 import type { ZoteroRuntime } from '../../src/remote.js'
@@ -110,7 +110,7 @@ async function boot(ctx: Context, state: ReturnType<typeof emptyLedgerState>): P
     }
     async register(): Promise<unknown> {
       return {
-        stateOf: () => ({ inheritedEventCount: 0, ledger: state }),
+        stateOf: () => ({ ledger: state }),
         dispose: async () => {},
       }
     }
@@ -306,7 +306,7 @@ describe('the sourcePage row cut', () => {
     expect(page.total).toBe(0)
     expect(page.workspace.exports).toHaveLength(0)
     // The page was cut from the whole fold, not the windowed head.
-    expect(blocksOf(state)).toHaveLength(2)
+    expect(blockCountOf(state)).toBe(2)
     await ctx.fiber.dispose()
   })
 

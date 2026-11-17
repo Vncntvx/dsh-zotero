@@ -1,3 +1,4 @@
+import { resultReceipt } from '../helpers/result-receipts.ts'
 /**
  * The literature workspace fold's remaining arms: the pending-tail comparison
  * that decides whether a read may reuse its cached view, the issue and filter
@@ -257,7 +258,7 @@ describe('the persisted export receipt without a projection', () => {
     const file = { attachmentId: 'attachment-1', name: 'export.json', bytes: 12 }
     // The harness brands AttachmentId; this fixture supplies the raw wire value.
     const fileBlock = { type: 'file' as const, attachment: file as never }
-    const receipt = {
+    const receipt = resultReceipt({
       delivery: 'file',
       version: 1,
       tool: 'zotero_export',
@@ -265,7 +266,7 @@ describe('the persisted export receipt without a projection', () => {
       callId: 'e1',
       summary: 'zotero_export: full result persisted.',
       file,
-    }
+    })
     const workspace = buildSourceWorkspace([
       settledBlock(
         'e1',

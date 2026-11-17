@@ -1,3 +1,4 @@
+import { createSourceWireView } from '../sources/window.js'
 /**
  * The literature-trail projection: a pure fold over committed session events
  * that serves the whole trail to the browser without the history window.
@@ -82,7 +83,6 @@ export const ledgerStateSchema = z
 
 const stateSchema = z
   .object({
-    inheritedEventCount: z.number().int().nonnegative(),
     ledger: ledgerStateSchema,
   })
   .strict()
@@ -138,6 +138,7 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
    * moved past it) is rebuilt from its own blocks once, then keeps folding, so
    * a cold or interleaved read is linear instead of wrong.
    */
+  let compactView = createSourceWireView()
   let chains = new WeakMap<SourceLedgerProjectionState, LedgerChain>()
 
   const currentChain = (state: SourceLedgerProjectionState): LedgerChain | undefined => {
@@ -168,12 +169,10 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
 
   const definition: SourceLedgerProjectionDefinition = {
     key: SOURCE_LEDGER_KEY,
-    // Version 2 chunks the settled facts: an append copies the outer chunk
-    // list plus at most one short chunk, never the whole fact array.
-    stateVersion: 2,
+    // Version 3 removes unused fork metadata; older checkpoints replay the event log.
+    stateVersion: 3,
     stateSchema,
-    init: (_header, inheritedEventCount) => ({
-      inheritedEventCount,
+    init: () => ({
       ledger: emptyLedgerState() satisfies SourceLedgerState,
     }),
     apply: (state, event) => {
@@ -192,7 +191,7 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
     wire: {
       summary: false,
       viewSchema: sourceWorkspaceSchema,
-      view: (state) => read(state, undefined, true),
+      view: (state) => compactView(read(state, undefined, true), blockCountOf(state.ledger)),
     },
   }
 
@@ -201,6 +200,7 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
     fullWorkspaceOf: (state, currentServerId) => read(state, currentServerId, false),
     dispose: () => {
       chains = new WeakMap()
+      compactView = createSourceWireView()
     },
   }
 }

@@ -36,7 +36,7 @@ afterEach(async () => {
 function providerOf(server: MockZotero, enhancer?: FulltextEnhancer): LocalApiProvider {
   return new LocalApiProvider({
     client: testHttpClient(server.baseUrl),
-    limits: () => PROVIDER_LIMITS,
+    limits: () => ({ ...PROVIDER_LIMITS, maxEvidencePassages: 8 }),
     fulltextEnhancer: () => enhancer,
   })
 }

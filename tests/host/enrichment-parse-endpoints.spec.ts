@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 /**
  * Composition verification, not live Zotero/MinerU acceptance. Real Gateway,
  * RemoteAccess, jobs-local, core/provider, parseDocument/parseOnce and disk store;
@@ -354,6 +355,9 @@ describe('explicit document parsing through the pinned Gateway', () => {
       JSON.stringify({
         ...meta,
         images: [{ name: 'images/page_0_figure.png', mediaType: 'image/png', bytes: bytes.length }],
+        imageSha256: {
+          'images/page_0_figure.png': createHash('sha256').update(bytes).digest('hex'),
+        },
       }),
     )
     const target = { kind: 'url' as const, url: DOCUMENT_URL }

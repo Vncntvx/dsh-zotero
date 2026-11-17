@@ -47,6 +47,8 @@ export async function readSourcePage(
   signal: AbortSignal,
 ): Promise<ZoteroSourcePageResultView> {
   signal.throwIfAborted()
+  // This exported seam also accepts in-process callers, so it validates
+  // independently of Gateway before opening any session projection.
   const parsed = zoteroSourcePageRequestSchema.safeParse(input)
   if (!parsed.success) invalid('Invalid literature-trail page request.')
   const request = parsed.data

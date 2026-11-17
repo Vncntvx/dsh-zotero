@@ -71,6 +71,7 @@ describe('ZoteroWorkspaceView pagination', () => {
         exports: [export2],
         exportTotal: 2,
         exportOperations: { running: 0, failed: 0, stopped: 0 },
+        searchOperations: { running: 0, failed: 0, stopped: 0 },
         omittedRows: 0,
         filterCounts: { all: 1, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
         evidencePassageTotal: 0,
@@ -136,6 +137,7 @@ describe('ZoteroWorkspaceView pagination', () => {
         exports: [],
         exportTotal: 0,
         exportOperations: { running: 0, failed: 0, stopped: 0 },
+        searchOperations: { running: 0, failed: 0, stopped: 0 },
         omittedRows: 0,
         filterCounts: { all: 2, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
         evidencePassageTotal: 0,
@@ -212,6 +214,7 @@ describe('ZoteroWorkspaceView pagination', () => {
         exports: [],
         exportTotal: 0,
         exportOperations: { running: 0, failed: 0, stopped: 0 },
+        searchOperations: { running: 0, failed: 0, stopped: 0 },
         omittedRows: 0,
         filterCounts: { all: 1, pdf: 0, retrieved: 0, evidence: 0, exported: 0, issues: 0 },
         evidencePassageTotal: 0,
@@ -252,4 +255,58 @@ describe('ZoteroWorkspaceView pagination', () => {
       expect(screen.getByText('“Second passage text”')).toBeDefined()
     })
   })
+})
+
+it('loads the selected deferred body and reloads it when the ledger revision changes', async () => {
+  const summary = sourceOf({
+    key: 'deferred',
+    title: 'Deferred paper',
+    evidence: [],
+    evidenceTotal: 1,
+    facts: { reportedEvidenceCount: 1 },
+    retrievalFacts: { truncated: false, sourceAvailability: {} },
+  })
+  const sourcePage = vi.fn(
+    async (request: import('../../../src/contract.ts').ZoteroSourcePageRequestView) => ({
+      ok: true as const,
+      value: {
+        sessionId: request.sessionId,
+        target: request.target,
+        revision: sourcePage.mock.calls.length,
+        offset: 0,
+        limit: 50,
+        total: 1,
+        workspace: workspaceOf([
+          {
+            ...summary,
+            evidence: [
+              passageOf({ text: `Complete evidence revision ${sourcePage.mock.calls.length}` }),
+            ],
+          },
+        ]),
+      },
+    }),
+  )
+  const props = { connection: CONNECTED, sessionId: 'session-1', sourcePage, onRefresh: vi.fn(), t }
+  const view = render(
+    <ZoteroWorkspaceView
+      {...props}
+      workspace={{ ...workspaceOf([summary]), detailsDeferred: true, detailsRevision: 1 }}
+    />,
+  )
+  await screen.findByText('“Complete evidence revision 1”')
+  expect(sourcePage.mock.calls[0]?.[0]).toMatchObject({
+    target: { kind: 'source', key: 'deferred', rows: 'evidence' },
+    offset: 0,
+  })
+  expect(sourcePage).toHaveBeenCalledTimes(1)
+  view.rerender(
+    <ZoteroWorkspaceView
+      {...props}
+      workspace={{ ...workspaceOf([summary]), detailsDeferred: true, detailsRevision: 2 }}
+    />,
+  )
+  await screen.findByText('“Complete evidence revision 2”')
+  expect(screen.queryByText('“Complete evidence revision 1”')).toBeNull()
+  expect(sourcePage).toHaveBeenCalledTimes(2)
 })

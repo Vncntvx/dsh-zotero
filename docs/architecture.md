@@ -46,7 +46,7 @@ graph LR
 - 负责 Provider 调度、能力门控与领域操作统一入口；
 - 配置以 Loader entry 为基准，设置变更通过 `loader/volatile-update` 提交到同一 entry；
 - 结构性配置变更会在现有实例上重建 HTTP 客户端、Provider 与写工具集，触发条件是 `TRANSPORT_CONFIG_KEYS` 中的六个键（`baseUrl`、`timeoutMs`、`maxResponseBytes`、`maxInFlightRequests`、`writeAuthorizeDeadlineMs`、`writeEnabled`）；其余限额由 Provider 实时读取，不触发重建；
-- 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、会话审批策略（`ctx.approval.request`）以及计划审查卡；
+- 写入闸门统一收敛于服务接缝：所有写操作接收 `ZoteroWriteCall`，依次通过能力检查、必要的只读写入预检、会话审批策略（`ctx.approval.request`）以及计划审查卡；
 - 注册 `tools/pre-execute` 监听器，检测直写本地 API 的 shell 命令并提升为审批请求：`bash`/`pwsh` 读 `command`，`terminal_send` 的 `text` 一律扫描，包括 `submit: false`，因为后续回车可以执行已缓冲的文本；`run_code` 的程序可在运行期拼出请求，属文本检测的已知盲区；
 - 策略提示词段（`zotero:policy`，`src/prompt.ts`）随每一步准入的工具集合裁剪：读路由、读上限与写策略只点名该步准入的工具；只要存在任一 Zotero 工具，就保留调用同意、注入防护与连接失败三段；没有本地读工具时保留写路由约束，准入为空时只保留该约束；写能力关闭时完整保留关闭状态说明与越界路由禁令；全量工具时文本保持稳定；
 - 配置重建策略与 config→limits 投影集中于 `src/service-config.ts`；本地工具注册清单由 `src/tool-registration.ts` 管理，工具调用诊断 hook 由 `src/tool-diagnostics.ts` 安装，步骤准入解析由 `src/step-tools.ts` 每步缓存一次，参数纠错由 `src/parameter-correction.ts` 通过 `tools/post-execute` 安装，`ResultDelivery` 只负责投递；子 agent 写策略由 `src/subagent-guard.ts` 承担，按会话血缘收缩子 agent 的写工具可见性，并在执行期拒绝其写调用；service 保留 fiber 生命周期、这些协作者的组合，以及该策略的刷新与释放；
@@ -70,6 +70,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 - 导出遵循 Zotero 本地接口的单次请求限制：除 `citation` 外的五种格式都在单次请求内取回全部条目（`itemKey` 单次上限 50 条），超出直接拒绝；`ris`/`csljson` 只需该次批请求，`bibtex`/`biblatex` 另外并行发出一次元数据批请求，用于把导出结果对齐到各条目；`citation` 按 50 一组发出多个请求；合并正文的逐条文档定位只服务于工具结果，面板端点只取渲染文本/引文；
 - 写入领域支持跨库文献关系（`dc:relation`），群组库条目自动映射至规范的 `http://zotero.org/groups/<id>/items/<key>` URI；
 - 非幂等写入的提交证明、拒绝映射及 `committed-unverified` 结果由 `src/local/write-verdicts.ts` 集中负责；操作域只负责构造请求和解释已验证回执；
+- `preflightWrite` 在审批前校验同级集合名称、笔记更新目标及集合修改；预检只读取文献库，实际操作在审批后重新读取并检查当前状态。
 - Saved search、Collection、tag/collection membership、note、批量写入、回收站恢复与全库标签删除分别由 `src/local/write-saved-searches.ts`、`write-collections.ts`、`write-item-lists.ts`、`write-notes.ts`、`write-batch.ts`、`write-library-maintenance.ts` 承担，复用以 `write-domain.ts` 为中心的版本化写入原语。
 
 ### 后台任务引擎 (`src/job-runner.ts`)
@@ -106,7 +107,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 - 授权与提示词同源：策略提示词由该组件自己注册（`src/scholarly/prompt.ts`，段落名 `scholarly:policy`），随组件挂载出现、随卸载消失；段落只列出该步骤准入的工具，准入为空时不渲染；web_fetch 路由禁令随任一外部 scholarly 工具保留；父组件的策略段不描述外部检索工具，只在 save 进入本步准入时按其名字归类写面。
 - 主机白名单：`src/scholarly/transport/hosts.ts` 是唯一真源，允许的 host 与每主机限流间隔都从 `SCHOLARLY_HOSTS` 派生。
 - 地址安全：白名单只判「名字」。端口仅允许 80/443（显式拼写等同默认端口）；开放获取 PDF 臂（`allowPublicPdf`）离开白名单时还须过第二道门——`src/transport/network.ts` 解析主机名并拒绝任何非公网单播地址（含 NAT64/IPv4-mapped 内嵌地址的判定），随后把已验证地址钉进 undici 连接（`connections.ts`），防止检查与建连之间的 DNS rebinding；重定向的每一跳都重新过词法门与解析门。第二道门有一个记录在案的 fake-IP 例外：本机解析器返回 `198.18.0.0/15` 占位地址时，已审阅的允许列表主机可以接受；开放获取 PDF 臂只对 HTTPS 目标接受；MinerU 传输同样只对 HTTPS 目标接受（MinerU 的全部地址都是 HTTPS，Token 仍只发往 `mineru.net`），身份由 TLS 证书绑定；明文 HTTP 目标、URL PDF 阅读、明文 HTTP 的 MinerU 目标与模型下载仍要求真实公网地址。允许列表臂只允许 HTTPS。dispatcher 只交给同一份 undici 副本的 `publicFetch`（`connections.ts`）；运行时全局 `fetch` 自带另一份 undici，会在建连前拒绝该 dispatcher，因此外部出口从不用全局 fetch。未接入这两道门（`publicAccess` 缺失）时该臂直接报错，不降级为不钉扎连接。
-- 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束，重试退避发生在闸门之外，不占用在飞槽位；熔断与限流按裸 hostname（不含端口）计。
+- 传输层：截止时间用 `@deepseek-ai/dsh-timeout` 的 `deadline()` / `timeoutOf()`，区分“provider 超时”与“调用方取消”（后者不重试）。每跳保留自己的 `timeoutMs`，整次逻辑请求另有 `6 × timeoutMs` 总预算，覆盖排队、DNS、重定向、重试、响应体读取与退避等待；换跳不重置总预算；响应体上限用共享的 `src/transport-bounds.ts`；在飞请求数由 `ConcurrencyGate` 约束，重试退避发生在闸门之外，不占用在飞槽位；熔断与限流按裸 hostname（不含端口）计。
 - 凭证：学术检索配置只保存 `role('credential-ref')` 声明的凭据引用名（`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`），密钥值不进入配置；`src/scholarly/credentials.ts` 在每次外部工具调用前经 `ctx.get('credentials')` 解析，引用名非法、凭据服务缺失或引用无值时分别报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` 或 `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`，不静默降级为匿名请求。解析后的 key 中，Semantic Scholar 与 OpenAlex 走请求头；NCBI E-utilities 只接受 query 参数，该密钥经 URL 传递，错误消息只报 hostname，不内插完整 URL。
 - 全文缓存：`src/scholarly/fulltext/store.ts` 在 `dshCachePath('zotero-scholarly')` 下按 key 存一份 JSON 正文，内存只保留 8 条索引；读结果分 `hit` / `miss` / `corrupt` 三态，损坏条目被驱逐并记录。
 - 失败语义：全文解析的每条路由各自记录失败原因，终态错误逐条列出；失败原因会带上底层传输 code（如 `UND_ERR_INVALID_ARG`、`ECONNRESET`），本地 dispatcher 错配与安全拒绝不重试、不计熔断，安全拒绝的原始消息（含 fake-IP 提示）直接透出；`scholarly_verify` 用四值结论区分“注册表说没有”与“注册表联系不上”。
@@ -141,13 +142,13 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 
 本地 retrieve 与 `scholarly_read` 的 query 路径在任何来源 I/O 前同步接纳可释放的 ranking scope，固定已提交配置、模型目标与服务世代，整次读取在 `finally` 释放。接纳时不提前加载模型；尚未开始排序的请求在组件卸载后仍可按固定目标懒加载，并遵守原请求 deadline。模型切换只在新模型加载成功后提交；新模型失败向其请求报错，旧实例仍被管理，不能代答新目标。旧实例要等最后一个 scope 与实际推理结束才释放。
 
-卸载立即撤槽并禁止新接纳，允许已接纳的前台作用域排空，等待实际 load/run 结束后一次性释放；重新注入使用新世代。组件自有后台解析与下载按上一节中止和清理。
+模型校验、tokenizer、ONNX 打开和推理由每模型独立 worker 持有。打开上限 180 秒，单次推理上限 120 秒；超时终止实际线程，等待退出后才允许后继模型打开。调用方取消只结束自身等待；最后一个 scope 离开时中止无人持有的打开工作，尚未开始的排队打开直接跳过。已终止的 resident 不再服务新 scope，新请求重新从磁盘打开。卸载立即撤槽并禁止新接纳，允许已接纳的前台作用域排空，等待实际 load/run 或线程终止后一次性释放；重新注入使用新世代。组件自有后台解析与下载按上一节中止和清理。
 
 ### 现有传输与产物存储
 
 `src/enrichment/transport.ts` 自建请求路径，复用 `src/transport/` 的公网地址词法门、DNS 解析与固定连接、逐跳重定向重校验与有界读取；API 返回的签名上传、结果 CDN 与缓存 HEAD 地址均视为不可信输入。`Authorization` 只发往固定的 `mineru.net` API 主机，签名上传、结果下载与源 HEAD 不携带凭据。签名上传不附加任何 header；非 2xx 正文有界截断并去 URL。阶段时限包括 30 分钟总预算、900 次轮询、提交/轮询 60 秒、上传 20 分钟、结果下载 10 分钟、源传输 20 分钟与 HEAD 15 秒。
 
-`mode`（`free` / `pro`）独立选择接口；`free` 不解析 token。`pro` 引用无法解析时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 明确失败，不降级免费或匿名；已有缓存产物无需 token 即可读取。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。
+`mode`（`free` / `pro`）独立选择接口；`free` 不解析 token。`pro` 引用无法解析时以 `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` 明确失败，不降级免费或匿名；已有缓存产物无需 token 即可读取。pro 的空 `extract_result` 视为 pending，末次轮询后不再额外等待。 上传前与上传后的任务记录均在满 24 小时后视为过期；用户显式解析时清除过期或损坏的任务并重新提交，轮询耗尽也清除续挂记录。存储读取或删除失败仍明确报错。
 
 当前产物在 `<outputDir>/<sha256>/` 下存 `full.md`、`meta.json`（精准模式另有 `content_list.json`，另有 `images/` 存放 Markdown 引用的插图，上限 512 张、单张 8 MB、合计 128 MB），`meta.json` 最后写入作为提交标记。当前源索引 `<outputDir>/sources/index.json` 按 canonical source 的 SHA-256 记录最近一次产物与源戳（`mode` 在 artifact meta 与内容缓存键中），本地附件用 stat、URL 用 HEAD 比较 ETag/Last-Modified/Content-Length。原始 URL 的 query/fragment 不写入 `meta.json`。`output-dir.ts` 使用 realpath 校验系统根、home、`~/.ssh`、`~/.gnupg`（含 macOS `/private/etc`、`/private/var`），配置错误明确失败；`zip.ts` 限制总条目 4096、wanted 2，拒绝重复 wanted、越界名和超大条目，由可取消 Worker 先解析正文引用，再只解压引用图片；结果缓冲区转移回宿主，ZIP 准入槽持有至落盘完成。
 
@@ -157,7 +158,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 
 `src/enrichment-model-catalog.ts` 是浏览器与宿主共用的纯目录，钉死六个档位的物理模型、revision、文件大小与 SHA-256、维度、窗口、许可及池化、归一化和指令前缀；构建侧的下载器直接导入该模块（Node 的类型剥离），不再保留镜像副本。默认资产目录为 `~/.dsh/models/<physicalKey>/`，可由 `semanticModelDir` 指定，经 `safe-directory.ts` 校验。下载按 revision 逐跳经过公网双门，并有长度、流式字节、SHA-256、60 秒停滞及单文件 30 分钟限制；`manifest.json` 最后落盘。`ModelDownloadManager` 每服务一份，卸载会调用其取消逻辑；host 下载不支持代理，CLI 支持 `--proxy`。
 
-`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。运行时 `onnxruntime-web` 不作为依赖：发布路径把 Node 入口、wasm 胶水与 wasm 二进制（约 3.8MB gzip）连同 MIT 许可与 SHA-256 记录写入包内 `assets/onnxruntime/<version>/`，`semantic/runtime.ts` 以绝对 URL 加载它并把 `env.wasm.wasmPaths` 指向该目录。插件安装的依赖闭包因此不带任何安装脚本，`npm run verify:pack` 同时核对资产存在、来源哈希与许可。准入按 `semantic/model-profiles.ts` 中每档实测固化的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档无关语料的最强余弦，因此全无关的非空语料不会产生语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档模型均已用真实 ONNX 推理实测：在零实词重合的改写集上语义 recall@4 为 58–96%，无关语料语义命中 0%。`matchKind` 说明命中路线，RRF 分数只表示排序。
+`src/enrichment/semantic/` 按 tokenizer → onnxruntime-web（WASM、Node）→ 池化 → L2 归一化产出向量，加载前 `semantic/bundle.ts` 核对 manifest 与逐文件 SHA-256。运行时 `onnxruntime-web` 不作为依赖：发布路径把 Node 入口、wasm 胶水与 wasm 二进制（约 3.8MB gzip）连同 MIT 许可与 SHA-256 记录写入包内 `assets/onnxruntime/<version>/`，`semantic/runtime.ts` 以绝对 URL 加载它并把 `env.wasm.wasmPaths` 指向该目录。插件安装的依赖闭包因此不带任何安装脚本，`npm run verify:pack` 同时核对资产存在、来源哈希与许可。准入按 `semantic/model-profiles.ts` 中每档固定的 `floor`（绝对余弦门槛）与 `margin`（相对最高余弦的容差）判定：`floor` 高于该档归档移除答案对照语料的最强余弦；最高余弦不足门槛时不返回语义命中；同一排序内按文本去重，跨请求共享有界向量缓存（`lru-cache`，最多 16,384 项 / 64 MiB）。六档真实 ONNX 向量归档在 `tests/fixtures/semantic-admission/`；20 个改写例（english 为 10 个）的 recall@4 为 55–95%，全部移除答案对照无语义命中。报告区分改写与完整回归集的分母、BM25 基线和固定 margin 策略；此同组检查不保证生产误命中率。`matchKind` 说明命中路线，RRF 分数只表示排序。
 
 运行时、状态读取和安装器共用 bundle inspector：manifest 以单次有界读取核对，逐文件大小、SHA-256 与普通文件/目录检查保持一致，最多 16 个身份快照跨 loader 复用。交给 ONNX 和 tokenizer 的字节另按目录钉值校验，ONNX 直接接收该内存快照，消除路径重开窗口。查询与改写每条最多 2,000 字符；嵌入文本连同前缀在编码前限制为 131,072 字符；每代缓存最多一个编码 batch 在途，每次推理包含 padding 的 token 总数最多 32,768，长批次完整拆分、每条只编码一次。
 
@@ -175,7 +176,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 
 ### 会话文献轨迹（`conversation.view`，id `zotero`，order 30）
 
-- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。折叠是增量的：服务持有按会话状态链推进的索引，一次视图只冻结本轮改动过的条目，注册卸载时释放全部缓存，模块级 memo 不再存在；状态保持完整，投递给浏览器的视图按窗口截断（会话顺序的列表头），并携带在截断前算好的精确聚合——过滤器计数、段落总数、导出去重数与每个列表的精确 total——因此未列出的部分被如实计数，不会丢失。运行中、失败、已停止的调用只计入 `operations`，不进入成果；只有成功且结构合法的调用产生事实。
+- 数据来源：优先读取宿主会话投影 `zoteroSources`（`src/session-projection/source-ledger.ts`），它按整份会话日志折叠，不受浏览器历史窗口限制；状态端点等待投影注册完成并报告 `not-composed`、`pending`、`ready` 或 `failed`。只有 registry 未组合时才回退到 `ChatSnapshot` 的已加载窗口；注册失败时明确显示投影不可用，不将局部窗口伪装成完整轨迹。两条可用路径共用 `src/sources/ledger.ts` 的同一个归约器，把 `zotero_*` 调用折叠为按条目聚合的 `SourceWorkspace`。折叠是增量的：服务持有按会话状态链推进的索引，一次视图只冻结本轮改动过的条目，注册卸载时释放全部缓存，模块级 memo 不再存在；状态保持完整，投递给浏览器的视图按窗口截断（会话顺序的列表头），并携带在截断前算好的精确聚合——过滤器计数、段落总数、导出去重数与每个列表的精确 total——因此未列出的部分被如实计数，不会丢失。运行中、失败、已停止的调用只计入 `operations`，不进入成果；没有条目 ref 的检索另计入会话级 `searchOperations`，工具栏显示其进行中、失败与停止计数。检索 episode 按归一化默认排序与 `itemLevel` 区分，证据去重同时保留附件与匹配方式、匹配字段；只有成功且结构合法的调用产生事实。
 - 窗口后的翻页：被窗口截断的列表由核心的 `sourcePage` 端点（`src/source-page.ts`，挂在核心 `ZoteroRuntime` 上，不依赖可选的文献面板组件）按页补齐。请求携带会话 id、目标列表、偏移与可选 `currentServerId`；续页必须携带上次返回的 `revision`（会话水位线），轨迹变动时以 `ZOTERO_SOURCE_PAGE_STALE` 拒绝而不是静默续在另一份折叠上。每次调用先在宿主 `ctx.remoteAccess` 校验会话授权、折叠完整账本、再切出有界页并二次校验授权与会话仍打开。浏览器侧 `useSourcePage` 按需追加页：列表未超出窗口时不发请求，列表身份（会话、目标、实例、偏移）变化时弃用已收页并中止在途请求。
 - 实例判定：归约状态保存条目 ref 的 `serverIds`；宿主编译时不知道当前连接的 Server ID，由客户端用状态探针结果调用 `withEvidenceMatch` 物化 `evidenceMatch`。
 - 检索折叠：分页续调用按 identity 折叠为一次检索；首屏的 `total` 与 `noteMatches` 取第一次调用，`returned`/`omitted` 在续页累加。
@@ -208,7 +209,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 - `plugins.bundle.config` 在插件详情页承载统一的 7 标签页配置表单（基础设置、本地连接、检索提取、文献面板、学术检索、文档解析、高级选项），管理 `zotero`、`library`、`scholarly`、`enrichment` 四个命名空间，保留未提交草稿；
 - `plugins.row.config` 为 `dsh-zotero#library`、`dsh-zotero#scholarly` 与 `dsh-zotero#enrichment` 提供组件行配置；
 - `plugins.bundle.activation` 在启用插件时弹出连通性引导；`plugins.detail.section` 提供实时状态卡与诊断卡；
-- 文献轨迹的写回执、导出元数据与同步 diff/job 分别由 `write-decoder.ts`、`export-decoder.ts`、`sync-decoder.ts` 解码，其余工具结果由 `decoders.ts` 解码。
+- 文献轨迹由 `src/sources/decoders.ts` 解码读取事实，导出元数据由同目录的 `export-decoder.ts` 解码；工具卡片的写回执与同步 diff/job 分别由 `src/client/sources/write-decoder.ts`、`sync-decoder.ts` 解码。写入不进入文献轨迹。
 
 ### 统一右键菜单与文献交互（`contextMenus`）
 
@@ -265,3 +266,7 @@ Gateway 在派发前拒绝没有授权绑定的非 owner Peer。方法内的会�
 浏览器仅保留来源附件 ref，恢复的阅读标签通过显式重载重新下载并替换原标签，不保存临时下载 URL。
 
 全量列表扫描在每页验证后立即 fold，随后释放原始行。筛选检索只持有 key、年份和附件事实，每个索引保留至多四个最近使用的筛选投影；DOI 对账只保留目标 DOI 的命中。协议对超过 1,000,000 行的总数或超过 10,000 页的扫描明确报错，不返回部分成功。面包屑节点缓存采用至多 4,096 项的 LRU 并过期清除；本次新拉取的名称列表未命中时直接拒绝，只有缓存未命中才再读一次。重复引用查询共用一次请求，内部搜索遵循 maxSearchResults。
+
+免费 MinerU 提交显式发送配置的 `ocrLanguage`（默认 `ch`，与官方默认值一致）；该参数只作用于 PDF OCR。任务 admission 固定配置快照，免费模式内容缓存键包括语言，精准模式不发送该参数。更改语言不会自行提交或恢复远端任务。
+
+文献轨迹的 session 投影视图只广播条目摘要、精确总数与 `detailsRevision`；证据、全文窗口、检索记录和导出正文不进入广播。浏览器在打开轨迹与选定条目后通过 `sourcePage` 读取首个正文页；后续页由用户请求，修订变化撤销旧页并重读。完整事件和正文仍由宿主保留，分页读取不截断正文。

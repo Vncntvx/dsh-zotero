@@ -112,13 +112,13 @@ export const en = {
   parsedExplainPrompt:
     'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: 'Copy selection',
-  parsedSelectionMenu: 'Actions for the selection',
+
   parsedUnavailable: 'This parsed result is unavailable. Parse the PDF again.',
   libraryParsedLoading: 'Reading the parsed document…',
-  libraryParsedNoPage: 'The parsed result could not be paged. Refresh and retry.',
+
   libraryParsedChars: 'Total {total} characters',
   libraryParsedPages: '{count} pages',
-  libraryParsedReadMore: 'Read more',
+
   libraryParsedCopy: 'Copy Markdown',
   libraryParsedCopied: 'Copied',
   libraryParsedDownload: 'Download Markdown',
@@ -189,6 +189,8 @@ export const en = {
   libraryWriteUnverified: 'Commit unverified; check Zotero before submitting again.',
   libraryWriteFailed: 'Write failed',
   libraryWriteApplied: 'Change applied',
+  libraryWritePartial: 'Partially completed; check each receipt.',
+  libraryWriteRestored: 'Restored',
   libraryWriteInvalid: 'Check required fields and JSON arrays before submitting.',
 
   nav: 'Literature trail',
@@ -229,8 +231,7 @@ export const en = {
   tabEnrichmentDesc:
     'Optional MinerU document parsing. Review one PDF in the session library panel and submit it explicitly after the deployment allows uploads.',
   tabAdvanced: 'Advanced',
-  groupLibrarySidebarDesc:
-    'Choose where the literature panel appears in DeepSeek Harness, with support for right-sidebar display.',
+
   libraryDisabled:
     'The literature panel is provided by the dsh-zotero/library component. Enable that component under "Included components" to turn on library browsing and sidebar configuration.',
   rightSidebarEnabled: 'Show in right sidebar',
@@ -259,6 +260,11 @@ export const en = {
   groupEnrichmentMode: 'Enrichment mode',
   groupEnrichmentModeDesc:
     'Document extraction API options: Agent Lightweight Parse or Precision Extract.',
+  enrichmentOcrLanguageInvalid:
+    'Enter a language code of 1–32 letters, digits, underscores or hyphens, beginning with a letter.',
+  enrichmentOcrLanguage: 'PDF OCR language',
+  enrichmentOcrLanguageHint:
+    'Free mode only. Use a MinerU language code, such as ch (Chinese) or en (English). The service validates language support.',
   enrichmentMode: 'API mode',
   enrichmentModeHint:
     'Agent Lightweight Parse: token-free, IP rate-limited, up to 20 pages and 10 MB, Markdown output. Precision Extract: requires API token, up to 200 pages and 200 MB, supports complex layouts, formulas, and tables, with 5,000 free files daily.',
@@ -267,7 +273,7 @@ export const en = {
   groupEnrichmentAuth: 'MinerU token',
   groupEnrichmentAuthDesc:
     'Access credential for the Precision Extract API. Tokens are valid for 3 months; the Agent Lightweight Parse mode needs no token.',
-  enrichmentTokenRefHint: 'Credential reference name for this plugin (default: {suggested}).',
+
   enrichmentToken: 'MinerU API Token',
   enrichmentTokenHint:
     'Precision Extract allows up to 5,000 files/day free (rate limit: 50 files/min submit, 1,000 req/min query). Tokens expire after 3 months.',
@@ -281,12 +287,10 @@ export const en = {
   enrichmentEnableNoticeDescription:
     'Submitting a specific Zotero PDF attachment or public PDF URL sends it to MinerU (mineru.net) for parsing, and saves the Markdown result locally. The notice reappears when the component is enabled again.',
   enrichmentEnableNoticeConfirm: 'Got it',
-  enrichmentEnableNoticeClose: 'Close',
   scholarlyEnableNoticeTitle: 'External scholarly retrieval is enabled',
   scholarlyEnableNoticeDescription:
     'With dsh-zotero/scholarly enabled, the agent can search external scholarly sources from a conversation. Queries, DOIs, and identifiers go to the allowlisted indexes (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, and Unpaywall). Open-access full-text reading may download a PDF from any public HTTP(S) host. The notice reappears when the component is enabled again.',
   scholarlyEnableNoticeConfirm: 'Got it',
-  scholarlyEnableNoticeClose: 'Close',
   groupEnrichmentOutput: 'Output & data notice',
   groupEnrichmentOutputDesc:
     'Submitted documents are sent to MinerU for parsing. Markdown artifacts are saved in the directory below.',
@@ -364,18 +368,7 @@ export const en = {
   semanticModelAcademic: 'Academic (academic · GTE-Base)',
   semanticModelAcademicDesc:
     'Academic multilingual tier (currently backed by Alibaba GTE Multilingual Base). 768 dim, 8K context. Covers 75+ languages with balanced recall across languages.',
-  semanticModelGranite_97MDesc:
-    'Lightweight model from IBM (384 dim, 32K context). Uses ~200MB RAM and ~15ms CPU latency. For low-resource hardware or batch indexing of abstracts.',
-  semanticModelNomic_137MDesc:
-    'English and code embedding model from Nomic (768 dim, 8K context). Supports Matryoshka dimension truncation. For English papers; weaker on Chinese.',
-  semanticModelGteBaseDesc:
-    'Multilingual model from Alibaba (768 dim, 8K context). Covers 75+ languages with balanced recall across languages.',
-  semanticModelKalm_05BDesc:
-    'Tuned for Chinese/English bilingual literature and instruction queries (896 dim, 32K context). For mixed bilingual research libraries.',
-  semanticModelBgeM3Desc:
-    'Multilingual model from BAAI (1024 dim, 8K context). For long body paragraphs and cross-lingual matching, including review papers and monographs.',
-  semanticModelQwen3_06BDesc:
-    'Alibaba embedding model (1024 dim, 32K context). Chinese semantic comprehension and long-context matching. Default for Chinese-focused libraries.',
+
   semanticSourceHfMirror: 'HF-Mirror (hf-mirror.com)',
   semanticSourceHuggingFace: 'Hugging Face (huggingface.co)',
   groupOutputDesc: 'Response buffer sizes and batch export caps.',
@@ -473,7 +466,8 @@ export const en = {
   maxFulltextChars: 'Full-text character bound',
   maxFulltextCharsHint: 'Most full-text characters considered when ranking passages.',
   fulltextWindowChars: 'Full-text window characters',
-  fulltextWindowCharsHint: 'Characters returned in one full-text window.',
+  fulltextWindowCharsHint:
+    'Characters per full-text window. Large windows use file delivery when they exceed the inline budget.',
   retrieveAttachmentCap: 'Attachment cap per retrieval',
   retrieveAttachmentCapHint: 'Most attachments one retrieval ranks full text from.',
   graphConcurrency: 'Retrieve concurrency',
@@ -657,6 +651,7 @@ export const en = {
   exportBadge: '{count} exports',
   failedBadge: '{count} failed',
   runningBadge: '{count} running',
+  searchOperationsLabel: 'Searches',
   stoppedBadge: '{count} stopped',
   badgePdf: 'PDF',
   badgeMarkdown: 'MD',
@@ -685,7 +680,7 @@ export const en = {
   toolExportKeyField: 'exportKey={key}',
   toolParentItemLine: 'Parent Item:',
   issuesBadge: 'Issues',
-  copyRef: 'Copy Zotero link',
+
   copyExport: 'Copy',
   copyCite: '\\cite{…}',
   copyAll: 'Copy all',
@@ -797,7 +792,9 @@ export const en = {
   toolTitleScholarlySave: 'Save Scholarly Result to Zotero',
   toolSummaryUpdateNote: 'Updated note "{title}"',
   toolSummaryUpdateCollection: 'Updated collection "{name}"',
-  toolSummaryRestoreItems: 'Restored {restored} items; {failed} failed',
+
+  toolSummaryRestoreItemsOutcome:
+    '{restored} restored, {alreadyPresent} already live, {failed} failed, {unverified} unverified',
   toolSummaryRestoreItemsRequested: 'Requested restoration of {count} items',
   toolSummaryCreateSavedSearch: 'Created saved search "{name}"',
   toolSummaryUpdateSavedSearch: 'Updated saved search "{name}"',
@@ -826,6 +823,8 @@ export const en = {
   toolSummaryItem: '{title} ({year})',
   toolSummaryCreateNote: 'Created note "{title}"',
   toolSummaryBatchItems: 'Requested {creates} creates, {updates} updates, {deletes} deletes',
+  toolSummaryBatchItemsOutcome:
+    '{created} created, {updated} updated, {deleted} trashed, {failed} failed, {unverified} unverified',
   toolSummaryUpdateItemTags: 'Updated tags: +{added} −{removed}',
   toolSummaryUpdateItemTagsRequested: 'Requested {count} tag changes',
   toolNoTagsChanged: 'The tag set already matches; nothing was written',
@@ -841,6 +840,7 @@ export const en = {
   toolSummaryBrowseKind: 'Browsing {kind}',
   toolSummaryBrowsePage: 'Browsing {kind}: {returned} of {total}',
   toolBrowseNextPage: 'More results start at offset {offset}',
+  toolBrowseOmittedRows: 'The card omits {count} rows; the complete page is in the result.',
   toolSummaryChanges: 'Sync changes: {count} records',
   toolChangesItems: 'Items',
   toolChangesChildItems: 'Child objects',
@@ -883,10 +883,7 @@ export const en = {
   libraryPanel: 'Literature panel navigation',
   librarySelectLibrary: 'Library',
   librarySearchPlaceholder: 'Search titles, creators, years…',
-  librarySearchModeLabel: 'Mode',
-  librarySearchModeMetadata: 'Metadata',
-  librarySearchModeEverything: 'Full text',
-  libraryEverythingHint: 'Searches PDF text via Zotero’s local index.',
+
   librarySortLabel: 'Sort',
   librarySortAsc: 'Ascending',
   librarySortDesc: 'Descending',
@@ -953,7 +950,7 @@ export const en = {
     'Please refer to the paper "{title}" ({ref}) and answer questions based on its contents.',
   libraryAskFulltextPrompt:
     'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
-  libraryMetaCreators: 'Creators',
+
   libraryMetaDate: 'Date',
   libraryMetaVenue: 'Venue',
   libraryMetaDoi: 'DOI',
@@ -1101,13 +1098,13 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   parsedExplainPrompt:
     'Explain request: read the paper’s complete parsed document before answering. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. If the document cannot be read, say so and explain only what you actually have.\n\nThen explain the quoted passage below. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Open with one plain sentence stating what the passage means, then explain what it does for the paper’s argument; when the text makes it clear, name the section or step it belongs to.\n- Define field terms and acronyms briefly on first use, and write continuous prose rather than a bullet list.\n- Keep the paper’s claims separate from your own reading: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- Keep it to a few short paragraphs unless the passage itself needs more.',
   parsedCopySelection: '复制选中内容',
-  parsedSelectionMenu: '选中内容的操作',
+
   parsedUnavailable: '解析结果不可用，请重新解析这个 PDF。',
   libraryParsedLoading: '正在读取解析文档…',
-  libraryParsedNoPage: '解析结果分页读取失败，请刷新后重试。',
+
   libraryParsedChars: '共 {total} 字符',
   libraryParsedPages: '{count} 页',
-  libraryParsedReadMore: '继续读取',
+
   libraryParsedCopy: '复制 Markdown',
   libraryParsedCopied: '已复制',
   libraryParsedDownload: '下载 Markdown',
@@ -1176,6 +1173,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryWriteUnverified: '提交未核验，再次提交前请先检查 Zotero。',
   libraryWriteFailed: '写入失败',
   libraryWriteApplied: '变更已应用',
+  libraryWritePartial: '部分完成，请核对每项回执。',
+  libraryWriteRestored: '已恢复',
   libraryWriteInvalid: '提交前请检查必填字段和 JSON 数组。',
 
   nav: '文献轨迹',
@@ -1212,7 +1211,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   tabEnrichmentDesc:
     '可选的 MinerU 文档解析。部署允许上传后，在会话文献面板中核对一个具体 PDF，再明确提交。',
   tabAdvanced: '高级选项',
-  groupLibrarySidebarDesc: '选择是否在 DeepSeek Harness 右侧边栏显示文献面板标签页。',
+
   libraryDisabled:
     '文献面板由 dsh-zotero/library 组件提供。在插件列表的「包含的组件」中启用该组件，即可开启文献面板与侧边栏配置。',
   rightSidebarEnabled: '在右侧侧边栏显示',
@@ -1236,6 +1235,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupScholarlyLimitsDesc: '全网检索最大返回篇数与全文提取字符上限。',
   groupEnrichmentMode: '解析模式',
   groupEnrichmentModeDesc: '文档解析接口选择。提供 Agent 轻量解析与精准解析两种模式。',
+  enrichmentOcrLanguageInvalid: '语言代码须以字母开头，长度为 1–32 个字母、数字、下划线或连字符。',
+  enrichmentOcrLanguage: 'PDF OCR 语言',
+  enrichmentOcrLanguageHint:
+    '仅用于免费模式。填写 MinerU 语言代码，例如 ch（中文）或 en（英文）；支持范围由服务端校验。',
   enrichmentMode: '接口模式',
   enrichmentModeHint:
     'Agent 轻量解析：无需 Token，基于 IP 限频，支持 20 页及 10MB 以内单文件，输出 Markdown；精准解析：需配置 Token，支持 200 页及 200MB 复杂版式、表格与公式，单用户每日可免费解析 5000 份文件。',
@@ -1244,7 +1247,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   groupEnrichmentAuth: 'MinerU Token',
   groupEnrichmentAuthDesc:
     '精准解析 API 的访问凭据。Token 有效期为 3 个月；Agent 轻量解析不需要 Token。',
-  enrichmentTokenRefHint: '插件专用的凭据引用名（默认：{suggested}）。',
+
   enrichmentToken: 'MinerU API Token',
   enrichmentTokenHint:
     '精准解析支持每日免费解析 5000 份文件（接口限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。Token 有效期为 3 个月，过期请前往官网重新生成。',
@@ -1258,12 +1261,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentEnableNoticeDescription:
     '提交具体的 Zotero PDF 附件或公开 PDF URL 后，文档会发往 MinerU（mineru.net）解析，Markdown 结果保存在本机。组件再次启用时会重新显示此提醒。',
   enrichmentEnableNoticeConfirm: '我知道了',
-  enrichmentEnableNoticeClose: '关闭',
   scholarlyEnableNoticeTitle: '外部学术检索组件已启用',
   scholarlyEnableNoticeDescription:
     '启用 dsh-zotero/scholarly 后，Agent 可在对话中检索外部学术资料。检索词、DOI 和标识符会发往白名单内的学术索引（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org 和 Unpaywall）。开放获取全文读取可能从任意公网 HTTP(S) 主机下载 PDF。组件再次启用时会重新显示此提醒。',
   scholarlyEnableNoticeConfirm: '我知道了',
-  scholarlyEnableNoticeClose: '关闭',
   groupEnrichmentOutput: '输出与数据说明',
   groupEnrichmentOutputDesc: '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。',
   enrichmentOutputDir: '解析文件目录',
@@ -1330,18 +1331,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   semanticModelAcademic: '经典学术 (academic · GTE-Base)',
   semanticModelAcademicDesc:
     '学术多语言档位（当前基于阿里通义 GTE-Base）。768 维，8K 上下文。覆盖 75 种以上语言，各语言检索表现平均，用于多国语言文献的混合文库。',
-  semanticModelGranite_97MDesc:
-    'IBM 发布的轻量模型（384 维，32K 上下文）。内存占用约 200MB，CPU 推理耗时约 15ms。面向低配设备或文献摘要批量编码。',
-  semanticModelNomic_137MDesc:
-    'Nomic 开发的英文与代码模型（768 维，8K 上下文）。支持 Matryoshka 维度裁剪。用于英文文献、学术论文或代码片段检索，中文理解较弱。',
-  semanticModelGteBaseDesc:
-    '阿里研发的多语言模型（768 维，8K 上下文）。覆盖 75 种以上语言，各语言检索表现平均，用于多国语言文献的混合文库。',
-  semanticModelKalm_05BDesc:
-    '面向中英双语与学术指令微调的模型（896 维，32K 上下文）。用于中英文混杂的科研论文库，理解含特定查询意图的检索词。',
-  semanticModelBgeM3Desc:
-    '智源研发的多语言长文本模型（1024 维，8K 上下文）。用于论文正文段落与跨语言比对，含长篇综述与多语种文献。',
-  semanticModelQwen3_06BDesc:
-    '阿里研发的嵌入模型（1024 维，32K 上下文）。中文语义匹配与长文本理解，资源消耗适中。中文为主文库的默认档位。',
+
   semanticSourceHfMirror: 'HF-Mirror 国内镜像（推荐）',
   semanticSourceHuggingFace: 'Hugging Face 官方直连',
   groupOutputDesc: '数据序列化缓冲区与批量导出规模限制。',
@@ -1430,7 +1420,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   maxFulltextChars: '全文字符上限',
   maxFulltextCharsHint: '参与相关片段排序的全文最多字数。',
   fulltextWindowChars: '全文窗口字符数',
-  fulltextWindowCharsHint: '全文读取模式每次返回的字符数。',
+  fulltextWindowCharsHint: '全文读取模式每次返回的字符数；窗口超过内联预算时，以完整文件交付。',
   retrieveAttachmentCap: '单次取文附件上限',
   retrieveAttachmentCapHint: '单次取文最多参与全文排序的附件数。',
   graphConcurrency: '取文并发数',
@@ -1601,6 +1591,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   exportBadge: '导出 {count}',
   failedBadge: '失败 {count}',
   runningBadge: '进行中 {count}',
+  searchOperationsLabel: '检索',
   stoppedBadge: '已停止 {count}',
   badgePdf: 'PDF',
   badgeMarkdown: 'MD',
@@ -1629,7 +1620,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolExportKeyField: 'exportKey={key}',
   toolParentItemLine: '所属父条目：',
   issuesBadge: '异常',
-  copyRef: '复制Zotero链接',
+
   copyExport: '复制',
   copyCite: '\\cite{…}',
   copyAll: '复制全部',
@@ -1739,7 +1730,9 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolTitleScholarlySave: '保存学术结果到 Zotero',
   toolSummaryUpdateNote: '已更新笔记 "{title}"',
   toolSummaryUpdateCollection: '已更新合集 "{name}"',
-  toolSummaryRestoreItems: '已恢复 {restored} 个条目；{failed} 个失败',
+
+  toolSummaryRestoreItemsOutcome:
+    '已恢复 {restored} 项、原本正常 {alreadyPresent} 项、失败 {failed} 项、未核验 {unverified} 项',
   toolSummaryRestoreItemsRequested: '请求恢复 {count} 个条目',
   toolSummaryCreateSavedSearch: '已创建已存搜索 "{name}"',
   toolSummaryUpdateSavedSearch: '已更新已存搜索 "{name}"',
@@ -1768,6 +1761,8 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryItem: '{title} ({year})',
   toolSummaryCreateNote: '已创建笔记 "{title}"',
   toolSummaryBatchItems: '请求新建 {creates} 项、更新 {updates} 项、移入回收站 {deletes} 项',
+  toolSummaryBatchItemsOutcome:
+    '已新建 {created} 项、已更新 {updated} 项、已移入回收站 {deleted} 项、失败 {failed} 项、未核验 {unverified} 项',
   toolSummaryUpdateItemTags: '已更新标签：新增 {added}，移除 {removed}',
   toolSummaryUpdateItemTagsRequested: '请求修改 {count} 个标签',
   toolNoTagsChanged: '标签集合已一致，未写入任何内容',
@@ -1783,6 +1778,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   toolSummaryBrowseKind: '正在浏览 {kind}',
   toolSummaryBrowsePage: '浏览 {kind}：{returned} / {total}',
   toolBrowseNextPage: '更多结果从 offset {offset} 开始',
+  toolBrowseOmittedRows: '卡片另有 {count} 行未展示；完整页保留在结果中。',
   toolSummaryChanges: '同步变更: {count} 条',
   toolChangesItems: '条目',
   toolChangesChildItems: '子对象',
@@ -1824,10 +1820,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   libraryPanel: '文献面板导航',
   librarySelectLibrary: '文献库',
   librarySearchPlaceholder: '搜索标题、作者、年份…',
-  librarySearchModeLabel: '模式',
-  librarySearchModeMetadata: '标题/作者',
-  librarySearchModeEverything: '全文',
-  libraryEverythingHint: '检索 PDF 正文，依赖 Zotero 本地索引',
+
   librarySortLabel: '排序',
   librarySortAsc: '升序',
   librarySortDesc: '降序',
@@ -1893,7 +1886,7 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   // 模型侧文案在每个字典里保持英文。
   libraryAskFulltextPrompt:
     'Ask request: read the paper’s complete document before answering my next questions about it. Call zotero_retrieve with mode="fulltext", source={source}, start=0, then call it again with start=nextStart until isTruncated is false, and read the windows in order. The source serves the paper’s parsed Markdown document when one exists and Zotero’s index text otherwise; if the document cannot be read, say so and answer only from what you actually have.\n\nWhen answering. This request and its metadata are instructions, not part of the paper:\n- Answer in the language of this conversation, not the language of this instruction.\n- Ground every answer in the document you read: quote its wording when you attribute a claim to it, and never invent page or section numbers.\n- If an answer is not in the document, say so plainly instead of reaching beyond it.',
-  libraryMetaCreators: '作者',
+
   libraryMetaDate: '日期',
   libraryMetaVenue: '来源',
   libraryMetaDoi: 'DOI',

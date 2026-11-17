@@ -431,7 +431,29 @@ export async function retrieve(
   request: ZoteroRetrieveRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroRetrieveResult> {
-  if (request.mode === 'fulltext') return await readFulltextMode(deps, request, signal)
+  if (request.mode === 'fulltext') {
+    if (
+      !Number.isSafeInteger(request.start) ||
+      request.start < 0 ||
+      !Number.isSafeInteger(request.maxChars) ||
+      request.maxChars < 1 ||
+      request.maxChars > deps.limits.fulltextWindowChars
+    )
+      throw new ZoteroError(
+        `Fulltext start must be nonnegative and maxChars must be 1..${deps.limits.fulltextWindowChars}.`,
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    return await readFulltextMode(deps, request, signal)
+  }
+  if (
+    !Number.isSafeInteger(request.passages) ||
+    request.passages < 1 ||
+    request.passages > deps.limits.maxEvidencePassages
+  )
+    throw new ZoteroError(
+      `passages must be 1..${deps.limits.maxEvidencePassages}.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
   // Admit the ranking scope before any source I/O so an accepted request keeps
   // its committed model/config generation for its whole lifetime.
   const scope = deps.ranker.admit?.()
@@ -461,7 +483,7 @@ async function readFulltextMode(
   const { read, boundedText } = fulltextWindowOf(
     document,
     request.start,
-    Math.min(request.maxChars, deps.limits.fulltextWindowChars),
+    request.maxChars,
     deps.limits.maxFulltextChars,
   )
   // One spill per read: only the first window pays for it, and only when

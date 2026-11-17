@@ -313,7 +313,7 @@ describe('retrieve ranking', () => {
   })
 
   it('chunks fulltext at the configured passage word count', async () => {
-    const narrow = makeProvider({ fulltextChunkWords: 2 })
+    const narrow = makeProvider({ fulltextChunkWords: 2, maxEvidencePassages: 20 })
     routeGraph()
     const result = await narrow.retrieve(retrieveRequest({ sources: ['fulltext'], passages: 20 }))
     // Evidence comes back BM25-ranked, so chunk order is relevance order, not

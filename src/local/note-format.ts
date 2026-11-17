@@ -47,6 +47,7 @@ const INLINE_MATH_PATTERN = /(?<!\\|\$)\$(?!\s)((?:[^$\n\x00]|\\\$)+?)(?<!\\|\s)
 const HIGHLIGHT_PATTERN = /(?<!=)==(?!=|\s)((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/g
 const CODE_RESTORE_PATTERN = /\x00CODE(\d+)\x00/g
 const MATH_RESTORE_PATTERN = /\x00MATH(\d+)\x00/g
+const LINK_RESTORE_PATTERN = /\x00LINK(\d+)\x00/g
 
 /**
  * Format inline text: extracts protected spans (inline code and inline math)
@@ -92,10 +93,26 @@ function inlineFormatting(raw: string): string {
   let formatted = escapeHtml(text)
 
   // 4. Inline rich markup
+  const links: string[] = []
+  formatted = formatted.replace(LINK_PATTERN, (_match, label: string, href: string) => {
+    const index = links.length
+    const literalHref = href
+      .replace(CODE_RESTORE_PATTERN, (_token, token: string) =>
+        escapeHtml('`' + codeTokens[Number(token)] + '`'),
+      )
+      .replace(MATH_RESTORE_PATTERN, (_token, token: string) =>
+        escapeHtml('$' + mathTokens[Number(token)] + '$'),
+      )
+    links.push(`<a href="${literalHref}">${italic(bold(highlight(label)))}</a>`)
+    return `\x00LINK${index}\x00`
+  })
   formatted = highlight(formatted)
   formatted = bold(formatted)
   formatted = italic(formatted)
-  formatted = linkify(formatted)
+  formatted = formatted.replace(
+    LINK_RESTORE_PATTERN,
+    (_match, index: string) => links[Number(index)]!,
+  )
 
   // 5. Restore protected tokens (guarded against unnecessary global scans)
   if (codeTokens.length > 0) {
@@ -130,13 +147,8 @@ function italic(escaped: string): string {
 /** Only the documented schemes become anchors; everything else stays literal. */
 const LINK_PATTERN = /\[([^\]\n]*)\]\((https?:\/\/[^)\s]+|zotero:\/\/[^)\s]+)\)/g
 
-function linkify(escaped: string): string {
-  return escaped.replace(LINK_PATTERN, '<a href="$2">$1</a>')
-}
-
 const HEADING = /^(#{1,4})\s+(.*)$/
-const FENCE_OPEN = /^```(.*)$/
-const FENCE_CLOSE = /^```\s*$/
+const FENCE_OPEN = /^(`{3,})([^`]*)$/
 const MATH_BLOCK_OPEN = /^\s*\$\$(?!\$)(.*)$/
 const QUOTE = /^>\s?/
 const UNORDERED_ITEM = /^[-*]\s+/
@@ -189,10 +201,11 @@ function formatListItem(rawText: string, subListHtml = '', trailingHtml = ''): F
   }
 }
 
-function renderList(ordered: boolean, hasTask: boolean, innerHtml: string): string {
+function renderList(ordered: boolean, hasTask: boolean, innerHtml: string, start = '1'): string {
   const tag = ordered ? 'ol' : 'ul'
   const listClass = hasTask ? ' class="task-list"' : ''
-  return `<${tag}${listClass}>${innerHtml}</${tag}>`
+  const startAttribute = ordered && start !== '1' ? ` start="${start}"` : ''
+  return `<${tag}${startAttribute}${listClass}>${innerHtml}</${tag}>`
 }
 
 /** The result of one block renderer: the block's HTML and the index of the first line after it. */
@@ -263,7 +276,7 @@ function renderListBlock(
   while (cursor < lines.length && marker.test(lines[cursor])) {
     let item = lines[cursor].replace(marker, '')
     cursor += 1
-    const nested: Array<{ ordered: boolean; text: string }> = []
+    const nested: Array<{ ordered: boolean; text: string; start: string }> = []
     const trailing: string[] = []
     for (;;) {
       if (cursor >= lines.length || lines[cursor].trim() === '' || !/^\s+\S/.test(lines[cursor])) {
@@ -271,7 +284,11 @@ function renderListBlock(
       }
       const nestedMatch = NESTED_ITEM.exec(lines[cursor])
       if (nestedMatch !== null && trailing.length === 0) {
-        nested.push({ ordered: /\d/.test(nestedMatch[1]), text: nestedMatch[2] })
+        nested.push({
+          ordered: /\d/.test(nestedMatch[1]),
+          text: nestedMatch[2],
+          start: nestedMatch[1].replace(/[.)]$/, ''),
+        })
       } else if (nestedMatch !== null) {
         trailing.push(lines[cursor].trim())
       } else if (nested.length === 0) {
@@ -289,6 +306,7 @@ function renderListBlock(
         nested[0].ordered,
         nestedHasTask,
         nestedItems.map((n) => n.html).join(''),
+        nested[0].start,
       )
     }
     const trailingHtml =
@@ -297,7 +315,10 @@ function renderListBlock(
     if (itemResult.isTask) hasTaskItem = true
     items.push(itemResult.html)
   }
-  return { html: renderList(ordered, hasTaskItem, items.join('')), nextIndex: cursor }
+  return {
+    html: renderList(ordered, hasTaskItem, items.join(''), /^\d+/.exec(lines[index])?.[0]),
+    nextIndex: cursor,
+  }
 }
 
 /** One pipe table: the head row plus every following pipe-carrying row. */
@@ -346,8 +367,9 @@ export function markdownToNoteHtml(markdown: string): string {
     const fence = FENCE_OPEN.exec(line)
     if (fence !== null) {
       const code: string[] = []
+      const closing = new RegExp('^`{' + fence[1].length + ',}\\s*$')
       index += 1
-      while (index < lines.length && !FENCE_CLOSE.test(lines[index])) {
+      while (index < lines.length && !closing.test(lines[index])) {
         code.push(lines[index])
         index += 1
       }

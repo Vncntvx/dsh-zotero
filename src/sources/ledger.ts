@@ -22,11 +22,11 @@
 import { receiptOf } from './receipt.js'
 import { exportBodyOf } from './export-body.js'
 import { windowedItem } from './window.js'
+import { SEARCH_DEFAULT_DIRECTION, SEARCH_DEFAULT_SORT } from '../constants.js'
 
 import type { ArgsView, ToolBlockLike } from './block-types.js'
 import {
   argsViewOf,
-  boolArg,
   callNameOf,
   isSettledTool,
   listArg,
@@ -86,6 +86,7 @@ interface SearchDraft {
   readonly callId: string
   readonly query?: string
   readonly mode: 'metadata' | 'everything'
+  readonly itemLevel: 'top' | 'all'
   readonly scope: SourceScope
   readonly library?: SupportedLocalLibrary
   /** The episode's own filter arguments, normalized at creation. */
@@ -93,7 +94,6 @@ interface SearchDraft {
   readonly tags: readonly string[]
   readonly tagMatch?: 'all' | 'any'
   readonly excludeTags: readonly string[]
-  readonly includeTrashed: boolean
   /**
    * The first page's whole-hit count and note-scan matches. Later pages of the
    * same identity never overwrite them: they describe the episode, not a page.
@@ -103,6 +103,7 @@ interface SearchDraft {
   returned: number
   /** The items whose `searches` list carries this occurrence; a page changes them all. */
   readonly members: Set<ItemDraft>
+  frozen?: SearchOccurrence
 }
 
 /** Mutable accumulator shapes; the frozen views come from `model.ts`. */
@@ -135,6 +136,7 @@ interface ItemDraft {
   readonly evidence: Map<string, EvidenceDraft>
   readonly fulltextReads: FulltextRead[]
   bestAttachment?: SourceItem['bestAttachment']
+  readAttachment?: SourceItem['readAttachment']
   attachment?: SourceAttachment
   retrievalFacts?: SourceRetrievalFacts
   /** Call ids of the successful, meta-recognizable retrieves (the run count). */
@@ -143,6 +145,11 @@ interface ItemDraft {
   readonly exportedCallIds: Set<string>
   /** Occurrences in episode order; the same draft object is shared across items. */
   readonly searches: SearchDraft[]
+  searchesRevision: number
+  evidenceRevision: number
+  fulltextRevision: number
+  exportsRevision: number
+  frozenLists?: FrozenItemLists
   firstSeenAt: number
   lastTouchedAt: number
   /**
@@ -155,6 +162,18 @@ interface ItemDraft {
    * shared aggregate counters are adjusted by the delta on each refreeze.
    */
   mask: number
+}
+
+/** Immutable list snapshots shared across item and instance views until that list changes. */
+interface FrozenItemLists {
+  readonly searchesRevision: number
+  readonly evidenceRevision: number
+  readonly fulltextRevision: number
+  readonly exportsRevision: number
+  readonly searches: readonly SearchOccurrence[]
+  readonly evidence: readonly EvidencePassage[]
+  readonly fulltextReads: readonly FulltextRead[]
+  readonly exports: readonly ExportArtifact[]
 }
 
 function emptyOperations(): DraftOperations {
@@ -176,6 +195,7 @@ interface NormalizedSearch {
   readonly identity: string
   readonly query?: string
   readonly mode: 'metadata' | 'everything'
+  readonly itemLevel: 'top' | 'all'
   readonly scope: SourceScope
   /** The library the occurrence carries; absent when the call did not name one. */
   readonly occurrenceLibrary?: SupportedLocalLibrary
@@ -183,7 +203,6 @@ interface NormalizedSearch {
   readonly tags: readonly string[]
   readonly tagMatch: 'all' | 'any'
   readonly excludeTags: readonly string[]
-  readonly includeTrashed: boolean
 }
 
 function normalizedSearchOf(
@@ -207,32 +226,32 @@ function normalizedSearchOf(
   const tags = normalizedListOf(listArg(args, 'tags'))
   const tagMatch = textArg(args, 'tagMatch') === 'any' ? 'any' : 'all'
   const excludeTags = normalizedListOf(listArg(args, 'excludeTags'))
-  const includeTrashed = boolArg(args, 'includeTrashed')
-  const sort = textArg(args, 'sort') ?? ''
-  const direction = textArg(args, 'direction') ?? ''
+  const sort = textArg(args, 'sort') ?? SEARCH_DEFAULT_SORT
+  const direction = textArg(args, 'direction') ?? SEARCH_DEFAULT_DIRECTION
+  const itemLevel = textArg(args, 'itemLevel') === 'all' ? 'all' : 'top'
   return {
     identity: JSON.stringify({
       query: query ?? '',
       mode,
+      itemLevel,
       library: identityLibrary,
       scope,
       itemTypes,
       tags,
       tagMatch,
       excludeTags,
-      includeTrashed,
       sort,
       direction,
     }),
     ...(query !== undefined && query !== '' ? { query } : {}),
     mode,
+    itemLevel,
     scope,
     ...(namedLibrary === undefined ? {} : { occurrenceLibrary: namedLibrary }),
     itemTypes,
     tags,
     tagMatch,
     excludeTags,
-    includeTrashed,
   }
 }
 
@@ -282,7 +301,8 @@ function refArgOf(args: ArgsView): string | null {
     const record = source as Record<string, unknown>
     for (const key of ['ref', 'artifactId']) {
       const value = record[key]
-      if (typeof value === 'string' && value !== '') return value
+      if (typeof value === 'string' && value !== '')
+        return key === 'artifactId' ? `artifact:${value}` : value
     }
   }
   return null
@@ -319,6 +339,9 @@ function evidenceKeyOf(item: import('../evidence-item.js').EvidenceItem): string
   return JSON.stringify([
     item.source,
     item.sourceRef,
+    item.attachmentRef,
+    item.matchKind,
+    item.matchedFields,
     item.pageLabel,
     item.preview,
     item.textFormat,
@@ -358,6 +381,8 @@ export function fulltextKeyOf(
     | 'end'
     | 'isTruncated'
     | 'attachmentRef'
+    | 'attachmentContentType'
+    | 'item'
   >,
 ): string {
   const artifact = read.artifact
@@ -372,6 +397,8 @@ export function fulltextKeyOf(
     read.end,
     read.isTruncated,
     read.attachmentRef ?? null,
+    read.attachmentContentType ?? null,
+    read.item?.ref ?? null,
     artifact === undefined
       ? null
       : [
@@ -407,21 +434,22 @@ function eventTimeOf(block: ToolBlockLike): number {
 /** The filter membership one frozen item contributes to the aggregate counters. */
 /** Freeze one occurrence; the argument arrays are written once and never mutated. */
 function frozenSearchOf(draft: SearchDraft): SearchOccurrence {
-  return {
+  if (draft.frozen?.returned === draft.returned) return draft.frozen
+  return (draft.frozen = {
     callId: draft.callId,
     ...(draft.query === undefined ? {} : { query: draft.query }),
     mode: draft.mode,
+    itemLevel: draft.itemLevel,
     scope: draft.scope,
     ...(draft.library ? { library: draft.library } : {}),
     itemTypes: draft.itemTypes,
     tags: draft.tags,
     ...(draft.tagMatch ? { tagMatch: draft.tagMatch } : {}),
     excludeTags: draft.excludeTags,
-    includeTrashed: draft.includeTrashed,
     returned: draft.returned,
     ...(draft.total === undefined ? {} : { total: draft.total }),
     ...(draft.noteMatches === undefined ? {} : { noteMatches: draft.noteMatches }),
-  }
+  })
 }
 
 /**
@@ -430,12 +458,33 @@ function frozenSearchOf(draft: SearchDraft): SearchOccurrence {
  * their `callIds` would let a later fold rewrite a view already published.
  */
 function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): SourceItem {
-  const searches = draft.searches.map(frozenSearchOf)
-  // Insertion order is transcript order (the fold is sequential), so the sort
-  // is a stable no-op that keeps the guarantee explicit for a resumed index.
-  const evidence = [...draft.evidence.values()]
-    .sort((a, b) => a.seq - b.seq)
-    .map((entry) => ({ ...entry.passage, callIds: [...entry.passage.callIds] }))
+  const previous = draft.frozenLists
+  const searches =
+    previous?.searchesRevision === draft.searchesRevision
+      ? previous.searches
+      : draft.searches.map(frozenSearchOf)
+  const evidence =
+    previous?.evidenceRevision === draft.evidenceRevision
+      ? previous.evidence
+      : [...draft.evidence.values()]
+          .sort((a, b) => a.seq - b.seq)
+          .map((entry) => ({ ...entry.passage, callIds: [...entry.passage.callIds] }))
+  const fulltextReads =
+    previous?.fulltextRevision === draft.fulltextRevision
+      ? previous.fulltextReads
+      : [...draft.fulltextReads]
+  const exports =
+    previous?.exportsRevision === draft.exportsRevision ? previous.exports : [...draft.exports]
+  draft.frozenLists = {
+    searchesRevision: draft.searchesRevision,
+    evidenceRevision: draft.evidenceRevision,
+    fulltextRevision: draft.fulltextRevision,
+    exportsRevision: draft.exportsRevision,
+    searches,
+    evidence,
+    fulltextReads,
+    exports,
+  }
   return {
     key: draft.key,
     ref: draft.ref,
@@ -455,9 +504,10 @@ function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): So
     searchesTotal: searches.length,
     evidence,
     evidenceTotal: evidence.length,
-    fulltextReads: draft.fulltextReads.map((read) => ({ ...read, callIds: [...read.callIds] })),
+    fulltextReads,
     fulltextReadsTotal: draft.fulltextReads.length,
     ...(draft.bestAttachment === undefined ? {} : { bestAttachment: draft.bestAttachment }),
+    ...(draft.readAttachment === undefined ? {} : { readAttachment: draft.readAttachment }),
     ...(draft.attachment === undefined ? {} : { attachment: draft.attachment }),
     ...(draft.retrievalFacts === undefined ? {} : { retrievalFacts: draft.retrievalFacts }),
     ...(draft.successfulRetrieveCallIds.size === 0
@@ -468,7 +518,7 @@ function frozenItemOf(draft: ItemDraft, currentServerId: string | undefined): So
             truncated: draft.retrievalFacts?.truncated === true,
           },
         }),
-    exports: [...draft.exports],
+    exports,
     exportsTotal: draft.exports.length,
     firstSeenAt: draft.firstSeenAt,
     lastTouchedAt: draft.lastTouchedAt,
@@ -483,14 +533,16 @@ interface PendingOverlay {
   /** Every item the pending calls touched, in first-seen order. */
   readonly items: readonly SourceItem[]
   readonly exportRunning: number
+  readonly searchRunning: number
 }
 
-const EMPTY_OVERLAY: PendingOverlay = { items: [], exportRunning: 0 }
+const EMPTY_OVERLAY: PendingOverlay = { items: [], exportRunning: 0, searchRunning: 0 }
 
 function sameOverlay(left: PendingOverlay | undefined, right: PendingOverlay): boolean {
   if (left === undefined) return right === EMPTY_OVERLAY
   if (right === EMPTY_OVERLAY) return left === EMPTY_OVERLAY
   if (left.exportRunning !== right.exportRunning) return false
+  if (left.searchRunning !== right.searchRunning) return false
   if (left.items.length !== right.items.length) return false
   for (let i = 0; i < left.items.length; i += 1) {
     const a = left.items[i]!
@@ -559,6 +611,7 @@ export class SourceWorkspaceIndex {
   private readonly indexByKey = new Map<string, number>()
   private readonly artifacts: ExportArtifact[] = []
   private readonly artifactOperations: DraftOperations = emptyOperations()
+  private readonly searchOperations: DraftOperations = emptyOperations()
   private readonly artifactRefs = new Set<string>()
   private readonly viewCaches = new Map<string | undefined, ViewCache>()
   private readonly filterTotals = { pdf: 0, retrieved: 0, evidence: 0, exported: 0 }
@@ -718,7 +771,11 @@ export class SourceWorkspaceIndex {
       ...(currentServerId === undefined ? {} : { currentServerId }),
       windowed: false,
     }).sources
-    return { items, exportRunning: tail.artifactOperations.running }
+    return {
+      items,
+      exportRunning: tail.artifactOperations.running,
+      searchRunning: tail.searchOperations.running,
+    }
   }
 
   /**
@@ -810,6 +867,11 @@ export class SourceWorkspaceIndex {
         failed: this.artifactOperations.failed,
         stopped: this.artifactOperations.stopped,
       },
+      searchOperations: {
+        running: this.searchOperations.running + overlay.searchRunning,
+        failed: this.searchOperations.failed,
+        stopped: this.searchOperations.stopped,
+      },
       omittedRows: this.omitted,
       filterCounts: {
         all: sourceTotal,
@@ -842,6 +904,10 @@ export class SourceWorkspaceIndex {
         exportedCallIds: new Set(),
         successfulRetrieveCallIds: new Set(),
         searches: [],
+        searchesRevision: 0,
+        evidenceRevision: 0,
+        fulltextRevision: 0,
+        exportsRevision: 0,
         firstSeenAt: seq,
         lastTouchedAt: seq,
         version: 1,
@@ -900,6 +966,7 @@ export class SourceWorkspaceIndex {
     // decoupled from the evidence side, so it adds no availability, count,
     // budget flag, or evidence-run count.
     if (view.kind === 'fulltext') {
+      draft.fulltextRevision++
       const read = view.fulltextRead
       const key = fulltextKeyOf(read)
       const existing = draft.fulltextReads.findIndex((entry) => fulltextKeyOf(entry) === key)
@@ -909,6 +976,7 @@ export class SourceWorkspaceIndex {
         const previous = draft.fulltextReads[existing]!
         draft.fulltextReads[existing] = {
           ...previous,
+          ...read,
           callIds: [...previous.callIds, callId],
         }
       }
@@ -967,6 +1035,7 @@ export class SourceWorkspaceIndex {
       draft.retrievalFacts = nextFacts
     }
     if (view.items !== null) {
+      if (view.items.length > 0) draft.evidenceRevision++
       for (const item of view.items) {
         const key = evidenceKeyOf(item)
         const existing = draft.evidence.get(key)
@@ -984,6 +1053,10 @@ export class SourceWorkspaceIndex {
                 : { start: item.start, end: item.end }),
               ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
               ...(item.attachmentRef === undefined ? {} : { attachmentRef: item.attachmentRef }),
+              ...(item.matchKind === undefined ? {} : { matchKind: item.matchKind }),
+              ...(item.matchedFields === undefined
+                ? {}
+                : { matchedFields: [...item.matchedFields] }),
               callIds: [callId],
             },
             seq,
@@ -1009,7 +1082,13 @@ export class SourceWorkspaceIndex {
 
     switch (name) {
       case 'zotero_search': {
-        if (state !== 'ok') break
+        if (state !== 'ok') {
+          if (state === 'running') this.searchOperations.running++
+          else if (state === 'stopped') this.searchOperations.stopped++
+          else this.searchOperations.failed++
+          this.bumpScalar()
+          break
+        }
         const view = meta === null ? null : searchMetaOf(meta)
         if (view === null || view.rows === null) break
         const resolvedScope = view.scope
@@ -1028,6 +1107,7 @@ export class SourceWorkspaceIndex {
             callId: block.callId,
             ...(normalized?.query === undefined ? {} : { query: normalized.query }),
             mode: normalized?.mode ?? 'metadata',
+            itemLevel: normalized?.itemLevel ?? 'top',
             scope: normalized?.scope ?? scopeOf(valueArg(args, 'scope')),
             ...(normalized?.occurrenceLibrary === undefined
               ? {}
@@ -1036,7 +1116,6 @@ export class SourceWorkspaceIndex {
             tags: normalized?.tags ?? [],
             tagMatch: normalized?.tagMatch ?? 'all',
             excludeTags: normalized?.excludeTags ?? [],
-            includeTrashed: normalized?.includeTrashed ?? false,
             returned: 0,
             ...(view.total === null ? {} : { total: view.total }),
             ...(view.noteMatches === null ? {} : { noteMatches: view.noteMatches }),
@@ -1077,7 +1156,10 @@ export class SourceWorkspaceIndex {
         // `returned` describes the episode, so a continuation page changes the
         // occurrence of every item the episode already listed, not only the
         // rows this page happened to repeat.
-        for (const member of episode.members) this.touchMember(member)
+        for (const member of episode.members) {
+          member.searchesRevision++
+          this.touchMember(member)
+        }
         break
       }
       case 'zotero_get': {
@@ -1147,27 +1229,27 @@ export class SourceWorkspaceIndex {
         break
       }
       case 'zotero_retrieve': {
-        const ref = refArgOf(args)
+        const view = meta === null ? undefined : retrieveMetaOf(meta)
+        const read = view?.kind === 'fulltext' ? view.fulltextRead : undefined
+        const ref = read?.item?.ref ?? read?.attachmentRef ?? refArgOf(args)
         if (ref === null) break
         const draft = this.draftOf(ref, seq)
         this.countOperation(draft, state)
         if (state === 'ok' && meta !== null) {
-          // An artifactId read has no Zotero identity: the resolved handle is
-          // the trail key, so the row's title is the window's safe source
-          // label (an attachment ref or URL origin) instead of the hex id.
-          const view = retrieveMetaOf(meta)
-          const source = valueArg(args, 'source')
-          const artifactId =
-            typeof source === 'object' && source !== null && !Array.isArray(source)
-              ? (source as Record<string, unknown>)['artifactId']
-              : undefined
-          if (
-            view.kind === 'fulltext' &&
-            typeof artifactId === 'string' &&
-            normalizeRefKey(ref) === normalizeRefKey(artifactId)
-          ) {
-            draft.title = view.fulltextRead.sourceLabel
-          }
+          if (read?.item !== undefined) {
+            draft.title = read.item.title
+            draft.creators = read.item.creatorSummary
+            if (read.item.year !== undefined) draft.year = read.item.year
+            if (read.item.venue !== undefined) draft.venue = read.item.venue
+          } else if (read !== undefined && ref.startsWith('artifact:'))
+            draft.title = read.sourceLabel
+          if (read?.attachmentRef !== undefined)
+            draft.readAttachment = {
+              ref: read.attachmentRef,
+              ...(read.attachmentContentType === undefined
+                ? {}
+                : { contentType: read.attachmentContentType }),
+            }
           this.pushEvidence(draft, meta, block.callId, seq)
         }
         break
@@ -1216,6 +1298,7 @@ export class SourceWorkspaceIndex {
           if (draft !== undefined && !draft.exportedCallIds.has(block.callId)) {
             draft.exportedCallIds.add(block.callId)
             draft.exports.push(artifact)
+            draft.exportsRevision++
             this.touchMember(draft)
           }
         }

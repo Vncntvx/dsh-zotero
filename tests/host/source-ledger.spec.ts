@@ -1,3 +1,5 @@
+import { workspaceOf } from './support/source-ledger-view.js'
+import { resultReceipt } from '../helpers/result-receipts.ts'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -15,7 +17,6 @@ import {
   emptyLedgerState,
   factsOf,
   foldLedgerEvent,
-  workspaceOf,
   type SourceLedgerState,
 } from '../../src/sources/event-ledger.js'
 import { sourceWorkspaceSchema } from '../../src/sources/workspace-schema.js'
@@ -46,6 +47,36 @@ const SEARCH_META = {
   omitted: 0,
   items: [{ ref: REF, title: 'Attention Is All You Need', creatorSummary: 'Vaswani', year: 2017 }],
 }
+
+it.each([
+  'zotero_search',
+  'zotero_get',
+  'zotero_get_batch',
+  'zotero_match_references',
+  'zotero_retrieve',
+])('does not duplicate %s rendered bodies in durable projection state', (name) => {
+  const call = event('tool/call', { callId: name, name, arguments: '{}' })
+  const large = 'rendered window '.repeat(1000)
+  const result = event('tool/result', {
+    meta: name === 'zotero_search' ? SEARCH_META : {},
+    message: { toolCallId: name, content: [{ type: 'text', text: large }] },
+  })
+  const state = fold([call, result])
+  expect(factsOf(state)).toHaveLength(1)
+  expect(factsOf(state)[0]?.content).toEqual([])
+  expect(JSON.stringify(state)).not.toContain(large)
+  expect(workspaceOf(state)).toEqual(
+    workspaceOf(
+      fold([
+        call,
+        event('tool/result', {
+          meta: name === 'zotero_search' ? SEARCH_META : {},
+          message: { toolCallId: name, content: [] },
+        }),
+      ]),
+    ),
+  )
+})
 
 /** Fold the event list, starting from the empty state. */
 function fold(events: readonly SessionEvent[]): SourceLedgerState {
@@ -392,7 +423,7 @@ describe('the host literature-trail fold', () => {
   })
 
   it('keeps a job_output result only when it carries a durable receipt', () => {
-    const receipt = {
+    const receipt = resultReceipt({
       delivery: 'file',
       version: 1,
       tool: 'zotero_export',
@@ -400,7 +431,7 @@ describe('the host literature-trail fold', () => {
       callId: 'call-export',
       summary: 'zotero_export: full result persisted.',
       file: { attachmentId: 'attachment-1', name: 'export.json', bytes: 12 },
-    }
+    })
     const withReceipt = fold([
       event('tool/call', {
         turn: 1,
@@ -483,7 +514,7 @@ describe('the host literature-trail fold', () => {
         meta: SEARCH_META,
       }),
     ])
-    const projectionState = { inheritedEventCount: 0, ledger: state }
+    const projectionState = { ledger: state }
     const roundTripped = JSON.parse(JSON.stringify(projectionState))
     expect(
       createSourceLedgerProjection().definition.stateSchema.safeParse(roundTripped).success,
@@ -507,7 +538,7 @@ describe('the host literature-trail fold', () => {
         meta: SEARCH_META,
       }),
     ])
-    const projectionState = { inheritedEventCount: 99, ledger: state }
+    const projectionState = { ledger: state }
     expect(
       createSourceLedgerProjection().definition.wire.view(projectionState).sources,
     ).toHaveLength(1)

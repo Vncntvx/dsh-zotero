@@ -12,16 +12,24 @@
  * @module dsh-zotero/local/item-batch
  */
 
+import { numericHeader, itemKeyList } from './wire.js'
 import { ZOTERO_LIBRARY_VERSION_HEADER } from '../constants.js'
 import { mapWithConcurrency } from '../concurrency.js'
 import { ZOTERO_NOT_FOUND, ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
-import { asRecord, asString, parseNonNegativeSafeInteger } from '../json.js'
+import { asRecord, asString } from '../json.js'
 import { libraryPrefix } from '../refs.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { chunkItemKeyBatches, requireArrayBody } from './pagination.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import type { LocalApiLimits } from './limits.js'
 import type { SupportedLocalLibrary } from '../types.js'
+
+/** A consistent key set can be re-read after the library changes during paging. */
+export class ItemBatchVersionDriftError extends ZoteroError {
+  constructor(what: string) {
+    super(`Zotero's library version changed while the ${what} was fetched.`, ZOTERO_UNEXPECTED)
+  }
+}
 
 /** One batched read's behavior. */
 export interface ItemKeyBatchOptions<T> {
@@ -85,14 +93,14 @@ async function fetchItemKeyScopes<T>(
     chunks,
     deps.limits.searchConcurrency,
     async (chunk, poolSignal) => {
-      const params = new URLSearchParams({ itemKey: chunk.join(',') })
+      const params = new URLSearchParams({ itemKey: itemKeyList(chunk) })
       const { json, headers } = await deps.client.getJson<unknown>(
         `${libraryPrefix(library)}/items`,
         params,
         { signal: poolSignal, serverId: options.serverId },
       )
       assertServerIdMatches(serverIdFromHeaders(headers, options.serverId), options.serverId)
-      const version = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+      const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
       return { byKey: rowsByKey(requireArrayBody(json, options.what), options), version }
     },
     { signal: options.signal },
@@ -133,7 +141,7 @@ async function fetchSingleItemObjects<T>(
         throw error
       }
       assertServerIdMatches(serverIdFromHeaders(headers, options.serverId), options.serverId)
-      const version = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+      const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
       const row = asRecord(json)
       if (asString(row?.key) !== key) {
         throw new ZoteroError(
@@ -176,10 +184,7 @@ function mergeResults<T>(
     for (const [key, item] of result.byKey) byKey.set(key, item)
     if (result.version !== undefined) {
       if (libraryVersion !== undefined && libraryVersion !== result.version) {
-        throw new ZoteroError(
-          `Zotero's library version changed while the ${what} was fetched.`,
-          ZOTERO_UNEXPECTED,
-        )
+        throw new ItemBatchVersionDriftError(what)
       }
       libraryVersion = result.version
     }

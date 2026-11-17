@@ -6,7 +6,7 @@
  * @module dsh-zotero/local/pagination
  */
 
-import { parseNonNegativeSafeInteger } from '../json.js'
+import { numericHeader } from './wire.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from '../errors.js'
 import {
   ZOTERO_ITEMKEY_BATCH,
@@ -29,8 +29,7 @@ export const MAX_LISTING_PAGES = 10_000
  */
 export function requireTotalResults(headers: Headers, what: string): number {
   // `Headers.get` is case-insensitive; one lookup covers both spellings.
-  const raw = headers.get(ZOTERO_TOTAL_RESULTS_HEADER)
-  const total = parseNonNegativeSafeInteger(raw)
+  const total = numericHeader(headers, ZOTERO_TOTAL_RESULTS_HEADER)
   if (total === undefined || total > MAX_LISTING_ROWS) {
     throw new ZoteroError(
       `Zotero did not return a valid Total-Results header for ${what}`,
@@ -47,8 +46,7 @@ export function requireTotalResults(headers: Headers, what: string): number {
  * read fails loud instead of inventing one.
  */
 export function requireLibraryVersionHeader(headers: Headers, what: string): number {
-  const raw = headers.get(ZOTERO_LIBRARY_VERSION_HEADER)
-  const version = parseNonNegativeSafeInteger(raw)
+  const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
   if (version === undefined) {
     throw new ZoteroError(
       `Zotero did not return a valid Last-Modified-Version header for ${what}`,
@@ -111,7 +109,16 @@ export function nextOffsetOrFail(
   returnedCount: number,
   total: number,
   what: string,
+  limit?: number,
 ): number | undefined {
+  if (
+    (returnedCount > 0 && offset + returnedCount > total) ||
+    (limit !== undefined && returnedCount > limit)
+  )
+    throw new ZoteroError(
+      `Zotero returned a page beyond the reported window for ${what}.`,
+      ZOTERO_UNEXPECTED,
+    )
   if (returnedCount === 0 && offset < total) {
     throw new ZoteroError(
       `Zotero returned an empty page for ${what} at offset ${offset} but Total-Results is ${total}`,
@@ -138,8 +145,8 @@ export function setPage(params: URLSearchParams, offset: number, limit: number):
 
 /**
  * Split inputs into `itemKey=`-sized batches: every batched read chunks at
- * `ZOTERO_ITEMKEY_BATCH` and then comma-joins each batch itself — that join
- * spelling is the wire contract Zotero splits server-side
+ * `ZOTERO_ITEMKEY_BATCH`; wire.itemKeyList encodes each batch using the
+ * spelling Zotero splits server-side
  * (`new Set(...split(','))`, `server_localAPI.js:1117-1129`).
  */
 export function chunkItemKeyBatches<T>(items: readonly T[]): T[][] {
@@ -199,7 +206,7 @@ export async function readAllPages(
     assertServerIdMatches(serverIdFromHeaders(headers), serverId)
     const page = requireArrayBody(json, what.body)
     const total = requireTotalResults(headers, what.body)
-    const version = parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+    const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
     if (page.length > ZOTERO_LIST_PAGE_ROWS || page.length > Math.max(0, total - offset))
       throw new ZoteroError(
         `Zotero returned a page beyond the reported window for ${what.page}.`,
@@ -257,7 +264,7 @@ export async function readPagesConcurrentlyFolded<T>(
   libraryVersion?: number
 }> {
   const versionOf = (headers: Headers): number | undefined =>
-    parseNonNegativeSafeInteger(headers.get(ZOTERO_LIBRARY_VERSION_HEADER))
+    numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
   let pagesRead = 0
   const readPage = async (offset: number, limit: number, poolSignal: AbortSignal | undefined) => {
     if (++pagesRead > MAX_LISTING_PAGES)

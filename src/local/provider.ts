@@ -70,6 +70,8 @@ import {
   updateItemTags as updateItemTagsDomain,
 } from './write-item-lists.js'
 import { batchItems as batchItemsDomain } from './write-batch.js'
+import { preflightWrite as preflightWriteDomain } from './write-preflight.js'
+import type { ZoteroWritePreflight } from '../types.js'
 import {
   createCollection as createCollectionDomain,
   deleteCollection as deleteCollectionDomain,
@@ -436,12 +438,12 @@ export class LocalApiProvider implements ZoteroProvider {
   retrieve(
     request: ZoteroFulltextRetrieveRequest,
     signal?: AbortSignal,
-    spill?: import('./retrieve-fulltext.js').FulltextSpillSink,
+    spill?: import('../fulltext-spill.js').FulltextSpillSink,
   ): Promise<ZoteroFulltextRetrieveResult>
   async retrieve(
     request: ZoteroRetrieveRequest,
     signal?: AbortSignal,
-    spill?: import('./retrieve-fulltext.js').FulltextSpillSink,
+    spill?: import('../fulltext-spill.js').FulltextSpillSink,
   ): Promise<ZoteroRetrieveResult> {
     const deps = this.deps()
     return retrieveDomain(spill === undefined ? deps : { ...deps, spill }, request, signal)
@@ -551,6 +553,10 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroCreateCollectionCommittedOutcome> {
     return createCollectionDomain(this.writeDeps(), request, signal)
+  }
+
+  async preflightWrite(request: ZoteroWritePreflight, signal?: AbortSignal): Promise<void> {
+    await preflightWriteDomain(this.writeDeps(), request, signal)
   }
 
   /**

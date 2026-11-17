@@ -4,6 +4,7 @@
  * @module dsh-zotero/local/item-schema-directory
  */
 
+import { LruTtlCache } from '../ttl-cache.js'
 import { sharedRead, type SharedOperation } from '../concurrency.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString } from '../json.js'
@@ -37,14 +38,25 @@ function itemTypeKeyOf(claim: string | undefined, itemType: string): string {
   return `${claim ?? ''}:${itemType}`
 }
 
+/** Schema aliases share a five-minute snapshot and a bounded key inventory. */
+class SchemaCache<V> {
+  private readonly entries = new LruTtlCache<{ value: V; fetchedAt: number }>(256, 5 * 60_000)
+  get(key: string): V | undefined {
+    return this.entries.get(key)?.value
+  }
+  set(key: string, value: V): void {
+    this.entries.set(key, { value, fetchedAt: Date.now() })
+  }
+}
+
 export class ItemSchemaDirectory {
-  private readonly itemTypesCache = new Map<string, ItemTypesSchema>()
+  private readonly itemTypesCache = new SchemaCache<ItemTypesSchema>()
   private readonly itemTypesInFlight = new Map<string, SharedOperation<ItemTypesSchema>>()
-  private readonly itemFieldsCache = new Map<string, ItemFieldsSchema>()
+  private readonly itemFieldsCache = new SchemaCache<ItemFieldsSchema>()
   private readonly itemFieldsInFlight = new Map<string, SharedOperation<ItemFieldsSchema>>()
-  private readonly fieldListCache = new Map<string, FieldListSchema>()
+  private readonly fieldListCache = new SchemaCache<FieldListSchema>()
   private readonly fieldListInFlight = new Map<string, SharedOperation<FieldListSchema>>()
-  private readonly itemTypeFieldsCache = new Map<string, WritableFieldsSchema>()
+  private readonly itemTypeFieldsCache = new SchemaCache<WritableFieldsSchema>()
   private readonly itemTypeFieldsInFlight = new Map<string, SharedOperation<WritableFieldsSchema>>()
 
   constructor(private readonly client: ZoteroHttpClient) {}
@@ -59,9 +71,7 @@ export class ItemSchemaDirectory {
       keys: {
         flightKey: claim ?? '',
         find: () =>
-          claim !== undefined
-            ? this.itemTypesCache.get(claim)
-            : (this.itemTypesCache.get('') ?? this.itemTypesCache.values().next().value),
+          claim !== undefined ? this.itemTypesCache.get(claim) : this.itemTypesCache.get(''),
         // The instance that served the answer, the default alias, and the
         // caller's claim all answer the same snapshot.
         store: (value) => [

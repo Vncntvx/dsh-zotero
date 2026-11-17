@@ -3,7 +3,7 @@
  * per-ref citations reordered to the requested order, joined bibliography and
  * translator formats, and the never mid-truncated output limit. `exportText`
  * is the panel's arm: same rendered/citation output, but no tool-side
- * per-document itemization and no bibtex-family metadata read.
+ * per-document itemization. Both arms independently verify the requested keys.
  * @module tests/provider/export
  */
 
@@ -37,12 +37,19 @@ import {
   itemRef,
   refOf,
 } from '../helpers/server/keys.js'
-import { citationRow } from '../helpers/server/objects.js'
-import { serveJson, serveText } from '../helpers/server/serve.js'
+import { citationRow, item } from '../helpers/server/objects.js'
+import { serveJson } from '../helpers/server/serve.js'
 
 let mock: ProviderHarness['mock']
 let provider: LocalApiProvider
 let harness: ProviderHarness
+
+function serveCheckedExport(body: string): void {
+  mock.route('GET', `${apiPath()}/items`, (_req, _res, helpers, search) => {
+    if (search.has('format')) helpers.text(body)
+    else helpers.json((search.get('itemKey') ?? '').split(',').map((key) => item({ key })))
+  })
+}
 
 beforeEach(async () => {
   harness = await setupProvider()
@@ -104,11 +111,7 @@ describe('export', () => {
   })
 
   it('fetches a joined bibliography with format=bib', async () => {
-    serveText(
-      mock,
-      `${apiPath()}/items`,
-      '<div class="csl-entry">A</div>\n<div class="csl-entry">B</div>',
-    )
+    serveCheckedExport('<div class="csl-entry">A</div>\n<div class="csl-entry">B</div>')
     const result = await provider.export(exportRequest({ format: 'bibliography' }))
     const sent = mock.requests[0]!
     expect(sent.search.get('format')).toBe('bib')
@@ -124,7 +127,8 @@ describe('export', () => {
 
   it('passes translator bodies through and pairs itemized entries with a bounded metadata batch', async () => {
     mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      helpers.text(`exported-as-${search.get('format')}`)
+      if (search.has('format')) helpers.text(`exported-as-${search.get('format')}`)
+      else helpers.json((search.get('itemKey') ?? '').split(',').map((key) => item({ key })))
     })
     for (const format of ['bibtex', 'biblatex', 'ris', 'csljson'] as const) {
       const before = mock.requests.length
@@ -201,7 +205,7 @@ describe('export', () => {
   it('pairs RIS translator documents with requested refs in memory', async () => {
     const risText =
       'TY  - JOUR\nTI  - First Paper\nID  - ABCD1234\nER  -\n\nTY  - JOUR\nTI  - Second Paper\nID  - BBBB1234\nER  -\n'
-    serveText(mock, `${apiPath()}/items`, risText)
+    serveCheckedExport(risText)
     const risResult = await provider.export(exportRequest({ format: 'ris' }))
     if (risResult.format !== 'ris') throw new Error('unreachable')
     expect(risResult.items).toHaveLength(2)
@@ -218,7 +222,7 @@ describe('export', () => {
       { id: 'ABCD1234', title: 'Paper A' },
       { id: 'http://zotero.org/users/0/items/BBBB1234', title: 'Paper B' },
     ])
-    serveText(mock, `${apiPath()}/items`, csljsonText)
+    serveCheckedExport(csljsonText)
     const cslResult = await provider.export(exportRequest({ format: 'csljson' }))
     if (cslResult.format !== 'csljson') throw new Error('unreachable')
     expect(cslResult.items).toHaveLength(2)
@@ -232,7 +236,7 @@ describe('export', () => {
 
   it('fails with OUTPUT_TOO_LARGE instead of truncating oversized exports', async () => {
     const narrow = makeProvider({ maxExportChars: 10 })
-    serveText(mock, `${apiPath()}/items`, '01234567890')
+    serveCheckedExport('01234567890')
     await zoteroError(
       narrow.export(exportRequest({ format: 'bibtex' })),
       'ZOTERO_OUTPUT_TOO_LARGE',
@@ -271,30 +275,16 @@ describe('export', () => {
 
   it('accepts a raw export body that lands exactly on the output cap', async () => {
     const narrow = makeProvider({ maxExportChars: 20 })
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      const keys = (search.get('itemKey') ?? '').split(',')
-      if (keys.length > 1) {
-        helpers.text('0123456789')
-        return
-      }
-      helpers.text('12345')
-    })
-    // The cap accounts batch + singles (both stay in the result): 10 + 5 + 5
-    // lands exactly on 20 and must pass; an off-by-one (>=) would reject it.
-    // This mock cannot tell the body request from the metadata request, so
-    // the alignment arm also fails and the receipt says so.
+    serveCheckedExport('01234567890123456789')
     const result = await narrow.export(exportRequest({ format: 'bibtex' }))
     expect(result).toEqual({
       format: 'bibtex',
-      text: '0123456789',
-      items: [{ ref: 'zotero://user/0/item/ABCD1234' }, { ref: 'zotero://user/0/item/BBBB1234' }],
-      metadataIncomplete: true,
+      text: '01234567890123456789',
+      items: [{ ref: itemRef() }, { ref: itemRef(SECOND_ITEM_KEY) }],
     })
   })
 
-  it('reports partial citekey alignment instead of silently dropping metadata', async () => {
-    // The metadata batch failing is not the export failing: the body is
-    // complete, but the receipt must say the per-document facts are partial.
+  it('refuses an unverified body and succeeds after the metadata service recovers', async () => {
     let metadataFails = true
     mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
       if (search.get('format') === 'bibtex') {
@@ -311,17 +301,16 @@ describe('export', () => {
         { key: 'ABCD1234', data: { key: 'ABCD1234', title: 'Carbon price forecasting' } },
       ])
     })
-    const partial = await provider.export(
-      exportRequest({ format: 'bibtex', refs: [parseRef(itemRef())] }),
+    await zoteroError(
+      provider.export(exportRequest({ format: 'bibtex', refs: [parseRef(itemRef())] })),
+      ZOTERO_UNEXPECTED,
+      'HTTP 500',
     )
-    if (partial.format !== 'bibtex') throw new Error('unreachable')
-    expect(partial.metadataIncomplete).toBe(true)
-    expect(partial.items).toEqual([{ ref: 'zotero://user/0/item/ABCD1234' }])
     const complete = await provider.export(
       exportRequest({ format: 'bibtex', refs: [parseRef(itemRef())] }),
     )
     if (complete.format !== 'bibtex') throw new Error('unreachable')
-    expect(complete.metadataIncomplete).toBeUndefined()
+    expect(complete.text).toContain('@article{customKeyA')
   })
 
   it("sends the first ref's server provenance on the export request", async () => {
@@ -401,55 +390,29 @@ describe('export', () => {
     expectRequestCount(mock, 0)
   })
 
-  it('counts unique items against the batch-breaking cap in a single request', async () => {
-    const refs = Array.from({ length: 50 }, (_, i) =>
-      parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
-    )
-    refs.push(refs[0]!)
-    serveText(
-      mock,
-      `${apiPath()}/items`,
-      refs
-        .slice(0, 50)
-        .map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`)
-        .join('\n'),
-    )
-    // 51 refs with one duplicate are 50 unique items and one bounded metadata batch.
-    const result = await provider.export(exportRequest({ refs, format: 'ris' }))
-    if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 2)
-    expect(result.items).toHaveLength(50)
-  })
-
-  it('fetches each unique item once when refs repeat', async () => {
-    serveText(
-      mock,
-      `${apiPath()}/items`,
-      'TY  - JOUR\nTI  - ABCD1234\nID  - ABCD1234\nER  -\n\nTY  - JOUR\nTI  - BBBB1234\nID  - BBBB1234\nER  -\n',
-    )
-    const result = await provider.export(
-      exportRequest({
-        format: 'ris',
-        refs: [parseRef(itemRef()), parseRef(itemRef(SECOND_ITEM_KEY)), parseRef(itemRef())],
-      }),
-    )
-    if (result.format !== 'ris') throw new Error('unreachable')
-    expectRequestCount(mock, 2)
-    expect(
-      mock.requests.some((request) => request.search.get('itemKey') === 'ABCD1234,BBBB1234'),
-    ).toBe(true)
-    expect(result.items).toHaveLength(2)
-  })
+  it.each(['citation', 'bibliography', 'bibtex', 'biblatex', 'ris', 'csljson', 'csv'] as const)(
+    'refuses repeated item identities for %s before any request',
+    async (format) => {
+      await expect(
+        provider.export(
+          exportRequest({
+            format,
+            refs: [parseRef(itemRef()), parseRef(`${itemRef()}?server=instance`)],
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: 'ZOTERO_INVALID_ARGUMENT',
+        message: expect.stringContaining('refs must be unique'),
+      })
+      expectRequestCount(mock, 0)
+    },
+  )
 
   it('itemizes a full 50-ref translator export with one metadata batch', async () => {
     const refs = Array.from({ length: 50 }, (_, i) =>
       parseRef(`zotero://user/0/item/${String(i).padStart(4, '0')}ABCD`),
     )
-    serveText(
-      mock,
-      `${apiPath()}/items`,
-      refs.map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`).join('\n'),
-    )
+    serveCheckedExport(refs.map((r) => `TY  - JOUR\nID  - ${r.key}\nER  -\n`).join('\n'))
     const result = await provider.export(exportRequest({ refs, format: 'ris' }))
     if (result.format !== 'ris') throw new Error('unreachable')
     expectRequestCount(mock, 2)
@@ -538,38 +501,30 @@ describe('exportText', () => {
 
   it('keeps the bibliography arm identical to the itemized export', async () => {
     const body = '<div class="csl-entry">A</div>\n<div class="csl-entry">B</div>'
-    serveText(mock, `${apiPath()}/items`, body)
+    serveCheckedExport(body)
     const text = await provider.exportText(exportRequest({ format: 'bibliography' }))
     expect(text).toEqual({ format: 'bibliography', style: 'apa', locale: 'en-US', text: body })
-    expectRequestCount(mock, 1)
+    expectRequestCount(mock, 2)
   })
 
   it.each(['bibtex', 'biblatex'] as const)(
-    'renders %s text in one request without the metadata read',
+    'verifies %s text before returning the unitemized body',
     async (format) => {
-      mock.route('GET', `${apiPath()}/items`, (req, res, helpers) => {
-        helpers.text(`exported-as-${format}`)
-      })
+      serveCheckedExport(`exported-as-${format}`)
       const text = await provider.exportText(exportRequest({ format }))
       expect(text).toEqual({ format, text: `exported-as-${format}` })
       expect('items' in text).toBe(false)
-      // The text arm must not pay for the tool's raw-item metadata read.
-      expectRequestCount(mock, 1)
+      expectRequestCount(mock, 2)
     },
   )
 
-  it.each(['ris', 'csljson'] as const)(
-    'renders %s text in one request without itemization',
-    async (format) => {
-      mock.route('GET', `${apiPath()}/items`, (req, res, helpers) => {
-        helpers.text(`exported-as-${format}`)
-      })
-      const text = await provider.exportText(exportRequest({ format }))
-      expect(text).toEqual({ format, text: `exported-as-${format}` })
-      expect('items' in text).toBe(false)
-      expectRequestCount(mock, 1)
-    },
-  )
+  it.each(['ris', 'csljson'] as const)('verifies %s text without itemization', async (format) => {
+    serveCheckedExport(`exported-as-${format}`)
+    const text = await provider.exportText(exportRequest({ format }))
+    expect(text).toEqual({ format, text: `exported-as-${format}` })
+    expect('items' in text).toBe(false)
+    expectRequestCount(mock, 2)
+  })
 })
 
 describe('export tolerances', () => {
@@ -600,33 +555,17 @@ describe('export tolerances', () => {
     await expect(pending).rejects.toMatchObject({ code: TOOL_ABORTED })
   })
 
-  it('keeps the export when the metadata arm fails, leaving refs bare', async () => {
-    // The metadata batch only sharpens entry-to-ref pairing. Its failure is
-    // fail-open: the delivered bibliography survives and the refs it could
-    // not sharpen stay bare, so a reader sees "unpaired" rather than losing
-    // the whole export. A caller abort is the one error that still escapes.
-    const batchText =
-      '@article{customKeyA,\n  title = {Carbon price forecasting},\n}\n\n' +
-      '@article{customKeyB,\n  title = {Insight into heterogeneous risks},\n}\n'
-    mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {
-      if (search.get('format') === 'bibtex') {
-        helpers.text(batchText)
-        return
-      }
-      // The metadata batch: the request is made and the server refuses it.
-      helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom')
+  it('does not deliver an unverified body when the metadata arm fails', async () => {
+    mock.route('GET', `${apiPath()}/items`, (_req, _res, helpers, search) => {
+      if (search.has('format'))
+        helpers.text('@article{existing, title={Verified only after metadata}}')
+      else helpers.raw(500, { 'Content-Type': 'text/plain' }, 'boom')
     })
-    const result = await provider.export(exportRequest({ format: 'bibtex' }))
-    if (result.format !== 'bibtex') throw new Error('unreachable')
-    // The bibliography body is delivered untouched.
-    expect(result.text).toBe(batchText)
-    // No metadata arrived, so no ref could be paired: every ref stays bare
-    // rather than being positionally guessed into an entry.
-    expect(result.items).toEqual([
-      { ref: 'zotero://user/0/item/ABCD1234' },
-      { ref: 'zotero://user/0/item/BBBB1234' },
-    ])
-    // Both arms were still attempted: the failure is a fallback, not a skip.
+    await zoteroError(
+      provider.export(exportRequest({ format: 'bibtex' })),
+      ZOTERO_UNEXPECTED,
+      'HTTP 500',
+    )
     expectRequestCount(mock, 2)
   })
 

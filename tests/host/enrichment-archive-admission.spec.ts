@@ -8,6 +8,8 @@ import { JobId } from '@deepseek-ai/dsh-jobs'
 import { describe, expect, it } from 'vitest'
 import { ARTIFACT_READER_DEFAULTS } from '../../src/artifact-reader-preferences.ts'
 import type { ZoteroStartDocumentParseRequestView } from '../../src/contract.ts'
+import { ArchiveProcessor } from '../../src/enrichment/archive-worker.ts'
+import { deferred } from '../helpers/sync.ts'
 import {
   DOCUMENT_URL,
   OWNER,
@@ -26,6 +28,39 @@ function parseRequest(operationId: string, url: string): ZoteroStartDocumentPars
 }
 
 describe('the configured archive admission', () => {
+  it('applies a larger live limit to queued work before admitting a new arrival', async () => {
+    let policy = { ...ARTIFACT_READER_DEFAULTS, archiveConcurrency: 1 }
+    const processor = new ArchiveProcessor(() => policy)
+    const firstEntered = deferred<void>(),
+      secondEntered = deferred<string>(),
+      thirdEntered = deferred<string>()
+    const releaseFirst = deferred<void>(),
+      releaseOthers = deferred<void>()
+    const signal = new AbortController().signal
+    const first = processor.run(signal, async () => {
+      firstEntered.resolve()
+      await releaseFirst.promise
+    })
+    await firstEntered.promise
+    const second = processor.run(signal, async () => {
+      secondEntered.resolve('second')
+      await releaseOthers.promise
+    })
+    policy = { ...policy, archiveConcurrency: 2 }
+    const third = processor.run(signal, async () => {
+      thirdEntered.resolve('third')
+      await releaseOthers.promise
+    })
+    try {
+      expect(await Promise.race([secondEntered.promise, thirdEntered.promise])).toBe('second')
+      releaseFirst.resolve()
+      expect(await thirdEntered.promise).toBe('third')
+    } finally {
+      releaseFirst.resolve()
+      releaseOthers.resolve()
+      await Promise.all([first, second, third])
+    }
+  })
   it('refuses the parse that exceeds the configured archive queue', async () => {
     const fixture = await endpointFixture({
       config: {

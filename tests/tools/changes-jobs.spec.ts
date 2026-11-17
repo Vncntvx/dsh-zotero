@@ -9,12 +9,7 @@ import { deferred } from '../helpers/sync.ts'
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  jobPromotedMessage,
-  JOBS_UNAVAILABLE_MESSAGE,
-  jobStartedMessage,
-  RUN_IN_BACKGROUND_DISABLED_MESSAGE,
-} from '../../src/job-runner.js'
+import { jobPromotedMessage, jobStartedMessage } from '../../src/job-runner.js'
 import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.js'
 import { resultStorage } from '../helpers/result-storage.ts'
 import { expectValue, type HostLane, setupHostLane } from '../helpers/lanes/host-lane.js'
@@ -51,8 +46,8 @@ describe('background jobs and promotion', () => {
     const result = await runTool('zotero_changes', { run_in_background: true })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
-    expect((result.content[0] as { text: string }).text).toBe(
-      `Error: invalid arguments: ${RUN_IN_BACKGROUND_DISABLED_MESSAGE}`,
+    expect((result.content[0] as { text: string }).text).toContain(
+      'run_in_background" is not a declared property',
     )
     // A rejection the model must act on carries its code, like every other
     // expected refusal.
@@ -63,8 +58,10 @@ describe('background jobs and promotion', () => {
     const result = await runTool('zotero_changes', { run_in_background: true })
     expect(result.isError).toBe(true)
     if (!result.isError) throw new Error('unreachable')
-    expect((result.content[0] as { text: string }).text).toBe(`Error: ${JOBS_UNAVAILABLE_MESSAGE}`)
-    expect(result.error?.info).toMatchObject({ code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    expect((result.content[0] as { text: string }).text).toContain(
+      'run_in_background" is not a declared property',
+    )
+    expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('starts a background job and returns immediately when run_in_background is requested', async () => {

@@ -97,7 +97,7 @@ describe('note-first-class paths', () => {
   })
 
   it('contributes every chunk of a long child note with locators', async () => {
-    const narrow = makeProvider({ fulltextChunkWords: 2 })
+    const narrow = makeProvider({ fulltextChunkWords: 2, maxEvidencePassages: 10 })
     serveItemGraph(mock, {
       parent: RETRIEVE_PARENT_WITHOUT_ATTACHMENT,
       children: [noteRow({ data: { note: 'alpha beta gamma delta epsilon' } })],

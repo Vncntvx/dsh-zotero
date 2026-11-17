@@ -29,6 +29,8 @@ import {
   requireSupportedLocalRef,
   PERSONAL_LIBRARY,
 } from '../refs.js'
+import { itemKeyList } from './wire.js'
+import { assertUniqueExportRefs } from '../export-limits.js'
 import { chunkItemKeyBatches, requireArrayBody } from './pagination.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
@@ -40,15 +42,6 @@ import type {
   ZoteroProgressEvent,
 } from '../types.js'
 
-/**
- * The `itemKey=` value for one batch: Zotero splits the comma-joined list
- * itself (`new Set(...split(','))`, `server_localAPI.js:1117-1129`), so this
- * one spelling is the whole wire contract. Every batched read builds it here.
- */
-function itemKeyList(refs: readonly ZoteroObjectRef[]): string {
-  return refs.map((ref) => ref.key).join(',')
-}
-
 /** The un-itemized export body plus the request facts the tool arm itemizes from. */
 interface ExportBody {
   readonly result: ZoteroExportTextResult
@@ -56,8 +49,6 @@ interface ExportBody {
   readonly refs: readonly ZoteroObjectRef[]
   /** Raw item JSON used to attach Zotero citation-key facts to located entries. */
   readonly rawItems: readonly Record<string, unknown>[]
-  /** The raw-metadata batch failed; alignment covers only what arrived. */
-  readonly metadataIncomplete: boolean
 }
 
 /**
@@ -72,7 +63,7 @@ export async function exportText(
   signal?: AbortSignal,
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportTextResult> {
-  const { result } = await exportBody(deps, request, signal, onProgress, false)
+  const { result } = await exportBody(deps, request, signal, onProgress)
   return result
 }
 
@@ -87,7 +78,7 @@ export async function exportText(
  * reorder the output. Itemized formats also read one bounded raw-metadata
  * batch for citekeys and field alignment, then pair each ref with its export
  * key, citekey, span offsets, and display title where available. An item
- * omitted by the translator stays ref-only; `csv` returns Zotero's whole-body table with
+ * omitted by the translator stays ref-only after its existence is verified; `csv` returns Zotero's whole-body table with
  * no per-document entries. Output that exceeds `maxExportChars` fails with
  * OUTPUT_TOO_LARGE: export text is never mid-truncated.
  */
@@ -97,13 +88,7 @@ export async function exportItems(
   signal?: AbortSignal,
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
-  const { result, refs, rawItems, metadataIncomplete } = await exportBody(
-    deps,
-    request,
-    signal,
-    onProgress,
-    true,
-  )
+  const { result, refs, rawItems } = await exportBody(deps, request, signal, onProgress)
   if (result.format === 'citation' || result.format === 'bibliography' || result.format === 'csv') {
     return result
   }
@@ -112,21 +97,18 @@ export async function exportItems(
   return {
     ...result,
     items,
-    ...(metadataIncomplete ? { metadataIncomplete: true as const } : {}),
   }
 }
 
 /**
- * The shared format pipeline behind both arms. `itemizeMetadata` decides
- * whether the bibtex-family raw-item read runs: the tool's itemization needs
- * it, while the panel's text arm must not pay for it.
+ * The shared pipeline verifies every requested key independently of translator output.
+ * Both tool and panel arms use the same existence check.
  */
 async function exportBody(
   deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   request: ZoteroExportRequest,
   signal: AbortSignal | undefined,
   onProgress: ((progress: ZoteroProgressEvent) => void) | undefined,
-  itemizeMetadata: boolean,
 ): Promise<ExportBody> {
   for (const ref of request.refs) requireSupportedLocalRef(ref, ['item'])
   // Export is single-library (v3 lock): all refs must share the same SupportedLocalLibrary
@@ -148,6 +130,9 @@ async function exportBody(
     request.refs.map((ref) => ref.serverId).filter((id): id is string => id !== undefined),
   )
   if (serverIds.size > 1) throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+  assertUniqueExportRefs(request.refs, (message) => {
+    throw new ZoteroError(message, ZOTERO_INVALID_ARGUMENT)
+  })
   const serverId = serverIds.size === 1 ? serverIds.values().next().value : undefined
   const exportLibrary: SupportedLocalLibrary = (firstLibrary ??
     PERSONAL_LIBRARY) as SupportedLocalLibrary
@@ -167,21 +152,9 @@ async function exportBody(
       }),
       refs: [],
       rawItems: [],
-      metadataIncomplete: false,
     }
   }
-  // Duplicate refs name the same item, and Zotero caps one itemKey request
-  // at ZOTERO_ITEMKEY_BATCH keys anyway, so every unique key is requested
-  // exactly once, keeping the first-seen order. Dedupe by canonical ref
-  // (library+key), not bare key.
-  const seen = new Set<string>()
-  const refs: ZoteroObjectRef[] = []
-  for (const ref of request.refs) {
-    const canonical = `${ref.library.type}:${ref.library.id}:${ref.key}`
-    if (seen.has(canonical)) continue
-    seen.add(canonical)
-    refs.push(ref)
-  }
+  const refs = request.refs
   if (refs.length > ZOTERO_ITEMKEY_BATCH) {
     throw new ZoteroError(
       `The ${request.format} format accepts at most ${ZOTERO_ITEMKEY_BATCH} item refs per call (Zotero's itemKey request cap, which also keeps the format's global ordering intact). Request up to ${ZOTERO_ITEMKEY_BATCH} refs at a time, or use citation, which batches up to the configured export cap.`,
@@ -195,7 +168,7 @@ async function exportBody(
     message: `Fetching ${refs.length} items (${request.format})...`,
   })
   const search = new URLSearchParams()
-  search.set('itemKey', itemKeyList(refs))
+  search.set('itemKey', itemKeyList(refs.map((ref) => ref.key)))
   if (request.format === 'bibliography') {
     search.set('format', 'bib')
     search.set('style', style)
@@ -203,18 +176,10 @@ async function exportBody(
   } else {
     search.set('format', request.format)
   }
-  const isItemizedTranslator =
-    request.format === 'bibtex' ||
-    request.format === 'biblatex' ||
-    request.format === 'ris' ||
-    request.format === 'csljson'
-  const exportPromise = deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
-  const metaPromise: Promise<{ rows: readonly Record<string, unknown>[]; incomplete: boolean }> =
-    itemizeMetadata && isItemizedTranslator
-      ? fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId)
-      : Promise.resolve({ rows: [], incomplete: false })
-
-  const [{ body }, meta] = await Promise.all([exportPromise, metaPromise])
+  const [{ body }, rawItems] = await Promise.all([
+    deps.client.get(`${exportPrefix}/items`, search, { signal, serverId }),
+    fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId),
+  ])
   // Close the progress event the fetch opened: without this the receipt
   // would sit at "Fetching N items…" forever, since the batched read has no
   // per-item steps to report.
@@ -235,47 +200,51 @@ async function exportBody(
       result: { format: 'bibliography', style, locale, text: body },
       refs,
       rawItems: [],
-      metadataIncomplete: meta.incomplete,
     }
   }
   return {
     result: { format: request.format, text: body },
     refs,
-    rawItems: meta.rows,
-    metadataIncomplete: meta.incomplete,
+    rawItems,
   }
 }
 
-/**
- * One raw-metadata batch for citekey and field alignment. The batch failing
- * is not the export failing: the body is already in hand, so the caller
- * reports the alignment as partial instead of silently serving fewer facts.
- * Cancellation is not a metadata failure: swallowing it would report a body
- * the caller stopped as a settled success.
- */
+/** Verify the requested item set before delivering any non-citation export. */
 async function fetchRawItemBatch(
   client: ZoteroHttpClient,
   prefix: string,
   refs: readonly ZoteroObjectRef[],
   signal: AbortSignal | undefined,
   serverId: string | undefined,
-): Promise<{ rows: readonly Record<string, unknown>[]; incomplete: boolean }> {
+): Promise<readonly Record<string, unknown>[]> {
   const search = new URLSearchParams()
-  search.set('itemKey', itemKeyList(refs))
-  try {
-    const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
-    if (Array.isArray(json)) {
-      return {
-        rows: json
-          .map(asRecord)
-          .filter((item): item is Record<string, unknown> => item !== undefined),
-        incomplete: false,
-      }
-    }
-  } catch (error) {
-    if (signal?.aborted) throw error
+  search.set('itemKey', itemKeyList(refs.map((ref) => ref.key)))
+  const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
+  const rows = requireArrayBody(json, 'export item verification').map((row) => {
+    const record = asRecord(row)
+    const key = asString(record?.key)
+    if (record === undefined || key === undefined || !isObjectKey(key))
+      throw new ZoteroError(ITEM_WITHOUT_KEY_MESSAGE, ZOTERO_UNEXPECTED)
+    return record
+  })
+  const expected = new Set(refs.map((ref) => ref.key))
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const key = row.key as string
+    if (!expected.has(key) || seen.has(key))
+      throw new ZoteroError(
+        'Zotero returned an unexpected or duplicate export item.',
+        ZOTERO_UNEXPECTED,
+      )
+    seen.add(key)
   }
-  return { rows: [], incomplete: true }
+  const missing = refs.filter((ref) => !seen.has(ref.key))
+  if (missing.length > 0)
+    throw new ZoteroError(
+      `Zotero did not return requested items: ${missing.map(formatRef).join(', ')}.`,
+      ZOTERO_NOT_FOUND,
+    )
+  return rows
 }
 
 interface CitationExportOptions {
@@ -373,7 +342,7 @@ async function fetchCitationBatch(
   signal: AbortSignal | undefined,
 ): Promise<Map<string, string>> {
   const search = new URLSearchParams()
-  search.set('itemKey', itemKeyList(batch))
+  search.set('itemKey', itemKeyList(batch.map((ref) => ref.key)))
   search.set('include', 'citation')
   search.set('style', style)
   search.set('locale', locale)

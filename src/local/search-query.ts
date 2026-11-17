@@ -4,6 +4,23 @@
 
 import type { ZoteroSearchRequest } from '../types.js'
 import { setPage } from './pagination.js'
+import { isLiteralSearchTag } from '../search-tags.js'
+import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../errors.js'
+
+export function assertLiteralSearchTags(
+  request: Pick<ZoteroSearchRequest, 'tags' | 'excludeTags'>,
+): void {
+  for (const [field, tags] of [
+    ['tags', request.tags],
+    ['excludeTags', request.excludeTags],
+  ] as const)
+    for (const tag of tags ?? [])
+      if (!isLiteralSearchTag(tag))
+        throw new ZoteroError(
+          `${field} must contain non-blank literal tag names without ||.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+}
 
 export function encodeLiteralTag(tag: string): string {
   return tag.startsWith('-') ? `\\-${tag.slice(1)}` : tag
@@ -27,6 +44,7 @@ export function encodeExcludeTag(tag: string): string {
  * adds `start`/`limit` on top.
  */
 function searchQueryOf(request: ZoteroSearchRequest): URLSearchParams {
+  assertLiteralSearchTags(request)
   const params = new URLSearchParams()
   if (request.query !== undefined && request.query !== '') params.set('q', request.query)
   if (request.mode === 'everything') params.set('qmode', 'everything')

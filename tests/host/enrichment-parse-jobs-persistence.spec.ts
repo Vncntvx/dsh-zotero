@@ -227,6 +227,7 @@ describe('durable parsing receipt guards', () => {
       message: PARSE_CANCELLED_MESSAGE,
     })
     const replay = await remounted.startDocumentParse(request, parseSignal())
+    expect(replay.status).toBe('joined')
     expect(replay.jobId).toBe(started.jobId)
     expect(replay.generation).toBe(started.generation)
     expect(fixture.ctx.jobs.list(owner)).toHaveLength(1)
@@ -235,6 +236,35 @@ describe('durable parsing receipt guards', () => {
     gate.resolve()
     expect((await settled(fixture, started.jobId)).status).toBe('completed')
   })
+
+  it.each(['failed', 'cancelled'])(
+    'replays a durable %s result as joined without starting another job',
+    async (kind) => {
+      const execute = vi.fn(async () => {
+        if (kind === 'cancelled') throw new DOMException('Explicit cancellation', 'AbortError')
+        throw new Error('Definite parsing failure')
+      })
+      fixture = await parseJobsFixture({ execute })
+      const request = parseRequest()
+      const first = await fixture.helper.startDocumentParse(request, parseSignal())
+      await settled(fixture, first.jobId)
+      const remounted = fixture.remount()
+      const replay = await remounted.startDocumentParse(request, parseSignal())
+      expect(replay).toMatchObject({
+        status: 'joined',
+        jobId: first.jobId,
+        generation: first.generation,
+      })
+      expect(fixture.ctx.jobs.list(owner)).toHaveLength(1)
+      expect(execute).toHaveBeenCalledOnce()
+      expect(
+        await remounted.documentParseReceipt(
+          { sessionId: request.sessionId, operationId: request.operationId },
+          parseSignal(),
+        ),
+      ).toMatchObject({ kind })
+    },
+  )
 
   it('records a positive parsed page count in the completed receipt', async () => {
     fixture = await parseJobsFixture({

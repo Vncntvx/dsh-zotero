@@ -1,3 +1,4 @@
+import { WRITE_SERVER_ID as SERVER_ID } from '../../helpers/server/keys.js'
 /**
  * The write transport's cancellation and bounds seam, split from
  * `write-http.spec.ts` along the same line: how a write settles when the
@@ -32,7 +33,6 @@ import { progress } from '../../helpers/sync.js'
 let mock: MockZotero
 let client: ZoteroWriteHttpClient
 
-const SERVER_ID = 'srv-cancel-tests-01'
 const API_KEY = 'placeholder-local-write-key'
 
 /** A documented-shape batch answer for one created note. */

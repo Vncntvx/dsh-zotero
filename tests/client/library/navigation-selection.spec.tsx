@@ -89,3 +89,16 @@ it('keeps a collection with items on the listing side', async () => {
   expect(result.current.narrowPane).toBe('list')
   expect(result.current.expanded.has(stocked.ref)).toBe(false)
 })
+
+it('uses loaded collection paths for repeated navigation without exact-path probes', async () => {
+  const { result, face } = setupLibraryFeed({ browse: browseRoots([container, stocked]) })
+  await waitFor(() => expect(result.current.flatTree).toHaveLength(2))
+  vi.mocked(face.collectionPath).mockClear()
+  for (const row of [stocked, container, stocked]) {
+    act(() => result.current.selectScope({ kind: 'collection', ref: row.ref, name: row.name }))
+    await waitFor(() =>
+      expect(result.current.selection).toMatchObject({ ref: row.ref, path: row.path }),
+    )
+  }
+  expect(face.collectionPath).not.toHaveBeenCalled()
+})
