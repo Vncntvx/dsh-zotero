@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { en } from '../../../src/client/locales.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ParseDocumentDialog } from '../../../src/client/enrichment/ParseDocumentDialog.tsx'
 import { parseEn, type ParseTranslate } from '../../../src/client/enrichment/parse-locales.ts'
 import {
@@ -32,6 +32,7 @@ function mount(
     remote?: Parameters<typeof parseRemote>[0]
     t?: ParseTranslate
     strict?: boolean
+    onOpenParsed?: (sessionId: string, artifactId: string, title: string) => void
   } = {},
 ) {
   const remote = parseRemote(options.remote)
@@ -51,6 +52,7 @@ function mount(
       open = false
       rerender()
     },
+    ...(options.onOpenParsed ? { onOpenParsed: options.onOpenParsed } : {}),
   }
   const element = () =>
     options.strict ? (
@@ -238,14 +240,48 @@ describe('ParseDocumentDialog receipts and artifacts', () => {
     await settle()
     expect(screen.getByText(parseEn.parseCompleted)).toBeDefined()
     expect(screen.getByText(parseEn.parseCached)).toBeDefined()
-    // The result stops at a compact summary; the parsed Markdown stays behind
-    // the preview toggle instead of filling the dialog.
+    // The result displays a compact summary; the parsed Markdown opens in a dedicated reading panel.
     expect(screen.getByText('9')).toBeDefined()
     expect(screen.getByText(parseEn.parsePagesUnknown)).toBeDefined()
     expect(screen.queryByText('# Preview')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: parseEn.parsePreview }))
-    expect(screen.getByText('# Preview')).toBeDefined()
     expect(screen.getByRole('button', { name: parseEn.parseReparse })).toBeDefined()
+  })
+
+  it('opens the committed artifact as a reading tab and closes the dialog', async () => {
+    const onOpenParsed = vi.fn()
+    mount({
+      onOpenParsed,
+      remote: {
+        documentParseReceipt: async () => ({
+          ok: true,
+          value: {
+            kind: 'completed',
+            receipt: parseReceipt({ artifactId: 'a'.repeat(64), targetLabel: 'Paper title' }),
+          },
+        }),
+      },
+    })
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseReadMarkdown }))
+    expect(onOpenParsed).toHaveBeenCalledWith(PARSE_SESSION, 'a'.repeat(64), 'Paper title')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('offers no reading action without an open-parsed port', async () => {
+    mount({
+      remote: {
+        documentParseReceipt: async () => ({
+          ok: true,
+          value: { kind: 'completed', receipt: parseReceipt() },
+        }),
+      },
+    })
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: parseEn.parseConfirm }))
+    await settle()
+    expect(screen.queryByRole('button', { name: parseEn.parseReadMarkdown })).toBeNull()
   })
 
   it('renders a failed receipt with its code and offers retry', async () => {

@@ -298,4 +298,49 @@ describe('parsed document manager edge inputs', () => {
       await screen.findByText(en.parsedManagerError.replace('{message}', 'gateway blip')),
     ).toBeDefined()
   })
+
+  it('clears pending deletion confirmation when the tab becomes invisible', async () => {
+    let tabVisible = true
+    const management = {
+      listParsedDocuments: vi.fn(async () => ({ ok: true, value: { rows: [row], total: 1 } })),
+      discardParsedDocument: vi.fn(async () => ({
+        ok: true,
+        value: { kind: 'discarded', removedAliases: 1, removedReceipts: 0 },
+      })),
+    }
+    const props = {
+      t: makeTranslate(en),
+      useAccess: () => true,
+      useSession: () => false,
+      useTabInfo: () => ({
+        tab: {
+          visible: tabVisible,
+          navigation: { address: parsedManagerTabAddress({ sessionId: 's1' }), params: {} },
+        },
+      }),
+      management,
+      parse: {
+        deployment: { subscribe: () => () => {}, getSnapshot: () => MOUNTED },
+        remote: {},
+        jobs: {},
+        recall: () => undefined,
+        recentUrl: () => undefined,
+        clearSession: () => {},
+      },
+      openParsed: vi.fn(),
+      discarded: vi.fn(),
+      notify: vi.fn(),
+    } as unknown as ParsedManagerTabProps
+
+    const { rerender } = render(<ParsedManagerTab {...props} />)
+    await screen.findByRole('button', { name: en.parsedManagerDelete })
+
+    fireEvent.click(screen.getByRole('button', { name: en.parsedManagerDelete }))
+    expect(screen.getByRole('dialog')).toBeDefined()
+
+    tabVisible = false
+    rerender(<ParsedManagerTab {...props} />)
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
 })

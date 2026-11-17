@@ -1323,6 +1323,15 @@ function registerUi(ctx: ClientContext): void {
         discardParsedDocument: (request, signal) =>
           ctx.remote.zotero.discardParsedDocument(request, signal),
       },
+      // The parse dialog's "Read Markdown" action opens the same address the
+      // manager and library use: one artifact-addressed tab per document, so a
+      // completed parse reveals its reading panel instead of a bounded preview.
+      openParsed: (sessionId, artifactId, title) =>
+        void ctx.sidebarRight.openResourceIn(
+          sessionId as SessionId,
+          parsedArtifactTabAddress({ sessionId, artifactId }),
+          { params: { title } },
+        ),
     },
   )
   ctx.effect(() => () => parse.dispose(), 'dsh-zotero: document parsing surface')

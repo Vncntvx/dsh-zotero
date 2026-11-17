@@ -73,6 +73,11 @@ export interface DocumentParseSurfacePort {
    * tab's `whileServed` registration, never by presence here.
    */
   readonly management: ParsedDocumentManagementRemote
+  /**
+   * Opens a committed artifact in its own right-sidebar reading tab once
+   * a receipt is available. The artifact id addresses every target kind.
+   */
+  readonly openParsed?: (sessionId: string, artifactId: string, title: string) => void
   readonly jobs: DocumentParseJobs
   readonly deployment: ParseSnapshotSource<DocumentParseDeployment>
   readonly recall: (selection: DocumentParseSelection) => DocumentParseOperation | undefined
@@ -91,9 +96,11 @@ export function createDocumentParseSurface(
     /** Fires once per committed parse, for panels that show committed state. */
     readonly onCommitted?: (sessionId: string, target: ZoteroParseTargetView) => void
     readonly management: ParsedDocumentManagementRemote
+    /** Opens a committed artifact in its own right-sidebar reading tab. */
+    readonly openParsed?: (sessionId: string, artifactId: string, title: string) => void
   },
 ): DocumentParseSurfacePort & { dispose(): void } {
-  const { form, onCommitted, management } = options
+  const { form, onCommitted, management, openParsed } = options
   const listeners = new Set<() => void>()
   // At most 64 recent operations live in memory; document URLs never enter storage.
   const operations = new Map<
@@ -164,6 +171,7 @@ export function createDocumentParseSurface(
   ]
   return {
     management,
+    ...(openParsed ? { openParsed } : {}),
     remote: {
       startDocumentParse: async (request) => {
         const key = keyOf(request)
@@ -407,6 +415,7 @@ export function useDocumentParseSurface(
             // artifact becomes visible in the inspector behind it.
             setRevision((previous) => previous + 1)
           }}
+          onOpenParsed={port?.openParsed}
           t={t}
         />
       </>

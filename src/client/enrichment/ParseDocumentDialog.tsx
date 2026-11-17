@@ -1,9 +1,10 @@
 /** Standalone parse surface. The composition root supplies committed capabilities and host ports. */
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   Button,
   Input,
   Modal,
+  IconDeliverDocRegular,
   IconRefreshOutlineRegular,
   IconStopFillRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -28,6 +29,8 @@ export interface ParseDocumentDialogProps {
   readonly jobs: DocumentParseJobs | undefined
   readonly capabilities: ParseSnapshotSource<DocumentParseCapabilities>
   readonly onClose: () => void
+  /** Opens the committed artifact in its own reading tab; absent when enrichment reads are off. */
+  readonly onOpenParsed?: (sessionId: string, artifactId: string, title: string) => void
   readonly t: ParseTranslate
 }
 
@@ -39,7 +42,7 @@ function formatLimit(bytes: number): string {
 
 /** The only start action is a user form submission; opening only inspects artifacts. */
 export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
-  const { remote, jobs, capabilities, selection, open, onClose } = props
+  const { remote, jobs, capabilities, selection, open, onClose, onOpenParsed } = props
   const controller = useMemo(
     () => new DocumentParseController(remote, jobs, capabilities),
     [remote, jobs, capabilities],
@@ -52,9 +55,6 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   const targetKey = JSON.stringify(selection)
   const latestSelection = useRef(selection)
   latestSelection.current = selection
-  // The receipt carries a bounded preview; the dialog keeps it behind an
-  // explicit toggle instead of turning the form into a document reader.
-  const [previewOpen, setPreviewOpen] = useState(false)
 
   useEffect(() => controller.connect(), [controller])
   useEffect(() => {
@@ -66,6 +66,14 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
   const close = () => {
     controller.close()
     onClose()
+  }
+  // The receipt's artifact id addresses the reading tab for every target kind
+  // (attachment, URL, or reused artifact); the dialog closes once the
+  // panel opens. The label names the chip and the downloaded Markdown file.
+  const readMarkdown = (artifactId: string, title: string) => {
+    if (!onOpenParsed) return
+    onOpenParsed(selection.sessionId, artifactId, title)
+    close()
   }
   const receipt = state.receipt
   const completed = receipt?.kind === 'completed'
@@ -245,11 +253,11 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
                     <dt>{t('parsePages')}</dt>
                     <dd>{receipt.receipt.pageCount ?? t('parsePagesUnknown')}</dd>
                   </dl>
-                  {receipt.receipt.preview !== '' && (
-                    <Preview
-                      text={receipt.receipt.preview}
-                      open={previewOpen}
-                      onToggle={() => setPreviewOpen((open) => !open)}
+                  {onOpenParsed && (
+                    <ReadMarkdown
+                      artifactId={receipt.receipt.artifactId}
+                      title={receipt.receipt.targetLabel || state.targetLabel}
+                      open={readMarkdown}
                       t={t}
                     />
                   )}
@@ -299,24 +307,30 @@ function Artifact({
   )
 }
 
-/** The receipt's bounded Markdown, read only when the user asks for it. */
-function Preview({
-  text,
+/**
+ * Opens the receipt's artifact in a dedicated right-sidebar reading tab,
+ * displaying the complete document and figures.
+ */
+function ReadMarkdown({
+  artifactId,
+  title,
   open,
-  onToggle,
   t,
 }: {
-  text: string
-  open: boolean
-  onToggle: () => void
+  artifactId: string
+  title: string
+  open: (artifactId: string, title: string) => void
   t: ParseTranslate
 }) {
   return (
-    <>
-      <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={onToggle}>
-        {t('parsePreview')}
-      </Button>
-      {open && <pre className={css.preview}>{text}</pre>}
-    </>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      icon={<IconDeliverDocRegular size={14} />}
+      onClick={() => open(artifactId, title)}
+    >
+      {t('parseReadMarkdown')}
+    </Button>
   )
 }

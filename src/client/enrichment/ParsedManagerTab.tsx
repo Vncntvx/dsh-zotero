@@ -1,53 +1,26 @@
-import { ResponsiveActionButton } from '../components/ResponsiveActionButton.tsx'
 /**
- * The parsed-document manager: one session-scoped right-sidebar tab that lists
- * every committed artifact and owns open / reparse / discard actions. The list
- * is a single host-side inventory call; no per-target probe, HEAD or MinerU
- * request runs behind the rows. The chrome follows the Host's own list
- * semantics: flat rows (no card), a row checkbox whose accessible name is the
- * selection action, pills for state narrowing, and "show more" instead of a
- * pager.
+ * The parsed-document manager tab displays committed artifacts in a right-sidebar
+ * panel with open, reparse, and discard actions. The list is fetched in a single
+ * host inventory call. Rows use flat layouts with selection checkboxes, state-filtering
+ * pills, and incremental paging.
  * @module dsh-zotero/client/enrichment/ParsedManagerTab
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import clsx from 'clsx'
 import {
   Button,
   IconCloseOutlineRegular,
   IconDeliverDocRegular,
-  IconEyeOutlineRegular,
-  IconLinkOutlineRegular,
-  IconPaperclipOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconSearchOutlineRegular,
-  IconSparkleRegular,
   IconTrashOutlineRegular,
-  Input,
-  Modal,
-  Pill,
-  StateDot,
-  Tag,
-  fileSizeText,
-  relativeTime,
-  type TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
   ZoteroListParsedDocumentsResultView,
   ZoteroParsedDocumentRowView,
-  ZoteroParsedDocumentState,
 } from '../../contract.ts'
-import { formatDateTime, joinNonEmpty } from '../../sources/presenters.js'
 import { messageOf } from '../error-text.ts'
 import { parseParsedManagerTabAddress } from '../parsed-manager-tab.ts'
 import { typedRemoteResult } from './parse-controller.ts'
-import {
-  formatCount,
-  shortArtifactId,
-  sourceDescriptorOf,
-  totalBytesOf,
-} from './parsed-manager-model.ts'
 import {
   useDocumentParseSurface,
   type DocumentParseDeployment,
@@ -55,6 +28,10 @@ import {
   type ParsedDocumentManagementRemote,
 } from './parse-surface.tsx'
 import { IconButton } from '../components/IconButton.tsx'
+import { ParsedManagerToolbar } from './parsed-manager/ParsedManagerToolbar.tsx'
+import { ParsedManagerRow } from './parsed-manager/ParsedManagerRow.tsx'
+import { ParsedManagerDeleteDialog } from './parsed-manager/ParsedManagerDeleteDialog.tsx'
+import type { StateFilter } from './parsed-manager/types.ts'
 import css from './parsed-manager.module.css'
 
 const PAGE_SIZE = 50
@@ -65,46 +42,6 @@ const SEARCH_DEBOUNCE_MS = 250
 /** Selection resets when the visible window changes. */
 const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
-type StateFilter = 'all' | ZoteroParsedDocumentState
-
-const FILTERS: readonly StateFilter[] = ['all', 'indexed', 'orphan', 'broken']
-
-const FILTER_LABELS = {
-  all: 'parsedManagerFilterAll',
-  indexed: 'parsedManagerFilterIndexed',
-  orphan: 'parsedManagerFilterOrphan',
-  broken: 'parsedManagerFilterBroken',
-} as const
-
-const STATE_LABELS = {
-  indexed: 'parsedManagerStateIndexed',
-  orphan: 'parsedManagerStateOrphan',
-  broken: 'parsedManagerStateBroken',
-} as const
-
-const STATE_TONES: Record<ZoteroParsedDocumentState, TagTone> = {
-  indexed: 'success',
-  orphan: 'warning',
-  broken: 'danger',
-}
-
-/** The host buckets the age; the words stay here, beside the row that shows them. */
-const AGO_LABELS = {
-  minutes: 'parsedManagerAgoMinutes',
-  hours: 'parsedManagerAgoHours',
-  days: 'parsedManagerAgoDays',
-  months: 'parsedManagerAgoMonths',
-  years: 'parsedManagerAgoYears',
-} as const
-
-const BROKEN_LABELS: Record<
-  NonNullable<ZoteroParsedDocumentRowView['broken']>['code'],
-  'parsedManagerBrokenMissingMeta' | 'parsedManagerBrokenUnreadableMeta'
-> = {
-  'missing-meta': 'parsedManagerBrokenMissingMeta',
-  'unreadable-meta': 'parsedManagerBrokenUnreadableMeta',
-}
-
 export interface ParsedManagerTabFace {
   readonly management: ParsedDocumentManagementRemote
   readonly parse: DocumentParseSurfacePort
@@ -113,8 +50,7 @@ export interface ParsedManagerTabFace {
   /** Notify already-open parsed tabs that an artifact was discarded. */
   readonly discarded: (sessionId: string, artifactId: string) => void
   /**
-   * Raise one transient notice in the shell overlay. It lives there, not in
-   * this tab, so closing the manager does not take the report with it.
+   * Raises a transient notice in the shell overlay that persists across tab navigation.
    */
   readonly notify: (text: string, tone?: 'success') => void
 }
@@ -172,10 +108,19 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const discardAbort = useRef<AbortController>()
   const moreAbort = useRef<AbortController>()
   const listGeneration = useRef(0)
+
+  // Clear confirmation modal when tab is hidden or unmounted
+  useEffect(() => {
+    if (tab.visible === false) {
+      setConfirming(undefined)
+    }
+  }, [tab.visible])
+
   useEffect(
     () => () => {
       discardAbort.current?.abort()
       moreAbort.current?.abort()
+      setConfirming(undefined)
     },
     [],
   )
@@ -300,8 +245,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     const failed: string[] = []
     try {
       for (const artifactId of ids) {
-        // The tab can only be abandoned while a request is in flight, so the
-        // check after each await is the one that matters.
         try {
           const value = typedRemoteResult(
             await management.discardParsedDocument({ sessionId, artifactId }, abort.signal),
@@ -356,102 +299,21 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const filtering = filter !== 'all' || appliedQuery !== ''
   /** One clock per render, so every row ages against the same moment. */
   const now = Date.now()
-  const titleOf = (row: ZoteroParsedDocumentRowView): string =>
-    row.title !== undefined && row.title.trim() !== '' ? row.title : shortArtifactId(row.artifactId)
-  const agoOf = (at: number): string => {
-    const age = relativeTime(at, now)
-    return age.unit === 'now'
-      ? props.t('parsedManagerAgoNow')
-      : props.t(AGO_LABELS[age.unit], { count: age.n })
-  }
-  const metaOf = (row: ZoteroParsedDocumentRowView): string => {
-    // A broken row has no metadata to describe; its reason line is the copy.
-    if (row.state === 'broken') return ''
-    const source = sourceDescriptorOf(row)
-    return joinNonEmpty(
-      source === ''
-        ? undefined
-        : row.sourceKind === 'attachment'
-          ? props.t('parsedManagerSourceAttachment', { key: source })
-          : source,
-      agoOf(row.committedAt),
-      fileSizeText(totalBytesOf(row)),
-      props.t('parsedManagerChars', { count: formatCount(row.characterCount) }),
-      row.pageCount === undefined
-        ? undefined
-        : props.t('libraryParsedPages', { count: row.pageCount }),
-      row.images.length === 0
-        ? undefined
-        : props.t('parsedManagerImages', { count: row.images.length }),
-      row.mode === 'pro' ? props.t('parsedManagerModePro') : undefined,
-    )
-  }
-  const pendingDelete = confirming
-  const batchConfirm = pendingDelete !== undefined && pendingDelete.ids.length > 1
 
   return (
     <section className={css.surface} aria-busy={busy}>
-      <header className={css.toolbar}>
-        <div className={css.filters} role="group" aria-label={props.t('parsedManagerFilterLabel')}>
-          {FILTERS.map((value) => (
-            <Pill
-              key={value}
-              active={filter === value}
-              aria-pressed={filter === value}
-              disabled={!listAllowed}
-              onClick={() => changeFilter(value)}
-            >
-              {props.t(FILTER_LABELS[value])}
-            </Pill>
-          ))}
-        </div>
-        <div className={css.toolbarRow}>
-          <Input
-            className={css.search}
-            icon={<IconSearchOutlineRegular size={14} />}
-            type="search"
-            placeholder={props.t('parsedManagerSearchPlaceholder')}
-            aria-label={props.t('parsedManagerSearchPlaceholder')}
-            value={query}
-            disabled={!listAllowed}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query !== '' && (
-            <IconButton
-              shape="round"
-              size="sm"
-              icon={<IconCloseOutlineRegular size={12} />}
-              aria-label={props.t('parsedManagerClearSearch')}
-              title={props.t('parsedManagerClearSearch')}
-              onClick={() => setQuery('')}
-            />
-          )}
-          <ResponsiveActionButton
-            variant="outline"
-            size="sm"
-            className={css.textSeat}
-            label={props.t('libraryParseUrl')}
-            icon={<IconLinkOutlineRegular size={13} className={css.urlParseGlyph} />}
-            disabled={parseSurface.openUrl === undefined}
-            onClick={() => parseSurface.openUrl?.()}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={props.t('parsedManagerRefresh')}
-            aria-busy={busy}
-            disabled={busy || !listAllowed}
-            icon={
-              busy ? (
-                <StateDot state="ongoing" size={13} />
-              ) : (
-                <IconRefreshOutlineRegular size={13} />
-              )
-            }
-            onClick={() => setRevision((previous) => previous + 1)}
-          />
-        </div>
-      </header>
+      <ParsedManagerToolbar
+        filter={filter}
+        onFilterChange={changeFilter}
+        query={query}
+        onQueryChange={setQuery}
+        busy={busy}
+        listAllowed={listAllowed}
+        urlParseDisabled={parseSurface.openUrl === undefined}
+        onOpenUrl={() => parseSurface.openUrl?.()}
+        onRefresh={() => setRevision((previous) => previous + 1)}
+        t={props.t}
+      />
       {error !== undefined && (
         <div className={css.errorRow}>
           <p className={css.error} role="alert">
@@ -544,84 +406,23 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         </div>
       )}
       <ul className={css.list}>
-        {rows.map((row) => {
-          const title = titleOf(row)
-          const meta = metaOf(row)
-          const isSelected = selected.has(row.artifactId)
-          return (
-            <li className={clsx(css.row, { [css.rowSelected]: isSelected })} key={row.artifactId}>
-              <div className={css.rowHead}>
-                {/* The Host's list rows pair a bare checkbox with a visible
-                 * title and name the control after the action, because the
-                 * primitive Checkbox cannot separate its label from its name. */}
-                <label className={css.rowSelect}>
-                  <input
-                    type="checkbox"
-                    className={css.rowCheck}
-                    checked={isSelected}
-                    disabled={!discardAllowed || busy}
-                    aria-label={props.t('parsedManagerSelectRow', { title })}
-                    onChange={(event) => toggleRow(row.artifactId, event.target.checked)}
-                  />
-                  <span className={css.rowTitle} title={row.title ?? row.artifactId}>
-                    {title}
-                  </span>
-                </label>
-                {row.state !== 'indexed' && (
-                  <Tag tone={STATE_TONES[row.state]}>{props.t(STATE_LABELS[row.state])}</Tag>
-                )}
-              </div>
-              <div className={css.rowMeta}>
-                {meta !== '' && (
-                  <span className={css.metaText} title={formatDateTime(row.committedAt)}>
-                    <span className={css.metaIcon} aria-hidden="true">
-                      {row.sourceKind === 'url' ? (
-                        <IconLinkOutlineRegular size={12} />
-                      ) : (
-                        <IconPaperclipOutlineRegular size={12} />
-                      )}
-                    </span>
-                    <span className={css.metaCopy}>{meta}</span>
-                  </span>
-                )}
-                <span className={css.actions}>
-                  <IconButton
-                    shape="square"
-                    icon={<IconEyeOutlineRegular size={14} />}
-                    aria-label={props.t('parsedManagerOpen')}
-                    title={props.t('parsedManagerOpen')}
-                    disabled={!row.actionable || row.state === 'broken'}
-                    onClick={() => openParsed(sessionId, row.artifactId, title)}
-                  />
-                  <IconButton
-                    shape="square"
-                    icon={<IconSparkleRegular size={14} />}
-                    aria-label={props.t('libraryParsedReparse')}
-                    title={props.t('libraryParsedReparse')}
-                    disabled={!row.actionable || parseSurface.openArtifact === undefined}
-                    onClick={() => parseSurface.openArtifact?.(row.artifactId, title)}
-                  />
-                  <IconButton
-                    shape="square"
-                    icon={<IconTrashOutlineRegular size={14} />}
-                    aria-label={props.t('parsedManagerDelete')}
-                    title={props.t('parsedManagerDelete')}
-                    disabled={!discardAllowed || busy}
-                    onClick={() => setConfirming({ ids: [row.artifactId], title })}
-                  />
-                </span>
-              </div>
-              {row.broken !== undefined && (
-                <p className={css.broken}>
-                  {props.t(BROKEN_LABELS[row.broken.code])}
-                  {row.broken.detail !== undefined && (
-                    <span className={css.brokenDetail}>{row.broken.detail}</span>
-                  )}
-                </p>
-              )}
-            </li>
-          )
-        })}
+        {rows.map((row) => (
+          <ParsedManagerRow
+            key={row.artifactId}
+            row={row}
+            isSelected={selected.has(row.artifactId)}
+            discardAllowed={discardAllowed}
+            busy={busy}
+            now={now}
+            sessionId={sessionId}
+            reparseDisabled={parseSurface.openArtifact === undefined}
+            onToggle={toggleRow}
+            onOpen={openParsed}
+            onReparse={parseSurface.openArtifact}
+            onDelete={(artifactId, title) => setConfirming({ ids: [artifactId], title })}
+            t={props.t}
+          />
+        ))}
       </ul>
       {list !== undefined && rows.length < Math.min(total, MAX_WINDOW) && (
         <Button
@@ -635,42 +436,12 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
           {props.t('parsedManagerShowMore')}
         </Button>
       )}
-      <Modal
-        open={pendingDelete !== undefined}
+      <ParsedManagerDeleteDialog
+        pendingDelete={confirming}
+        busy={busy}
         onClose={() => setConfirming(undefined)}
-        title={props.t(
-          batchConfirm ? 'parsedManagerBatchDeleteTitle' : 'parsedManagerDeleteTitle',
-          {
-            count: pendingDelete?.ids.length ?? 0,
-          },
-        )}
-        description={props.t(
-          batchConfirm ? 'parsedManagerBatchDeleteDescription' : 'parsedManagerDeleteDescription',
-          { count: pendingDelete?.ids.length ?? 0, title: pendingDelete?.title ?? '' },
-        )}
-        closeLabel={props.t('parsedManagerDeleteCancel')}
-        footer={
-          // The confirm action only exists while a target does, so the ids are
-          // read from the target that opened it rather than re-checked.
-          pendingDelete === undefined ? undefined : (
-            <>
-              <Button variant="outline" onClick={() => setConfirming(undefined)}>
-                {props.t('parsedManagerDeleteCancel')}
-              </Button>
-              <Button
-                variant="outline"
-                className={css.dangerAction}
-                disabled={busy}
-                onClick={() => {
-                  setConfirming(undefined)
-                  void discardRows(pendingDelete.ids, rows.length)
-                }}
-              >
-                {props.t('parsedManagerDeleteConfirm')}
-              </Button>
-            </>
-          )
-        }
+        onConfirm={(ids) => void discardRows(ids, rows.length)}
+        t={props.t}
       />
       {parseSurface.dialog}
     </section>

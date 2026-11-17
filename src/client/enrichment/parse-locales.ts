@@ -39,7 +39,7 @@ export const parseEn = {
   parseCharacters: 'Characters',
   parsePages: 'Pages',
   parsePagesUnknown: 'Not reported',
-  parsePreview: 'Markdown preview',
+  parseReadMarkdown: 'Read Markdown',
   parseUnavailable: 'Enable the document parsing component and its jobs service to parse here.',
   parsePermission: 'This session does not have permission for this parsing action.',
   parseReadPermission:
@@ -84,7 +84,7 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parseCharacters: '字符数',
   parsePages: '页数',
   parsePagesUnknown: '未报告',
-  parsePreview: 'Markdown 预览',
+  parseReadMarkdown: '阅读 Markdown',
   parseUnavailable: '启用文档解析组件及其任务服务后即可在此解析。',
   parsePermission: '当前会话没有执行此解析操作的权限。',
   parseReadPermission: '当前会话没有查看产物或解析回执的权限。',
