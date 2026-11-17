@@ -18,7 +18,7 @@ import {
   searchSemanticScholar,
 } from '../../../src/scholarly/sources/semanticscholar.js'
 import { createScholarlyHttp, type ScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 import { ScholarlyHttpError } from '../../../src/scholarly/transport/http.js'
 
 describe('scholarly query router', () => {

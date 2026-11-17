@@ -12,7 +12,7 @@ import { createVolatile } from '@deepseek-ai/cosmokit'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { composeRealJobs } from '../helpers/real-jobs.ts'
-import { bootScholarlyContext } from './fixtures.js'
+import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
 
 const owned: Context[] = []
 

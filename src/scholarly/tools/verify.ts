@@ -4,7 +4,8 @@
  * @module dsh-zotero/scholarly/tools/verify
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import { mapWithConcurrency } from '../../concurrency.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { titleKey, titleTokens } from '../normalize.js'
@@ -145,7 +146,11 @@ function checkDiscrepancies(
   }
 
   if (parsed.firstAuthor && paper.authors.length > 0) {
-    const authorMatch = paper.authors.some((a) => a.toLowerCase().includes(parsed.firstAuthor!))
+    // A reference names the first author. A later collaborator or a substring
+    // of a different surname cannot establish that identity.
+    const first = paper.authors[0]!.normalize('NFKC').trim().toLowerCase()
+    const surname = first.includes(',') ? first.split(',')[0]!.trim() : first.split(/\s+/).at(-1)!
+    const authorMatch = surname === parsed.firstAuthor.normalize('NFKC')
     if (!authorMatch) {
       notes.push(
         `Author discrepancy: reference indicates author "${parsed.firstAuthor}", but registry lists "${paper.authors[0]}".`,

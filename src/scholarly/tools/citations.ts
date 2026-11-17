@@ -3,12 +3,14 @@
  * @module dsh-zotero/scholarly/tools/citations
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import { formatPaperItem, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupOpenAlex, openalexLinkedWorks } from '../sources/openalex.js'
 import { annotateWithLibraryStatus } from '../zotero-link.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
+import { allSourcesFailedText, failureTextOf, isLocalAddressRejection } from './failure.js'
 import {
   SCHOLARLY_TEXT_OUTPUT_DESCRIPTOR,
   toCleanJsonRecords,
@@ -61,63 +63,78 @@ export function createScholarlyCitationsTool(host: ScholarlyToolHost): ToolDefin
       )
       const keys = await host.keys()
 
-      const work = await lookupOpenAlex(openAlexLookupId, host.http, keys, exec.signal)
-      if (!work?.openalex) {
-        return {
-          text: `OpenAlex citation index does not recognize identifier "${raw}". Recent preprints may not have citation links yet.`,
-          papers: [],
+      try {
+        const work = await lookupOpenAlex(openAlexLookupId, host.http, keys, exec.signal)
+        if (!work?.openalex) {
+          return {
+            text: `OpenAlex citation index does not recognize identifier "${raw}". Recent preprints may not have citation links yet.`,
+            papers: [],
+          }
         }
-      }
 
-      const relation =
-        args.direction === 'citations'
-          ? 'cites'
-          : args.direction === 'references'
-            ? 'cited_by'
-            : 'related_to'
+        const relation =
+          args.direction === 'citations'
+            ? 'cites'
+            : args.direction === 'references'
+              ? 'cited_by'
+              : 'related_to'
 
-      const { papers, total } = await openalexLinkedWorks(
-        work.openalex,
-        relation,
-        limit,
-        host.http,
-        keys,
-        exec.signal,
-      )
+        const { papers, total } = await openalexLinkedWorks(
+          work.openalex,
+          relation,
+          limit,
+          host.http,
+          keys,
+          exec.signal,
+        )
 
-      const relDesc =
-        args.direction === 'citations'
-          ? 'cite'
-          : args.direction === 'references'
-            ? 'are referenced by'
-            : 'are related to'
+        const relDesc =
+          args.direction === 'citations'
+            ? 'cite'
+            : args.direction === 'references'
+              ? 'are referenced by'
+              : 'are related to'
 
-      if (papers.length === 0) {
-        return {
-          text: `No papers found that ${relDesc} "${work.title}" in OpenAlex.`,
-          papers: [],
+        if (papers.length === 0) {
+          return {
+            text: `No papers found that ${relDesc} "${work.title}" in OpenAlex.`,
+            papers: [],
+          }
         }
-      }
 
-      const fused = fuseRankedLists([{ sourceId: 'openalex', papers }])
+        const fused = fuseRankedLists([{ sourceId: 'openalex', papers }])
 
-      // Check collision with Zotero
-      const { notice: libraryNotice } = await annotateWithLibraryStatus(
-        fused,
-        host.zoteroService?.(),
-        exec.signal,
-      )
+        // Check collision with Zotero
+        const { notice: libraryNotice } = await annotateWithLibraryStatus(
+          fused,
+          host.zoteroService?.(),
+          exec.signal,
+        )
 
-      const countDesc =
-        total !== undefined && total > fused.length
-          ? `${total} total papers ${relDesc} "${work.title}"; showing top ${fused.length} most cited:`
-          : `${fused.length} papers ${relDesc} "${work.title}":`
+        const countDesc =
+          total !== undefined && total > fused.length
+            ? `${total} total papers ${relDesc} "${work.title}"; showing top ${fused.length} most cited:`
+            : `${fused.length} papers ${relDesc} "${work.title}":`
 
-      const lines = fused.map((p, idx) => formatPaperItem(p, idx + 1, 200)).join('\n\n')
+        const lines = fused.map((p, idx) => formatPaperItem(p, idx + 1, 200)).join('\n\n')
 
-      return {
-        text: `${countDesc}\n\n${lines}${libraryNotice}`,
-        papers: toCleanJsonRecords(fused),
+        return {
+          text: `${countDesc}\n\n${lines}${libraryNotice}`,
+          papers: toCleanJsonRecords(fused),
+        }
+      } catch (error) {
+        if (exec.signal.aborted) throw exec.signal.reason ?? error
+        const issues = [`OpenAlex (${failureTextOf(error)})`]
+        return {
+          text: allSourcesFailedText(
+            'this identifier',
+            raw,
+            issues,
+            isLocalAddressRejection(error),
+          ),
+          papers: [],
+          issues,
+        }
       }
     },
     presentCall: (args) => {

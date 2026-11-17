@@ -33,16 +33,16 @@ export interface EnableNoticeState {
 
 /** The status subset the controller reads from its component's card store. */
 export interface NamespaceStatusSource {
-  getSnapshot(): { readonly namespaceStatus: NamespaceStatus }
+  getSnapshot(): { readonly namespaceStatus: NamespaceStatus; readonly enableEpoch?: string }
   subscribe(listener: () => void): () => void
 }
 
 /** Where one client keeps its acknowledgement of one enable period. */
 export interface EnableNoticeAcknowledgement {
   /** Whether this client already acknowledged the current enable. */
-  read(): boolean
+  read(epoch?: string): boolean
   /** Persist the acknowledgement for the current enable. */
-  remember(): void
+  remember(epoch?: string): void
   /** Drop the acknowledgement: a new enable period owes the disclosure again. */
   forget(): void
 }
@@ -69,31 +69,82 @@ export const SCHOLARLY_RETRIEVAL_ACK_KEY = 'dsh-zotero:scholarly-retrieval-ack:1
  * @returns the acknowledgement port over this client's storage.
  */
 export function clientAcknowledgement(key: string): EnableNoticeAcknowledgement {
-  let sessionAcknowledged: boolean | undefined
+  let session: { epoch?: string; acknowledged: boolean } | undefined
   return {
-    read: () => {
-      if (sessionAcknowledged !== undefined) return sessionAcknowledged
+    read: (epoch) => {
+      if (session?.epoch === epoch && session !== undefined) return session.acknowledged
+      if (epoch === undefined) return false
       try {
-        return localStorage.getItem(key) === '1'
+        return localStorage.getItem(key) === epoch
       } catch {
         return false
       }
     },
-    remember: () => {
-      sessionAcknowledged = true
+    remember: (epoch) => {
+      session = { epoch, acknowledged: true }
+      if (epoch === undefined) return
       try {
-        localStorage.setItem(key, '1')
+        localStorage.setItem(key, epoch)
       } catch {
         // The session state above still closes the disclosure for this enable.
       }
     },
     forget: () => {
-      sessionAcknowledged = false
+      session = { epoch: session?.epoch, acknowledged: false }
       try {
         localStorage.removeItem(key)
       } catch {
         // The session state above still revokes it, so a later enable discloses.
       }
+    },
+  }
+}
+
+/** Resolve a fresh host mount identity once per served period; failures still disclose. */
+export function withEnableEpoch(
+  source: NamespaceStatusSource,
+  load: () => Promise<string | undefined>,
+): NamespaceStatusSource & { dispose(): void } {
+  const store = createSnapshotStore<ReturnType<NamespaceStatusSource['getSnapshot']>>({
+    namespaceStatus: 'loading',
+  })
+  let generation = 0,
+    previous: NamespaceStatus | undefined,
+    disposed = false
+  const observe = () => {
+    const status = source.getSnapshot().namespaceStatus
+    if (disposed || status === previous) return
+    previous = status
+    const ticket = ++generation
+    if (status !== 'ready') {
+      store.set({ namespaceStatus: status })
+      return
+    }
+    store.set({ namespaceStatus: 'loading' })
+    void Promise.resolve()
+      .then(load)
+      .then(
+        (epoch) => {
+          if (disposed || generation !== ticket) return
+          store.set({
+            namespaceStatus: 'ready',
+            ...(epoch === undefined ? {} : { enableEpoch: epoch }),
+          })
+        },
+        () => {
+          if (!disposed && generation === ticket) store.set({ namespaceStatus: 'ready' })
+        },
+      )
+  }
+  const unsubscribe = source.subscribe(observe)
+  observe()
+  return {
+    getSnapshot: store.getSnapshot,
+    subscribe: store.subscribe,
+    dispose: () => {
+      disposed = true
+      generation++
+      unsubscribe()
     },
   }
 }
@@ -193,13 +244,13 @@ export class EnableNoticeController<Hook extends EnableNoticeHookName> {
    */
   private observe(): void {
     if (this.disposed) return
-    const status = this.source.getSnapshot().namespaceStatus
+    const { namespaceStatus: status, enableEpoch } = this.source.getSnapshot()
     if (status === 'loading') return
     if (status !== this.lastStatus) {
       if (status !== 'ready') this.acknowledgement.forget()
       this.lastStatus = status
     }
-    this.owed = status === 'ready' && !this.acknowledgement.read()
+    this.owed = status === 'ready' && !this.acknowledgement.read(enableEpoch)
     this.arbiter.refresh()
   }
 
@@ -213,7 +264,7 @@ export class EnableNoticeController<Hook extends EnableNoticeHookName> {
   /** Clear this enable's debt; the arbiter refreshes visibility afterwards. */
   private accept(): void {
     if (this.disposed || !this.owed) return
-    this.acknowledgement.remember()
+    this.acknowledgement.remember(this.source.getSnapshot().enableEpoch)
     this.owed = false
   }
 

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { createScholarlyVerifyTool } from '../../src/scholarly/tools/verify.js'
-import { createMockHost, createMockHttp, EXEC_CONTEXT } from './fixtures.js'
+import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../helpers/scholarly-runtime.js'
 
 describe('scholarly_verify bibliographic-match branches', () => {
   /**

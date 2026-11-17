@@ -1,7 +1,7 @@
 /**
  * `ScholarlyService` lifecycle and the tool layer's degradation rules.
  *
- * Fixtures shared with the sibling scholarly tool specs live in `./fixtures.ts`.
+ * Shared scripted scholarly hosts live in `tests/helpers/scholarly-runtime.ts`.
  * @module tests/scholarly/service
  */
 
@@ -27,7 +27,7 @@ import {
   createMockHost,
   createMockHttp,
   writeVolatile,
-} from './fixtures.js'
+} from '../helpers/scholarly-runtime.js'
 import {
   createAllScholarlyTools,
   createScholarlySearchTool,

@@ -16,7 +16,7 @@ import { createVolatile } from '@deepseek-ai/cosmokit'
 import { describe, expect, it, vi } from 'vitest'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { composeRealJobs } from '../helpers/real-jobs.ts'
-import { bootScholarlyContext } from './fixtures.js'
+import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
 
 const { fetchStub, fetchGate } = vi.hoisted(() => {
   let release: (() => void) | undefined
@@ -77,7 +77,7 @@ describe('ScholarlyService follows a late-mounted jobs registry', () => {
     const refusedResult = refused.results[0]?.result
     expect(refusedResult?.isError).toBe(true)
     if (!refusedResult?.isError) throw new Error('background request unexpectedly succeeded')
-    expect(refusedResult.error.message).toContain('Background execution is unavailable')
+    expect(refusedResult.error.message).toContain('run_in_background" is not a declared property')
 
     // The same call after the real registry mounted as `ctx.jobs` reaches
     // it: the runner resolved the service per call.

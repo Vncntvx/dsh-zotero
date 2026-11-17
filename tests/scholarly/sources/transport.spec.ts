@@ -6,7 +6,7 @@ import {
   isPublicUrl,
 } from '../../../src/scholarly/transport/allowlist.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
 
 describe('scholarly transport safety: allowlist', () => {

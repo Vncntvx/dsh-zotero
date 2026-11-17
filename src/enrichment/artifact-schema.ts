@@ -85,6 +85,9 @@ export const artifactMetaSchema = z
       .int()
       .positive()
       .max(64 * 1024 * 1024),
+    markdownSha256: SHA256,
+    contentListSha256: SHA256.optional(),
+    imageSha256: z.record(z.string().regex(ARTIFACT_IMAGE_NAME_PATTERN), SHA256),
     parser: z.literal('mineru'),
     format: z.literal('markdown'),
     sourceId: SHA256,
@@ -112,7 +115,23 @@ export const artifactMetaSchema = z
     /** The Markdown H1, captured at commit; the tab chip names the paper with it. */
     title: z.string().min(1).max(2048).optional(),
   })
-  .strict() satisfies z.ZodType<ParsedArtifactMeta>
+  .strict()
+  .superRefine((meta, context) => {
+    if ((meta.files.length === 2) !== (meta.contentListSha256 !== undefined))
+      context.addIssue({
+        code: 'custom',
+        message: 'The content-list digest must match the file list.',
+      })
+    const names = new Set((meta.images ?? []).map((image) => image.name))
+    if (
+      Object.keys(meta.imageSha256).length !== names.size ||
+      Object.keys(meta.imageSha256).some((name) => !names.has(name))
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Image digests must cover exactly the declared images.',
+      })
+  }) satisfies z.ZodType<ParsedArtifactMeta>
 
 export const sourceRecordSchema = z
   .object({

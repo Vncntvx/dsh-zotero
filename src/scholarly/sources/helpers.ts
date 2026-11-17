@@ -56,9 +56,13 @@ const ENTITIES: Record<string, string> = {
 }
 
 export function decodeEntities(text: string): string {
+  const scalar = (code: number): string =>
+    code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+      ? String.fromCodePoint(code)
+      : '\uFFFD'
   return text
-    .replace(/&#x([0-9a-f]+);/gi, (_all, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_all, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_all, hex: string) => scalar(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_all, code: string) => scalar(Number(code)))
     .replace(/&([a-z]+);/gi, (all, name: string) => ENTITIES[name.toLowerCase()] ?? all)
 }
 

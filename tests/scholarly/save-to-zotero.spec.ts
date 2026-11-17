@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
 import { renderScholarlySave } from '../../src/scholarly/tools/save-to-zotero.js'
 import { createScholarlySaveToZoteroTool } from '../../src/scholarly/tools/index.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../helpers/scholarly-runtime.js'
 
 /** A stub Zotero service that records the request and settles with `outcome`. */
 function stubZotero(outcome: unknown): {

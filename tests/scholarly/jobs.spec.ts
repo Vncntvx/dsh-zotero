@@ -20,7 +20,7 @@ import {
 import type { JobRegistry } from '@deepseek-ai/dsh-jobs'
 import { composeRealJobs, type RealJobs } from '../helpers/real-jobs.ts'
 import { deferred } from '../helpers/sync.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../helpers/scholarly-runtime.js'
 
 /** The registries this spec composed; teardown stops their live jobs. */
 const registries: RealJobs[] = []

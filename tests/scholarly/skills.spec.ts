@@ -3,7 +3,7 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { afterEach, describe, expect, it } from 'vitest'
 import ScholarlyService from '../../src/scholarly/service.js'
 import { SCHOLARLY_SOPS } from '../../src/skills/scholarly.js'
-import { bootScholarlyContext } from './fixtures.js'
+import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
 
 let ctx: Context | undefined
 afterEach(async () => {

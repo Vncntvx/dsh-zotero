@@ -5,6 +5,7 @@
  */
 
 import { decodeEntities, plain } from '../sources/helpers.js'
+import { academicHtml } from './html.js'
 
 function tidy(text: string): string {
   return decodeEntities(text.replace(/<[^>]+>/g, ''))
@@ -18,38 +19,8 @@ function tidy(text: string): string {
  * Extracts and converts the <article> section of an arXiv HTML page to Markdown.
  */
 export function arxivHtmlToMarkdown(html: string): string | undefined {
-  const start = html.search(/<article[\s>]/i)
-  const end = html.lastIndexOf('</article>')
-  if (start === -1 || end <= start) return undefined
-
-  let body = html
-    .slice(start, end)
-    .replace(/<(script|style|nav|button|svg)\b[\s\S]*?<\/\1>/gi, '')
-    .replace(/<math\b([^>]*)>[\s\S]*?<\/math>/gi, (_all, attrs: string) => {
-      const tex = /alttext="([^"]*)"/i.exec(attrs)?.[1]
-      if (tex === undefined) return ''
-      return /display="block"/i.test(attrs) ? `\n$$${tex}$$\n` : `$${tex}$`
-    })
-    .replace(
-      /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi,
-      (_all, level: string, inner: string) =>
-        `\n\n${'#'.repeat(Number(level))} ${plain(inner)}\n\n`,
-    )
-    .replace(
-      /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi,
-      (_all, inner: string) => `\n[${plain(inner)}]\n`,
-    )
-    .replace(/<\/t[dh]>/gi, ' | ')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<li\b[^>]*>/gi, '\n- ')
-    .replace(/<(br|\/p|\/div|\/section|\/li|\/table|\/figure|\/blockquote)\b[^>]*>/gi, '\n')
-
-  body = tidy(body)
-    .replace(/^[ |]*\|[ |]*$/gm, '')
-    .replace(/ \|$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-
-  return body.length < 500 ? undefined : body
+  const body = academicHtml(html)
+  return body === undefined || body.length < 500 ? undefined : body
 }
 
 /**

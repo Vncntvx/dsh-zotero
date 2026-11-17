@@ -27,7 +27,7 @@ import {
   scholarlyRoutingTextOf,
 } from '../../src/scholarly/prompt.js'
 import { PROMPT_BAND_CEILING } from '../../src/prompt-band.js'
-import { bootScholarlyContext } from './fixtures.js'
+import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
 import { admittedToolSet } from '../helpers/tool-set.js'
 import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
 

@@ -16,7 +16,10 @@ export interface SafePathDeps {
   readonly realpath: (path: string) => Promise<string>
   /** Resolve existing ancestors while preserving the complete missing suffix. */
   readonly canonicalize?: (path: string) => Promise<string>
-  readonly stat: (path: string) => Promise<{ isDirectory(): boolean }>
+  readonly stat: (
+    path: string,
+  ) => Promise<{ isDirectory(): boolean; readonly mode: number; readonly uid: number }>
+  readonly currentUid?: () => number | undefined
   readonly access: (path: string, mode: number) => Promise<void>
   readonly mkdir: (path: string) => Promise<void>
   readonly home?: () => string
@@ -29,7 +32,7 @@ export const hostSafePathDeps: SafePathDeps = {
   stat,
   access,
   mkdir: async (path) => {
-    await mkdir(path, { recursive: true })
+    await mkdir(path, { recursive: true, mode: 0o700 })
   },
 }
 
@@ -104,6 +107,8 @@ export interface SafePathOptions {
   readonly readOnly?: boolean
   /** Return the safe canonical candidate when it does not exist. */
   readonly allowMissing?: boolean
+  /** Parsed evidence must be owned by this user and unwritable by other accounts. */
+  readonly privateOwner?: boolean
   readonly deps?: SafePathDeps
   /** Translate one refusal into the caller's domain error. */
   readonly refuse: (reason: string) => never
@@ -140,6 +145,21 @@ export async function resolveSafeDirectoryPath(options: SafePathOptions): Promis
     })
     if (info === undefined) return false
     if (!info.isDirectory()) refuse('the path is not a directory')
+    if (options.privateOwner && process.platform !== 'win32') {
+      const uid = (deps.currentUid ?? (() => process.getuid?.()))()
+      if (uid === undefined || info.uid !== uid || (info.mode & 0o022) !== 0)
+        refuse(
+          'the directory must be owned by the current user and not writable by group or other users',
+        )
+      for (let ancestor = dirname(path); ; ancestor = dirname(ancestor)) {
+        const parent = await deps.stat(ancestor)
+        if (parent.uid !== 0 && parent.uid !== uid && (parent.mode & 0o1000) === 0)
+          refuse('an ancestor directory is owned by another user without sticky protection')
+        if ((parent.mode & 0o022) !== 0 && (parent.mode & 0o1000) === 0)
+          refuse('an ancestor directory is writable by other users without sticky protection')
+        if (ancestor === dirname(ancestor)) break
+      }
+    }
     try {
       await deps.access(path, options.readOnly ? constants.R_OK : constants.R_OK | constants.W_OK)
     } catch (error) {

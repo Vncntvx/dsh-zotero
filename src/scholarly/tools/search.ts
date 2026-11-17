@@ -4,7 +4,8 @@
  * @module dsh-zotero/scholarly/tools/search
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import {
   formatPaperItem,
   fuseRankedLists,
@@ -67,7 +68,7 @@ export function createScholarlySearchTool(
         enum: ['relevance', 'date', 'citations'],
         default: 'relevance',
         description:
-          'Result order: relevance, date (newest first; defaults to the previous year if year_from omitted), citations (most cited first).',
+          'Order: relevance; date (arXiv: submitted date; others: newest within top min(50,3*limit) relevance hits); citations (most cited first).',
       },
       categories: {
         type: 'array',
@@ -102,7 +103,7 @@ export function createScholarlySearchTool(
       const yearTo =
         yearFrom === undefined && args.year_to === undefined
           ? undefined
-          : Math.min(args.year_to ?? thisYear + 1, thisYear + 1)
+          : (args.year_to ?? thisYear + 1)
 
       const queryObj: ScholarlyQuery = {
         query: text,

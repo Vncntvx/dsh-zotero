@@ -1,6 +1,6 @@
 /** Closed scholarly disk records and memory/disk invalidation. */
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, utimes, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -34,6 +34,53 @@ async function inject(key: string, value: unknown): Promise<void> {
 }
 
 describe('ScholarlyTextStore closed envelope', () => {
+  it('expires a hot memory record without extending its lifetime on reads', async () => {
+    let now = Date.now()
+    const store = new ScholarlyTextStore(directory, 8, { ttlMs: 10, now: () => now })
+    await store.set('paper', record)
+    now += 9
+    expect((await store.get('paper')).kind).toBe('hit')
+    now += 1
+    expect(await store.get('paper')).toEqual({ kind: 'miss' })
+    await expect(stat(pathOf('paper'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('reclaims expired unread disk records on the next publication', async () => {
+    const store = new ScholarlyTextStore(directory)
+    await store.set('abandoned', record)
+    const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+    await utimes(pathOf('abandoned'), old, old)
+    await new ScholarlyTextStore(directory).set('new', record)
+    await expect(stat(pathOf('abandoned'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await new ScholarlyTextStore(directory).get('new')).kind).toBe('hit')
+  })
+
+  it('enforces record and aggregate-byte ceilings across concurrent publications', async () => {
+    const encodedBytes = Buffer.byteLength(
+      JSON.stringify({ version: 3, key: 'paper-0', entry: { kind: 'document', record } }),
+    )
+    const store = new ScholarlyTextStore(directory, 8, {
+      maxRecords: 3,
+      maxBytes: encodedBytes * 2,
+    })
+    await Promise.all(Array.from({ length: 12 }, (_, index) => store.set(`paper-${index}`, record)))
+    const files = (await readdir(join(directory, 'v3'))).filter((name) => name.endsWith('.json'))
+    expect(files.length).toBeLessThanOrEqual(3)
+    const sizes = await Promise.all(
+      files.map(async (file) => (await stat(join(directory, 'v3', file))).size),
+    )
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(encodedBytes * 2)
+    const diskKeys = await Promise.all(
+      files.map(
+        async (file) =>
+          JSON.parse(await readFile(join(directory, 'v3', file), 'utf8')).key as string,
+      ),
+    )
+    for (let index = 0; index < 12; index++)
+      expect((await store.get(`paper-${index}`)).kind).toBe(
+        diskKeys.includes(`paper-${index}`) ? 'hit' : 'miss',
+      )
+  })
   it('roundtrips provider, format, source identity and body through a cold store', async () => {
     const store = new ScholarlyTextStore(directory)
     expect(await store.get('paper')).toEqual({ kind: 'miss' })

@@ -33,16 +33,19 @@ function filesystem() {
   const deps = {
     home: () => home,
     temp: () => '/tmp',
+    currentUid: () => 1000,
     realpath: vi.fn(async (path: string) => {
       const alias = [...aliases].find(([from]) => path === from || path.startsWith(from + '/'))
       const candidate = alias ? alias[1] + path.slice(alias[0].length) : path
       if (!directories.has(candidate)) throw absent(path)
       return candidate
     }),
-    stat: vi.fn(async (path: string): Promise<{ isDirectory(): boolean }> => {
-      if (!directories.has(path)) throw absent(path)
-      return { isDirectory: () => true }
-    }),
+    stat: vi.fn(
+      async (path: string): Promise<{ isDirectory(): boolean; mode: number; uid: number }> => {
+        if (!directories.has(path)) throw absent(path)
+        return { isDirectory: () => true, mode: 0o700, uid: 1000 }
+      },
+    ),
     access: vi.fn(async (path: string, _mode: number) => {
       if (!directories.has(path)) throw absent(path)
     }),
@@ -54,6 +57,53 @@ function filesystem() {
 }
 
 describe('resolveOutputDir creation and safety', () => {
+  it.each([
+    { mode: 0o1777, uid: 1000 },
+    { mode: 0o770, uid: 1000 },
+    { mode: 0o700, uid: 2000 },
+  ])('rejects shared or foreign-owned evidence roots ($mode, $uid)', async ({ mode, uid }) => {
+    const fs = filesystem()
+    const target = `${home}/parsed`
+    fs.add(target)
+    fs.deps.stat.mockImplementation(async (path) => ({
+      isDirectory: () => true,
+      mode: path === target ? mode : 0o700,
+      uid: path === target ? uid : 1000,
+    }))
+    await expect(resolveOutputDir(target, fs.deps, readonly)).rejects.toMatchObject({
+      ...invalid,
+      message: expect.stringContaining('owned by the current user'),
+    })
+    expect(fs.deps.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('accepts an owned private directory below a shared sticky temporary parent', async () => {
+    const fs = filesystem()
+    fs.add('/tmp/parsed')
+    fs.deps.stat.mockImplementation(async (path) => ({
+      isDirectory: () => true,
+      mode: path === '/tmp' ? 0o1777 : 0o700,
+      uid: path === '/tmp' ? 0 : 1000,
+    }))
+    await expect(resolveOutputDir('/tmp/parsed', fs.deps)).resolves.toBe('/tmp/parsed')
+  })
+
+  it.each([
+    { mode: 0o777, uid: 0 },
+    { mode: 0o755, uid: 2000 },
+  ])('rejects a replaceable ancestor ($mode, $uid)', async ({ mode, uid }) => {
+    const fs = filesystem()
+    fs.add('/tmp/parsed')
+    fs.deps.stat.mockImplementation(async (path) => ({
+      isDirectory: () => true,
+      mode: path === '/tmp' ? mode : 0o700,
+      uid: path === '/tmp' ? uid : 1000,
+    }))
+    await expect(resolveOutputDir('/tmp/parsed', fs.deps)).rejects.toMatchObject({
+      ...invalid,
+      message: expect.stringContaining('ancestor directory'),
+    })
+  })
   it('creates the missing harness default when no options override the policy', async () => {
     const fs = filesystem()
     await expect(resolveOutputDir('', fs.deps)).resolves.toBe(defaultRoot)
@@ -182,7 +232,7 @@ describe('resolveOutputDir creation and safety', () => {
   it('refuses a path that is not a directory', async () => {
     const fs = filesystem()
     fs.add(`${home}/file`)
-    fs.deps.stat.mockResolvedValue({ isDirectory: () => false })
+    fs.deps.stat.mockResolvedValue({ isDirectory: () => false, mode: 0o600, uid: 1000 })
     await expect(resolveOutputDir(`${home}/file`, fs.deps)).rejects.toMatchObject({
       ...invalid,
       message: expect.stringContaining('not a directory'),
@@ -302,7 +352,7 @@ describe('resolveOutputDir read-only roots', () => {
     fs.add(target)
     fs.deps.stat.mockImplementation(async (path) => {
       if (path === target) throw Object.assign(new Error('EACCES: stat denied'), { code: 'EACCES' })
-      return { isDirectory: () => true }
+      return { isDirectory: () => true, mode: 0o700, uid: 1000 }
     })
     await expect(resolveOutputDir(target, fs.deps, readonly)).rejects.toMatchObject({
       ...invalid,

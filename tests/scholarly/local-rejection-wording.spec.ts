@@ -17,7 +17,7 @@ import {
   createScholarlySearchTool,
   createScholarlyVerifyTool,
 } from '../../src/scholarly/tools/index.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../helpers/scholarly-runtime.js'
 
 function fakeIpFailure(): TypeError {
   return new TypeError('fetch failed', {

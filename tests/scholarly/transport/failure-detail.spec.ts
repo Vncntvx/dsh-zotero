@@ -16,7 +16,7 @@ import {
 } from '../../../src/scholarly/transport/http.js'
 import { CircuitBreaker } from '../../../src/scholarly/transport/circuit-breaker.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 
 const HOST = 'api.openalex.org'
 const WORKS_URL = `https://${HOST}/works`

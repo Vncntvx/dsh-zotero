@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { rm } from 'node:fs/promises'
 import { createScholarlyReadTool } from '../../../src/scholarly/tools/read.ts'
 import type { FulltextLookupResult } from '../../../src/local/fulltext-enhancer.ts'
-import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../fixtures.ts'
+import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../../helpers/scholarly-runtime.ts'
 
 const url = 'https://example.org/markdown.pdf'
 const markdown =

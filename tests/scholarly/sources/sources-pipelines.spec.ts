@@ -21,7 +21,7 @@ import {
   searchSemanticScholar,
 } from '../../../src/scholarly/sources/semanticscholar.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 
 describe('adapter network query & lookup pipelines', () => {
   it('searches and looks up arXiv papers', async () => {

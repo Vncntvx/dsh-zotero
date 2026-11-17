@@ -1,13 +1,13 @@
 /**
  * `scholarly_search`, `scholarly_get`, and `scholarly_citations` tool contracts.
  *
- * Fixtures shared with the sibling scholarly tool specs live in `./fixtures.ts`.
+ * Shared scripted scholarly hosts live in `tests/helpers/scholarly-runtime.ts`.
  * @module tests/scholarly/search-tools
  */
 
 import { describe, expect, it } from 'vitest'
 import type { ZoteroServiceLike } from '../../src/scholarly/zotero-link.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../helpers/scholarly-runtime.js'
 import { SCHOLARLY_TOOL_NAMES } from '../helpers/tool-names.js'
 import {
   createAllScholarlyTools,

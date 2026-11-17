@@ -4,7 +4,8 @@
  * @module dsh-zotero/scholarly/tools/cite
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import { mapWithConcurrency } from '../../concurrency.js'
 import { ZoteroError, ZOTERO_INVALID_ARGUMENT } from '../../errors.js'
 import { parsePaperIdentifier } from '../fulltext/resolve.js'

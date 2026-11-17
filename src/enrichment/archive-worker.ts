@@ -123,6 +123,8 @@ export class ArchiveProcessor {
   }
   private async acquire(signal: AbortSignal): Promise<() => void> {
     signal.throwIfAborted()
+    // A larger live limit belongs to queued callers before a new arrival.
+    this.drain()
     if (this.running < this.policy().archiveConcurrency) {
       this.running++
       return this.release

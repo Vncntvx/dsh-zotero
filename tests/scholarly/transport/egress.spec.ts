@@ -15,7 +15,7 @@ import { createServer, type Server } from 'node:http'
 import { installProxyFromEnvironment, proxyRouteFor } from '@deepseek-ai/dsh-http-proxy'
 import { egressRouteFor } from '../../../src/transport/connections.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { resolverOf, stubPublicAccessWith } from '../fixtures.js'
+import { resolverOf, stubPublicAccessWith } from '../../helpers/scholarly-runtime.js'
 
 const HOST = 'api.openalex.org'
 const WORKS_URL = `https://${HOST}/works`

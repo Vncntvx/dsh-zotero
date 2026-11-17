@@ -1,6 +1,6 @@
 /**
- * Per-host request pacing: at most one request in flight per host, spaced by
- * that host's declared interval.
+ * Per-host request starts are spaced by that host's declared interval.
+ * The HTTP transport's shared concurrency gate owns in-flight admission.
  *
  * Intervals come from `hosts.ts`; this module owns no host list of its own.
  *
@@ -34,7 +34,7 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
 }
 
 /**
- * Serializes requests per host and spaces them by the host's interval.
+ * Serializes start reservations per host and spaces them by the host's interval.
  *
  * The per-host tail is a promise chain, but every link resolves: a rejected
  * link would poison the host for the rest of the process, so the release step

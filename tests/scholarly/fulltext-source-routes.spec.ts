@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { FulltextEnhancer, FulltextLookupResult } from '../../src/local/fulltext-enhancer.ts'
 import { resolveScholarlyFullText } from '../../src/scholarly/fulltext/resolve.ts'
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.ts'
-import { createMockHttp } from './fixtures.ts'
+import { createMockHttp } from '../helpers/scholarly-runtime.ts'
 
 const resources: Array<{ store: ScholarlyTextStore; http: ReturnType<typeof createMockHttp> }> = []
 afterEach(async () => {

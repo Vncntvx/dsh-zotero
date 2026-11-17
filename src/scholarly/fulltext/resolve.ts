@@ -116,7 +116,12 @@ async function fetchPdfText(
   enhancer?: FulltextEnhancer,
   source = 'the PDF at that URL',
 ): Promise<PdfOutcome> {
-  const url = scholarlySourceIdentityOf(rawUrl)
+  let url: string
+  try {
+    url = scholarlySourceIdentityOf(rawUrl)
+  } catch (error) {
+    return { kind: 'none', reason: 'fetch', detail: errorDetailOf(error) }
+  }
   const lookup = await lookupPdfArtifact(url, enhancer, signal)
   if (typeof lookup !== 'string') return { kind: 'record', record: lookup }
   return await extractRemotePdf(url, http, source, signal)
@@ -198,14 +203,14 @@ async function tryHtmlRoute(
   provider: MarkdownRecord['provider'],
   signal?: AbortSignal,
 ): Promise<AttemptOutcome> {
-  let html: string
+  let markdown: string | undefined
   try {
-    html = await http.text(url, { signal, timeoutMs: 35_000, retries: 0 })
+    const html = await http.text(url, { signal, timeoutMs: 35_000, retries: 0 })
+    markdown = arxivHtmlToMarkdown(html)
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error
     return { kind: 'none', reason: `${label}: ${errorDetailOf(error)}` }
   }
-  const markdown = arxivHtmlToMarkdown(html)
   if (markdown === undefined) {
     return { kind: 'none', reason: `${label}: no article body found` }
   }
@@ -271,7 +276,7 @@ interface ScholarlyResolutionContext {
   readonly keys?: ScholarlyKeys
   readonly store?: ScholarlyTextStore
   readonly signal?: AbortSignal
-  /** Optional higher-quality document parser, read lazily from `ctx.enrichment`. */
+  /** Artifact lookup slot, read lazily from `ctx.zotero.fulltextEnhancer()`. */
   readonly enhancer?: FulltextEnhancer
 }
 
@@ -388,8 +393,8 @@ export async function resolveScholarlyFullText(
 
 /**
  * The DOI / PMID / PMCID route: Europe PMC, OpenAlex, and Unpaywall lookups
- * start concurrently, PMC JATS XML is the preferred Markdown source, then
- * the discovered open-access PDF candidates are tried in order. `reasons`
+ * prefer PMC JATS XML, then discover PDF alternatives concurrently and try
+ * the resulting open-access candidates in order. `reasons`
  * accumulates by reference so the caller's terminal error names every route;
  * the helper returns undefined when no route answered.
  */
@@ -421,38 +426,6 @@ async function resolveDoiLikeRoute(
     return undefined
   })
 
-  // When resolving a DOI, initiate OpenAlex and Unpaywall concurrently with Europe PMC
-  const openAlexPromise =
-    doi !== undefined
-      ? lookupOpenAlex(`doi:${doi}`, http, keys, signal)
-          .then((work) => ({ kind: 'openalex' as const, work }))
-          .catch((error) => {
-            if (signal?.aborted) throw signal.reason ?? error
-            reasons.push(`OpenAlex lookup: ${errorDetailOf(error)}`)
-            return undefined
-          })
-      : Promise.resolve(undefined)
-
-  const unpaywallPromise =
-    doi !== undefined && keys?.email !== undefined
-      ? http
-          .json<{
-            best_oa_location?: { url_for_pdf?: string | null } | null
-            oa_locations?: Array<{ url_for_pdf?: string | null }>
-          }>(
-            `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
-              keys.email,
-            )}`,
-            { signal, timeoutMs: 25_000 },
-          )
-          .then((oa) => ({ kind: 'unpaywall' as const, oa }))
-          .catch((error) => {
-            if (signal?.aborted) throw signal.reason ?? error
-            reasons.push(`Unpaywall lookup: ${errorDetailOf(error)}`)
-            return undefined
-          })
-      : Promise.resolve(undefined)
-
   const epmc = await epmcPromise
 
   if (epmc !== undefined) {
@@ -470,7 +443,13 @@ async function resolveDoiLikeRoute(
       reasons.push(`PMC full text (${pmcid}): ${errorDetailOf(error)}`)
     }
     if (xml !== undefined) {
-      const markdown = jatsToMarkdown(xml)
+      let markdown: string | undefined
+      try {
+        markdown = jatsToMarkdown(xml)
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error
+        reasons.push(`PMC full text (${pmcid}): conversion failed (${errorDetailOf(error)})`)
+      }
       if (markdown !== undefined) {
         return await remember({
           provider: 'pmc-jats',
@@ -487,11 +466,53 @@ async function resolveDoiLikeRoute(
 
   // Candidate open-access PDFs, in discovery order
   const candidatePdfUrls: Array<{ url: string; from: string }> = []
-  if (epmc?.pdfUrl !== undefined) candidatePdfUrls.push({ url: epmc.pdfUrl, from: 'Europe PMC' })
+  const addCandidate = (raw: string | undefined | null, from: string): void => {
+    if (raw === undefined || raw === null) return
+    try {
+      const url = scholarlySourceIdentityOf(raw)
+      if (!candidatePdfUrls.some((candidate) => candidate.url === url))
+        candidatePdfUrls.push({ url, from })
+    } catch (error) {
+      reasons.push(`open-access PDF via ${from}: invalid URL (${errorDetailOf(error)})`)
+    }
+  }
+  addCandidate(epmc?.pdfUrl, 'Europe PMC')
 
   const attemptedArxivIds = new Set<string>()
 
   if (doi !== undefined) {
+    // Discover PDF alternatives only after the preferred PMC route has missed.
+    const openAlexPromise =
+      doi !== undefined
+        ? lookupOpenAlex(`doi:${doi}`, http, keys, signal)
+            .then((work) => ({ kind: 'openalex' as const, work }))
+            .catch((error) => {
+              if (signal?.aborted) throw signal.reason ?? error
+              reasons.push(`OpenAlex lookup: ${errorDetailOf(error)}`)
+              return undefined
+            })
+        : Promise.resolve(undefined)
+
+    const unpaywallPromise =
+      doi !== undefined && keys?.email !== undefined
+        ? http
+            .json<{
+              best_oa_location?: { url_for_pdf?: string | null } | null
+              oa_locations?: Array<{ url_for_pdf?: string | null }>
+            }>(
+              `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${encodeURIComponent(
+                keys.email,
+              )}`,
+              { signal, timeoutMs: 25_000 },
+            )
+            .then((oa) => ({ kind: 'unpaywall' as const, oa }))
+            .catch((error) => {
+              if (signal?.aborted) throw signal.reason ?? error
+              reasons.push(`Unpaywall lookup: ${errorDetailOf(error)}`)
+              return undefined
+            })
+        : Promise.resolve(undefined)
+
     const [openAlexRes, unpaywallRes] = await Promise.all([openAlexPromise, unpaywallPromise])
 
     if (openAlexRes?.work !== undefined) {
@@ -508,16 +529,11 @@ async function resolveDoiLikeRoute(
         }
         reasons.push(`preprint arXiv:${preprintId}: ${preprint.reasons.join('; ')}`)
       }
-      if (work.pdfUrl !== undefined && !candidatePdfUrls.some((c) => c.url === work.pdfUrl)) {
-        candidatePdfUrls.push({ url: work.pdfUrl, from: 'OpenAlex' })
-      }
+      addCandidate(work.pdfUrl, 'OpenAlex')
     }
 
     if (unpaywallRes?.oa !== undefined) {
-      const pdf = unpaywallRes.oa.best_oa_location?.url_for_pdf
-      if (pdf !== undefined && pdf !== null && !candidatePdfUrls.some((c) => c.url === pdf)) {
-        candidatePdfUrls.push({ url: pdf, from: 'Unpaywall' })
-      }
+      addCandidate(unpaywallRes.oa.best_oa_location?.url_for_pdf, 'Unpaywall')
     }
 
     if (candidatePdfUrls.length === 0) {
@@ -529,9 +545,7 @@ async function resolveDoiLikeRoute(
         s2 = undefined
         reasons.push(`Semantic Scholar lookup: ${errorDetailOf(error)}`)
       }
-      if (s2?.pdfUrl !== undefined && !candidatePdfUrls.some((c) => c.url === s2.pdfUrl)) {
-        candidatePdfUrls.push({ url: s2.pdfUrl, from: 'Semantic Scholar' })
-      }
+      addCandidate(s2?.pdfUrl, 'Semantic Scholar')
     }
   }
 

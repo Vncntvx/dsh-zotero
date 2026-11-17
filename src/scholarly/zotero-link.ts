@@ -29,9 +29,9 @@ import type {
   ZoteroSearchRequest,
   ZoteroSearchResult,
   ZoteroCreateItemRequest,
-  ZoteroCreateItemCommittedOutcome,
-  ZoteroWriteCall,
+  ZoteroCreateItemOutcome,
 } from '../types.js'
+import type { ZoteroWriteCall } from '../write-call.js'
 import { titleKey } from './normalize.js'
 import type { ScholarlyPaper } from './types.js'
 import type { FulltextEnhancer } from '../local/fulltext-enhancer.js'
@@ -48,7 +48,7 @@ export interface ZoteroServiceLike {
   createItem?(
     request: ZoteroCreateItemRequest,
     call: ZoteroWriteCall,
-  ): Promise<ZoteroCreateItemCommittedOutcome | { kind: 'declined' }>
+  ): Promise<ZoteroCreateItemOutcome>
   /**
    * The ranking strategy the core holds: its own lexical ranker, or the hybrid
    * one the enrichment component installed. Declared here so callers need not
@@ -154,6 +154,9 @@ export async function attachLibraryStatus(
 
     const paperDoi = paper.doi?.trim().toLowerCase()
 
+    let unavailable = false
+    let invalidRef = false
+    let matched = false
     for (const item of res.items ?? []) {
       // The grammar owns ref identity: an unparseable ref is not a match, and
       // the detail seam below takes the parsed object, never a string.
@@ -161,7 +164,7 @@ export async function attachLibraryStatus(
       try {
         ref = parseRef(item.ref)
       } catch {
-        report.unparseable += 1
+        invalidRef = true
         continue
       }
 
@@ -190,7 +193,7 @@ export async function attachLibraryStatus(
           // A failed detail read leaves the compact record's own match intact,
           // but when the compact record did not match this read was the only
           // discovery path: a failure is not evidence of absence.
-          if (!isMatch) report.failed += 1
+          if (!isMatch) unavailable = true
         }
       }
 
@@ -201,8 +204,13 @@ export async function attachLibraryStatus(
           collections,
         }
         report.matched += 1
+        matched = true
         break
       }
+    }
+    if (!matched) {
+      if (unavailable) report.failed += 1
+      else if (invalidRef) report.unparseable += 1
     }
   })
 
@@ -230,11 +238,16 @@ export async function annotateWithLibraryStatus(
   }
   const report = await attachLibraryStatus(papers, zoteroService, signal)
   let notice = ''
-  if (report.failed > 0) {
+  const unavailable = report.failed + report.unparseable
+  if (unavailable > 0) {
+    const reasons = [
+      ...(report.failed > 0 ? ['local Zotero lookup failed'] : []),
+      ...(report.unparseable > 0 ? ['local Zotero returned an invalid item reference'] : []),
+    ].join('; ')
     notice =
       style === 'item'
-        ? '\n\nLibrary status unavailable (local Zotero lookup failed).'
-        : `\n\nLibrary status unavailable for ${report.failed} of ${papers.length} results (local Zotero lookup failed).`
+        ? `\n\nLibrary status unavailable (${reasons}).`
+        : `\n\nLibrary status unavailable for ${unavailable} of ${papers.length} results (${reasons}).`
   }
   return { notice, report }
 }

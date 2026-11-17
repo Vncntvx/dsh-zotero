@@ -4,7 +4,7 @@ import {
   ScholarlyCircuitOpenError,
 } from '../../../src/scholarly/transport/circuit-breaker.js'
 import { createScholarlyHttp } from '../../../src/scholarly/transport/http.js'
-import { stubPublicAccess } from '../fixtures.js'
+import { stubPublicAccess } from '../../helpers/scholarly-runtime.js'
 import { HostPacer } from '../../../src/scholarly/transport/pacing.js'
 
 describe('scholarly transport resilience: circuit breaker', () => {

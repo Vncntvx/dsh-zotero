@@ -15,7 +15,7 @@ import {
   PLAIN_TEXT_OUTLINE_MESSAGE,
   NO_SECTION_HEADINGS_MESSAGE,
 } from '../../../src/scholarly/tools/read.js'
-import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../fixtures.js'
+import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../../helpers/scholarly-runtime.js'
 
 const hosts: ReturnType<typeof createMockHost>[] = []
 afterEach(async () => {

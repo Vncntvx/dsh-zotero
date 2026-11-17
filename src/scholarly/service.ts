@@ -1,3 +1,5 @@
+import type {} from '../job-kinds.js'
+import { registerComponentEnablement } from '../component-enablement.js'
 /**
  * Cordis Service plugin providing `ctx.scholarly`.
  *
@@ -97,6 +99,7 @@ export class ScholarlyService extends Service {
     public config: ScholarlyConfig = {},
   ) {
     super(ctx, 'scholarly')
+    registerComponentEnablement(ctx, 'scholarly')
     assertNoLegacyCredentialFields(config)
 
     this.http = createScholarlyHttp({

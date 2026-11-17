@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { parameterCorrectionHint } from '../../src/parameter-correction.ts'
 import ScholarlyService from '../../src/scholarly/index.ts'
-import { bootScholarlyContext } from './fixtures.js'
+import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
 
 let ctx: Context | undefined
 

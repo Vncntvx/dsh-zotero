@@ -16,7 +16,7 @@ import {
   createScholarlyVerifyTool,
   parseReferenceSnippet,
 } from '../../src/scholarly/tools/verify.js'
-import { createMockHost, createMockHttp, EXEC_CONTEXT } from './fixtures.js'
+import { createMockHost, createMockHttp, EXEC_CONTEXT } from '../helpers/scholarly-runtime.js'
 
 describe('scholarly_cite failure paths', () => {
   it('names the transport status when a registry rate-limits a citation read', async () => {

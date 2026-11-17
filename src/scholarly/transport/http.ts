@@ -39,7 +39,7 @@ import { ConcurrencyGate } from '../../concurrency.js'
 import { DEFAULT_MAX_RESPONSE_BYTES } from '../../constants.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../../transport-bounds.js'
 import { errnoCodeOf, errorDetailOf } from '../../errors.js'
-import { addressRefusalOf } from '../../transport/public-url.js'
+import { addressRefusalOf, PublicAddressError } from '../../transport/public-url.js'
 import { egressRouteFor } from '../../transport/connections.js'
 import {
   assertAllowedScholarlyUrl,
@@ -279,6 +279,9 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
     const maxRedirects = 5
     const maxRetries = reqOptions.retries ?? 2
     const timeoutMs = reqOptions.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    // One logical request owns a budget across admission, redirects, retries,
+    // body reading and backoff. A new hop cannot reset this clock.
+    using overall = deadline(reqOptions.signal, timeoutMs * (maxRedirects + 1), SCHOLARLY_TIMEOUT)
     const maxBytes = reqOptions.maxBytes ?? DEFAULT_MAX_BYTES
     const probeTokens = new Map<string, symbol>()
     const releaseProbe = (host: string): void => {
@@ -304,6 +307,11 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         releaseProbe(new URL(currentUrl).hostname)
         throw reqOptions.signal?.reason ?? new Error('Operation aborted')
       }
+      if (isProviderTimeout(overall.signal)) {
+        const host = new URL(currentUrl).hostname
+        releaseProbe(host)
+        throw new ScholarlyHttpError(504, host)
+      }
       // The lexical gate lives in the allowlist module, so the initial URL
       // and every redirect hop are judged by the same rule (including the
       // allowlist arm's HTTPS-only requirement). A same-host redirect may
@@ -320,7 +328,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
       // The breaker, the pacer, and every error message key on the bare
       // hostname: the interval table has no port column, and a keyed-by-port
       // entry would bypass pacing and split breaker circuits.
-      using d = deadline(reqOptions.signal, timeoutMs, SCHOLARLY_TIMEOUT)
+      using d = deadline(overall.signal, timeoutMs, SCHOLARLY_TIMEOUT)
 
       const probeToken = circuitBreaker.beforeRequest(hostname, probeTokens.get(hostname))
       if (probeToken === undefined) probeTokens.delete(hostname)
@@ -371,6 +379,20 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         releaseProbe(hostname)
         if (callerAborted(reqOptions.signal)) throw error
         if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
+        if (error instanceof PublicAddressError && error.reason === 'resolution-failed') {
+          if (halfOpenProbe || attempt >= maxRetries) {
+            recordFailure(hostname)
+            throw error
+          }
+          try {
+            await sleep(1_000 * 2 ** attempt, overall.signal)
+          } catch (waitError) {
+            if (callerAborted(reqOptions.signal)) throw reqOptions.signal!.reason
+            if (isProviderTimeout(overall.signal)) throw new ScholarlyHttpError(504, hostname)
+            throw waitError
+          }
+          continue
+        }
         throw error
       }
       const dispatcher = route?.proxied
@@ -542,9 +564,11 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
       }
       if (retryDelayMs !== undefined && retryDelayMs > 0) {
         try {
-          await sleep(retryDelayMs, reqOptions.signal)
+          await sleep(retryDelayMs, overall.signal)
         } catch (error) {
           releaseProbe(hostname)
+          if (callerAborted(reqOptions.signal)) throw reqOptions.signal!.reason
+          if (isProviderTimeout(overall.signal)) throw new ScholarlyHttpError(504, hostname)
           throw error
         }
       }

@@ -3,12 +3,13 @@
  * on disk; MinerU bodies remain owned by enrichment and are looked up per read.
  * @module dsh-zotero/scholarly/fulltext/store
  */
-import { mkdir, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { join } from 'node:path'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import type { FulltextArtifactProvenance } from '../../local/fulltext-enhancer.js'
+import { readRegularFile } from '../../regular-file.js'
 
 interface FullTextBody {
   readonly text: string
@@ -59,6 +60,15 @@ const CACHE_DIRECTORY = `v${CACHE_VERSION}`
 const MAX_RECORD_BYTES = 4 * 1_048_576
 const DEFAULT_MEMORY_ITEMS = 8
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const CACHE_MAX_RECORDS = 256
+const CACHE_MAX_BYTES = 128 * 1_048_576
+
+interface CachePolicy {
+  readonly ttlMs: number
+  readonly maxRecords: number
+  readonly maxBytes: number
+  readonly now: () => number
+}
 
 /** Same-source URL identity: preserve query spelling/order, remove only the fragment. */
 export function scholarlySourceIdentityOf(raw: string): string {
@@ -167,14 +177,28 @@ function entryOf(value: unknown): FullTextCacheEntry | undefined {
  * are neither read nor migrated. Corrupt records are evicted and reported.
  */
 export class ScholarlyTextStore {
-  private readonly memory = new Map<string, FullTextCacheEntry>()
+  private readonly memory = new Map<string, { entry: FullTextCacheEntry; createdAt: number }>()
   private disposed = false
   private rootEnsured: Promise<void> | undefined
+  private writing = Promise.resolve()
+  private readonly policy: CachePolicy
 
   constructor(
     public readonly root: string = dshCachePath('zotero-scholarly'),
     private readonly memoryItems: number = DEFAULT_MEMORY_ITEMS,
-  ) {}
+    policy: Partial<CachePolicy> = {},
+  ) {
+    this.policy = {
+      ttlMs: CACHE_TTL_MS,
+      maxRecords: CACHE_MAX_RECORDS,
+      maxBytes: CACHE_MAX_BYTES,
+      now: Date.now,
+      ...policy,
+    }
+    for (const value of [this.policy.ttlMs, this.policy.maxRecords, this.policy.maxBytes])
+      if (!Number.isSafeInteger(value) || value < 1)
+        throw new Error('Invalid scholarly cache bound')
+  }
 
   private ensureRoot(): Promise<void> {
     if (!this.rootEnsured) {
@@ -193,8 +217,12 @@ export class ScholarlyTextStore {
     if (this.disposed) return { kind: 'miss' }
     const cached = this.memory.get(key)
     if (cached) {
-      this.remember(key, cached)
-      return { kind: 'hit', entry: cached }
+      if (this.policy.now() - cached.createdAt >= this.policy.ttlMs) {
+        await this.delete(key)
+        return { kind: 'miss' }
+      }
+      this.remember(key, cached.entry, cached.createdAt)
+      return { kind: 'hit', entry: cached.entry }
     }
     const path = join(this.root, CACHE_DIRECTORY, fileNameOf(key))
     const corrupt = async (reason: string): Promise<FullTextRead> => {
@@ -204,7 +232,7 @@ export class ScholarlyTextStore {
     }
     let raw: string
     try {
-      raw = await readFile(path, 'utf8')
+      raw = (await readRegularFile(path, MAX_RECORD_BYTES)).toString('utf8')
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       return code === 'ENOENT'
@@ -228,12 +256,15 @@ export class ScholarlyTextStore {
     }
     if (envelope.key !== key) return await corrupt('cache key mismatch')
     const fileInfo = await stat(path).catch(() => undefined)
-    if (fileInfo !== undefined && Date.now() - fileInfo.mtimeMs > CACHE_TTL_MS)
-      return await corrupt('record expired')
+    if (fileInfo === undefined) return { kind: 'miss' }
+    if (this.policy.now() - fileInfo.mtimeMs >= this.policy.ttlMs) {
+      await this.delete(key)
+      return { kind: 'miss' }
+    }
     const entry = entryOf(envelope.entry)
     if (!entry) return await corrupt('record shape')
     if (this.disposed) return { kind: 'miss' }
-    this.remember(key, entry)
+    this.remember(key, entry, fileInfo.mtimeMs)
     return { kind: 'hit', entry }
   }
 
@@ -258,14 +289,16 @@ export class ScholarlyTextStore {
         `scholarly store: record "${key}" exceeds the ${MAX_RECORD_BYTES}-byte cache ceiling`,
       )
     }
-    await this.ensureRoot()
-    if (this.disposed) return
-    const path = join(this.root, CACHE_DIRECTORY, fileNameOf(key))
-    // The upstream atomic replacement: exclusive-create temp sibling carrying
-    // the 0600 bits through the rename, so a crash or a planted symlink at
-    // the temp path can neither widen the record's permissions nor alias it.
-    await writeFileAtomic(path, encoded, { mode: 0o600, dirMode: 0o700 })
-    if (!this.disposed) this.remember(key, validated)
+    const writing = this.writing.then(async () => {
+      await this.ensureRoot()
+      if (this.disposed) return
+      const path = join(this.root, CACHE_DIRECTORY, fileNameOf(key))
+      await writeFileAtomic(path, encoded, { mode: 0o600, dirMode: 0o700 })
+      if (!this.disposed) this.remember(key, validated, this.policy.now())
+      await this.prune()
+    })
+    this.writing = writing.catch(() => {})
+    await writing
   }
 
   /** Expiry removes both tiers before any refetch; deletion failures stay explicit. */
@@ -279,9 +312,47 @@ export class ScholarlyTextStore {
     this.memory.clear()
   }
 
-  private remember(key: string, entry: FullTextCacheEntry): void {
+  private async prune(): Promise<void> {
+    const root = join(this.root, CACHE_DIRECTORY)
+    const entries = await readdir(root, { withFileTypes: true })
+    const records = (
+      await Promise.all(
+        entries
+          .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
+          .map(async (entry) => {
+            try {
+              const info = await stat(join(root, entry.name))
+              return { name: entry.name, bytes: info.size, createdAt: info.mtimeMs }
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+              throw error
+            }
+          }),
+      )
+    )
+      .filter((record) => record !== undefined)
+      .sort((a, b) => a.createdAt - b.createdAt || a.name.localeCompare(b.name))
+    let count = records.length,
+      bytes = records.reduce((sum, record) => sum + record.bytes, 0)
+    const removed = new Set<string>()
+    for (const record of records) {
+      if (
+        this.policy.now() - record.createdAt < this.policy.ttlMs &&
+        count <= this.policy.maxRecords &&
+        bytes <= this.policy.maxBytes
+      )
+        continue
+      await rm(join(root, record.name), { force: true })
+      removed.add(record.name)
+      count--
+      bytes -= record.bytes
+    }
+    for (const key of this.memory.keys()) if (removed.has(fileNameOf(key))) this.memory.delete(key)
+  }
+
+  private remember(key: string, entry: FullTextCacheEntry, createdAt: number): void {
     this.memory.delete(key)
-    this.memory.set(key, entry)
+    this.memory.set(key, { entry, createdAt })
     if (this.memory.size <= this.memoryItems) return
     const oldest = this.memory.keys().next().value
     if (oldest !== undefined) this.memory.delete(oldest)

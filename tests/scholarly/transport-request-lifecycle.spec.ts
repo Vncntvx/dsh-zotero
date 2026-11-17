@@ -15,7 +15,7 @@ import {
   type ScholarlyPublicAccess,
 } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
-import { stubPublicAccess } from './fixtures.js'
+import { stubPublicAccess } from '../helpers/scholarly-runtime.js'
 import { deferred } from '../helpers/sync.js'
 
 describe('scholarly HTTP status extraction', () => {

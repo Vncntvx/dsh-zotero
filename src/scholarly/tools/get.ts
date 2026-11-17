@@ -3,7 +3,8 @@
  * @module dsh-zotero/scholarly/tools/get
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import { bestIdentifierOf, formatPaperDetail, fuseRankedLists } from '../fusion.js'
 import { openAlexIdOf, parsePaperIdentifier } from '../fulltext/resolve.js'
 import { lookupArxiv } from '../sources/arxiv.js'
@@ -33,7 +34,7 @@ const GET_PARAMETERS = {
     type: 'string',
     required: true,
     description:
-      'DOI (e.g. 10.1038/nature1234), arXiv ID (e.g. 2301.00001), PMID, PMCID, URL, or exact title.',
+      'DOI (e.g. 10.1038/nature1234), arXiv ID (e.g. 2301.00001), PMID, PMCID, a URL containing one of these identifiers, or an exact title.',
   },
 } as const
 
@@ -41,7 +42,7 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
   return defineTool({
     name: 'scholarly_get',
     description:
-      'Look up one scholarly paper by DOI, arXiv ID, PMID, PMCID, URL, or exact title. ' +
+      'Look up one paper by scholarly identifier, an identifier-bearing URL, or exact title. ' +
       'Merges metadata across OpenAlex, Crossref, arXiv, Semantic Scholar, and Europe PMC ' +
       'into full abstract, authors, venue, citations, open-access status, and retraction checks.',
     parameters: GET_PARAMETERS,

@@ -4,7 +4,8 @@
  * @module dsh-zotero/scholarly/tools/read
  */
 
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineZoteroTool as defineTool } from '../../define-tool.js'
 import type { ScholarlyTextStore } from '../fulltext/store.js'
 import { extractOutline, findSection, rankPassages } from '../fulltext/evidence-bridge.js'
 import { parsePaperIdentifier, resolveScholarlyFullText } from '../fulltext/resolve.js'
@@ -105,7 +106,8 @@ export function createScholarlyReadTool(
       },
       max_chars: {
         type: 'integer',
-        description: 'Maximum characters per chunk (defaults to the configured maxContentChars).',
+        description:
+          'Chunk character limit: 1 through maxContentChars (default: that cap). Out-of-range values are refused.',
       },
       ...(background ? RUN_IN_BACKGROUND_PARAMETER : {}),
     },
@@ -113,6 +115,13 @@ export function createScholarlyReadTool(
     isConcurrencySafe: () => true,
     timeoutMs: 180_000,
     async execute(args, exec) {
+      const maxChars = host.maxContentChars ? host.maxContentChars() : 12_000
+      if (args.max_chars !== undefined && (args.max_chars < 1 || args.max_chars > maxChars)) {
+        throw new ZoteroError(
+          `max_chars must be between 1 and ${maxChars}.`,
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      }
       const raw = args.id.trim()
       const parsedId = parsePaperIdentifier(raw)
       if (!parsedId) {
@@ -150,7 +159,9 @@ export function createScholarlyReadTool(
               message: `Read ${fullText.text.length} characters from ${fullText.source}`,
             })
 
-            const sections = fullText.format === 'markdown' ? extractOutline(fullText.text) : []
+            let outline: ReturnType<typeof extractOutline> | undefined
+            const sectionsOf = () =>
+              (outline ??= fullText.format === 'markdown' ? extractOutline(fullText.text) : [])
             const documentSource = {
               id: raw,
               provider: fullText.provider,
@@ -166,6 +177,7 @@ export function createScholarlyReadTool(
 
             // 1. Inspect Table of Contents
             if (args.outline) {
+              const sections = sectionsOf()
               if (sections.length === 0) {
                 return {
                   text: `${header}\n\nNotice: ${fullText.format === 'text' ? PLAIN_TEXT_OUTLINE_MESSAGE : MARKDOWN_OUTLINE_MESSAGE}`,
@@ -199,9 +211,11 @@ export function createScholarlyReadTool(
             let activeText = fullText.text
             let sourceStart = 0
             let scopeLabel = ''
+            let sectionId: string | undefined
 
             // 2. Read specific Section
             if (args.section?.trim()) {
+              const sections = sectionsOf()
               const sec = findSection(sections, args.section)
               if (!sec) {
                 const available = sections
@@ -218,6 +232,7 @@ export function createScholarlyReadTool(
               activeText = fullText.text.slice(sec.start, sec.end)
               sourceStart = sec.start
               scopeLabel = ` [Section ${sec.id}: ${sec.title}]`
+              sectionId = sec.id
             }
 
             // 3. Passage matching against a natural-language question
@@ -273,9 +288,8 @@ export function createScholarlyReadTool(
             }
 
             // 4. Default Chunked Reading
-            const maxChars = host.maxContentChars ? host.maxContentChars() : 12_000
             const start = Math.min(activeText.length, Math.max(0, args.start ?? 0))
-            const chunkSize = Math.min(maxChars, Math.max(500, args.max_chars ?? maxChars))
+            const chunkSize = args.max_chars ?? maxChars
             const end = Math.min(activeText.length, start + chunkSize)
 
             const isTruncated = end < activeText.length
@@ -284,11 +298,16 @@ export function createScholarlyReadTool(
             // document the delivery would keep inline needs no handle, and
             // one settings edit moves this threshold with the delivery's own.
             const inlineBudget = host.maxInlineResultTokens?.() ?? 4_000
-            if (isTruncated && exceedsInlineTokenBudget(activeText, inlineBudget) && host.ctx) {
+            if (
+              start === 0 &&
+              isTruncated &&
+              exceedsInlineTokenBudget(activeText, inlineBudget) &&
+              host.ctx
+            ) {
               spillRef = await trySpillToolOutput(
                 host.ctx,
                 exec,
-                `${raw.replace(/[^a-zA-Z0-9._-]/g, '_')}-fulltext.txt`,
+                `${raw.replace(/[^a-zA-Z0-9._-]/g, '_')}-${sectionId === undefined ? 'fulltext' : `section-${sectionId.replace(/[^a-zA-Z0-9._-]/g, '_')}`}.txt`,
                 activeText,
               )
             }
@@ -311,7 +330,7 @@ export function createScholarlyReadTool(
               : 'is_truncated: false (end of section/text)'
 
             const hint =
-              start === 0 && isTruncated && sections.length > 0 && !scopeLabel
+              start === 0 && isTruncated && !scopeLabel && sectionsOf().length > 0
                 ? ' (Tip: This paper has section headings; use outline=true to inspect them).'
                 : ''
 

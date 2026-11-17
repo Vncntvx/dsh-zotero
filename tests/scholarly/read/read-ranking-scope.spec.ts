@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { bm25EvidenceRanker, type EvidenceRankRequest } from '../../../src/local/evidence-ranker.js'
 import { ScholarlyTextStore } from '../../../src/scholarly/fulltext/store.js'
 import { createScholarlyReadTool } from '../../../src/scholarly/tools/index.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../../helpers/scholarly-runtime.js'
 
 const doc = `
 # 1. Introduction

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { EXEC_CONTEXT, createMockHost, createMockHttp } from './fixtures.js'
+import { EXEC_CONTEXT, createMockHost, createMockHttp } from '../helpers/scholarly-runtime.js'
 import { createScholarlyCitationsTool } from '../../src/scholarly/tools/index.js'
 import { toCleanJsonRecords } from '../../src/scholarly/tools/common.js'
 

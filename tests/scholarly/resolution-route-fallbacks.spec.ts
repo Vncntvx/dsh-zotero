@@ -18,7 +18,7 @@ import { resolveScholarlyFullText } from '../../src/scholarly/fulltext/resolve.j
 import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
-import { stubPublicAccess } from './fixtures.js'
+import { stubPublicAccess } from '../helpers/scholarly-runtime.js'
 
 const tempDirs: string[] = []
 afterEach(() => {
@@ -59,6 +59,32 @@ function routed(routes: Array<[string, () => Response]>, seen: string[] = []) {
 }
 
 const articleHtml = `<article class="ltx_document"><h1>Preprint Copy</h1><p>${'Detailed treatment of the discovered preprint. '.repeat(20)}</p></article>`
+
+it('finishes a DOI through PMC without starting unused OpenAlex or Unpaywall requests', async () => {
+  const xml = `<article><body><sec><title>Results</title><p>${'Validated article body. '.repeat(40)}</p></sec></body></article>`
+  const { http, seen } = routed([
+    [
+      'europepmc/webservices/rest/search',
+      () =>
+        json({
+          resultList: {
+            result: [{ id: '1', source: 'MED', pmcid: 'PMC5550000', doi: '10.1234/pmc' }],
+          },
+        }),
+    ],
+    ['fullTextXML', () => new Response(xml, { headers: { 'content-type': 'application/xml' } })],
+  ])
+  const record = await resolveScholarlyFullText(
+    { kind: 'doi', id: '10.1234/pmc' },
+    {
+      http,
+      keys: { email: 'reader@example.org' },
+    },
+  )
+  expect(record.provider).toBe('pmc-jats')
+  expect(seen).toHaveLength(2)
+  expect(seen.every((url) => url.includes('www.ebi.ac.uk'))).toBe(true)
+})
 
 it('resolves an arXiv identifier through the PDF when both HTML routes lack an article body', async () => {
   const { http } = routed([

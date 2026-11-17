@@ -14,7 +14,7 @@ import { ScholarlyTextStore } from '../../src/scholarly/fulltext/store.ts'
 import type { ScholarlyHttp } from '../../src/scholarly/transport/http.ts'
 import type { FulltextEnhancer, FulltextLookupResult } from '../../src/local/fulltext-enhancer.ts'
 import { ZoteroError } from '../../src/errors.ts'
-import { createMockHttp } from './fixtures.ts'
+import { createMockHttp } from '../helpers/scholarly-runtime.ts'
 
 const pdfUrl = 'https://example.org/a.pdf'
 const pdfSentence = 'Local PDF extraction keeps attention evidence after a cache miss.'

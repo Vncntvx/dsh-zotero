@@ -19,7 +19,7 @@ import {
 } from '../../src/transport/network.js'
 import { ScholarlySecurityError } from '../../src/scholarly/transport/allowlist.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
-import { stubPublicAccess, resolverOf } from './fixtures.js'
+import { stubPublicAccess, resolverOf } from '../helpers/scholarly-runtime.js'
 import { HostPacer } from '../../src/scholarly/transport/pacing.js'
 import { deferred } from '../helpers/sync.js'
 

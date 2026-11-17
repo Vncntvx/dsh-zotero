@@ -1,17 +1,18 @@
 /**
  * `scholarly_read`, `scholarly_cite`, and `scholarly_verify` tool contracts.
  *
- * Fixtures shared with the sibling scholarly tool specs live in `./fixtures.ts`.
+ * Shared scripted scholarly hosts live in `tests/helpers/scholarly-runtime.ts`.
  * @module tests/scholarly/read/read-tools
  */
 
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { ZOTERO_INVALID_ARGUMENT } from '../../../src/errors.js'
-import { ScholarlyTextStore } from '../../../src/scholarly/fulltext/store.js'
-import { EXEC_CONTEXT, createMockHost, createMockHttp, itemLineOf } from '../fixtures.js'
+import {
+  EXEC_CONTEXT,
+  createMockHost,
+  createMockHttp,
+  itemLineOf,
+} from '../../helpers/scholarly-runtime.js'
 import {
   createScholarlyCiteTool,
   createScholarlyGetTool,
@@ -43,7 +44,8 @@ Empirical results indicate strong convergence under AdamW schedule.
   })
 
   it('supports outline inspection and BM25 passage querying', async () => {
-    const cache = new ScholarlyTextStore(mkdtempSync(join(tmpdir(), 'scholarly-tools-')))
+    const host = createMockHost(createMockHttp(() => new Response('{}')))
+    const cache = host.cache
     await cache.set('arxiv-2301.07041', {
       provider: 'arxiv-html',
       format: 'markdown',
@@ -53,8 +55,6 @@ Empirical results indicate strong convergence under AdamW schedule.
       sourceIdentity: 'https://arxiv.org/html/2301.07041',
     })
 
-    const host = createMockHost(createMockHttp(() => new Response('{}')))
-    host.cache = cache
     const tool = createScholarlyReadTool(host)
 
     // Test outline mode
