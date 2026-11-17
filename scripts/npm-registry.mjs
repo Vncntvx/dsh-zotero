@@ -46,17 +46,14 @@ export async function registryVersion(
 }
 
 /** Downloads the package tarball from the registry and verifies its integrity. */
-export async function registryTarball(
-  metadata,
-  manifest,
-  expectedBytes,
-  options = fetch,
-) {
+export async function registryTarball(metadata, manifest, expectedBytes, options = fetch) {
   const {
     fetchImpl = typeof options === 'function' ? options : fetch,
     delay = pause,
     maxAttempts = 15,
-  } = typeof options === 'object' && options !== null ? options : { fetchImpl: typeof options === 'function' ? options : fetch }
+  } = typeof options === 'object' && options !== null
+    ? options
+    : { fetchImpl: typeof options === 'function' ? options : fetch }
   assertRegistryArtifact(metadata, manifest, expectedBytes)
   const url = new URL(metadata.dist.tarball)
   if (url.origin !== registry) throw new Error('Tarball URL leaves registry.npmjs.org')
