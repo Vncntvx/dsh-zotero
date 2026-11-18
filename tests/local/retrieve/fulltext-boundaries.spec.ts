@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { MockZotero } from '../../helpers/mock-zotero.ts'
 import { createProvider } from '../../helpers/provider-harness.ts'
 import { serveFulltext, serveJson } from '../../helpers/server/serve.ts'
-import { attachment } from '../../helpers/server/objects.ts'
+import { annotationRow, attachment, item } from '../../helpers/server/objects.ts'
 import {
   attachmentRef,
   itemRef,
@@ -47,6 +47,7 @@ it('refuses an item ref where an attachment ref is required', async () => {
 })
 
 it('reports an absent index as ZOTERO_NO_FULLTEXT', async () => {
+  serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, attachment())
   await expect(
     createProvider(mock).retrieve({
       mode: 'fulltext',
@@ -55,6 +56,53 @@ it('reports an absent index as ZOTERO_NO_FULLTEXT', async () => {
       maxChars: 6,
     }),
   ).rejects.toMatchObject({ code: 'ZOTERO_NO_FULLTEXT' })
+})
+
+it.each([
+  { row: annotationRow({ key: ATTACHMENT_KEY }), message: 'Read from the owning attachment ref' },
+  { row: item({ key: ATTACHMENT_KEY }), message: 'journalArticle, not an attachment' },
+  { row: { key: ATTACHMENT_KEY, data: {} }, message: 'could not be confirmed as an attachment' },
+])(
+  'reports the actual attachment target type before requesting its fulltext',
+  async ({ row, message }) => {
+    serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, row)
+    await expect(
+      createProvider(mock).retrieve({
+        mode: 'fulltext',
+        source: { kind: 'ref', ref: attachmentRef() },
+        start: 0,
+        maxChars: 6,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ZOTERO_INVALID_ARGUMENT',
+      message: expect.stringContaining(message),
+    })
+    expect(mock.requests).toHaveLength(1)
+  },
+)
+
+it('rejects a continuation moved to a different index source with identical bytes', async () => {
+  const otherKey = 'PDF00099'
+  const provider = createProvider(mock)
+  for (const key of [ATTACHMENT_KEY, otherKey]) {
+    serveJson(mock, `${apiPath()}/items/${key}`, attachment({ key, data: { parentItem: false } }))
+    serveFulltext(mock, key, { content: 'same document', indexedChars: 13, totalChars: 13 })
+  }
+  const first = await provider.retrieve({
+    mode: 'fulltext',
+    source: { kind: 'ref', ref: attachmentRef() },
+    start: 0,
+    maxChars: 6,
+  })
+  await expect(
+    provider.retrieve({
+      mode: 'fulltext',
+      source: { kind: 'ref', ref: attachmentRef(otherKey) },
+      start: first.fulltext!.nextStart!,
+      maxChars: 6,
+      continuation: first.fulltext!.continuation!,
+    }),
+  ).rejects.toMatchObject({ code: 'ZOTERO_SOURCE_PAGE_STALE' })
 })
 
 it('returns the exact empty document boundary and refuses a start beyond it', async () => {

@@ -12,19 +12,15 @@ import {
   ZOTERO_ENRICHMENT_ARTIFACT_NOT_FOUND,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_NO_FULLTEXT,
+  ZOTERO_SOURCE_PAGE_STALE,
   ZOTERO_UNEXPECTED,
   ZoteroError,
 } from '../errors.js'
 import { chunkText, type EvidenceChunk } from '../evidence.js'
-import {
-  formatRef,
-  libraryPrefix,
-  parseSupportedRef,
-  refStringFor,
-  requireSupportedLocalRef,
-} from '../refs.js'
+import { formatRef, libraryPrefix, parseSupportedRef, refStringFor } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
 import { asRecord } from '../json.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type {
   SupportedLocalLibrary,
   ZoteroCoverage,
@@ -200,9 +196,9 @@ export async function readFulltextDocument(
         'The parsed attachment artifact has no attachment identity.',
         ZOTERO_UNEXPECTED,
       )
-    const identity =
+    const { serverId: _serverId, ...identity } =
       outcome.attachmentRef === undefined
-        ? {}
+        ? { serverId: undefined }
         : await fulltextIdentityOf(deps.client, outcome.attachmentRef, signal)
     return {
       text: outcome.text,
@@ -213,8 +209,9 @@ export async function readFulltextDocument(
       ...identity,
     }
   }
-  const ref = requireSupportedLocalRef(parseSupportedRef(source.ref, ['attachment']))
-  const attachmentRef = formatRef(ref)
+  const ref = parseSupportedRef(source.ref, ['attachment'])
+  const { serverId, ...identity } = await fulltextIdentityOf(deps.client, formatRef(ref), signal)
+  const { attachmentRef, attachmentContentType } = identity
   // The shared single-source kernel: artifact first (PDF candidates only),
   // then Zotero's index text. A missing artifact and an unindexed source are
   // the same answer here — the complete read has nothing to fall back to.
@@ -224,14 +221,14 @@ export async function readFulltextDocument(
       key: ref.key,
       attachmentRef,
       library: ref.library as SupportedLocalLibrary,
-      serverId: ref.serverId,
+      serverId,
+      contentType: attachmentContentType,
     },
     signal,
   )
   if (outcome.status === 'unindexed') {
     throw new ZoteroError(NO_FULLTEXT_MESSAGE, ZOTERO_NO_FULLTEXT)
   }
-  const identity = await fulltextIdentityOf(deps.client, attachmentRef, signal)
   return {
     text: outcome.text,
     textFormat: outcome.textFormat,
@@ -399,7 +396,7 @@ export function assertFulltextContinuation(
     record.totalChars !== boundedText.length ||
     record.sha256 !== fulltextDigestOf(boundedText)
   )
-    throw new ZoteroError(FULLTEXT_CONTINUATION_CHANGED_MESSAGE, ZOTERO_UNEXPECTED)
+    throw new ZoteroError(FULLTEXT_CONTINUATION_CHANGED_MESSAGE, ZOTERO_SOURCE_PAGE_STALE)
 }
 
 /**
@@ -600,8 +597,9 @@ export async function fetchFulltext(
     const response = await deps.client.getJson<ZoteroFulltextPayload>(
       `${libraryPrefix(library)}/items/${attachmentKey}/fulltext`,
       undefined,
-      { signal, serverId },
+      { signal, serverId, sendServerId: false },
     )
+    assertServerIdMatches(serverIdFromHeaders(response.headers, serverId), serverId)
     return response.json
   } catch (error) {
     if (isNotFoundError(error)) {

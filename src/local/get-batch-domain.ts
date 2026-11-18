@@ -2,7 +2,12 @@
 
 import { formatRef } from '../refs.js'
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZoteroError } from '../errors.js'
+import {
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_NOT_FOUND,
+  ZOTERO_UNEXPECTED,
+  ZoteroError,
+} from '../errors.js'
 import type {
   ZoteroGetBatchRequest,
   ZoteroGetBatchResult,
@@ -18,8 +23,10 @@ export const GET_BATCH_MAX = MAX_BATCH
 
 function errorOf(error: unknown): { code: string; message: string } {
   if (error instanceof ZoteroError) return { code: error.code, message: error.message }
-  if (error instanceof Error) return { code: 'ZOTERO_UNEXPECTED', message: error.message }
-  return { code: 'ZOTERO_UNEXPECTED', message: String(error) }
+  return {
+    code: ZOTERO_UNEXPECTED,
+    message: error instanceof Error ? error.message : String(error),
+  }
 }
 
 function getRequestOf(ref: ZoteroObjectRef, request: ZoteroGetBatchRequest): ZoteroGetRequest {
@@ -42,11 +49,11 @@ function getRequestOf(ref: ZoteroObjectRef, request: ZoteroGetBatchRequest): Zot
 /** Validate the entire request before starting any per-ref read. */
 export function assertGetBatchRequest(request: ZoteroGetBatchRequest): void {
   if (request.refs.length === 0)
-    throw new ZoteroError('refs must list at least one Zotero ref', 'ZOTERO_INVALID_ARGUMENT')
+    throw new ZoteroError('refs must list at least one Zotero ref', ZOTERO_INVALID_ARGUMENT)
   if (request.refs.length > MAX_BATCH) {
     throw new ZoteroError(
       `refs accepts at most ${MAX_BATCH} refs per call`,
-      'ZOTERO_INVALID_ARGUMENT',
+      ZOTERO_INVALID_ARGUMENT,
     )
   }
   const seen = new Set<string>()
@@ -55,7 +62,7 @@ export function assertGetBatchRequest(request: ZoteroGetBatchRequest): void {
     if (seen.has(formatted)) {
       throw new ZoteroError(
         `refs must be unique; duplicate ref: ${formatted}`,
-        'ZOTERO_INVALID_ARGUMENT',
+        ZOTERO_INVALID_ARGUMENT,
       )
     }
     seen.add(formatted)
@@ -66,7 +73,7 @@ export function assertGetBatchRequest(request: ZoteroGetBatchRequest): void {
   )
     throw new ZoteroError(
       'Attachment refs cannot request children or attachments. Split item and attachment refs into separate calls; read attachment refs without these include flags.',
-      'ZOTERO_INVALID_ARGUMENT',
+      ZOTERO_INVALID_ARGUMENT,
     )
 }
 
@@ -102,7 +109,7 @@ export async function getBatch(
           status: 'error' as const,
           code: detail.code,
           message: detail.message,
-          ...(detail.code === 'ZOTERO_NOT_FOUND'
+          ...(detail.code === ZOTERO_NOT_FOUND
             ? { next: 'Check the ref or search Zotero again before retrying.' }
             : {}),
         }

@@ -20,7 +20,7 @@ import {
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
 } from './constants.js'
-import { ZoteroError, invalid } from './errors.js'
+import { ZoteroError, ZOTERO_SOURCE_PAGE_STALE, invalid } from './errors.js'
 import { requireZoteroService } from './service.js'
 import { filterSources } from './sources/filters.js'
 import type { SourceItem } from './sources/model.js'
@@ -81,7 +81,7 @@ export async function readSourcePage(
   if (request.revision !== undefined && request.revision !== revision) {
     throw new ZoteroError(
       'The literature trail changed. Refresh before paging again.',
-      'ZOTERO_SOURCE_PAGE_STALE',
+      ZOTERO_SOURCE_PAGE_STALE,
     )
   }
   const cap =

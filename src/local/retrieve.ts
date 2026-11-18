@@ -11,7 +11,12 @@
  */
 
 import { mapWithConcurrency } from '../concurrency.js'
-import { ZOTERO_INVALID_ARGUMENT, ZOTERO_NO_FULLTEXT, ZoteroError } from '../errors.js'
+import {
+  attachmentTypeMessage,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_NO_FULLTEXT,
+  ZoteroError,
+} from '../errors.js'
 import { chunkText, tokenize, type EvidenceChunk } from '../evidence.js'
 import { queryTermsAcross } from './evidence-ranker.js'
 import { asRecord, asString } from '../json.js'
@@ -323,7 +328,9 @@ async function readMultiAttachmentFulltext(
         const row = await deps.client.getJson<unknown>(`${prefix}/items/${wanted.key}`, undefined, {
           signal: poolSignal,
           serverId,
+          sendServerId: false,
         })
+        assertServerIdMatches(serverIdFromHeaders(row.headers, serverId), serverId)
         const rowData = asRecord(asRecord(row.json)?.data)
         const rowType = asString(rowData?.itemType)
         const parentKey = asString(rowData?.parentItem)
@@ -331,7 +338,7 @@ async function readMultiAttachmentFulltext(
           throw new ZoteroError(
             rowType === undefined
               ? `Attachment ref ${wanted.key} cannot be proven an attachment: Zotero's answer named no item type for it, so nothing rules out a bibliographic item. Read the item's attachments with zotero_get (with include: ["attachments"]) and name an attachment ref from there.`
-              : `Attachment ref ${wanted.key} names a ${rowType}, not an attachment.`,
+              : attachmentTypeMessage(rowType),
             ZOTERO_INVALID_ARGUMENT,
           )
         }
@@ -564,11 +571,14 @@ async function retrieveWithScope(
   }
   const ref = requireSupportedLocalRef(request.ref, ['item'])
   const prefix = libraryPrefix(ref.library as SupportedLocalLibrary)
+  const expected = ref.serverId ?? deps.client.serverId
   const parent = await deps.client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
     signal,
-    serverId: ref.serverId,
+    serverId: expected,
+    sendServerId: false,
   })
-  const serverId = serverIdFromHeaders(parent.headers, ref.serverId)
+  const serverId = serverIdFromHeaders(parent.headers, expected)
+  assertServerIdMatches(serverId, expected)
   const record = asRecord(parent.json)
   const data = asRecord(record?.data)
   const itemType = asString(data?.itemType) ?? asString(record?.itemType)

@@ -77,7 +77,6 @@ it.each([undefined, false, ''])(
 
 it.each([
   { label: 'different attachment key', row: attachment({ key: 'OTHER123' }) },
-  { label: 'wrong attachment type', row: item() },
   { label: 'malformed parent key', row: attachment({ data: { parentItem: 'bad' } }) },
 ])('rejects $label instead of guessing an identity', async ({ row }) => {
   serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, row)

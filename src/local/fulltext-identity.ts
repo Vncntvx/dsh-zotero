@@ -3,10 +3,17 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeSearchItem } from '../normalize-search.js'
 import { formatRef, libraryPrefix, parseSupportedRef, refStringFor } from '../refs.js'
-import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
+import {
+  attachmentTypeMessage,
+  ZoteroError,
+  ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_UNEXPECTED,
+} from '../errors.js'
 import type { SupportedLocalLibrary, ZoteroFulltextItem } from '../types.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 
 export interface FulltextIdentity {
+  readonly serverId: string | undefined
   readonly attachmentRef: string
   readonly attachmentContentType?: string
   readonly item?: ZoteroFulltextItem
@@ -20,37 +27,51 @@ export async function fulltextIdentityOf(
   const ref = parseSupportedRef(attachment, ['attachment'])
   const library = ref.library as SupportedLocalLibrary
   const prefix = libraryPrefix(library)
-  const { json } = await client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
+  const expected = ref.serverId ?? client.serverId
+  const { json, headers } = await client.getJson<unknown>(`${prefix}/items/${ref.key}`, undefined, {
     signal,
-    serverId: ref.serverId,
+    serverId: expected,
+    sendServerId: false,
   })
+  let serverId = serverIdFromHeaders(headers, expected)
+  assertServerIdMatches(serverId, expected)
   const record = asRecord(json),
     data = asRecord(record?.data)
-  if (record?.key !== ref.key || data?.itemType !== 'attachment')
+  if (record?.key !== ref.key)
     throw new ZoteroError(
       'Zotero returned different or invalid fulltext attachment metadata.',
       ZOTERO_UNEXPECTED,
     )
-  const serverId = client.serverId ?? ref.serverId
-  const attachmentRef = refStringFor(library, 'attachment', ref.key, serverId)
-  const attachmentContentType = asString(data.contentType)
-  const identity = {
-    attachmentRef,
+  const itemType = asString(data?.itemType)
+  if (itemType !== 'attachment')
+    throw new ZoteroError(
+      itemType
+        ? attachmentTypeMessage(itemType)
+        : `The referenced object ${ref.key} could not be confirmed as an attachment.`,
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  const attachmentContentType = asString(data?.contentType)
+  const identity = () => ({
+    serverId,
+    attachmentRef: refStringFor(library, 'attachment', ref.key, serverId),
     ...(attachmentContentType === undefined ? {} : { attachmentContentType }),
-  }
-  if (data.parentItem === undefined || data.parentItem === false || data.parentItem === '')
-    return identity
+  })
+  if (data?.parentItem === undefined || data.parentItem === false || data.parentItem === '')
+    return identity()
   const parent = asString(data.parentItem)
   if (parent === undefined || !isObjectKey(parent))
     throw new ZoteroError(
       'Zotero returned an invalid parent for the fulltext attachment.',
       ZOTERO_UNEXPECTED,
     )
-  const { json: parentJson } = await client.getJson<unknown>(
+  const { json: parentJson, headers: parentHeaders } = await client.getJson<unknown>(
     `${prefix}/items/${parent}`,
     undefined,
-    { signal, serverId },
+    { signal, serverId, sendServerId: false },
   )
+  const parentServerId = serverIdFromHeaders(parentHeaders, serverId)
+  assertServerIdMatches(parentServerId, serverId)
+  serverId = parentServerId
   const parentRecord = asRecord(parentJson),
     parentData = asRecord(parentRecord?.data)
   if (
@@ -64,7 +85,7 @@ export async function fulltextIdentityOf(
     )
   const normalized = normalizeSearchItem(parentJson, { library, serverId })
   return {
-    ...identity,
+    ...identity(),
     item: {
       ref: normalized.ref,
       title: normalized.title,

@@ -25,6 +25,7 @@ export const ZOTERO_FILE_UNREADABLE = 'ZOTERO_FILE_UNREADABLE'
 export const ZOTERO_INVALID_REF = 'ZOTERO_INVALID_REF'
 /** An argument the schema cannot express violates a domain constraint. */
 export const ZOTERO_INVALID_ARGUMENT = 'ZOTERO_INVALID_ARGUMENT'
+export const ZOTERO_SOURCE_PAGE_STALE = 'ZOTERO_SOURCE_PAGE_STALE'
 /** A collection or saved-search name matches more than one object. */
 export const ZOTERO_SCOPE_AMBIGUOUS = 'ZOTERO_SCOPE_AMBIGUOUS'
 /** The provider's own deadline elapsed; caller cancellation is preserved separately. */
@@ -35,7 +36,9 @@ export const ZOTERO_RESPONSE_TOO_LARGE = 'ZOTERO_RESPONSE_TOO_LARGE'
 export const ZOTERO_OUTPUT_TOO_LARGE = 'ZOTERO_OUTPUT_TOO_LARGE'
 /** The item type contradicts an attachment ref. */
 export function attachmentTypeMessage(itemType: string): string {
-  return `The referenced object is a ${itemType}, not an attachment.`
+  return itemType === 'annotation'
+    ? 'The referenced object is an annotation, not an attachment. Read from the owning attachment ref.'
+    : `The referenced object has item type ${itemType}, not an attachment.`
 }
 
 /** The selected provider does not declare the required capability. */
@@ -100,7 +103,7 @@ export const ZOTERO_WRITE_APPROVAL_UNAVAILABLE = 'ZOTERO_WRITE_APPROVAL_UNAVAILA
 
 /** Every stable error code a `ZoteroError` may carry, in documentation order. */
 export const ZOTERO_ERROR_CODES = [
-  'ZOTERO_SOURCE_PAGE_STALE',
+  ZOTERO_SOURCE_PAGE_STALE,
   'ZOTERO_URL_PDF_DISABLED',
   'ZOTERO_URL_PDF_BUSY',
   'ZOTERO_URL_PDF_NOT_URL',
