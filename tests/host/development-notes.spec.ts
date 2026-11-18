@@ -1,4 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 
 function entriesOf(text: string, retiredTitle: string) {
@@ -72,6 +75,18 @@ function danglingReferences(rel: string, text: string, known: ReadonlySet<number
   return missing
 }
 
+function* sourceFiles(dir: URL, prefix = ''): Generator<string> {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix + entry.name
+    if (entry.isDirectory()) {
+      if (entry.name !== 'node_modules')
+        yield* sourceFiles(new URL(encodeURIComponent(entry.name) + '/', dir), rel + '/')
+    } else if (/\.(?:ts|tsx|mjs|md|json|ya?ml)$/u.test(entry.name)) {
+      yield rel
+    }
+  }
+}
+
 it('protects the identity of every bilingual development note', () => {
   const zh = readFileSync(new URL('../../docs/development-notes.md', import.meta.url), 'utf8')
   const en = readFileSync(new URL('../../docs/development-notes.en.md', import.meta.url), 'utf8')
@@ -127,10 +142,7 @@ it('resolves every DN reference outside the ledger to an entry', () => {
   ])
   const missing: string[] = []
   for (const root of roots) {
-    const names = readdirSync(new URL(`../../${root}/`, import.meta.url), { recursive: true })
-      .filter((name): name is string => typeof name === 'string')
-      .filter((name) => /\.(?:ts|tsx|mjs|md|json|ya?ml)$/u.test(name))
-    for (const name of names) {
+    for (const name of sourceFiles(new URL(`../../${root}/`, import.meta.url))) {
       const rel = `${root}/${name}`
       if (skipped.has(rel)) continue
       const text = readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8')
@@ -143,4 +155,20 @@ it('resolves every DN reference outside the ledger to an entry', () => {
 it('detects a dangling reference', () => {
   expect(danglingReferences('x.ts', 'see DN-4', new Set([4]))).toEqual([])
   expect(danglingReferences('x.ts', 'see DN-5', new Set([4]))).toEqual(['x.ts:1 DN-5'])
+})
+
+it('scans consumer files without treating dependencies as repository ledger references', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-zotero-ledger-'))
+  try {
+    mkdirSync(join(root, 'consumer', 'node_modules', 'dependency'), { recursive: true })
+    writeFileSync(join(root, 'consumer', 'package.md'), 'See DN-8')
+    writeFileSync(join(root, 'consumer', 'node_modules', 'dependency', 'README.md'), 'See DN-9')
+    const dir = pathToFileURL(root + sep)
+    const missing = [...sourceFiles(dir)].flatMap((name) =>
+      danglingReferences(name, readFileSync(new URL(name, dir), 'utf8'), new Set()),
+    )
+    expect(missing).toEqual(['consumer/package.md:1 DN-8'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

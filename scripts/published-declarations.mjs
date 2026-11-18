@@ -28,7 +28,7 @@ export function declarationDependencyProblems(sources, manifest) {
         ['ImportDeclaration', 'ExportNamedDeclaration', 'ExportAllDeclaration'].includes(node.type)
       )
         check(node.source?.value)
-      if (node.type === 'TSImportType') check(node.argument?.value)
+      if (node.type === 'TSImportType') check(node.source.value)
       for (const value of Object.values(node)) {
         if (Array.isArray(value)) value.forEach(visit)
         else if (value !== null && typeof value === 'object') visit(value)

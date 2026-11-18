@@ -659,11 +659,6 @@ export function importedSpecifiers(scanRoot = root) {
       const value = node.source?.value
       if (typeof value === 'string' && value.startsWith('@deepseek-ai/')) specifiers.add(value)
     }
-    // Babel 7 represents import() as a call unless createImportExpressions is enabled.
-    if (node.type === 'CallExpression' && node.callee?.type === 'Import') {
-      const value = node.arguments[0]?.value
-      if (typeof value === 'string' && value.startsWith('@deepseek-ai/')) specifiers.add(value)
-    }
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) value.forEach(visit)
       else if (value !== null && typeof value === 'object') visit(value)

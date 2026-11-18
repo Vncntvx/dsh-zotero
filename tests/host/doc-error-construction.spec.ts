@@ -17,7 +17,10 @@ it('requires construction evidence for every documented Zotero error code', () =
     const path = join(directory.pathname, String(file))
     const ast = parse(readFileSync(path, 'utf8'), {
       sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      plugins: [
+        ['typescript', { dts: path.endsWith('.d.ts') }],
+        ...(path.endsWith('.tsx') ? (['jsx'] as const) : []),
+      ],
     })
     const visit = (node: Node, parent?: Node): void => {
       if (

@@ -17,9 +17,14 @@ export function sourceTree(source, options = {}) {
 
 export function sourceNodes(source) {
   const nodes = []
+  visitSourceNodes(sourceTree(source).program, (node, parent) => nodes.push({ node, parent }))
+  return nodes
+}
+
+function visitSourceNodes(root, consume) {
   const visit = (node, parent) => {
     if (node === null || typeof node !== 'object' || typeof node.type !== 'string') return
-    nodes.push({ node, parent })
+    consume(node, parent)
     for (const [key, value] of Object.entries(node)) {
       if (
         [
@@ -36,8 +41,7 @@ export function sourceNodes(source) {
       else if (value !== null && typeof value === 'object') visit(value, node)
     }
   }
-  visit(sourceTree(source).program, undefined)
-  return nodes
+  visit(root, undefined)
 }
 
 /** Blank comments and literal contents without changing any code-unit offset. */
@@ -52,7 +56,11 @@ export function stripCommentsAndStrings(source, blankStrings = true) {
     const label = token.type.label
     if (label === 'regexp') blank(token.start + 1, token.end)
     else if (blankStrings && label === 'string') blank(token.start + 1, token.end - 1)
-    else if (blankStrings && label === 'template') blank(token.start, token.end)
+  }
+  if (blankStrings) {
+    visitSourceNodes(ast.program, (node) => {
+      if (node.type === 'TemplateElement') blank(node.start, node.end)
+    })
   }
   return out.join('')
 }

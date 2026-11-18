@@ -137,6 +137,14 @@ describe('comment and string stripping', () => {
     expect(stripped.split('\n')).toHaveLength(4)
     expect(stripped).not.toContain('only')
   })
+
+  it('masks multiline and nested template text but scans executable interpolations', () => {
+    const source = 'const doc = `it.skip\n${`it.todo ${it.only("real")}\n tail`} end`'
+    const stripped = stripCommentsAndStrings(source)
+    expect(stripped).toHaveLength(source.length)
+    expect(stripped.indexOf('it.only')).toBe(source.indexOf('it.only'))
+    expect(focusViolationsOf(source)).toEqual([{ line: 2, construct: 'it.only' }])
+  })
 })
 
 describe('extension coverage guard', () => {

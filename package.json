@@ -203,7 +203,8 @@
   "devDependencies": {
     "@babel/core": "8.1.2",
     "@babel/eslint-parser": "8.1.2",
-    "@babel/parser": "^7.29.14",
+    "@babel/parser": "^8.1.2",
+    "@babel/types": "^8.1.2",
     "@deepseek-ai/cordis": "^4.1.0",
     "@deepseek-ai/cordis-plugin-include": "^1.1.0",
     "@deepseek-ai/cordis-plugin-loader": "^1.1.0",
@@ -311,7 +312,7 @@
     "micromark-util-symbol": "^2.0.1",
     "micromark-util-types": "^2.0.2",
     "onnxruntime-web": "1.31.1",
-    "playwright": "1.65.0",
+    "playwright": "1.65.1",
     "prettier": "^3.9.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
