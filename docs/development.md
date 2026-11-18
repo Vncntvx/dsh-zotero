@@ -101,14 +101,17 @@ npm run typecheck            # 类型检查（包含 Node、宿主测试、浏�
 npm run build                # 编译全部产物（tsc → lib/，esbuild → lib/client.js）
 npm run build:client         # 仅构建浏览器端产物
 npm run test:coverage        # 覆盖率门禁检查
+npm run test:calibration     # 语义标定自检（离线协议，不加载模型）
 npm run harness:check        # 检查上游 Harness 版本钉与产物一致性
 npm run harness:pin -- <ver> # 统一更新 Harness 依赖版本钉
 npm run deps:check           # 查询 registry，列出落后于最新版的直接依赖
 npm run verify:pack          # 校验打包产物文件完整性（含包内语义运行时资产的哈希与许可）
+npm run assets:semantic      # 下载并校验钉定的本地语义模型到 ~/.dsh/models
 npm run assets:runtime       # 从 devDependency 重新生成包内语义运行时资产
 npm run smoke -- --profile-dir <profile目录> # 已安装 profile + dsh 运行时，对真实 Zotero 执行八个只读入口
 npm run smoke:scholarly      # 需联网的手动 scholarly_get 冒烟，使用生产 DNS/undici/TLS 栈
 npm run smoke:discovery      # 打包产物 → 临时 profile（无需构建批准）→ dsh web 启动探针
+npm run smoke:web-composition # 在 smoke:discovery 之上追加浏览器组合验收
 npm run release:branch       # 切出可发布的 release 分支（清单驱动）
 npm run release:check        # 发布门禁：格式、版本钉、测试、类型、覆盖率、构建、打包
 npm run link:local-harness   # 将 @deepseek-ai/dsh-* 依赖链接到 sibling 检出
@@ -116,7 +119,10 @@ npm run dev                  # 监听 Node 端源码并增量编译
 npm run dev:client           # 监听浏览器端源码并增量打包
 npm run lint:hooks           # React Hook 顺序与依赖；告警也拦截发布
 npm run lint:test            # 仅运行测试规范守卫
+npm run style:check          # 客户端样式守卫，对照宿主设计 token 快照
+npm run tokens:write         # 宿主升级后刷新样式 token 快照
 npm run test:watch           # vitest watch 模式
+npm run test:integration     # 对运行在 127.0.0.1:23119 的真实 Zotero 执行只读集成测试
 npm run format               # 执行 Prettier 格式化
 npm run format:check         # 检查代码格式
 ```
@@ -181,7 +187,7 @@ npm run test:integration
 | hybrid      | 0.509118 |   0.12 |       20 |           90% |      0.9 |         0/24 |
 | academic    |    0.584 |   0.12 |       20 |           95% |     0.95 |         0/24 |
 
-同一批改写问题上，BM25 的答案 recall@4 为 0%；完整回归集包含词面控制例，BM25 recall@4 为 4/24（english 为 2/12）。不能把两个分母混用。`margin` 是固定策略值，本次未声称独立拟合得到最优 margin。所有当前 floor 均高于实测移除答案对照的最高余弦；hybrid 旧 floor 0.461 曾产生 2 次无关命中，现按最高余弦 0.508117562 加 0.001 安全距离向上取六位小数，改为 0.509118，保持本组改写召回不变。
+同一批改写问题上，BM25 的答案 recall@4 为 0%；完整回归集包含词面控制例，BM25 recall@4 为 4/24（english 为 2/12），两个分母不能混用。`margin` 是固定策略值，本次未声称独立拟合得到最优 margin。所有当前 floor 均高于实测移除答案对照的最高余弦；hybrid 的 0.509118 按实测最高余弦 0.508117562 加 0.001 安全距离取整，替换曾放进两条无关对照的旧值 0.461，本组改写召回不变。
 
 这些结果描述同组回归检查，不构成外部独立标注、真实 PDF 提取、heldout 效果或生产误命中率保证。档位仍可漏召回。报告列出模型 identity、输入摘要、向量文件 SHA-256、逐例余弦、语义与 BM25 排名；自动测试只复算归档向量，不加载模型、不联网。
 
@@ -201,6 +207,15 @@ node scripts/semantic-calibration/measure-admission.mjs --embeddings /tmp/<key>-
 
 - Node 端产物（`lib/`）：由 `tsc` 编译生成，包含服务逻辑、工具定义、Provider 与传输层；
 - 浏览器端产物（`lib/client.js`）：由 `esbuild` 打包生成，包含设置页、文献轨迹、文献面板与会话卡片。
+
+## 工程约束
+
+- **构建与发布身份**：`scripts/build-state.mjs` 在完整 build/prepare 后记录源文件、脚本、配置、lockfile、工具链与全部产物的摘要；release artifact 是去掉脚本、开发依赖与开发用 overrides 的单一 tarball。`release-artifact.mjs`、`release-tar.mjs` 与 `publish-release-branch.mjs` 绑定源 SHA、文件闭集、逐文件摘要、tarball 摘要与包内内容；publish 作业以读取到的旧 ref 作 CAS lease，来源回退和字节变化都被拒绝。验证：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`、`release:check`。
+- **样式 token 来源**：CI 用 lockfile 安装的精确 theme 源码核对 dsw/ds，链接开发用 sibling 的 pin tag；`scripts/style-tokens.mjs` 的 `RUNTIME_SEAMS` 逐项对应当前 pin 的设置、CSS 定义或 `setProperty` 调用，来源表与快照闭合。验证：`tokens:check`（在 `release:check` 中）、`style-tokens.spec.ts`。
+- **客户端平台清单**：`scripts/client-graph-authority.mjs` 在 sibling 在场时用 TypeScript AST 读取 pin tag 的 `PLATFORM_MODULES`，逐项拒绝宿主未提供的 external；无 sibling 的注册表检查由固定输入的门禁测试覆盖。手动 UI 验收复用 `pinnedHarness`/`pinThemeSheets`，记录 DOM、控制台错误与截图。验证：`client-graph-authority` 变异测试、`harness:check`、`smoke-parsed-ui.mjs`。
+- **React Hook 与脚本类型**：客户端源码与浏览器测试执行 `rules-of-hooks` 与 `exhaustive-deps`，任何告警使 `lint:hooks` 失败；Babel 解析 TS/JSX，`.ts` 保持无 JSX 语义；`tsconfig.scripts.json` 覆盖 CLI 的宿主 API 调用，`typecheck:program` 在 build 生成 `lib` 声明后运行。验证：`react-hooks.spec.ts`、`harness-artifacts.spec.ts`、`npm run lint:hooks`、`npm run typecheck`。
+- **样式门禁**：`scripts/shared/css-syntax.mjs` 用 CSSTree 解析规则、声明、选择器与媒体条件；字体字面量必须来自宿主阶梯，颜色包括命名色、现代函数与变量 fallback，hover 与触屏字号条件在相反能力下必须不匹配，减少动态效果须实际把 transition/animation 置 none。验证：`style-syntax.spec.ts`、`npm run style:check`。
+- **依赖与运行时身份**：ONNX 1.31.1 的独立锚点来自官方 npm 元数据的 tarball SHA-512，归档通过 SRI 后提取三个资产的 SHA-256；许可证固定摘要。vendored harness 包的版本从不可变 pin tag 读取，锁文件解析必须等于声明地板；每个打包声明中的静态 import/export/import type 必须有 consumer dependency、optionalDependency 或 peer。验证：`vendor-onnxruntime` 篡改反例、`harness-vendor-state`、`published-declarations`、`verify:pack`。
 
 ## 本地调试
 
@@ -265,7 +280,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 未运行的实时验收（需单独用户授权）
 
-以下项目本轮未执行，标为未验收。执行前须取得用户对被测具体文档的授权；启用组件授权的是能力，不是对任意文档做实时上传，模拟组件测试也不替代浏览器验收：
+以下项目未在本轮运行，标为未验收。执行前须取得用户对被测具体文档的授权；模拟组件测试不替代浏览器验收：
 
 - **MinerU free / pro 实时上传**：分别用内容已知的专用合成 PDF（附件放隔离库/测试条目）测试；无 pro 凭据或实时服务时列为未验收。
 - **浏览器端到端验收**：打包到临时 Harness profile，实际操作附件解析、顶层附件、URL 解析、重新解析、取消、重连、组件切换与模型切换，验证按钮权限、进度、错误恢复、窄屏/键盘与旧响应隔离。
@@ -273,7 +288,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 已运行门禁（真实结果）
 
-- `npm test`：654 个 spec 文件、6999 个测试，652 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
+- `npm test`：661 个 spec 文件、7129 个测试，659 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
 - `npm run release:check`：退出码 0（format、strict harness、lint:test、lint:hooks、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
 - `npm run build:client`、`npx vitest run tests/host/doc-examples.spec.ts`：通过。
 
@@ -304,7 +319,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 | X3   | `semantic/model-profiles.ts`, `scripts/semantic-calibration/*`, `tests/fixtures/semantic-admission/*` | 真实向量准入报告与六档原始向量；`semantic-admission-measurement.spec.ts` 逐项复算。                                                                 | 自动测试不加载模型、不联网；历史 logistic 报告由独立元数据守卫检查。         |
 | X4   | 全仓清除 `allowParsingUpload` / `dsh-zotero/parsing` / 旧 `{lookup,enhance}` 描述                     | `tests/host/enrichment-parse-aliases.spec.ts`、文档 Grep                                                                                            | 无旧别名/迁移/兼容分支                                                       |
 
-表内「通过」仅指对应行为测试与本机门禁通过；效果、实时与浏览器验收状态见上节，不得据此宣称完整实时落地。
+表内「通过」仅指对应行为测试与本机门禁通过；效果、实时与浏览器验收状态见上节。
 
 ## 测试规范
 
@@ -330,7 +345,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 供应链约定：
 
 - 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
-- npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.15.0 自带 npm 11.12.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束，详见 DN-44；
+- npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.15.0 自带 npm 11.12.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束；
 - `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出发行版领先的直接依赖；版本更新由人工执行，Dependabot 不开版本更新 PR；
 - Dependabot alerts 只用于 CVE 提醒，security updates 关闭；
 - 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；
@@ -344,12 +359,14 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 2. `npm run build:client`：浏览器端产物可以单独构建；
 3. `npm test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）与全量 vitest；
 4. `npm run format:check`：Prettier 格式检查；
-5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`typecheck`、`build`、`test:coverage`、`test:calibration` 与 `verify:pack`；
+5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`build`、`typecheck:program`、`test:coverage`、`test:calibration` 与 `verify:pack`；可直接从 `npm ci --ignore-scripts` 开始，无需预构建；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
 8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。
+
+三平台安装 smoke 从 `tests/fixtures/harness-toolchain-pin.json` 读取上游固定标签根清单的 pnpm 版本。`harness:pin` 从 sibling 的目标标签同步刷新快照；`harness:check` 核对版本钉，有标签时还核对来源提交和 `packageManager`。
 
 ### 版本、发行说明与发布动作
 
@@ -359,8 +376,8 @@ CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三�
 
 npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。随后用 OIDC 可信发布把 `artifact.json` 指定的原 tarball 发到 npm（OIDC 认证下公开仓库与公开包默认带 provenance，无需 `--provenance` 或 token），并以 `gh` 创建/更新该 tag 的 GitHub Release，正文含 tag 注释、GitHub 生成的变更说明，以及源 SHA、artifactDigest 与 tarballSha256。`main` 推送与手动触发仅运行门禁与 release 分支推送。发布前直接查询 `registry.npmjs.org`，仅明确的 404 允许发布；已有版本在名称、版本与 SHA-512 integrity 完全一致时跳过，查询失败直接终止。发布后再次查询，并下载公开 tarball 核对其实际字节，成功后才创建 Release；可见性等待有界，失败后可重跑核验。内容变化需新版本与重新验证，`npm-release` 与 `publish` 互不阻塞，可单独重跑。
 
-可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见 DN-44。
+可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见本节。
 
 本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的 release 分支。
 
-发布与 harness 升级的浏览器验收：在完整 `release:check` 之后运行 `npm run smoke:web-composition`，保留临时 profile、浏览器报告和错误日志；保证范围见 DN-41。
+发布与 harness 升级的浏览器验收：在完整 `release:check` 之后运行 `npm run smoke:web-composition`，保留临时 profile、浏览器报告和错误日志；保证范围按实际测试的精确 pin 计。

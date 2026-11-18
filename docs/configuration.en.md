@@ -197,7 +197,7 @@ Each component mount has a fresh random identity. An acknowledgement applies to 
 
 ## Document parsing component configuration (`dsh-zotero/enrichment`)
 
-Content enrichment is a separate DSH bundle sub-component, shipped with the package and disabled by default (`cordis.patch.yml` contains `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`). Enabling the component accepts MinerU document egress and provides three capabilities: user-submitted document parsing, read-only reuse of valid same-source artifacts, and local semantic ranking with model management. The client displays an egress disclosure when first enabled. Ordinary reads reuse a valid artifact through the core's read-only `FulltextEnhancer` slot (`lookup` by source, `lookupArtifact` by artifact id); on a miss they use the Zotero fulltext index or authorized local PDF extraction. With the component disabled, both read paths keep their original behavior.
+Content enrichment is a separate DSH bundle sub-component, shipped with the package and disabled by default (`cordis.patch.yml` contains `- id: enrichment` / `name: dsh-zotero/enrichment` / `disabled: true`). Enabling the component accepts MinerU document egress and provides three capabilities: user-submitted document parsing, read-only reuse of valid same-source artifacts, and local semantic ranking with model management. The client displays an egress disclosure while the component is enabled; a new mount discloses again. Ordinary reads reuse a valid artifact through the core's read-only `FulltextEnhancer` slot (`lookup` by source, `lookupArtifact` by artifact id); on a miss they use the Zotero fulltext index or authorized local PDF extraction. With the component disabled, both read paths keep their original behavior.
 
 Parsing tasks start when the user explicitly submits a specific PDF; ordinary retrieval reuses existing artifacts. Local semantic ranking operates independently of MinerU and requires no parsing credentials or semantic model. An old `allowDocumentUpload` value in a profile is ignored.
 
@@ -294,4 +294,4 @@ Error classification:
 
 All parsing failures propagate directly to the caller as an explicit error.
 
-The [official MinerU API documentation](https://mineru.net/apiManage/docs) defines language support. Local validation checks the code shape; a remote refusal remains explicit. Editing this setting does not submit a background task. OCR quality across languages has not been measured locally.
+The [official MinerU API documentation](https://mineru.net/apiManage/docs) defines language support. Local validation checks the code shape; a remote refusal remains explicit. Editing this setting does not submit a background task.

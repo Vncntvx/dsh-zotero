@@ -101,14 +101,17 @@ npm run typecheck            # Type check (Node, host-test, browser, browser-tes
 npm run build                # Compile all artifacts (tsc → lib/, esbuild → lib/client.js)
 npm run build:client         # Build the browser artifact only
 npm run test:coverage        # Coverage gate check
+npm run test:calibration     # Semantic calibration self-check (offline protocol, no model loading)
 npm run harness:check        # Check the upstream Harness version pin and artifact consistency
 npm run harness:pin -- <ver> # Update every Harness dependency pin together
 npm run deps:check           # Query the registry for direct dependencies behind their latest release
 npm run verify:pack          # Validate the packed tarball, including the packaged runtime's hashes and license
+npm run assets:semantic      # Download and verify the pinned local semantic models into ~/.dsh/models
 npm run assets:runtime       # Regenerate the packaged semantic runtime from its dev dependency
 npm run smoke -- --profile-dir <profile-dir> # Installed profile + dsh runtime; execute all eight read arms against real Zotero
 npm run smoke:scholarly      # Manual online scholarly_get acceptance through production DNS/undici/TLS
 npm run smoke:discovery      # Packed artifact → temporary profile (no build approval needed) → dsh web boot probe
+npm run smoke:web-composition # Add the browser composition acceptance on top of smoke:discovery
 npm run release:branch       # Cut the publishable release branch (manifest-driven)
 npm run release:check        # Release gate: format, version pin, tests, types, coverage, build, pack
 npm run link:local-harness   # Link the @deepseek-ai/dsh-* dependencies to the sibling checkout
@@ -116,7 +119,10 @@ npm run dev                  # Watch Node-side sources and compile incrementally
 npm run dev:client           # Watch browser-side sources and bundle incrementally
 npm run lint:hooks           # React hook order and dependencies; warnings fail the gate
 npm run lint:test            # Run the test specification guards only
+npm run style:check          # Client stylesheet guard against the host design token snapshot
+npm run tokens:write         # Refresh the style token snapshot after a harness upgrade
 npm run test:watch           # vitest watch mode
+npm run test:integration     # Read-only integration tests against real Zotero on 127.0.0.1:23119
 npm run format               # Run Prettier formatting
 npm run format:check         # Check code formatting
 ```
@@ -181,7 +187,7 @@ On 2026-11-17, all six pinned ONNX bundles were encoded through the production w
 | hybrid      | 0.509118 |   0.12 |               20 |                 90% |            0.9 |                0/24 |
 | academic    |    0.584 |   0.12 |               20 |                 95% |           0.95 |                0/24 |
 
-BM25 answer recall@4 is 0% on those paraphrase questions. The full regression dataset includes lexical controls, so its BM25 recall@4 is 4/24 (2/12 for English). These denominators are distinct. Margins are fixed policy limits; this run does not claim independently fitted optimal margins. Every current floor exceeds the strongest measured answer-removed cosine. Hybrid's old 0.461 floor admitted two controls; its measured maximum 0.508117562 plus a 0.001 safety distance, rounded upward to six decimals, gives the corrected 0.509118 floor. Paraphrase recall on this set is unchanged.
+BM25 answer recall@4 is 0% on those paraphrase questions. The full regression dataset includes lexical controls, so its BM25 recall@4 is 4/24 (2/12 for English); keep the two denominators separate. Margins are fixed policy limits; this run does not claim independently fitted optimal margins. Every current floor exceeds the strongest measured answer-removed cosine. Hybrid's 0.509118 floor is its measured maximum 0.508117562 plus a 0.001 safety distance, rounded upward to six decimals, replacing the old 0.461 that admitted two controls; paraphrase recall on this set is unchanged.
 
 These are checks on the same regression set, not external annotation, real PDF extraction, heldout effectiveness or production false-positive guarantees. Tiers still miss answers. The report records model identity, input digests, vector-file SHA-256, per-case cosines and semantic/BM25 rankings. Automated tests only recompute archived vectors; they never load models or use the network.
 
@@ -201,6 +207,15 @@ The encoder creates its output exclusively; choose a new path for each rerun. Me
 
 - Node artifact (`lib/`): compiled by `tsc`, containing service logic, tool definitions, the provider, and the transport layer;
 - Browser artifact (`lib/client.js`): bundled by `esbuild`, containing the settings page, the literature trail, the literature panel, and session cards.
+
+## Engineering Constraints
+
+- **Build and release identity**: `scripts/build-state.mjs` records digests of source files, scripts, configuration, lockfile, toolchain, and every artifact after a complete build/prepare; the release artifact is one tarball with scripts, devDependencies, and development-only overrides removed. `release-artifact.mjs`, `release-tar.mjs`, and `publish-release-branch.mjs` bind the source SHA, file closure, per-file digests, tarball digest, and package contents; the publish job uses the read old ref as a CAS lease and rejects source rollback or byte changes. Verified by `build-state.spec.ts`, `release-artifact.spec.ts`, `release-branch.spec.ts`, and `release:check`.
+- **Style-token sources**: CI reads the exact lockfile-installed theme sources for dsw/ds, while linked development reads the sibling pin tag; `RUNTIME_SEAMS` in `scripts/style-tokens.mjs` maps each seam to the current pin's setting, CSS definition, or `setProperty` call, and the source table stays closed with the snapshot. Verified by `tokens:check` (inside `release:check`) and `style-tokens.spec.ts`.
+- **Client platform manifest**: when the sibling is present, `scripts/client-graph-authority.mjs` reads the pin tag's `PLATFORM_MODULES` through the TypeScript AST and rejects every external the host does not provide; registry-only checks use fixed-input gate tests. Manual UI acceptance reuses `pinnedHarness`/`pinThemeSheets` and records the DOM, console errors, and screenshots. Verified by the `client-graph-authority` mutation tests, `harness:check`, and `smoke-parsed-ui.mjs`.
+- **React Hooks and script types**: client sources and browser tests run `rules-of-hooks` and `exhaustive-deps`, and any warning fails `lint:hooks`; Babel parses TS/JSX while `.ts` stays JSX-free; `tsconfig.scripts.json` covers CLI host-API calls, and `typecheck:program` runs after the build emits `lib` declarations. Verified by `react-hooks.spec.ts`, `harness-artifacts.spec.ts`, `npm run lint:hooks`, and `npm run typecheck`.
+- **Style gate**: `scripts/shared/css-syntax.mjs` parses rules, declarations, selectors, and media conditions with CSSTree; font literals must come from the host ladder, colours include named colours, modern functions, and variable fallbacks, hover and touch type-size conditions must not match under the opposite capability, and reduced motion must actually set transition/animation to none. Verified by `style-syntax.spec.ts` and `npm run style:check`.
+- **Dependency and runtime identity**: ONNX 1.31.1's independent anchor is the tarball SHA-512 from official npm metadata; after the archive passes SRI, the three assets' SHA-256 values are extracted, and the license digest is fixed. Vendored harness versions come from the immutable pin tag and the lockfile resolution must equal the declared floor; every static import/export/import type in a packaged declaration needs a consumer dependency, optionalDependency, or peer. Verified by `vendor-onnxruntime` tampering cases, `harness-vendor-state`, `published-declarations`, and `verify:pack`.
 
 ## Local Debugging
 
@@ -265,7 +280,7 @@ This table is the number → test → acceptance-results mapping required by WP0
 
 ### Live acceptance not run (needs separate user authorization)
 
-The following were not run this round and are marked "Not accepted". Before running them, obtain the user's authorization for the specific documents under test; enabling the component authorizes a capability, not a live upload of any document, and simulated component tests do not replace browser acceptance:
+The following were not run this round and are marked "Not accepted". Before running them, obtain the user's authorization for the specific documents under test; simulated component tests do not replace browser acceptance:
 
 - **MinerU free / pro live uploads**: test each with a dedicated synthetic PDF of known content (attachments in an isolated library / test items); without pro credentials or a live service, mark it not accepted.
 - **Browser end-to-end acceptance**: pack into a temporary Harness profile and actually operate attachment parsing, top-level attachments, URL parsing, reparse, cancel, reconnect, component switch, and model switch, verifying control permissions, progress, error recovery, narrow-screen/keyboard, and stale-response isolation.
@@ -273,7 +288,7 @@ The following were not run this round and are marked "Not accepted". Before runn
 
 ### Gates actually run (real results)
 
-- `npm test`: 654 spec files / 6999 tests — 652 files passed, 2 files skipped (requiring live Zotero and the write probe, totaling 27 skipped tests), 0 failed; no test loads a model or uses the network.
+- `npm test`: 661 spec files / 7129 tests — 659 files passed, 2 files skipped (requiring live Zotero and the write probe, totaling 27 skipped tests), 0 failed; no test loads a model or uses the network.
 - `npm run release:check`: exit 0 (format, strict harness, lint:test, lint:hooks, style:check, typecheck, coverage, build, verify:pack all pass; `verify:pack` checked the packed entries).
 - `npm run build:client` and `npx vitest run tests/host/doc-examples.spec.ts`: pass.
 
@@ -304,7 +319,7 @@ The following were not run this round and are marked "Not accepted". Before runn
 | X3  | `semantic/model-profiles.ts`, `scripts/semantic-calibration/*`, `tests/fixtures/semantic-admission/*`    | Actual-vector admission report and six raw vector files; `semantic-admission-measurement.spec.ts` recomputes all observations.                      | No model/network in automated tests; historical logistic diagnostics have a separate metadata guard.                                       |
 | X4  | repo-wide removal of `allowParsingUpload` / `dsh-zotero/parsing` / old two-slot wording                  | `tests/host/enrichment-parse-aliases.spec.ts`, doc grep                                                                                             | No legacy aliases, migrations, or compat branches                                                                                          |
 
-"Pass" above means the corresponding behaviour tests and local gates pass; effect, live, and browser acceptance status is in the previous section and must not be read as full live completion.
+"Pass" above means the corresponding behaviour tests and local gates pass; effect, live, and browser acceptance status is in the previous section.
 
 ## Testing Standards
 
@@ -317,7 +332,7 @@ The following were not run this round and are marked "Not accepted". Before runn
 
 Tool tests use public `@deepseek-ai/dsh-tool-testkit` fixtures to execute the real single-call pipeline. Locale fixtures use the pinned `@deepseek-ai/dsh-client-test-runtime/src/translate.ts`: the package explicitly exports `./src/*` and actually publishes `src`. This pure entry removes the local translation algorithm. Both test-support packages are devDependencies with exact harness overrides.
 
-The full Slot runtime now assembles through explicitly published production-source contracts and is used for slot creation/disposal and resource composition. Only loader-only `/client` entries use this mapping; ordinary ESM entries retain their compiled path, and a separate test executes the physical resource bundle. Vitest dependencies resolve to one runner instance. The entry's recording fake and fault-injection doubles under `tests/client/helpers/` still require individual migration. Recheck source-mapping counterexamples, slot lifecycle and compiled-bundle execution when the runtime, browser exports or runner changes.
+The full Slot runtime now assembles through explicitly published production-source contracts and is used for slot creation/disposal and resource composition. Only loader-only `/client` entries use this mapping; ordinary ESM entries retain their compiled path, and a separate test executes the physical resource bundle. Vitest dependencies resolve to one runner instance. The entry-composition test also runs the production `bootClient` through the public `TestClient`, renders the seven settings tabs, and verifies saves, reload, and full unmount; local recording doubles serve explicit fault injection only and do not stand in for assembly acceptance. Recheck source-mapping counterexamples, slot lifecycle and compiled-bundle execution when the runtime, browser exports or runner changes.
 
 ## CI Workflows
 
@@ -330,7 +345,7 @@ Three workflows live under `.github/workflows/`:
 Supply-chain rules:
 
 - Every third-party GitHub Action is pinned to an immutable commit SHA, with the matching version kept in a trailing comment, so a mutable tag cannot silently change the executed code;
-- npm publication uses OIDC trusted publishing: `id-token: write` mints short-lived credentials (npm CLI ≥ 11.5.1 and Node ≥ 22.14; this repo's pinned Node 24.15.0 ships npm 11.12.1), and public repositories publishing public packages include provenance by default. Publication still relies on the trusted-publisher configuration on npmjs.com; see DN-44;
+- npm publication uses OIDC trusted publishing: `id-token: write` mints short-lived credentials (npm CLI ≥ 11.5.1 and Node ≥ 22.14; this repo's pinned Node 24.15.0 ships npm 11.12.1), and public repositories publishing public packages include provenance by default. Publication still relies on the trusted-publisher configuration on npmjs.com;
 - `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list direct dependencies behind their published release; upgrades stay manual, and Dependabot opens no version-update pull requests;
 - Dependabot alerts serve as CVE reminders only, with security updates disabled;
 - The browser bundle mirrors the third-party runtime dependencies the sibling harness declares in its own `packages/client/*` manifests (lexical, katex, react, zod, …); those versions move with the harness, and the `deps:check` exclusion set keeps them out of the report;
@@ -344,7 +359,7 @@ Run the following checks in order before a release, and stop at the first failur
 2. `npm run build:client`: the browser artifact builds on its own;
 3. `npm test`: test specification guards (lanes, `.only`/`.skip`, spec line ratchet) plus the full vitest run;
 4. `npm run format:check`: Prettier formatting check;
-5. `npm run release:check`: the release gate, running `format:check`, `harness-state.mjs --strict`, `lint:test`, `lint:hooks`, `tokens:check`, `style:check`, `typecheck`, `build`, `test:coverage`, and `verify:pack` in order;
+5. `npm run release:check`: the release gate, running `format:check`, `harness-state.mjs --strict`, `lint:test`, `lint:hooks`, `tokens:check`, `style:check`, `build`, `typecheck:program`, `test:coverage`, `test:calibration`, and `verify:pack` in order. Start from `npm ci --ignore-scripts` without a preliminary build;
 6. Pack review: step 5's `verify:pack` already validated the tarball's required files; to confirm by hand, run `npm pack --dry-run` and check that the artifact contains `lib/`, `cordis.patch.yml`, `locale/`, `README`, and `docs/plugin-detail.md`;
 7. Walk through acceptance workflows: G1 through G8 are mandatory; add P cases when the change touches the panel or the trail, and add W cases in a separate session with writes enabled when the change touches writing;
 8. Asset check: this version's docs embed no screenshots, and `docs/images/` retains the plugin icon `icon.png`, header collage, and Web UI reference screenshots; if release notes add images, take them from the current Web UI and keep the wording consistent with the interface.
@@ -353,14 +368,16 @@ Run the following checks in order before a release, and stop at the first failur
 
 ### Versions, release notes and publication
 
+The smoke matrix reads the exact pnpm version from `tests/fixtures/harness-toolchain-pin.json`. `harness:pin` refreshes the snapshot from the tagged root manifest in the sibling checkout. `harness:check` verifies the pin and checks the source commit and `packageManager` when the tag is available.
+
 `package.json` owns the version. Before a release, update the root manifest in `package-lock.json` and prepare that version's changes, validation and migration requirements. Use `v<version>` for the tag on the main commit that passed every gate; the tag, manifest and release notes must agree. Prereleases use SemVer notation such as `1.3.0-alpha.1`. npm publication explicitly uses the first prerelease identifier as the dist-tag (`alpha` here; numeric or `latest` identifiers use `next`), and the GitHub Release is marked as a prerelease and excluded from Latest. Stable versions publish to `latest`.
 
 CI's quality gate creates `release-artifact-<source SHA>`. All three installation platforms consume its exact tarball through the published, exactly pinned dsh CLI, retain the host's default pnpm build-approval policy, and import all four host entries from the installed profile. Linux also verifies browser composition, settings saves and reloads. The publish job downloads that artifact, verifies its source and every file, then advances the project's release branch under a CAS lease. The job only downloads, verifies and publishes the artifact. A tag whose source predates the published source is refused.
 
 npm publication and the GitHub Release are automated: pushing a `v<version>` tag triggers the `npm-release` job, which downloads the same verified artifact, re-checks its source and every file, and confirms that the tag, manifest and in-artifact version agree. It then publishes the original tarball named in `artifact.json` to npm through OIDC trusted publishing (a public repository publishing a public package gets provenance by default under OIDC — no `--provenance` flag or token), and uses `gh` to create or update that tag's GitHub Release with the tag annotation, generated changelog, source SHA, artifactDigest and tarballSha256. Pushes to `main` and manual dispatch run only the gate and release-branch push. A pre-publication lookup queries `registry.npmjs.org` directly: only an explicit 404 permits publication. An existing version must match the artifact's name, version and SHA-512 integrity before publication is skipped; lookup failures stop the job. After publication, another lookup and download verify the public tarball's actual bytes before the Release is created. Visibility waits are bounded, and a failed verification can be retried. Changed bytes require a new version and fresh verification; `npm-release` and `publish` are independent and can be retried separately.
 
-Trusted publishing requires configuring a trusted publisher for `Vncntvx/dsh-zotero` on npmjs.com with the workflow filename set exactly to `release-branch.yml` (case-sensitive, including the extension) and `npm publish` allowed. The configuration binds the workflow filename, so renaming it breaks publication. The one-time setup and troubleshooting are in DN-44.
+Trusted publishing requires configuring a trusted publisher for `Vncntvx/dsh-zotero` on npmjs.com with the workflow filename set exactly to `release-branch.yml` (case-sensitive, including the extension) and `npm publish` allowed. The configuration binds the workflow filename, so renaming it breaks publication. The one-time setup and troubleshooting are in this section.
 
 Use `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` to inspect a local artifact from a clean worktree. A real push requires explicit `--push --artifact <checked artifact directory>` and targets only the project's origin release branch.
 
-For release and harness upgrades, run `npm run smoke:web-composition` after the complete `release:check` gate. Retain its temporary profile, browser report and error logs. DN-41 defines the validation scope.
+For release and harness upgrades, run `npm run smoke:web-composition` after the complete `release:check` gate. Retain its temporary profile, browser report and error logs. The validation scope is the exact tested pin.

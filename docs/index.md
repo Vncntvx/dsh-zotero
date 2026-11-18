@@ -24,5 +24,6 @@
 以下文档面向仓库维护者：
 
 - [仓库规则](../AGENTS.md)：代理与贡献者约束
+- [文档写作与路由](AGENTS.md)（English）：文档归属、写作规则与门禁
 - [测试规范](../tests/README.md)：测试分层与夹具规则
-- [开发留意](development-notes.md)：未来开发需要复核的约束、行为边界与迁移事项
+- [开发留意](development-notes.md)：上游补丁与替换时机

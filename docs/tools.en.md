@@ -8,11 +8,11 @@ All eight local read tools share a delivery envelope. `{delivery:"inline", data:
 
 When argument validation fails (for example `refs` sent as `ref`), all dsh-zotero tools attach a parameter-correction hint after the `invalid arguments` error, indicating the rejected parameter and the intended name. Matching ignores case and `_`/`-`, and an adjacent character transposition counts as one edit. The hint appears only for a unique near-match.
 
-All 30 tools have closed root parameters: any undeclared name fails with `INVALID_ARGS` before execution, network access or approval. Misspelled optional parameters are never silently ignored.
+All 30 tools have closed root parameters: any undeclared name fails with `INVALID_ARGS` before execution, network access or approval.
 
-Every write tool’s `{kind:"declined"}` can carry `feedback`: the complete custom plan-review response reaches the model and renders as separate user feedback. Free text always declines the current plan and dispatches no write. The model must revise the plan and request approval again.
+Every write tool’s `{kind:"declined"}` can carry `feedback`: the complete custom plan-review response reaches the model and renders as separate user feedback. Free text always declines the current plan; the model must revise the plan and request approval again.
 
-Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error; full text never falls back inline. A backend without file support returns `ZOTERO_OUTPUT_TOO_LARGE` with guidance to configure a file-capable backend and repeat the read. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
+Files are saved with `AttachmentStore.saveFileStream`; validated receipts live in the `zotero_results` storage domain. Both services are required for oversized or managed background results. Any save, index, cancellation or integrity failure is an error. A backend without file support returns `ZOTERO_OUTPUT_TOO_LARGE` with guidance to configure a file-capable backend and repeat the read. Completed `job_output` for an owned Zotero job appends the same file reference without changing its canonical value. Nested PTC calls forward standard file context. Original background acknowledgements retain `resultSessionId`; the client can read an already-persisted receipt after restart, but running jobs are not resumed.
 
 The authenticated `GET /api/zotero/result?sessionId=<id>&seq=<event>&index=<file>` route reads only a file recorded at those persistent coordinates, or the verified receipt of that event's background acknowledgement. It does not accept a path or arbitrary attachment ID. Copy/download become available after the entire verified stream has completed. Attachments use the host lifecycle and may occupy disk beyond a Session's lifetime; this plugin does not delete shared files.
 
@@ -125,7 +125,7 @@ zotero_get_batch(refs=["zotero://user/0/item/ABCD1234", "zotero://user/0/item/EF
 ## zotero_match_references
 
 Output fields by result arm: `items`.
-Reconcile BibTeX, DOI, or reference fields against the local Zotero library. It uses only the local library, does not call scholarly tools, and never writes. Exact DOI matching pages through top-level item metadata once per call because Zotero quick search does not index DOI fields. Each call accepts up to 50 references. Only a unique high-confidence result is `matched`; weak or competing candidates are `ambiguous`, and citekey-source disagreements are `conflict`.
+Reconcile BibTeX, DOI, or reference fields against the local Zotero library, using only the local library. Exact DOI matching pages through top-level item metadata once per call because Zotero quick search does not index DOI fields. Each call accepts up to 50 references. Only a unique high-confidence result is `matched`; weak or competing candidates are `ambiguous`, and citekey-source disagreements are `conflict`.
 
 ### Parameters
 
@@ -149,7 +149,7 @@ zotero_match_references(references=[{inputId:"ref-1", bibKey:"doe2024", doi:"10.
 ## zotero_retrieve
 
 Output fields by result arm: `artifact`, `attachmentContentType`, `attachmentRef`, `attachments`, `coverage`, `evidence`, `fulltext`, `mode`, `noMatch`, `queryTerms`, `rankedRoutes`, `ref`, `sourcesSkipped`, `textFormat`, `truncated`.
-Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one document (bounded by `maxFulltextChars`) without ranking or chunking; parsed Markdown is preferred and Zotero index text is the explicit fallback. `complete=true` reads the whole bounded document in one call and returns its text or a whole-document spill handle; otherwise the read proceeds in source-order character windows.
+Two mutually exclusive modes. `evidence`: extract query-relevant passages from one paper's multiple sources and rank them (lexical BM25; with the enrichment component's local semantic ranking on, a lexical and a semantic route fuse by RRF, each passage labeled with `matchKind`). `fulltext`: read one document (bounded by `maxFulltextChars`) in character windows; parsed Markdown is preferred and Zotero index text is the fallback. `complete=true` reads the whole bounded document in one call and returns its text or a whole-document spill handle; otherwise the read proceeds in source-order character windows.
 
 ### Parameters
 
@@ -171,13 +171,14 @@ Two mutually exclusive modes. `evidence`: extract query-relevant passages from o
 
 ### Output
 
-The returned structure contains `mode`. `evidence` mode carries `ref`, `attachmentRef`, `attachmentContentType`, `coverage`, `attachments`, `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms`, `rankedRoutes`, and `noMatch`. `fulltext` mode carries only `mode` and `fulltext` (`sourceKind`, `sourceLabel`, `item`, `attachmentContentType`, `textFormat`, `artifact`, `coverage`, `totalChars`, `inputTruncated`, `start`, `end`, `text`, `isTruncated`, `nextStart`, `continuation`, `attachmentRef`, `spillRef`, `spillAvailable`). It carries no evidence-side field at all: no `ref`, `evidence`, `truncated`, `sourcesSkipped`, `queryTerms`, `noMatch`, or `rankedRoutes`.
+The returned structure contains `mode`. `evidence` mode carries `ref`, `attachmentRef`, `attachmentContentType`, `coverage`, `attachments`, `evidence` (passage list, each with source, sourceRef, attachmentRef, text, chunkIndex, chunkCount, comment, pageLabel, `matchKind`, matchedFields), `truncated`, `sourcesSkipped`, `queryTerms`, `rankedRoutes`, and `noMatch`. `fulltext` mode carries only `mode` and `fulltext` (`sourceKind`, `sourceLabel`, `item`, `attachmentContentType`, `textFormat`, `artifact`, `coverage`, `totalChars`, `inputTruncated`, `start`, `end`, `text`, `isTruncated`, `nextStart`, `continuation`, `attachmentRef`, `spillRef`, `spillAvailable`).
 
 ### Notes
 
 - `matchKind` gives the reason a passage returned: `lexical` (the passage text carries the query's words and may be quoted as such), `semantic` (meaning only, not quoted as containing the query's terms), `hybrid` (both);
+- Each local attachment window verifies attachment metadata and, for a child attachment, its parent (1–2 metadata reads per window). Use `complete=true` to avoid paging. If the source, text, or artifact generation changes during continuation, restart after `ZOTERO_SOURCE_PAGE_STALE`.
 - Only `annotation` sources carry a page label (`pageLabel`); full-text passages give no page numbers;
-- Unavailable or unindexed sources are recorded in `sourcesSkipped`; `noMatch` does not mean the item has nothing on the subject;
+- Unavailable or unindexed sources are recorded in `sourcesSkipped`; `noMatch` is `no-overlap` (no passage among the read sources matched the query) or `no-sources` (the item offered no rankable passage), and describes this query against the sources this call read, not whether the item has anything on the subject;
 - Annotation content ranks the highlighted text and the user comment together, and `matchedFields` marks whether the match came from `text` or `comment`; a semantic hit names no field (the wording does not overlap);
 - Under the multi-attachment policies, unindexed attachments are marked `unindexed` and attachments that were not read are marked `unread`;
 - `complete=true` reads the whole bounded document in one call: a document within the delivery budget returns its complete text; a larger one returns a whole-document `spillRef` handle from the host spill store, with `text` empty and `spillAvailable: true`. `complete` is mutually exclusive with `start`, `maxChars`, and `continuation`. Without `complete`, start at `start=0` and follow `nextStart` with the `continuation` token the previous window returned until `isTruncated` is false; `start > 0` requires the token, and changes to source identity, character length, or text digest refuse continuation to ensure generation consistency. `totalChars`, `start`, `end`, and `nextStart` count UTF-16 code units, with window boundaries preserving surrogate pairs. A one-unit request starting at a pair returns its two units. Concatenating windows in order yields the complete document. `textFormat` `markdown` comes from a parsed artifact, while `text` comes from Zotero's index. `inputTruncated: true` means the document was cut to `maxFulltextChars`, so the windows cover that bounded portion. When a `source.kind="ref"` read misses a parsed artifact, it uses Zotero index text; a `source.kind="artifactId"` miss fails explicitly. A parsed-artifact window carries no `coverage`; an index-text window carries Zotero's own indexing coverage. On a long document with more windows to come, the first window also carries `spillRef` (`locator`, `bytes`, `retrievalHint`) and `spillAvailable: true` when the host provides spill storage: a one-handle copy of the whole bounded text. The default window and delivery budgets fit inline; larger windows or lower inline budgets can select file delivery, preserving the complete window and continuation position. Reads use existing sources; parsing, downloading, and uploading are separate operations.
@@ -199,7 +200,7 @@ Pass a non-empty `outputFile` to write bibliography, translator, or `csv` text (
 
 Generate formatted citations or export data files.
 
-Every export format requires unique item identities. The same library and key is a duplicate even when one ref carries server qualification and the other does not. Duplicates are refused before any request rather than silently deduplicated.
+Every export format requires unique item identities. The same library and key is a duplicate even when one ref carries server qualification and the other does not; duplicates are refused before any request.
 
 ### Parameters
 
@@ -231,7 +232,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 
 - Total refs are bounded by `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call; exceeding this returns an error;
 - `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The default `maxExportRefs` is also 50, so batching only happens after that setting is raised above 50;
-- `bibtex`, `biblatex`, `ris`, and `csljson` use one translator request and one bounded raw-metadata batch for citekeys and alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint, never by position; a ref that cannot be located keeps only its own ref in the result. If the metadata request fails (for example Zotero returns 5xx), the export still completes: the raw body is retained and refs that could not be paired stay in their bare `ref`-only shape. A caller abort still throws. One call supports at most 50 items;
+- `bibtex`, `biblatex`, `ris`, and `csljson` use one translator request and one bounded raw-metadata batch for citekeys and alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint; a ref that cannot be located keeps only its own ref in the result. If the metadata request fails (for example Zotero returns 5xx), the export still completes: the raw body is retained and refs that could not be paired stay in their bare `ref`-only shape. A caller abort still throws;
 - A single export only accepts refs from the same library; mixed cross-library exports are not supported.
 
 ### Example
@@ -279,7 +280,7 @@ Each `kind` returns the matching structured array:
 - `itemTypes`: `{itemType, localized?}`
 - `itemFields`: `{field, localized?}` or `{creatorType, localized?}`
 
-Collection and saved-search results also carry a top-level `libraryVersion` taken from a valid `Last-Modified-Version` response header; a missing or malformed version fails explicitly rather than being invented.
+Collection and saved-search results also carry a top-level `libraryVersion` taken from a valid `Last-Modified-Version` response header; a missing or malformed version fails the call.
 
 ### Example
 
@@ -307,7 +308,7 @@ Read incremental update and deletion records of the library based on local trans
 
 ### Output
 
-When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="background"`; neither receipt contains the completed business result.
 
 A synchronous foreground call returns:
 `{library, serverId?, fromVersion?, cursor?, libraryChanged?, versionUnavailable?, changed, deleted?, totals?, unobservable?, truncated?}`.
@@ -318,7 +319,7 @@ A synchronous foreground call returns:
 - `cursor`: returned only when the current batch was read completely and no concurrent write happened during the read; use it for later incremental requests. `cursor.include` contains only the resource classes the active Zotero build actually supports tracking; classes with no matching endpoint (such as older builds lacking the `/deleted` route) are recorded in `cursor.unserved`, are not counted toward coverage claims, and can still be passed back as-is in later incremental requests;
 - `unobservable`: names the resource classes that cannot be observed because of version or endpoint limits, plus the reason. A missing endpoint (`not-served`) does not stop cursor generation; an unsupported key range (`range-not-covered`) or a read failure (`unreadable`) suppresses the cursor for the current batch, so advancing the cursor never skips change rows that were not read successfully.
 
-Each `changed` / `deleted` resource list returns at most `maxChangesResults` rows (default 50), including in the canonical result the model receives. `totals` retains true counts and `truncated` marks a capped list. A cursor requires the complete upstream version map; a capped result list does not mean the upstream read was incomplete.
+Each `changed` / `deleted` resource list returns at most `maxChangesResults` rows (default 50), including in the canonical result the model receives. `totals` retains true counts and `truncated` marks a capped list. A cursor is issued only after the complete upstream version map is read; the row cap bounds the model-visible list only and does not affect cursor issuance.
 
 A large version range can exceed `maxResponseBytes` and fail with `ZOTERO_RESPONSE_TOO_LARGE`, without returning a new cursor. To retain that range, increase the response-byte budget and retry the original `since`. Omitting `since` only creates a current baseline and does not recover intervening changes; complete a full resynchronization before using that new baseline for later increments.
 
@@ -338,7 +339,7 @@ Create a standalone research note or a child note under a given item.
 
 ### Supported Markdown syntax
 
-The input `markdown` is converted before writing into the restricted HTML whitelist that Zotero 7+ supports natively (unknown syntax degrades safely to literal text, with no invented attributes and no raw HTML passthrough):
+The input `markdown` is converted before writing into the restricted HTML whitelist that Zotero 7+ supports natively (unknown syntax degrades safely to literal text):
 
 - Paragraphs and headings: blank lines separate paragraphs, and soft-wrapped lines join with spaces; ATX `#` to `####` headings are supported (five or more hashes stay literal text);
 - Emphasis and highlights: `**bold**`, `*italic*` (underscores `_` stay literal to protect variable names); `==highlight==` becomes `<mark>`;
@@ -495,7 +496,7 @@ zotero_delete_collection(collection="Field notes")
 ## zotero_create_item
 
 Output fields by result arm: `collections`, `committed`, `completedRefs`, `feedback`, `itemType`, `key`, `kind`, `libraryVersion`, `parentRef`, `reason`, `ref`, `retryable`, `serverId`, `tags`, `title`, `version`.
-Create a paper item from a closed field set. Zotero's `POST /items` only accepts Zotero item JSON, so there is no BibTeX/CSL-JSON intake: fields are assembled one by one, and nothing outside the closed set leaves this module.
+Create a paper item from a closed field set. Zotero's `POST /items` only accepts Zotero item JSON, so there is no BibTeX/CSL-JSON intake: fields are assembled one by one.
 
 ### Parameters
 
@@ -926,7 +927,7 @@ The bundle component `dsh-zotero/scholarly` ships with the package and is off by
 
 ### scholarly_search
 
-When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="background"`; neither receipt contains the completed business result.
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Multi-source literature retrieval across arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. It supports phrase-based topic routing, multi-source RRF fusion, and automatic local-library status checks. Fusion merges records that share a published DOI, PMID, PMCID, or arXiv ID. A verified version relationship, such as a preprint and its published version, becomes one entry whose variants keep their own metadata in `versions`; title-based matching requires the same token set, first author, and publication years within one year.
 
@@ -972,7 +973,7 @@ scholarly_get(id="10.1038/nature1234")
 
 #### Failure semantics
 
-When an index cannot answer (rate limited, timed out, service error), the result lists it as `Unanswered sources: <index> (<reason>)`, and successful hits carry `Notice: <index> (<reason>)`. The reason carries the underlying transport code (such as `fetch failed (UND_ERR_INVALID_ARG)` or `fetch failed (ECONNRESET)`), so a local composition error is distinguishable from a network failure. An unavailable index does not mean the paper does not exist: only when every index answered normally and none matched does the tool ask the caller to check the identifier.
+When an index cannot answer (rate limited, timed out, service error), the result lists it as `Unanswered sources: <index> (<reason>)`, and successful hits carry `Notice: <index> (<reason>)`. The reason carries the underlying transport code (such as `fetch failed (UND_ERR_INVALID_ARG)` or `fetch failed (ECONNRESET)`), so a local composition error is distinguishable from a network failure. Only when every index answered and none matched does the tool ask the caller to check the identifier; unanswered indexes mean the search was partial.
 
 ---
 
@@ -999,7 +1000,7 @@ scholarly_citations(id="2301.07041", direction="citations", limit=5)
 
 ### scholarly_read
 
-When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="background"`; neither receipt contains the completed business result.
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Tiered reading of lawful open-access full text with passage-level evidence location. Supports outline extraction (`outline`), section-targeted reading (`section`), and evidence-passage matching from a natural-language question (`query`).
 
@@ -1061,7 +1062,7 @@ scholarly_cite(ids=["10.1038/nature1234"], format="bibtex")
 
 ### scholarly_verify
 
-When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="job"`; neither receipt contains the completed business result.
+When the foreground wait budget expires, execution continues in the background and returns `kind="promoted"`, `jobId`, `message` and `timeoutMs`. Read the final result through `job_output`. Explicit background submission returns `kind="background"`; neither receipt contains the completed business result.
 Output fields by result arm: `checks`, `citations`, `document`, `issues`, `jobId`, `kind`, `message`, `papers`, `resultSessionId`, `spill`, `text`, `timeoutMs`.
 Reference truthfulness and accuracy verification. Each entry may be a full bibliographic reference or a bare DOI / `doi.org` URL. Full references compare the supplied title, year, and first author; bare DOIs check identifier resolution and retraction state, with title/authors/year reported as `not-compared`. The tool compares registry facts against Crossref and reports fabricated references, mismatched DOIs, wrong years, and retraction status. It does not assess whether a paper supports a claim.
 

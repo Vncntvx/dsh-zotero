@@ -2,7 +2,7 @@
 
 # Research SOP skill reference
 
-This page serves researchers and developers using or maintaining research workflows. Skills are phased instructions. The model selects a skill from a short catalog and loads the full Markdown SOP with the Harness `skill` tool. Full bodies stay out of the standing system prompt; names and short descriptions remain in the catalog, which still uses some tokens.
+Skills are phased instructions. The model selects a skill from a short catalog and loads the full Markdown SOP with the Harness `skill` tool. Full bodies stay out of the standing system prompt; names and short descriptions remain in the catalog, which still uses some tokens.
 
 Catalog names, descriptions and trigger keywords are English-only. The model matches Chinese-language requests cross-lingually. `tests/host/skill-contracts.spec.ts` asserts that no CJK characters remain.
 
@@ -54,4 +54,4 @@ The Harness base composition supplies the `dsh-skill` registry and `dsh-tool-ski
 
 Test ownership: `tests/host/skills.spec.ts` covers composition and lifecycle; `tests/scholarly/skills.spec.ts` covers the external authorization catalog; `tests/host/skill-contracts.spec.ts` checks every recipe against recipe arguments, the parameter tables parsed from both language tool references, and real schema properties, with recursive nested-key checks and tool-name scans across model-facing fields; `tests/host/subagent-view.spec.ts` covers the scoped tool view and restriction lifecycle, `tests/host/subagent-guard.spec.ts` covers execution-time denial and refresh failure containment; `tests/unit/tooling/client-graph-authority.spec.ts` refuses browser imports. Tests access neither a real library nor external indexes.
 
-Before release run focused specs, `npm run typecheck`, `npm test` and `npm run release:check`. Builds compile TS bodies directly, without copying Markdown assets. Release gates continue checking client authority, coverage, build and packaging. Parameter contracts remain in the [tool reference](tools.en.md).
+Before release run focused specs, `npm run typecheck`, `npm test` and `npm run release:check`. Builds compile TS bodies directly, without copying Markdown assets. Release gates check client authority, coverage, build and packaging. Parameter contracts remain in the [tool reference](tools.en.md).

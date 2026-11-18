@@ -195,7 +195,7 @@ Note: diagnostic records stay in the current process memory and are cleared when
 ## 28. Scholarly retrieval fails behind a local fake-IP proxy
 
 - Symptom: every source in `scholarly_search` / `scholarly_get` reports `fetch failed`, or the message names a host resolved to `198.18.x.x`; a MinerU parse in the literature panel fails at submission; a browser or a plain `fetch` reaches the same site normally.
-- Cause: with Clash/mihomo TUN in fake-IP mode, the local resolver turns domains into `198.18.0.0/15` placeholders. The plugin now accepts that placeholder for allowlisted index hosts, HTTPS open-access PDFs, and HTTPS MinerU targets, with the peer identity bound by the reviewed hostname and the TLS certificate; plain-HTTP PDFs, literature-panel URL PDF reading, and model downloads still require a real public address. A failed parse now carries its reason in the dialog, the receipt, and the persisted record (addresses and credentials reduced, length bounded) instead of only the fixed "parsing failed" line.
+- Cause: with Clash/mihomo TUN in fake-IP mode, the local resolver turns domains into `198.18.0.0/15` placeholders. The plugin accepts that placeholder for allowlisted index hosts, HTTPS open-access PDFs, and HTTPS MinerU targets, with the peer identity bound by the reviewed hostname and the TLS certificate; plain-HTTP PDFs, literature-panel URL PDF reading, and model downloads still require a real public address. A failed parse carries its reason in the dialog, the receipt, and the persisted record (addresses and credentials reduced, length bounded).
 - Fix (only when you want the allowlisted index hosts to use real public addresses again): exclude those hosts from fake-IP in Clash Verge's Merge/override config. `SCHOLARLY_HOSTS` in `src/scholarly/transport/hosts.ts` is the single source of the reviewed names; the suffix form for one of them is:
 
   ```yaml
@@ -204,7 +204,7 @@ Note: diagnostic records stay in the current process memory and are cleared when
       - '+.publisher.example'
   ```
 
-  Add one `+.` entry per reviewed index host instead of copying a second list into this document. A publisher host, `mineru.net`, or a model-download seed host is not in that table: those are HTTPS targets that already accept the placeholder, or strict paths that need their own real public address. URL PDF reading and model downloads never use the placeholder, so a `fake-ip-filter` for an index host does not change them; to reach a publisher over plain HTTP, or to read a URL PDF, give that target a real public address (or switch the proxy to `redir-host`).
+  Add one `+.` entry per reviewed index host from that table. A publisher host, `mineru.net`, or a model-download seed host is not in that table: those are HTTPS targets that already accept the placeholder, or strict paths that need their own real public address. URL PDF reading and model downloads never use the placeholder, so a `fake-ip-filter` for an index host does not change them; to reach a publisher over plain HTTP, or to read a URL PDF, give that target a real public address (or switch the proxy to `redir-host`).
 
 - Self-check: `node -e 'require("node:dns").lookup("api.openalex.org",{all:true},(e,a)=>console.log(e||a))'`; a real public address such as `104.20.x.x` means it took effect.
 - Boundary: do not relax the plugin's address judgment to make this pass; `redir-host` also works but loses fake-IP's routing and leak-protection benefits.

@@ -31,7 +31,7 @@ The agent searches, reads, and cites the library with tools in conversation; the
 
 - **Conversation**
   - Search and browsing: Search by title, author, year, tag, or full text, scoped to the whole library, My Publications, one collection, or one saved search. Read collection trees, tags, and saved searches, and batch-read known refs with a separate result for each one.
-  - Passage location: Pull passages from full text, notes, and annotations for a specific question. Every passage names its source, annotations keep their Zotero page numbers, and the result reports full-text coverage and the sources it skipped.
+  - Passage location: Pull passages from full text, notes, and annotations for a specific question, or read a whole document end to end. Every passage names its source, annotations keep their Zotero page numbers, and the result reports full-text coverage and the sources it skipped.
   - Ranking and matches: BM25 lexical ranking by default. Optional local semantic ranking runs six CPU-only embedding tiers and fuses them with BM25 through RRF, with every passage reporting a lexical, semantic, or hybrid match. Up to four query variants are scored separately and each passage keeps its best score; an empty result says whether nothing overlapped or no source was available.
   - Citations and export: Generate in-text citations or a merged bibliography in CSL styles, and export BibTeX, BibLaTeX, RIS, or CSL-JSON. Style and locale follow the configured defaults.
   - Reconciliation and changes: Reconcile DOIs, BibTeX keys, or bibliographic fields against the library and get back refs, citation keys, confidence, and a reviewable field diff. Report additions, modifications, and deletions from the library version, with the Trash counted separately.
