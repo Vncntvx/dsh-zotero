@@ -138,11 +138,9 @@ export class CircuitBreaker {
 
   /** Release a half-open probe that was cancelled before it reached fetch. */
   releaseProbe(host: string, probeToken?: symbol): void {
-    const circuit = this.getCircuit(host)
-    if (
-      circuit.state === 'HALF_OPEN' &&
-      (probeToken === undefined || circuit.probeToken === probeToken)
-    ) {
+    if (probeToken === undefined) return
+    const circuit = this.circuits.get(host)
+    if (circuit?.state === 'HALF_OPEN' && circuit.probeToken === probeToken) {
       circuit.probeToken = undefined
     }
   }

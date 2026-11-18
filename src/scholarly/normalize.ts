@@ -277,6 +277,15 @@ export function normalizePaper(paper: ScholarlyPaper): ScholarlyPaper {
     ...paper,
     authors: [...(paper.authors ?? [])],
     sources: [...(paper.sources ?? [])],
+    ...(paper.versions === undefined
+      ? {}
+      : {
+          versions: paper.versions.map((version) => ({
+            ...version,
+            authors: [...version.authors],
+            sources: [...version.sources],
+          })),
+        }),
   }
 
   // Align arXiv DOI and arXiv ID
@@ -353,7 +362,11 @@ function versionIdentityKey(version: PaperVersion): string {
 export function addVersionRecord(target: ScholarlyPaper, source: PaperVersion): void {
   const versions = (target.versions ??= [])
   const key = versionIdentityKey(source)
-  const existing = versions.find((version) => versionIdentityKey(version) === key)
+  const existing = versions.find(
+    (version) =>
+      versionIdentityKey(version) === key ||
+      (version.kind === source.kind && identityRelationOf(version, source).relation === 'same'),
+  )
   if (!existing) {
     versions.push(source)
     return

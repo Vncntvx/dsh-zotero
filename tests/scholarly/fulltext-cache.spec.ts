@@ -34,6 +34,31 @@ async function inject(key: string, value: unknown): Promise<void> {
 }
 
 describe('ScholarlyTextStore closed envelope', () => {
+  it.each(['hot', 'cold', 'corrupt'] as const)(
+    'reports an eviction failure from a %s record',
+    async (mode) => {
+      let now = Date.now()
+      const store = new ScholarlyTextStore(directory, mode === 'hot' ? 8 : 0, {
+        ttlMs: 10,
+        now: () => now,
+      })
+      const path = pathOf('paper')
+      await store.set('paper', record)
+      await rm(path)
+      await mkdir(path)
+      if (mode !== 'corrupt') {
+        await utimes(path, new Date(0), new Date(0))
+        now += 100
+      }
+      const answer = await store.get('paper')
+      expect(answer).toMatchObject({
+        kind: mode === 'hot' ? 'miss' : 'corrupt',
+        issue: expect.stringContaining('disk eviction failed'),
+      })
+      expect(await store.get('paper')).toMatchObject({ kind: 'miss' })
+    },
+  )
+
   it('expires a hot memory record without extending its lifetime on reads', async () => {
     let now = Date.now()
     const store = new ScholarlyTextStore(directory, 8, { ttlMs: 10, now: () => now })

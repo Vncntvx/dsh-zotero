@@ -286,7 +286,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
     const probeTokens = new Map<string, symbol>()
     const releaseProbe = (host: string): void => {
       const probeToken = probeTokens.get(host)
-      circuitBreaker.releaseProbe(host, probeToken)
+      if (probeToken !== undefined) circuitBreaker.releaseProbe(host, probeToken)
       probeTokens.delete(host)
     }
     const recordSuccess = (host: string): void => {
@@ -302,7 +302,8 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
     // signal is checked directly, never inferred from a fused one. A retry
     // delay is paid *after* the gate slot and the pinned agent are released,
     // so one host's rate-limit wait cannot starve the other sources.
-    for (let attempt = 0; ; attempt++) {
+    let retries = 0
+    for (;;) {
       if (callerAborted(reqOptions.signal)) {
         releaseProbe(new URL(currentUrl).hostname)
         throw reqOptions.signal?.reason ?? new Error('Operation aborted')
@@ -380,17 +381,18 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         if (callerAborted(reqOptions.signal)) throw error
         if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         if (error instanceof PublicAddressError && error.reason === 'resolution-failed') {
-          if (halfOpenProbe || attempt >= maxRetries) {
+          if (halfOpenProbe || retries >= maxRetries) {
             recordFailure(hostname)
             throw error
           }
           try {
-            await sleep(1_000 * 2 ** attempt, overall.signal)
+            await sleep(1_000 * 2 ** retries, overall.signal)
           } catch (waitError) {
             if (callerAborted(reqOptions.signal)) throw reqOptions.signal!.reason
             if (isProviderTimeout(overall.signal)) throw new ScholarlyHttpError(504, hostname)
             throw waitError
           }
+          retries += 1
           continue
         }
         throw error
@@ -423,6 +425,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         if (REDIRECT_STATUSES.includes(response.status)) {
           // A redirect is neither success nor failure for the host's health;
           // counting it as success would reset a count a peer just raised.
+          await response.body?.cancel()
           redirectCount += 1
           if (redirectCount > maxRedirects) {
             throw new ScholarlySecurityError(
@@ -434,7 +437,6 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           if (location === null) {
             throw new ScholarlyHttpError(response.status, hostname)
           }
-          await response.body?.cancel()
           const nextUrl = new URL(location, currentUrl).href
           assertAllowedScholarlyUrl(nextUrl, publicOnly)
           if (new URL(currentUrl).protocol === 'https:' && new URL(nextUrl).protocol !== 'https:')
@@ -473,10 +475,11 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
 
           if (
             (status === 429 || status === 503) &&
-            attempt < maxRetries &&
+            !halfOpenProbe &&
+            retries < maxRetries &&
             (retryAfterSeconds ?? 0) <= 20
           ) {
-            retryDelayMs = Math.max((retryAfterSeconds ?? 0) * 1_000, 1_000 * Math.pow(2, attempt))
+            retryDelayMs = Math.max((retryAfterSeconds ?? 0) * 1_000, 1_000 * 2 ** retries)
           } else {
             throw new ScholarlyHttpError(status, hostname, retryAfterSeconds)
           }
@@ -537,14 +540,14 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
 
         // A provider deadline is one failure of this host; a connection drop is
         // another. Both are retried, and neither is reported as a caller abort.
-        if (isProviderTimeout(d.signal) || attempt >= maxRetries) {
+        if (isProviderTimeout(d.signal) || retries >= maxRetries) {
           recordFailure(hostname)
           if (isProviderTimeout(d.signal)) {
             throw new ScholarlyHttpError(504, hostname)
           }
           throw transportFailure ?? error
         }
-        retryDelayMs = 1_000 * Math.pow(2, attempt)
+        retryDelayMs = 1_000 * 2 ** retries
       } finally {
         // The pinned agent served exactly this attempt's connection; its
         // response body (success, cancelled, or failed) is already settled by
@@ -571,6 +574,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           if (isProviderTimeout(overall.signal)) throw new ScholarlyHttpError(504, hostname)
           throw error
         }
+        retries += 1
       }
     }
   }

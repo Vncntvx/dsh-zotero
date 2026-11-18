@@ -92,13 +92,14 @@ export function paperFromArxiv(entry: ArxivAtomEntry): ScholarlyPaper {
   })
 }
 
-export function buildArxivSearchQuery(query: ScholarlyQuery, anyWord = false): string {
+/** Strict searches pair each term with its fields; relaxed searches group the original text by field. */
+export function buildArxivSearchQuery(query: ScholarlyQuery, relaxed = false): string {
   const text = query.query.trim()
   const isFielded = /\b(ti|au|abs|cat|co|jr|rn|all|id):/.test(text)
   const terms = (text.match(/"[^"]+"|[^\s"]+/g) ?? []).filter(
     (term) => !SCHOLARLY_STOPWORDS.has(term.toLowerCase()),
   )
-  const words = (anyWord ? [] : terms).map((term) => `(ti:${term} OR abs:${term})`).join(' AND ')
+  const words = (relaxed ? [] : terms).map((term) => `(ti:${term} OR abs:${term})`).join(' AND ')
   const parts = [
     isFielded ? `(${text})` : words !== '' ? `(${words})` : `(ti:(${text}) OR abs:(${text}))`,
   ]
@@ -121,8 +122,8 @@ export async function searchArxiv(
   http: ScholarlyHttp,
   signal?: AbortSignal,
 ): Promise<ScholarlyPaper[]> {
-  const execute = async (anyWord: boolean): Promise<ScholarlyPaper[]> => {
-    const searchQuery = buildArxivSearchQuery(query, anyWord)
+  const execute = async (relaxed: boolean): Promise<ScholarlyPaper[]> => {
+    const searchQuery = buildArxivSearchQuery(query, relaxed)
     const url = `https://export.arxiv.org/api/query?${encodeQueryParams({
       search_query: searchQuery,
       start: 0,

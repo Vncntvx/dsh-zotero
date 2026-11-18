@@ -171,15 +171,17 @@ export function createScholarlyReadTool(
               sourceIdentity: fullText.sourceIdentity,
               ...(fullText.provider === 'mineru' ? { provenance: fullText.provenance } : {}),
             }
+            const issues = fullText.issues?.length ? { issues: [...fullText.issues] } : {}
             const header = `${raw} — ${fullText.text.length} characters (source: ${fullText.source})${
               fullText.url ? `\nLink: ${fullText.url}` : ''
-            }`
+            }${fullText.issues?.length ? `\nCache notice: ${fullText.issues.join('; ')}` : ''}`
 
             // 1. Inspect Table of Contents
             if (args.outline) {
               const sections = sectionsOf()
               if (sections.length === 0) {
                 return {
+                  ...issues,
                   text: `${header}\n\nNotice: ${fullText.format === 'text' ? PLAIN_TEXT_OUTLINE_MESSAGE : MARKDOWN_OUTLINE_MESSAGE}`,
                   document: toCleanJsonRecord({
                     ...documentSource,
@@ -196,6 +198,7 @@ export function createScholarlyReadTool(
                 )
                 .join('\n')
               return {
+                ...issues,
                 text: `${header}\n\nSections (use section="..." to read):\n${outlineText}`,
                 document: toCleanJsonRecord({
                   ...documentSource,
@@ -256,6 +259,7 @@ export function createScholarlyReadTool(
               })
               if (ranked.length === 0) {
                 return {
+                  ...issues,
                   text: `${header}${scopeLabel}\n\n${noPassageMessage(args.query.trim(), routes)}`,
                   document: toCleanJsonRecord({
                     ...documentSource,
@@ -278,6 +282,7 @@ export function createScholarlyReadTool(
                 .join('\n\n')
 
               return {
+                ...issues,
                 text: `${header}${scopeLabel}\n\nTop passages matching "${args.query}":\n\n${passagesText}`,
                 document: toCleanJsonRecord({
                   ...documentSource,
@@ -339,6 +344,7 @@ export function createScholarlyReadTool(
               message: `Returning characters ${start}–${end} of ${activeText.length}`,
             })
             return {
+              ...issues,
               text: `${header}${scopeLabel}\nCharacters ${start}–${end}; ${statusTail}.${hint}\n\n${activeText.slice(
                 start,
                 end,

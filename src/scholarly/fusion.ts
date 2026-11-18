@@ -5,6 +5,7 @@
 
 import { ZOTERO_RRF_K as RRF_K } from '../constants.js'
 import {
+  addVersionRecord,
   identityKeysOf,
   identityRelationOf,
   mergePaperInto,
@@ -33,6 +34,9 @@ export interface RankedSourceList {
 interface MergedEntry {
   paper: ScholarlyPaper
   score: number
+  keys: Set<string>
+  primaryOrder: number
+  order: number
 }
 
 /**
@@ -63,40 +67,23 @@ function metadataRelationOf(
  * published, the incoming record becomes the primary and the old primary is
  * retained as a version.
  */
-function absorbEntry(entry: MergedEntry, paper: ScholarlyPaper, relation: MergeRelation): void {
-  if (publishedDoiOf(paper) !== undefined && publishedDoiOf(entry.paper) === undefined) {
-    const previous = entry.paper
-    const promoted: ScholarlyPaper = {
-      ...paper,
-      sources: [...paper.sources],
-      versions: [...(paper.versions ?? [])],
-    }
-    entry.paper = promoted
-    mergePaperInto(promoted, previous, 'version')
-    return
-  }
-  mergePaperInto(entry.paper, paper, relation)
-}
-
-function indexEntry(
-  entry: MergedEntry,
-  identityIndex: Map<string, MergedEntry>,
-  titleIndex: Map<string, MergedEntry[]>,
-): void {
-  for (const key of identityKeysOf(entry.paper)) identityIndex.set(key, entry)
-  for (const version of entry.paper.versions ?? []) {
-    for (const key of identityKeysOf(version)) identityIndex.set(key, entry)
-  }
-  // Only the primary title is a candidate signature: the merge gate compares
-  // the incoming record against the primary's own authors and year.
-  const signature = titleSignature(entry.paper.title)
-  if (signature === undefined) return
-  const bucket = titleIndex.get(signature)
-  if (!bucket) {
-    titleIndex.set(signature, [entry])
-  } else if (!bucket.includes(entry)) {
-    bucket.push(entry)
-  }
+function absorbEntry(entry: MergedEntry, incoming: MergedEntry, titleMatch: boolean): void {
+  const preferred =
+    Number(publishedDoiOf(incoming.paper) !== undefined) -
+    Number(publishedDoiOf(entry.paper) !== undefined)
+  const promote = preferred > 0 || (preferred === 0 && incoming.primaryOrder < entry.primaryOrder)
+  const primary = promote ? incoming.paper : entry.paper
+  const other = promote ? entry.paper : incoming.paper
+  const relation = titleMatch
+    ? 'version'
+    : metadataRelationOf(primary, other, identityRelationOf(primary, other).relation)
+  mergePaperInto(primary, other, relation)
+  for (const version of other.versions ?? []) addVersionRecord(primary, version)
+  entry.paper = primary
+  entry.primaryOrder = promote ? incoming.primaryOrder : entry.primaryOrder
+  entry.order = Math.min(entry.order, incoming.order)
+  entry.score += incoming.score
+  for (const key of incoming.keys) entry.keys.add(key)
 }
 
 /**
@@ -107,9 +94,18 @@ function indexEntry(
  * entry, with compatible strong identifiers.
  */
 export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPaper[] {
-  const merged: MergedEntry[] = []
+  const merged = new Set<MergedEntry>()
   const identityIndex = new Map<string, MergedEntry>()
-  const titleIndex = new Map<string, MergedEntry[]>()
+  const titleIndex = new Map<string, Set<MergedEntry>>()
+  let order = 0
+
+  const removeTitle = (entry: MergedEntry): void => {
+    const signature = titleSignature(entry.paper.title)
+    const bucket = signature === undefined ? undefined : titleIndex.get(signature)
+    if (bucket === undefined) return
+    bucket.delete(entry)
+    if (bucket.size === 0) titleIndex.delete(signature!)
+  }
 
   for (const list of lists) {
     const weight = list.weight ?? 1.0
@@ -122,54 +118,55 @@ export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPa
         paper.sources.push(sourceName)
       }
 
-      let entry: MergedEntry | undefined
-      let relation: MergeRelation = 'same'
-
-      // Identity keys name records. A match here is a shared identity, and the
-      // verdict distinguishes one record from a verified version relationship.
-      for (const key of identityKeysOf(paper)) {
-        const candidate = identityIndex.get(key)
-        if (!candidate) continue
-        const verdict = identityRelationOf(candidate.paper, paper)
-        entry = candidate
-        relation = metadataRelationOf(candidate.paper, paper, verdict.relation)
-        break
+      const keys = new Set([paper, ...(paper.versions ?? [])].flatMap(identityKeysOf))
+      const candidates = new Set<MergedEntry>()
+      for (const key of keys) {
+        const hit = identityIndex.get(key)
+        if (hit !== undefined) candidates.add(hit)
       }
+      let titleMatch = false
 
       // A title signature proposes candidates; the gate checks the title token
       // set, first author, year window, and strong-identifier compatibility.
-      if (!entry) {
+      if (candidates.size === 0) {
         const signature = titleSignature(paper.title)
         for (const candidate of signature ? (titleIndex.get(signature) ?? []) : []) {
           const verdict = identityRelationOf(candidate.paper, paper)
           if (verdict.relation !== 'distinct' || verdict.conflicting) continue
           if (!titleVersionMatch(candidate.paper, paper)) continue
-          entry = candidate
-          relation = 'version'
+          candidates.add(candidate)
+          titleMatch = true
           break
         }
       }
 
-      if (!entry) {
-        entry = {
-          paper: { ...paper, sources: [...paper.sources] },
-          score: 0,
+      const [first, ...rest] = [...candidates].sort((left, right) => left.order - right.order)
+      const incoming = { paper, score: weight / (RRF_K + rank), keys, order, primaryOrder: order }
+      order += 1
+      const entry = first ?? incoming
+      if (first !== undefined) {
+        removeTitle(first)
+        for (const absorbed of rest) {
+          removeTitle(absorbed)
+          absorbEntry(entry, absorbed, false)
+          merged.delete(absorbed)
         }
-        merged.push(entry)
-      } else {
-        absorbEntry(entry, paper, relation)
+        absorbEntry(entry, incoming, titleMatch)
       }
-
-      // Reciprocal Rank Fusion contribution
-      entry.score += weight / (RRF_K + rank)
-
-      // Register every identity this entry now answers to, including the
-      // versions it absorbed.
-      indexEntry(entry, identityIndex, titleIndex)
+      merged.add(entry)
+      for (const key of entry.keys) identityIndex.set(key, entry)
+      const signature = titleSignature(entry.paper.title)
+      if (signature !== undefined) {
+        const bucket = titleIndex.get(signature) ?? new Set<MergedEntry>()
+        bucket.add(entry)
+        titleIndex.set(signature, bucket)
+      }
     })
   }
 
-  return merged.sort((a, b) => b.score - a.score).map((e) => e.paper)
+  return [...merged]
+    .sort((left, right) => right.score - left.score || left.order - right.order)
+    .map((entry) => entry.paper)
 }
 
 /**
@@ -243,6 +240,8 @@ interface IdentifierFields {
 }
 
 export function bestIdentifierOf(paper: IdentifierFields): string {
+  const published = publishedDoiOf(paper)
+  if (published !== undefined) return published
   if (paper.arxiv) return `arXiv:${paper.arxiv}`
   if (paper.doi) return paper.doi
   if (paper.pmid) return `PMID:${paper.pmid}`

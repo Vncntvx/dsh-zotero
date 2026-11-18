@@ -283,10 +283,16 @@ interface ScholarlyResolutionContext {
 export async function resolveScholarlyFullText(
   target: PaperIdentifier,
   context: ScholarlyResolutionContext,
-): Promise<FullTextRecord> {
+): Promise<FullTextRecord & { readonly issues?: readonly string[] }> {
   const { http, keys, store, signal, enhancer } = context
   const cacheKey = `${target.kind}-${target.kind === 'url' ? scholarlySourceIdentityOf(target.id) : target.id}`
   const reasons: string[] = []
+  const issues: string[] = []
+  const report = (issue: string | undefined): void => {
+    if (issue !== undefined) issues.push(issue)
+  }
+  const resultOf = (record: FullTextRecord) =>
+    issues.length === 0 ? record : { ...record, issues }
   let cachedPdf: Extract<FullTextCacheEntry, { kind: 'pdf' }> | undefined
 
   if (store !== undefined) {
@@ -297,8 +303,8 @@ export async function resolveScholarlyFullText(
           ? cached.entry.sourceIdentity
           : cached.entry.record.sourceIdentity
       if (target.kind === 'url' && identity !== scholarlySourceIdentityOf(target.id)) {
-        await store.delete(cacheKey)
-        reasons.push('cache: evicted a different URL source')
+        report('cache: rejected a different URL source')
+        report(await store.delete(cacheKey))
       } else if (cached.entry.kind === 'document') {
         return cached.entry.record
       } else {
@@ -308,8 +314,9 @@ export async function resolveScholarlyFullText(
     if (cached.kind === 'corrupt') {
       // The corrupt entry is evicted and re-fetched. It is a fact worth naming
       // in the terminal error, not a silent miss.
-      reasons.push(`cache: evicted an unusable entry (${cached.reason})`)
+      report(`cache: rejected an unusable entry (${cached.reason})`)
     }
+    if (cached.kind !== 'hit') report(cached.issue)
   }
 
   /**
@@ -317,15 +324,15 @@ export async function resolveScholarlyFullText(
    * write must not fail the read it just served, so the failure only lands in
    * the reasons list.
    */
-  const remember = async (record: FullTextRecord): Promise<FullTextRecord> => {
+  const remember = async (record: FullTextRecord) => {
     if (store !== undefined) {
       try {
         await store.set(cacheKey, record)
       } catch (error) {
-        reasons.push(`cache: write failed (${errorDetailOf(error)})`)
+        report(`cache: write failed (${errorDetailOf(error)})`)
       }
     }
-    return record
+    return resultOf(record)
   }
 
   // Revalidate the exact PDF source, including discovered DOI/preprint targets.
@@ -334,12 +341,12 @@ export async function resolveScholarlyFullText(
   if (cachedPdf) {
     const lookup = await lookupPdfArtifact(cachedPdf.url, enhancer, signal)
     if (typeof lookup !== 'string') {
-      if (!cachedPdf.record) return lookup
-      await store!.delete(cacheKey)
+      if (!cachedPdf.record) return resultOf(lookup)
+      report(await store!.delete(cacheKey))
       return await remember(lookup)
     }
     if (lookup === 'absent' && cachedPdf.record) return cachedPdf.record
-    if (lookup === 'expired') await store!.delete(cacheKey)
+    if (lookup === 'expired') report(await store!.delete(cacheKey))
     const pdf = await extractRemotePdf(
       cachedPdf.url,
       http,
@@ -348,7 +355,7 @@ export async function resolveScholarlyFullText(
     )
     if (pdf.kind === 'record') return await remember(pdf.record)
     throw new ZoteroError(
-      `The cached PDF source did not yield readable text (${pdf.reason}${pdf.detail ? `: ${pdf.detail}` : ''}).`,
+      `The cached PDF source did not yield readable text (${pdf.reason}${pdf.detail ? `: ${pdf.detail}` : ''}). ${issues.join('; ')}`.trim(),
       ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
@@ -358,7 +365,7 @@ export async function resolveScholarlyFullText(
     const resolved = await resolveArxivFullText(target.id, http, signal, enhancer)
     if ('record' in resolved) return await remember(resolved.record)
     throw new ZoteroError(
-      `arXiv has no readable copy of ${target.id} right now. Tried: ${resolved.reasons.join('; ')}.`,
+      `arXiv has no readable copy of ${target.id} right now. Tried: ${[...resolved.reasons, ...issues].join('; ')}.`,
       ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
@@ -370,17 +377,16 @@ export async function resolveScholarlyFullText(
     throw new ZoteroError(
       `That URL did not yield readable PDF text (${pdf.reason}${
         pdf.detail === undefined ? '' : `: ${pdf.detail}`
-      }).`,
+      }). ${issues.join('; ')}`.trim(),
       ZOTERO_SCHOLARLY_NO_FULLTEXT,
     )
   }
 
   // 3. DOI / PMID / PMCID resolution
   const record = await resolveDoiLikeRoute(target, http, keys, signal, reasons, remember, enhancer)
-  if (record !== undefined) return record
+  if (record !== undefined) return resultOf(record)
 
-  const tried =
-    reasons.length === 0 ? 'no route was available for this identifier' : reasons.join('; ')
+  const tried = [...reasons, ...issues].join('; ') || 'no route was available for this identifier'
   throw new ZoteroError(
     `No open-access full text found for ${target.id}. Tried: ${tried}. ` +
       `If a route above reports a transport failure, the copy may exist but be unreachable right now — ` +

@@ -210,7 +210,10 @@ export function createScholarlyGetTool(host: ScholarlyToolHost): ToolDefinition 
           }
         }
         return {
-          text: `No scholarly index found a paper matching "${raw}". Verify the identifier or use scholarly_search for broader candidates.`,
+          text:
+            id === undefined
+              ? `OpenAlex found no paper matching the title "${raw}". Use scholarly_search for broader candidates.`
+              : `No scholarly index found a paper matching "${raw}". Verify the identifier or use scholarly_search for broader candidates.`,
           papers: [],
           issues: failedSources,
         }

@@ -221,7 +221,7 @@ describe('weighted RRF fusion', () => {
     expect(formatted).toContain('[1] Foundation Models in 2024')
     expect(formatted).toContain('[In Zotero: AI Research]')
     expect(formatted).toContain('cited 1500')
-    expect(formatted).toContain('id: arXiv:2401.99999')
+    expect(formatted).toContain('id: 10.1234/5678')
 
     const detail = formatPaperDetail(paper)
     expect(detail).toContain('in Zotero: yes (itemKey: ABC12345')
