@@ -9,7 +9,7 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 - Zotero ≥ 7 desktop installed (reads require Zotero ≥ 7; writes require Zotero 10).
 - Local API enabled: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
 - Node.js ≥ 24.15.0.
-- Host dsh `>=0.2.2-rc.3 <0.3.0`; for the mapping of earlier versions, see GitHub Releases.
+- Host dsh `>=0.2.2-rc.4 <0.3.0`; for the mapping of earlier versions, see GitHub Releases.
 
 ## Installing the Plugin
 
@@ -18,9 +18,9 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 In the DeepSeek Harness desktop app under **Plugins** (or **Settings → Plugins**), click **Install Plugin** and enter the package identifier:
 
 - Latest version (recommended): `dsh-zotero`
-- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.3.0-alpha.1`)
+- Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.3.0`)
 - GitHub prebuilt branch: `github:Vncntvx/dsh-zotero#release`
-- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.3.0-alpha.1` or `github:Vncntvx/dsh-zotero#<commit-hash>`
+- GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.3.0` or `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### Command line
 

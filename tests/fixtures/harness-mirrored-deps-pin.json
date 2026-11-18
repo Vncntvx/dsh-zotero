@@ -1,7 +1,7 @@
 {
-  "pin": "dsh-v0.2.2-rc.3",
+  "pin": "dsh-v0.2.2-rc.4",
   "source": "packages/client/*/package.json (plus @types/* from the root manifest) at the pin tag",
-  "note": "Extract after a pin bump with: node scripts/extract-mirrored-deps.mjs 0.2.2-rc.3",
+  "note": "Extract after a pin bump with: node scripts/extract-mirrored-deps.mjs 0.2.2-rc.4",
   "declarations": {
     "@deepseek-ai/cordis": ["workspace:~"],
     "@deepseek-ai/cordis-plugin-loader": ["workspace:~"],

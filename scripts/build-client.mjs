@@ -184,15 +184,9 @@ function platformModuleTable() {
 }
 
 /**
- * The module-loader API this bundle targets.
- *
- * The browser loader is a shell global, not an installed package: nothing in
- * this repository can ask it which handoff shape it accepts. Upstream HEAD
- * moves to `load({ id, factory, meta: () => ({ stylesheets }) })` and drops the
- * `data-plugin-css` tag handling this bundle relies on; that change is not in
- * the pinned release yet. So the API is a deliberate constant that
- * `npm run harness:pin` must revisit (DN-10), and the build refuses the two
- * halves drifting apart in either direction.
+ * The client loader handoff at the pinned release tag. The shell claims
+ * styles injected by the factory. Check the registration contract on every
+ * pin (DN-10).
  */
 export const CLIENT_LOADER_API = 'legacy-stylesheet-tag'
 

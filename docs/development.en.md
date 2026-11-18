@@ -153,13 +153,21 @@ The same script also validates the vendored framework packages: the lower bound 
 
 ### Pin upgrade checklist
 
-After `npm run harness:pin -- <ver>`, also review the upstream semantics mirrored in this repository:
+`npm run harness:pin -- <ver>` updates the toolchain snapshot and consumer manifest from the target upstream tag. Refresh both lockfiles, then run `harness:check`. When the upstream tag is available, the check also verifies the source commit and `packageManager`.
 
 ```sh
-# Tool-block predicate: isSettledTool in src/sources/presenters.ts mirrors it
-rg -n "export declare function isSettledTool" -A 4 ../deepseek-harness/packages/client/ui-chat/src/client/contract/chat-nodes.ts
-# Result text: resultTextOf in the same file mirrors it (upstream does not export it from ./client)
-rg -n "function resultText" -A 30 ../deepseek-harness/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+npm install --package-lock-only
+npm install --package-lock-only --prefix tests/fixtures/dsh-cli-consumer
+npm run harness:check
+```
+
+Also review the upstream semantics mirrored in this repository.
+
+```sh
+pin=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-agent']")
+git -C ../deepseek-harness grep -n -E 'data-plugin-css|ClientBundleRegistration|claimStyles' "dsh-v$pin" -- packages/client/tsdown.client.ts packages/client/modules/src/client
+git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-chat/src/client/contract/chat-nodes.ts" | rg -n 'export function isSettledTool' -A 3
+git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/tool/models/tool-call-model.ts" | rg -n 'export function resultText' -A 13
 ```
 
 `isSettledTool` is publicly exported from `@deepseek-ai/dsh-client-ui-chat/client`; `resultText` has no public entry. Both mirrors are reused by the host half, so neither can become a value import. If an upstream implementation changes (especially the empty-content-with-error fallback and the `preparing` decision), update the degradation matrix in `tests/client/presenters.spec.ts` with it.
@@ -368,11 +376,11 @@ Run the following checks in order before a release, and stop at the first failur
 
 ### Versions, release notes and publication
 
-The smoke matrix reads the exact pnpm version from `tests/fixtures/harness-toolchain-pin.json`. `harness:pin` refreshes the snapshot from the tagged root manifest in the sibling checkout. `harness:check` verifies the pin and checks the source commit and `packageManager` when the tag is available.
+The three-platform smoke matrix copies the manifest and lockfile from `tests/fixtures/dsh-cli-consumer/` to the runner's temporary directory and uses `npm ci` to install the pinned dsh CLI and pnpm there. Only the Linux browser check installs repository development dependencies. The npm cache key includes both lockfiles. The CLI install step prints npm phase timings and the job retains the timing files on failure.
 
 `package.json` owns the version. Before a release, update the root manifest in `package-lock.json` and prepare that version's changes, validation and migration requirements. Use `v<version>` for the tag on the main commit that passed every gate; the tag, manifest and release notes must agree. Prereleases use SemVer notation such as `1.3.0-alpha.1`. npm publication explicitly uses the first prerelease identifier as the dist-tag (`alpha` here; numeric or `latest` identifiers use `next`), and the GitHub Release is marked as a prerelease and excluded from Latest. Stable versions publish to `latest`.
 
-CI's quality gate creates `release-artifact-<source SHA>`. All three installation platforms consume its exact tarball through the published, exactly pinned dsh CLI, retain the host's default pnpm build-approval policy, and import all four host entries from the installed profile. Linux also verifies browser composition, settings saves and reloads. The publish job downloads that artifact, verifies its source and every file, then advances the project's release branch under a CAS lease. The job only downloads, verifies and publishes the artifact. A tag whose source predates the published source is refused.
+CI's quality gate creates `release-artifact-<source SHA>`. All three installation platforms consume its exact tarball through the published, exactly pinned dsh CLI installed from the consumer lockfile, retain the host's default pnpm build-approval policy, and import all four host entries from the installed profile. Linux also verifies browser composition, settings saves and reloads. The publish job downloads that artifact, verifies its source and every file, then advances the project's release branch under a CAS lease. The job only downloads, verifies and publishes the artifact. A tag whose source predates the published source is refused.
 
 npm publication and the GitHub Release are automated: pushing a `v<version>` tag triggers the `npm-release` job, which downloads the same verified artifact, re-checks its source and every file, and confirms that the tag, manifest and in-artifact version agree. It then publishes the original tarball named in `artifact.json` to npm through OIDC trusted publishing (a public repository publishing a public package gets provenance by default under OIDC — no `--provenance` flag or token), and uses `gh` to create or update that tag's GitHub Release with the tag annotation, generated changelog, source SHA, artifactDigest and tarballSha256. Pushes to `main` and manual dispatch run only the gate and release-branch push. A pre-publication lookup queries `registry.npmjs.org` directly: only an explicit 404 permits publication. An existing version must match the artifact's name, version and SHA-512 integrity before publication is skipped; lookup failures stop the job. After publication, another lookup and download verify the public tarball's actual bytes before the Release is created. Visibility waits are bounded, and a failed verification can be retried. Changed bytes require a new version and fresh verification; `npm-release` and `publish` are independent and can be retried separately.
 

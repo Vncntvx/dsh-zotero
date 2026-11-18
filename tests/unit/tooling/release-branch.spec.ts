@@ -12,6 +12,23 @@ import {
   assertReleaseTarget,
 } from '../../../scripts/release-branch-guard.mjs'
 
+function readReleaseWorkflow() {
+  return readFileSync(
+    new URL('../../../.github/workflows/release-branch.yml', import.meta.url),
+    'utf8',
+  )
+}
+
+function installMatrixSteps() {
+  const workflow = load(readReleaseWorkflow()) as {
+    jobs: Record<
+      string,
+      { steps: { uses?: string; with?: Record<string, string>; run?: string; if?: string }[] }
+    >
+  }
+  return workflow.jobs['web-composition']!.steps
+}
+
 it('rejects a source SHA drift before a release ref can move', () => {
   expect(() =>
     assertReleaseSource({ actualSha: 'actual', expectedSha: 'checked', status: '' }),
@@ -29,17 +46,14 @@ it('rejects tracked worktree changes before a release ref can move', () => {
 })
 
 it('keeps publishing behind both mandatory release jobs', () => {
-  const workflow = readFileSync(
-    new URL('../../../.github/workflows/release-branch.yml', import.meta.url),
-    'utf8',
-  )
+  const workflow = readReleaseWorkflow()
   expect(workflow).toContain('quality-gate:')
   expect(workflow).toContain('web-composition:')
   expect(workflow).toMatch(/publish:[\s\S]*needs:\n\s+- quality-gate\n\s+- web-composition/)
   expect(workflow).toContain('npm run release:check')
   expect(workflow).toContain('npm run smoke:web-composition')
   // The smoke needs a dsh CLI; CI has no sibling checkout, so the job installs
-  // the published CLI at the version the dev tree pins.
+  // the published CLI from an isolated consumer lockfile at the pinned version.
   expect(workflow).toContain('node scripts/harness-toolchain.mjs')
   const publish = workflow.slice(workflow.indexOf('  publish:'))
   expect(publish).not.toMatch(/npm (?:ci|install|run build)/)
@@ -51,10 +65,7 @@ it('keeps publishing behind both mandatory release jobs', () => {
 })
 
 it('gates npm publication on a version tag with OIDC and the verified artifact', () => {
-  const workflow = readFileSync(
-    new URL('../../../.github/workflows/release-branch.yml', import.meta.url),
-    'utf8',
-  )
+  const workflow = readReleaseWorkflow()
   const start = workflow.indexOf('  npm-release:')
   expect(start).toBeGreaterThanOrEqual(0)
   const job = workflow.slice(start, workflow.indexOf('  publish:', start))
@@ -89,9 +100,9 @@ it.each([
   ['1.3.0-1', 'next', 'true'],
   ['1.3.0-latest.1', 'next', 'true'],
 ])('selects the publication channel for %s', async (version, distTag, prerelease) => {
-  const workflow = load(
-    readFileSync(new URL('../../../.github/workflows/release-branch.yml', import.meta.url), 'utf8'),
-  ) as { jobs: Record<string, { steps: { name?: string; run?: string }[] }> }
+  const workflow = load(readReleaseWorkflow()) as {
+    jobs: Record<string, { steps: { name?: string; run?: string }[] }>
+  }
   const script = workflow.jobs['npm-release']!.steps.find(
     (step) => step.name === 'Select publication channel',
   )!.run!
@@ -107,10 +118,7 @@ it.each([
 })
 
 it('installs the same artifact on all desktop platforms before publication', () => {
-  const workflow = readFileSync(
-    new URL('../../../.github/workflows/release-branch.yml', import.meta.url),
-    'utf8',
-  )
+  const workflow = readReleaseWorkflow()
   const job = workflow.slice(
     workflow.indexOf('  web-composition:'),
     workflow.indexOf('  npm-release:'),
@@ -119,9 +127,24 @@ it('installs the same artifact on all desktop platforms before publication', () 
   expect(job).toContain('fail-fast: false')
   expect(job).toContain('node scripts/harness-toolchain.mjs')
   expect(job).toContain('--install-only --tarball "$tarball"')
-  expect(job).toContain('--dsh "$dsh_cli"')
+  expect(job).toContain('DSH_CLI: ${{ steps.harness-toolchain.outputs.dsh-cli }}')
+  expect(job).toContain('--dsh "$DSH_CLI"')
   expect(job).toContain('if: failure()')
   expect(job).not.toContain('--ignore-scripts --tarball')
+})
+
+it('keys the install matrix npm cache on both dependency locks', () => {
+  const setup = installMatrixSteps().find((step) => step.uses?.startsWith('actions/setup-node@'))
+  expect(setup?.with).toMatchObject({
+    cache: 'npm',
+    'cache-dependency-path':
+      'package-lock.json\ntests/fixtures/dsh-cli-consumer/package-lock.json\n',
+  })
+})
+
+it('installs repository development dependencies only for the Linux browser smoke', () => {
+  const install = installMatrixSteps().find((step) => step.run === 'npm ci --ignore-scripts')
+  expect(install?.if).toBe("runner.os == 'Linux'")
 })
 
 it.each([

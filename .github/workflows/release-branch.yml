@@ -78,11 +78,16 @@ jobs:
         with:
           node-version: 24.15.0
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            tests/fixtures/dsh-cli-consumer/package-lock.json
 
       - name: Install dependencies
+        if: runner.os == 'Linux'
         run: npm ci --ignore-scripts
 
-      - name: Install dsh CLI at the pinned harness version
+      - name: Install consumer dsh CLI at the pinned harness version
+        id: harness-toolchain
         run: node scripts/harness-toolchain.mjs
 
       - name: Install Chromium
@@ -99,13 +104,20 @@ jobs:
         run: node scripts/release-artifact.mjs --verify --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
 
       - name: Install verified tarball and load all host entries
+        env:
+          DSH_CLI: ${{ steps.harness-toolchain.outputs.dsh-cli }}
+          PNPM_VERSION: ${{ steps.harness-toolchain.outputs.pnpm-version }}
         run: |
+          pnpm_version="$(pnpm --version)"
+          if [ "$pnpm_version" != "$PNPM_VERSION" ]; then
+            echo "Expected pnpm $PNPM_VERSION, got $pnpm_version" >&2
+            exit 1
+          fi
           tarball="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; import { join } from "node:path"; const dir=join(process.env.RUNNER_TEMP,"release-artifact"); console.log(join(dir,JSON.parse(readFileSync(join(dir,"artifact.json"),"utf8")).tarball))')"
-          dsh_cli="$(npm root --global)/@deepseek-ai/dsh/lib/bin.js"
           if [ "$RUNNER_OS" = Linux ]; then
-            npm run smoke:web-composition -- --tarball "$tarball" --dsh "$dsh_cli" --home "$RUNNER_TEMP/install-smoke"
+            npm run smoke:web-composition -- --tarball "$tarball" --dsh "$DSH_CLI" --home "$RUNNER_TEMP/install-smoke"
           else
-            npm run smoke:discovery -- --install-only --tarball "$tarball" --dsh "$dsh_cli" --home "$RUNNER_TEMP/install-smoke"
+            npm run smoke:discovery -- --install-only --tarball "$tarball" --dsh "$DSH_CLI" --home "$RUNNER_TEMP/install-smoke"
           fi
 
       - name: Preserve installation failure diagnostics
@@ -116,6 +128,7 @@ jobs:
           path: |
             ${{ runner.temp }}/install-smoke
             !${{ runner.temp }}/install-smoke/**/node_modules/**
+            ${{ runner.temp }}/dsh-cli-consumer-*/npm-logs/*-timing.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

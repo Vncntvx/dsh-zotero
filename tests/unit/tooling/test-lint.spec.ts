@@ -8,8 +8,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   BINARY_EXTENSIONS,
@@ -19,7 +20,9 @@ import {
   focusViolationsOf,
   helperSizeViolations,
   isHelperFile,
+  specFiles,
   stripCommentsAndStrings,
+  textFiles,
   unscannedExtensionsOf,
   upstreamSourceImportsOf,
   wholesalePrimitiveMocksOf,
@@ -148,6 +151,21 @@ describe('comment and string stripping', () => {
 })
 
 describe('extension coverage guard', () => {
+  it('excludes nested dependencies from text and spec discovery', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-zotero-scan-'))
+    try {
+      const consumer = join(root, 'tests', 'fixtures', 'consumer')
+      const modules = join(consumer, 'node_modules', 'dependency')
+      mkdirSync(modules, { recursive: true })
+      writeFileSync(join(consumer, 'package.json'), '{}')
+      writeFileSync(join(modules, 'fixture.spec.ts'), 'it("dependency", () => {})')
+      writeFileSync(join(modules, 'unknown.extension'), '')
+      expect(textFiles(root)).toEqual([join(consumer, 'package.json')])
+      expect(specFiles(root)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
   it('treats the shipped declaration flavor as text', () => {
     // The four `scripts/*.d.mts` contract files are read by the build gates;
     // an extension that is neither text nor binary is scanned by nothing.

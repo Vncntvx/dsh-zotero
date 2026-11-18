@@ -10,7 +10,7 @@
  * @module tests/client/workspace/ExportsLens
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExportDocumentRow } from '../../../src/client/components/ExportDocumentRow.tsx'
 import { ExportCard } from '../../../src/client/components/ExportCard.tsx'
@@ -30,9 +30,6 @@ import { bibTexKeysOf, citeCommandOf } from '../../../src/sources/bibtex.js'
 import type { ExportArtifact } from '../../../src/sources/model.js'
 import type { ExportedDocument } from '../../../src/client/sources/selectors.ts'
 import { artifactOf, workspaceOf } from '../helpers/source-fixtures.ts'
-
-// The real primitives bundle pulls heavy dependencies (katex, shiki, the
-// portal machinery); the export rows only need the shared DOM face.
 
 import { mockT } from '../helpers/mock-translate.ts'
 import { clipboardWrites } from '../setup.ts'
@@ -162,17 +159,18 @@ describe('ExportCard', () => {
     expect(screen.getByText(new RegExp(zh.exportRefCount.replace('{count}', '2')))).toBeDefined()
   })
 
-  it('keeps the keys, cite command, and verbatim body behind the disclosure', () => {
-    render(<ExportCard artifact={BIBTEX_ARTIFACT} t={t} />)
-    // Collapsed: no keys, no verbatim body in the DOM.
-    expect(screen.queryAllByText(/dao2023/)).toHaveLength(0)
+  it('keeps the keys, cite command, and verbatim body behind the disclosure', async () => {
+    const { container } = render(<ExportCard artifact={BIBTEX_ARTIFACT} t={t} />)
+    const body = () => container.querySelector('[data-code-block-content]')
+    expect([body(), screen.queryByText('dao2023')]).toEqual([null, null])
     fireEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(screen.getAllByText(/dao2023/).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(/@article\{dao2023/)).toBeDefined()
+    expect(screen.getByText('dao2023', { selector: 'p[title] > span' })).toBeDefined()
+    await waitFor(() => expect(body()?.querySelector('pre.shiki')).toBeTruthy())
+    expect(body()?.textContent).toBe(BIBTEX_ARTIFACT.text)
     fireEvent.click(screen.getByLabelText(zh.copyCite))
     expect(writeClipboard).toHaveBeenCalledWith('\\cite{dao2023}')
     fireEvent.click(screen.getByRole('button', { expanded: true }))
-    expect(screen.queryAllByText(/dao2023/)).toHaveLength(0)
+    expect([body(), screen.queryByText('dao2023')]).toEqual([null, null])
   })
 
   it('copies the full export text from the always-visible action', () => {

@@ -121,7 +121,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/toolviews/ExportToolView.spec.tsx': 470,
   'tests/client/toolviews/RetrieveToolView.spec.tsx': 558,
   'tests/client/toolviews/WriteToolView.spec.tsx': 609,
-  'tests/client/workspace/ExportsLens.spec.tsx': 508,
+  'tests/client/workspace/ExportsLens.spec.tsx': 506,
   'tests/client/workspace/SourceAuditPanel.spec.tsx': 408,
   'tests/client/workspace/SourceEvidence.spec.tsx': 596,
   'tests/host/doc-coverage.spec.ts': 414,
@@ -218,7 +218,7 @@ const failures = []
 function filesUnder(dir) {
   const found = []
   for (const entry of readdirSync(dir)) {
-    if (entry.startsWith('.')) continue
+    if (entry.startsWith('.') || entry === 'node_modules') continue
     const path = join(dir, entry)
     if (statSync(path).isDirectory()) found.push(...filesUnder(path))
     else found.push(path)

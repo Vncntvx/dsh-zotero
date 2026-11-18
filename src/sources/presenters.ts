@@ -75,23 +75,10 @@ export function resultFirstTextOf(block: ToolBlockLike): string | null {
 }
 
 /**
- * Flatten settled content blocks to display text.
- *
- * The harness's `resultText`
- * (`packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`) is not
- * exported from its package's `./client` entry, so a mirror is the only option.
- * It matches the pinned `0.2.2-rc.3` semantics: text blocks verbatim, other
- * block shapes as pretty JSON, empty content on a failed call falling back to
- * the structured error's `name: code` line, otherwise the empty string, and
- * every part joined with `\n`. Running blocks return null (the harness helper
- * only accepts settled nodes); callers normalize with `?? ''`.
- *
- * Two differences are known and deliberate until the next pin (DN-10):
- * upstream HEAD joins with `reduce` so a part already ending in `\n` does not
- * gain a second one, and its signature grew an optional `formatImage` for
- * image blocks. Neither exists in the pinned release, so mirroring them now
- * would change this plugin's own output for no benefit. Re-check both on every
- * `harness:pin`; the trigger is also named in `docs/development.md`.
+ * Mirror the pinned Harness `resultText` for tool cards and host consumers.
+ * Join text and pretty-printed non-text blocks with newlines. Empty content
+ * with a structured error yields its `name: code` line. Running blocks return
+ * null. Check the release tag on every pin (DN-10).
  */
 export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null

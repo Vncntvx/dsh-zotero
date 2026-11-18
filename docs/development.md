@@ -153,13 +153,21 @@ pnpm --dir ../deepseek-harness run build:lib:client   # 第 2 项：只重建浏
 
 ### pin 升级复核清单
 
-`npm run harness:pin -- <ver>` 之后，除了上面的产物一致性门禁，还要复核本仓库刻意镜像的上游语义：
+`npm run harness:pin -- <ver>` 从上游目标标签更新版本快照和 consumer 清单。随后刷新两份 lockfile，再运行 `harness:check`。上游标签可用时，该检查也核对来源提交和 `packageManager`。
 
 ```sh
-# 工具块谓词：src/sources/presenters.ts 的 isSettledTool 镜像它
-rg -n "export declare function isSettledTool" -A 4 ../deepseek-harness/packages/client/ui-chat/src/client/contract/chat-nodes.ts
-# 结果文本：同文件的 resultTextOf 镜像它（上游未从 ./client 入口导出）
-rg -n "function resultText" -A 30 ../deepseek-harness/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+npm install --package-lock-only
+npm install --package-lock-only --prefix tests/fixtures/dsh-cli-consumer
+npm run harness:check
+```
+
+升级时还要复核本仓库镜像的上游语义。
+
+```sh
+pin=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-agent']")
+git -C ../deepseek-harness grep -n -E 'data-plugin-css|ClientBundleRegistration|claimStyles' "dsh-v$pin" -- packages/client/tsdown.client.ts packages/client/modules/src/client
+git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-chat/src/client/contract/chat-nodes.ts" | rg -n 'export function isSettledTool' -A 3
+git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/tool/models/tool-call-model.ts" | rg -n 'export function resultText' -A 13
 ```
 
 `isSettledTool` 由上游 `@deepseek-ai/dsh-client-ui-chat/client` 公开导出，`resultText` 没有公开入口，两个镜像都在 host 半被复用，因此不能改成值导入。上游实现若有变化（尤其是"空内容 + 错误"的回退、"preparing" 的判定），同步 `tests/client/presenters.spec.ts` 的退化矩阵。
@@ -366,13 +374,13 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。
 
-三平台安装 smoke 从 `tests/fixtures/harness-toolchain-pin.json` 读取上游固定标签根清单的 pnpm 版本。`harness:pin` 从 sibling 的目标标签同步刷新快照；`harness:check` 核对版本钉，有标签时还核对来源提交和 `packageManager`。
+三平台安装 smoke 将 `tests/fixtures/dsh-cli-consumer/` 的清单和 lockfile 复制到 runner 临时目录，再用 `npm ci` 安装固定版本的 dsh CLI 与 pnpm。矩阵中只有 Linux 浏览器检查需要安装仓库开发依赖。npm 缓存键包含两份 lockfile。CLI 安装步骤输出 npm 分阶段耗时，作业失败时保留计时文件。
 
 ### 版本、发行说明与发布动作
 
 版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。预发布版本使用 SemVer 写法（如 `1.3.0-alpha.1`），npm 发布时显式选择首个预发布标识作为 dist-tag（此例为 `alpha`；纯数字或 `latest` 标识使用 `next`），GitHub Release 同步标记为 prerelease 且不设为 Latest。正式版本发布到 `latest`。
 
-CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，调用发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
+CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
 
 npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。随后用 OIDC 可信发布把 `artifact.json` 指定的原 tarball 发到 npm（OIDC 认证下公开仓库与公开包默认带 provenance，无需 `--provenance` 或 token），并以 `gh` 创建/更新该 tag 的 GitHub Release，正文含 tag 注释、GitHub 生成的变更说明，以及源 SHA、artifactDigest 与 tarballSha256。`main` 推送与手动触发仅运行门禁与 release 分支推送。发布前直接查询 `registry.npmjs.org`，仅明确的 404 允许发布；已有版本在名称、版本与 SHA-512 integrity 完全一致时跳过，查询失败直接终止。发布后再次查询，并下载公开 tarball 核对其实际字节，成功后才创建 Release；可见性等待有界，失败后可重跑核验。内容变化需新版本与重新验证，`npm-release` 与 `publish` 互不阻塞，可单独重跑。
 

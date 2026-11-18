@@ -7,7 +7,7 @@
  */
 
 import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   useDiagnosticsFeed,
@@ -16,9 +16,22 @@ import {
 import type { ZoteroDiagnosticsView } from '../../src/client/remote.ts'
 import { deferred, type Deferred } from '../helpers/sync.ts'
 
+let originalVisibility: PropertyDescriptor | undefined
+
+function setVisibility(value: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { value, configurable: true })
+}
+
+beforeEach(() => {
+  originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+  setVisibility('visible')
+})
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  if (originalVisibility === undefined) Reflect.deleteProperty(document, 'visibilityState')
+  else Object.defineProperty(document, 'visibilityState', originalVisibility)
 })
 
 interface FeedBox {
@@ -80,15 +93,19 @@ describe('useDiagnosticsFeed', () => {
     })
     expect(calls).toBe(2)
 
-    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    act(() => {
+      setVisibility('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(6000)
     })
     expect(calls).toBe(2)
 
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
-    document.dispatchEvent(new Event('visibilitychange'))
-    await act(async () => {})
+    await act(async () => {
+      setVisibility('visible')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
     // The visibility return refreshes immediately instead of waiting out the
     // interval, and the guard keeps it to one call.
     expect(calls).toBe(3)
@@ -200,9 +217,10 @@ describe('useDiagnosticsFeed', () => {
     render(<Probe diagnostics={diagnostics} pollMs={60000} box={box} />)
     await act(async () => {})
     expect(calls).toBe(1)
-    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
-    document.dispatchEvent(new Event('visibilitychange'))
-    await act(async () => {})
+    await act(async () => {
+      setVisibility('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
     expect(calls).toBe(1)
   })
 

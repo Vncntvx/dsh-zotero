@@ -49,7 +49,9 @@ export { harnessUpperBoundOf } from './shared/harness-version.mjs'
  *   node scripts/harness-state.mjs                 # check every fact, then exit
  *   node scripts/harness-state.mjs --strict        # stale declarations fail too
  *   node scripts/harness-state.mjs --write <ver>   # move the pin, then re-check
- *   # --write leaves package-lock.json behind: npm install --package-lock-only
+ *   # After --write, refresh both lockfiles:
+ *   npm install --package-lock-only
+ *   npm install --package-lock-only --prefix tests/fixtures/dsh-cli-consumer
  * @module scripts/harness-state
  */
 
@@ -83,7 +85,11 @@ import {
 } from './shared/harness-doc-pin.mjs'
 import { clientPlatformProblems, clientMirrorProblems } from './client-graph-authority.mjs'
 import {
+  consumerLockPath,
+  consumerManifestPath,
+  consumerProblems,
   extractHarnessToolchain,
+  pnpmVersion,
   readHarnessToolchain,
   toolchainFixture,
 } from './harness-toolchain.mjs'
@@ -1206,6 +1212,10 @@ function writePin(version, previous) {
   const manifest = applyPinToManifest(readJson(pkgPath), version, lockedPackageNames)
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
   writeFileSync(toolchainFixture, `${JSON.stringify(toolchain, null, 2)}\n`)
+  const consumer = readJson(consumerManifestPath)
+  consumer.dependencies['@deepseek-ai/dsh'] = version
+  consumer.dependencies.pnpm = pnpmVersion(toolchain.packageManager)
+  writeFileSync(consumerManifestPath, `${JSON.stringify(consumer, null, 2)}\n`)
   for (const path of HARNESS_PIN_DOCS) {
     const file = join(root, path)
     writeFileSync(file, withHarnessDocPin(path, readFileSync(file, 'utf8'), version))
@@ -1254,7 +1264,15 @@ function runCheck(strict) {
   problems.push(...collectClientDepsMirrorProblems(pin, manifest))
   if (pin !== undefined) {
     try {
-      readHarnessToolchain(harnessRoot, pin)
+      const snapshot = readHarnessToolchain(harnessRoot, pin)
+      problems.push(
+        ...consumerProblems(
+          readJson(consumerManifestPath),
+          readJson(consumerLockPath),
+          pin,
+          snapshot,
+        ),
+      )
     } catch (error) {
       problems.push(`invalid harness toolchain snapshot: ${error.message}`)
     }
@@ -1282,7 +1300,7 @@ if (isMain) {
         report()
       } else {
         console.log(`pin moved ${previous} -> ${version}`)
-        // Re-check what was written; a stale package-lock.json surfaces here.
+        // Check both lockfiles against the new pin.
         runCheck(false)
       }
     }

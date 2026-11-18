@@ -34,7 +34,6 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { resolveHarnessRoot } from './shared/harness-packages.mjs'
-import { chromium } from 'playwright'
 
 /** The plugin id the boot graph must carry, derived from the package manifest. */
 const PLUGIN_ID = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).name
@@ -461,6 +460,7 @@ async function serveOnce(port) {
 }
 
 async function verifyBrowser(port, cookie) {
+  const { chromium } = await import('playwright')
   const browser = await chromium.launch({ headless: true })
   const browserContext = await browser.newContext()
   const [cookieName, ...cookieParts] = cookie.split('=')
@@ -477,6 +477,25 @@ async function verifyBrowser(port, cookie) {
   const requests = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   page.on('request', (request) => requests.push(request.url()))
+  const assertZoteroStyles = async () => {
+    await page.locator('[data-zotero-config-page]').waitFor()
+    const styles = await page.evaluate((id) => {
+      const settings = document.querySelector('[data-zotero-config-page]')
+      const css = getComputedStyle(settings)
+      const sheets = [...document.querySelectorAll('head style[data-plugin-css]')]
+      const stylesheet = id + '/src/client/ZoteroSettingsSection.module.css'
+      const owned = sheets.filter((sheet) => sheet.getAttribute('data-plugin-css') === stylesheet)
+      return {
+        owned: owned.length === 1 && owned[0].getAttribute('data-plugin') === id,
+        display: css.display,
+        direction: css.flexDirection,
+      }
+    }, PLUGIN_ID)
+    if (!styles.owned || styles.display !== 'flex' || styles.direction !== 'column')
+      throw new Error(
+        `browser did not apply the Zotero settings stylesheet: ${JSON.stringify(styles)}`,
+      )
+  }
   try {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
@@ -531,6 +550,7 @@ async function verifyBrowser(port, cookie) {
     await page.getByRole('tab', { name: 'Literature panel', exact: true }).click()
     await page.getByRole('button', { name: 'List density', exact: true }).waitFor()
     const settings = page.locator('[data-zotero-config-page]')
+    await assertZoteroStyles()
     for (const name of [
       'Display and details',
       'Browsing',
@@ -582,6 +602,7 @@ async function verifyBrowser(port, cookie) {
       .locator('[data-zotero-config-page]')
       .getByRole('button', { name: 'List density', exact: true })
     await acceptedDensity.waitFor()
+    await assertZoteroStyles()
     if (!(await acceptedDensity.innerText()).includes('Compact'))
       throw new Error('Saved density was not restored from the host after browser reload')
     if (
@@ -603,20 +624,21 @@ async function verifyBrowser(port, cookie) {
       })
     await waitForPaint()
     await page.screenshot({
-      path: '/tmp/zotero-library-settings.png',
+      path: join(HOME, 'zotero-library-settings.png'),
       fullPage: true,
       animations: 'disabled',
     })
     await citation.scrollIntoViewIfNeeded()
     await waitForPaint()
     await page.screenshot({
-      path: '/tmp/zotero-library-citation-defaults.png',
+      path: join(HOME, 'zotero-library-citation-defaults.png'),
       fullPage: true,
       animations: 'disabled',
     })
     console.log(
       'browser settings ok: five groups, direct citation editors, accepted saves and reload persistence',
     )
+    if (pageErrors.length > 0) throw new Error(`browser page errors: ${pageErrors.join('; ')}`)
     console.log('browser composition ok: packed bundle and literature panel surface')
   } finally {
     await browserContext.close()
