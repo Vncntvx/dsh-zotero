@@ -91,6 +91,26 @@ describe('stored parsed artifact metadata', () => {
     expect(resolveAttachment).not.toHaveBeenCalled()
   })
 
+  it('resolves the active source pointer from historical artifact metadata without touching the PDF', async () => {
+    const resolveAttachment = memoryResolveAttachment()
+    const store = new ParsedArtifactStore('/root', memoryFiles().deps)
+    const historical = artifactIdOf('e'.repeat(64))!
+    await store.put(historical, ARTIFACT)
+    await store.put(CACHE_KEY, ARTIFACT)
+    await store.putSource(ARTIFACT.meta.sourceId, SOURCE_RECORD)
+    const result = await storedMetadata(
+      depsFor(store, resolveAttachment),
+      config,
+      { sessionId: 's1', op: 'meta', target: { kind: 'artifact', artifactId: historical } },
+      SIGNAL,
+    )
+    expect(result).toMatchObject({
+      metadata: { artifactId: historical },
+      currentArtifactId: CACHE_KEY,
+    })
+    expect(resolveAttachment).not.toHaveBeenCalled()
+  })
+
   it('answers metadata by URL target and missing for unindexed sources', async () => {
     const resolveAttachment = memoryResolveAttachment()
     const store = new ParsedArtifactStore('/root', memoryFiles().deps)

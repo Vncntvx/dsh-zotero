@@ -6,6 +6,7 @@ import { createBundleInspector } from '../model-bundle-inspector.js'
 import { readRegularFile } from '../../regular-file.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { openEmbedder, type Embedder } from './session.js'
+import { SemanticBundleFailure } from './bundle-failure.js'
 
 export interface SemanticBundleVerifier {
   verify(dir: string, spec: SemanticModelEntry): Promise<void>
@@ -17,10 +18,18 @@ export function createBundleVerifier(): SemanticBundleVerifier {
   return {
     async verify(dir, spec) {
       try {
-        const inspection = await inspector.inspect({ dir, expected: manifestOf(spec) })
+        const inspection = await inspector.inspect(
+          { dir, expected: manifestOf(spec) },
+          { runtime: true },
+        )
         if (inspection.kind !== 'ready')
-          throw new Error(inspection.reason ?? 'the model bundle is missing')
+          throw new SemanticBundleFailure(
+            `The local semantic model is unusable: ${inspection.reason ?? 'the model bundle is missing'}`,
+            inspection.kind,
+            inspection.snapshot,
+          )
       } catch (cause) {
+        if (cause instanceof SemanticBundleFailure) throw cause
         throw new ZoteroError(
           `The local semantic model is unusable: ${cause instanceof Error ? cause.message : String(cause)}`,
           ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,

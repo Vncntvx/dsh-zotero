@@ -110,6 +110,7 @@ describe('the enrichment model endpoints', () => {
       source: 'huggingface',
       modelDir: '',
       force: true,
+      onInstalled: expect.any(Function),
     })
   })
 

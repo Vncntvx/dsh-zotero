@@ -251,10 +251,9 @@ export function artifactReadFailureOf(error: unknown): Error {
  *
  * A `mode:"fulltext"` read walks one document one character window at a time,
  * and every window would otherwise re-resolve the artifact id and re-read
- * `full.md` from the store. The cache keys on the artifact id together with
- * its content fingerprint, its parse generation and the store's write
- * counter, so any committed change — a re-parse at a new generation or a
- * store write — misses by construction. The cache is service-instance state,
+ * `full.md` from the store. The key is the artifact id and the store's write
+ * counter. The fingerprint and generation are provenance on the cached value.
+ * The cache is service-instance state,
  * never module state: it dies with the service, and an explicit discard
  * retires its entry alongside the readers it belongs to. An entry holds the
  * full artifactId hit (resolved source facts, provenance and Markdown), so a
@@ -288,11 +287,8 @@ class DocumentCache {
     return this.entries.get(documentCacheKeyOf(cacheKey, storeWrites))
   }
 
-  put(cacheKey: string, meta: ParsedArtifactMeta, storeWrites: number, hit: CachedDocument): void {
+  put(cacheKey: string, storeWrites: number, hit: CachedDocument): void {
     if (Buffer.byteLength(hit.text, 'utf8') > DocumentCache.MAX_BYTES) return
-    // The meta identity rides in the entry check on the next hit: the store's
-    // write counter in the key already invalidates across writes, and the
-    // caller compares the meta it resolves against `hit.provenance`.
     this.entries.set(documentCacheKeyOf(cacheKey, storeWrites), hit)
   }
 
@@ -770,6 +766,7 @@ export class EnrichmentService extends TypertRemoteService {
         source: parsed.source ?? cfg.semanticDownloadSource,
         modelDir: parsed.modelDir ?? cfg.semanticModelDir,
         force: parsed.force,
+        onInstalled: (dir) => this.loader?.forgetBundleFailures(dir),
       })
     })
   }
@@ -813,6 +810,7 @@ export class EnrichmentService extends TypertRemoteService {
           (physicalKey, configuredDir) => resolveSemanticModelDir(physicalKey, configuredDir),
         )
         this.loader?.retire(target)
+        this.loader?.forgetBundleFailures(result.path)
         // Only the deleted tier's vectors are invalidated: deleting an unused
         // tier must not flush the warm cache of the configured model.
         const deletedDigest = vectorCacheIdentityDigestOf(vectorCacheIdentityOf(target.spec))
@@ -967,10 +965,8 @@ export class EnrichmentService extends TypertRemoteService {
   /**
    * The artifactId read with its read-through cache. The cache entry carries
    * everything a committed artifact's window read needs — the resolved source
-   * facts, the record, the meta and the Markdown — keyed by the artifact id
-   * plus its content fingerprint, its parse generation and the store's write
-   * counter, so a re-parse at a new generation or any store write misses by
-   * construction. A hit answers with zero file reads; a miss resolves the
+   * facts, provenance and Markdown — keyed by the artifact id and store's
+   * write counter. A hit answers with zero file reads; a miss resolves the
    * target once and fills the entry.
    */
   private async lookupArtifactFrom(
@@ -1017,7 +1013,7 @@ export class EnrichmentService extends TypertRemoteService {
       },
       ...(meta.pageCount !== undefined ? { pageCount: meta.pageCount } : {}),
     }
-    this.documents.put(artifactId, meta, store.writes, hit)
+    this.documents.put(artifactId, store.writes, hit)
     return { kind: 'hit', ...hit }
   }
 

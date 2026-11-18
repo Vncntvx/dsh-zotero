@@ -11,7 +11,7 @@ import { parseJobsFixture, parseSignal, parseRequest } from './enrichment-parse-
 
 export async function artifactReadsFixture(text = '# Snapshot', imageCount = 1) {
   const reads = vi.fn(async () => text)
-  const image = vi.fn(async () => ({
+  const image = vi.fn<DisplayArtifactCandidate['image']>(async () => ({
     data: new Uint8Array([137, 80, 78, 71]),
     mediaType: 'image/png' as const,
   }))

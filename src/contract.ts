@@ -676,7 +676,7 @@ export type ZoteroDocumentArtifactResultView =
   | { readonly kind: 'missing' | 'expired' }
   | { readonly kind: 'released' }
   | ({ readonly kind: 'ready' } & ZoteroArtifactMetadataView)
-  | ({ readonly kind: 'meta' } & ZoteroArtifactMetadataView)
+  | ({ readonly kind: 'meta'; readonly currentArtifactId?: string } & ZoteroArtifactMetadataView)
   | { readonly kind: 'probed'; readonly results: readonly ZoteroArtifactProbeResultView[] }
   | ({
       readonly kind: 'opened'

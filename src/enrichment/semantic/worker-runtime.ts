@@ -4,6 +4,7 @@ import { openSemanticEmbedder } from './bundle.js'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import type { EmbeddingSide } from './tokenizer.js'
 import type { Embedder } from './session.js'
+import { SemanticBundleFailure } from './bundle-failure.js'
 
 type Request =
   { op: 'embed'; id: number; texts: string[]; side: EmbeddingSide } | { op: 'cancel'; id: number }
@@ -65,6 +66,9 @@ export async function serveModelWorker(
     port.postMessage({
       type: 'fatal',
       message: error instanceof Error ? error.message : String(error),
+      ...(error instanceof SemanticBundleFailure
+        ? { bundle: { kind: error.kind, snapshot: error.snapshot } }
+        : {}),
     })
     return async () => {}
   }

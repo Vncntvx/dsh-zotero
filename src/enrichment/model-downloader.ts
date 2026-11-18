@@ -326,6 +326,7 @@ export class ModelDownloadManager {
     readonly source?: string
     readonly modelDir?: string
     readonly force?: boolean
+    readonly onInstalled?: (dir: string) => void
   }): Promise<SemanticModelDownloadResult> {
     if (this.closed) throw failed('the model download manager is closed')
     if (options.model !== undefined && !isKnownModel(options.model)) {
@@ -408,6 +409,7 @@ export class ModelDownloadManager {
       options.force === true,
       controller,
       settle,
+      options.onInstalled,
     )
   }
 
@@ -476,6 +478,7 @@ export class ModelDownloadManager {
     force: boolean,
     controller: AbortController,
     settle: () => void,
+    onInstalled?: (dir: string) => void,
   ): Promise<SemanticModelDownloadResult> {
     // `settle` resolves the reservation's single cancellation promise only
     // after the owned writer and its staging cleanup have actually settled.
@@ -505,6 +508,7 @@ export class ModelDownloadManager {
       }
       const current = await this.inspect(spec, dir, true)
       if (current.kind === 'ready' && force !== true && !controller.signal.aborted) {
+        onInstalled?.(dir)
         entry.status = {
           ...entry.status,
           ready: true,
@@ -522,7 +526,9 @@ export class ModelDownloadManager {
 
       // Launch the owned writer. Its settlement resolves the shared cancellation
       // promise, so cancel/dispose can never return before real cleanup.
-      void this.runInstall(entry, spec, dir, sources, force, controller).finally(finish)
+      void this.runInstall(entry, spec, dir, sources, force, controller, onInstalled).finally(
+        finish,
+      )
       return { success: true, model: spec.key, status: 'started', path: dir }
     } catch (error) {
       this.fail(entry, error, controller)
@@ -549,6 +555,7 @@ export class ModelDownloadManager {
     sources: readonly SemanticDownloadSource[],
     force: boolean,
     controller: AbortController,
+    onInstalled?: (dir: string) => void,
   ): Promise<void> {
     try {
       const result = await this.installOf({
@@ -574,6 +581,7 @@ export class ModelDownloadManager {
         },
       })
       const warning = result.cleanupError === undefined ? undefined : messageOf(result.cleanupError)
+      onInstalled?.(dir)
       entry.status = {
         ...entry.status,
         ready: true,

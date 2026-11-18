@@ -3,6 +3,8 @@ import { Worker } from 'node:worker_threads'
 import { asRecord } from '../../json.js'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import type { Embedder } from './session.js'
+import type { BundleSnapshot } from '../model-installation.js'
+import { SemanticBundleFailure } from './bundle-failure.js'
 
 export const SEMANTIC_OPEN_DEADLINE_MS = 180_000
 export const SEMANTIC_RUN_DEADLINE_MS = 120_000
@@ -143,7 +145,18 @@ export async function openWorkerEmbedder(
       return
     }
     if (row?.type === 'fatal') {
-      fail(new Error(typeof row.message === 'string' ? row.message : 'Semantic worker failed'))
+      const message = typeof row.message === 'string' ? row.message : 'Semantic worker failed'
+      const bundle = asRecord(row.bundle)
+      const snapshot = asRecord(bundle?.snapshot)
+      fail(
+        !ready &&
+          (bundle?.kind === 'missing' || bundle?.kind === 'corrupt') &&
+          typeof snapshot?.dir === 'string' &&
+          typeof snapshot.catalogFingerprint === 'string' &&
+          typeof snapshot.identityFingerprint === 'string'
+          ? new SemanticBundleFailure(message, bundle.kind, bundle.snapshot as BundleSnapshot)
+          : new Error(message),
+      )
       return
     }
     const request = typeof row?.id === 'number' ? pending.get(row.id) : undefined

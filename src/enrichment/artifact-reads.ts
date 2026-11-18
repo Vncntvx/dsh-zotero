@@ -18,6 +18,7 @@ import {
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZOTERO_ENRICHMENT_TASK_FAILED,
 } from '../errors.js'
+import type { MetadataResult } from './artifact-metadata.js'
 
 export interface DisplayArtifactCandidate {
   readonly metadata: ZoteroArtifactMetadataView
@@ -70,7 +71,7 @@ export interface ArtifactReadDependencies {
   readonly metadata: (
     request: Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>,
     signal: AbortSignal,
-  ) => Promise<{ readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }>
+  ) => Promise<MetadataResult>
   /** One freshness probe per ref, answered from a single index snapshot. */
   readonly probe: (
     request: Extract<ZoteroDocumentArtifactRequestView, { op: 'probe' }>,
@@ -142,8 +143,6 @@ export class ArtifactReads {
 
   private page(entry: Lease, offset: number) {
     const text = entry.text!
-    if (offset > text.length)
-      throw new ZoteroError('The document offset exceeds its length.', ZOTERO_INVALID_ARGUMENT)
     return {
       offset,
       text: text.slice(offset, offset + ZOTERO_ARTIFACT_PAGE_CHARS),
@@ -219,7 +218,15 @@ export class ArtifactReads {
       const checked = await this.deps.owner(request.sessionId, combined, ctx)
       if (checked.agent !== owner.agent)
         throw new ZoteroError('The document owner changed.', ZOTERO_NOT_FOUND)
-      return 'kind' in resolved ? resolved : { kind: 'meta', ...resolved.metadata }
+      return 'kind' in resolved
+        ? resolved
+        : {
+            kind: 'meta',
+            ...resolved.metadata,
+            ...(resolved.currentArtifactId
+              ? { currentArtifactId: resolved.currentArtifactId }
+              : {}),
+          }
     }
     if (request.op === 'probe') {
       const combined = AbortSignal.any([signal, peer.signal])
@@ -236,29 +243,37 @@ export class ArtifactReads {
         'The document read is no longer available. Reload the document.',
         ZOTERO_NOT_FOUND,
       )
-    this.current(entry, owner)
+    if (entry.owner.peer.id !== owner.peer.id) this.current(entry, owner)
     entry.active++
     this.arm(entry)
     const combined = AbortSignal.any([signal, peer.signal, entry.abort.signal])
     let transferBytes = 0
+    let invalidParameter = false
     try {
       combined.throwIfAborted()
+      this.current(entry, owner)
       let result: ZoteroDocumentArtifactResultView
-      if (request.op === 'page')
+      if (request.op === 'page') {
+        if (request.offset > entry.text!.length) {
+          invalidParameter = true
+          throw new ZoteroError('The document offset exceeds its length.', ZOTERO_INVALID_ARGUMENT)
+        }
         result = {
           kind: 'page',
           lease: entry.token,
           artifactId: entry.candidate!.metadata.artifactId,
           page: this.page(entry, request.offset),
         }
-      else {
+      } else {
         const candidate = entry.candidate!
         const declared = candidate.metadata.images.find((image) => image.name === request.name)
-        if (declared === undefined)
+        if (declared === undefined) {
+          invalidParameter = true
           throw new ZoteroError(
             'The figure does not belong to this document.',
             ZOTERO_INVALID_ARGUMENT,
           )
+        }
         // File bytes, the encoding copy and UTF-16 base64 all coexist while returning the frame.
         const reserved = declared.bytes * 5
         if (this.bytes + reserved > entry.policy.maxBytes)
@@ -287,7 +302,7 @@ export class ArtifactReads {
       this.current(entry, await this.deps.owner(request.sessionId, combined, ctx))
       return result
     } catch (error) {
-      this.retire(entry)
+      if (!invalidParameter) this.retire(entry)
       throw error
     } finally {
       this.bytes -= transferBytes

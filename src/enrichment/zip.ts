@@ -79,8 +79,7 @@ export function extractParsedFiles(bytes: Uint8Array): ExtractedParsedFiles {
       if (directory) continue
       const image = imageOf(entry.name)
       if (image !== undefined) {
-        if (imageEntries.has(image.name) || imageEntries.size >= ZIP_MAX_IMAGES)
-          invalid('it contains duplicate or excessive figures')
+        if (imageEntries.has(image.name)) invalid('it contains duplicate figures')
         imageEntries.set(image.name, entry)
       }
       const kind = wanted(entry.name)

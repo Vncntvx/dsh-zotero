@@ -1386,7 +1386,10 @@ export const zoteroDocumentArtifactResultSchema = lazySchema(() =>
       .strict(),
     artifactMetadata
       .unwrap()
-      .extend({ kind: z.literal('meta') })
+      .extend({
+        kind: z.literal('meta'),
+        currentArtifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN).optional(),
+      })
       .strict(),
     z
       .object({

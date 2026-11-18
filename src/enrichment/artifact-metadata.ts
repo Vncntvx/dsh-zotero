@@ -127,7 +127,8 @@ export function cachedAttachmentResolver(
 }
 
 export type MetadataResult =
-  { readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }
+  | { readonly metadata: ZoteroArtifactMetadataView; readonly currentArtifactId?: string }
+  | { readonly kind: 'missing' }
 export type ProbeResult = Extract<ZoteroDocumentArtifactResultView, { kind: 'probed' }>
 type MetaRequest = Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>
 type ProbeRequest = Extract<ZoteroDocumentArtifactRequestView, { op: 'probe' }>
@@ -171,7 +172,13 @@ export async function storedMetadata(
   signal.throwIfAborted()
   if (stored === undefined) return { kind: 'missing' }
   const { meta } = stored
+  const currentArtifactId =
+    request.target.kind === 'artifact'
+      ? (await store.sourceRecord(meta.sourceId))?.cacheKey
+      : cacheKey
+  signal.throwIfAborted()
   return {
+    ...(currentArtifactId !== undefined ? { currentArtifactId } : {}),
     metadata: {
       sourceId: meta.sourceId,
       targetLabel: meta.identity,

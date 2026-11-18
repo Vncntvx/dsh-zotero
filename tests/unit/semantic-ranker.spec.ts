@@ -14,6 +14,7 @@ import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import type { AdmissionRules } from '../../src/enrichment/semantic/admission.ts'
 import { createVectorCache } from '../../src/enrichment/semantic/vector-cache.ts'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../src/errors.ts'
+import { semanticModelOf } from '../../src/enrichment-model-catalog.ts'
 
 const DIMENSION = 8
 
@@ -228,7 +229,7 @@ describe('semanticEvidenceRanker with measured admission', () => {
 })
 
 describe('SemanticEmbedderLoader', () => {
-  const target = { spec: { key: 'balanced' }, dir: '/models/qwen3-0.6b' } as never
+  const target = { spec: semanticModelOf('balanced'), dir: '/models/qwen3-0.6b' }
 
   it('single-flights one load and maps failures to the fail-closed error', async () => {
     const open = vi.fn(async () => ({
@@ -279,7 +280,7 @@ describe('SemanticEmbedderLoader', () => {
       }),
     })
     await (await loader.get(target)).dispose()
-    const other = { spec: { key: 'lightweight' }, dir: '/models/granite-97m' } as never
+    const other = { spec: semanticModelOf('lightweight'), dir: '/models/granite-97m' }
     await (await loader.get(other)).dispose()
     expect(disposed).toEqual(['balanced'])
     await loader.dispose()

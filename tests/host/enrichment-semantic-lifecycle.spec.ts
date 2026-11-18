@@ -15,6 +15,7 @@ import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE } from '../../src/errors.ts'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.ts'
 import type { Embedder } from '../../src/enrichment/semantic/session.ts'
 import { deferred } from '../helpers/sync.ts'
+import { semanticModelOf } from '../../src/enrichment-model-catalog.ts'
 
 const owned: Context[] = []
 
@@ -325,9 +326,9 @@ describe('one loader closes once', () => {
       open: async (target) => scriptedEmbedder(target.spec.dimension, disposed, target.spec.key),
     })
     const scope = loader.scope({
-      spec: { key: 'lightweight', dimension: 4 },
+      spec: { ...semanticModelOf('lightweight'), dimension: 4 },
       dir: '/models/lightweight',
-    } as never)
+    })
     await scope.embedder()
     scope.release()
     // Two owners (the component teardown and a re-injected generation) call

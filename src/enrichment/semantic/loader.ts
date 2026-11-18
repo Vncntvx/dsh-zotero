@@ -15,12 +15,23 @@
  * @module dsh-zotero/enrichment/semantic/loader
  */
 
-import { semanticModelOf, type SemanticModelEntry } from '../../enrichment-model-catalog.js'
+import { resolve } from 'node:path'
+import {
+  manifestOf,
+  semanticModelOf,
+  type SemanticModelEntry,
+} from '../../enrichment-model-catalog.js'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { resolveSemanticModelDirSafe } from '../model-dir.js'
 import { openWorkerEmbedder } from './worker-embedder.js'
 import type { Embedder } from './session.js'
 import { awaitSharedWaiter } from '../../waiter-flight.js'
+import { createBundleInspector } from '../model-bundle-inspector.js'
+import { catalogFingerprintOf } from '../model-manifest.js'
+import type { ModelBundleInspectorPort } from '../model-installation.js'
+import { SemanticBundleFailure } from './bundle-failure.js'
+
+const BUNDLE_FAILURE_LIMIT = 16
 
 /** What the host resolves per rank call: which model, from which directory. */
 export interface SemanticModelTarget {
@@ -40,6 +51,7 @@ export interface SemanticEmbedderLoaderDeps {
    * Injectable so tests never touch disk or WASM.
    */
   readonly open?: (target: SemanticModelTarget, signal: AbortSignal) => Promise<Embedder>
+  readonly inspector?: Pick<ModelBundleInspectorPort, 'snapshot'>
 }
 
 /** Map any loader failure onto the fail-closed semantic-unavailable error. */
@@ -114,6 +126,11 @@ export class SemanticEmbedderLoader {
   private resident: Managed | undefined
   private readonly pending = new Map<string, Managed>()
   private readonly owned = new Set<Managed>()
+  private readonly inspector: Pick<ModelBundleInspectorPort, 'snapshot'>
+  private readonly bundleFailures = new Map<
+    string,
+    { key: string; failure: SemanticBundleFailure }
+  >()
   private readonly open: (target: SemanticModelTarget, signal: AbortSignal) => Promise<Embedder>
   private closed = false
   private generation = 0
@@ -125,6 +142,7 @@ export class SemanticEmbedderLoader {
   private readonly disposals = new Set<Promise<void>>()
 
   constructor(deps: SemanticEmbedderLoaderDeps = {}) {
+    this.inspector = deps.inspector ?? createBundleInspector()
     this.open =
       deps.open ??
       (async (target, signal) =>
@@ -227,6 +245,8 @@ export class SemanticEmbedderLoader {
    */
   retire(target: SemanticModelTarget): void {
     const key = keyOf(target)
+    for (const [id, entry] of this.bundleFailures)
+      if (entry.key === key) this.bundleFailures.delete(id)
     for (const managed of this.owned) {
       if (managed.key !== key) continue
       managed.retiring = true
@@ -234,6 +254,12 @@ export class SemanticEmbedderLoader {
     }
     this.pending.delete(key)
     if (this.resident?.key === key) this.resident = undefined
+  }
+
+  forgetBundleFailures(dir: string): void {
+    const canonical = resolve(dir)
+    for (const [id, entry] of this.bundleFailures)
+      if (entry.failure.snapshot.dir === canonical) this.bundleFailures.delete(id)
   }
 
   private beginLoad(target: SemanticModelTarget): Managed {
@@ -253,9 +279,41 @@ export class SemanticEmbedderLoader {
         throw semanticUnavailable(error)
       })
       controller.signal.throwIfAborted()
-      return this.open(resolved, controller.signal).catch((error: unknown) => {
+      const { signal } = controller
+      const dir = resolve(resolved.dir)
+      const expected = manifestOf(resolved.spec)
+      const catalog = catalogFingerprintOf(expected)
+      const bundleKey = JSON.stringify([dir, catalog])
+      try {
+        const previous = this.bundleFailures.get(bundleKey)?.failure
+        if (previous !== undefined) {
+          const snapshot = await this.inspector.snapshot({ dir, expected }, { signal })
+          signal.throwIfAborted()
+          if (
+            snapshot.catalogFingerprint === catalog &&
+            snapshot.identityFingerprint === previous.snapshot.identityFingerprint &&
+            this.bundleFailures.get(bundleKey)?.failure === previous
+          )
+            throw previous
+          this.bundleFailures.delete(bundleKey)
+        }
+        return await this.open(resolved, signal)
+      } catch (error) {
+        if (
+          error instanceof SemanticBundleFailure &&
+          !signal.aborted &&
+          !this.closed &&
+          this.pending.get(key)?.id === id &&
+          error.snapshot.dir === dir &&
+          error.snapshot.catalogFingerprint === catalog
+        ) {
+          this.bundleFailures.delete(bundleKey)
+          if (this.bundleFailures.size >= BUNDLE_FAILURE_LIMIT)
+            this.bundleFailures.delete(this.bundleFailures.keys().next().value!)
+          this.bundleFailures.set(bundleKey, { key, failure: error })
+        }
         throw semanticUnavailable(error)
-      })
+      }
     })
     const managed: Managed = {
       id,
@@ -352,6 +410,7 @@ export class SemanticEmbedderLoader {
 
   private async disposeOnce(): Promise<void> {
     this.closed = true
+    this.bundleFailures.clear()
     this.generation += 1
     const all = new Set(this.owned)
     for (const managed of all) {

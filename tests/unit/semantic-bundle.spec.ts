@@ -76,6 +76,59 @@ describe('shared bundle verification', () => {
     })
   })
 
+  it('distinguishes an unsafe commit-marker path from cacheable corruption', async () => {
+    await bundle(async (dir) => {
+      const marker = join(dir, 'manifest.json')
+      await fs.unlink(marker)
+      await fs.mkdir(marker)
+      await expect(verifySemanticBundle(dir, tinyModel)).rejects.toMatchObject({
+        name: 'ZoteroError',
+        message: expect.stringContaining('commit marker is not a regular file'),
+      })
+      await expect(inspectInstalledBundle(dir, tinyManifest())).resolves.toMatchObject({
+        kind: 'corrupt',
+      })
+    })
+  })
+
+  it.each(['[', '[]'])(
+    'classifies invalid manifest bytes (%s) as deterministic corruption',
+    async (marker) => {
+      await bundle(async (dir) => {
+        await fs.writeFile(join(dir, 'manifest.json'), marker)
+        await expect(verifySemanticBundle(dir, tinyModel)).rejects.toMatchObject({
+          kind: 'corrupt',
+          snapshot: expect.objectContaining({ dir }),
+        })
+      })
+    },
+  )
+
+  it.each(['manifest.json', 'config.json'])(
+    'does not cache a temporary open failure for %s',
+    async (name) => {
+      await bundle(async (dir) => {
+        const original = vi.mocked(fs.open).getMockImplementation()!
+        const failure = Object.assign(new Error('temporarily unavailable'), { code: 'EIO' })
+        vi.mocked(fs.open).mockImplementation(async (...args) => {
+          if (String(args[0]) === join(dir, name)) throw failure
+          return original(...args)
+        })
+        try {
+          const verifier = createBundleVerifier()
+          await expect(verifier.verify(dir, tinyModel)).rejects.toMatchObject({ cause: failure })
+          await expect(inspectInstalledBundle(dir, tinyManifest())).resolves.toMatchObject({
+            kind: 'corrupt',
+          })
+          vi.mocked(fs.open).mockImplementation(original)
+          await expect(verifier.verify(dir, tinyModel)).resolves.toBeUndefined()
+        } finally {
+          vi.mocked(fs.open).mockImplementation(original)
+        }
+      })
+    },
+  )
+
   it('refuses a missing pinned file', async () => {
     await bundle(async (dir) => {
       await fs.unlink(join(dir, 'config.json'))

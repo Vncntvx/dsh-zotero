@@ -26,7 +26,6 @@ import { LRUCache } from 'lru-cache'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { resolveSafeDirectory } from './safe-directory.js'
 import {
-  type ZoteroArtifactMetadataView,
   type ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroDocumentParseReceiptRequestView,
@@ -60,6 +59,7 @@ import { resolveEnrichmentConfig } from './config.js'
 import { PARSE_TOTAL_TIMEOUT_MS } from './limits.js'
 import type { ParseDocumentResult } from './parse-document.js'
 import type { ParsePhase } from './parse-once.js'
+import type { MetadataResult } from './artifact-metadata.js'
 import { sanitizedErrorDetail } from './transport.js'
 import {
   parseDigest,
@@ -329,7 +329,7 @@ export interface EnrichmentParseJobsDeps {
     config: EnrichmentPreferences,
     request: Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>,
     signal: AbortSignal,
-  ) => Promise<{ readonly metadata: ZoteroArtifactMetadataView } | { readonly kind: 'missing' }>
+  ) => Promise<MetadataResult>
   /** One freshness probe per visible attachment row, from a single index snapshot. */
   readonly probe: (
     config: EnrichmentPreferences,

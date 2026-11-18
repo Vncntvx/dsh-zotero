@@ -19,7 +19,7 @@ import { deferred } from '../helpers/sync.ts'
 import { tinyModel } from '../helpers/semantic-model-bundle.ts'
 
 function target(key: string): SemanticModelTarget {
-  return { spec: { key } as never, dir: `/models/${key}` }
+  return { spec: { ...tinyModel, key: key as typeof tinyModel.key }, dir: `/models/${key}` }
 }
 
 async function loadOnce(
@@ -281,7 +281,7 @@ describe('configured model directory validation', () => {
       // segment; the reader must open the canonical path.
       const configuredDir = `${join(base, 'nested')}${sep}..`
       await loadOnce(loader, {
-        spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
+        spec: { ...tinyModel, physicalKey: 'qwen3-0.6b' },
         dir: `${configuredDir}${sep}qwen3-0.6b`,
         configuredDir,
       })
@@ -321,7 +321,7 @@ describe('configured model directory validation', () => {
     const configuredDir = join(homedir(), '.ssh', 'models')
     await expect(
       loadOnce(loader, {
-        spec: { key: 'qwen3-0.6b', physicalKey: 'qwen3-0.6b' } as never,
+        spec: { ...tinyModel, physicalKey: 'qwen3-0.6b' },
         dir: join(configuredDir, 'qwen3-0.6b'),
         configuredDir,
       }),

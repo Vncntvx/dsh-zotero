@@ -58,6 +58,19 @@ describe('extractParsedFiles', () => {
     expect(() => extractParsedFiles(archive)).toThrow(/invalid/)
   })
 
+  it('caps unique referenced figures, not stored entries or repeated references', () => {
+    const names = Array.from({ length: 513 }, (_, index) => `images/figure_${index}.png`)
+    const entries = Object.fromEntries(names.map((name) => [name, encoder.encode(name)]))
+    const archive = (references: string[]) =>
+      zipSync({
+        ...entries,
+        'full.md': encoder.encode(references.map((name) => `![](${name})`).join('\n')),
+      })
+    expect(extractParsedFiles(archive(Array(513).fill(names[0]))).images).toHaveLength(1)
+    expect(extractParsedFiles(archive(names.slice(0, 512))).images).toHaveLength(512)
+    expect(() => extractParsedFiles(archive(names))).toThrow(/references excessive figures/)
+  })
+
   it("keeps a figure-heavy archive's images beside the Markdown", () => {
     const entries: Record<string, Uint8Array> = {
       'full.md': encoder.encode(

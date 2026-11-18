@@ -8,7 +8,8 @@ import {
   type SemanticWorkerFactory,
 } from '../../src/enrichment/semantic/worker-embedder.js'
 import { SemanticEmbedderLoader } from '../../src/enrichment/semantic/loader.js'
-import { tinyModel } from '../helpers/semantic-model-bundle.js'
+import { createBundleInspector } from '../../src/enrichment/model-bundle-inspector.js'
+import { tinyManifest, tinyModel } from '../helpers/semantic-model-bundle.js'
 import { deferred } from '../helpers/sync.js'
 import type { Embedder } from '../../src/enrichment/semantic/session.js'
 
@@ -45,9 +46,12 @@ async function opened(factory: SemanticWorkerFactory = good): Promise<Embedder> 
 
 describe('isolated semantic runtime lifecycle', () => {
   it('boots the real source worker and refuses a missing bundle before loading the runtime', async () => {
-    await expect(openWorkerEmbedder(tinyModel, '/synthetic/absent-model-bundle')).rejects.toThrow(
-      /not installed|missing|unusable/i,
-    )
+    const dir = '/synthetic/absent-model-bundle'
+    const snapshot = await createBundleInspector().snapshot({ dir, expected: tinyManifest() })
+    await expect(openWorkerEmbedder(tinyModel, dir)).rejects.toMatchObject({
+      kind: 'missing',
+      snapshot,
+    })
   })
   it('returns ordered typed vectors through the actual thread channel and terminates once', async () => {
     const model = await opened()

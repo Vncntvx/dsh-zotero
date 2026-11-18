@@ -245,7 +245,8 @@ export class ParsedArtifactStore {
    * Any attempted write invalidates the read caches, whether or not it
    * succeeds: a failed atomic write may still have mutated the target, so
    * every write method opens with this. A new store write path must do the
-   * same or the inventory cache goes stale (see DN-4). The source index
+   * same or the inventory cache goes stale (see the artifact inventory
+   * write-generation rule in docs/architecture.md). The source index
    * itself is deliberately read per call — its I/O failures must surface,
    * never hide behind a cache.
    */

@@ -20,6 +20,25 @@ async function fixture(text?: string, images?: number) {
 }
 
 describe('source-bound document snapshots', () => {
+  it('keeps the lease after request validation but retires it when a declared figure is missing', async () => {
+    const host = await fixture('body', 1)
+    const opened = await host.open()
+    const image = (name: string) =>
+      host.call({ sessionId: 'parse-owner', op: 'image', lease: opened.lease, name })
+    await expect(host.page(opened.lease, 5)).rejects.toMatchObject({
+      code: 'ZOTERO_INVALID_ARGUMENT',
+    })
+    await expect(image('images/undeclared.png')).rejects.toMatchObject({
+      code: 'ZOTERO_INVALID_ARGUMENT',
+    })
+    expect(requirePage(await host.page(opened.lease))).toBe('body')
+    const name = opened.images[0]!.name
+    await expect(image(name)).resolves.toMatchObject({ kind: 'image', name })
+    host.image.mockImplementationOnce(async () => undefined)
+    await expect(image(name)).rejects.toMatchObject({ code: 'ZOTERO_ENRICHMENT_TASK_FAILED' })
+    await expect(host.page(opened.lease)).rejects.toMatchObject({ code: 'ZOTERO_NOT_FOUND' })
+  })
+
   it('reads the source and Markdown once for all pages and images', async () => {
     const text = 'x'.repeat(ZOTERO_ARTIFACT_PAGE_CHARS * 3) + 'tail'
     const host = await fixture(text, 12)

@@ -135,11 +135,14 @@ async function hashFile(path: string, signal: AbortSignal | undefined): Promise<
 
 async function readManifest(
   path: string,
+  runtime: boolean,
 ): Promise<{ kind: 'valid' | 'missing' | 'corrupt'; reason?: string; parsed?: unknown }> {
   const info = await lstatOrUndefined(path)
   if (info === undefined) return { kind: 'missing' }
-  if (info.isSymbolicLink() || !info.isFile())
+  if (info.isSymbolicLink() || !info.isFile()) {
+    if (runtime) throw new Error('the commit marker is not a regular file')
     return { kind: 'corrupt', reason: 'the commit marker is not a regular file' }
+  }
   if (info.size > MANIFEST_MAX_BYTES)
     return { kind: 'corrupt', reason: 'the commit marker exceeds its bounded size' }
   try {
@@ -149,6 +152,7 @@ async function readManifest(
       return { kind: 'corrupt', reason: 'the commit marker is not a JSON object' }
     return { kind: 'valid', parsed }
   } catch (error) {
+    if (runtime && !(error instanceof SyntaxError)) throw error
     return { kind: 'corrupt', reason: (error as Error).message }
   }
 }
@@ -156,6 +160,7 @@ async function readManifest(
 export interface BundleInspectorOptions {
   /** Skip the coalescing cache and hash every pinned file. */
   readonly forceHash?: boolean
+  readonly runtime?: boolean
   readonly signal?: AbortSignal
 }
 
@@ -228,12 +233,13 @@ export function createBundleInspector(): BundleInspector {
       const info = await lstatOrUndefined(directory.path)
       if (info !== undefined && (info.isSymbolicLink() || !info.isDirectory())) {
         directoryReason = `${directory.relativePath} is not a regular directory`
+        if (options?.runtime) throw new Error(directoryReason)
         break
       }
     }
     const { parsed, ...marker } =
       directoryReason === undefined
-        ? await readManifest(join(dir, MANIFEST_PATH))
+        ? await readManifest(join(dir, MANIFEST_PATH), options?.runtime === true)
         : { kind: 'corrupt' as const, reason: directoryReason, parsed: undefined }
     const fileResults: {
       readonly relativePath: string
@@ -271,6 +277,8 @@ export function createBundleInspector(): BundleInspector {
       const path = join(dir, relativePath)
       const info = await lstatOrUndefined(path)
       if (info === undefined || info.isSymbolicLink() || !info.isFile()) {
+        if (options?.runtime && info !== undefined)
+          throw new Error(`${relativePath} is missing or not a regular file`)
         allValid = false
         fileResults.push({
           relativePath,
@@ -298,6 +306,7 @@ export function createBundleInspector(): BundleInspector {
       }
       signal?.throwIfAborted()
       const digest = await hashFile(path, signal).catch((error: Error) => error)
+      if (digest instanceof Error && (options?.runtime || signal?.aborted)) throw digest
       if (digest instanceof Error || digest !== pin.sha256) {
         allValid = false
         fileResults.push({
