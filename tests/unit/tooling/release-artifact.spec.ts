@@ -1,8 +1,9 @@
 /** The tarball and published tree must carry identical, proven bytes. */
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { writeBuildState } from '../../../scripts/build-state.mjs'
 import {
@@ -65,6 +66,37 @@ it('packs public declarations and removes install-time code from the checked art
     expect(manifest.overrides).toBeUndefined()
     expect(manifest.peerDependencies).toEqual({ dangerous: '>=1.0.0' })
     expect(verifyReleaseArtifact(out, sha).provenance.files).toHaveProperty('lib/index.d.ts')
+  })
+})
+
+it('ends public verification on the first 404 and records which workflow to rerun', async () => {
+  await withTempDir(async (root) => {
+    const { out, sha } = await artifact(root)
+    const summary = join(root, 'summary.md')
+    const registry = fileURLToPath(new URL('../../../scripts/npm-registry.mjs', import.meta.url))
+    const mock = `let requests = 0
+      globalThis.fetch = async () => {
+        console.log('registry request ' + ++requests)
+        return new Response(null, { status: 404 })
+      }`
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        `data:text/javascript,${encodeURIComponent(mock)}`,
+        registry,
+        '--verify',
+        '--out',
+        out,
+        '--source-sha',
+        sha,
+      ],
+      { encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: summary } },
+    )
+    expect(result.status).toBe(1)
+    expect(result.stdout.trim()).toBe('registry request 1')
+    expect(result.stderr).toContain('dsh-zotero@1.0.0 is not public yet')
+    expect(await readFile(summary, 'utf8')).toContain('re-run the Verify npm Release workflow')
   })
 })
 

@@ -344,9 +344,10 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ## CI 工作流
 
-`.github/workflows/` 下有三个工作流：
+`.github/workflows/` 下有四个工作流：
 
-- `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 作业通过 OIDC 发布并下载核验 npm tarball，再创建 GitHub Release。同一次运行的 `publish` 作业校验产物并更新预构建的 `release` 分支。`npm-release` 与最终作业各自获得 `contents: write`（前者还需 `id-token: write`），其余作业只读；
+- `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新预构建的 `release` 分支；
+- `verify-npm-release.yml`：发布工作流成功完成后启动，由 `npm-publication` 环境延迟运行。它复用原运行的产物，核验公开 tarball 后创建 GitHub Release；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
 - `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
 
@@ -382,7 +383,11 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
 
-npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。随后用 OIDC 可信发布把 `artifact.json` 指定的原 tarball 发到 npm（OIDC 认证下公开仓库与公开包默认带 provenance，无需 `--provenance` 或 token），并以 `gh` 创建/更新该 tag 的 GitHub Release，正文含 tag 注释、GitHub 生成的变更说明，以及源 SHA、artifactDigest 与 tarballSha256。发布前直接查询 `registry.npmjs.org`，仅明确的 404 允许发布；已有版本在名称、版本与 SHA-512 integrity 完全一致时跳过，查询失败直接终止。发布后再次查询，并下载公开 tarball 核对其实际字节，成功后才创建 Release；可见性等待有界，失败后可重跑核验。内容变化需新版本与重新验证，`npm-release` 与 `publish` 互不阻塞，可单独重跑。
+npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。发布前查询 `registry.npmjs.org`。已有版本的名称、版本和 SHA-512 integrity 必须与产物一致。首次查询返回 404 时，作业通过 OIDC 将 `artifact.json` 指定的原 tarball 提交给 npm，符合条件的公开包自动附带 provenance。
+
+`verify-npm-release` 下载公开 tarball 并校验实际字节；校验通过后创建或更新 GitHub Release，正文记录 tag 注释、GitHub 生成的变更说明、源 SHA、artifactDigest 和 tarballSha256。npm 返回 404 时，作业在摘要中提示并结束；等 npm 显示 **Published** 后重新运行核验工作流。原产物保留 7 天，下载或核验失败后也可重新运行。内容变化需要新版本与重新验证。
+
+启用延迟核验前，在 GitHub 仓库 Settings → Environments 的 `npm-publication` 环境设置 **15 分钟** wait timer，并将核验工作流合入默认分支。GitHub 在等待结束后启动 runner；核验作业最多运行 3 分钟。
 
 可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见本节。
 

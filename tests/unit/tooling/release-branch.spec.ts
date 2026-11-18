@@ -75,7 +75,7 @@ it('gates npm publication on a version tag with OIDC and the verified artifact',
   const job = workflow.slice(start, workflow.indexOf('  publish:', start))
   expect(job).toContain("if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')")
   expect(job).toContain('id-token: write')
-  expect(job).toContain('contents: write')
+  expect(job).toContain('contents: read')
   expect(job).toContain('needs:\n      - quality-gate\n      - web-composition')
   // OIDC mints short-lived publish tokens instead of stored credentials.
   expect(job).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./)
@@ -83,27 +83,54 @@ it('gates npm publication on a version tag with OIDC and the verified artifact',
   expect(job).toContain('package-manager-cache: false')
   expect(job).toContain('--verify')
   expect(job).toContain('npm publish "$TARBALL" --access public --tag "$NPM_DIST_TAG"')
-  expect(job).toContain('release_flags+=(--prerelease --latest=false)')
-  expect(job).toContain('"${release_flags[@]}"')
   expect(job).toContain("if: env.PUBLISH_NEEDED == 'true'")
   expect(job).toContain('scripts/npm-registry.mjs --check')
+  expect(job).not.toContain('scripts/npm-registry.mjs --verify')
+  expect(job).not.toMatch(/npm (?:ci|install|run build)/)
+})
+
+it('delays public verification after a successful tag release and reuses its verified artifact', () => {
+  const workflow = readFileSync(
+    new URL('../../../.github/workflows/verify-npm-release.yml', import.meta.url),
+    'utf8',
+  )
+  expect(load(workflow)).toHaveProperty('on.workflow_run', {
+    workflows: ['Update Release Branch'],
+    types: ['completed'],
+  })
+  const job = workflow.slice(workflow.indexOf('  verify-npm-release:'))
+  expect(job).toContain("github.event.workflow_run.conclusion == 'success'")
+  expect(job).toContain("github.event.workflow_run.event == 'push'")
+  expect(job).toContain('github.event.workflow_run.head_repository.full_name == github.repository')
+  expect(job).toContain("github.event.workflow_run.path == '.github/workflows/release-branch.yml'")
+  expect(job).toContain('environment: npm-publication')
+  expect(job).toContain('timeout-minutes: 3')
+  expect(job).toContain('contents: write')
+  expect(job).toContain('actions: read')
+  expect(job).toContain('name: release-artifact-${{ github.event.workflow_run.head_sha }}')
+  expect(job).toContain('run-id: ${{ github.event.workflow_run.id }}')
+  expect(job).toContain('RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha }}')
+  expect(job).toContain('RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}')
+  expect(job).not.toContain('ref: ${{ github.event.workflow_run.head_sha }}')
+  expect(job).toContain('git rev-parse "refs/tags/$tag^{commit}"')
+  expect(job).toContain('release_flags+=(--prerelease --latest=false)')
+  expect(job).toContain('"${release_flags[@]}"')
   expect(job).toContain('scripts/npm-registry.mjs --verify')
   expect(job.indexOf('scripts/npm-registry.mjs --verify')).toBeLessThan(
     job.indexOf('gh release create'),
   )
   expect(job).toContain('gh release create')
-  // Republishes the exact verified tarball without rebuilding.
-  expect(job).not.toMatch(/npm (?:ci|install|run build)/)
+  expect(job).not.toMatch(/id-token:|npm (?:publish|ci|install|run build)/)
 })
 
 it.each([
-  ['1.3.0', 'latest', 'false'],
-  ['1.3.0-alpha.1', 'alpha', 'true'],
-  ['1.3.0-beta.2', 'beta', 'true'],
-  ['1.3.0-rc.1', 'rc', 'true'],
-  ['1.3.0-1', 'next', 'true'],
-  ['1.3.0-latest.1', 'next', 'true'],
-])('selects the publication channel for %s', async (version, distTag, prerelease) => {
+  ['1.3.0', 'latest'],
+  ['1.3.0-alpha.1', 'alpha'],
+  ['1.3.0-beta.2', 'beta'],
+  ['1.3.0-rc.1', 'rc'],
+  ['1.3.0-1', 'next'],
+  ['1.3.0-latest.1', 'next'],
+])('selects the publication channel for %s', async (version, distTag) => {
   const workflow = load(readReleaseWorkflow()) as {
     jobs: Record<string, { steps: { name?: string; run?: string }[] }>
   }
@@ -115,9 +142,7 @@ it.each([
     execFileSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
       env: { ...process.env, VERSION: version, GITHUB_ENV: envFile },
     })
-    expect(readFileSync(envFile, 'utf8')).toBe(
-      `NPM_DIST_TAG=${distTag}\nPRERELEASE=${prerelease}\n`,
-    )
+    expect(readFileSync(envFile, 'utf8')).toBe(`NPM_DIST_TAG=${distTag}\n`)
   })
 })
 

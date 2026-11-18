@@ -91,35 +91,6 @@ it.each([
   expect(fetchImpl).toHaveBeenCalledOnce()
 })
 
-it('waits for publication visibility before checking the registry artifact', async () => {
-  const fetchImpl = vi
-    .fn(async () => Response.json(metadata))
-    .mockResolvedValueOnce(new Response(null, { status: 404 }))
-  const delay = vi.fn(async () => {})
-  await expect(
-    registryVersion(manifest.name, manifest.version, {
-      fetchImpl,
-      waitForPublication: true,
-      delay,
-    }),
-  ).resolves.toEqual(metadata)
-  expect(fetchImpl).toHaveBeenCalledTimes(2)
-  expect(delay).toHaveBeenCalledOnce()
-})
-
-it('bounds the wait for a published version', async () => {
-  const fetchImpl = vi.fn(async () => new Response(null, { status: 404 }))
-  const delay = vi.fn(async () => {})
-  await expect(
-    registryVersion(manifest.name, manifest.version, {
-      fetchImpl,
-      waitForPublication: true,
-      delay,
-    }),
-  ).rejects.toThrow('not visible')
-  expect(fetchImpl).toHaveBeenCalledTimes(30)
-})
-
 it('verifies downloaded bytes against the tarball that passed installation smoke', async () => {
   const fetchImpl = vi.fn(async () => new Response(bytes))
   await expect(registryTarball(metadata, manifest, bytes, { fetchImpl })).resolves.toEqual(bytes)

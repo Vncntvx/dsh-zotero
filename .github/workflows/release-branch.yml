@@ -131,11 +131,11 @@ jobs:
           retention-days: 7
 
   npm-release:
-    name: Publish to npm and create GitHub Release
+    name: Submit package to npm
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
     needs:
       - quality-gate
@@ -191,26 +191,19 @@ jobs:
           {
             echo "VERSION=$version"
             echo "TARBALL=$(node --input-type=module -e 'import { readFileSync } from "node:fs"; import { join } from "node:path"; const dir=join(process.env.RUNNER_TEMP,"release-artifact"); console.log(join(dir,JSON.parse(readFileSync(join(dir,"artifact.json"),"utf8")).tarball))')"
-            echo "ARTIFACT_DIGEST=$(node -p "require('$RUNNER_TEMP/release-artifact/artifact.json').artifactDigest")"
-            echo "TARBALL_SHA256=$(node -p "require('$RUNNER_TEMP/release-artifact/artifact.json').tarballSha256")"
           } >> "$GITHUB_ENV"
 
       - name: Select publication channel
         run: |
           dist_tag=latest
-          prerelease=false
           if [[ "$VERSION" == *-* ]]; then
-            prerelease=true
             prerelease_id="${VERSION#*-}"
             dist_tag="${prerelease_id%%.*}"
             if [[ "$dist_tag" = latest || ! "$dist_tag" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
               dist_tag=next
             fi
           fi
-          {
-            echo "NPM_DIST_TAG=$dist_tag"
-            echo "PRERELEASE=$prerelease"
-          } >> "$GITHUB_ENV"
+          echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
 
       - name: Check whether npm already holds the verified artifact
         run: node scripts/npm-registry.mjs --check --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}" >> "$GITHUB_ENV"
@@ -218,38 +211,6 @@ jobs:
       - name: Publish the verified tarball to npm (OIDC trusted publishing)
         if: env.PUBLISH_NEEDED == 'true'
         run: npm publish "$TARBALL" --access public --tag "$NPM_DIST_TAG"
-
-      - name: Download and verify the public npm tarball
-        run: node scripts/npm-registry.mjs --verify --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
-
-      - name: Create the GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          git fetch origin --force --tags >/dev/null 2>&1 || true
-          # Signed tags put the PGP signature in %(contents); stop at it so the
-          # release notes show only the human-written annotation.
-          tag_body="$(git tag -l --format='%(contents)' "$tag" | sed '/^-----BEGIN PGP SIGNATURE-----/,$d')"
-          generated="$(gh api "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="$tag" --jq .body)"
-          {
-            if [ -n "$tag_body" ]; then printf '%s\n\n' "$tag_body"; fi
-            printf '%s\n' "$generated"
-            printf '\n---\n\n**Publication provenance**\n\n'
-            printf -- '- Source commit: `%s`\n' "${{ github.sha }}"
-            printf -- '- artifactDigest: `%s`\n' "$ARTIFACT_DIGEST"
-            printf -- '- tarballSha256: `%s`\n' "$TARBALL_SHA256"
-          } > "$RUNNER_TEMP/release-notes.md"
-          release_flags=()
-          if [ "$PRERELEASE" = true ]; then
-            release_flags+=(--prerelease --latest=false)
-          fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; refreshing its notes."
-            gh release edit "$tag" --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
-          else
-            gh release create "$tag" --title "$tag" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
-          fi
 
   publish:
     runs-on: ubuntu-latest

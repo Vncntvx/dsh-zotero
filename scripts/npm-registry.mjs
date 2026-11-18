@@ -1,6 +1,6 @@
 /** Bind the public registry package to the tarball that passed installation smoke. */
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { setTimeout as pause } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -32,11 +32,7 @@ async function requestBody(url, options) {
     if (response && !response.ok) {
       const { status } = response
       if (status === 404 && missing === 'return') return undefined
-      failure = new Error(
-        status === 404 && missing === 'publication'
-          ? 'Published version is not visible on registry.npmjs.org'
-          : `${label}: HTTP ${status}`,
-      )
+      failure = new Error(`${label}: HTTP ${status}`)
       if (status !== 404 && status !== 408 && status !== 429 && (status < 500 || status > 599))
         throw failure
     }
@@ -61,7 +57,7 @@ export function assertRegistryArtifact(metadata, manifest, bytes) {
 export async function registryVersion(
   name,
   version,
-  { fetchImpl = fetch, waitForPublication = false, delay = pause, maxAttempts = 30 } = {},
+  { fetchImpl = fetch, delay = pause, maxAttempts = 30 } = {},
 ) {
   const url = `${registry}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`
   const text = await requestBody(url, {
@@ -71,7 +67,7 @@ export async function registryVersion(
     timeout: 20_000,
     read: (response) => response.text(),
     label: 'Registry lookup failed',
-    missing: waitForPublication ? 'publication' : 'return',
+    missing: 'return',
   })
   if (text === undefined) return undefined
   const metadata = JSON.parse(text)
@@ -120,12 +116,18 @@ async function main() {
   const manifest = JSON.parse(readFileSync(join(artifact.stage, 'package.json'), 'utf8'))
   const bytes = readFileSync(artifact.tarball)
   const metadata = await registryVersion(manifest.name, manifest.version, {
-    waitForPublication: verify,
+    maxAttempts: 3,
   })
   if (metadata !== undefined) assertRegistryArtifact(metadata, manifest, bytes)
   if (check) console.log(`PUBLISH_NEEDED=${metadata === undefined}`)
   else {
-    const downloaded = await registryTarball(metadata, manifest, bytes)
+    if (metadata === undefined) {
+      const message = `${manifest.name}@${manifest.version} is not public yet. Once npm shows Published, re-run the Verify npm Release workflow.`
+      if (process.env.GITHUB_STEP_SUMMARY)
+        appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${message}\n`)
+      throw new Error(message)
+    }
+    const downloaded = await registryTarball(metadata, manifest, bytes, { maxAttempts: 2 })
     writeFileSync(join(out, 'registry.tgz'), downloaded)
     console.log(`Registry tarball verified: ${manifest.name}@${manifest.version}`)
   }

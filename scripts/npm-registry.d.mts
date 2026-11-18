@@ -13,7 +13,6 @@ export function registryVersion(
   version: string,
   options?: {
     fetchImpl?: typeof fetch
-    waitForPublication?: boolean
     delay?: (ms: number) => Promise<unknown>
     maxAttempts?: number
   },

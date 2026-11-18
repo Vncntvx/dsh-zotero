@@ -85,6 +85,9 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 
 1. 安装并运行 Zotero 7 及以上桌面版（写入功能需 Zotero 10）。
 2. 在 Zotero 中开启本地 API：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**。
+3. 安装并运行与插件匹配的 DeepSeek Harness 桌面端。当前插件要求 dsh 0.2.2-rc.4；如果应用内更新尚未提供该版本，可直接下载安装包（将链接中的版本替换为所需版本）：
+   - macOS（Apple Silicon）：`https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.2-rc.4-mac-arm64.dmg`
+   - Windows（x64）：`https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.2-rc.4-win-x64.exe`
 
 ## 使用示例
 
