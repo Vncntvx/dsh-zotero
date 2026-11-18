@@ -10,7 +10,7 @@
  * @module tests/scholarly/transport/egress
  */
 
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import { installProxyFromEnvironment, proxyRouteFor } from '@deepseek-ai/dsh-http-proxy'
 import { egressRouteFor } from '../../../src/transport/connections.js'
@@ -24,20 +24,25 @@ const disposers: Array<() => Promise<void>> = []
 const servers: Server[] = []
 const envSnapshots: Array<Record<string, string | undefined>> = []
 
-afterEach(() => {
-  vi.unstubAllEnvs()
-  for (const snapshot of envSnapshots.splice(0)) {
-    for (const [name, value] of Object.entries(snapshot)) {
-      if (value === undefined) delete process.env[name]
-      else process.env[name] = value
+afterEach(async () => {
+  try {
+    for (const dispose of disposers.splice(0).reverse()) await dispose()
+  } finally {
+    try {
+      for (const server of servers.splice(0).reverse()) {
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        )
+      }
+    } finally {
+      vi.unstubAllEnvs()
+      for (const snapshot of envSnapshots.splice(0).reverse()) {
+        for (const [name, value] of Object.entries(snapshot)) {
+          if (value === undefined) delete process.env[name]
+          else process.env[name] = value
+        }
+      }
     }
-  }
-})
-
-afterAll(async () => {
-  for (const dispose of disposers.splice(0)) await dispose()
-  for (const server of servers.splice(0)) {
-    await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })
 

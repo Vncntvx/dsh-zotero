@@ -12,7 +12,7 @@
  */
 
 import { lookup } from 'node:dns/promises'
-import { Agent, fetch as undiciFetch } from 'undici'
+import { createRequire } from 'node:module'
 import { proxyRouteFor, type ProxyRoute } from '@deepseek-ai/dsh-http-proxy'
 import {
   pinnedLookup,
@@ -22,6 +22,11 @@ import {
   type PinnedDispatcher,
   type ResolvedAddress,
 } from './network.js'
+
+// Harness owns the proxy dispatcher in its own installation. Resolve its
+// Undici there so fetch and direct agents share the same module in a profile.
+const requireProxyDependency = createRequire(import.meta.resolve('@deepseek-ai/dsh-http-proxy'))
+const { Agent, fetch: undiciFetch }: typeof import('undici') = requireProxyDependency('undici')
 
 /** The external transports' fetch seam: the runtime `fetch` shape. */
 export type PublicFetch = typeof globalThis.fetch
@@ -70,9 +75,7 @@ export type EgressRoute =
 /**
  * Ask the harness proxy policy how one request to `url` must be sent.
  * `proxyRouteFor` reads the launch environment; the returned route's
- * dispatcher comes from the same undici copy this module owns, because the
- * proxy package pins the compatible version and `publicFetch` rejects a
- * dispatcher built by another copy.
+ * dispatcher comes from the same undici installation as `publicFetch`.
  */
 export function egressRouteFor(url: URL): EgressRoute {
   const route: ProxyRoute = proxyRouteFor(url)

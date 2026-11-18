@@ -346,7 +346,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 - 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
 - npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.15.0 自带 npm 11.12.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束；
-- `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出发行版领先的直接依赖；版本更新由人工执行，Dependabot 不开版本更新 PR；
+- `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出可更新的直接依赖。Node 类型以 `engines.node` 的最低主版本为轨道，Undici 跟随固定版 Harness 代理。轨道外和宿主约束下的更新单列，退出码 1 表示有可更新项，2 表示检查失败；版本更新由人工执行，Dependabot 不开版本更新 PR；
 - Dependabot alerts 只用于 CVE 提醒，security updates 关闭；
 - 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；
 - 扫描器工作流只授予 `contents: read` 且不保留 checkout 凭据，因此 fork 的 pull request 也能在同等约束下运行。

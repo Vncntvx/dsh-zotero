@@ -1,4 +1,5 @@
 export function registryVersionsOf(
   packument: unknown,
   range: string,
-): { wanted: string; latest: string; outsideRange: boolean }
+  constraint?: string,
+): { wanted: string; latest: string; eligible: string; outsideRange: boolean }

@@ -314,6 +314,11 @@ describe('client-primitive mock guard', () => {
 })
 
 describe('fetch ownership guard', () => {
+  it('enforces ownership for dynamic Undici imports', () => {
+    const source = "const http = import('undici')"
+    expect(fetchOwnershipIssuesOf('src/scholarly/tools/get.ts', source)).toHaveLength(1)
+    expect(fetchOwnershipIssuesOf('src/transport/connections.ts', source)).toEqual([])
+  })
   it('rejects a second undici import outside the seam owner', () => {
     expect(
       fetchOwnershipIssuesOf('src/scholarly/tools/get.ts', `import { fetch } from 'undici'`),

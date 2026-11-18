@@ -1,3 +1,4 @@
+import { lockedPathOf } from './shared/lockfile.mjs'
 import { declarationDependencyProblems } from './published-declarations.mjs'
 import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
 import { assertBuildFresh } from './build-state.mjs'
@@ -153,23 +154,6 @@ export function packReportOf(stdout) {
     )
   }
   return lines.slice(start).join('\n')
-}
-
-/** Resolve one dependency from a lockfile entry the way Node walks up parents.
- * @param packages - the lockfile's `packages` map, keyed by install path.
- * @param fromPath - the entry path the dependency is asked from.
- * @param name - the dependency name.
- * @returns the resolved entry path, or undefined when the lock cannot answer.
- */
-function lockedPathOf(packages, fromPath, name) {
-  let scope = fromPath
-  for (;;) {
-    const candidate = scope === '' ? `node_modules/${name}` : `${scope}/node_modules/${name}`
-    if (packages[candidate] !== undefined) return candidate
-    if (scope === '') return undefined
-    const cut = scope.lastIndexOf('node_modules/')
-    scope = cut <= 0 ? '' : scope.slice(0, cut - 1)
-  }
 }
 
 /**

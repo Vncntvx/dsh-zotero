@@ -91,10 +91,10 @@
 - **上游**：`@deepseek-ai/dsh-http-proxy` 与 undici。
 - **上游特性**：外部出口的代理路由与地址钉住。
 - **上游缺陷**：代理自己做 DNS，不能同时钉地址；`pinned.dispatcher` 只被同一份 undici 的 `fetch` 接受。
-- **本地补丁**：`src/transport/connections.ts` 的 `egressRouteFor`、`proxyRouteFor`、`publicFetch`：proxied 走代理包的进程级 dispatcher（不 close，词法公网闸照跑），direct 解析地址、钉住闭集并每次 close；全包只用一份 undici。
+- **本地补丁**：`src/transport/connections.ts` 的 `egressRouteFor`、`proxyRouteFor`、`publicFetch`：proxied 走代理包的进程级 dispatcher（不 close，词法公网闸照跑），direct 解析地址、钉住闭集并每次 close；插件从已安装的 Harness 代理包解析 undici，使 profile 与 CLI 分装时也共用 dispatcher 和 fetch 所属模块。
 - **为什么是妥协**：proxied 请求依赖代理 DNS，direct 请求依赖本地解析；混用等于放弃 check-then-connect。
 - **上游期望**：上游把 proxy 与 pinning 合成一条 API。
-- **复核触发**：harness 代理版本、undici 更换、新增外部出口；`deps:check` 与 harness-mirrored-deps 会先报警。
+- **复核触发**：harness 代理版本、undici 更换、新增外部出口。`harness:check` 核对仓库共用的锁记录，打包冒烟验证插件 fetch 来自代理实际安装的 undici。`deps:check` 报告高于宿主约束的发行版。
 - **验证**：`tests/host/*-proxy*`、`tests/scholarly/network.spec.ts`、`fake-ip-policy.spec.ts`、test-lint 的 fetch 归属检查。
 - **后续处理**：删除 `egressRouteFor`，改用合并 API。
 

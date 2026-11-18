@@ -787,12 +787,7 @@ export function fetchOwnershipIssuesOf(rel, source) {
     if (rel.startsWith('src/')) {
       if (node.type === 'ImportDeclaration' && node.source.value === 'undici' && rel !== owner)
         add(node, 'imports undici')
-      if (
-        node.type === 'CallExpression' &&
-        node.callee.type === 'Import' &&
-        node.arguments[0]?.value === 'undici' &&
-        rel !== owner
-      )
+      if (node.type === 'ImportExpression' && node.source.value === 'undici' && rel !== owner)
         add(node, 'imports undici')
       if (rel.startsWith('src/client/') || allowed.has(rel)) continue
       if (

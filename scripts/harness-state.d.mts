@@ -1,5 +1,7 @@
 /** Type surface for the harness-state CLI's pure helpers (unit-tested). */
 
+export declare function collectProxyUndiciProblems(lock: unknown, manifest: unknown): string[]
+
 /**
  * Rewrite every harness face of a manifest to the pin (mutates `manifest`).
  * Dev/overrides take the exact pin; peers and engines become >=pin. The

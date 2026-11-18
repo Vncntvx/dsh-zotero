@@ -346,7 +346,7 @@ Supply-chain rules:
 
 - Every third-party GitHub Action is pinned to an immutable commit SHA, with the matching version kept in a trailing comment, so a mutable tag cannot silently change the executed code;
 - npm publication uses OIDC trusted publishing: `id-token: write` mints short-lived credentials (npm CLI ≥ 11.5.1 and Node ≥ 22.14; this repo's pinned Node 24.15.0 ships npm 11.12.1), and public repositories publishing public packages include provenance by default. Publication still relies on the trusted-publisher configuration on npmjs.com;
-- `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list direct dependencies behind their published release; upgrades stay manual, and Dependabot opens no version-update pull requests;
+- `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list eligible direct dependency updates. Node types follow the minimum major in `engines.node`, and Undici follows the pinned Harness proxy. Constrained releases are reported separately. Exit code 1 signals eligible updates and 2 signals a failed check. Upgrades stay manual, and Dependabot opens no version-update pull requests;
 - Dependabot alerts serve as CVE reminders only, with security updates disabled;
 - The browser bundle mirrors the third-party runtime dependencies the sibling harness declares in its own `packages/client/*` manifests (lexical, katex, react, zod, …); those versions move with the harness, and the `deps:check` exclusion set keeps them out of the report;
 - The scanner workflow is granted only `contents: read` and keeps no checkout credentials, so a pull request from a fork runs it under the same constraints.

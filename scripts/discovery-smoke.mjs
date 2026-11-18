@@ -106,6 +106,14 @@ async function verifyInstalledEntries() {
       const ctx = new Context()
       try {
         await ctx.plugin(PluginPackages, { resolution })
+        const installed = new URL(import.meta.resolve(${JSON.stringify(PLUGIN_ID)}))
+        const transport = new URL('./transport/connections.js', installed)
+        const { publicFetch } = await import(transport.href)
+        const proxy = import.meta.resolve('@deepseek-ai/dsh-http-proxy')
+        const proxyRequire = createRequire(proxy)
+        if (publicFetch !== proxyRequire('undici').fetch)
+          throw new Error('installed plugin fetch uses a different Undici instance from the Harness proxy')
+        console.log('installed proxy and plugin share Undici: ' + proxyRequire.resolve('undici'))
         for (const suffix of ['', '/library', '/scholarly', '/enrichment']) {
           const name = ${JSON.stringify(PLUGIN_ID)} + suffix
           const entry = await import(name)

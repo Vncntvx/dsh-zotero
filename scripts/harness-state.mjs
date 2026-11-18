@@ -67,6 +67,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minVersion, satisfies, validRange } from 'semver'
 import { stripCommentsAndStrings } from './shared/source-scan.mjs'
+import { lockedPathOf, lockedProxyUndiciVersion } from './shared/lockfile.mjs'
 import {
   collectHarnessPackages,
   mirroredDeclarationsOf,
@@ -279,7 +280,31 @@ export function collectVendorLockProblems(lock, manifest) {
   return found
 }
 
-/** Fail when the lockfile resolves any harness package off the pin or a vendor entry drifts. */
+/** Keep the plugin fetch and the Harness proxy dispatcher on one Undici installation. */
+export function collectProxyUndiciProblems(lock, manifest) {
+  let expected
+  try {
+    expected = lockedProxyUndiciVersion(lock)
+  } catch (error) {
+    return [error.message]
+  }
+  const packages = lock.packages ?? {}
+  const plugin = lockedPathOf(packages, '', 'undici')
+  const proxy = lockedPathOf(packages, 'node_modules/@deepseek-ai/dsh-http-proxy', 'undici')
+  if (
+    manifest.dependencies?.undici === expected &&
+    packages['']?.dependencies?.undici === expected &&
+    plugin !== undefined &&
+    plugin === proxy &&
+    packages[plugin].version === expected
+  )
+    return []
+  return [
+    `the plugin and @deepseek-ai/dsh-http-proxy must share one lockfile entry for undici@${expected}; align the exact dependency and rerun npm install --package-lock-only`,
+  ]
+}
+
+/** Check the Harness pin, vendor packages, and shared proxy dependency. */
 function checkLock(pin, manifest) {
   const lockPath = join(root, 'package-lock.json')
   if (!existsSync(lockPath)) {
@@ -289,6 +314,7 @@ function checkLock(pin, manifest) {
   const lock = readJson(lockPath)
   problems.push(...collectLockProblems(lock, manifest, pin))
   problems.push(...collectVendorLockProblems(lock, manifest))
+  problems.push(...collectProxyUndiciProblems(lock, manifest))
 }
 
 /**

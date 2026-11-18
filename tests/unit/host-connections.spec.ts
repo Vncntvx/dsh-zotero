@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { Agent, fetch as undiciFetch } from 'undici'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,15 +8,25 @@ const { lookupMock, agentMocks } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:dns/promises', () => ({ lookup: lookupMock }))
-vi.mock('undici', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('undici')>()
+vi.mock('node:module', async (importOriginal) => {
+  const module = await importOriginal<typeof import('node:module')>()
+  const fromProxy = import.meta.resolve('@deepseek-ai/dsh-http-proxy')
+  const require = module.createRequire(fromProxy)
+  const actual: typeof import('undici') = require('undici')
   class RecordingAgent extends actual.Agent {
     constructor(options: { connect?: { lookup?: unknown } }) {
       super(options as ConstructorParameters<typeof actual.Agent>[0])
       agentMocks.push(options)
     }
   }
-  return { ...actual, Agent: RecordingAgent }
+  return {
+    ...module,
+    createRequire: (anchor: string | URL) =>
+      anchor === fromProxy
+        ? (name: string) =>
+            name === 'undici' ? { ...actual, Agent: RecordingAgent } : require(name)
+        : module.createRequire(anchor),
+  }
 })
 
 import {
@@ -56,6 +67,7 @@ describe('createPinnedDispatcher', () => {
   it('hands back an undici agent and closes its pool on demand', async () => {
     const pinned = createPinnedDispatcher([{ address: '192.0.2.10', family: 4 }])
     expect(pinned.dispatcher).toBeInstanceOf(Agent)
+    expect(agentMocks).toHaveLength(1)
     // undici resolves its pool teardown with null when nothing was in flight.
     await expect(pinned.close()).resolves.toBeNull()
   })
@@ -67,7 +79,9 @@ describe('publicFetch', () => {
     // same copy accepts them; the runtime's global fetch ships another undici
     // and rejects the dispatcher before a socket opens.
     expect(publicFetch).toBe(undiciFetch)
-    expect(publicFetch).not.toBe(vi.fn())
+    expect(publicFetch).toBe(
+      createRequire(import.meta.resolve('@deepseek-ai/dsh-http-proxy'))('undici').fetch,
+    )
   })
 })
 

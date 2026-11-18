@@ -24,8 +24,9 @@ import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diff, gt, maxSatisfying, satisfies, valid } from 'semver'
+import { diff, gt, maxSatisfying, minVersion, satisfies, valid } from 'semver'
 import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
+import { lockedProxyUndiciVersion } from './shared/lockfile.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -56,28 +57,44 @@ function registryBase() {
   }
 }
 
-async function latestVersion(registry, name, range) {
+async function latestVersion(registry, name, range, constraint) {
   const response = await fetch(`${registry}/${name.replace('/', '%2F')}`, {
     headers: { accept: 'application/vnd.npm.install-v1+json' },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   const packument = await response.json()
-  return registryVersionsOf(packument, range)
+  return registryVersionsOf(packument, range, constraint)
 }
 
 /** Report the declared range and the current stable release independently. */
-export function registryVersionsOf(packument, range) {
-  const versions = Object.keys(packument.versions ?? {}).filter((version) => valid(version))
+export function registryVersionsOf(packument, range, constraint) {
+  const versions = Object.keys(packument?.versions ?? {}).filter((version) => valid(version))
   const wanted = maxSatisfying(versions, range)
-  const latest = packument['dist-tags']?.latest
+  const tag = packument?.['dist-tags']?.latest
   if (wanted === null) throw new Error(`no published version satisfies ${range}`)
-  if (typeof latest !== 'string' || valid(latest) === null || !versions.includes(latest))
+  if (typeof tag !== 'string' || valid(tag) === null || !versions.includes(tag))
     throw new Error('registry metadata has no valid published latest tag')
+  const latest = gt(wanted, tag) ? wanted : tag
+  const eligible = constraint === undefined ? latest : maxSatisfying(versions, constraint)
+  if (eligible === null) throw new Error(`no published version satisfies constraint ${constraint}`)
   return {
     wanted,
-    latest: gt(wanted, latest) ? wanted : latest,
+    latest,
+    eligible,
     outsideRange: !satisfies(latest, range),
+  }
+}
+
+function upgradeConstraint(name) {
+  if (name === 'undici') {
+    const version = lockedProxyUndiciVersion(lock)
+    return { range: version, reason: `Harness HTTP proxy requires ${version}` }
+  }
+  if (name === '@types/node') {
+    const node = minVersion(manifest.engines?.node ?? '')
+    if (!node) throw new Error('package.json must declare a Node minimum version')
+    return { range: `${node.major}.x`, reason: `Node ${node.major} runtime baseline` }
   }
 }
 
@@ -101,16 +118,20 @@ function installedVersion(name) {
 async function main() {
   const targets = Object.keys(manifest.dependencies ?? {})
     .concat(Object.keys(manifest.devDependencies ?? {}))
-    .filter(
-      (name) =>
-        !name.startsWith('@deepseek-ai/') && !HARNESS_MIRRORED.has(name) && installedVersion(name),
-    )
+    .filter((name) => !name.startsWith('@deepseek-ai/') && !HARNESS_MIRRORED.has(name))
 
   const registry = registryBase()
   const lookups = await mapLimit(targets, CONCURRENCY, async (name) => {
     const current = installedVersion(name)
     try {
-      return { name, current, ...(await latestVersion(registry, name, declaredRange(name))) }
+      if (!valid(current)) throw new Error('no valid version in the lockfile')
+      const constraint = upgradeConstraint(name)
+      return {
+        name,
+        current,
+        constraint,
+        ...(await latestVersion(registry, name, declaredRange(name), constraint?.range)),
+      }
     } catch (error) {
       return { name, current, error: error instanceof Error ? error.message : String(error) }
     }
@@ -118,11 +139,11 @@ async function main() {
 
   const failures = lookups.filter((lookup) => lookup.error !== undefined)
   const rows = lookups
-    .filter((lookup) => lookup.error === undefined && gt(lookup.latest, lookup.current))
+    .filter((lookup) => lookup.error === undefined && gt(lookup.eligible, lookup.current))
     .map((lookup) => ({
       ...lookup,
       range: declaredRange(lookup.name),
-      level: (diff(lookup.current, lookup.latest) ?? 'patch').replace(/^pre/, ''),
+      level: (diff(lookup.current, lookup.eligible) ?? 'patch').replace(/^pre/, ''),
     }))
     .sort(
       (a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.name.localeCompare(b.name),
@@ -132,18 +153,24 @@ async function main() {
     console.error(`deps-check: ${failure.name} could not be checked (${failure.error})`)
 
   if (rows.length === 0 && failures.length === 0)
-    console.log('deps-check: direct dependencies are current')
+    console.log('deps-check: direct dependencies are current within their constraints')
   else if (rows.length > 0) {
     console.log(`deps-check: ${rows.length} direct dependencies behind the registry`)
     const width = Math.max(...rows.map((row) => row.name.length))
     for (const row of rows) {
       console.log(
-        `  ${row.level.padEnd(5)} ${row.name.padEnd(width)} ${row.current} -> ${row.latest}  (${row.range}; wanted ${row.wanted}${row.outsideRange ? '; outside range' : ''})`,
+        `  ${row.level.padEnd(5)} ${row.name.padEnd(width)} ${row.current} -> ${row.eligible}  (${row.range}; wanted ${row.wanted}${satisfies(row.eligible, row.range) ? '' : '; outside range'})`,
       )
     }
     console.log(
       'Review out-of-range releases before updating the manifest; use npm install for in-range updates',
     )
+  }
+  for (const row of lookups) {
+    if (row.error === undefined && row.constraint && gt(row.latest, row.eligible))
+      console.log(
+        `  constrained ${row.name} ${row.current} -> ${row.latest}  (${row.constraint.reason}; eligible ${row.eligible})`,
+      )
   }
 
   if (failures.length > 0) process.exitCode = 2

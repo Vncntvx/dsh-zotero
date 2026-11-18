@@ -91,10 +91,10 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Upstream**: `@deepseek-ai/dsh-http-proxy` and undici.
 - **Upstream feature**: proxy routing and address pinning for external egress.
 - **Upstream defect**: the proxy performs its own DNS, so addresses cannot be pinned at the same time; `pinned.dispatcher` is accepted only by the same undici copy's `fetch`.
-- **Local patch**: `egressRouteFor`, `proxyRouteFor`, and `publicFetch` in `src/transport/connections.ts`: proxied requests use the package's process-level dispatcher (never closed, lexical public gate still runs), direct requests resolve, pin the closed address set, and close per attempt; the package uses one undici copy.
+- **Local patch**: `egressRouteFor`, `proxyRouteFor`, and `publicFetch` in `src/transport/connections.ts`: proxied requests use the package's process-level dispatcher (never closed, lexical public gate still runs), direct requests resolve, pin the closed address set, and close per attempt; the plugin resolves Undici from the installed Harness HTTP proxy, so profile and CLI package layouts share the dispatcher and fetch module.
 - **Why this is a compromise**: proxied requests rely on the proxy's DNS, direct requests on the local resolver; combining them would abandon check-then-connect.
 - **Upstream expectation**: one upstream API that combines proxy routing with address pinning.
-- **Review trigger**: harness proxy version, undici replacement, or a new external egress; `deps:check` and harness-mirrored-deps warn first.
+- **Review trigger**: harness proxy version, undici replacement, or a new external egress. `harness:check` verifies the shared repository lockfile entry. The packed install smoke checks that the plugin fetch is the function exported by the proxy’s installed Undici. `deps:check` reports releases above the host constraint.
 - **Verification**: `tests/host/*-proxy*`, `tests/scholarly/network.spec.ts`, `fake-ip-policy.spec.ts`, and the test-lint fetch-ownership check.
 - **Follow-up**: delete `egressRouteFor` and use the combined API.
 
