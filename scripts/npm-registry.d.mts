@@ -22,11 +22,9 @@ export function registryTarball(
   metadata: RegistryPackage,
   manifest: { name: string; version: string },
   expectedBytes: Uint8Array,
-  options?:
-    | typeof fetch
-    | {
-        fetchImpl?: typeof fetch
-        delay?: (ms: number) => Promise<unknown>
-        maxAttempts?: number
-      },
+  options?: {
+    fetchImpl?: typeof fetch
+    delay?: (ms: number) => Promise<unknown>
+    maxAttempts?: number
+  },
 ): Promise<Buffer>

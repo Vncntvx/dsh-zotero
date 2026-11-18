@@ -40,7 +40,7 @@ it('keeps publishing behind both mandatory release jobs', () => {
   expect(workflow).toContain('npm run smoke:web-composition')
   // The smoke needs a dsh CLI; CI has no sibling checkout, so the job installs
   // the published CLI at the version the dev tree pins.
-  expect(workflow).toContain('npm install --global "@deepseek-ai/dsh@')
+  expect(workflow).toContain('node scripts/harness-toolchain.mjs')
   const publish = workflow.slice(workflow.indexOf('  publish:'))
   expect(publish).not.toMatch(/npm (?:ci|install|run build)/)
   expect(publish).toContain('--artifact "$RUNNER_TEMP/release-artifact"')
@@ -117,7 +117,7 @@ it('installs the same artifact on all desktop platforms before publication', () 
   )
   expect(job).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
   expect(job).toContain('fail-fast: false')
-  expect(job).toContain('pnpm@11.28.5')
+  expect(job).toContain('node scripts/harness-toolchain.mjs')
   expect(job).toContain('--install-only --tarball "$tarball"')
   expect(job).toContain('--dsh "$dsh_cli"')
   expect(job).toContain('if: failure()')

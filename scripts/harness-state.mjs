@@ -81,6 +81,11 @@ import {
   withHarnessDocPin,
 } from './shared/harness-doc-pin.mjs'
 import { clientPlatformProblems, clientMirrorProblems } from './client-graph-authority.mjs'
+import {
+  extractHarnessToolchain,
+  readHarnessToolchain,
+  toolchainFixture,
+} from './harness-toolchain.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolveHarnessRoot(root)
@@ -1162,6 +1167,15 @@ function writePin(version, previous) {
     )
     return
   }
+  let toolchain
+  try {
+    toolchain = extractHarnessToolchain(harnessRoot, version)
+  } catch (error) {
+    problems.push(
+      `cannot move the pin: read packageManager at dsh-v${version} in the sibling harness: ${error.message}`,
+    )
+    return
+  }
   const lockPath = join(root, 'package-lock.json')
   const lockedPackageNames = Object.keys(
     (existsSync(lockPath) ? readJson(lockPath).packages : undefined) ?? {},
@@ -1170,6 +1184,7 @@ function writePin(version, previous) {
     .filter((name) => name !== undefined)
   const manifest = applyPinToManifest(readJson(pkgPath), version, lockedPackageNames)
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  writeFileSync(toolchainFixture, `${JSON.stringify(toolchain, null, 2)}\n`)
   for (const path of HARNESS_PIN_DOCS) {
     const file = join(root, path)
     writeFileSync(file, withHarnessDocPin(path, readFileSync(file, 'utf8'), version))
@@ -1216,6 +1231,13 @@ function runCheck(strict) {
   // too; their drift only surfaces as a typecheck/test-vs-runtime mismatch
   // after a harness upgrade, so it fails in both modes like the mirror does.
   problems.push(...collectClientDepsMirrorProblems(pin, manifest))
+  if (pin !== undefined) {
+    try {
+      readHarnessToolchain(harnessRoot, pin)
+    } catch (error) {
+      problems.push(`invalid harness toolchain snapshot: ${error.message}`)
+    }
+  }
   checkArtifacts(strict, packages, pin)
   report()
   if (problems.length === 0) console.log(`harness state ok: pin ${pin}`)

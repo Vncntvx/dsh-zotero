@@ -181,7 +181,7 @@ export function packageNameOf(key) {
  * working copy and not its HEAD, both of which can be far ahead of the pin
  * the installed packages resolve to. Two guards hold the line: the snapshot
  * fixture `tests/fixtures/harness-client-graph-pin.json` (extracted from the
- * tag, CI-proof) and the `checkMirror` step in `scripts/harness-state.mjs`
+ * tag, CI-proof) and `collectMirrorProblems` in `scripts/harness-state.mjs`
  * (diffs the mirror against `git show dsh-v<pin>:…` whenever a sibling
  * checkout is present). A harness bump re-extracts the fixture and this
  * mirror from the new tag; never copy them from the working tree.

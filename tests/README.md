@@ -338,14 +338,14 @@ instead of reporting a mocked pass as live verification.
 ### Complexity budgets
 
 - A new spec stays at or below 400 lines and a new helper or module support
-  file at or below 300 lines. The helper and support budget is enforced by
-  lint; the spec budget by review. Count the complete file, including setup and
+  file at or below 300 lines. Lint enforces all three budgets.
+  Count the complete file, including setup and
   comments. First split by responsibility; moving the same complexity into one
   oversized helper does not satisfy the rule.
 - Existing files above these budgets are grandfathered at their pre-change
-  size and must not grow. An exception to a review budget must identify the
-  path, reason, and follow-up in the change description. It cannot exceed the
-  automated global spec limit or relax a coverage ratchet.
+  size and must not grow. Lower the baseline when a file shrinks, and remove
+  its entry when it reaches the standard budget or is removed. All specs must
+  still respect the global hard limit.
 - Review module-wide cost as well as file size: required support imports,
   repeated error matrices, setup cost, and files changed for one behaviour.
   Do not cap test counts or total module lines merely because a feature grew.
@@ -395,6 +395,15 @@ The helper import graph — specs → module support → shared helpers, with no
 cross-module support references, no support importing specs, and no shared
 helper importing module support — remains review-enforced; the lint pass does
 not parse it.
+
+Two test-construction constraints are also review-enforced. Import-scanner
+syntax and traversal cases use isolated temporary directories and never rescan
+the growing repository from a unit test; the full typecheck and test guards
+keep their real scope. A `..` normalization test constructs the raw input with
+explicit path separators because `path.join` erases `..`; `realpath` supplies
+the already-normalized path, and neither path depends on macOS's `/var` alias.
+`tests/unit/tooling/harness-artifacts.spec.ts` and
+`tests/unit/semantic-loader-lifecycle.spec.ts` hold the current cases.
 
 `vitest.config.ts` holds coverage ratchets per layer, each set just under
 what that layer measures today. They are not aspirations: a layer earns a

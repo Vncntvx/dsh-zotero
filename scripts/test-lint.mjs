@@ -93,6 +93,91 @@ const ALLOWED_CONTROL = new Set([0x09, 0x0a, 0x0d])
  * splitting that spec first.
  */
 export const MAX_SPEC_LINES = 726
+export const STANDARD_SPEC_LINES = 400
+
+export const SPEC_SIZE_BASELINE = Object.freeze({
+  'tests/client/apply.spec.ts': 717,
+  'tests/client/enrichment/enrichment-model-controller.spec.ts': 451,
+  'tests/client/enrichment/enrichment-model-form.spec.tsx': 487,
+  'tests/client/enrichment/parse-dialog.spec.tsx': 403,
+  'tests/client/library/library-data-plane.spec.ts': 410,
+  'tests/client/library/library-inspector.spec.tsx': 712,
+  'tests/client/library/library-panel.interaction.spec.tsx': 510,
+  'tests/client/library/library-panel.states.spec.tsx': 486,
+  'tests/client/library/library-tag-picker.spec.tsx': 418,
+  'tests/client/library/library-tree.spec.tsx': 461,
+  'tests/client/library/library-write.spec.tsx': 591,
+  'tests/client/library/remote-contract-library.spec.ts': 503,
+  'tests/client/open/PdfReadButton.spec.tsx': 463,
+  'tests/client/settings/ZoteroSettingsSection.spec.tsx': 579,
+  'tests/client/settings/scholarly-form.spec.tsx': 485,
+  'tests/client/slot-crash-intake.spec.ts': 445,
+  'tests/client/sources/decoders.spec.ts': 490,
+  'tests/client/sources/reducer-evidence.spec.ts': 483,
+  'tests/client/sources/reducer-outputs.spec.ts': 653,
+  'tests/client/sources/reducer.spec.ts': 673,
+  'tests/client/sources/selectors.spec.ts': 473,
+  'tests/client/toolviews/BrowseToolView.spec.tsx': 705,
+  'tests/client/toolviews/ExportToolView.spec.tsx': 470,
+  'tests/client/toolviews/RetrieveToolView.spec.tsx': 558,
+  'tests/client/toolviews/WriteToolView.spec.tsx': 609,
+  'tests/client/workspace/ExportsLens.spec.tsx': 508,
+  'tests/client/workspace/SourceAuditPanel.spec.tsx': 408,
+  'tests/client/workspace/SourceEvidence.spec.tsx': 596,
+  'tests/host/doc-coverage.spec.ts': 414,
+  'tests/host/doc-examples.spec.ts': 549,
+  'tests/host/enrichment-api-contract.spec.ts': 465,
+  'tests/host/enrichment-artifact-store.spec.ts': 410,
+  'tests/host/enrichment-parse-endpoints.spec.ts': 405,
+  'tests/host/enrichment-parse-once.spec.ts': 494,
+  'tests/host/http-client.spec.ts': 681,
+  'tests/host/library-service.spec.ts': 411,
+  'tests/host/lifecycle.spec.ts': 589,
+  'tests/host/remote.spec.ts': 631,
+  'tests/host/source-ledger.spec.ts': 546,
+  'tests/host/write/write-http.spec.ts': 614,
+  'tests/integration/zotero.integration.spec.ts': 706,
+  'tests/local/browse.spec.ts': 430,
+  'tests/local/export.spec.ts': 593,
+  'tests/local/get.spec.ts': 418,
+  'tests/local/path-resolution.spec.ts': 510,
+  'tests/local/retrieve/retrieve-sources.spec.ts': 538,
+  'tests/local/scope-directory.spec.ts': 418,
+  'tests/local/search/search-filters.spec.ts': 589,
+  'tests/local/search/search-scan.spec.ts': 698,
+  'tests/local/search/search.spec.ts': 690,
+  'tests/local/write/domain.spec.ts': 684,
+  'tests/local/write/lifecycle.spec.ts': 524,
+  'tests/local/write/trash.spec.ts': 630,
+  'tests/local/write/verdicts.spec.ts': 484,
+  'tests/scholarly/cite-verify.spec.ts': 407,
+  'tests/scholarly/fusion.spec.ts': 551,
+  'tests/scholarly/network.spec.ts': 612,
+  'tests/scholarly/read/read-tools.spec.ts': 692,
+  'tests/scholarly/resolution.spec.ts': 722,
+  'tests/scholarly/search-tools.spec.ts': 613,
+  'tests/scholarly/service.spec.ts': 416,
+  'tests/scholarly/sources/sources-requests.spec.ts': 499,
+  'tests/scholarly/sources/transport.spec.ts': 569,
+  'tests/tools/batch-items.spec.ts': 641,
+  'tests/tools/retrieve-fulltext.spec.ts': 552,
+  'tests/tools/retrieve-render.spec.ts': 464,
+  'tests/tools/retrieve.spec.ts': 411,
+  'tests/tools/search.spec.ts': 449,
+  'tests/tools/write/create-item.spec.ts': 415,
+  'tests/tools/write/restore-items.spec.ts': 475,
+  'tests/tools/write/saved-search.spec.ts': 589,
+  'tests/tools/write/write-item-presentation.spec.ts': 587,
+  'tests/tools/write/write-presentation.spec.ts': 726,
+  'tests/unit/enrichment-model-downloader.spec.ts': 427,
+  'tests/unit/enrichment-parse-wire.spec.ts': 464,
+  'tests/unit/export-mapping.spec.ts': 703,
+  'tests/unit/library-views.spec.ts': 706,
+  'tests/unit/normalize/normalize-item-detail.spec.ts': 711,
+  'tests/unit/presentation-meta.spec.ts': 559,
+  'tests/unit/tooling/harness-state.spec.ts': 605,
+  'tests/unit/tooling/style-guard.spec.ts': 427,
+})
 
 /**
  * Ratchet: the most lines one helper may occupy. Existing helpers above the
@@ -250,7 +335,8 @@ function checkExtensionCoverage() {
 
 /** No spec may outgrow the ratchet; the offenders are listed largest first. */
 function checkSpecSize() {
-  const sized = specFiles().map((path) => ({ path, lines: lineCountOf(join(root, path)) }))
+  const sized = fileSizes(specFiles())
+  checkFileSizes('spec', specSizeViolations(sized))
   for (const { path, lines } of sized.filter((entry) => entry.lines > MAX_SPEC_LINES)) {
     failures.push(
       [
@@ -297,10 +383,26 @@ export function helperSizeViolations(
   return found
 }
 
+export function specSizeViolations(entries, baseline = SPEC_SIZE_BASELINE) {
+  return helperSizeViolations(entries, baseline, STANDARD_SPEC_LINES)
+}
+
+function fileSizes(paths) {
+  return paths.map((path) => ({
+    path: path.replaceAll('\\', '/'),
+    lines: lineCountOf(join(root, path)),
+  }))
+}
+
 /** No helper may outgrow its baseline or the new-helper limit. */
 function checkHelperSize() {
-  const entries = helperFiles().map((path) => ({ path, lines: lineCountOf(join(root, path)) }))
-  for (const violation of helperSizeViolations(entries)) {
+  const entries = fileSizes(helperFiles())
+  checkFileSizes('helper', helperSizeViolations(entries))
+  return `${entries.length} helpers`
+}
+
+function checkFileSizes(kind, violations) {
+  for (const violation of violations) {
     if (violation.kind === 'grown') {
       failures.push(
         [
@@ -310,31 +412,30 @@ function checkHelperSize() {
       )
     } else if (violation.kind === 'shrunk') {
       failures.push(
-        `${violation.path} shrank to ${violation.lines} lines; lower its helper-size baseline from ${violation.limit} to ${violation.lines}`,
+        `${violation.path} shrank to ${violation.lines} lines; lower or remove its ${kind}-size baseline of ${violation.limit}`,
       )
     } else if (violation.kind === 'stale') {
       failures.push(
         [
-          `${violation.path} is in the helper-size baseline but no longer exists`,
+          `${violation.path} is in the ${kind}-size baseline but no longer exists`,
           `  fix: remove its baseline entry in the same commit that removed or renamed it`,
         ].join('\n'),
       )
     } else {
       failures.push(
         [
-          `${violation.path} is ${violation.lines} lines; new helpers are limited to ${violation.limit}`,
-          `  fix: move the seam into module support instead of growing the helper`,
+          `${violation.path} is ${violation.lines} lines; new ${kind} files are limited to ${violation.limit}`,
+          `  fix: split the file along its own seams`,
         ].join('\n'),
       )
     }
   }
-  return `${entries.length} helpers`
 }
 
 /** A spec's location is decided by the module it tests, so only lanes are allowed. */
 function checkLanes() {
   for (const path of specFiles()) {
-    const lane = relative(join(root, 'tests'), join(root, path)).split('/')[0]
+    const lane = relative(join(root, 'tests'), join(root, path)).split(/[\\/]/)[0]
     const segment = /\.spec\.(?:[cm]?ts|tsx)$/.test(lane) ? '' : lane
     if (!SPEC_LANES.includes(segment)) {
       failures.push(

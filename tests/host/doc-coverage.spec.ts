@@ -195,8 +195,9 @@ describe('the documentation set stays complete', () => {
   it('pairs every document with its English half and its section count', () => {
     // A missing translation or a section added to one side only is invisible
     // to every other check: they all read the files they are given.
+    // `AGENTS.md` is a single-language agent instruction, not a user-facing pair.
     const names = readdirSync(new URL('docs/', REPO_ROOT)).filter(
-      (name) => name.endsWith('.md') && !name.endsWith('.en.md'),
+      (name) => name.endsWith('.md') && !name.endsWith('.en.md') && name !== 'AGENTS.md',
     )
     const count = (text: string): number => text.match(/^## /gm)?.length ?? 0
     const violations: string[] = []
@@ -349,8 +350,8 @@ describe('component and settings docs stay in lockstep', () => {
     }
 
     const agents = docOf('AGENTS.md')
-    expect(agents).toContain('four Cordis bundle components')
-    expect(agents).toContain('src/enrichment/')
+    expect(agents).toMatch(/four Cordis (?:bundle )?components/)
+    expect(agents).toContain('`dsh-zotero/enrichment` (off)')
     expect(agents).toContain('mineru.net')
     expect(agents).toContain('MinerU')
 

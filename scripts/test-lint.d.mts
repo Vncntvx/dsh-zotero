@@ -74,6 +74,11 @@ export declare function helperSizeViolations(
   limit?: number,
 ): HelperSizeViolation[]
 
+export declare function specSizeViolations(
+  entries: readonly { readonly path: string; readonly lines: number }[],
+  baseline?: Readonly<Record<string, number>>,
+): HelperSizeViolation[]
+
 /**
  * Find imports of an upstream package's unpublished source tree.
  * @param source - the file content.
