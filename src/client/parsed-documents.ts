@@ -9,12 +9,15 @@ import type {
   ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroParseTargetView,
+  ZoteroParseReceiptView,
 } from '../contract.ts'
 import { artifactIdOf, ZOTERO_ARTIFACT_PAGE_CHARS } from '../contract.ts'
 import { parsedDisplayMarkdown } from './parsed-markdown.ts'
 import { parseParsedTabAddress, type ParsedTabTarget } from './parsed-tab.ts'
 import { isGenericParsedTitle } from '../parsed-title.ts'
 import { en, type ZoteroLocaleKey } from './locales.ts'
+import { refFieldsOf } from '../ref-grammar.ts'
+import { objectIdentity } from './components/library/navigation-identity.ts'
 
 export type ParsedArtifactRead = (
   request: ZoteroDocumentArtifactRequestView,
@@ -56,6 +59,7 @@ interface Entry {
   document?: PreparedParsedDocument
   /** Set once a read opens; a discard refresh only touches matching tabs. */
   artifactId?: string
+  sourceId?: string
   abort?: AbortController
   work: Promise<void>
   generation: number
@@ -243,13 +247,18 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     }
   }
 
-  refresh(address: string): void {
+  refresh(address: string, dropPrevious = false): void {
     const entry = this.entries.get(address)
     if (entry === undefined || entry.closed) return
     const target = parseParsedTabAddress(address)
     if (target === undefined || !this.access(target.sessionId).getSnapshot()) return
     const generation = ++entry.generation
     entry.abort?.abort()
+    if (dropPrevious && entry.document !== undefined) {
+      this.revoke(entry.document)
+      delete entry.document
+      this.publish(entry, { ok: true, value: { phase: 'preparing', progress: progress() } })
+    }
     const abort = new AbortController()
     entry.abort = abort
     entry.work = entry.work.then(async () => {
@@ -286,6 +295,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
         const previous = entry.document
         entry.document = document
         entry.artifactId = document.metadata.artifactId
+        entry.sourceId = document.metadata.sourceId
         this.publish(entry, {
           ok: true,
           value: {
@@ -312,12 +322,64 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     })
   }
 
-  committed(sessionId: string, ref: string): void {
-    // Addresses carry presentation values in their query, so open tabs match
-    // structurally on (session, ref) rather than by exact address string.
-    this.refreshMatching(sessionId, (target) => target.ref === ref)
-    this.invalidateTitles(sessionId, (target) => target.ref === ref)
+  committed(
+    sessionId: string,
+    target: ZoteroParseTargetView,
+    receipt: ZoteroParseReceiptView,
+  ): void {
+    if (!this.access(sessionId).getSnapshot()) return
+    const matches = (tab: ParsedTabTarget, address: string) =>
+      tab.artifactId === undefined &&
+      (this.entries.get(address)?.sourceId === receipt.sourceId ||
+        (target.kind === 'attachment' &&
+          objectIdentity(tab.ref, refFieldsOf(target.ref)?.serverId) ===
+            objectIdentity(target.ref, refFieldsOf(tab.ref)?.serverId)))
+    for (const address of this.entries.keys()) {
+      const tab = parseParsedTabAddress(address)
+      if (tab?.sessionId === sessionId && matches(tab, address)) this.refresh(address, true)
+    }
+    this.invalidateTitles(sessionId, matches, true)
     this.bumpProbeRevision()
+  }
+
+  async belongsTo(
+    address: string,
+    sessionId: string,
+    target: ZoteroParseTargetView,
+    receipt: ZoteroParseReceiptView,
+    nextArtifactId: string,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    const tab = parseParsedTabAddress(address)
+    const access = this.access(sessionId)
+    if (
+      tab?.sessionId !== sessionId ||
+      tab.artifactId === undefined ||
+      tab.artifactId === nextArtifactId ||
+      !access.getSnapshot() ||
+      signal.aborted
+    )
+      return false
+    if (target.kind === 'artifact' && target.artifactId === tab.artifactId) return true
+    const bound = this.entries.get(address)?.sourceId
+    if (bound === receipt.sourceId) return true
+    const controller = new AbortController()
+    const detach = access.subscribe(() => {
+      if (!access.getSnapshot()) controller.abort()
+    })
+    try {
+      const meta = await this.call(
+        { sessionId, op: 'meta', target: documentTargetOf(tab) },
+        AbortSignal.any([signal, controller.signal]),
+      )
+      return (
+        access.getSnapshot() &&
+        meta.kind === 'meta' &&
+        (meta.sourceId === receipt.sourceId || meta.currentArtifactId === nextArtifactId)
+      )
+    } finally {
+      detach()
+    }
   }
 
   /** A discarded artifact invalidates every open tab bound to it. */
@@ -384,10 +446,10 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
    * non-generic address title needs no read, a cached or in-flight read is
    * kept, and a `missing` result re-resolves on the next invalidation.
    */
-  resolveTitle(address: string, target: ParsedTabTarget | undefined): void {
+  resolveTitle(address: string, target: ParsedTabTarget | undefined, force = false): void {
     if (
       target === undefined ||
-      !isGenericParsedTitle(target.title) ||
+      (!force && !isGenericParsedTitle(target.title)) ||
       !this.access(target.sessionId).getSnapshot() ||
       !this.titleListeners.has(address)
     )
@@ -431,15 +493,20 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
     notifySubscribers(this.titleListeners.get(address) ?? [], '[zotero-parsed-title]', meta)
   }
 
-  private invalidateTitles(sessionId: string, matches: (target: ParsedTabTarget) => boolean): void {
+  private invalidateTitles(
+    sessionId: string,
+    matches: (target: ParsedTabTarget, address: string) => boolean,
+    force = false,
+  ): void {
     for (const address of new Set([...this.titleListeners.keys(), ...this.titles.keys()])) {
       const target = parseParsedTabAddress(address)
-      if (target === undefined || target.sessionId !== sessionId || !matches(target)) continue
+      if (target === undefined || target.sessionId !== sessionId || !matches(target, address))
+        continue
       this.titleReads.get(address)?.abort()
       this.titleReads.delete(address)
       this.titles.delete(address)
       this.publishTitle(address, { state: 'missing' })
-      this.resolveTitle(address, target)
+      this.resolveTitle(address, target, force)
     }
   }
 
@@ -605,12 +672,12 @@ export function useParsedTitleMeta(
         : { sessionId, ref, artifactId, title, item },
     [sessionId, ref, artifactId, title, item],
   )
-  const [snapshot, setSnapshot] = useState<ParsedTitleMeta>(() => documents.titleSnapshot(address))
+  const [, setSnapshot] = useState<ParsedTitleMeta>(() => documents.titleSnapshot(address))
   useEffect(() => {
     setSnapshot(documents.titleSnapshot(address))
     const unsubscribe = documents.subscribeTitle(address, setSnapshot)
     documents.resolveTitle(address, stableTarget)
     return unsubscribe
   }, [documents, address, stableTarget])
-  return snapshot
+  return documents.titleSnapshot(address)
 }

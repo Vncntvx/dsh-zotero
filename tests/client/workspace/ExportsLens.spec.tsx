@@ -108,21 +108,8 @@ const RIS_DOC: ExportedDocument = {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
-
-/**
- * Let the download helper's scheduled URL release run.
- *
- * `downloadBlob` hands the object URL to a `window.setTimeout(…, 0)` callback
- * (`src/client/download.ts`: "the blob URL must not outlive the click"), so the
- * release is a macrotask, and the click that schedules it returns long before
- * that callback runs: a microtask flush would assert too early. This is the
- * one wait in this file that a promise the test owns cannot express: the code
- * under test does not hand out the timer.
- */
-async function settleUrlRelease(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 describe('sanitizeFileStem', () => {
   it('replaces path, separator, and control characters with dashes', () => {
@@ -252,7 +239,8 @@ describe('ExportDocumentRow', () => {
     expect(screen.getAllByText('A RIS record')).toHaveLength(1)
   })
 
-  it('downloads the single document as a blob named by its key', async () => {
+  it('downloads the single document as a blob named by its key', () => {
+    vi.useFakeTimers()
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -262,14 +250,17 @@ describe('ExportDocumentRow', () => {
     expect(click).toHaveBeenCalledTimes(1)
     const anchor = click.mock.instances[0] as HTMLAnchorElement
     expect(anchor.download).toBe('zotero-dao2023.bib')
-    await settleUrlRelease()
+    expect(anchor.isConnected).toBe(false)
+    expect(revoke).not.toHaveBeenCalled()
+    vi.runOnlyPendingTimers()
     expect(revoke).toHaveBeenCalledTimes(1)
     create.mockRestore()
     revoke.mockRestore()
     click.mockRestore()
   })
 
-  it('names a keyless download by the item key', async () => {
+  it('names a keyless download by the item key', () => {
+    vi.useFakeTimers()
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<ExportDocumentRow doc={RIS_DOC} t={t} />)
@@ -277,19 +268,20 @@ describe('ExportDocumentRow', () => {
     const anchor = click.mock.instances[0] as HTMLAnchorElement
     expect(anchor.download).toBe('zotero-BBBBBBBB.ris')
     // Let the scheduled URL release run before the next test's spy lands.
-    await settleUrlRelease()
+    vi.runOnlyPendingTimers()
     create.mockRestore()
     click.mockRestore()
   })
 
-  it('falls back the download name for a ref without an item key', async () => {
+  it('falls back the download name for a ref without an item key', () => {
+    vi.useFakeTimers()
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<ExportDocumentRow doc={{ ...RIS_DOC, ref: 'not-a-zotero-ref' }} t={t} />)
     fireEvent.click(screen.getByText(`${zh.downloadArtifact} ${extensionOf('ris')}`))
     const anchor = click.mock.instances[0] as HTMLAnchorElement
     expect(anchor.download).toBe('zotero-export.ris')
-    await settleUrlRelease()
+    vi.runOnlyPendingTimers()
     create.mockRestore()
     click.mockRestore()
   })
@@ -357,7 +349,8 @@ describe('ExportSections', () => {
     expect(writeClipboard).toHaveBeenCalledWith(updated)
   })
 
-  it('reports unlocatable items as a light note with the full text download', async () => {
+  it('reports unlocatable items as a light note with the full text download', () => {
+    vi.useFakeTimers()
     const artifact = itemizedBibtex({
       callId: 'e1',
       refs: [REF_A, 'zotero://user/0/item/CCCCCCCC'],
@@ -384,14 +377,15 @@ describe('ExportSections', () => {
     fireEvent.click(screen.getByText(`${zh.downloadFull} BibTeX`))
     const anchor = click.mock.instances[0] as HTMLAnchorElement
     expect(anchor.download).toBe('zotero-bibtex.bib')
-    await settleUrlRelease()
+    vi.runOnlyPendingTimers()
     expect(revoke).toHaveBeenCalledTimes(1)
     create.mockRestore()
     revoke.mockRestore()
     click.mockRestore()
   })
 
-  it('downloads the joined latest entries as one file', async () => {
+  it('downloads the joined latest entries as one file', () => {
+    vi.useFakeTimers()
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -400,7 +394,7 @@ describe('ExportSections', () => {
     expect(create).toHaveBeenCalledTimes(1)
     const anchor = click.mock.instances[0] as HTMLAnchorElement
     expect(anchor.download).toBe('zotero-bibtex.bib')
-    await settleUrlRelease()
+    vi.runOnlyPendingTimers()
     expect(revoke).toHaveBeenCalledTimes(1)
     create.mockRestore()
     revoke.mockRestore()
@@ -494,7 +488,8 @@ describe('artifact file and time facts', () => {
     expect(artifactTimeOf(BIBTEX_ARTIFACT)).toBe('')
   })
 
-  it('downloads the full text as a blob and revokes the URL', async () => {
+  it('downloads the full text as a blob and revokes the URL', () => {
+    vi.useFakeTimers()
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -504,7 +499,7 @@ describe('artifact file and time facts', () => {
     expect(create).toHaveBeenCalledTimes(1)
     expect(click).toHaveBeenCalledTimes(1)
     // The URL release is scheduled right after the click, never leaked.
-    await settleUrlRelease()
+    vi.runOnlyPendingTimers()
     expect(revoke).toHaveBeenCalledTimes(1)
     create.mockRestore()
     revoke.mockRestore()

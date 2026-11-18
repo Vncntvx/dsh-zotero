@@ -12,7 +12,7 @@ import {
   metaOf,
   resultTextOf,
 } from '../../sources/presenters.js'
-import { isRecord, numberField, stringField } from '../../json.ts'
+import { getBatchMetaOf } from '../../sources/decoders.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import css from './toolviews.module.css'
 
@@ -22,41 +22,23 @@ export function GetBatchToolView(props: Props) {
   const { block, toolName, useDisclosure, inspect, t } = props
   const icon = useMemo(() => <IconDeliverDocRegular size={14} />, [])
   const view = useMemo(() => {
-    const meta = metaOf(block)
-    const counts = meta !== null && isRecord(meta['counts']) ? meta['counts'] : null
-    const rows =
-      meta !== null && Array.isArray(meta['items'])
-        ? meta['items']
-            .filter(isRecord)
-            .map((item) => ({
-              ref: stringField(item, 'ref') ?? '',
-              status: stringField(item, 'status') ?? 'unknown',
-              title: stringField(item, 'title'),
-              code: stringField(item, 'code'),
-              message: stringField(item, 'message'),
-              citationKey: stringField(item, 'citationKey'),
-            }))
-            .filter((item) => item.ref !== '')
-        : []
+    const decoded = getBatchMetaOf(metaOf(block) ?? {}, listArg(argsViewOf(block), 'refs'))
     const raw = (resultTextOf(block) ?? '').trim()
     return {
-      rows,
-      requested:
-        numberField(counts ?? {}, 'requested') ?? listArg(argsViewOf(block), 'refs').length,
-      succeeded: numberField(counts ?? {}, 'succeeded'),
-      failed: numberField(counts ?? {}, 'failed'),
+      ...decoded,
+      rows: [...(decoded.rows?.values() ?? [])],
       raw,
       error: errorSummaryOf(block, raw),
     }
   }, [block])
 
   const summary =
-    view.succeeded === undefined
+    view.succeeded === undefined || view.failed === undefined
       ? t('toolSummaryGetBatch', { requested: view.requested })
       : t('toolSummaryGetBatchDone', {
           succeeded: view.succeeded,
           requested: view.requested,
-          failed: view.failed ?? 0,
+          failed: view.failed,
         })
 
   return (
@@ -74,33 +56,48 @@ export function GetBatchToolView(props: Props) {
       {({ isRunning }) =>
         isRunning ? (
           <RunningNotice text={t('toolGetBatchRunning')} />
-        ) : view.rows.length > 0 ? (
-          <div className={css.cardList}>
-            {view.rows.map((row, index) => (
-              <ToolItemRow
-                data-batch-row
-                key={`${row.ref}-${index}`}
-                title={<>{row.title ?? row.ref}</>}
-                trailing={
-                  <>
-                    <span className={css.itemMeta}>
-                      {row.status === 'ok'
-                        ? (row.citationKey ?? t('toolGetBatchRowOk'))
-                        : (row.code ?? t('toolGetBatchRowError'))}
-                    </span>
-                  </>
-                }
-              >
-                {row.status === 'error' && row.message && (
-                  <div className={css.coverageNotice}>{row.message}</div>
-                )}
-                <div className={css.itemMeta}>{row.ref}</div>
-              </ToolItemRow>
-            ))}
-          </div>
-        ) : view.raw ? (
-          <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
-        ) : null
+        ) : (
+          <>
+            {view.detailOmitted && (
+              <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>
+            )}
+            {view.rows.length > 0 && (
+              <div className={css.cardList}>
+                {view.rows.map((row, index) => (
+                  <ToolItemRow
+                    data-batch-row
+                    key={`${row.ref}-${index}`}
+                    title={<>{row.title ?? row.ref}</>}
+                    trailing={
+                      <>
+                        <span className={css.itemMeta}>
+                          {row.status === 'ok'
+                            ? (row.citationKey ?? t('toolGetBatchRowOk'))
+                            : row.status === 'error'
+                              ? (row.code ?? t('toolGetBatchRowError'))
+                              : null}
+                        </span>
+                      </>
+                    }
+                  >
+                    {row.status === 'error' && row.message && (
+                      <div className={css.coverageNotice}>{row.message}</div>
+                    )}
+                    <div className={css.itemMeta}>{row.ref}</div>
+                  </ToolItemRow>
+                ))}
+              </div>
+            )}
+            {view.omitted > 0 && (
+              <div className={css.coverageNotice}>
+                {t('omittedRowsNote', { count: view.omitted })}
+              </div>
+            )}
+            {(view.rows.length === 0 || view.omitted > 0 || view.detailOmitted) && view.raw && (
+              <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
+            )}
+          </>
+        )
       }
     </ZoteroToolRow>
   )

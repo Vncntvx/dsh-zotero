@@ -73,7 +73,10 @@ it('opens a zero-item collection with sub-collections and stays on the tree', as
   expect(result.current.narrowPane).toBe('tree')
   expect(result.current.expanded.has(container.ref)).toBe(true)
   await waitFor(() =>
-    expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: container.ref })),
+    expect(face.browse).toHaveBeenCalledWith(
+      expect.objectContaining({ parentRef: container.ref }),
+      expect.any(AbortSignal),
+    ),
   )
 })
 

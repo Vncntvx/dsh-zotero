@@ -39,7 +39,10 @@ it('restores the child lane of a persisted expanded root', async () => {
   })
   const { result, face } = setupLibraryFeed()
   await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
-  expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: ref }))
+  expect(face.browse).toHaveBeenCalledWith(
+    expect.objectContaining({ parentRef: ref }),
+    expect.any(AbortSignal),
+  )
 })
 it('clears user filters in the first query of a different scope', async () => {
   const { result, face } = setupLibraryFeed()

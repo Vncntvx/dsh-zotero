@@ -68,6 +68,7 @@ describe('feed read cancellation', () => {
       'retryInspector',
       'pageChild',
       'retryChild',
+      'clearPosition',
       'list',
       'listQuery',
     ] as const)

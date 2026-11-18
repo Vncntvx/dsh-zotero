@@ -353,6 +353,7 @@ it('does not resume path expansion after unmount while a path prefix is loading'
   await waitFor(() =>
     expect(browse).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'collections', offset: 1 }),
+      expect.any(AbortSignal),
     ),
   )
   unmount()

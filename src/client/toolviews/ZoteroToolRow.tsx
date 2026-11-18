@@ -124,9 +124,7 @@ export function ZoteroToolRow({
         >
           <TextShimmer active={isRunning}>{displaySummary}</TextShimmer>
         </span>
-        {summarySuffix && (state === 'ok' || isDeclined) && (
-          <span className={css.summarySuffix}>{summarySuffix}</span>
-        )}
+        {summarySuffix && <TextShimmer className={css.summarySuffix}>{summarySuffix}</TextShimmer>}
       </>
     )
   }, [displaySummary, isDeclined, isUnverified, isPreparing, isRunning, state, summarySuffix])

@@ -1193,9 +1193,8 @@ export class SourceWorkspaceIndex {
         const view = getBatchMetaOf(meta ?? {}, listArg(args, 'refs'))
         for (const ref of view.attributedRefs) {
           const raw = view.rows?.get(ref)
-          const hasOutcome = view.outcomes.has(ref) || raw !== undefined
-          if (state === 'ok' && !hasOutcome) continue
-          const outcome = view.outcomes.get(ref) ?? (raw?.status === 'error' ? 'error' : 'ok')
+          const outcome = view.outcomes.get(ref) ?? raw?.status
+          if (state === 'ok' && outcome == null) continue
           const draft = this.draftOf(ref, seq)
           const itemState = state === 'ok' && outcome === 'error' ? 'error' : state
           this.countOperation(draft, itemState)

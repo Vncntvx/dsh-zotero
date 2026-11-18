@@ -180,6 +180,22 @@ describe('library filter controls', () => {
     expect(change).toHaveBeenCalledTimes(2)
   })
 
+  it('rejects fractional and out-of-range years on debounce, blur, and Enter', async () => {
+    vi.useFakeTimers()
+    const { change } = mountFilters()
+    click(zh.libraryYearLabel)
+    editYear('from', '1.5')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(screen.getByRole('alert').textContent).toBe(zh.libraryYearNumberInvalid)
+    fireEvent.blur(editYear('from', '-1'))
+    fireEvent.keyDown(editYear('from', '10000'), { key: 'Enter' })
+    expect(change).not.toHaveBeenCalled()
+    fireEvent.keyDown(editYear('from', '0'), { key: 'Enter' })
+    expect(change).toHaveBeenLastCalledWith({ yearFrom: 0, yearTo: undefined })
+    fireEvent.blur(editYear('to', '9999'))
+    expect(change).toHaveBeenLastCalledWith({ yearFrom: 0, yearTo: 9999 })
+  })
+
   it('restores the year draft and commits on close or blur without duplicate changes', () => {
     const { change } = mountFilters({ yearFrom: 2020, yearTo: 2024 })
     fireEvent.click(screen.getByText(zh.libraryYearLabel))

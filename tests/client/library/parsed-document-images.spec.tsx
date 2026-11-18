@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { parseReceipt } from '../enrichment/support/parse-ports.ts'
 /** One generation owns all its figure bytes and Blob URLs. */
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -33,8 +34,16 @@ describe('prepared parsed figures', () => {
     })
     const second = runtime.documents.probeRevision.subscribe(observer)
     try {
-      runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/ABCD1234')
-      runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/ABCD1234')
+      runtime.documents.committed(
+        'parsed-session',
+        { kind: 'attachment', ref: 'zotero://user/0/attachment/ABCD1234' },
+        parseReceipt(),
+      )
+      runtime.documents.committed(
+        'parsed-session',
+        { kind: 'attachment', ref: 'zotero://user/0/attachment/ABCD1234' },
+        parseReceipt(),
+      )
       expect(observer).toHaveBeenCalledTimes(2)
       expect(runtime.documents.probeRevision.getSnapshot()).toBe(2)
       expect(diagnostic).toHaveBeenCalledTimes(2)
@@ -92,7 +101,7 @@ describe('prepared parsed figures', () => {
       await act(async () => {
         figure!.onload!()
       })
-      expect(screen.getByRole('heading', { name: 'Decoded' })).toBeDefined()
+      expect(screen.getByRole('heading', { name: 'Decoded', level: 1 })).toBeDefined()
       expect(screen.getByRole('img').getAttribute('src')).toBe('blob:decoded')
     } finally {
       vi.stubGlobal('Image', BrowserImage)
@@ -139,7 +148,7 @@ describe('prepared parsed figures', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
     await tick()
-    expect(screen.getByRole('heading', { name: 'Generation2' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Generation2', level: 1 })).toBeDefined()
     expect(screen.getByRole('img').getAttribute('src')).toBe('blob:blue')
     expect(created).toHaveBeenCalledTimes(2)
     expect(revoked).toHaveBeenCalledWith('blob:red')

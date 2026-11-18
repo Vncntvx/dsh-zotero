@@ -73,7 +73,7 @@ it('reports a terminal start response and coalesces its later receipt', async ()
     operationId: receipt.operationId,
   })
   expect(committed).toHaveBeenCalledOnce()
-  expect(committed).toHaveBeenCalledWith(PARSE_SELECTION.sessionId, PARSE_SELECTION.target)
+  expect(committed).toHaveBeenCalledWith(PARSE_SELECTION.sessionId, PARSE_SELECTION.target, receipt)
 })
 
 it('ignores unknown receipts and late completions after disposal', async () => {

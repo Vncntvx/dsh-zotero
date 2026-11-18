@@ -2,8 +2,9 @@
 /** Host Menu interaction over a snapshot of the user's passage. */
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { documentRead, parsedRuntime, composer, REF } from './support/parsed-document.tsx'
+import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
 import {
+  ParsedDocumentTab,
   extractSelectionMarkdown,
   extractMarkdownTitle,
   serializeNodeToMarkdown,
@@ -49,6 +50,25 @@ async function mount() {
 }
 
 describe('parsed passage menu', () => {
+  it('reports an unknown blob once and withholds the draft action', async () => {
+    const { runtime, actions } = await mount()
+    const passage = screen.getByText('Selected passage')
+    const image = document.createElement('img')
+    image.src = 'blob:unknown'
+    passage.append(image)
+    const range = document.createRange()
+    range.selectNodeContents(passage)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    await act(async () => {
+      document.dispatchEvent(new Event('selectionchange'))
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    expect(runtime.notify).toHaveBeenCalledExactlyOnceWith(mockT('parsedSelectionImageUnavailable'))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(actions.insertQuote).not.toHaveBeenCalled()
+  })
+
   it('copies the saved passage after DOM selection is gone', async () => {
     const { runtime } = await mount()
     await select()
@@ -58,6 +78,29 @@ describe('parsed passage menu', () => {
     expect(clipboardWrites).toHaveBeenCalledWith('Selected passage')
     // The confirmation is raised in the shell overlay, so it outlives this tab.
     expect(runtime.notify).toHaveBeenCalledWith(mockT('libraryParsedCopied'), 'success')
+  })
+
+  it('notifies for each successful copy, not for rerenders, another lane settling or a refusal', async () => {
+    const { runtime, view, actions } = await mount()
+    await select()
+    fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedCopySelection') }))
+    await act(async () => {})
+    expect(runtime.notify).toHaveBeenCalledTimes(1)
+    const nextNotify = vi.fn()
+    const nextProps = { ...runtime.props({ actions }), notify: nextNotify }
+    view.rerender(<ParsedDocumentTab {...nextProps} />)
+    expect(nextNotify).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedCopy') }))
+    await act(async () => {})
+    expect(nextNotify).toHaveBeenCalledExactlyOnceWith(mockT('libraryParsedCopied'), 'success')
+    clipboardWrites.mockRejectedValueOnce(new Error('clipboard denied'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedCopied') }))
+    })
+    expect(nextNotify).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedCopy') }))
+    await act(async () => {})
+    expect(nextNotify).toHaveBeenCalledTimes(2)
   })
 
   it('inserts the whole request as one quote card', async () => {
@@ -70,7 +113,7 @@ describe('parsed passage menu', () => {
     // composer keeps a single removable block instead of loose text.
     expect(actions.insertQuote).toHaveBeenCalledWith(
       `${mockT('parsedExplainPrompt', {
-        source: JSON.stringify({ kind: 'ref', ref: REF }),
+        source: JSON.stringify({ kind: 'artifactId', artifactId: METADATA.artifactId }),
         language: 'English (en)',
       })}\n\nPaper\n\nSelected passage`,
       { label: mockT('parsedExplain'), title: 'Paper', detail: 'Paper', body: 'Selected passage' },
@@ -208,6 +251,17 @@ describe('parsed passage menu', () => {
 })
 
 describe('the selection markdown serializer', () => {
+  it('keeps a mapped figure with escaped alt text inside a mixed table cell', () => {
+    const host = document.createElement('div')
+    host.innerHTML =
+      '<table><tr><th>Evidence</th></tr><tr><td><strong>Figure</strong> <img alt="[a]|b" src="blob:figure"></td></tr></table>'
+    const range = document.createRange()
+    range.selectNodeContents(host)
+    const markdown = extractSelectionMarkdown(range, new Map([['blob:figure', 'images/f.png']]))
+    expect(markdown).toContain('| **Figure** ![\\[a\\]\\|b](images/f.png) |')
+    expect(markdown).not.toContain('blob:')
+  })
+
   it('serializes every block and inline element the parsed body carries', () => {
     const host = document.createElement('div')
     host.innerHTML = [

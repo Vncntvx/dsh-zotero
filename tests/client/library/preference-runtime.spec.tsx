@@ -93,16 +93,9 @@ it('starts all-items only for a new tab and retains the same occurrence across b
   expect(second.result.current.filters).toEqual({ tags: ['kept'] })
   second.unmount()
   signal.abort()
+  const nextMemory = store.viewMemory(new AbortController().signal, 'S1', 'session-1')
   const third = renderHook(() =>
-    useLibraryFeed(
-      face,
-      'S1',
-      true,
-      'session-1',
-      store,
-      preferences,
-      store.viewMemory(new AbortController().signal, 'S1', 'session-1'),
-    ),
+    useLibraryFeed(face, 'S1', true, 'session-1', store, preferences, nextMemory),
   )
   await waitFor(() => expect(third.result.current.list.phase).toBe('ready'))
   expect(third.result.current.filters).toEqual({})

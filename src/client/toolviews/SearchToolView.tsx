@@ -42,7 +42,7 @@ export function SearchToolView(props: SearchToolViewProps) {
 
       let sum = ''
       if (isToolRunning(block)) {
-        sum = q ? `"${q}"` : t('toolSearchRunning')
+        sum = t('toolSearchRunning')
       } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
         // The hit count is the call's, not the projection's: `rows` is the
         // bounded page the card draws, which is capped independently of the
@@ -54,7 +54,7 @@ export function SearchToolView(props: SearchToolViewProps) {
             ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
             : t('toolSummaryFound', { count })
       } else {
-        sum = q ? `"${q}"` : t('toolTitleSearch')
+        sum = t('toolTitleSearch')
       }
 
       const errSummary = errorSummaryOf(block, raw)

@@ -54,7 +54,10 @@ it('restores visible expanded descendants and confirms their leaf state', async 
   )
   expect(result.current.expanded.has(child.ref)).toBe(false)
   expect(result.current.expanded.has(root.ref)).toBe(true)
-  expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: root.ref }))
+  expect(face.browse).toHaveBeenCalledWith(
+    expect.objectContaining({ parentRef: root.ref }),
+    expect.any(AbortSignal),
+  )
 })
 it('does not load expanded descendants hidden behind a collapsed ancestor', async () => {
   writeLibraryState('S1', 'session-1', { ...saved, expanded: [child.ref] })
@@ -115,11 +118,11 @@ it('limits navigation restoration to four concurrent branches and drops queued w
   writeLibraryState('S1', 'session-1', { ...saved, expanded: roots.map((row) => row.ref) })
   const pending = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
   const original = hierarchy()
-  let calls = 0
+  const signals: AbortSignal[] = []
   const { unmount } = setupLibraryFeed({
-    browse: async (request) => {
+    browse: async (request, signal) => {
       if (request.parentRef) {
-        calls++
+        signals.push(signal!)
         return pending.promise
       }
       if (request.kind === 'collections')
@@ -130,12 +133,64 @@ it('limits navigation restoration to four concurrent branches and drops queued w
       return original(request)
     },
   })
-  await waitFor(() => expect(calls).toBe(4))
+  await waitFor(() => expect(signals).toHaveLength(4))
   unmount()
+  expect(signals.every((signal) => signal.aborted)).toBe(true)
   await act(async () =>
     pending.resolve({ ok: true, value: { ...ROOT_COLLECTIONS, items: [], total: 0, returned: 0 } }),
   )
-  expect(calls).toBe(4)
+  expect(signals).toHaveLength(4)
+})
+
+it('does not spend rebuilt slots on old queued work or accept late old branches', async () => {
+  const roots = Array.from({ length: 6 }, (_, index) => ({
+    ...root,
+    ref: root.ref.replace('COLL0001', `ROOT000${index}`),
+  }))
+  writeLibraryState('S1', 'session-1', { ...saved, expanded: roots.map((row) => row.ref) })
+  const previous = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+  const replacement = deferred<Awaited<ReturnType<LibraryFeedFace['browse']>>>()
+  const firstSignals: AbortSignal[] = []
+  const nextSignals: AbortSignal[] = []
+  const original = hierarchy()
+  let rebuilding = false
+  const { result } = setupLibraryFeed({
+    browse: async (request, signal) => {
+      if (request.parentRef) {
+        const signals = rebuilding ? nextSignals : firstSignals
+        signals.push(signal!)
+        return rebuilding ? replacement.promise : previous.promise
+      }
+      if (request.kind === 'collections')
+        return {
+          ok: true,
+          value: { ...ROOT_COLLECTIONS, items: roots, total: roots.length, returned: roots.length },
+        }
+      return original(request)
+    },
+  })
+  await waitFor(() => expect(firstSignals).toHaveLength(4))
+  rebuilding = true
+  act(() => result.current.refresh())
+  expect(firstSignals.every((signal) => signal.aborted)).toBe(true)
+  await waitFor(() => expect(nextSignals).toHaveLength(4))
+  await act(async () =>
+    previous.resolve({
+      ok: true,
+      value: { ...ROOT_COLLECTIONS, items: [child], total: 1, returned: 1 },
+    }),
+  )
+  expect(nextSignals).toHaveLength(4)
+  expect(result.current.flatTree.some(({ row }) => row.ref === child.ref)).toBe(false)
+  await act(async () =>
+    replacement.resolve({
+      ok: true,
+      value: { ...ROOT_COLLECTIONS, items: [], total: 0, returned: 0 },
+    }),
+  )
+  expect(nextSignals).toHaveLength(6)
+  for (const row of roots)
+    expect(result.current.treeLane(row.ref)).toMatchObject({ phase: 'ready', total: 0 })
 })
 
 it('does not reread a confirmed leaf when expansion is attempted again', async () => {

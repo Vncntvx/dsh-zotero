@@ -7,7 +7,7 @@ import {
   ParsedDocumentTab,
   ParsedDocumentTitle,
 } from '../../../src/client/components/library/ParsedDocumentTab.tsx'
-import { documentRead, parsedRuntime, composer, REF } from './support/parsed-document.tsx'
+import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
@@ -134,7 +134,7 @@ it('instructs the model to read the full document through zotero_retrieve', asyn
   // The instruction names the exact tool call and source; no local path
   // or uninterpolated placeholder survives, and the excerpt closes the card.
   expect(draft).toContain('mode="fulltext"')
-  expect(draft).toContain(JSON.stringify({ kind: 'ref', ref: REF }))
+  expect(draft).toContain(JSON.stringify({ kind: 'artifactId', artifactId: METADATA.artifactId }))
   expect(draft).toContain('complete=true')
   expect(draft).toContain('Answer in English (en)')
   expect(draft).not.toContain('{source}')
@@ -157,10 +157,13 @@ it('instructs the model to read the full document through zotero_retrieve', asyn
 it('addresses a URL-sourced document by artifact id in the explanation', async () => {
   const actions = composer()
   const artifactId = 'e'.repeat(64)
-  await fixture({
+  const runtime = await parsedRuntime(documentRead('Passage', { artifactId }))
+  owned.push(runtime)
+  runtime.mount({
     actions,
     address: `dsh-resource://zotero-parsed/artifact/parsed-session/${artifactId}`,
   })
+  await tick()
   await select()
   fireEvent.click(screen.getByRole('menuitem', { name: mockT('parsedExplain') }))
   await tick()

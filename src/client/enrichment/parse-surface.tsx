@@ -23,6 +23,7 @@ import { refFieldsOf } from '../../ref-grammar.ts'
 import type {
   ZoteroAttachmentRowView,
   ZoteroParseTargetView,
+  ZoteroParseReceiptView,
   ZoteroListParsedDocumentsRequestView,
   ZoteroListParsedDocumentsResultView,
   ZoteroDiscardParsedDocumentRequestView,
@@ -94,7 +95,12 @@ export function createDocumentParseSurface(
   options: {
     readonly form: ConfigForm<Record<string, unknown>>
     /** Fires once per committed parse, for panels that show committed state. */
-    readonly onCommitted?: (sessionId: string, target: ZoteroParseTargetView) => void
+    readonly onCommitted?: (
+      sessionId: string,
+      target: ZoteroParseTargetView,
+      receipt: ZoteroParseReceiptView,
+    ) => void
+    readonly onClearSession?: (sessionId: string) => void
     readonly management: ParsedDocumentManagementRemote
     /** Opens a committed artifact in its own right-sidebar reading tab. */
     readonly openParsed?: (sessionId: string, artifactId: string, title: string) => void
@@ -116,17 +122,27 @@ export function createDocumentParseSurface(
   const keyOf = (selection: Pick<DocumentParseSelection, 'sessionId' | 'target'>) =>
     JSON.stringify([selection.sessionId, selection.target])
   const committed = new Set<string>()
-  const notifyCommitted = (sessionId: string, operationId: string, generation: string) => {
-    const key = JSON.stringify([sessionId, operationId, generation])
+  const notifyCommitted = (
+    sessionId: string,
+    operationId: string,
+    receipt: ZoteroParseReceiptView,
+  ) => {
+    if (receipt.operationId !== operationId) return
+    const key = JSON.stringify([sessionId, operationId, receipt.generation])
     if (committed.has(key) || disposed) return
     const entry = [...operations.values()].find(
       (value) =>
         value.selection.sessionId === sessionId && value.operation.operationId === operationId,
     )
-    if (entry === undefined) return
+    if (
+      entry === undefined ||
+      entry.revision !== snapshot.revision ||
+      entry.operation.generation !== receipt.generation
+    )
+      return
     committed.add(key)
     if (committed.size > 128) committed.delete(committed.values().next().value!)
-    onCommitted?.(sessionId, entry.selection.target)
+    onCommitted?.(sessionId, entry.selection.target, receipt)
   }
   let sequence = 0
   let disposed = false
@@ -208,9 +224,9 @@ export function createDocumentParseSurface(
               },
             })
             if (operations.size > 64) operations.delete(operations.keys().next().value!)
+            if (result.value.receipt)
+              notifyCommitted(request.sessionId, result.value.operationId, result.value.receipt)
           }
-          if (result.ok && result.value.receipt)
-            notifyCommitted(request.sessionId, result.value.operationId, result.value.generation)
           return result
         } finally {
           admissions.delete(admission)
@@ -220,7 +236,7 @@ export function createDocumentParseSurface(
       documentParseReceipt: async (request, signal) => {
         const result = await ctx.remote.zotero.documentParseReceipt(request, signal)
         if (result.ok && result.value.kind === 'completed')
-          notifyCommitted(request.sessionId, request.operationId, result.value.receipt.generation)
+          notifyCommitted(request.sessionId, request.operationId, result.value.receipt)
         return result
       },
     },
@@ -241,6 +257,7 @@ export function createDocumentParseSurface(
       return entry && { ...entry.selection, operation: entry.operation }
     },
     clearSession: (sessionId) => {
+      options.onClearSession?.(sessionId)
       for (const [key, entry] of operations)
         if (entry.selection.sessionId === sessionId) operations.delete(key)
       for (const admission of admissions)
@@ -398,27 +415,25 @@ export function useDocumentParseSurface(
     revision,
     mounted: deployment.mounted,
     dialog: port && selection && (
-      <>
-        {deployment.error && (
-          <p role="alert">{t('libraryParseConfigError', { message: deployment.error })}</p>
-        )}
-        <ParseDocumentDialog
-          key={sessionId}
-          open={open && selection.sessionId === sessionId && sessionAllowed}
-          selection={selection}
-          remote={port.remote}
-          jobs={port.jobs}
-          capabilities={capabilities}
-          onClose={() => {
-            setOpen(false)
-            // Closing the dialog is the one point where a newly committed
-            // artifact becomes visible in the inspector behind it.
-            setRevision((previous) => previous + 1)
-          }}
-          onOpenParsed={port?.openParsed}
-          t={t}
-        />
-      </>
+      <ParseDocumentDialog
+        key={sessionId}
+        open={open && selection.sessionId === sessionId && sessionAllowed}
+        selection={selection}
+        remote={port.remote}
+        jobs={port.jobs}
+        capabilities={capabilities}
+        deploymentError={
+          deployment.error ? t('libraryParseConfigError', { message: deployment.error }) : undefined
+        }
+        onClose={() => {
+          setOpen(false)
+          // Closing the dialog is the one point where a newly committed
+          // artifact becomes visible in the inspector behind it.
+          setRevision((previous) => previous + 1)
+        }}
+        onOpenParsed={port?.openParsed}
+        t={t}
+      />
     ),
   }
 }

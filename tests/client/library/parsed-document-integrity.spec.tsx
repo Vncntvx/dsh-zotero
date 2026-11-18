@@ -127,5 +127,5 @@ it('does no source I/O before access is granted and supports repeated refresh co
   await tick()
   fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
   await tick()
-  expect(screen.getByRole('heading', { name: 'Granted' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Granted', level: 1 })).toBeDefined()
 })

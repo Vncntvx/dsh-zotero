@@ -29,6 +29,7 @@ export interface ParseDocumentDialogProps {
   readonly jobs: DocumentParseJobs | undefined
   readonly capabilities: ParseSnapshotSource<DocumentParseCapabilities>
   readonly onClose: () => void
+  readonly deploymentError?: string
   /** Opens the committed artifact in its own reading tab; absent when enrichment reads are off. */
   readonly onOpenParsed?: (sessionId: string, artifactId: string, title: string) => void
   readonly t: ParseTranslate
@@ -165,6 +166,7 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
         </div>
       }
     >
+      {props.deploymentError && <p role="alert">{props.deploymentError}</p>}
       <form
         id={formId}
         className={css.surface}

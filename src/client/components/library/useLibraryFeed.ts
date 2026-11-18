@@ -142,7 +142,10 @@ export function useLibraryFeed(
 ): LibraryFeed {
   // The session cache carries only the detail payload; every preference and
   // the view pins (`selectedRef` / `narrowPane`) hydrate from localStorage.
-  const initialView = initialViewOverride ?? viewStore.sessionView(undefined, sessionId)
+  const initialView = useMemo(
+    () => initialViewOverride ?? viewStore.sessionView(undefined, sessionId),
+    [initialViewOverride, viewStore, sessionId],
+  )
   const [storageError, setStorageError] = useState<string>()
   const visibleRef = useRef(visible)
   visibleRef.current = visible
@@ -642,7 +645,7 @@ export function useLibraryFeed(
         setInspector({ phase: 'error', message: laneFailureOf(error) })
       })
     return () => controller.abort()
-  }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren, memory?.childPages])
+  }, [active, face, selectedRef, inspectorRetry, refreshToken, resetChildren, memory])
 
   /**
    * Open or close one branch. Refs may arrive in alias spellings, so
@@ -859,31 +862,33 @@ export function useLibraryFeed(
     [memory, selectedRef, pageChild, childOffsetOf],
   )
 
+  const clearPosition = useCallback(() => {
+    seq.current.list += 1
+    seq.current.inspector += 1
+    resetChildren()
+    cancelLocate()
+    resetLibraryState(PERSONAL_LIBRARY)
+    if (memory) {
+      memory.cancelScrollSave()
+      memory.childPages = undefined
+      memory.snapshot = undefined
+      memory.scroll = {}
+      memory.disclosure = undefined
+    }
+    lastPersisted.current = undefined
+    try {
+      if (serverId) clearLibraryState(serverId, sessionId)
+      setStorageError(undefined)
+      return true
+    } catch (error) {
+      setStorageError(laneFailureOf(error))
+      return false
+    }
+  }, [resetChildren, cancelLocate, resetLibraryState, memory, serverId, sessionId])
+
   return {
     storageError,
-    clearPosition: () => {
-      seq.current.list += 1
-      seq.current.inspector += 1
-      resetChildren()
-      cancelLocate()
-      resetLibraryState(PERSONAL_LIBRARY)
-      if (memory) {
-        memory.cancelScrollSave()
-        memory.childPages = undefined
-        memory.snapshot = undefined
-        memory.scroll = {}
-        memory.disclosure = undefined
-      }
-      lastPersisted.current = undefined
-      try {
-        if (serverId) clearLibraryState(serverId, sessionId)
-        setStorageError(undefined)
-        return true
-      } catch (error) {
-        setStorageError(laneFailureOf(error))
-        return false
-      }
-    },
+    clearPosition,
     libraries,
     currentLibrary,
     selectLibrary,

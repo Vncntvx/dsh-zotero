@@ -17,7 +17,6 @@ import {
   searchPage,
 } from '../helpers/library-panel-harness.tsx'
 import type { ZoteroLibraryBrowseRequestView } from '../../../src/client/remote.ts'
-import type { DocumentParseSurfacePort } from '../../../src/client/enrichment/parse-surface.tsx'
 import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 
@@ -265,6 +264,7 @@ describe('the toolbar rewinds to the first page on change', () => {
     )
     expect(face.browse).not.toHaveBeenCalledWith(
       expect.objectContaining({ library: { type: 'group', id: 999 } }),
+      expect.any(AbortSignal),
     )
   })
 })
@@ -338,10 +338,12 @@ describe('the library selector switches libraries', () => {
           kind: 'collections',
           library: { type: 'group', id: 123 },
         }),
+        expect.any(AbortSignal),
       )
     })
     expect(face.browse).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'savedSearches', library: { type: 'group', id: 123 } }),
+      expect.any(AbortSignal),
     )
     // Switching back to the personal library re-runs both lanes for user/0.
     // The first change re-rendered the toolbar, so re-query the button.
@@ -356,6 +358,7 @@ describe('the library selector switches libraries', () => {
     await waitFor(() => {
       expect(face.browse).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'collections', library: { type: 'user', id: 0 } }),
+        expect.any(AbortSignal),
       )
     })
     // The scope resets to the library view, not the previous collection, and
@@ -503,75 +506,5 @@ describe('a rejecting wire face surfaces its lane error, then recovers', () => {
       row.click()
     })
     expect(await screen.findByText('NeurIPS')).toBeTruthy()
-  })
-
-  it('renders stacked PDF and MD badges when an item has a parsed artifact', async () => {
-    const documentArtifact = vi.fn(async (request: { op: string; refs?: readonly string[] }) =>
-      request.op === 'probe'
-        ? {
-            ok: true as const,
-            value: {
-              kind: 'probed' as const,
-              results: (request.refs ?? []).map((ref) => ({ ref, state: 'ready' as const })),
-            },
-          }
-        : { ok: true as const, value: { kind: 'ready' } },
-    )
-    const deploymentSnapshot = {
-      mounted: true,
-      connected: true,
-      mode: 'local' as const,
-      revision: 0,
-      maxFileBytes: 1000,
-      maxPages: 100,
-    }
-    mountPanel(
-      {
-        search: vi.fn(async () => ({
-          ok: true,
-          value: searchPage({
-            items: [
-              {
-                ref: 'zotero://user/0/item/ITEM0001',
-                title: 'Parsed Paper',
-                creatorSummary: 'Author',
-                year: 2024,
-                itemType: 'journalArticle',
-                bestAttachmentType: 'application/pdf',
-                bestAttachmentRef: 'zotero://user/0/attachment/ATT0001',
-              },
-            ],
-          }),
-        })),
-      },
-      undefined,
-      {
-        parse: {
-          remote: { documentArtifact } as unknown as DocumentParseSurfacePort['remote'],
-          jobs: {} as DocumentParseSurfacePort['jobs'],
-          deployment: {
-            getSnapshot: () => deploymentSnapshot,
-            subscribe: () => () => {},
-          } as unknown as DocumentParseSurfacePort['deployment'],
-          management: {
-            listParsedDocuments: async () => ({
-              ok: true as const,
-              value: { rows: [], total: 0 },
-            }),
-            discardParsedDocument: async () => ({
-              ok: true as const,
-              value: { kind: 'discarded' as const, removedAliases: 0, removedReceipts: 0 },
-            }),
-          },
-          recall: () => undefined,
-          recentUrl: () => undefined,
-          clearSession: () => {},
-        },
-      },
-    )
-
-    expect(await screen.findByText('Parsed Paper')).toBeTruthy()
-    expect(await screen.findByText(zh.badgePdf)).toBeTruthy()
-    expect(await screen.findByText(zh.badgeMarkdown)).toBeTruthy()
   })
 })

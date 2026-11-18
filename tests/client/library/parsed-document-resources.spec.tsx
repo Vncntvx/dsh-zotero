@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { parseReceipt } from '../enrichment/support/parse-ports.ts'
 /** Resource revocation, bounded preparation and explicit failure recovery. */
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -34,7 +35,7 @@ it('revokes displayed bytes, cancels preparation and prepares afresh after acces
   expect(screen.getByRole('alert').textContent).toContain('not authorized')
   act(() => runtime.access.publish(true))
   await tick()
-  expect(screen.getByRole('heading', { name: 'Resource' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Resource', level: 1 })).toBeDefined()
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(2)
 })
 
@@ -57,7 +58,7 @@ it('refuses an over-budget candidate and preserves the previous complete version
   })
   fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
   await tick()
-  expect(screen.getByRole('heading', { name: 'Resource' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Resource', level: 1 })).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Replacement' })).toBeNull()
   expect(screen.getByRole('alert').textContent).toContain('memory is full')
 })
@@ -83,7 +84,7 @@ it('invalidates a late opening when a newer refresh is requested', async () => {
     }),
   )
   await tick()
-  expect(screen.getByRole('heading', { name: 'Fresh' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Fresh', level: 1 })).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Stale' })).toBeNull()
   expect(read.mock.calls.filter(([request]) => request.op === 'release')).toHaveLength(2)
 })
@@ -97,7 +98,7 @@ it('keeps successful content available and reports a lease cleanup refusal', asy
   })
   const runtime = await mount(read)
   await tick()
-  expect(screen.getByRole('heading', { name: 'Resource' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Resource', level: 1 })).toBeDefined()
   expect(runtime.failures).toHaveBeenCalledWith(
     expect.objectContaining({ message: 'cleanup refused' }),
   )
@@ -108,9 +109,15 @@ it('starts a new preparation when a committed generation is reported without pol
   const runtime = await mount(read)
   await tick()
   read.mockImplementation(documentRead('# Committed'))
-  act(() => runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001'))
+  act(() =>
+    runtime.documents.committed(
+      'parsed-session',
+      { kind: 'attachment', ref: 'zotero://user/0/attachment/PDF00001' },
+      parseReceipt(),
+    ),
+  )
   await tick()
-  expect(screen.getByRole('heading', { name: 'Committed' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Committed', level: 1 })).toBeDefined()
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(2)
 })
 
@@ -126,9 +133,15 @@ it('matches a committed attachment structurally even when its tab address carrie
   runtime.mount({ address: titled, title: 'Real Title' })
   await tick()
   read.mockImplementation(documentRead('# Committed'))
-  act(() => runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001'))
+  act(() =>
+    runtime.documents.committed(
+      'parsed-session',
+      { kind: 'attachment', ref: 'zotero://user/0/attachment/PDF00001' },
+      parseReceipt(),
+    ),
+  )
   await tick()
-  expect(screen.getByRole('heading', { name: 'Committed' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Committed', level: 1 })).toBeDefined()
 })
 
 it('reports a browser decode failure in the active locale and retains the complete document', async () => {
@@ -154,7 +167,7 @@ it('reports a browser decode failure in the active locale and retains the comple
   fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
   await tick()
   expect(screen.getByRole('alert').textContent).toBe(zh.parsedErrorFigureDecode)
-  expect(screen.getByRole('heading', { name: 'Complete' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Complete', level: 1 })).toBeDefined()
   expect(screen.queryByRole('img')).toBeNull()
   expect(revoke).toHaveBeenCalledWith('blob:broken')
 })
@@ -164,12 +177,20 @@ it('coalesces simultaneous refresh commands into one replacement', async () => {
   const runtime = await mount(read)
   await tick()
   act(() => {
-    runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001')
-    runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001')
+    runtime.documents.committed(
+      'parsed-session',
+      { kind: 'attachment', ref: 'zotero://user/0/attachment/PDF00001' },
+      parseReceipt(),
+    )
+    runtime.documents.committed(
+      'parsed-session',
+      { kind: 'attachment', ref: 'zotero://user/0/attachment/PDF00001' },
+      parseReceipt(),
+    )
   })
   await tick()
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(2)
-  expect(screen.getByRole('heading', { name: 'Resource' })).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Resource', level: 1 })).toBeDefined()
 })
 
 it('ignores unchanged grants and committed notices while access is denied', async () => {
@@ -180,7 +201,13 @@ it('ignores unchanged grants and committed notices while access is denied', asyn
   await tick()
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(1)
   act(() => runtime.access.publish(false))
-  act(() => runtime.documents.committed('parsed-session', 'zotero://user/0/attachment/PDF00001'))
+  act(() =>
+    runtime.documents.committed(
+      'parsed-session',
+      { kind: 'attachment', ref: 'zotero://user/0/attachment/PDF00001' },
+      parseReceipt(),
+    ),
+  )
   await tick()
   expect(read.mock.calls.filter(([request]) => request.op === 'open')).toHaveLength(1)
   expect(screen.queryByRole('heading', { name: 'Resource' })).toBeNull()

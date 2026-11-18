@@ -320,6 +320,7 @@ describe('targeted recovery and write refresh', () => {
     await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
     expect(face.browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'collections', offset: 2 }),
+      expect.any(AbortSignal),
     )
   })
 

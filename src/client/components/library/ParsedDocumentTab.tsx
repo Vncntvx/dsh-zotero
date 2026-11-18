@@ -80,7 +80,6 @@ export function ParsedDocumentTitle(
   )
   const meta = useParsedTitleMeta(props.documents, tab.navigation.address, target)
   if (target === undefined) return props.t('tabParsedFallback')
-  if (!isGenericParsedTitle(target.title)) return target.title
   return meta.title || target.title || props.t('tabParsedFallback')
 }
 
@@ -100,11 +99,19 @@ export function ParsedDocumentTab(props: ParsedDocumentTabProps) {
   return <ParsedDocumentView {...props} key={address} target={target} address={address} />
 }
 
-export function serializeTableToMarkdown(table: Element): string {
+type FigureNames = ReadonlyMap<string, string>
+
+export function serializeTableToMarkdown(table: Element, figures?: FigureNames): string {
   const rows = Array.from(table.querySelectorAll('tr'))
   if (rows.length === 0) return ''
   const matrix = rows.map((tr) =>
-    Array.from(tr.children).map((cell) => cell.textContent?.trim() ?? ''),
+    Array.from(tr.children).map((cell) =>
+      Array.from(cell.childNodes, (node) => serializeNodeToMarkdown(node, figures))
+        .join('')
+        .trim()
+        .replace(/\s*\n\s*/gu, ' ')
+        .replaceAll('|', '\\|'),
+    ),
   )
   if (matrix.length === 0 || !matrix[0]) return ''
   const colCount = Math.max(...matrix.map((r) => r.length))
@@ -119,7 +126,9 @@ export function serializeTableToMarkdown(table: Element): string {
   return md + '\n'
 }
 
-export function serializeNodeToMarkdown(node: Node): string {
+class UnknownSelectionImage extends Error {}
+
+export function serializeNodeToMarkdown(node: Node, figures?: FigureNames): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.nodeValue ?? ''
   }
@@ -149,7 +158,7 @@ export function serializeNodeToMarkdown(node: Node): string {
 
   let childrenText = ''
   for (let i = 0; i < node.childNodes.length; i++) {
-    childrenText += serializeNodeToMarkdown(node.childNodes[i]!)
+    childrenText += serializeNodeToMarkdown(node.childNodes[i]!, figures)
   }
 
   const tag = el.tagName ? el.tagName.toUpperCase() : ''
@@ -188,12 +197,14 @@ export function serializeNodeToMarkdown(node: Node): string {
     case 'A': {
       const href = el.getAttribute('href')
       const text = childrenText.trim()
-      return href ? `[${text}](${href})` : text
+      return href && /^(?:https?:|mailto:|#)/iu.test(href) ? `[${text}](${href})` : text
     }
     case 'IMG': {
       const alt = el.getAttribute('alt') ?? ''
       const src = el.getAttribute('src') ?? ''
-      return `![${alt}](${src})`
+      const name = figures?.get(src) ?? artifactImageName(src)
+      if (src.startsWith('blob:') && name === undefined) throw new UnknownSelectionImage()
+      return name !== undefined ? `![${alt.replace(/[\\[\]]/gu, '\\$&')}](${name})` : alt
     }
     case 'BLOCKQUOTE': {
       const text = childrenText.trim()
@@ -209,21 +220,21 @@ export function serializeNodeToMarkdown(node: Node): string {
     case 'HR':
       return '\n\n---\n\n'
     case 'TABLE':
-      return serializeTableToMarkdown(el)
+      return serializeTableToMarkdown(el, figures)
     default:
       return childrenText
   }
 }
 
-export function extractSelectionMarkdown(range: Range): string {
+export function extractSelectionMarkdown(range: Range, figures?: FigureNames): string | undefined {
   try {
     const fragment = range.cloneContents()
-    const md = serializeNodeToMarkdown(fragment)
+    const md = serializeNodeToMarkdown(fragment, figures)
       .replace(/\n{3,}/g, '\n\n')
       .trim()
     if (md !== '') return md
-  } catch {
-    // fallback
+  } catch (error) {
+    if (error instanceof UnknownSelectionImage) return undefined
   }
   return range.toString().trim()
 }
@@ -244,6 +255,10 @@ function ParsedDocumentView(
     artifactAllowed && sessionAllowed && resource.value?.phase !== 'denied'
       ? resource.value?.document
       : undefined
+  const figures = useMemo(
+    () => new Map(Object.entries(document?.images ?? {}).map(([name, url]) => [url, name])),
+    [document],
+  )
   const parseSurface = useDocumentParseSurface(
     parse,
     {
@@ -263,12 +278,20 @@ function ParsedDocumentView(
   const titleId = useId()
   const copy = useCopyFeedback(address)
   const copyDocument = useCopyFeedback(document?.metadata.artifactId, document?.text)
+  const notify = props.notify
+  const copyLabel = t('libraryParsedCopied')
+  const previousCopy = useRef(false)
+  const previousDocumentCopy = useRef(false)
   useEffect(() => {
-    if (copy.phase === 'done' || copyDocument.phase === 'done') {
-      // The shell overlay owns the notice, so it outlives this tab.
-      props.notify?.(t('libraryParsedCopied'), 'success')
-    }
-  }, [copy.phase, copyDocument.phase, props, t])
+    const copied = copy.phase === 'done'
+    if (copied && !previousCopy.current) notify?.(copyLabel, 'success')
+    previousCopy.current = copied
+  }, [copy.phase, copyLabel, notify])
+  useEffect(() => {
+    const copied = copyDocument.phase === 'done'
+    if (copied && !previousDocumentCopy.current) notify?.(copyLabel, 'success')
+    previousDocumentCopy.current = copied
+  }, [copyDocument.phase, copyLabel, notify])
   const labels = useMemo(
     () => ({
       code: { copyLabel: t('libraryParsedCopyCode'), copiedLabel: t('libraryParsedCopiedCode') },
@@ -286,7 +309,7 @@ function ParsedDocumentView(
     const abort = new AbortController()
     escape.current = abort
     return () => abort.abort()
-  }, [address])
+  }, [address, document?.metadata.artifactId])
   // Registration effects run after render has installed the current actions below.
   const selectionActions = useRef<{
     explain(text: string): void
@@ -324,7 +347,8 @@ function ParsedDocumentView(
     let pointerSelecting = false,
       keyboardSelecting = false
     let previous:
-      { text: string; start: Node; offset: number; end: Node; endOffset: number } | undefined
+      | { text: string | undefined; start: Node; offset: number; end: Node; endOffset: number }
+      | undefined
     const closeOwned = () => {
       const active = contextMenus.active.getSnapshot()
       if (active?.kind === 'zoteroSelection' && active.value.owner === selectionOwner)
@@ -336,10 +360,10 @@ function ParsedDocumentView(
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
       const range = selection.getRangeAt(0)
       if (!documentRef.current?.contains(range.commonAncestorContainer)) return
-      const text = extractSelectionMarkdown(range)
-      if (!text) return
+      const text = extractSelectionMarkdown(range, figures)
       if (
-        previous?.text === text &&
+        previous !== undefined &&
+        previous.text === text &&
         previous.start === range.startContainer &&
         previous.offset === range.startOffset &&
         previous.end === range.endContainer &&
@@ -352,6 +376,11 @@ function ParsedDocumentView(
         offset: range.startOffset,
         end: range.endContainer,
         endOffset: range.endOffset,
+      }
+      if (!text) {
+        closeOwned()
+        if (text === undefined) notify?.(t('parsedSelectionImageUnavailable'))
+        return
       }
       const rects = Array.from(range.getClientRects()).filter(
         (rect) => rect.width > 0 && rect.height > 0,
@@ -425,7 +454,7 @@ function ParsedDocumentView(
       window.document.removeEventListener('keyup', keyUp)
       closeOwned()
     }
-  }, [contextMenus, selectionOwner])
+  }, [contextMenus, selectionOwner, figures, notify, t])
 
   const extractedTitle = useMemo(
     () =>
@@ -436,12 +465,13 @@ function ParsedDocumentView(
   )
   const hasGenericTarget = isGenericParsedTitle(target.title)
   const hasGenericLabel = isGenericParsedTitle(document?.metadata.targetLabel)
-  const displayTitle = !hasGenericTarget
-    ? target.title
-    : extractedTitle ||
-      (!hasGenericLabel ? document!.metadata.targetLabel : '') ||
-      target.title ||
-      t('tabParsedFallback')
+  const displayTitle =
+    extractedTitle ||
+    (!hasGenericTarget
+      ? target.title
+      : (!hasGenericLabel ? document!.metadata.targetLabel : '') ||
+        target.title ||
+        t('tabParsedFallback'))
   const explain = async (selection: { text: string }) => {
     if (inputActions === undefined) return
     const signal = escape.current.signal
@@ -458,10 +488,8 @@ function ParsedDocumentView(
       // Address the exact parsed document the tab shows. A Zotero attachment
       // ref or an opaque artifact id both resolve through the same retrieve
       // mode; URL-sourced documents have no ref and use artifactId.
-      const source =
-        target.artifactId !== undefined
-          ? { kind: 'artifactId', artifactId: target.artifactId }
-          : { kind: 'ref', ref: target.ref }
+      if (document === undefined) return
+      const source = { kind: 'artifactId', artifactId: document.metadata.artifactId }
       const draft = [
         t('parsedExplainPrompt', {
           source: JSON.stringify(source),

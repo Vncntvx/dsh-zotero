@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { parseReceipt } from '../enrichment/support/parse-ports.ts'
 /** The library badges answer one batched probe and re-probe on commits and discards. */
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -148,7 +149,7 @@ it('re-probes when the provider reports a commit or discard', async () => {
   expect(screen.queryByText(REF)).toBeNull()
   // A commit from the inspector: the badge returns.
   ready.add(REF)
-  act(() => documents.committed('s1', REF))
+  act(() => documents.committed('s1', { kind: 'attachment', ref: REF }, parseReceipt()))
   await act(async () => {})
   expect(read).toHaveBeenCalledTimes(3)
   expect(screen.getByText(REF)).toBeDefined()

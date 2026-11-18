@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
+import { awaitSharedWaiter } from '../../../waiter-flight.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
 import { LibraryFailure, laneFailureOf } from './library-errors.ts'
 import {
@@ -45,6 +46,15 @@ export type NavigationLane<T> =
 type Row = CollectionRowView | SavedSearchRowView
 /** The one lane key that is not an object identity; no valid ref can equal it. */
 const SAVED = '@saved'
+
+function navigationEpoch() {
+  return {
+    pending: new Map<string, Promise<void>>(),
+    controllers: new Set<AbortController>(),
+    queue: [] as ((acquired: boolean) => void)[],
+    slots: 0,
+  }
+}
 
 /**
  * Whether two breadcrumbs name the same path. An absent path and an empty one
@@ -101,28 +111,25 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
   const [locateError, setLocateError] = useState<string>()
   const [locatedRef, setLocatedRef] = useState<string>()
   const state = useRef(new Map<string, NavigationLane<Row>>())
-  const generation = useRef(0)
-  const locationGeneration = useRef(0)
+  const epoch = useRef(navigationEpoch())
+  const location = useRef<AbortController>()
   const recheckLeaves = useRef(new Set<string>())
-  const pending = useRef(new Map<string, Promise<void>>())
   const open = useRef(expanded)
   open.current = expanded
   const live = useRef(active)
   live.current = active
   const restoreCounts = useRef<Readonly<Record<string, number>>>({})
-  const slots = useRef(0)
-  /**
-   * Slot handoff for loads beyond the 4-concurrent cap. The reset and cleanup
-   * effects below drop this array together with `pending`, which is a
-   * deliberate never-settle contract, not a leak: a task still queued at that
-   * moment has its `await` abandoned — the suspended frame never reaches
-   * `valid()`, never publishes a lane, and never runs its `finally`. With the
-   * only strong reference to the task promise gone from `pending`, the whole
-   * frame (promise, resolvers, closures) is unreachable and left to GC.
-   * Nothing observes the difference because nothing awaits a queued load
-   * across an epoch change.
-   */
-  const queue = useRef<(() => void)[]>([])
+  const cancelLocate = useCallback(() => {
+    location.current?.abort()
+    location.current = undefined
+  }, [])
+  const resetEpoch = useCallback(() => {
+    const previous = epoch.current
+    epoch.current = navigationEpoch()
+    cancelLocate()
+    for (const settle of previous.queue.splice(0)) settle(false)
+    for (const controller of previous.controllers) controller.abort()
+  }, [cancelLocate])
   const keyOf = useCallback(
     (ref?: string) => (ref === undefined ? '' : identityOf(ref)),
     [identityOf],
@@ -139,21 +146,21 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
   const load = useCallback(
     (ref?: string, goal = 0, rebuild = false): Promise<void> => {
       const key = ref === SAVED ? SAVED : keyOf(ref)
-      const running = pending.current.get(key)
+      const current = epoch.current
+      const running = current.pending.get(key)
       if (running) return running
-      const epoch = generation.current
-      const valid = () => live.current && generation.current === epoch
+      const controller = new AbortController()
+      current.controllers.add(controller)
+      const { signal } = controller
+      const valid = () => live.current && epoch.current === current && !signal.aborted
       const task = (async () => {
-        await new Promise<void>((resolve) => {
-          if (slots.current < 4) {
-            slots.current++
-            resolve()
-          } else
-            queue.current.push(() => {
-              slots.current++
-              resolve()
-            })
+        const acquired = await new Promise<boolean>((resolve) => {
+          if (current.slots < 4) {
+            current.slots++
+            resolve(true)
+          } else current.queue.push(resolve)
         })
+        if (!acquired) return
         try {
           if (!valid()) return
           let previous = pageOf(key)
@@ -166,10 +173,14 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
           for (;;) {
             const offset = page?.nextOffset ?? 0
             if (page && page.nextOffset === undefined) break
-            const response = await face.browse(
-              ref === SAVED
-                ? savedSearchesRequestOf(library, offset)
-                : treeRequestOf(library, ref, offset),
+            const response = await awaitSharedWaiter(
+              face.browse(
+                ref === SAVED
+                  ? savedSearchesRequestOf(library, offset)
+                  : treeRequestOf(library, ref, offset),
+                signal,
+              ),
+              signal,
             )
             if (!valid()) return
             if (!response.ok) throw new Error(response.error.message)
@@ -235,24 +246,22 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
               previous: pageOf(key),
             })
         } finally {
-          slots.current--
-          queue.current.shift()?.()
+          const next = current.queue.shift()
+          if (next === undefined) current.slots--
+          else next(true)
         }
       })().finally(() => {
-        if (pending.current.get(key) === task) pending.current.delete(key)
+        current.controllers.delete(controller)
+        if (current.pending.get(key) === task) current.pending.delete(key)
       })
-      pending.current.set(key, task)
+      current.pending.set(key, task)
       return task
     },
     [face, library, keyOf, setExpanded],
   )
 
   useEffect(() => {
-    const pendingReads = pending.current
     live.current = active
-    generation.current += 1
-    pendingReads.clear()
-    queue.current = []
     state.current.clear()
     setLanes(new Map())
     if (active) {
@@ -260,12 +269,10 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
       void load(SAVED, activationPrefixes.current[SAVED] ?? 0)
     }
     return () => {
-      generation.current += 1
       live.current = false
-      queue.current = []
-      pendingReads.clear()
+      resetEpoch()
     }
-  }, [active, serverId, library, load])
+  }, [active, serverId, library, load, resetEpoch])
 
   const lane = useCallback(
     (ref?: string) => lanes.get(ref === SAVED ? SAVED : keyOf(ref)),
@@ -323,19 +330,20 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
 
   const locate = useCallback(async () => {
     if (!active || !('ref' in selection)) return
-    const epoch = generation.current
-    const location = ++locationGeneration.current
-    const valid = () =>
-      live.current && epoch === generation.current && location === locationGeneration.current
+    cancelLocate()
+    const controller = new AbortController()
+    location.current = controller
+    const { signal } = controller
+    const valid = () => live.current && !signal.aborted
     setLocateError(undefined)
     setLocatedRef(undefined)
     try {
-      await load()
+      await awaitSharedWaiter(load(), signal)
       const root = pageOf('')
       if (!valid()) return
       if (!root) throw new LibraryFailure('libraryErrorScopeMissing')
       if (selection.kind === 'savedSearch') {
-        await load(SAVED)
+        await awaitSharedWaiter(load(SAVED), signal)
         while (valid()) {
           const page = pageOf(SAVED)
           const savedLane = state.current.get(SAVED)
@@ -353,15 +361,21 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
           }
           if (page?.nextOffset === undefined)
             throw new LibraryFailure('libraryErrorSavedSearchGone')
-          await load(SAVED, page.rows.length + 1)
+          await awaitSharedWaiter(load(SAVED, page.rows.length + 1), signal)
         }
         return
       }
-      const response = await face.collectionPath({
-        library,
-        ref: selection.ref,
-        libraryVersion: root.libraryVersion,
-      })
+      const response = await awaitSharedWaiter(
+        face.collectionPath(
+          {
+            library,
+            ref: selection.ref,
+            libraryVersion: root.libraryVersion,
+          },
+          signal,
+        ),
+        signal,
+      )
       if (!valid()) return
       if (!response.ok) throw new Error(response.error.message)
       let parent: string | undefined
@@ -371,7 +385,7 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
           if (page?.rows.some((item) => keyOf(item.ref) === keyOf(row.ref))) break
           if (page && page.nextOffset === undefined)
             throw new LibraryFailure('libraryErrorPathChanged')
-          await load(parent, (page?.rows.length ?? 0) + 1)
+          await awaitSharedWaiter(load(parent, (page?.rows.length ?? 0) + 1), signal)
           if (state.current.get(keyOf(parent))?.phase === 'error')
             throw new LibraryFailure('libraryErrorPathFailed')
         }
@@ -399,8 +413,10 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
       }
     } catch (error) {
       if (valid()) setLocateError(laneFailureOf(error))
+    } finally {
+      if (location.current === controller) location.current = undefined
     }
-  }, [active, selection, face, library, load, keyOf, setExpanded, updateSelection])
+  }, [active, selection, face, library, load, keyOf, setExpanded, updateSelection, cancelLocate])
   const locateRef = useRef(locate)
   locateRef.current = locate
   useEffect(() => {
@@ -414,8 +430,8 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
    * re-proven. Saved-search writes use {@link refreshSaved} instead.
    */
   const rebuild = useCallback(() => {
-    generation.current += 1
-    pending.current.clear()
+    resetEpoch()
+    const current = epoch.current
     const counts = new Map(
       [...state.current].map(([key, value]) => [
         key,
@@ -438,9 +454,9 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
         load(undefined, counts.get('') ?? 0, true),
         load(SAVED, counts.get(SAVED) ?? 0, true),
       ])
-      await locateRef.current()
+      if (epoch.current === current && live.current) await locateRef.current()
     })()
-  }, [load])
+  }, [load, resetEpoch])
   /**
    * Reload only the saved-search lane after a saved-search write. The write
    * advanced the library version, so this prefix restarts at offset 0 and
@@ -460,9 +476,6 @@ export function useLibraryNavigation(options: LibraryNavigationOptions) {
       ),
     [lanes],
   )
-  const cancelLocate = useCallback(() => {
-    locationGeneration.current++
-  }, [])
   const treeLane = useCallback(
     (ref?: string) => lane(ref) as NavigationLane<CollectionRowView> | undefined,
     [lane],

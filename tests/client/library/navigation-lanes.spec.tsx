@@ -100,7 +100,10 @@ describe('navigation lanes', () => {
     act(() => result.current.retryTree(undefined))
     await waitFor(() => expect(result.current.treeLane(undefined)?.phase).toBe('ready'))
     expect(result.current.treeLane('child')?.phase).toBe('ready')
-    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 }))
+    expect(browse).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 0 }),
+      expect.any(AbortSignal),
+    )
   })
 
   it('makes saved searches after the first fifty reachable and retries the same page', async () => {
@@ -132,6 +135,7 @@ describe('navigation lanes', () => {
     await waitFor(() =>
       expect(browse).toHaveBeenLastCalledWith(
         expect.objectContaining({ kind: 'savedSearches', offset: 1 }),
+        expect.any(AbortSignal),
       ),
     )
   })

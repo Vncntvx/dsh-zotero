@@ -6,7 +6,7 @@
  * behaviour a unit can see directly, including the arms that only a
  * misconfigured deployment reaches.
  */
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react'
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -215,11 +215,24 @@ describe('parse surface row mapping', () => {
     expect(clear).toHaveBeenCalledWith(PARSE_SESSION)
   })
 
-  it('shows the accepted-value error beside the dialog', () => {
+  it('owns the current accepted-value error inside the dialog until it closes', () => {
     const { port } = surfaceWorld({ form: fakeScope({ value: { mode: 'bogus' } }) })
-    const { result } = renderHook(() => useDocumentParseSurface(port, ACCESS, mockT))
-    act(() => result.current.openUrl!())
-    render(<div>{result.current.dialog}</div>)
-    expect(screen.getByRole('alert').textContent).toContain('mode')
+    function Surface() {
+      const surface = useDocumentParseSurface(port, ACCESS, mockT)
+      return (
+        <>
+          <button onClick={surface.openUrl}>Open</button>
+          {surface.dialog}
+        </>
+      )
+    }
+    render(<Surface />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('alert').textContent).toContain('mode')
+    fireEvent.click(within(dialog).getByRole('button', { name: mockT('parseClose') }))
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toContain('mode')
   })
 })

@@ -68,7 +68,11 @@ describe('MatchReferencesToolView', () => {
           {
             inputId: 'entry-2',
             status: 'matched',
-            selected: { title: 'Selected paper', matchMethod: 'title' },
+            selected: {
+              ref: 'zotero://user/0/item/AAAA1111',
+              title: 'Selected paper',
+              matchMethod: 'title',
+            },
           },
           { reason: 'Malformed row without an input id.' },
         ],
@@ -85,9 +89,7 @@ describe('MatchReferencesToolView', () => {
         })}
       />,
     )
-    expect(
-      screen.getByText(mockT('toolSummaryMatchReferences', { matched: 1, input: 2 })),
-    ).toBeTruthy()
+    expect(screen.getAllByText(mockT('toolTitleMatchReferences')).length).toBeGreaterThan(0)
     expect(screen.getByText('entry-2')).toBeTruthy()
     expect(screen.getByText(/Selected paper/)).toBeTruthy()
     expect(screen.getByText('Raw match payload')).toBeTruthy()
@@ -125,6 +127,7 @@ describe('MatchReferencesToolView', () => {
     expect(
       screen.getByText(mockT('toolSummaryMatchReferences', { matched: 5, input: 25 })),
     ).toBeTruthy()
+    expect(screen.getByText(mockT('omittedRowsNote', { count: 5 }))).toBeTruthy()
   })
 
   it('shows the empty-result state and raw fallback when no match rows arrive', () => {

@@ -1,5 +1,4 @@
 import {
-  Button,
   IconCloseOutlineRegular,
   IconLinkOutlineRegular,
   IconRefreshOutlineRegular,
@@ -86,7 +85,8 @@ export function ParsedManagerToolbar(props: ParsedManagerToolbarProps) {
           disabled={urlParseDisabled}
           onClick={onOpenUrl}
         />
-        <Button
+        <IconButton
+          shape="square"
           variant="outline"
           size="sm"
           aria-label={t('parsedManagerRefresh')}

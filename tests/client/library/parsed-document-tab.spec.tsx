@@ -46,7 +46,7 @@ describe('complete parsed-document delivery', () => {
     const request = read.mock.calls.find(([request]) => request.op === 'page')![0]
     tail.resolve(await base(request))
     await ready()
-    expect(screen.getByRole('heading', { name: 'Title' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Title', level: 1 })).toBeDefined()
     expect(screen.getByText(/tail paragraph/)).toBeDefined()
     expect(read.mock.calls.filter(([request]) => request.op === 'release')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedCopy') }))
@@ -65,7 +65,7 @@ describe('complete parsed-document delivery', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
     await ready()
-    expect(screen.getByRole('heading', { name: 'First' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'First', level: 1 })).toBeDefined()
     expect(screen.getByRole('alert').textContent).toContain('Store unreadable')
     expect(runtime.source.getSnapshot().status).toBe('failed')
   })
@@ -83,7 +83,7 @@ describe('complete parsed-document delivery', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: mockT('parsedReload') }))
     await ready()
-    expect(screen.getByRole('heading', { name: 'First' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'First', level: 1 })).toBeDefined()
     expect(screen.getByRole('alert').textContent).toContain('changed')
   })
 
@@ -118,7 +118,7 @@ describe('complete parsed-document delivery', () => {
       act(() => runtime.grant(action).publish(true))
       await ready()
     }
-    expect(screen.getByRole('heading', { name: 'Access' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Access', level: 1 })).toBeDefined()
   })
 
   it('reports an unavailable artifact and releases its request id', async () => {
@@ -142,9 +142,7 @@ describe('complete parsed-document delivery', () => {
       const read = documentRead('# Prepared')
       await mount(read)
       await ready()
-      expect(screen.getAllByRole('heading').some((h) => h.textContent?.includes('Paper'))).toBe(
-        true,
-      )
+      expect(screen.getByRole('heading', { level: 2, name: 'Prepared' })).toBeDefined()
       const opened = read.mock.calls.find(([request]) => request.op === 'open')
       expect(opened).toBeDefined()
       expect(opened![0].op === 'open' ? opened![0].requestId : '').toMatch(

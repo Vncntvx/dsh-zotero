@@ -88,6 +88,7 @@ import { LibraryFormController } from './library-form-controller.ts'
 import { CitationFormController } from './citation-form-controller.ts'
 import type { ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
+  artifactIdOf,
   ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   ZOTERO_REMOTE_PACKAGE,
   type ZoteroDiagnosticsView,
@@ -115,6 +116,7 @@ import {
   PARSED_TAB_KIND,
   PARSED_TAB_PATTERN,
   parsedArtifactTabAddress,
+  parseParsedTabAddress,
   parsedTabAddress,
 } from './parsed-tab.ts'
 import {
@@ -1309,6 +1311,14 @@ function registerUi(ctx: ClientContext): void {
     'dsh-zotero: parsed document resources',
   )
   const connection: DocumentParseClientContext['connection'] = ctx.get('connection')
+  const parseTransitions = new Map<string, { sessionId: string; controller: AbortController }>()
+  const clearTransitions = (sessionId?: string) => {
+    for (const [key, transition] of parseTransitions) {
+      if (sessionId !== undefined && transition.sessionId !== sessionId) continue
+      transition.controller.abort()
+      parseTransitions.delete(key)
+    }
+  }
   const parse = createDocumentParseSurface(
     {
       remote: ctx.remote,
@@ -1318,8 +1328,102 @@ function registerUi(ctx: ClientContext): void {
     },
     {
       form: enrichmentForm,
-      onCommitted: (sessionId, target) => {
-        if (target.kind === 'attachment') parsedDocuments.committed(sessionId, target.ref)
+      onClearSession: clearTransitions,
+      onCommitted: (sessionId, target, receipt) => {
+        const access = ctx.remoteAccess.source('session', sessionId, 'zotero/documentArtifact')
+        const deployment = parse.deployment.getSnapshot()
+        if (!access.getSnapshot() || !deployment.mounted || !deployment.connected) return
+        const artifactId = artifactIdOf(receipt.artifactId)
+        if (artifactId === undefined) return
+        const key = JSON.stringify([sessionId, receipt.sourceId])
+        parseTransitions.get(key)?.controller.abort()
+        const controller = new AbortController()
+        const { signal } = controller
+        parseTransitions.set(key, { sessionId, controller })
+        const detach = access.subscribe(() => {
+          if (!access.getSnapshot()) controller.abort()
+        })
+        const detachDeployment = parse.deployment.subscribe(() => {
+          const current = parse.deployment.getSnapshot()
+          if (!current.connected || !current.mounted || current.revision !== deployment.revision)
+            controller.abort()
+        })
+        const tabs = ctx.sidebarRight.openTabs
+          .getSnapshot()
+          .filter((tab) => tab.sessionId === sessionId && tab.kind === PARSED_TAB_KIND)
+        const readCurrent = async () => {
+          const result = await ctx.remote.zotero.documentArtifact(
+            { sessionId, op: 'meta', target: { kind: 'artifact', artifactId } },
+            signal,
+          )
+          signal.throwIfAborted()
+          if (!result.ok) throw result.error
+          const meta = result.value
+          return meta.kind === 'meta' && meta.sourceId === receipt.sourceId ? meta : undefined
+        }
+        void (async () => {
+          const meta = await readCurrent()
+          if (meta?.currentArtifactId === undefined) return
+          const { currentArtifactId: nextArtifactId } = meta
+          const ref = meta.targetLabel.startsWith('zotero://') ? meta.targetLabel : undefined
+          const matches = await Promise.allSettled(
+            tabs.map((tab) =>
+              parsedDocuments.belongsTo(
+                tab.contentId,
+                sessionId,
+                target,
+                receipt,
+                nextArtifactId,
+                signal,
+              ),
+            ),
+          )
+          if ((await readCurrent())?.currentArtifactId !== nextArtifactId) return
+          parsedDocuments.committed(sessionId, ref ? { kind: 'attachment', ref } : target, receipt)
+          const next = parsedArtifactTabAddress({ sessionId, artifactId: nextArtifactId })
+          for (const [index, tab] of tabs.entries()) {
+            const match = matches[index]!
+            if (match.status === 'rejected') {
+              ctx.logger.warn(
+                'Parsed document tab could not follow the committed reading',
+                match.reason,
+              )
+              continue
+            }
+            if (!match.value || signal.aborted) continue
+            const current = ctx.sidebarRight.openTabs.getSnapshot()
+            if (
+              !current.some(
+                (entry) =>
+                  entry.sessionId === tab.sessionId &&
+                  entry.tabId === tab.tabId &&
+                  entry.contentId === tab.contentId,
+              )
+            )
+              continue
+            if (
+              current.some(
+                (entry) =>
+                  entry.sessionId === tab.sessionId &&
+                  entry.kind === PARSED_TAB_KIND &&
+                  parseParsedTabAddress(entry.contentId)?.artifactId === nextArtifactId,
+              )
+            ) {
+              ctx.sidebarRight.closeIn(tab.sessionId, tab.tabId)
+            } else {
+              ctx.sidebarRight.openResourceIn(tab.sessionId, next, { replaceTab: tab.tabId })
+            }
+          }
+        })()
+          .catch((error) => {
+            if (!signal.aborted)
+              ctx.logger.warn('Parsed document tab could not follow the committed reading', error)
+          })
+          .finally(() => {
+            detach()
+            detachDeployment()
+            if (parseTransitions.get(key)?.controller === controller) parseTransitions.delete(key)
+          })
       },
       management: {
         listParsedDocuments: (request, signal) =>
@@ -1338,7 +1442,13 @@ function registerUi(ctx: ClientContext): void {
         ),
     },
   )
-  ctx.effect(() => () => parse.dispose(), 'dsh-zotero: document parsing surface')
+  ctx.effect(
+    () => () => {
+      clearTransitions()
+      parse.dispose()
+    },
+    'dsh-zotero: document parsing surface',
+  )
   const surfaces: UiSurfaces = {
     parse,
     parsedDocuments,

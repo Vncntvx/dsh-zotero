@@ -28,6 +28,7 @@ import {
 import type { FlatCollectionRow, LibraryLaneState, LibrarySelection } from './library-model.ts'
 import { lanePageOf } from './library-model.ts'
 import { IconButton } from '../IconButton.tsx'
+import { ContentButton } from '../ContentButton.tsx'
 import css from './library.module.css'
 import { LibraryLaneControls } from './LibraryLaneControls.tsx'
 
@@ -280,15 +281,17 @@ function LibraryTreeBody({
               )}
             >
               <span className={css.treeExpanderPlaceholder} />
-              <button
+              <ContentButton
                 type="button"
-                className={clsx(css.treeRow, sameFixedScope(selection, fixed) && css.treeRowActive)}
+                size="sm"
+                variant="ghost"
+                className={css.treeRow}
                 aria-current={sameFixedScope(selection, fixed) ? 'page' : undefined}
                 onClick={() => selectScope(fixed)}
               >
                 <Icon />
                 <span className={css.treeRowLabel}>{t(labelKey)}</span>
-              </button>
+              </ContentButton>
             </div>
           </li>
         ))}
@@ -363,8 +366,10 @@ function LibraryTreeBody({
                       }}
                     />
                   )}
-                  <button
+                  <ContentButton
                     type="button"
+                    size="sm"
+                    variant="ghost"
                     role="treeitem"
                     ref={(element) => {
                       if (element) buttons.current.set(row.ref, element)
@@ -379,7 +384,7 @@ function LibraryTreeBody({
                     aria-posinset={posInSet}
                     onFocus={() => setFocused(row.ref)}
                     onKeyDown={(event) => keyDown(event, index)}
-                    className={clsx(css.treeRow, isSelected && css.treeRowActive)}
+                    className={css.treeRow}
                     title={row.path.length > 0 ? row.path.join(' / ') : row.name}
                     onClick={() =>
                       selectScope({ kind: 'collection', ref: row.ref, name: row.name })
@@ -402,7 +407,7 @@ function LibraryTreeBody({
                         <Tag tone="quiet">{row.itemCount}</Tag>
                       </span>
                     )}
-                  </button>
+                  </ContentButton>
                 </div>
                 {closingBranches.get(row.ref)?.map((entry) => (
                   <LibraryLaneControls

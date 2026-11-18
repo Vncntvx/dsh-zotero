@@ -59,7 +59,7 @@ export function LibraryFilters({
   // commit (debounce, blur, or Enter).
   const [yearOpen, setYearOpen] = useState(false)
   const [yearDraft, setYearDraft] = useState<{ from: string; to: string }>({ from: '', to: '' })
-  const [yearInvalid, setYearInvalid] = useState(false)
+  const [yearInvalid, setYearInvalid] = useState<'number' | 'range'>()
   const yearTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Item types are a static schema listing the panel reads once for every
@@ -105,13 +105,23 @@ export function LibraryFilters({
   /** Commit the draft: refuse a crossed range locally, never send it. */
   const commitYear = (from: string, to: string): void => {
     if (yearTimer.current !== undefined) clearTimeout(yearTimer.current)
-    const fromValue = from === '' ? undefined : Number(from)
-    const toValue = to === '' ? undefined : Number(to)
-    if (fromValue !== undefined && toValue !== undefined && fromValue > toValue) {
-      setYearInvalid(true)
+    const fromValue = from === '' ? undefined : /^\d+$/u.test(from) ? Number(from) : NaN
+    const toValue = to === '' ? undefined : /^\d+$/u.test(to) ? Number(to) : NaN
+    if (
+      [fromValue, toValue].some(
+        (year) =>
+          year !== undefined &&
+          (!Number.isInteger(year) || year < ZOTERO_YEAR_MIN || year > ZOTERO_YEAR_MAX),
+      )
+    ) {
+      setYearInvalid('number')
       return
     }
-    setYearInvalid(false)
+    if (fromValue !== undefined && toValue !== undefined && fromValue > toValue) {
+      setYearInvalid('range')
+      return
+    }
+    setYearInvalid(undefined)
     if (value.yearFrom === fromValue && value.yearTo === toValue) return
     change({ ...value, yearFrom: fromValue, yearTo: toValue })
   }
@@ -126,7 +136,7 @@ export function LibraryFilters({
   const openYear = (): void => {
     const next = !yearOpen
     setYearOpen(next)
-    setYearInvalid(false)
+    setYearInvalid(undefined)
     if (next) {
       setYearDraft({
         from: value.yearFrom === undefined ? '' : String(value.yearFrom),
@@ -141,7 +151,7 @@ export function LibraryFilters({
   const clearAll = (): void => {
     if (yearTimer.current !== undefined) clearTimeout(yearTimer.current)
     setYearOpen(false)
-    setYearInvalid(false)
+    setYearInvalid(undefined)
     setYearDraft({ from: '', to: '' })
     change({})
   }
@@ -322,7 +332,7 @@ export function LibraryFilters({
           />
           {yearInvalid && (
             <span className={css.filterYearInvalid} role="alert">
-              {t('libraryYearRangeInvalid')}
+              {t(yearInvalid === 'number' ? 'libraryYearNumberInvalid' : 'libraryYearRangeInvalid')}
             </span>
           )}
         </div>

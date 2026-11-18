@@ -24,7 +24,10 @@ describe('unguarded seams', () => {
     vi.mocked(face.browse).mockClear()
     act(() => result.current.retryTree(undefined))
     await waitFor(() =>
-      expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ offset: 0 })),
+      expect(face.browse).toHaveBeenCalledWith(
+        expect.objectContaining({ offset: 0 }),
+        expect.any(AbortSignal),
+      ),
     )
   })
 

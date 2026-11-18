@@ -96,7 +96,10 @@ describe('restored view pins', () => {
     )
     expect(result.current.expanded.has(qualified)).toBe(true)
     await waitFor(() =>
-      expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ parentRef: qualified })),
+      expect(face.browse).toHaveBeenCalledWith(
+        expect.objectContaining({ parentRef: qualified }),
+        expect.any(AbortSignal),
+      ),
     )
   })
 

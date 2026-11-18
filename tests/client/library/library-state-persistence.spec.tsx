@@ -75,7 +75,10 @@ describe('library state persistence', () => {
 
     act(() => result.current.loadMoreTree(undefined))
     await waitFor(() =>
-      expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 1 })),
+      expect(browse).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 1 }),
+        expect.any(AbortSignal),
+      ),
     )
     // The loading publish still shows the first page's one-row prefix, so the
     // durable content is identical and no synchronous write happens.

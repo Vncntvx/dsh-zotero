@@ -47,7 +47,10 @@ it('appends the server cursor without losing the selected first root', async () 
   act(() => result.current.loadMoreTree(undefined))
   await waitFor(() => expect(result.current.flatTree).toHaveLength(2))
   expect(result.current.selection.kind).toBe('collection')
-  expect(face.browse).toHaveBeenCalledWith(expect.objectContaining({ offset: 1 }))
+  expect(face.browse).toHaveBeenCalledWith(
+    expect.objectContaining({ offset: 1 }),
+    expect.any(AbortSignal),
+  )
 })
 it('preserves the successful prefix when a continuation repeats an object', async () => {
   const { result } = setupLibraryFeed({
@@ -94,7 +97,12 @@ it('drops an in-flight continuation after unmount without scheduling another req
     result.current.loadMoreTree(undefined)
     result.current.loadMoreTree(undefined)
   })
-  await waitFor(() => expect(browse).toHaveBeenCalledWith(expect.objectContaining({ offset: 1 })))
+  await waitFor(() =>
+    expect(browse).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 1 }),
+      expect.any(AbortSignal),
+    ),
+  )
   const count = browse.mock.calls.length
   unmount()
   await act(async () =>

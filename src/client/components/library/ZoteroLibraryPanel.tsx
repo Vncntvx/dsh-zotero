@@ -210,7 +210,10 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const sessionKey = props.sessionId
   // The cached payload is read before the probe knows the instance, so the key
   // is the pre-probe spelling; once connected the read is exact.
-  const initialView = props.viewStore.sessionView(undefined, sessionKey)
+  const initialView = useMemo(
+    () => props.viewStore.sessionView(undefined, sessionKey),
+    [props.viewStore, sessionKey],
+  )
 
   // The connectivity lamp: the shared probe hook owns the in-flight, unmount,
   // and rejection guards. One probe on open, another on every refresh.

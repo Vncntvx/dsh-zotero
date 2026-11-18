@@ -12,7 +12,7 @@ import {
   resultTextOf,
   valueArg,
 } from '../../sources/presenters.js'
-import { isRecord, numberField, stringField } from '../../json.ts'
+import { matchReferencesMetaOf } from '../../sources/decoders.js'
 import { RunningNotice, RawTextFallback, ZoteroToolRow } from './ZoteroToolRow.tsx'
 import { CitationKeyConflictNotice } from '../components/CitationKeyConflictNotice.tsx'
 import css from './toolviews.module.css'
@@ -23,48 +23,13 @@ export function MatchReferencesToolView(props: Props) {
   const { block, toolName, useDisclosure, inspect, t } = props
   const icon = useMemo(() => <IconSearchOutlineRegular size={14} />, [])
   const view = useMemo(() => {
-    const args = argsViewOf(block)
-    const refs = valueArg(args, 'references')
-    const input = Array.isArray(refs) ? refs.length : 0
-    const meta = metaOf(block)
-    const items =
-      meta !== null && Array.isArray(meta['items']) ? meta['items'].filter(isRecord) : []
-    const inputCount = meta === null ? 0 : (numberField(meta, 'requested') ?? items.length)
-    const rows = items
-      .map((item) => {
-        const selected = isRecord(item['selected']) ? item['selected'] : null
-        const rawCandidates = Array.isArray(item['candidates'])
-          ? item['candidates'].filter(isRecord)
-          : []
-        const candidates = selected !== null ? [selected] : rawCandidates
-        return {
-          inputId: stringField(item, 'inputId') ?? '',
-          status: stringField(item, 'status') ?? 'unknown',
-          reason: stringField(item, 'reason'),
-          candidates: candidates.map((candidate) => ({
-            ref: stringField(candidate, 'ref'),
-            title: stringField(candidate, 'title'),
-            citationKey: stringField(candidate, 'citationKey'),
-            exportKey: stringField(candidate, 'exportKey'),
-            matchMethod: stringField(candidate, 'matchMethod'),
-            confidence: stringField(candidate, 'confidence'),
-            citationKeyConflict: isRecord(candidate['citationKeyConflict'])
-              ? {
-                  native: stringField(candidate['citationKeyConflict'], 'native'),
-                  extra: stringField(candidate['citationKeyConflict'], 'extra'),
-                }
-              : null,
-          })),
-        }
-      })
-      .filter((item) => item.inputId !== '')
-    const matched =
-      meta === null
-        ? 0
-        : (numberField(meta, 'matched') ??
-          items.filter((item) => item['status'] === 'matched').length)
+    const refs = valueArg(argsViewOf(block), 'references')
+    const decoded = matchReferencesMetaOf(
+      metaOf(block) ?? {},
+      Array.isArray(refs) ? refs.length : 0,
+    )
     const raw = (resultTextOf(block) ?? '').trim()
-    return { input: inputCount || input, matched, rows, raw, error: errorSummaryOf(block, raw) }
+    return { ...decoded, rows: decoded.items ?? [], raw, error: errorSummaryOf(block, raw) }
   }, [block])
 
   return (
@@ -79,67 +44,79 @@ export function MatchReferencesToolView(props: Props) {
       summary={
         isToolRunning(block)
           ? t('toolMatchReferencesRunning')
-          : t('toolSummaryMatchReferences', { matched: view.matched, input: view.input })
+          : view.matched === undefined
+            ? t('toolTitleMatchReferences')
+            : t('toolSummaryMatchReferences', { matched: view.matched, input: view.requested })
       }
       errorSummary={view.error}
     >
       {({ isRunning }) =>
         isRunning ? (
           <RunningNotice text={t('toolMatchReferencesRunning')} />
-        ) : view.rows.length > 0 ? (
-          <div className={css.cardList}>
-            {view.rows.map((row) => (
-              <ToolItemRow
-                data-match-row
-                key={row.inputId}
-                title={<>{row.inputId}</>}
-                trailing={
-                  <>
-                    <span className={css.itemMeta}>{row.status}</span>
-                  </>
-                }
-              >
-                {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
-                {row.candidates.map((candidate, index) => (
-                  <div key={`${candidate.ref ?? ''}-${index}`}>
-                    <div className={css.itemMeta}>
-                      {[
-                        candidate.ref,
-                        candidate.citationKey &&
-                          t('toolCitationKeyField', { key: candidate.citationKey }),
-                        candidate.exportKey &&
-                          t('toolExportKeyField', { key: candidate.exportKey }),
-                        candidate.title,
-                        candidate.matchMethod,
-                        candidate.confidence,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </div>
-                    {/* The stricter both-fields-truthy guard stays: an empty
-                        field renders as nothing, as before. */}
-                    {candidate.citationKeyConflict?.native &&
-                      candidate.citationKeyConflict.extra && (
-                        <CitationKeyConflictNotice
-                          conflict={{
-                            native: candidate.citationKeyConflict.native,
-                            extra: candidate.citationKeyConflict.extra,
-                          }}
-                          t={t}
-                        />
-                      )}
-                  </div>
-                ))}
-              </ToolItemRow>
-            ))}
-            {view.raw && (
-              <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
-            )}
-          </div>
-        ) : view.raw ? (
-          <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
         ) : (
-          <div className={css.coverageNotice}>{t('toolMatchCandidatesEmpty')}</div>
+          <>
+            {view.detailOmitted && (
+              <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>
+            )}
+            <div className={css.cardList}>
+              {view.rows
+                .filter((row) => row.inputId)
+                .map((row, index) => (
+                  <ToolItemRow
+                    data-match-row
+                    key={`${row.inputId}-${index}`}
+                    title={<>{row.inputId}</>}
+                    trailing={
+                      <>
+                        <span className={css.itemMeta}>{row.status}</span>
+                      </>
+                    }
+                  >
+                    {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
+                    {(row.selected.length > 0 ? row.selected : row.candidates).map(
+                      (candidate, index) => (
+                        <div key={`${candidate.ref ?? ''}-${index}`}>
+                          <div className={css.itemMeta}>
+                            {[
+                              candidate.ref,
+                              candidate.citationKey &&
+                                t('toolCitationKeyField', { key: candidate.citationKey }),
+                              candidate.exportKey &&
+                                t('toolExportKeyField', { key: candidate.exportKey }),
+                              candidate.title,
+                              candidate.matchMethod,
+                              candidate.confidence,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                          {/* The stricter both-fields-truthy guard stays: an empty
+                        field renders as nothing, as before. */}
+                          {candidate.citationKeyConflict?.native &&
+                            candidate.citationKeyConflict.extra && (
+                              <CitationKeyConflictNotice
+                                conflict={candidate.citationKeyConflict}
+                                t={t}
+                              />
+                            )}
+                        </div>
+                      ),
+                    )}
+                  </ToolItemRow>
+                ))}
+              {view.omitted > 0 && (
+                <div className={css.coverageNotice}>
+                  {t('omittedRowsNote', { count: view.omitted })}
+                </div>
+              )}
+              {view.raw && (
+                <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
+              )}
+            </div>
+            {view.rows.length === 0 && !view.raw && !view.detailOmitted && view.omitted === 0 && (
+              <div className={css.coverageNotice}>{t('toolMatchCandidatesEmpty')}</div>
+            )}
+          </>
         )
       }
     </ZoteroToolRow>

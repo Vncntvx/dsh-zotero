@@ -599,28 +599,10 @@
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
   text-align: left;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xxs-12);
-  padding: 4px 6px;
-  cursor: pointer;
-  transition: color 120ms var(--ds-ease-in-out);
-}
-
-.treeRow:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
-}
-
-.treeRowActive {
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
 }
 
 .treeRowIcon {
@@ -630,7 +612,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.treeRowActive .treeRowIcon {
+.treeRowWrapActive .treeRowIcon {
   color: var(--dsw-alias-state-business-primary);
 }
 
@@ -1577,10 +1559,6 @@
   .treeRowWrap:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
-
-  .treeRow:hover {
-    color: var(--dsw-alias-label-primary);
-  }
 }
 
 /* The composer's own convention: a coarse pointer raises the input floor so
@@ -1718,7 +1696,6 @@
 @media (prefers-reduced-motion: reduce) {
   .treeRowWrap,
   .treeExpander,
-  .treeRow,
   .itemRow,
   .tagOption,
   .toggleChevron,
