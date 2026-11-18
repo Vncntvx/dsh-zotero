@@ -31,6 +31,10 @@ import type {
  */
 export type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search'
 
+export function isWriteReceiptIndex(index: string, length: number): boolean {
+  return /^(?:0|[1-9][0-9]*)$/.test(index) && Number(index) < length
+}
+
 export interface CommittedUnverifiedOptions {
   readonly kind: CommittedUnverifiedKind
   readonly serverId: string
@@ -216,7 +220,7 @@ function settleSingleEntryBatch<P>(
   const has = (bucket: Record<string, unknown>, index: string): boolean =>
     Object.hasOwn(bucket, index)
   const hasUnexpectedIndex = (bucket: Record<string, unknown>): boolean =>
-    Object.keys(bucket).some((index) => index !== '0')
+    Object.keys(bucket).some((index) => !isWriteReceiptIndex(index, 1))
   const failed = has(batch.failed, '0')
   const successful = has(batch.successful, '0')
   const success = has(batch.success, '0')
@@ -306,10 +310,9 @@ export function settleBatchCreates(
   unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
 ): void {
-  const indices = new Set(creates.map((_, index) => String(index)))
   const buckets = [batch.successful, batch.success, batch.failed, batch.unchanged]
   const unexpectedIndex = buckets.some((bucket) =>
-    Object.keys(bucket).some((index) => !indices.has(index)),
+    Object.keys(bucket).some((index) => !isWriteReceiptIndex(index, creates.length)),
   )
   const owners = new Map<string, Set<number>>()
   for (let index = 0; index < creates.length; index++) {

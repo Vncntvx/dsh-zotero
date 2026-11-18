@@ -27,6 +27,8 @@ import type { DiagnosticSink } from './diagnostics.js'
 
 /** A broken producer cannot hold plugin teardown forever. */
 export const RESULT_DELIVERY_DRAIN_MS = 5_000
+const MAX_SESSION_DELIVERIES = 128
+const MAX_TOTAL_DELIVERIES = 1024
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -480,14 +482,14 @@ export class ResultDelivery {
   }
 
   /** FIFO retention counts deliveries, keeping their call and job aliases together. */
-  async pruneReceipts(sessionId: string, max = 128): Promise<number> {
+  async pruneReceipts(sessionId: string, max = MAX_SESSION_DELIVERIES): Promise<number> {
     const table = await this.receipts()
     return this.pruneTable(table, sessionId, max)
   }
   private async pruneTable(
     table: Awaited<ReturnType<ResultDelivery['receipts']>>,
     sessionId: string,
-    max = 128,
+    max = MAX_SESSION_DELIVERIES,
   ): Promise<number> {
     const deliveries = new Map<string, { sessionId: string; createdAt: number; keys: string[] }>()
     for (const [key, receipt] of table.entries()) {
@@ -506,7 +508,7 @@ export class ResultDelivery {
     const remove = new Set(sessionDeliveries.slice(0, Math.max(0, sessionDeliveries.length - max)))
     let remaining = deliveries.size - remove.size
     for (const [identity] of ordered) {
-      if (remaining <= 1024) break
+      if (remaining <= MAX_TOTAL_DELIVERIES) break
       if (remove.has(identity)) continue
       remove.add(identity)
       remaining -= 1

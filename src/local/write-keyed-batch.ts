@@ -12,6 +12,7 @@ import { asRecord, isNonNegativeSafeInteger } from '../json.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { withWriteKey } from './write-domain.js'
 import { submittedFieldsMatch } from './write-content-proof.js'
+import { isWriteReceiptIndex } from './write-verdicts.js'
 
 export interface KeyedItemUpdate {
   readonly key: string
@@ -49,9 +50,7 @@ export async function writeKeyedItems(
   )
   const buckets = [batch.successful, batch.success, batch.unchanged, batch.failed]
   const invalidIndex = buckets.some((bucket) =>
-    Object.keys(bucket).some(
-      (index) => !/^(?:0|[1-9][0-9]*)$/.test(index) || Number(index) >= entries.length,
-    ),
+    Object.keys(bucket).some((index) => !isWriteReceiptIndex(index, entries.length)),
   )
   const owners = new Map<string, Set<number>>()
   entries.forEach((_entry, index) => {

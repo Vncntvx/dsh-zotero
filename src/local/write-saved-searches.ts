@@ -1,5 +1,6 @@
 import { deleteRecordForWrite, patchRecordForWrite } from './write-record.js'
 import { submittedFieldsMatch } from './write-content-proof.js'
+import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 /**
  * Write operations for saved-search records.
  * @module dsh-zotero/local/write-saved-searches
@@ -10,6 +11,7 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_UNEXPECTED,
   ZoteroError,
+  ZoteroWriteCommitUnknownError,
 } from '../errors.js'
 import { asString } from '../json.js'
 import { requireUpdateField } from '../write-item-rules.js'
@@ -111,19 +113,24 @@ export async function updateSavedSearch(
   )
   if (outcome.status === 'unverified') return outcome.value
   const { libraryVersion } = outcome
+  const unverified = () => ({
+    ...committedUnverified({
+      kind: 'search',
+      key: ref.key,
+      serverId,
+      reason: 'saved-state-unverified',
+    }),
+    libraryVersion,
+  })
   try {
     const saved = await readRecordForWrite(deps, 'search', ref.key, serverId, signal)
+    signal?.throwIfAborted()
     if (
       saved.version < version ||
       saved.data === undefined ||
       !submittedFieldsMatch(saved.data, { name, conditions })
     )
-      return committedUnverified({
-        kind: 'search',
-        key: ref.key,
-        serverId,
-        reason: 'saved-state-unverified',
-      })
+      return unverified()
     return {
       kind: 'applied',
       ref: searchRef(ref.key, serverId),
@@ -134,13 +141,17 @@ export async function updateSavedSearch(
       libraryVersion,
       serverId,
     }
-  } catch {
-    return committedUnverified({
-      kind: 'search',
-      key: ref.key,
-      serverId,
-      reason: 'saved-state-unverified',
-    })
+  } catch (cause) {
+    const receipt = unverified()
+    if (signal?.aborted) {
+      const ref = receipt.ref!
+      throw new ZoteroWriteCommitUnknownError(
+        `Zotero acknowledged the dispatched write to ${ref} at library version ${libraryVersion}. Verification was cancelled (committed-unverified). Do not retry; read the saved search to reconcile first.`,
+        TOOL_ABORTED,
+        { cause, receipt, unverifiedRefs: [ref] },
+      )
+    }
+    return receipt
   }
 }
 

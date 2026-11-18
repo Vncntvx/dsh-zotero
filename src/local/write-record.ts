@@ -50,6 +50,7 @@ async function mutateRecord(
     })
     return { status: 'acknowledged', libraryVersion: result.libraryVersion }
   } catch (error) {
+    if (signal?.aborted) throw error
     return { status: 'unverified', value: receiptOfCommitUnknown(error, target) }
   }
 }

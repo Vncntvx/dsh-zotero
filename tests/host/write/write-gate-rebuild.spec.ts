@@ -12,7 +12,7 @@
  * @module tests/host/write/write-gate-rebuild
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ZoteroWriteCall } from '../../../src/write-call.js'
 import { commitLive, setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
@@ -82,12 +82,14 @@ describe('the write gate across a transport rebuild', () => {
   it('serializes writes through one gate while a rebuild swaps the client', async () => {
     lane = await boot()
     const firstPatch = deferred<void>()
+    const firstArrival = deferred<void>()
     let firstAnswered = false
     /** Whether the mock was serving when each PATCH arrived. */
     const arrivals: boolean[] = []
     lane.mock.route('PATCH', ITEM_PATH, async (_req, _res, helpers) => {
       arrivals.push(firstAnswered)
       if (!firstAnswered) {
+        firstArrival.resolve()
         await firstPatch.promise
         firstAnswered = true
       }
@@ -99,7 +101,7 @@ describe('the write gate across a transport rebuild', () => {
       callOf('- add tag alpha'),
     )
     // The first write hangs on the wire with its gate slot held.
-    await vi.waitFor(() => expect(arrivals).toHaveLength(1))
+    await firstArrival.promise
 
     // The rebuild replaces the write client while the first write hangs.
     await commitLive(lane, { timeoutMs: 7000 })

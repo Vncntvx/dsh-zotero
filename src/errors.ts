@@ -14,7 +14,7 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
 import { findInCauseChain } from './cause-chain.js'
 import { ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
-import type { ZoteroBatchItemsResult } from './types.js'
+import type { ZoteroBatchItemsResult, ZoteroWriteCommittedUnverified } from './types.js'
 
 /**
  * Domain failure with a stable machine-routable code and an actionable,
@@ -38,6 +38,7 @@ export interface ZoteroWriteCommitUnknownOptions extends ErrorOptions {
   readonly completedRefs?: readonly string[]
   readonly unverifiedRefs?: readonly string[]
   readonly partial?: ZoteroBatchItemsResult
+  readonly receipt?: ZoteroWriteCommittedUnverified
 }
 
 /**
@@ -55,6 +56,7 @@ export class ZoteroWriteCommitUnknownError extends HarnessError {
   readonly completedRefs?: readonly string[]
   readonly unverifiedRefs?: readonly string[]
   readonly partial?: ZoteroBatchItemsResult
+  readonly receipt?: ZoteroWriteCommittedUnverified
 
   constructor(message: string, code: string, options?: ZoteroWriteCommitUnknownOptions) {
     super(message, code, options)
@@ -62,6 +64,7 @@ export class ZoteroWriteCommitUnknownError extends HarnessError {
     this.completedRefs = options?.completedRefs
     this.unverifiedRefs = options?.unverifiedRefs
     this.partial = options?.partial
+    this.receipt = options?.receipt
   }
 }
 

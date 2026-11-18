@@ -111,7 +111,6 @@ const CREATE_NOTE_OUTPUT_SCHEMA = {
 
 type CreateNoteOutput = InferValue<typeof CREATE_NOTE_OUTPUT_SCHEMA>
 
-/** Body characters shown on the approval card; the full markdown is what gets written. */
 /** The deterministic plan markdown the approval card renders. */
 export function createNotePlan(args: CreateNoteArgs): string {
   // buildRequest already refused non-empty collections on a child note, so a

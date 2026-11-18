@@ -1,4 +1,8 @@
-import { validateJsonSchemaValue, type ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
+import {
+  TOOL_ABORTED,
+  validateJsonSchemaValue,
+  type ObjectJsonSchema,
+} from '@deepseek-ai/dsh-tools'
 import { libraryWriteCases } from '../support/library-write-cases.ts'
 /** Panel mutations retain the tool policy, approval gate and single dispatch. */
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -19,6 +23,8 @@ import {
   ApprovingQuestions,
 } from '../../helpers/approval-stub.js'
 import { nonTextContent, textContent, toolBatchResult } from '../support/tool-batch.js'
+import { grantAuthorize, SERVER_ID } from '../../helpers/write-domain-fixtures.js'
+import { deferred } from '../../helpers/sync.js'
 
 let lane: HostLane | undefined
 const agent = { status: 'running' }
@@ -71,6 +77,62 @@ async function boot(enabled = true) {
 }
 
 describe('panel write gateway', () => {
+  it('preserves the acknowledged write facts after the registered saved-search tool is cancelled', async () => {
+    const host = await boot()
+    grantAuthorize(host.mock)
+    const headers = { 'Zotero-Server-ID': SERVER_ID }
+    host.mock.route('GET', '/api/', (_req, _res, helpers) => helpers.json({}, headers))
+    const path = '/api/users/0/searches/SEARCH01'
+    const ref = 'zotero://user/0/search/SEARCH01'
+    const readback = deferred()
+    const release = deferred()
+    let acknowledged = false
+    host.mock.route('GET', path, async (_req, _res, helpers) => {
+      if (acknowledged) {
+        readback.resolve()
+        await release.promise
+      }
+      helpers.json(
+        {
+          key: 'SEARCH01',
+          version: 7,
+          data: {
+            key: 'SEARCH01',
+            name: 'Old',
+            conditions: [{ condition: 'title', operator: 'contains', value: 'review' }],
+          },
+        },
+        headers,
+      )
+    })
+    host.mock.route('PATCH', path, (_req, _res, helpers) => {
+      acknowledged = true
+      helpers.raw(204, { ...headers, 'Last-Modified-Version': '8' }, '')
+    })
+    const controller = new AbortController()
+    const call = executeLibraryWrite(
+      host.ctx,
+      {
+        sessionId: request.sessionId,
+        operation: 'updateSavedSearch',
+        args: { search: ref, name: 'New' },
+      },
+      controller.signal,
+    )
+    try {
+      expect(await Promise.race([readback.promise.then(() => 'readback'), call])).toBe('readback')
+      controller.abort()
+      const result = await call
+      expect(result).toMatchObject({ kind: 'failed', code: TOOL_ABORTED })
+      expect(result.message).toContain(`${ref}?server=${SERVER_ID} at library version 8`)
+      expect(result.message).toContain('committed-unverified')
+      expect(result.message).toContain('Do not retry')
+      expect(host.mock.requests.filter(({ method }) => method === 'PATCH')).toHaveLength(1)
+    } finally {
+      release.resolve()
+    }
+  })
+
   it('runs the registered tool through session approval and makes no HTTP request after refusal', async () => {
     const host = await boot()
     setApprovalOutcome('rejected')

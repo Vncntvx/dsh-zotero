@@ -65,9 +65,14 @@ function prevalidateBatchDeletes(
   deletes: readonly NonNullable<ZoteroBatchItemsRequest['delete']>[number][],
   serverId: string,
 ): ZoteroObjectRef[] {
+  const keys = new Set<string>()
   return deletes.map((ref) => {
     const writable = requireWritableRef(ref, ['item'])
-    return requireWritableRefAtServer(writable, ['item'], serverId)
+    const checked = requireWritableRefAtServer(writable, ['item'], serverId)
+    if (keys.has(checked.key))
+      throw new ZoteroError(`Batch delete repeats item ${checked.key}.`, ZOTERO_INVALID_ARGUMENT)
+    keys.add(checked.key)
+    return checked
   })
 }
 
@@ -203,7 +208,7 @@ async function runBatchUpdates(
     receipt: ZoteroBatchUpdateItemResult
     send: () => Promise<{ libraryVersion: number }>
   }[] = []
-  for (const update of checkedUpdates) {
+  for (const [index, update] of checkedUpdates.entries()) {
     signal?.throwIfAborted()
     try {
       const wantsTags = update.addTags.length > 0 || update.removeTags.length > 0
@@ -264,7 +269,7 @@ async function runBatchUpdates(
           if (tagsChanged) patchBody.tags = nextTags
           if (collectionsChanged) patchBody.collections = nextCollectionKeys
           pending.push({
-            index: checkedUpdates.indexOf(update),
+            index,
             entry: { key: update.ref.key, version: snapshot.version, fields: patchBody },
             send: () => send(patchBody),
             receipt: {
@@ -287,6 +292,7 @@ async function runBatchUpdates(
       if (result !== undefined) updated.push(result)
     } catch (err) {
       if (signal?.aborted || isWriteUnauthorized(err)) throw err
+      // Planning only queues sends; the dispatch below settles commit-unknown outcomes.
       if (err instanceof ZoteroWriteCommitUnknownError) continue
       failed.push({
         op: 'update',
