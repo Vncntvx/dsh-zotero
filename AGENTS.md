@@ -39,7 +39,7 @@ npm run release:check        # full gate: format, strict harness, lint, typechec
 - Behavior changes: `npm test`. Cross-cutting, test-infrastructure, or release-bound changes: `npm run release:check`.
 - Docs-only changes: `npm run format:check` and `npm run lint:test`.
 - Interactive launches and the live write probe are in `docs/development.md` and [tests/README.md](tests/README.md).
-- Pull requests run only the security scanner; the quality gate runs on `main` pushes, `v*` tags, and the weekly workflow. Local validation is the merge gate. Report live checks you did not run.
+- Pull requests and `main` pushes run the security scanner. The quality gate runs on `v*` tag pushes and in the upstream health workflow. Local validation is the merge gate. Report live checks you did not run.
 
 ## Architecture and invariants
 

@@ -45,6 +45,10 @@ it('rejects tracked worktree changes before a release ref can move', () => {
   ).toThrow('dirty worktree')
 })
 
+it('starts the release workflow only on version tag pushes', () => {
+  expect(load(readReleaseWorkflow())).toHaveProperty('on', { push: { tags: ['v*'] } })
+})
+
 it('keeps publishing behind both mandatory release jobs', () => {
   const workflow = readReleaseWorkflow()
   expect(workflow).toContain('quality-gate:')
