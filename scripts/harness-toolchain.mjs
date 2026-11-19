@@ -21,6 +21,17 @@ const packageManagerPattern = new RegExp(
   `^pnpm@(${exactVersion})(?:\\+sha(?:224|256|384|512)\\.[a-fA-F0-9]+)?$`,
 )
 
+/**
+ * The committed harness toolchain pin snapshot's face: the pin tag, the exact
+ * source commit, and the pinned packageManager declaration.
+ * @typedef {{ pin?: unknown, commit?: unknown, packageManager?: unknown }} HarnessToolchainFixture
+ */
+
+/**
+ * Extract the exact pnpm version a packageManager declaration pins.
+ * @param packageManager {unknown} the manifest's packageManager field.
+ * @returns {string} the exact pnpm version.
+ */
 export function pnpmVersion(packageManager) {
   const version =
     typeof packageManager === 'string' && packageManagerPattern.exec(packageManager)?.[1]
@@ -28,7 +39,12 @@ export function pnpmVersion(packageManager) {
   return version
 }
 
-/** The consumer dependency versions one pin snapshot requires. */
+/**
+ * The consumer dependency versions one pin snapshot requires.
+ * @param pin {string} the exact harness version.
+ * @param fixture {HarnessToolchainFixture} the committed pin snapshot.
+ * @returns {{ '@deepseek-ai/dsh': string, pnpm: string }} the required consumer versions.
+ */
 export function consumerDependencies(pin, fixture) {
   if (!pinPattern.test(pin) || fixture?.pin !== `dsh-v${pin}`)
     throw new Error(`Harness toolchain snapshot is not for dsh-v${pin}`)
@@ -46,12 +62,37 @@ export function consumerDependencies(pin, fixture) {
  * @param fixture - the committed pin snapshot.
  * @returns human-readable problems; empty when every consumer fact agrees.
  */
+/**
+ * The consumer fixture manifest face this comparison reads.
+ * @typedef {{ dependencies?: Record<string, string | undefined> }} ConsumerManifest
+ */
+
+/**
+ * The consumer fixture lockfile face this comparison reads.
+ * @typedef {{
+ *   packages?: Record<
+ *     string,
+ *     { version?: string, dependencies?: Record<string, string | undefined> } | undefined
+ *   >,
+ * }} ConsumerLockfile
+ */
+
+/**
+ * Report every disagreement between the isolated consumer manifest/lockfile
+ * and one harness pin. Reads only the passed-in data.
+ * @param manifest {ConsumerManifest} parsed tests/fixtures/dsh-cli-consumer/package.json.
+ * @param lock {ConsumerLockfile} parsed tests/fixtures/dsh-cli-consumer/package-lock.json.
+ * @param pin {string} the exact harness version.
+ * @param fixture {HarnessToolchainFixture} the committed pin snapshot.
+ * @returns {string[]} human-readable problems; empty when every consumer fact agrees.
+ */
 export function consumerProblems(manifest, lock, pin, fixture) {
   const expected = consumerDependencies(pin, fixture)
   const packages = lock?.packages ?? {}
   const declared = manifest?.dependencies ?? {}
   const locked = packages['']?.dependencies ?? {}
   const found = []
+  /** @param where {string} @param actual {string | undefined} @param wanted {string} */
   const check = (where, actual, wanted) => {
     if (actual !== wanted) found.push(`${where} is "${actual ?? 'missing'}", expected "${wanted}"`)
   }
@@ -80,6 +121,7 @@ export function consumerProblems(manifest, lock, pin, fixture) {
   return found
 }
 
+/** @param harnessRoot {string} @param args {string[]} @returns {string} the trimmed git stdout. */
 function git(harnessRoot, args) {
   return execFileSync('git', ['-C', harnessRoot, ...args], {
     encoding: 'utf8',
@@ -87,6 +129,12 @@ function git(harnessRoot, args) {
   }).trim()
 }
 
+/**
+ * Extract the toolchain snapshot one harness pin declares at its tag.
+ * @param harnessRoot {string} the sibling harness checkout root.
+ * @param pin {string} the exact harness version.
+ * @returns {{ pin: string, commit: string, packageManager: string }} the tag's toolchain snapshot.
+ */
 export function extractHarnessToolchain(harnessRoot, pin) {
   const tag = `dsh-v${pin}`
   const commit = git(harnessRoot, ['rev-parse', '--verify', `${tag}^{commit}`])
@@ -96,6 +144,13 @@ export function extractHarnessToolchain(harnessRoot, pin) {
   return snapshot
 }
 
+/**
+ * Read the committed toolchain snapshot for one pin, cross-checking it against
+ * the sibling checkout's tag whenever a sibling checkout exists.
+ * @param harnessRoot {string} the sibling harness checkout root, when present.
+ * @param pin {string} the exact harness version.
+ * @returns {HarnessToolchainFixture} the committed snapshot.
+ */
 export function readHarnessToolchain(harnessRoot, pin) {
   const snapshot = JSON.parse(readFileSync(toolchainFixture, 'utf8'))
   consumerDependencies(pin, snapshot)
@@ -113,6 +168,7 @@ export function readHarnessToolchain(harnessRoot, pin) {
   return snapshot
 }
 
+/** @param path {string} @returns {any} the parsed JSON document. */
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }

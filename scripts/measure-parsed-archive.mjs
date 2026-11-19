@@ -12,6 +12,7 @@ const markdown =
   Array.from({ length: figureCount }, (_, i) => `![Figure ${i}](images/figure${i}.png)`).join(
     '\n\n',
   )
+/** @type {Record<string, Uint8Array>} */
 const entries = { 'full.md': new TextEncoder().encode(markdown) }
 for (let i = 0; i < figureCount; i++) {
   const bytes = new Uint8Array(figureBytes)
@@ -22,6 +23,12 @@ const archive = zipSync(entries)
 const processor = new ArchiveProcessor()
 const signal = new AbortController().signal
 
+/** @typedef {{ elapsedMs: number, maxDelayMs: number }} Sample */
+
+/**
+ * @param {'synchronous' | 'worker'} mode
+ * @returns {Promise<Sample>} one observation of elapsed time and event-loop delay.
+ */
 async function measure(mode) {
   let previous = performance.now()
   let maxDelayMs = 0
@@ -55,11 +62,13 @@ async function measure(mode) {
 // Discard the first import/JIT and Worker startup observation for each arm.
 await measure('synchronous')
 await measure('worker')
+/** @type {{ synchronous: Sample[], worker: Sample[] }} */
 const samples = { synchronous: [], worker: [] }
 for (let i = 0; i < 3; i++) {
   samples.synchronous.push(await measure('synchronous'))
   samples.worker.push(await measure('worker'))
 }
+/** @param {Sample[]} rows @param {keyof Sample} field @returns {number} the middle sample's value. */
 const median = (rows, field) => rows.map((row) => row[field]).sort((a, b) => a - b)[1]
 const report = {
   kind: 'synthetic archive measurement; emitted production JS; no network',

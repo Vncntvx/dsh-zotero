@@ -38,6 +38,24 @@ it('allows publication only on registry HTTP 404', async () => {
   expect(fetchImpl).toHaveBeenCalledOnce()
 })
 
+it('waits for the published version after an initial 404 when requested', async () => {
+  const fetchImpl = vi
+    .fn(async () => Response.json(metadata))
+    .mockResolvedValueOnce(new Response(null, { status: 404 }))
+  const delay = vi.fn(async () => {})
+  await expect(
+    registryVersion(manifest.name, manifest.version, {
+      fetchImpl,
+      delay,
+      maxAttempts: 3,
+      delayMs: 10_000,
+      waitForPublication: true,
+    }),
+  ).resolves.toEqual(metadata)
+  expect(fetchImpl).toHaveBeenCalledTimes(2)
+  expect(delay.mock.calls).toEqual([[10_000]])
+})
+
 it.each([401, 403, 302])('refuses HTTP %s without retry and cancels the body', async (status) => {
   const cancel = vi.fn()
   const fetchImpl = vi.fn(async () => new Response(new ReadableStream({ cancel }), { status }))

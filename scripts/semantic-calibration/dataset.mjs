@@ -4,39 +4,100 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
+/** @typedef {'en' | 'zh'} Language */
+/** @typedef {{ en: string, zh: string }} Bilingual */
+/** @typedef {'train' | 'calibration' | 'heldout'} Split */
+/** @typedef {{ id: string, format: string, text: Bilingual }} Document */
+/** @typedef {{ id: string, kind: string, text: Bilingual, rationale: string, relevant: string[], variants?: Record<Language, string[]> }} Query */
+/** @typedef {{ id: string, topic: string, documentFamily: string }} FamilyBase */
+/** @typedef {FamilyBase & { query: Bilingual, document: Bilingual }} BackgroundFamily */
+/** @typedef {FamilyBase & { documents: Document[], queries: Query[] }} PartitionFamily */
+/** @typedef {{ synthetic: boolean, externalIndependentAnnotation: boolean, realExtraction: boolean, [key: string]: unknown }} Provenance */
+/** @typedef {{ scoringVersion: string, features: string[], kCandidates: number[], ridgeCandidates: number[], folds: number, thresholdCandidates: number[], alpha: number, negativeAnyHitUpperTarget: number, mixedPrecisionLowerTarget: number, minimumNegativeQueriesPerLanguage: number, corpusSizes: number[], phrasingCounts: number[], languages: string[], directions: string[], seed: number, bootstrapReplicates: number, [key: string]: unknown }} Protocol */
+/** @typedef {{ schemaVersion: number, provenance: Provenance, background: string, quarantine: string, partitions: Record<Split, string>, protocol: Protocol, limitations: string[] }} Manifest */
+/** @typedef {{ query: string, answer: string }} LegacyCase */
+/** @typedef {{ legacyCases: LegacyCase[], distractors: string[], diagnosticProbes: string[], legacySource: string, legacySourceSha256: string }} Quarantine */
+/** @typedef {{ families: BackgroundFamily[] }} Background */
+/** @typedef {{ split: Split, schemaVersion: number, families: PartitionFamily[] }} Partition */
+/** @typedef {{ manifest: Manifest, background: Background, quarantine: Quarantine, partitions: Record<Split, Partition>, digest: string, backgroundDigest: string, partitionDigests: Record<string, string> }} Dataset */
+/** @typedef {{ positiveIntents: number, negativeIntents: number, documents: number, fivePhrasingIntents: number }} LanguageCounts */
+/** @typedef {{ families: number, perLanguage: Record<string, LanguageCounts>, formats: Record<string, number>, negativeKinds: Record<string, number> }} SplitCounts */
+/** @typedef {{ key: string, side: 'query' | 'document', text: string, language: Language, familyId: string, documentId?: string, intentId?: string, phrasing?: number, role: string }} Entry */
+/** @typedef {{ familyId: string, documentFamilyId: string, intentId: string, language: Language, documentLanguage: Language, phrasing: number, queryKey: string, documentKey: string, queryText: string, documentText: string, label: number, negativeIntent: boolean, kind: string }} PairRow */
+
 export const fixtureRoot = fileURLToPath(
   new URL('../../tests/fixtures/semantic-calibration/', import.meta.url),
 )
+/** @type {Split[]} */
 export const splits = ['train', 'calibration', 'heldout']
+/** @type {Language[]} */
 export const languages = ['en', 'zh']
+/**
+ * @param {string | Uint8Array} value
+ * @returns {string}
+ */
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex')
+/**
+ * @param {string} text
+ * @returns {string}
+ */
 export const normalized = (text) =>
   text
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[\p{P}\p{Z}\s]+/gu, '')
+/** @type {(condition: unknown, message: string) => asserts condition} */
 export const invariant = (condition, message) => {
   if (!condition) throw new Error(message)
 }
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
 export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${canonical(/** @type {Record<string, unknown>} */ (value)[key])}`,
+      )
       .join(',')}}`
   }
   return JSON.stringify(value)
 }
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
 export const digestOf = (value) => sha256(canonical(value))
+/**
+ * @param {string} side
+ * @param {string} text
+ * @returns {string}
+ */
 export const textKey = (side, text) => `${side}:${sha256(text)}`
+/**
+ * @param {string} text
+ * @returns {number}
+ */
 export const codepoints = (text) => [...text].length
 
+/**
+ * @param {string} path
+ * @returns {Promise<unknown>}
+ */
 export async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
+/**
+ * @param {string[]} argv
+ * @param {readonly string[]} allowed
+ * @returns {Record<string, string | true | undefined>}
+ */
 export function options(argv, allowed) {
-  const result = {}
+  const result = /** @type {Record<string, string | true | undefined>} */ ({})
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i]
     invariant(allowed.includes(key), `Unknown argument: ${key}`)
@@ -49,29 +110,45 @@ export function options(argv, allowed) {
   }
   return result
 }
+/**
+ * @param {string} url
+ */
 export const isMain = (url) =>
   process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === url
+/**
+ * @param {() => Promise<unknown>} main
+ */
 export function cli(main) {
-  main().catch((error) => {
+  main().catch((/** @type {Error} */ error) => {
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 1
   })
 }
+/**
+ * @param {unknown} value
+ */
 export const print = (value) => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
 
+/** @returns {Promise<Dataset>} */
 export async function loadDataset() {
-  const manifest = await readJson(resolve(fixtureRoot, 'manifest.json'))
-  const background = await readJson(resolve(fixtureRoot, manifest.background))
-  const quarantine = await readJson(resolve(fixtureRoot, manifest.quarantine))
-  const partitions = Object.fromEntries(
-    await Promise.all(
-      splits.map(async (split) => [
-        split,
-        await readJson(resolve(fixtureRoot, manifest.partitions[split])),
-      ]),
-    ),
+  const manifest = /** @type {Manifest} */ (await readJson(resolve(fixtureRoot, 'manifest.json')))
+  const background = /** @type {Background} */ (
+    await readJson(resolve(fixtureRoot, manifest.background))
   )
-  const dataset = { manifest, background, quarantine, partitions }
+  const quarantine = /** @type {Quarantine} */ (
+    await readJson(resolve(fixtureRoot, manifest.quarantine))
+  )
+  const partitions = /** @type {Record<Split, Partition>} */ (
+    Object.fromEntries(
+      await Promise.all(
+        splits.map(async (split) => [
+          split,
+          await readJson(resolve(fixtureRoot, manifest.partitions[split])),
+        ]),
+      ),
+    )
+  )
+  const dataset = /** @type {Dataset} */ ({ manifest, background, quarantine, partitions })
   dataset.digest = digestOf({ manifest, background, quarantine, partitions })
   dataset.backgroundDigest = digestOf(background)
   dataset.partitionDigests = Object.fromEntries(
@@ -80,6 +157,10 @@ export async function loadDataset() {
   return dataset
 }
 
+/**
+ * @param {Bilingual} text
+ * @param {string} where
+ */
 function bilingual(text, where) {
   invariant(text && Object.keys(text).sort().join(',') === 'en,zh', `${where}: expected en/zh`)
   for (const language of languages) {
@@ -92,6 +173,10 @@ function bilingual(text, where) {
   }
 }
 
+/**
+ * @param {Dataset} dataset
+ * @returns {Record<string, SplitCounts>}
+ */
 export function validateDataset(dataset) {
   const { manifest, background, quarantine, partitions } = dataset
   invariant(
@@ -115,18 +200,25 @@ export function validateDataset(dataset) {
   const topics = new Set()
   const documentFamilies = new Set()
   const texts = new Map()
+  /**
+   * @param {string} text
+   * @param {string} owner
+   */
   const registerText = (text, owner) => {
     const key = normalized(text)
     invariant(!blocked.has(key), `${owner}: quarantined text reused`)
     invariant(!texts.has(key), `${owner}: duplicate text with ${texts.get(key)}`)
     texts.set(key, owner)
   }
+  /**
+   * @param {FamilyBase} family
+   */
   const registerFamily = (family) => {
-    for (const [set, value, label] of [
+    for (const [set, value, label] of /** @type {[Set<string>, string, string][]} */ ([
       [familyIds, family.id, 'family'],
       [topics, family.topic, 'topic'],
       [documentFamilies, family.documentFamily, 'document family'],
-    ]) {
+    ])) {
       invariant(
         typeof value === 'string' && value.length > 2 && !set.has(normalized(value)),
         `Repeated/missing ${label}: ${value}`,
@@ -136,12 +228,13 @@ export function validateDataset(dataset) {
   }
   for (const family of background.families) {
     registerFamily(family)
-    for (const side of ['query', 'document']) {
+    for (const side of /** @type {readonly ['query', 'document']} */ (['query', 'document'])) {
       bilingual(family[side], `${family.id}/${side}`)
       for (const language of languages)
         registerText(family[side][language], `${family.id}/${side}/${language}`)
     }
   }
+  /** @type {Record<string, SplitCounts>} */
   const counts = {}
   for (const split of splits) {
     invariant(
@@ -221,10 +314,14 @@ export function validateDataset(dataset) {
   return counts
 }
 
+/**
+ * @param {{ background: { families: { id: string, query: Bilingual, document: Bilingual }[] } }} dataset
+ * @returns {Entry[]}
+ */
 export function backgroundEntries(dataset) {
   return dataset.background.families.flatMap((family) =>
     languages.flatMap((language) =>
-      ['query', 'document'].map((side) => ({
+      /** @type {readonly ['query', 'document']} */ (['query', 'document']).map((side) => ({
         key: textKey(side, family[side][language]),
         side,
         text: family[side][language],
@@ -235,40 +332,53 @@ export function backgroundEntries(dataset) {
     ),
   )
 }
+/**
+ * @param {{ partitions: Record<Split, Partition> }} dataset
+ * @param {Split} split
+ * @returns {Entry[]}
+ */
 export function splitEntries(dataset, split) {
-  return dataset.partitions[split].families.flatMap((family) => [
-    ...family.documents.flatMap((document) =>
-      languages.map((language) => ({
-        key: textKey('document', document.text[language]),
-        side: 'document',
-        text: document.text[language],
-        language,
-        familyId: family.id,
-        documentId: document.id,
-        role: split,
-      })),
-    ),
-    ...family.queries.flatMap((query) =>
-      languages.flatMap((language) =>
-        [query.text[language], ...(query.variants?.[language] ?? [])].map((text, phrasing) => ({
-          key: textKey('query', text),
-          side: 'query',
-          text,
+  return /** @type {Entry[]} */ (
+    dataset.partitions[split].families.flatMap((family) => [
+      ...family.documents.flatMap((document) =>
+        languages.map((language) => ({
+          key: textKey('document', document.text[language]),
+          side: 'document',
+          text: document.text[language],
           language,
           familyId: family.id,
-          intentId: `${family.id}/${query.id}`,
-          phrasing,
+          documentId: document.id,
           role: split,
         })),
       ),
-    ),
-  ])
+      ...family.queries.flatMap((query) =>
+        languages.flatMap((language) =>
+          [query.text[language], ...(query.variants?.[language] ?? [])].map((text, phrasing) => ({
+            key: textKey('query', text),
+            side: 'query',
+            text,
+            language,
+            familyId: family.id,
+            intentId: `${family.id}/${query.id}`,
+            phrasing,
+            role: split,
+          })),
+        ),
+      ),
+    ])
+  )
 }
 
 // // Cross-family pairs below are authored off-topic negatives; semantic
 // labels still need independent review. No cross-split documents.
+/**
+ * @param {{ partitions: Record<Split, Partition> }} dataset
+ * @param {Split} split
+ * @returns {PairRow[]}
+ */
 export function pairRows(dataset, split) {
   const families = dataset.partitions[split].families
+  /** @type {PairRow[]} */
   const rows = []
   for (let f = 0; f < families.length; f++) {
     const family = families[f]

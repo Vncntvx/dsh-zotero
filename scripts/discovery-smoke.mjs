@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
 /**
  * Real client-discovery smoke: proves that a clean install of the packed
  * tarball into a fresh dsh profile makes the web composition serve the
@@ -42,6 +44,7 @@ const execFileAsync = promisify(execFile)
 
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
+/** @param {string} flag @returns {string | undefined} the following argv entry, when present. */
 function argAfter(flag) {
   const index = process.argv.indexOf(flag)
   return index === -1 ? undefined : process.argv[index + 1]
@@ -64,6 +67,7 @@ const HOME = argAfter('--home') ?? mkdtempSync(join(tmpdir(), 'dsh-zotero-home-'
 const PROFILE = 'web' // `dsh web` always boots the web profile
 const ENV = { ...process.env, DSH_HOME: HOME }
 
+/** @param {string[]} args */
 async function runDsh(args) {
   const command = dshCommand(args)
   try {
@@ -74,7 +78,8 @@ async function runDsh(args) {
     })
     appendFileSync(join(HOME, 'install.log'), result.stdout + result.stderr)
   } catch (error) {
-    appendFileSync(join(HOME, 'install.log'), (error.stdout ?? '') + (error.stderr ?? ''))
+    const output = /** @type {{ stdout?: string, stderr?: string }} */ (error)
+    appendFileSync(join(HOME, 'install.log'), (output.stdout ?? '') + (output.stderr ?? ''))
     throw error
   }
 }
@@ -128,6 +133,7 @@ async function verifyInstalledEntries() {
   console.log(result.stdout.trim())
 }
 
+/** @param {string[]} args @returns {{ command: string, args: string[] }} the spawn plan. */
 function dshCommand(args) {
   if (DSH.endsWith('.js')) {
     return { command: process.execPath, args: [DSH, ...args] }
@@ -144,18 +150,28 @@ function packPath() {
   return resolve(PACKAGE_DIR, lines[lines.length - 1])
 }
 
+/** @param {number} ms @returns {Promise<void>} */
 function sleep(ms) {
   return new Promise((resolveDelay) => {
     setTimeout(resolveDelay, ms)
   })
 }
 
+/**
+ * @param {string} url
+ * @param {string | undefined} cookie - the instance cookie, when the probe has one.
+ * @returns {Promise<string>} the response body.
+ */
 async function fetchText(url, cookie) {
   const response = await fetch(url, { headers: cookie === undefined ? {} : { cookie } })
   if (!response.ok) throw new Error(`GET ${url} → HTTP ${response.status}`)
   return await response.text()
 }
 
+/**
+ * @param {string} html - the served index HTML.
+ * @returns {{ entries: { id: string, url: string }[], batches?: { entries?: unknown[] }[] }} the boot manifest rows this smoke reads.
+ */
 function extractBootGraph(html) {
   // The webserver injects the boot graph as `globalThis["__DSH_BOOT__"] = …`
   // (the `window.` spelling is only a browser-side read alias).
@@ -167,7 +183,12 @@ function extractBootGraph(html) {
   return JSON.parse(match[1].replaceAll('\\u003c', '<'))
 }
 
-/** Poll the boot log for the one-time token the web CLI prints on startup. */
+/**
+ * Poll the boot log for the one-time token the web CLI prints on startup.
+ * @param {string} home - the temp dsh home.
+ * @param {number} [attempts=240] - poll budget.
+ * @returns {Promise<string>} the boot token.
+ */
 async function waitForBootToken(home, attempts = 240) {
   const logPath = join(home, 'dsh-web.log')
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -182,7 +203,12 @@ async function waitForBootToken(home, attempts = 240) {
   throw new Error('dsh web printed no boot token within the probe window')
 }
 
-/** Exchange the one-time boot token for the page cookie every request carries. */
+/**
+ * Exchange the one-time boot token for the page cookie every request carries.
+ * @param {number} port - the reserved local port.
+ * @param {string} token - the boot token.
+ * @returns {Promise<string>} the `name=value` page cookie.
+ */
 async function exchangeTokenForCookie(port, token) {
   const response = await fetch(`http://127.0.0.1:${port}/?token=${token}`, {
     redirect: 'manual',
@@ -197,6 +223,12 @@ async function exchangeTokenForCookie(port, token) {
   return setCookie.split(';')[0]
 }
 
+/**
+ * @param {number} port - the reserved local port.
+ * @param {string} cookie - the instance cookie.
+ * @param {number} [attempts=240] - poll budget.
+ * @returns {Promise<string>} the served index HTML.
+ */
 async function waitForIndex(port, cookie, attempts = 240) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -210,7 +242,10 @@ async function waitForIndex(port, cookie, attempts = 240) {
   throw new Error(`dsh web did not serve an index within the probe window on port ${port}`)
 }
 
-/** Resolve after two animation frames: the first lays out, the second paints. */
+/**
+ * Resolve after two animation frames: the first lays out, the second paints.
+ * @param {import('playwright').Page} page
+ */
 async function settlePaint(page) {
   await page.evaluate(
     () =>
@@ -233,6 +268,10 @@ async function settlePaint(page) {
  * host's edge placement. The scroll happens before the click because the host
  * dismisses an open menu on scroll.
  */
+/**
+ * @param {import('playwright').Page} page
+ * @param {import('playwright').Locator} trigger - the menu trigger locator.
+ */
 async function openMenu(page, trigger) {
   await trigger.scrollIntoViewIfNeeded()
   await trigger.evaluate((element) => {
@@ -245,6 +284,8 @@ async function openMenu(page, trigger) {
 
 /** Layout frames a just-opened menu gets to settle before the hit check gives up. */
 const MENU_SETTLE_ATTEMPTS = 5
+
+/** @typedef {{ box: { x: number, y: number, width: number, height: number }, point: { x: number, y: number }, probe: { name: string, at: string } }} MenuMiss */
 
 /**
  * Click an open menu's item at its own centre after proving the point resolves
@@ -260,8 +301,13 @@ const MENU_SETTLE_ATTEMPTS = 5
  * gets clicked is the one this same attempt proved hittable, and a row that
  * never becomes hittable still fails with the geometry that explains why.
  */
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} name - the menu item's exact label.
+ */
 async function clickMenuItem(page, name) {
   const item = page.getByRole('menuitem', { name, exact: true })
+  /** @type {MenuMiss | undefined} */
   let failure
   for (let attempt = 0; attempt < MENU_SETTLE_ATTEMPTS; attempt += 1) {
     const box = await item.boundingBox()
@@ -285,7 +331,7 @@ async function clickMenuItem(page, name) {
     failure = { box, point, probe }
     await settlePaint(page)
   }
-  const { box, point, probe } = failure
+  const { box, point, probe } = /** @type {MenuMiss} */ (failure)
   const viewport = page.viewportSize()
   throw new Error(
     `menu item ${name} is not hit-testable at its own centre (` +
@@ -296,12 +342,13 @@ async function clickMenuItem(page, name) {
   )
 }
 
+/** @returns {Promise<number>} a free loopback port reserved then released. */
 async function reservePort() {
   const server = createServer()
   await new Promise((resolveListen) => {
-    server.listen(0, '127.0.0.1', resolveListen)
+    server.listen(0, '127.0.0.1', /** @type {() => void} */ (resolveListen))
   })
-  const port = server.address().port
+  const port = /** @type {import('node:net').AddressInfo} */ (server.address()).port
   await new Promise((resolveClose) => {
     server.close(resolveClose)
   })
@@ -358,7 +405,8 @@ async function main() {
       await serveOnce(await reservePort())
       break
     } catch (error) {
-      if (error?.code !== 'EADDRINUSE' || attempt === 3) throw error
+      if (/** @type {{ code?: string }} */ (error)?.code !== 'EADDRINUSE' || attempt === 3)
+        throw error
       console.log(`port stolen (attempt ${attempt}); retrying on a fresh port`)
     }
   }
@@ -372,6 +420,7 @@ async function main() {
   console.log('discovery-smoke: passed')
 }
 
+/** @param {number} port - the reserved local port to bind. */
 async function serveOnce(port) {
   const logPath = join(HOME, 'dsh-web.log')
   const logFd = openSync(logPath, 'a')
@@ -451,7 +500,9 @@ async function serveOnce(port) {
       // No log to attribute with; fall through to the generic failure below.
     }
     if (log.includes('EADDRINUSE')) {
-      const stolen = new Error(`dsh web could not bind port ${port} (EADDRINUSE)`)
+      const stolen = /** @type {Error & { code: string }} */ (
+        new Error(`dsh web could not bind port ${port} (EADDRINUSE)`)
+      )
       stolen.code = 'EADDRINUSE'
       throw stolen
     }
@@ -459,6 +510,10 @@ async function serveOnce(port) {
   }
 }
 
+/**
+ * @param {number} port - the reserved local port.
+ * @param {string} cookie - the instance cookie.
+ */
 async function verifyBrowser(port, cookie) {
   const { chromium } = await import('playwright')
   const browser = await chromium.launch({ headless: true })
@@ -473,7 +528,9 @@ async function verifyBrowser(port, cookie) {
     },
   ])
   const page = await browserContext.newPage()
+  /** @type {string[]} */
   const pageErrors = []
+  /** @type {string[]} */
   const requests = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   page.on('request', (request) => requests.push(request.url()))
@@ -481,6 +538,7 @@ async function verifyBrowser(port, cookie) {
     await page.locator('[data-zotero-config-page]').waitFor()
     const styles = await page.evaluate((id) => {
       const settings = document.querySelector('[data-zotero-config-page]')
+      if (!settings) throw new Error('Zotero settings are missing')
       const css = getComputedStyle(settings)
       const sheets = [...document.querySelectorAll('head style[data-plugin-css]')]
       const stylesheet = id + '/src/client/ZoteroSettingsSection.module.css'
@@ -516,7 +574,7 @@ async function verifyBrowser(port, cookie) {
         .innerText()
         .catch(() => '')
       throw new Error(
-        `${error.message}; body=${body.slice(0, 500)}; pageErrors=${pageErrors.join('|')}`,
+        `${/** @type {Error} */ (error).message}; body=${body.slice(0, 500)}; pageErrors=${pageErrors.join('|')}`,
       )
     }
     const panel = page.getByRole('button', { name: 'Literature panel', exact: true })

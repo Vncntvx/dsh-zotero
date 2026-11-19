@@ -1,4 +1,9 @@
-/** Distinguish an absent pin from a missing contract inside an existing pin. */
+/**
+ * Distinguish an absent pin from a missing contract inside an existing pin.
+ * @param {((args: string[]) => string)} run - the git runner.
+ * @param {string} tag - the harness pin tag.
+ * @param {string} path - the contract file path inside the tag.
+ */
 export function pinnedFileOf(run, tag, path) {
   try {
     run(['rev-parse', '--verify', `${tag}^{commit}`])

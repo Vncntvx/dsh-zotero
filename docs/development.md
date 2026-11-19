@@ -221,9 +221,10 @@ node scripts/semantic-calibration/measure-admission.mjs --embeddings /tmp/<key>-
 - **构建与发布身份**：`scripts/build-state.mjs` 在完整 build/prepare 后记录源文件、脚本、配置、lockfile、工具链与全部产物的摘要；release artifact 是去掉脚本、开发依赖与开发用 overrides 的单一 tarball。`release-artifact.mjs`、`release-tar.mjs` 与 `publish-release-branch.mjs` 绑定源 SHA、文件闭集、逐文件摘要、tarball 摘要与包内内容；publish 作业以读取到的旧 ref 作 CAS lease，来源回退和字节变化都被拒绝。验证：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`、`release:check`。
 - **样式 token 来源**：CI 用 lockfile 安装的精确 theme 源码核对 dsw/ds，链接开发用 sibling 的 pin tag；`scripts/style-tokens.mjs` 的 `RUNTIME_SEAMS` 逐项对应当前 pin 的设置、CSS 定义或 `setProperty` 调用，来源表与快照闭合。验证：`tokens:check`（在 `release:check` 中）、`style-tokens.spec.ts`。
 - **客户端平台清单**：`scripts/client-graph-authority.mjs` 在 sibling 在场时用 TypeScript AST 读取 pin tag 的 `PLATFORM_MODULES`，逐项拒绝宿主未提供的 external；无 sibling 的注册表检查由固定输入的门禁测试覆盖。手动 UI 验收复用 `pinnedHarness`/`pinThemeSheets`，记录 DOM、控制台错误与截图。验证：`client-graph-authority` 变异测试、`harness:check`、`smoke-parsed-ui.mjs`。
-- **React Hook 与脚本类型**：客户端源码与浏览器测试执行 `rules-of-hooks` 与 `exhaustive-deps`，任何告警使 `lint:hooks` 失败；Babel 解析 TS/JSX，`.ts` 保持无 JSX 语义；`tsconfig.scripts.json` 覆盖 CLI 的宿主 API 调用，`typecheck:program` 在 build 生成 `lib` 声明后运行。验证：`react-hooks.spec.ts`、`harness-artifacts.spec.ts`、`npm run lint:hooks`、`npm run typecheck`。
+- **React Hook 与脚本类型**：客户端源码与浏览器测试执行 `rules-of-hooks` 与 `exhaustive-deps`，任何告警使 `lint:hooks` 失败；Babel 解析 TS/JSX，`.ts` 保持无 JSX 语义；`tsconfig.scripts.json` 以 `checkJs` 检查 `scripts/` 下的全部 `.mjs`；`typecheck:after-build` 在 build 之后运行，覆盖其余四个工程的类型检查。验证：`react-hooks.spec.ts`、`harness-artifacts.spec.ts`、`npm run lint:hooks`、`npm run typecheck`。
 - **样式门禁**：`scripts/shared/css-syntax.mjs` 用 CSSTree 解析规则、声明、选择器与媒体条件；字体字面量必须来自宿主阶梯，颜色包括命名色、现代函数与变量 fallback，hover 与触屏字号条件在相反能力下必须不匹配，减少动态效果须实际把 transition/animation 置 none。验证：`style-syntax.spec.ts`、`npm run style:check`。
 - **依赖与运行时身份**：ONNX 1.31.1 的独立锚点来自官方 npm 元数据的 tarball SHA-512，归档通过 SRI 后提取三个资产的 SHA-256；许可证固定摘要。vendored harness 包的版本从不可变 pin tag 读取，锁文件解析必须等于声明地板；每个打包声明中的静态 import/export/import type 必须有 consumer dependency、optionalDependency 或 peer。验证：`vendor-onnxruntime` 篡改反例、`harness-vendor-state`、`published-declarations`、`verify:pack`。
+- **scholarly 融合身份语义**：`src/scholarly/fusion.ts` 按 `identityRelationOf` 裁决候选，优先精确匹配正式 DOI，并保留冲突键的多个候选；身份门、强标识集合或仲裁顺序的任何改动必须同步更新 `tests/scholarly/fusion-bridges.spec.ts` 的正反例。验证：`fusion-bridges.spec.ts`、`fusion.spec.ts`、`fusion-identity.spec.ts`。
 
 ## 本地调试
 
@@ -368,7 +369,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 2. `npm run build:client`：浏览器端产物可以单独构建；
 3. `npm test`：测试规范守卫（lane、`.only`/`.skip`、spec 行数棘轮）与全量 vitest；
 4. `npm run format:check`：Prettier 格式检查；
-5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`build`、`typecheck:program`、`test:coverage`、`test:calibration` 与 `verify:pack`；可直接从 `npm ci --ignore-scripts` 开始，无需预构建；
+5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`build`、`typecheck:after-build`、`test:coverage`、`test:calibration` 与 `verify:pack`；可直接从 `npm ci --ignore-scripts` 开始，无需预构建；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
 8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
@@ -385,9 +386,9 @@ CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三�
 
 npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。发布前查询 `registry.npmjs.org`。已有版本的名称、版本和 SHA-512 integrity 必须与产物一致。首次查询返回 404 时，作业通过 OIDC 将 `artifact.json` 指定的原 tarball 提交给 npm，符合条件的公开包自动附带 provenance。
 
-`verify-npm-release` 下载公开 tarball 并校验实际字节；校验通过后创建或更新 GitHub Release，正文记录 tag 注释、GitHub 生成的变更说明、源 SHA、artifactDigest 和 tarballSha256。npm 返回 404 时，作业在摘要中提示并结束；等 npm 显示 **Published** 后重新运行核验工作流。原产物保留 7 天，下载或核验失败后也可重新运行。内容变化需要新版本与重新验证。
+`verify-npm-release` 下载公开 tarball 并校验实际字节；校验通过后创建或更新 GitHub Release，正文记录 tag 注释、GitHub 生成的变更说明、源 SHA、artifactDigest 和 tarballSha256。作业使用源提交的脚本核验。版本暂不可见时最多查询 12 次、间隔 10 秒；持续返回 404 时在作业摘要中提示，待 npm 显示 **Published** 后可重新运行。原产物保留 7 天，下载或核验失败后也可重新运行。内容变化需要新版本与重新验证。
 
-启用延迟核验前，在 GitHub 仓库 Settings → Environments 的 `npm-publication` 环境设置 **15 分钟** wait timer，并将核验工作流合入默认分支。GitHub 在等待结束后启动 runner；核验作业最多运行 3 分钟。
+启用延迟核验前，在 GitHub 仓库 Settings → Environments 的 `npm-publication` 环境设置 **15 分钟** wait timer，并将核验工作流合入默认分支。GitHub 在等待结束后启动 runner；核验作业最多运行 15 分钟。
 
 可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见本节。
 

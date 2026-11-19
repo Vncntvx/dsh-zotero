@@ -15,6 +15,8 @@ export function registryVersion(
     fetchImpl?: typeof fetch
     delay?: (ms: number) => Promise<unknown>
     maxAttempts?: number
+    delayMs?: number
+    waitForPublication?: boolean
   },
 ): Promise<RegistryPackage | undefined>
 export function registryTarball(
@@ -25,5 +27,6 @@ export function registryTarball(
     fetchImpl?: typeof fetch
     delay?: (ms: number) => Promise<unknown>
     maxAttempts?: number
+    delayMs?: number
   },
 ): Promise<Buffer>

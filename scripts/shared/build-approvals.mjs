@@ -15,16 +15,18 @@
  * @module scripts/shared/build-approvals
  */
 
-/** Every install script this plugin's dependency tree needs a decision for. */
+/** Every install script this plugin's dependency tree needs a decision for.
+ * @type {readonly string[]}
+ */
 export const APPROVED_BUILD_SCRIPTS = Object.freeze([])
 
 /**
  * Compare the install hooks a dependency tree declares with the approved list.
  * A declared name outside the list needs a decision; an approved name with
  * nothing left to run is a stale entry that would hide the next change.
- * @param declared package names whose manifest declares an install hook
- * @param approved names the profile approves
- * @returns the names needing a decision and the approvals with nothing to run
+ * @param {readonly string[]} declared - package names whose manifest declares an install hook.
+ * @param {readonly string[]} [approved=APPROVED_BUILD_SCRIPTS] - names the profile approves.
+ * @returns {{ missing: string[], stale: string[] }} the names needing a decision and the approvals with nothing to run.
  */
 export function approvalGaps(declared, approved = APPROVED_BUILD_SCRIPTS) {
   const declaredSet = new Set(declared)

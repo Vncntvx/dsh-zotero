@@ -13,24 +13,26 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.path == '.github/workflows/release-branch.yml' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
+      startsWith(github.event.workflow_run['head_branch'], 'v')
     environment: npm-publication
     concurrency:
-      group: verify-npm-release-${{ github.event.workflow_run.head_branch }}
+      group: verify-npm-release-${{ github.event.workflow_run['head_branch'] }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: write
     env:
-      RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha }}
-      RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+      RELEASE_SOURCE: ${{ github.event.workflow_run['head_sha'] }}
+      RELEASE_TAG: ${{ github.event.workflow_run['head_branch'] }}
 
     steps:
       - name: Checkout verification scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Use the verification scripts from the commit that produced the artifact.
+          ref: ${{ github.event.workflow_run['head_sha'] }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -42,7 +44,7 @@ jobs:
       - name: Download verified release artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifact-${{ github.event.workflow_run.head_sha }}
+          name: release-artifact-${{ github.event.workflow_run['head_sha'] }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/release-artifact

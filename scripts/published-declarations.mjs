@@ -3,6 +3,11 @@ import { parse } from '@babel/parser'
 import { builtinModules } from 'node:module'
 const builtins = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]))
 
+/**
+ * @param {readonly { path: string, source: string }[]} sources - declaration sources to scan.
+ * @param {{ name: string, dependencies?: Record<string, string>, optionalDependencies?: Record<string, string>, peerDependencies?: Record<string, string> }} manifest - parsed package.json.
+ * @returns {string[]} sorted problems; empty when every external specifier is declared.
+ */
 export function declarationDependencyProblems(sources, manifest) {
   const declared = new Set([
     ...Object.keys(manifest.dependencies ?? {}),
@@ -10,9 +15,11 @@ export function declarationDependencyProblems(sources, manifest) {
     ...Object.keys(manifest.peerDependencies ?? {}),
     manifest.name,
   ])
+  /** @type {Set<string>} */
   const problems = new Set()
   for (const { path, source } of sources) {
     const parsed = parse(source, { sourceType: 'module', plugins: [['typescript', { dts: true }]] })
+    /** @param {unknown} specifier */
     const check = (specifier) => {
       if (typeof specifier !== 'string' || specifier.startsWith('.') || builtins.has(specifier))
         return
@@ -22,6 +29,7 @@ export function declarationDependencyProblems(sources, manifest) {
       if (!declared.has(name))
         problems.add(`${path} references undeclared consumer dependency ${name}`)
     }
+    /** @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types. */
     const visit = (node) => {
       if (node === null || typeof node !== 'object') return
       if (

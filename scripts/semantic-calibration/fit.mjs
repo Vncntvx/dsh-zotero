@@ -15,6 +15,40 @@ import { featureRows, loadEmbeddings } from './features.mjs'
 import { fitLogistic, groupedSelect } from './logistic.mjs'
 import { perIntentOutcomes, regressionMetrics, scoreRows, selectThreshold } from './metrics.mjs'
 
+/** @typedef {{
+ * schemaVersion: number,
+ * kind: string,
+ * scoringVersion: string,
+ * featureNames: string[],
+ * model: unknown,
+ * embeddingInputSha256: string,
+ * embeddingProvenance: { synthetic: boolean, generatedBy: string },
+ * dataProvenance: import('./dataset.mjs').Provenance,
+ * datasetDigest: string,
+ * backgroundDigest: string,
+ * partitionDigests: Record<string, string>,
+ * protocolDigest: string,
+ * k: number,
+ * classifier: import('./logistic.mjs').LogisticModel,
+ * threshold: number | null,
+ * selection: unknown,
+ * thresholdSelection: { selected: number | null, candidates: { threshold: number | null, feasible: boolean }[] },
+ * trainingRows: number,
+ * calibrationRows: number,
+ * calibrationOutcomes: unknown,
+ * calibrationRecall: unknown,
+ * status: string,
+ * productionEligible: boolean,
+ * wp6Acceptance: boolean,
+ * blockers: string[],
+ * candidateDigest?: string
+ * }} Candidate */
+
+/**
+ * @param {import('./dataset.mjs').Dataset} dataset
+ * @param {import('./features.mjs').Embeddings} embeddings
+ * @returns {Promise<Candidate>}
+ */
 export async function fitCandidate(dataset, embeddings) {
   validateDataset(dataset)
   const protocol = dataset.manifest.protocol
@@ -24,7 +58,10 @@ export async function fitCandidate(dataset, embeddings) {
   )
   const selection = groupedSelect(rowsByK, protocol)
   const { k, lambda } = selection.selected
-  const classifier = fitLogistic(rowsByK.get(k), lambda)
+  const classifier = fitLogistic(
+    /** @type {import('./logistic.mjs').LogisticRow[]} */ (rowsByK.get(k)),
+    lambda,
+  )
   const calibration = scoreRows(
     featureRows(dataset, pairRows(dataset, 'calibration'), embeddings, k),
     classifier,
@@ -86,7 +123,10 @@ if (isMain(import.meta.url))
       'Missing --embeddings; this command cannot create or download vectors',
     )
     const dataset = await loadDataset()
-    const embeddings = await loadEmbeddings(args['--embeddings'], dataset, ['train', 'calibration'])
+    const embeddings = await loadEmbeddings(/** @type {string} */ (args['--embeddings']), dataset, [
+      'train',
+      'calibration',
+    ])
     const candidate = await fitCandidate(dataset, embeddings)
     print(candidate)
     invariant(

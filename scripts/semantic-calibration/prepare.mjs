@@ -18,6 +18,14 @@ import {
 import { modelIdentity } from './features.mjs'
 import { validateFrozenCandidate } from './evaluate.mjs'
 
+/** @typedef {{ id: string, intentId: string, familyId: string, language: import('./dataset.mjs').Language, documentLanguage: import('./dataset.mjs').Language, mode: string, size: number, phrasingCount: number, independentQueryUnit: string, queryKeys: string[], chunks: { index: number, textKey: string, sourceHandle: string, relevant: boolean }[], uniqueDocumentTexts: number, duplicatesAreStressOnly: boolean, productionChunkingVerified: boolean, allRelevantCovered: boolean }} CorpusRequest */
+
+/**
+ * @param {import('./dataset.mjs').Dataset} dataset
+ * @param {import('./dataset.mjs').Split} split
+ * @param {number} [maximum]
+ * @returns {CorpusRequest[]}
+ */
 export function corpusRequests(dataset, split, maximum) {
   const families = dataset.partitions[split].families
   const sizes = [
@@ -26,8 +34,8 @@ export function corpusRequests(dataset, split, maximum) {
   const requests = []
   for (const family of families)
     for (const query of family.queries)
-      for (const language of ['en', 'zh'])
-        for (const documentLanguage of ['en', 'zh']) {
+      for (const language of /** @type {readonly ['en', 'zh']} */ (['en', 'zh']))
+        for (const documentLanguage of /** @type {readonly ['en', 'zh']} */ (['en', 'zh'])) {
           const own = family.documents.map((document) => ({
             familyId: family.id,
             id: document.id,
@@ -114,11 +122,16 @@ if (isMain(import.meta.url))
       return
     }
     invariant(
-      ['encoding', 'corpora'].includes(args['--mode']),
+      ['encoding', 'corpora'].includes(/** @type {string} */ (args['--mode'])),
       'Specify --mode encoding or corpora',
     )
-    invariant(['fit', 'heldout'].includes(args['--split']), 'Specify --split fit or heldout')
-    const selected = args['--split'] === 'fit' ? ['train', 'calibration'] : ['heldout']
+    invariant(
+      ['fit', 'heldout'].includes(/** @type {string} */ (args['--split'])),
+      'Specify --split fit or heldout',
+    )
+    const selected = /** @type {import('./dataset.mjs').Split[]} */ (
+      args['--split'] === 'fit' ? ['train', 'calibration'] : ['heldout']
+    )
     const maximum = args['--max-corpus'] === undefined ? undefined : Number(args['--max-corpus'])
     invariant(
       maximum === undefined || (Number.isSafeInteger(maximum) && maximum >= 64 && maximum <= 16384),
@@ -131,7 +144,13 @@ if (isMain(import.meta.url))
         args['--candidate'] && args['--freeze'],
         'Heldout export requires a supported frozen candidate and --freeze digest',
       )
-      validateFrozenCandidate(await readJson(args['--candidate']), dataset, args['--freeze'])
+      validateFrozenCandidate(
+        /** @type {import('./evaluate.mjs').FrozenCandidate} */ (
+          await readJson(/** @type {string} */ (args['--candidate']))
+        ),
+        dataset,
+        /** @type {string} */ (args['--freeze']),
+      )
     }
     const entries = [
       ...backgroundEntries(dataset),

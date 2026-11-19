@@ -3,10 +3,28 @@
 // Intercept is not penalized. Means/scales belong to the training fold only.
 import { invariant } from './dataset.mjs'
 
+/** @typedef {{ familyId: string, documentFamilyId: string, language: string, intentId: string, label: number, features: number[] }} LogisticRow */
+/** @typedef {{ means: number[], scales: number[], coefficients: number[], lambda: number }} LogisticModel */
+
+/**
+ * @param {number} z
+ */
 export const sigmoid = (z) => (z >= 0 ? 1 / (1 + Math.exp(-z)) : Math.exp(z) / (1 + Math.exp(z)))
+/**
+ * @param {number} z
+ */
 const softplus = (z) => Math.max(0, z) + Math.log1p(Math.exp(-Math.abs(z)))
+/**
+ * @param {number[]} a
+ * @param {number[]} b
+ * @returns {number}
+ */
 const dot = (a, b) => a.reduce((sum, x, i) => sum + x * b[i], 0)
 
+/**
+ * @param {LogisticRow[]} rows
+ * @returns {number[]}
+ */
 export function queryWeights(rows) {
   const counts = new Map()
   for (const row of rows) {
@@ -15,11 +33,16 @@ export function queryWeights(rows) {
   }
   return rows.map((row) => 1 / counts.get(`${row.language}/${row.intentId}`))
 }
+/**
+ * @param {LogisticRow[]} rows
+ * @param {number[]} weights
+ * @returns {Pick<LogisticModel, 'means' | 'scales'>}
+ */
 function standardizer(rows, weights) {
   const width = rows[0].features.length
   const total = weights.reduce((a, b) => a + b, 0)
-  const means = Array(width).fill(0)
-  const scales = Array(width).fill(0)
+  const means = /** @type {number[]} */ (Array(width).fill(0))
+  const scales = /** @type {number[]} */ (Array(width).fill(0))
   rows.forEach((row, i) =>
     row.features.forEach((value, j) => {
       means[j] += (value * weights[i]) / total
@@ -32,6 +55,11 @@ function standardizer(rows, weights) {
   )
   return { means, scales: scales.map((variance) => (variance < 1e-20 ? 1 : Math.sqrt(variance))) }
 }
+/**
+ * @param {number[]} features
+ * @param {LogisticModel} model
+ * @returns {number[]}
+ */
 export function featureVector(features, model) {
   invariant(
     Array.isArray(features) &&
@@ -41,9 +69,18 @@ export function featureVector(features, model) {
   )
   return [1, ...features.map((x, i) => (x - model.means[i]) / model.scales[i])]
 }
+/**
+ * @param {number[]} features
+ * @param {LogisticModel} model
+ */
 export const predict = (features, model) =>
   sigmoid(dot(featureVector(features, model), model.coefficients))
 
+/**
+ * @param {number[][]} matrix
+ * @param {number[]} vector
+ * @returns {number[]}
+ */
 function solve(matrix, vector) {
   const n = vector.length
   const a = matrix.map((row, i) => [...row, vector[i]])
@@ -62,6 +99,11 @@ function solve(matrix, vector) {
   }
   return a.map((row) => row[n])
 }
+/**
+ * @param {LogisticRow[]} rows
+ * @param {number} lambda
+ * @param {{ maxIterations?: number, tolerance?: number }} [options]
+ */
 export function fitLogistic(rows, lambda, { maxIterations = 100, tolerance = 1e-8 } = {}) {
   invariant(
     rows.length > 0 && Number.isFinite(lambda) && lambda > 0,
@@ -80,8 +122,13 @@ export function fitLogistic(rows, lambda, { maxIterations = 100, tolerance = 1e-
     )
   const weights = queryWeights(rows)
   const total = weights.reduce((a, b) => a + b, 0)
-  const model = { ...standardizer(rows, weights), coefficients: Array(6).fill(0), lambda }
+  const model = {
+    ...standardizer(rows, weights),
+    coefficients: /** @type {number[]} */ (Array(6).fill(0)),
+    lambda,
+  }
   const x = rows.map((row) => featureVector(row.features, model))
+  /** @param {number[]} beta */
   const objective = (beta) =>
     rows.reduce((loss, row, i) => {
       const z = dot(x[i], beta)
@@ -107,17 +154,26 @@ export function fitLogistic(rows, lambda, { maxIterations = 100, tolerance = 1e-
     const descent = dot(gradient, step)
     const before = objective(beta)
     let rate = 1
+    /** @type {number[] | undefined} */
     let candidate
     for (let line = 0; line < 50; line++) {
       candidate = beta.map((value, j) => value - rate * step[j])
-      if (objective(candidate) <= before - 1e-4 * rate * descent) break
+      if (objective(/** @type {number[]} */ (candidate)) <= before - 1e-4 * rate * descent) break
       rate /= 2
     }
-    invariant(rate > 2 ** -49 && candidate.every(Number.isFinite), 'Logistic line search failed')
-    model.coefficients = candidate
+    invariant(
+      rate > 2 ** -49 && /** @type {number[]} */ (candidate).every(Number.isFinite),
+      'Logistic line search failed',
+    )
+    model.coefficients = /** @type {number[]} */ (candidate)
   }
   throw new Error('Ridge logistic fitting did not converge')
 }
+/**
+ * @param {LogisticRow[]} rows
+ * @param {LogisticModel} model
+ * @returns {number}
+ */
 export function logLoss(rows, model) {
   const weights = queryWeights(rows)
   const total = weights.reduce((a, b) => a + b, 0)
@@ -127,15 +183,19 @@ export function logLoss(rows, model) {
   }, 0)
 }
 
+/**
+ * @param {Map<number, LogisticRow[]>} rowsByK
+ * @param {{ kCandidates: number[], ridgeCandidates: number[], folds: number }} selection
+ */
 export function groupedSelect(rowsByK, { kCandidates, ridgeCandidates, folds }) {
-  const firstRows = rowsByK.get(kCandidates[0])
+  const firstRows = /** @type {LogisticRow[]} */ (rowsByK.get(kCandidates[0]))
   const familyIds = [...new Set(firstRows.map((row) => row.familyId))].sort()
   invariant(familyIds.length >= folds * 2, 'Too few train families for grouped CV')
   const foldByFamily = new Map(familyIds.map((id, i) => [id, i % folds]))
   const reports = []
   for (const k of kCandidates)
     for (const lambda of ridgeCandidates) {
-      const rows = rowsByK.get(k)
+      const rows = /** @type {LogisticRow[]} */ (rowsByK.get(k))
       const losses = []
       for (let fold = 0; fold < folds; fold++) {
         const training = rows.filter((row) => foldByFamily.get(row.familyId) !== fold)

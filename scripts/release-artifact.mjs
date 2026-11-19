@@ -17,7 +17,13 @@ import { tarFileDigests } from './release-tar.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const provenanceName = 'release-provenance.json'
+/** @param bytes {string | Uint8Array} @returns {string} the sha256 hex digest. */
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
+/**
+ * Refuse release paths that are not clean, relative, POSIX-safe segments.
+ * @param path {unknown} the manifest-declared path.
+ * @returns {string} the same path once proven safe.
+ */
 function safePath(path) {
   if (
     typeof path !== 'string' ||
@@ -29,7 +35,14 @@ function safePath(path) {
     throw new Error(`Unsafe release path: ${String(path)}`)
   return path
 }
+/**
+ * Digest every regular file under `base` into a sorted path→sha256 map.
+ * @param base {string} the tree root.
+ * @param [prefix] {string} the accumulated relative path.
+ * @returns {Record<string, string>} path → sha256 hex digest.
+ */
 function tree(base, prefix = '') {
+  /** @type {Record<string, string>} */
   const files = {}
   for (const entry of readdirSync(join(base, prefix), { withFileTypes: true })) {
     const path = safePath(prefix ? `${prefix}/${entry.name}` : entry.name)
@@ -40,23 +53,81 @@ function tree(base, prefix = '') {
   }
   return Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b, 'en')))
 }
+/**
+ * The `package.json` face the release gate reads: the fields it copies into
+ * the staged manifest and the three host-only sections it strips.
+ * @typedef {{
+ *   name?: string,
+ *   version?: string,
+ *   main?: string,
+ *   types?: string,
+ *   icon?: string,
+ *   files?: string[],
+ *   exports?: unknown,
+ *   dsh?: { bundle?: { patch?: string | string[] } },
+ *   scripts?: unknown,
+ *   devDependencies?: unknown,
+ *   overrides?: unknown,
+ * }} ReleasePackageManifest
+ */
+
+/**
+ * The provenance a verified release artifact carries.
+ * @typedef {{
+ *   version: number,
+ *   name: string,
+ *   packageVersion: string,
+ *   sourceSha: string,
+ *   buildDigest: string,
+ *   artifactDigest: string,
+ *   files: Record<string, string>,
+ * }} ReleaseProvenance
+ */
+
+/**
+ * The verified release artifact: the staged tree, the packed tarball, and the
+ * provenance the publication steps carry forward.
+ * @typedef {{ stage: string, tarball: string, provenance: ReleaseProvenance }} VerifiedReleaseArtifact
+ */
+
+/**
+ * The staged manifest: the package manifest with the host-only sections
+ * stripped and the provenance file added to `files`.
+ * @param manifest {ReleasePackageManifest} the parsed source `package.json`.
+ * @returns {ReleasePackageManifest} the manifest the tarball carries.
+ */
 export function releaseManifestOf(manifest) {
   const { scripts: _scripts, devDependencies: _dev, overrides: _overrides, ...release } = manifest
   return { ...release, files: [...new Set([...(manifest.files ?? []), provenanceName])] }
 }
+
+/**
+ * The concrete paths the manifest says a consumer resolves.
+ * @param manifest {ReleasePackageManifest} the staged package manifest.
+ * @returns {string[]} safe, relative paths; wildcard entries are excluded.
+ */
 function manifestEntries(manifest) {
+  /** @type {Set<unknown>} */
   const paths = new Set([manifest.main, manifest.types, manifest.icon, manifest.dsh?.bundle?.patch])
+  /** @param value {unknown} */
   function visit(value) {
     if (typeof value === 'string') paths.add(value)
     else if (value && typeof value === 'object') Object.values(value).forEach(visit)
   }
   visit(manifest.exports)
-  return [...paths]
-    .filter((path) => typeof path === 'string' && !path.includes('*'))
-    .map((path) => safePath(path.replace(/^\.\//, '')))
+  return /** @type {string[]} */ (
+    [...paths].filter((path) => typeof path === 'string' && !path.includes('*'))
+  ).map((path) => safePath(path.replace(/^\.\//, '')))
 }
 
-/** Prepare the tree consumed by smoke and publication; later steps run no build/install scripts. */
+/**
+ * Prepare the tree consumed by smoke and publication; later steps run no
+ * build/install scripts.
+ * @param out {string} the empty artifact directory to stage into.
+ * @param sourceSha {string} the exact source commit the build was stamped with.
+ * @param [base] {string} the package root the build state and manifest are read from.
+ * @returns {VerifiedReleaseArtifact} the verified stage and tarball.
+ */
 export function prepareReleaseArtifact(out, sourceSha, base = root) {
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(sourceSha))
     throw new Error('Expected a full source commit SHA')
@@ -109,7 +180,12 @@ export function prepareReleaseArtifact(out, sourceSha, base = root) {
   return verifyReleaseArtifact(out, sourceSha)
 }
 
-/** Validate every byte and the closed file set before any release ref changes. */
+/**
+ * Validate every byte and the closed file set before any release ref changes.
+ * @param out {string} the artifact directory holding `artifact.json` and `package/`.
+ * @param sourceSha {string} the exact source commit the artifact was built from.
+ * @returns {VerifiedReleaseArtifact} the staged tree, tarball path, and provenance.
+ */
 export function verifyReleaseArtifact(out, sourceSha) {
   const envelope = JSON.parse(readFileSync(join(out, 'artifact.json'), 'utf8'))
   const stage = join(out, 'package')

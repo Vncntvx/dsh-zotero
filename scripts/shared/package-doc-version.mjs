@@ -7,6 +7,11 @@ export const PACKAGE_VERSION_DOCS = [
 ]
 const version = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?`
 
+/**
+ * @param {string} text - document text carrying install examples.
+ * @param {string} current - the package version the examples must show.
+ * @returns {string} the text with every install example rewritten.
+ */
 export function withPackageDocVersion(text, current) {
   return text
     .replace(new RegExp('dsh-zotero@' + version, 'g'), 'dsh-zotero@' + current)
@@ -15,6 +20,12 @@ export function withPackageDocVersion(text, current) {
       'github:Vncntvx/dsh-zotero#v' + current,
     )
 }
+/**
+ * @param {string} path - document path, for problem messages.
+ * @param {string} text - document text carrying install examples.
+ * @param {string} current - the package version the examples must show.
+ * @returns {string[]} human-readable problems; empty when the examples agree.
+ */
 export function packageDocVersionProblems(path, text, current) {
   return text === withPackageDocVersion(text, current)
     ? []

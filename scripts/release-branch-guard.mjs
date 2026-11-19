@@ -1,5 +1,25 @@
 /** Pure source identity checks used before a release branch can move. */
 
+/**
+ * The release source facts the publishing workflow reads from git.
+ * @typedef {{ actualSha: string, expectedSha: string, status: string }} ReleaseSourceFacts
+ */
+
+/**
+ * The release target facts the publishing workflow reads from git.
+ * @typedef {{ branch: string, remote: string, remoteUrl?: string }} ReleaseTargetFacts
+ */
+
+/**
+ * The release channel state the provenance records for the previous release.
+ * @typedef {{ sourceSha: string, artifactDigest: string }} ReleaseChannelState
+ */
+
+/**
+ * Reject a HEAD that does not match the checked source or a dirty worktree.
+ * @param source {ReleaseSourceFacts} the HEAD sha, the sha the run checked out, and `git status --porcelain`.
+ * @returns {void}
+ */
 export function assertReleaseSource({ actualSha, expectedSha, status }) {
   if (actualSha !== expectedSha) {
     throw new Error(
@@ -11,7 +31,11 @@ export function assertReleaseSource({ actualSha, expectedSha, status }) {
   }
 }
 
-/** The installation channel is one reviewed branch on the project's own remote. */
+/**
+ * The installation channel is one reviewed branch on the project's own remote.
+ * @param target {ReleaseTargetFacts} the branch, remote name, and remote URL.
+ * @returns {void}
+ */
 export function assertReleaseTarget({ branch, remote, remoteUrl }) {
   if (branch !== 'release' || remote !== 'origin')
     throw new Error('[release-branch] Only origin refs/heads/release is a release target')
@@ -29,7 +53,18 @@ export function assertReleaseTarget({ branch, remote, remoteUrl }) {
     throw new Error('[release-branch] The release remote is not the trusted project repository')
 }
 
-/** A legacy channel can be initialized only from current main; later moves are monotonic. */
+/**
+ * A legacy channel can be initialized only from current main; later moves are
+ * monotonic.
+ * @param advance {{
+ *   sourceSha: string,
+ *   mainSha: string,
+ *   previous: ReleaseChannelState | undefined,
+ *   sourceDescendsFromPrevious: boolean,
+ *   artifactDigest: string,
+ * }} the candidate release move.
+ * @returns {void}
+ */
 export function assertReleaseAdvance({
   sourceSha,
   mainSha,

@@ -28,7 +28,10 @@ try {
   const value = result.value
   assert.ok(value && typeof value === 'object' && !Array.isArray(value))
   assert.ok(Array.isArray(value.papers), 'scholarly_get must return its canonical paper array')
-  const paper = value.papers.find((paper) => paper.doi?.toLowerCase() === doi)
+  const papers = /** @type {{ doi?: string, title: string, sources: unknown[] }[]} */ (
+    /** @type {unknown} */ (value.papers)
+  )
+  const paper = papers.find((paper) => paper.doi?.toLowerCase() === doi)
   assert.ok(paper, `The real indexes must return the requested DOI: ${JSON.stringify(value)}`)
   assert.equal(paper.title.trim().toLowerCase(), 'deep learning')
   assert.ok(paper.sources.length > 0, 'At least one actual index must confirm this work')

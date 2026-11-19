@@ -30,6 +30,7 @@ if (process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.me
   }
   const harnessRoot = process.argv[3] ?? join(root, '..', 'deepseek-harness')
   const tag = `dsh-v${version}`
+  /** @param {string[]} args */
   const run = (args) => execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' })
   const declarations = mirroredDeclarationsOf(run, tag)
   writeFileSync(

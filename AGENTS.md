@@ -32,7 +32,7 @@ npm run harness:check        # pin, lockfile, and upstream artifact freshness
 npm run style:check          # client CSS guards; refresh with tokens:write after harness upgrades
 npm run deps:check           # direct dependencies behind the registry; harness-owned ones excluded
 npm run assets:semantic      # download/verify pinned models into ~/.dsh/models
-npm run release:check        # full gate: format, strict harness, lint, typecheck, coverage, build, pack
+npm run release:check        # full gate: format, strict harness, lint, build, post-build typecheck, coverage, calibration, pack
 ```
 
 - Iterating: focused spec + `npm run typecheck`; add `npm run build:client` for client changes.
@@ -64,6 +64,6 @@ npm run release:check        # full gate: format, strict harness, lint, typechec
 
 - **Local API**: `resolveConfig` rejects non-loopback bases and the Local API client never follows redirects. Keep scholarly external traffic behind its HTTPS allowlist. User-initiated URL PDF reading, open-access PDFs, MinerU, and model downloads each use their own public-address checks; every redirect hop is re-validated. The `198.18.0.0/15` fake-IP exception applies only to reviewed allowlist hosts, HTTPS public PDFs, and HTTPS MinerU; plain HTTP and model downloads keep the strict gate. Deterministic address/policy refusals are final; transient resolution failures may be retried.
 - **MinerU boundary**: the API host is fixed to `mineru.net`. Attach the `Authorization` token only there; never attach it to signed uploads, result CDNs, or cache HEADs.
-- **Model downloads**: `src/enrichment/model-download-client.ts` permits only the fixed seed hosts, per-revision URLs, re-gated redirects, a byte cap, and SHA-256 verification; the host path has no proxy.
+- **Model downloads**: `src/enrichment/model-download-client.ts` permits only the fixed seed hosts, per-revision URLs, re-gated redirects, a byte cap, and SHA-256 verification; egress follows the shared proxy route policy (`egressRouteFor`).
 - **Credentials**: the Zotero write grant lives in `dsh-credentials`, never plugin config. Scholarly keys and the MinerU token are references resolved per call through `ctx.credentials`; unresolved references fail closed, especially MinerU's `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`.
 - **Generated output**: `lib/`, `coverage/`, `assets/onnxruntime/`, and the ignored model files under `assets/semantic/models/` are generated; rebuild instead of editing.

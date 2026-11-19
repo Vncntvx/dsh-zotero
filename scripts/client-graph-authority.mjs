@@ -25,7 +25,12 @@ export const CLIENT_EXTERNALS = [
   '@tanstack/react-virtual',
 ]
 
-/** Compare declared externals with the pinned host's actual PLATFORM_MODULES literal. */
+/**
+ * Compare declared externals with the pinned host's actual PLATFORM_MODULES literal.
+ * @param source {string} the pinned host platform module source.
+ * @param externals {string[]} the client externals the host table must serve.
+ * @returns {string[]} human-readable problems; empty when every external is served.
+ */
 export function clientPlatformProblems(source, externals = CLIENT_EXTERNALS) {
   const parsed = parse(source, { sourceType: 'module', plugins: ['typescript'] })
   const declarations = parsed.program.body.flatMap((node) =>
@@ -42,7 +47,9 @@ export function clientPlatformProblems(source, externals = CLIENT_EXTERNALS) {
     expression.elements.some((node) => node?.type !== 'StringLiteral')
   )
     return ['Pinned host has no static string PLATFORM_MODULES declaration']
-  const entries = expression.elements.map((node) => node.value)
+  const entries = /** @type {import('@babel/types').StringLiteral[]} */ (expression.elements).map(
+    (node) => node.value,
+  )
   const available = new Set(entries)
   return externals
     .filter((name) => !available.has(name))
@@ -161,8 +168,8 @@ export const CLIENT_INLINE_PACKAGES = [
  * dependency (`node_modules/a/node_modules/b/...`) is judged as `b` (the
  * package whose code would actually be bundled), and not as its parent. The
  * leading `.*` is greedy precisely to select the last `node_modules/` segment.
- * @param key - normalized metafile input key.
- * @returns the package name when the input is inside one, else undefined.
+ * @param key {string} normalized metafile input key.
+ * @returns {string | undefined} the package name when the input is inside one, else undefined.
  */
 export function packageNameOf(key) {
   const match = /^(?:.*\/)?node_modules\/(@[^/]+\/[^/]+|[^/]+)(?:\/|$)/.exec(key)
@@ -195,8 +202,8 @@ export const VENDORED_LIBRARY =
 /**
  * Whether a harness `@deepseek-ai/*` specifier may enter the client bundle by
  * inlining (as opposed to the loader module table / `EXTERNALS`).
- * @param specifier - the import specifier as resolved.
- * @returns true when the harness purity rule allows an inline copy.
+ * @param specifier {string} the import specifier as resolved.
+ * @returns {boolean} true when the harness purity rule allows an inline copy.
  */
 export function isInlineSafeHarness(specifier) {
   return (
@@ -209,8 +216,8 @@ export function isInlineSafeHarness(specifier) {
 /**
  * Normalize an esbuild metafile input key to a posix `src/...` /
  * `node_modules/...` spelling.
- * @param key - raw metafile input path.
- * @returns normalized key.
+ * @param key {string} raw metafile input path.
+ * @returns {string} normalized key.
  */
 function normalizeInputKey(key) {
   const normalized = key.replaceAll('\\', '/').replace(/^\.\//, '')
@@ -221,11 +228,21 @@ function normalizeInputKey(key) {
 }
 
 /**
+ * One client-graph violation: the input, its classification, and why it may not ship.
+ * @typedef {{
+ *   kind: 'host-package' | 'unknown-package' | 'host-local',
+ *   key: string,
+ *   detail: string,
+ * }} ClientGraphViolation
+ */
+
+/**
  * Classify client-graph inputs against runtime authority.
- * @param inputs - esbuild `metafile.inputs` (or equivalent path→record map).
- * @returns violations, each naming the input and why it may not ship.
+ * @param inputs {Record<string, unknown> | undefined} esbuild `metafile.inputs` (or equivalent path→record map).
+ * @returns {ClientGraphViolation[]} violations, each naming the input and why it may not ship.
  */
 export function clientGraphViolations(inputs) {
+  /** @type {ClientGraphViolation[]} */
   const violations = []
   for (const raw of Object.keys(inputs ?? {})) {
     const key = normalizeInputKey(raw)
@@ -278,7 +295,7 @@ export function clientGraphViolations(inputs) {
  * Esbuild plugin: refuse host-only packages at resolve time, then re-check
  * every local `src/**` input (and any `node_modules/zod`) via metafile on
  * each successful build. Independent of minify and of path comments.
- * @returns the `client-graph-authority` esbuild plugin.
+ * @returns {import('esbuild').Plugin} the `client-graph-authority` esbuild plugin.
  */
 export function createClientAuthorityPlugin() {
   return {
@@ -311,7 +328,11 @@ export function createClientAuthorityPlugin() {
   }
 }
 
-/** Compare both pattern and flags of every mirrored constant with the pinned source. */
+/**
+ * Compare both pattern and flags of every mirrored constant with the pinned source.
+ * @param source {string} the pinned host platform module source.
+ * @returns {string[]} human-readable mirror problems; empty when the mirrors match.
+ */
 export function clientMirrorProblems(source) {
   const parsed = parse(source, { sourceType: 'module', plugins: ['typescript'] })
   const declarations = parsed.program.body.flatMap((node) => {
@@ -319,11 +340,11 @@ export function clientMirrorProblems(source) {
     return declaration?.type === 'VariableDeclaration' ? declaration.declarations : []
   })
   const problems = []
-  for (const [name, mirror] of [
+  for (const [name, mirror] of /** @type {[string, RegExp][]} */ ([
     ['INLINE_SAFE', INLINE_SAFE],
     ['GENERATED_REMOTE', GENERATED_REMOTE],
     ['VENDORED_LIBRARY', VENDORED_LIBRARY],
-  ]) {
+  ])) {
     const binding = declarations.find(
       (node) => node.id.type === 'Identifier' && node.id.name === name,
     )

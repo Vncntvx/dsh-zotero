@@ -3,6 +3,12 @@ import { posix } from 'node:path'
 import { sourceNodes } from './source-scan.mjs'
 import { styleRules, styleDeclarations, selectorSubjects } from './css-syntax.mjs'
 
+/**
+ * One rule broken by one check, shaped like `StyleViolation` in `style-guard.d.mts`.
+ * @typedef {{ file: string, line: number, selector: string, detail: string, fix: string }} StyleViolation
+ */
+
+/** @param {string} property @returns {boolean} */
 const ownsControlDesign = (property) =>
   /^(?:padding(?:-.+)?|(?:min-|max-)?height|(?:min-|max-)?block-size|background(?:-.+)?|color|font(?:-.+)?|line-height|border(?:-.+)?|outline(?:-.+)?|box-shadow|corner-shape)$/.test(
     property,
@@ -10,9 +16,16 @@ const ownsControlDesign = (property) =>
 const geometryAdapter = 'src/client/components/IconButton.module.css'
 const contentAdapter = 'src/client/components/ContentButton.tsx'
 
+/**
+ * @param {ReadonlyArray<{ file: string, code: string }>} codeSources
+ * @param {ReadonlyArray<{ file: string, css: string }>} styles
+ * @returns {StyleViolation[]} the violations, empty when every control defers to the host.
+ */
 export function controlStyleViolations(codeSources, styles) {
+  /** @type {Map<string, Set<string>>} */
   const targets = new Map(),
-    violations = []
+    violations = /** @type {StyleViolation[]} */ ([])
+  /** @param {string} file @param {number} line @param {string} selector @param {string} detail */
   const add = (file, line, selector, detail) =>
     violations.push({
       file,
@@ -22,10 +35,10 @@ export function controlStyleViolations(codeSources, styles) {
       fix: 'use the host control size/variant; place content layout or surface decoration on its own container',
     })
   for (const { file, code } of codeSources) {
-    const nodes = sourceNodes(code),
+    const nodes = /** @type {ReadonlyArray<{ node: any, parent: any }>} */ (sourceNodes(code)),
       controls = new Set(),
-      modules = new Map(),
-      bindings = new Map()
+      modules = /** @type {Map<string, string>} */ (new Map()),
+      bindings = /** @type {Map<string, any>} */ (new Map())
     for (const { node } of nodes) {
       if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier')
         bindings.set(node.id.name, node.init)
@@ -44,12 +57,13 @@ export function controlStyleViolations(codeSources, styles) {
           controls.add(spec.local.name)
       }
     }
+    /** @param {any} [node] a Babel AST fragment; `@babel/parser` ships no usable node types. @param {Set<string>} [seen] */
     const visit = (node, seen = new Set()) => {
       if (!node || typeof node !== 'object') return
       if (node.type === 'Identifier' && bindings.has(node.name) && !seen.has(node.name))
         visit(bindings.get(node.name), new Set([...seen, node.name]))
       if (node.type === 'MemberExpression' && modules.has(node.object?.name)) {
-        const path = modules.get(node.object.name),
+        const path = /** @type {string} */ (modules.get(node.object.name)),
           names = targets.get(path) ?? new Set()
         const property =
           node.computed && node.property.type === 'Identifier'

@@ -54,8 +54,8 @@ function targetShortNames() {
  * Whether `dest` is a leftover local symlink to a non-package (upstream rename
  * or a directory that dropped its `package.json`). A registry install is a
  * real directory and is never pruned.
- * @param dest - `node_modules/@deepseek-ai/<short>` path.
- * @returns true when the entry is a stale local link.
+ * @param {string} dest - `node_modules/@deepseek-ai/<short>` path.
+ * @returns {boolean} true when the entry is a stale local link.
  */
 function isStaleLocalLink(dest) {
   try {
@@ -70,11 +70,14 @@ function isStaleLocalLink(dest) {
 
 /**
  * Relink one package. Skips when the destination already points at source.
- * @returns 'ok' | 'relink' | 'link'
+ * @param {string} name - the short package name.
+ * @param {string} source - the sibling checkout directory to link to.
+ * @returns {'ok' | 'relink' | 'link'}
  */
 function linkOne(name, source) {
   const dest = join(nmScope, name)
   const rel = relative(nmScope, source)
+  /** @type {'ok' | 'relink' | 'link'} */
   let kind = 'link'
   try {
     const stat = lstatSync(dest)

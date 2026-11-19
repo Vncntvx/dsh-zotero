@@ -1,6 +1,13 @@
 // Exact one-sided Clopper-Pearson bounds and deterministic cluster diagnostics.
 import { invariant } from './dataset.mjs'
 
+/** @typedef {{ successes: number, trials: number, estimate: number | null, lower: number, upper: number, alpha: number, method: string }} BinomialBounds */
+/** @typedef {{ lower: number, upper: number, clusters: number, method: string, seed?: number, replicates?: number, alpha?: number, limitation?: string }} ClusterBounds */
+
+/**
+ * @param {number} z
+ * @returns {number}
+ */
 function logGamma(z) {
   const p = [
     676.5203681218851, -1259.1392167224028, 771.3234287776531, -176.6150291621406,
@@ -13,6 +20,12 @@ function logGamma(z) {
   const t = z + p.length - 0.5
   return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x)
 }
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} x
+ * @returns {number}
+ */
 function betaFraction(a, b, x) {
   const tiny = 1e-300
   let c = 1
@@ -41,6 +54,12 @@ function betaFraction(a, b, x) {
   }
   throw new Error('Incomplete-beta evaluation did not converge')
 }
+/**
+ * @param {number} x
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
+ */
 function betaCdf(x, a, b) {
   if (x <= 0) return 0
   if (x >= 1) return 1
@@ -51,6 +70,12 @@ function betaCdf(x, a, b) {
     ? (term * betaFraction(a, b, x)) / a
     : 1 - (term * betaFraction(b, a, 1 - x)) / b
 }
+/**
+ * @param {number} probability
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
+ */
 function betaQuantile(probability, a, b) {
   let lo = 0
   let hi = 1
@@ -61,6 +86,12 @@ function betaQuantile(probability, a, b) {
   }
   return (lo + hi) / 2
 }
+/**
+ * @param {number} successes
+ * @param {number} trials
+ * @param {number} [alpha]
+ * @returns {BinomialBounds}
+ */
 export function binomialBounds(successes, trials, alpha = 0.05) {
   invariant(
     Number.isSafeInteger(trials) &&
@@ -91,8 +122,16 @@ export function binomialBounds(successes, trials, alpha = 0.05) {
     method: 'one-sided-clopper-pearson',
   }
 }
+/**
+ * @param {number} [target]
+ * @param {number} [alpha]
+ */
 export const minimumZeroFailureTrials = (target = 0.01, alpha = 0.05) =>
   Math.ceil(Math.log(alpha) / Math.log1p(-target))
+/**
+ * @param {number} seed
+ * @returns {() => number}
+ */
 export function randomOf(seed) {
   let state = seed >>> 0
   return () => {
@@ -100,6 +139,11 @@ export function randomOf(seed) {
     return state / 4294967296
   }
 }
+/**
+ * @param {{ numerator: number, denominator: number }[]} clusters
+ * @param {{ seed?: number, replicates?: number, alpha?: number }} [bootstrap]
+ * @returns {ClusterBounds}
+ */
 export function clusterBootstrap(
   clusters,
   { seed = 20261111, replicates = 2000, alpha = 0.05 } = {},
@@ -113,6 +157,7 @@ export function clusterBootstrap(
       method: 'topic-family-percentile-bootstrap-diagnostic',
     }
   const random = randomOf(seed)
+  /** @type {number[]} */
   const values = []
   for (let r = 0; r < replicates; r++) {
     let numerator = 0

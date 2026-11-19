@@ -5,12 +5,9 @@
     "checkJs": true,
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "allowImportingTsExtensions": true
   },
-  "include": [
-    "scripts/fetch-semantic-model.mjs",
-    "scripts/client-test-platform.mjs",
-    "scripts/client-declarations.mjs"
-  ],
+  "include": ["scripts/**/*.mjs"],
   "exclude": []
 }

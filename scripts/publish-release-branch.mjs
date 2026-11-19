@@ -12,6 +12,7 @@ import {
 import { prepareReleaseArtifact, verifyReleaseArtifact } from './release-artifact.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+/** @param {string[]} args @param {string} [cwd=root] @returns {string} trimmed stdout. */
 function git(args, cwd = root) {
   return execFileSync('git', args, {
     cwd,
@@ -21,6 +22,18 @@ function git(args, cwd = root) {
   }).trim()
 }
 const args = process.argv.slice(2)
+/**
+ * @overload
+ * @param {string} flag
+ * @param {string} fallback
+ * @returns {string}
+ * @overload
+ * @param {string} flag
+ * @returns {string | undefined}
+ * @param {string} flag
+ * @param {string} [fallback]
+ * @returns {string | undefined} the option value, when present.
+ */
 function option(flag, fallback) {
   const index = args.indexOf(flag)
   if (index === -1) return fallback

@@ -22,11 +22,28 @@
 
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diff, gt, maxSatisfying, minVersion, satisfies, valid } from 'semver'
 import { HARNESS_MIRRORED } from './shared/harness-mirrored-deps.mjs'
 import { lockedProxyUndiciVersion } from './shared/lockfile.mjs'
+
+/**
+ * The semver functions this check compares versions with. `semver` ships no
+ * type declarations, so the module is required and typed here once.
+ * @typedef {{
+ *   diff: (a: string | undefined, b: string | undefined) => string | null,
+ *   gt: (a: string | undefined, b: string | undefined) => boolean,
+ *   maxSatisfying: (versions: string[], range: string | undefined) => string | null,
+ *   minVersion: (range: string) => { major: number } | null,
+ *   satisfies: (version: string | undefined, range: string | undefined) => boolean,
+ *   valid: (version: string | undefined | null) => string | null,
+ * }} SemverModule
+ */
+const require = createRequire(import.meta.url)
+/** @type {SemverModule} */
+const semver = require('semver')
+const { diff, gt, maxSatisfying, minVersion, satisfies, valid } = semver
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -37,7 +54,11 @@ const CONCURRENCY = 8
 const TIMEOUT_MS = 15_000
 const LEVELS = ['major', 'minor', 'patch']
 
-/** The declared range for a direct dependency, or undefined when it is not one. */
+/**
+ * The declared range for a direct dependency, or undefined when it is not one.
+ * @param name {string} the dependency name.
+ * @returns {string | undefined} the declared version range.
+ */
 function declaredRange(name) {
   const range = manifest.dependencies?.[name] ?? manifest.devDependencies?.[name]
   return typeof range === 'string' ? range : undefined
@@ -57,17 +78,44 @@ function registryBase() {
   }
 }
 
+/**
+ * The npm packument face this check reads: the published versions and the
+ * `latest` dist-tag.
+ * @typedef {{ versions?: Record<string, unknown>, 'dist-tags'?: Record<string, string> }} Packument
+ */
+
+/**
+ * The versions one registry lookup compares: the best release inside the
+ * declared range, the current stable `latest` tag, the constraint-eligible
+ * release, and whether `latest` already left the declared range.
+ * @typedef {{ wanted: string, latest: string, eligible: string, outsideRange: boolean }} RegistryVersions
+ */
+
+/**
+ * The newest registry release under the declared range and the upgrade constraint.
+ * @param registry {string} the registry base URL.
+ * @param name {string} the package name.
+ * @param range {string | undefined} the declared dependency range.
+ * @param constraint {string | undefined} the repo-level upgrade constraint.
+ * @returns {Promise<RegistryVersions>} the compared versions.
+ */
 async function latestVersion(registry, name, range, constraint) {
   const response = await fetch(`${registry}/${name.replace('/', '%2F')}`, {
     headers: { accept: 'application/vnd.npm.install-v1+json' },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  const packument = await response.json()
+  const packument = /** @type {Packument} */ (await response.json())
   return registryVersionsOf(packument, range, constraint)
 }
 
-/** Report the declared range and the current stable release independently. */
+/**
+ * Report the declared range and the current stable release independently.
+ * @param packument {Packument} the registry packument for the package.
+ * @param range {string | undefined} the declared dependency range.
+ * @param [constraint] {string | undefined} the repo-level upgrade constraint.
+ * @returns {RegistryVersions} the compared versions.
+ */
 export function registryVersionsOf(packument, range, constraint) {
   const versions = Object.keys(packument?.versions ?? {}).filter((version) => valid(version))
   const wanted = maxSatisfying(versions, range)
@@ -86,6 +134,16 @@ export function registryVersionsOf(packument, range, constraint) {
   }
 }
 
+/**
+ * The repo-level constraint that pins one dependency's upgrade ceiling.
+ * @typedef {{ range?: string, reason: string }} UpgradeConstraint
+ */
+
+/**
+ * The upgrade constraint for dependencies upgraded by hand, else undefined.
+ * @param name {string} the dependency name.
+ * @returns {UpgradeConstraint | undefined} the constraint, when one applies.
+ */
 function upgradeConstraint(name) {
   if (name === 'undici') {
     const version = lockedProxyUndiciVersion(lock)
@@ -98,7 +156,17 @@ function upgradeConstraint(name) {
   }
 }
 
+/**
+ * Run one async task per item with a fixed concurrency, preserving order.
+ * @template T
+ * @template R
+ * @param items {T[]} the items to process.
+ * @param limit {number} the maximum number of concurrent tasks.
+ * @param task {(item: T) => Promise<R>} one task per item.
+ * @returns {Promise<R[]>} the results in the items' order.
+ */
 async function mapLimit(items, limit, task) {
+  /** @type {R[]} */
   const results = new Array(items.length)
   let cursor = 0
   const worker = async () => {
@@ -111,9 +179,29 @@ async function mapLimit(items, limit, task) {
   return results
 }
 
+/**
+ * The exact version the lockfile installed for one direct dependency.
+ * @param name {string} the dependency name.
+ * @returns {string | undefined} the locked version.
+ */
 function installedVersion(name) {
   return lock.packages?.[`node_modules/${name}`]?.version
 }
+
+/**
+ * One dependency lookup: the failure face carries only the error message;
+ * the success face carries the compared registry versions.
+ * @typedef {{
+ *   name: string,
+ *   current: string | undefined,
+ *   error?: string,
+ *   constraint?: UpgradeConstraint,
+ *   wanted?: string,
+ *   latest?: string,
+ *   eligible?: string,
+ *   outsideRange?: boolean,
+ * }} DepLookup
+ */
 
 async function main() {
   const targets = Object.keys(manifest.dependencies ?? {})
@@ -121,6 +209,7 @@ async function main() {
     .filter((name) => !name.startsWith('@deepseek-ai/') && !HARNESS_MIRRORED.has(name))
 
   const registry = registryBase()
+  /** @type {DepLookup[]} */
   const lookups = await mapLimit(targets, CONCURRENCY, async (name) => {
     const current = installedVersion(name)
     try {

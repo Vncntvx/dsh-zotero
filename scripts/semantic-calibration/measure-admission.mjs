@@ -9,7 +9,17 @@ import { admissionInputsForModel, prepareAdmissionInputs } from './admission-dat
 import { cli, digestOf, invariant, isMain, options, print, sha256, textKey } from './dataset.mjs'
 import { modelIdentity } from './features.mjs'
 
+/** @typedef {{ schemaVersion: number, protocol: string, synthetic: boolean, datasetDigest: string, inputDigest: string, generatedBy: string, generatedAt: string, durationMs: number, runtime: unknown, model: import('./features.mjs').ModelIdentity, entries: { key: string, vector: number[] }[] }} EncodingFile */
+/** @typedef {{ relevant: readonly number[], top4: readonly number[], lexicalTop4: readonly number[] }} CaseRow */
+
+/** @param {number} value */
 const round = (value) => Number(value.toFixed(9))
+/**
+ * @param {import('./admission-data.mjs').AdmissionInputs} request
+ * @param {EncodingFile} encoded
+ * @param {string} inputSha256
+ * @param {import('../../lib/enrichment/semantic/admission.js').AdmissionRules} [profile]
+ */
 export function measureAdmissionVectors(request, encoded, inputSha256, profile) {
   const model = SEMANTIC_MODELS.find((model) => model.key === encoded?.model?.key)
   invariant(
@@ -106,6 +116,10 @@ export function measureAdmissionVectors(request, encoded, inputSha256, profile) 
       lexicalTop4: row.lexical.slice(0, 4),
     }
   })
+  /**
+   * @param {CaseRow[]} rows
+   * @param {'top4' | 'lexicalTop4'} field
+   */
   const metrics = (rows, field) => {
     let at1 = 0,
       at4 = 0,
@@ -173,7 +187,13 @@ if (isMain(import.meta.url))
       return
     }
     invariant(args['--embeddings'], 'Specify --embeddings')
-    const bytes = await readFile(args['--embeddings'])
+    const bytes = await readFile(/** @type {string} */ (args['--embeddings']))
     invariant(bytes.length <= 256 * 1024 * 1024, 'Vector input exceeds 256 MiB')
-    print(measureAdmissionVectors(prepareAdmissionInputs(), JSON.parse(bytes), sha256(bytes)))
+    print(
+      measureAdmissionVectors(
+        prepareAdmissionInputs(),
+        JSON.parse(/** @type {string} */ (/** @type {unknown} */ (bytes))),
+        sha256(bytes),
+      ),
+    )
   })

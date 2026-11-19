@@ -1,3 +1,6 @@
+/// <reference path="./smoke-parsed-ui.d.ts" />
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
 /** Production-component Chromium fixture; complements the packaged app composition smoke. */
 import { build } from 'esbuild'
 import { transform } from 'lightningcss'
@@ -13,6 +16,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 const output = process.argv[2] ?? '/tmp/dsh-zotero-parsed-ui'
 mkdirSync(output, { recursive: true })
 const aliases = clientTestAliasesOf(root)
+/** @type {import('esbuild').Plugin} */
 const css = {
   name: 'inline-css',
   setup(build) {
@@ -132,6 +136,7 @@ const results = []
 try {
   const page = await browser.newPage({ viewport: { width: 360, height: 300 } })
   page.setDefaultTimeout(10_000)
+  /** @type {string[]} */
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.route('https://parsed-ui.test/**', (route) =>
@@ -183,18 +188,19 @@ try {
             })
         else
           await page
-            .getByRole('heading', { name: 'Generation 1', exact: true })
+            .getByRole('heading', { name: 'Generation 1', exact: true, level: 1 })
             .waitFor()
             .catch(async (error) => {
               console.error(await page.locator('body').innerText())
               throw error
             })
+        /** @type {{ x: number, y: number, width: number, height: number, clipped: boolean, rows?: { height: number, contentHeight: number, clipped: boolean, label: string | null }[] }} */
         const layout = await page.evaluate((mode) => {
-          const rect = document
-            .querySelector(
-              mode === 'document' || mode.startsWith('list') ? 'section' : '[role=dialog]',
-            )
-            .getBoundingClientRect()
+          const surface = document.querySelector(
+            mode === 'document' || mode.startsWith('list') ? 'section' : '[role=dialog]',
+          )
+          if (!surface) throw new Error(`Missing fixture surface: ${mode}`)
+          const rect = surface.getBoundingClientRect()
           return {
             x: rect.x,
             y: rect.y,
@@ -219,6 +225,7 @@ try {
           const rows = await page.locator('li > button').evaluateAll((buttons) =>
             buttons.map((button) => {
               const box = button.getBoundingClientRect()
+              if (!button.firstElementChild) throw new Error('Library row has no content')
               const content = button.firstElementChild.getBoundingClientRect()
               return {
                 height: box.height,
@@ -250,15 +257,17 @@ try {
     }
   }
   await page.evaluate(() => window.showFixture('document', 'zh'))
-  await page.getByRole('heading', { name: 'Generation 1', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Generation 1', exact: true, level: 1 }).waitFor()
   await page.evaluate(() => {
-    const range = document.createRange()
-    range.selectNodeContents(
-      [...document.querySelectorAll('p')].find((node) => node.textContent === 'Selected passage'),
+    const passage = [...document.querySelectorAll('p')].find(
+      (node) => node.textContent === 'Selected passage',
     )
-    const s = getSelection()
-    s.removeAllRanges()
-    s.addRange(range)
+    const selection = getSelection()
+    if (!passage || !selection) throw new Error('Fixture passage selection is unavailable')
+    const range = document.createRange()
+    range.selectNodeContents(passage)
+    selection.removeAllRanges()
+    selection.addRange(range)
     document.dispatchEvent(new Event('selectionchange'))
   })
   await page.getByRole('menuitem', { name: '让模型解释' }).waitFor()
@@ -267,13 +276,14 @@ try {
   await page.getByRole('menu').waitFor({ state: 'detached' })
   const parsesBefore = await page.evaluate(() => window.__parsedFullParses)
   await page.evaluate(() => window.changeGeneration())
-  await page.getByRole('heading', { name: 'Generation 2', exact: true }).waitFor()
+  const currentHeading = page.getByRole('heading', { name: 'Generation 2', exact: true, level: 1 })
+  await currentHeading.waitFor()
   const parsesAfter = await page.evaluate(() => window.__parsedFullParses)
   if (parsesAfter - parsesBefore !== 1)
     throw new Error('A complete generation did not parse exactly once')
   await page.evaluate(() => window.failRefresh())
   await page.getByRole('alert').waitFor()
-  if (!(await page.getByRole('heading', { name: 'Generation 2', exact: true }).isVisible()))
+  if (!(await currentHeading.isVisible()))
     throw new Error('Refresh failure discarded complete document')
   if ((await page.evaluate(() => window.__parsedFullParses)) !== parsesAfter)
     throw new Error('Failed refresh reparsed the retained document')

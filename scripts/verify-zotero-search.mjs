@@ -29,6 +29,7 @@ const source = flags.has('--source')
 const file = parse(source, { sourceType: 'script' })
 const wanted = new Set(['_searchNormalizeMap', '_searchFormattingTagRE', 'normalizeForSearch'])
 const expressions = new Map()
+/** @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types. */
 function visit(node) {
   if (!node || typeof node !== 'object') return
   if (Array.isArray(node)) {
@@ -58,6 +59,7 @@ if (expressions.size !== wanted.size)
   throw new Error(
     'Upstream normalization definitions changed; inspect the source before updating extraction.',
   )
+/** @type {Record<string, unknown>} */
 const internal = {}
 for (const key of ['_searchNormalizeMap', '_searchFormattingTagRE'])
   internal[key] = runInNewContext('(' + expressions.get(key) + ')', {}, { timeout: 1000 })
@@ -67,6 +69,7 @@ const oracle = runInNewContext(
   { timeout: 1000 },
 )
 let cases = 0
+/** @param {string} text */
 function compare(text) {
   const actual = normalizeForSearch(text),
     expected = oracle(text)

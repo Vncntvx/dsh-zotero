@@ -39,7 +39,11 @@ const SOURCE_DIR = join(root, 'src')
 /** The browser half's source root, excluded from the Node transpile. */
 const CLIENT_DIR = join(SOURCE_DIR, 'client')
 
-/** Every Node-half TypeScript source file, in stable order. */
+/**
+ * Every Node-half TypeScript source file, in stable order.
+ * @param {string} [dir=SOURCE_DIR] - directory to walk.
+ * @returns {string[]} absolute source paths, sorted.
+ */
 function nodeSources(dir = SOURCE_DIR) {
   const found = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -97,8 +101,14 @@ if (
  * so a new component entry cannot ship unchecked, with the browser bundle the
  * loader fetches by name appended when the map does not already list it.
  */
+/**
+ * @param {unknown} exportsMap - the manifest's `exports` map.
+ * @returns {string[]} package-relative output paths, sorted.
+ */
 function requiredOutputsFrom(exportsMap) {
+  /** @type {Set<string>} */
   const outputs = new Set()
+  /** @param {unknown} value */
   const visit = (value) => {
     if (typeof value === 'string') {
       if (value.startsWith('./lib/') && value.endsWith('.js')) outputs.add(value.slice(2))

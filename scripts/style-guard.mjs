@@ -68,6 +68,31 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/**
+ * One stylesheet, as the guards receive it.
+ * @typedef {{ file: string, css: string }} StyleSource
+ */
+
+/**
+ * The published token names a reference may resolve to, mirroring
+ * `TokenPalette` in `style-guard.d.mts`.
+ * @typedef {{ dsw: string[], dsh?: string[], ds?: string[] }} TokenPalette
+ */
+
+/**
+ * One rule broken by one guard, mirroring `StyleViolation` in `style-guard.d.mts`.
+ * @typedef {{ file: string, line: number, selector: string, detail: string, fix: string }} StyleViolation
+ */
+
+/** @typedef {'top' | 'right' | 'bottom' | 'left'} Side */
+
+/**
+ * A border width per side, where the rule states none.
+ * @typedef {Partial<Record<Side, number>>} SideWidths
+ */
+
+/** @typedef {ReadonlyArray<{ property: string, value: string }>} Declarations */
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Directory scanned for stylesheets, relative to the repository root. */
@@ -86,10 +111,16 @@ export const FOCUS_ZOOM_GUARD = { query: 'pointer: coarse', value: '16px' }
 /** Properties whose literal `#000` is a coverage value rather than a colour. */
 export const MASK_PROPERTIES = ['mask', 'mask-image', '-webkit-mask-image']
 
-/** Border sides, in the order a shorthand writes them. */
+/**
+ * Border sides, in the order a shorthand writes them.
+ * @type {Side[]}
+ */
 const SIDES = ['top', 'right', 'bottom', 'left']
 
-/** The physical sides each logical border shorthand paints. */
+/**
+ * The physical sides each logical border shorthand paints.
+ * @type {Record<string, Side[]>}
+ */
 const LOGICAL_SIDES = {
   'border-block': ['top', 'bottom'],
   'border-inline': ['right', 'left'],
@@ -129,8 +160,8 @@ export const declarationsOf = styleDeclarations
  * Every design-system token a stylesheet references. The three namespaces are
  * the static palette (`--dsw-*`), the runtime preference seams (`--dsh-*`), and
  * the host base tokens (`--ds-*`, defined in `ui-theme/src/styles/base.css`).
- * @param text - stylesheet source, or a single value.
- * @returns the referenced names, `--` prefix included.
+ * @param {string} text - stylesheet source, or a single value.
+ * @returns {string[]} the referenced names, `--` prefix included.
  */
 export function tokenReferencesOf(text) {
   return tokenReferences(text).map((reference) => reference.name)
@@ -138,9 +169,9 @@ export function tokenReferencesOf(text) {
 
 /**
  * The line a source offset falls on.
- * @param css - stylesheet source.
- * @param at - the offset, or `-1` when unknown.
- * @returns the 1-based line number.
+ * @param {string} css - stylesheet source.
+ * @param {number} at - the offset, or `-1` when unknown.
+ * @returns {number} the 1-based line number.
  */
 function lineOf(css, at) {
   if (at < 0) return 0
@@ -151,8 +182,8 @@ function lineOf(css, at) {
 
 /**
  * The length in a `border`/`border-width` value, in pixels.
- * @param value - the declaration value.
- * @returns the pixel width, or `undefined` when the value states none.
+ * @param {string} value - the declaration value.
+ * @returns {number | undefined} the pixel width, or `undefined` when the value states none.
  */
 function borderWidthOf(value) {
   const match = /(?:^|\s)(\d*\.?\d+)px\b/.exec(value)
@@ -167,7 +198,12 @@ function borderWidthOf(value) {
  * @param declarations - the rule's declarations.
  * @returns the width per side, `undefined` where the rule states none.
  */
+/**
+ * @param {Declarations} declarations
+ * @returns {SideWidths} the width per side, `undefined` where the rule states none.
+ */
 function sideWidthsOf(declarations) {
+  /** @type {SideWidths} */
   const widths = {}
   for (const { property, value } of declarations) {
     if (property.endsWith('-color') || property.endsWith('-style')) continue
@@ -189,8 +225,9 @@ function sideWidthsOf(declarations) {
 
 /**
  * Expand a one-to-four value box shorthand to its four sides, as CSS does.
- * @param values - the stated values, in source order.
- * @returns one value per side; the missing ones stay `undefined`.
+ * @template T
+ * @param {Array<T | undefined>} values - the stated values, in source order.
+ * @returns {{ top: T | undefined, right: T | undefined, bottom: T | undefined, left: T | undefined }} one value per side; the missing ones stay `undefined`.
  */
 function expandBox(values) {
   const [first, second = first, third = first, fourth = second] = values
@@ -199,8 +236,8 @@ function expandBox(values) {
 
 /**
  * The sides a rule paints with a state colour.
- * @param declarations - the rule's declarations.
- * @returns the sides, empty when the rule paints no state colour.
+ * @param {string} property - the declaration property.
+ * @returns {Side[]} the sides, empty when the rule paints no state colour.
  */
 function sidesFor(property) {
   if (['border', 'border-color', 'border-width', 'border-style'].includes(property)) return SIDES
@@ -210,17 +247,23 @@ function sidesFor(property) {
     (side) => property === `border-${side}` || property.startsWith(`border-${side}-`),
   )
   if (physical) return [physical]
-  const logicalSide = {
+  const logicalSide = /** @type {Record<string, Side>} */ ({
     'border-block-start': 'top',
     'border-block-end': 'bottom',
     'border-inline-start': 'left',
     'border-inline-end': 'right',
-  }[logical]
+  })[logical]
   return logicalSide ? [logicalSide] : []
 }
 
+/**
+ * @param {Declarations} declarations
+ * @returns {{ colours: Partial<Record<Side, string>>, solid: Partial<Record<Side, boolean>> }} the colour and solidity per side.
+ */
 function borderColours(declarations) {
+  /** @type {Partial<Record<Side, string>>} */
   const colours = {}
+  /** @type {Partial<Record<Side, boolean>>} */
   const solid = {}
   for (const { property, value } of declarations) {
     const sides = sidesFor(property)
@@ -249,6 +292,10 @@ function borderColours(declarations) {
   return { colours, solid }
 }
 
+/**
+ * @param {Declarations} declarations
+ * @returns {Side[]} the sides, empty when the rule paints no state colour.
+ */
 function stateSidesOf(declarations) {
   const { colours } = borderColours(declarations)
   return SIDES.filter((side) => (colours[side] ?? '').includes('--dsw-alias-state-'))
@@ -269,9 +316,9 @@ const subjectClassesOf = selectorSubjects
 /**
  * Violations of the token contract: a reference to a name the palette does not
  * publish resolves to nothing, so the declaration silently does nothing.
- * @param source - one stylesheet: its repo-relative path and its source text.
- * @param palette - the published `--dsw-*`, `--dsh-*`, and `--ds-*` names.
- * @returns the violations, empty when every reference resolves.
+ * @param {StyleSource} source - one stylesheet: its repo-relative path and its source text.
+ * @param {TokenPalette} palette - the published `--dsw-*`, `--dsh-*`, and `--ds-*` names.
+ * @returns {StyleViolation[]} the violations, empty when every reference resolves.
  */
 export function unknownTokenViolations(source, palette) {
   const css = stripComments(source.css)
@@ -293,8 +340,8 @@ export function unknownTokenViolations(source, palette) {
 /**
  * Violations of the typography ladder: a literal size opts out of the scale and
  * out of the reader's font-size axis.
- * @param source - one stylesheet.
- * @returns the violations, empty when every size is a token.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every size is a token.
  */
 export function bareFontScaleViolations(source) {
   const css = stripComments(source.css)
@@ -304,7 +351,7 @@ export function bareFontScaleViolations(source) {
       if (!['font', 'font-size', 'line-height'].includes(property)) continue
       const offScale = valueNodes(value).some(
         (node) =>
-          (['Dimension', 'Percentage'].includes(node.type) && Number(node.value) !== 0) ||
+          ((node.type === 'Dimension' || node.type === 'Percentage') && Number(node.value) !== 0) ||
           (node.type === 'Identifier' &&
             [
               'xx-small',
@@ -321,8 +368,9 @@ export function bareFontScaleViolations(source) {
       )
       if (!offScale) continue
       const licensed =
-        rule.atRules.some((at) => mediaRequires(at, 'pointer', 'coarse')) &&
-        value === FOCUS_ZOOM_GUARD.value
+        rule.atRules.some(
+          /** @param {string} at */ (at) => mediaRequires(at, 'pointer', 'coarse'),
+        ) && value === FOCUS_ZOOM_GUARD.value
       if (licensed) continue
       violations.push({
         file: source.file,
@@ -339,8 +387,8 @@ export function bareFontScaleViolations(source) {
 /**
  * Violations of the palette contract: a literal colour cannot follow the dark
  * palette, the high-contrast palette, or a brand override.
- * @param source - one stylesheet.
- * @returns the violations, empty when every colour is a token or a mask value.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every colour is a token or a mask value.
  */
 export function literalColorViolations(source) {
   const css = stripComments(source.css)
@@ -371,8 +419,8 @@ export function literalColorViolations(source) {
 /**
  * Violations of the corner-shape pairing: a full-round radius carries a
  * `corner-shape: round`, or the theme's corner cap renders it as a squircle.
- * @param source - one stylesheet.
- * @returns the violations, empty when every full round is paired.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every full round is paired.
  */
 export function fullRoundRadiusViolations(source) {
   const css = stripComments(source.css)
@@ -380,7 +428,7 @@ export function fullRoundRadiusViolations(source) {
   for (const rule of rulesOf(css)) {
     const declarations = declarationsOf(rule.body)
     const radius = declarations.find(
-      ({ property, value }) =>
+      /** @param {{ property: string, value: string }} declaration */ ({ property, value }) =>
         (property === 'border-radius' ||
           /^border-(?:top|bottom)-(?:left|right)-radius$/.test(property) ||
           /^border-(?:start|end)-(?:start|end)-radius$/.test(property)) &&
@@ -397,7 +445,8 @@ export function fullRoundRadiusViolations(source) {
     )
     if (radius === undefined) continue
     const paired = declarations.some(
-      ({ property, value }) => property === 'corner-shape' && value === 'round',
+      /** @param {{ property: string, value: string }} declaration */ ({ property, value }) =>
+        property === 'corner-shape' && value === 'round',
     )
     if (paired) continue
     violations.push({
@@ -417,14 +466,15 @@ export function fullRoundRadiusViolations(source) {
  * suffix-composed variant (`.itemRowActive`) resolves against the longest base
  * class name that prefixes it (`.itemRow`), which is the class whose width it
  * restates the colour of.
- * @param baseWidths - widths keyed by base class name.
- * @param key - the variant's own base class name.
- * @returns the inherited widths, empty when no base declares one.
+ * @param {ReadonlyMap<string, SideWidths>} baseWidths - widths keyed by base class name.
+ * @param {string} key - the variant's own base class name.
+ * @returns {SideWidths} the inherited widths, empty when no base declares one.
  */
 function resolveBaseWidths(baseWidths, key) {
   const exact = baseWidths.get(key)
   if (exact !== undefined) return exact
   let best = ''
+  /** @type {SideWidths} */
   let widths = {}
   for (const [base, candidate] of baseWidths) {
     if (key.startsWith(base) && base.length > best.length) {
@@ -444,8 +494,8 @@ function resolveBaseWidths(baseWidths, key) {
  * pair, both for attribute variants and for suffix-composed class names. A
  * variant that neither states nor inherits a full pixel is the failure this
  * catches.
- * @param source - one stylesheet.
- * @returns the violations, empty when every state border is full weight.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every state border is full weight.
  */
 export function stateBorderViolations(source) {
   const css = stripComments(source.css)
@@ -486,8 +536,8 @@ export function stateBorderViolations(source) {
  * style, resolving declarations in source order the way the cascade does: a
  * state-coloured longhand after a neutral shorthand takes that side out of the
  * rule, and a colour-only variant keeps the style its base rule stated.
- * @param declarations - the rule's declarations.
- * @returns the sides whose effective colour is a neutral border token and whose effective style is solid.
+ * @param {Declarations} declarations - the rule's declarations.
+ * @returns {Side[]} the sides whose effective colour is a neutral border token and whose effective style is solid.
  */
 function neutralSidesOf(declarations) {
   const { colours, solid } = borderColours(declarations)
@@ -504,8 +554,8 @@ function neutralSidesOf(declarations) {
  *
  * A declared accent (see {@link NEUTRAL_BORDER_ACCENTS}) is skipped: a rail is
  * a mark, not a separator.
- * @param source - one stylesheet.
- * @returns the violations, empty when every neutral border is a hairline.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every neutral border is a hairline.
  */
 export function neutralBorderViolations(source) {
   const css = stripComments(source.css)
@@ -551,15 +601,16 @@ export function neutralBorderViolations(source) {
 /**
  * Violations of the hover gate: an ungated `:hover` sticks after a tap on touch
  * hardware.
- * @param source - one stylesheet.
- * @returns the violations, empty when every hover rule is gated.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every hover rule is gated.
  */
 export function hoverMediaViolations(source) {
   const css = stripComments(source.css)
   const violations = []
   for (const rule of rulesOf(css)) {
     if (!selectorHasHover(rule.selector)) continue
-    if (rule.atRules.some((at) => mediaRequires(at, 'hover', 'hover'))) continue
+    if (rule.atRules.some(/** @param {string} at */ (at) => mediaRequires(at, 'hover', 'hover')))
+      continue
     violations.push({
       file: source.file,
       line: lineOf(css, rule.at),
@@ -582,8 +633,8 @@ export function hoverMediaViolations(source) {
  * host does not hold this line consistently (64 of its sheets declare a
  * transition, 40 reduce it); this repository does, because a list nobody checks
  * is a list that is wrong.
- * @param source - one stylesheet.
- * @returns the violations, empty when every animated class is reduced.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every animated class is reduced.
  */
 export function unreducedMotionViolations(source) {
   const css = stripComments(source.css)
@@ -608,8 +659,15 @@ export function unreducedMotionViolations(source) {
     const subjects = subjectClassesOf(rule.selector)
     const isReduction =
       rule.atRules.length > 0 &&
-      rule.atRules.every((at) => mediaCovers(at, 'prefers-reduced-motion', 'reduce'))
-    if (rule.atRules.some((at) => mediaRequires(at, 'prefers-reduced-motion', 'no-preference')))
+      rule.atRules.every(
+        /** @param {string} at */ (at) => mediaCovers(at, 'prefers-reduced-motion', 'reduce'),
+      )
+    if (
+      rule.atRules.some(
+        /** @param {string} at */ (at) =>
+          mediaRequires(at, 'prefers-reduced-motion', 'no-preference'),
+      )
+    )
       continue
     for (const subject of subjects)
       for (const [kind, enabled] of modes) {
@@ -641,7 +699,12 @@ export function unreducedMotionViolations(source) {
   return violations
 }
 
-/** Every stylesheet guard, in the order they are reported. */
+/**
+ * Every stylesheet guard, in the order they are reported. Each guard reads one
+ * stylesheet; only `unknownTokenViolations` consumes the palette, so the rest
+ * accept it and ignore it.
+ * @type {ReadonlyArray<(source: StyleSource, palette: TokenPalette) => StyleViolation[]>}
+ */
 export const STYLE_GUARDS = [
   unknownTokenViolations,
   bareFontScaleViolations,
@@ -655,9 +718,9 @@ export const STYLE_GUARDS = [
 
 /**
  * Run every guard over every stylesheet.
- * @param sources - the stylesheets, as repo-relative path plus source text.
- * @param palette - the published token names.
- * @returns the violations, empty when the stylesheets conform.
+ * @param {ReadonlyArray<StyleSource>} sources - the stylesheets, as repo-relative path plus source text.
+ * @param {TokenPalette} palette - the published token names.
+ * @returns {StyleViolation[]} the violations, empty when the stylesheets conform.
  */
 export function styleViolations(sources, palette) {
   const violations = []
@@ -671,10 +734,11 @@ export function styleViolations(sources, palette) {
 
 /**
  * Every stylesheet under the scanned root.
- * @param base - the repository root; defaults to the one this script lives in.
- * @returns the sources, sorted by path.
+ * @param {string} [base] - the repository root; defaults to the one this script lives in.
+ * @returns {StyleSource[]} the sources, sorted by path.
  */
 export function styleSources(base = root) {
+  /** @param {string} dir @returns {string[]} */
   const walk = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const path = join(dir, entry.name)
@@ -691,8 +755,8 @@ export function styleSources(base = root) {
 
 /**
  * Format one violation as the CLI prints it.
- * @param violation - the violation.
- * @returns three indented lines.
+ * @param {StyleViolation} violation - the violation.
+ * @returns {string} three indented lines.
  */
 export function formatViolation(violation) {
   const where = violation.line === 0 ? violation.file : `${violation.file}:${violation.line}`
@@ -707,7 +771,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const palette = JSON.parse(
     readFileSync(join(root, 'tests', 'fixtures', 'style-tokens.json'), 'utf8'),
   )
-  const code = readdirSync(join(root, 'src/client'), { recursive: true })
+  const code = /** @type {string[]} */ (readdirSync(join(root, 'src/client'), { recursive: true }))
     .filter((file) => /\.tsx$/.test(String(file)))
     .map((file) => ({
       file: `src/client/${file}`,

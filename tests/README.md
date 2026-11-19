@@ -447,11 +447,11 @@ Documentation-only rule changes need focused formatting and test-lint checks.
 They do not require running the behavioural suite when no executable files
 change.
 
-The gate that exists today fires on push to `main`, on `v*` tags, and on the
-weekly dependency-health cron; pull requests run only the security scanner. When
-changing CI, keep aiming for the complete deterministic quality gate on every
+The quality gate runs on `v*` tag pushes and in the weekly upstream-health
+workflow; pushes to `main` and pull requests run only the security scanner.
+When changing CI, aim for the complete deterministic quality gate on every
 source commit: affected-module selection is a development shortcut, not the
-sole merge gate, and scheduled or live checks never substitute for it.
+merge gate, and scheduled or live checks do not substitute for it.
 
 ## Not here, on purpose
 

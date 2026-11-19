@@ -13,6 +13,10 @@ export function prepareAdmissionInputs() {
     relevant: [...row.relevant],
   }))
   const entries = new Map()
+  /**
+   * @param {'query' | 'document'} side
+   * @param {string} text
+   */
   const add = (side, text) => {
     const key = textKey(side, text)
     entries.set(key, { key, side, text })
@@ -33,6 +37,7 @@ export function prepareAdmissionInputs() {
   }
 }
 
+/** @param {import('./admission-data.mjs').AdmissionInputs} request */
 export function checkAdmissionInputs(request) {
   const expected = prepareAdmissionInputs()
   invariant(
@@ -55,6 +60,10 @@ export function checkAdmissionInputs(request) {
   return expected
 }
 
+/**
+ * @param {import('./admission-data.mjs').AdmissionInputs} request
+ * @param {import('../../src/enrichment-model-catalog.ts').SemanticModelEntry} model
+ */
 export function admissionInputsForModel(request, model) {
   checkAdmissionInputs(request)
   const cases = request.cases.filter(

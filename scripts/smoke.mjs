@@ -12,6 +12,7 @@ import { resolve } from 'node:path'
 import { readFileSync, realpathSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 
+/** @param {string} flag @returns {string | undefined} the following argv entry, when present. */
 function argAfter(flag) {
   const index = process.argv.indexOf(flag)
   return index < 0 ? undefined : process.argv[index + 1]
@@ -31,6 +32,7 @@ const dshEntry = realpathSync(
   argAfter('--dsh') ?? execFileSync('which', ['dsh'], { encoding: 'utf8' }).trim(),
 )
 const runtimeRequire = createRequire(pathToFileURL(dshEntry))
+/** @param {string} name */
 const runtimeImport = (name) => import(pathToFileURL(runtimeRequire.resolve(name)).href)
 const { Context } = await runtimeImport('@deepseek-ai/cordis')
 const { PluginPackages, createRuntimeResolution, loadProfileDirectory } = await runtimeImport(
@@ -58,7 +60,10 @@ try {
   await ctx.plugin(ZoteroService, { writeEnabled: true })
   const zotero = ctx.zotero
 
-  /** Build a `ZoteroObjectRef` from a model-facing item ref string (the seam's public grammar). */
+  /**
+   * Build a `ZoteroObjectRef` from a model-facing item ref string (the seam's public grammar).
+   * @param {string} ref
+   */
   function itemRef(ref) {
     const key = /zotero:\/\/(?:user\/0|group\/(\d+))\/item\/([A-Z0-9]{8})/.exec(ref)
     if (key === null) throw new Error(`unexpected item ref ${ref}`)
@@ -139,8 +144,10 @@ try {
         `attachment: ${location.kind} ${location.kind === 'file' ? location.path : location.url}`,
       )
     } catch (error) {
-      if (error?.code !== 'ZOTERO_NO_ATTACHMENT') throw error
-      console.log(`attachment: no usable attachment (${error.code})`)
+      if (/** @type {{ code?: string }} */ (error)?.code !== 'ZOTERO_NO_ATTACHMENT') throw error
+      console.log(
+        `attachment: no usable attachment (${/** @type {{ code?: string }} */ (error).code})`,
+      )
     }
   }
 
@@ -151,15 +158,24 @@ try {
   console.log(`changes: baseline at version ${baseline.cursor?.version ?? 'unknown'}`)
 
   const assembly = await ctx.systemPrompt.assemble()
-  if (assembly.sections.find((entry) => entry.name === 'zotero:policy') === undefined) {
+  if (
+    assembly.sections.find(
+      /** @param {{ name: string }} entry */ (entry) => entry.name === 'zotero:policy',
+    ) === undefined
+  ) {
     throw new Error('zotero:policy section missing')
   }
   // The registry must carry exactly the plugin's vocabulary (every name the
   // shared list declares, and no zotero_* tool it does not), so a registration
   // that rots (a tool dropped, renamed, or added without the list) fails here.
-  const registered = ctx.tools.schemas().map((schema) => schema.name)
-  const missing = ZOTERO_TOOL_NAMES.filter((name) => !registered.includes(name))
+  const registered = ctx.tools
+    .schemas()
+    .map(/** @param {{ name: string }} schema */ (schema) => schema.name)
+  const missing = ZOTERO_TOOL_NAMES.filter(
+    /** @param {string} name */ (name) => !registered.includes(name),
+  )
   const extra = registered.filter(
+    /** @param {string} name */
     (name) => name.startsWith('zotero_') && !ZOTERO_TOOL_NAMES.includes(name),
   )
   if (missing.length > 0 || extra.length > 0) {

@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { zipSync } from 'fflate'
 
+/** @param {string} root - the package root to pack and smoke. */
 export async function smokeArchiveWorker(root) {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const staging = await mkdtemp(join(tmpdir(), 'zotero-worker-pack-'))

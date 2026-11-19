@@ -16,23 +16,40 @@ import {
   splitEntries,
 } from './dataset.mjs'
 
+/** @typedef {{ key: string, physicalKey: string, modelId: string, revision: string, dimension: number, maxTokens: number, pooling: string, normalize: boolean, queryPrefix: string, documentPrefix: string, files: unknown }} ModelIdentity */
+/** @typedef {{ vectors: Map<string, number[]>, identity: unknown, synthetic: boolean, generatedBy: string, inputSha256: string }} Embeddings */
+
+/**
+ * The `Record<string, any>` arm only backs the dynamic `[key, spec[key]]`
+ * reflection below; every caller still passes a full catalog entry.
+ * @param {import('../../src/enrichment-model-catalog.ts').SemanticModelEntry & Record<string, any>} spec
+ * @returns {ModelIdentity}
+ */
 export function modelIdentity(spec) {
-  return Object.fromEntries(
-    [
-      'key',
-      'physicalKey',
-      'modelId',
-      'revision',
-      'dimension',
-      'maxTokens',
-      'pooling',
-      'normalize',
-      'queryPrefix',
-      'documentPrefix',
-      'files',
-    ].map((key) => [key, spec[key]]),
+  return /** @type {ModelIdentity} */ (
+    Object.fromEntries(
+      [
+        'key',
+        'physicalKey',
+        'modelId',
+        'revision',
+        'dimension',
+        'maxTokens',
+        'pooling',
+        'normalize',
+        'queryPrefix',
+        'documentPrefix',
+        'files',
+      ].map((key) => [key, spec[key]]),
+    )
   )
 }
+/**
+ * @param {string} path
+ * @param {import('./dataset.mjs').Dataset} dataset
+ * @param {readonly import('./dataset.mjs').Split[]} requestedSplits
+ * @returns {Promise<Embeddings>}
+ */
 export async function loadEmbeddings(path, dataset, requestedSplits) {
   const bytes = await readFile(path)
   invariant(bytes.length <= 256 * 1024 * 1024, 'Embedding JSON exceeds 256 MiB preparation limit')
@@ -81,7 +98,9 @@ export async function loadEmbeddings(path, dataset, requestedSplits) {
         entry.vector.every(Number.isFinite),
       `Invalid vector dimensions/values: ${entry.key}`,
     )
-    const norm = Math.sqrt(entry.vector.reduce((sum, x) => sum + x * x, 0))
+    const norm = Math.sqrt(
+      entry.vector.reduce((/** @type {number} */ sum, /** @type {number} */ x) => sum + x * x, 0),
+    )
     invariant(Number.isFinite(norm) && norm > 1e-12, `Zero/invalid vector: ${entry.key}`)
     invariant(!spec.normalize || Math.abs(norm - 1) <= 0.001, `Expected unit vector: ${entry.key}`)
     vectors.set(entry.key, entry.vector)
@@ -95,20 +114,32 @@ export async function loadEmbeddings(path, dataset, requestedSplits) {
     inputSha256: sha256(bytes),
   }
 }
+/**
+ * @template {import('./dataset.mjs').PairRow | { queryKey: string, documentKey: string, queryText: string, documentText: string }} T
+ * @param {{ background: { families: { id: string, query: import('./dataset.mjs').Bilingual, document: import('./dataset.mjs').Bilingual }[] } }} dataset
+ * @param {T[]} rows
+ * @param {{ vectors: Map<string, number[]> }} embeddings
+ * @param {number} k
+ * @returns {(T & { features: number[] })[]}
+ */
 export function featureRows(dataset, rows, embeddings, k) {
   const bank = backgroundEntries(dataset)
-  const bd = bank
-    .filter((row) => row.side === 'document')
-    .map((row) => embeddings.vectors.get(row.key))
-  const bq = bank
-    .filter((row) => row.side === 'query')
-    .map((row) => embeddings.vectors.get(row.key))
+  const bd = /** @type {number[][]} */ (
+    bank.filter((row) => row.side === 'document').map((row) => embeddings.vectors.get(row.key))
+  )
+  const bq = /** @type {number[][]} */ (
+    bank.filter((row) => row.side === 'query').map((row) => embeddings.vectors.get(row.key))
+  )
   invariant(
     Number.isSafeInteger(k) && k > 0 && k <= Math.min(bd.length, bq.length),
     'Invalid bank top-k',
   )
   const qBaseline = new Map()
   const dBaseline = new Map()
+  /**
+   * @param {number[]} vector
+   * @param {number[][]} reference
+   */
   const topMean = (vector, reference) =>
     reference
       .map((other) => cosine(vector, other))

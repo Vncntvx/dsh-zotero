@@ -5,6 +5,10 @@ const HTTPS_ARMS = new Set(['src/scholarly/transport/http.ts', 'src/enrichment/t
 const NETWORK = 'src/transport/network.ts'
 const CONNECTIONS = 'src/transport/connections.ts'
 
+/**
+ * @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types.
+ * @returns {string | undefined} the property's textual name, when textual.
+ */
 function propertyName(node) {
   return node.type === 'Identifier'
     ? node.name
@@ -13,6 +17,11 @@ function propertyName(node) {
       : undefined
 }
 
+/**
+ * @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types.
+ * @param {((node: any, parent: any) => void)} visit - visitor over each AST node.
+ * @param {any} [parent] the enclosing AST fragment, if any.
+ */
 function visitTree(node, visit, parent) {
   if (!node || typeof node !== 'object') return
   if (Array.isArray(node)) {
@@ -37,6 +46,10 @@ function visitTree(node, visit, parent) {
       visitTree(child, visit, node)
 }
 
+/**
+ * @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types.
+ * @returns {boolean} whether the initializer matches the reviewed HTTPS name guard.
+ */
 function httpsNameGuard(node) {
   const left = node?.left,
     right = node?.right
@@ -59,7 +72,11 @@ function httpsNameGuard(node) {
   )
 }
 
-/** Inspect executable syntax; comments and inert documentation never grant an exception. */
+/**
+ * Inspect executable syntax; comments and inert documentation never grant an exception.
+ * @param {readonly (readonly [path: string, source: string])[]} sources - the production source inventory.
+ * @returns {string[]} human-readable problems; empty when every egress arm stays reviewed.
+ */
 export function fakeIpPolicyIssues(sources) {
   const issues = [],
     propertyCounts = new Map()

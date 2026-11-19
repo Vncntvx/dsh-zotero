@@ -3,8 +3,14 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { parse } from '@babel/parser'
 
+/**
+ * @param {string} root
+ * @returns {Array<[string, string]>} the `[path, source]` pairs.
+ */
 export function clientLocaleSources(root) {
+  /** @type {Array<[string, string]>} */
   const sources = []
+  /** @param {string} dir */
   function visit(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name)
@@ -17,8 +23,14 @@ export function clientLocaleSources(root) {
   return sources
 }
 
+/**
+ * @param {ReadonlyArray<string>} keys
+ * @param {ReadonlyArray<readonly [string, string]>} sources
+ * @returns {string[]} the keys no client source mentions.
+ */
 export function unusedLocaleKeys(keys, sources) {
   const literals = new Set()
+  /** @param {any} [node] a Babel AST fragment; `@babel/parser` ships no usable node types. */
   function visit(node) {
     if (!node || typeof node !== 'object') return
     if (Array.isArray(node)) {

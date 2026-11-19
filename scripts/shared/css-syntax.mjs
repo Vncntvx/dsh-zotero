@@ -1,7 +1,11 @@
 /** CSS syntax and escape handling shared by every style policy. */
 import * as tree from 'css-tree'
 
-/** Comments are tokens; comment-looking text inside strings and URLs stays intact. */
+/**
+ * Comments are tokens; comment-looking text inside strings and URLs stays intact.
+ * @param {string} css - the stylesheet text.
+ * @returns {string} the text with every comment token blanked out.
+ */
 export function stripCssComments(css) {
   const characters = css.split('')
   tree.tokenize(css, (type, start, end) => {
@@ -12,21 +16,31 @@ export function stripCssComments(css) {
   return characters.join('')
 }
 
+/**
+ * The canonical spelling of one parsed node.
+ * @param {import('css-tree').CssNode} node - the parsed node.
+ * @returns {string} the generated, escaped-normalized CSS text.
+ */
 function canonical(node) {
   const copy = tree.clone(node)
   tree.walk(copy, (entry) => {
     if (entry.type === 'Dimension') entry.unit = tree.ident.decode(entry.unit).toLowerCase()
-    if (typeof entry.name !== 'string') return
+    if (!('name' in entry) || typeof entry.name !== 'string') return
     const decoded = tree.ident.decode(entry.name)
     if (['ClassSelector', 'IdSelector'].includes(entry.type))
       entry.name = tree.ident.encode(decoded)
     else entry.name = decoded.startsWith('--') ? decoded : decoded.toLowerCase()
-    if (entry.type === 'Dimension') entry.unit = tree.ident.decode(entry.unit).toLowerCase()
   })
   return tree.generate(copy)
 }
 
+/**
+ * Rejects unbalanced delimiters and invalid strings before parsing.
+ * @param {string} css - the text to tokenize.
+ * @returns {void}
+ */
 function validateDelimiters(css) {
+  /** @type {Array<number | undefined>} */
   const stack = []
   const pairs = new Map([
     [tree.tokenTypes.Function, tree.tokenTypes.RightParenthesis],
@@ -45,6 +59,12 @@ function validateDelimiters(css) {
   if (stack.length > 0) throw new SyntaxError('CSS has an unclosed delimiter')
 }
 
+/**
+ * Every top-level or nested rule with its raw body and enclosing at-rule preludes.
+ * @param {string} css - the stylesheet text.
+ * @returns {Array<{selector: string, body: string, atRules: string[], at: number}>}
+ *   one entry per rule, in source order.
+ */
 export function styleRules(css) {
   validateDelimiters(css)
   const ast = tree.parse(css, {
@@ -53,13 +73,20 @@ export function styleRules(css) {
       throw error
     },
   })
+  /** @type {Array<{selector: string, body: string, atRules: string[], at: number}>} */
   const result = []
+  /**
+   * @param {import('css-tree').CssNode} node
+   * @param {string[]} atRules
+   */
   const visit = (node, atRules) => {
     if (node.type === 'Atrule') {
       if (node.block === null) return
+      if (!node.loc || !node.block.loc) throw new SyntaxError('Missing CSS at-rule positions')
       const prelude = css.slice(node.loc.start.offset, node.block.loc.start.offset).trim()
       node.block.children.forEach((child) => visit(child, [...atRules, prelude]))
     } else if (node.type === 'Rule') {
+      if (!node.loc || !node.block.loc) throw new SyntaxError('Missing CSS rule positions')
       result.push({
         selector: canonical(node.prelude),
         body: css.slice(node.block.loc.start.offset + 1, node.block.loc.end.offset - 1),
@@ -71,10 +98,16 @@ export function styleRules(css) {
       })
     }
   }
+  if (ast.type !== 'StyleSheet') throw new SyntaxError('Expected a CSS stylesheet')
   ast.children.forEach((node) => visit(node, []))
   return result
 }
 
+/**
+ * Every declaration of one raw rule body, with the property canonicalized.
+ * @param {string} body - the rule body between the braces.
+ * @returns {Array<{property: string, value: string}>} declarations in source order.
+ */
 export function styleDeclarations(body) {
   validateDelimiters(body)
   const block = tree.parse(`{${body}}`, {
@@ -83,16 +116,23 @@ export function styleDeclarations(body) {
       throw error
     },
   })
+  if (block.type !== 'Block') throw new SyntaxError('Expected a CSS declaration block')
   return block.children
     .toArray()
-    .filter((node) => node.type === 'Declaration')
+    .filter(/** @param {import('css-tree').CssNode} node */ (node) => node.type === 'Declaration')
     .map((node) => ({
       property: tree.ident.decode(node.property).toLowerCase(),
       value: canonical(node.value),
     }))
 }
 
+/**
+ * Every custom property referenced through `var()` in one text.
+ * @param {string} text - the text to tokenize.
+ * @returns {Array<{name: string, at: number}>} referenced names with their offsets.
+ */
 export function tokenReferences(text) {
+  /** @type {Array<{type: number, start: number, end: number}>} */
   const tokens = []
   tree.tokenize(text, (type, start, end) => tokens.push({ type, start, end }))
   const references = []
@@ -117,9 +157,15 @@ export function tokenReferences(text) {
   return references
 }
 
-/** Reparse var fallbacks, which CSSTree deliberately preserves as Raw nodes. */
+/**
+ * Reparse var fallbacks, which CSSTree deliberately preserves as Raw nodes.
+ * @param {string} value - the declaration value.
+ * @returns {import('css-tree').CssNode[]} the flattened value nodes.
+ */
 export function valueNodes(value) {
+  /** @type {import('css-tree').CssNode[]} */
   const nodes = []
+  /** @param {import('css-tree').CssNode} ast */
   const collect = (ast) =>
     tree.walk(ast, (node) => {
       if (node.type === 'Raw') collect(tree.parse(node.value, { context: 'value' }))
@@ -129,14 +175,27 @@ export function valueNodes(value) {
   return nodes
 }
 
+/**
+ * The four sides of one box value, each canonicalized.
+ * @param {string} value - the declaration value.
+ * @returns {string[]} one canonical side per entry.
+ */
 export function boxValues(value) {
-  return tree.parse(value, { context: 'value' }).children.toArray().map(canonical)
+  const ast = tree.parse(value, { context: 'value' })
+  return ast.type === 'Value' ? ast.children.toArray().map(canonical) : []
 }
 
+/**
+ * Every color a value may resolve to, as literals or function prefixes.
+ * @param {string} value - the declaration value.
+ * @param {boolean} named - whether named colors count as literals.
+ * @returns {string[]} color literals and color-function prefixes.
+ */
 export function colorLiterals(value, named) {
   return valueNodes(value).flatMap((node) => {
     if (node.type === 'Hash') return [`#${tree.ident.decode(node.value)}`]
-    const name = typeof node.name === 'string' ? tree.ident.decode(node.name).toLowerCase() : ''
+    if (node.type !== 'Identifier' && node.type !== 'Function') return []
+    const name = tree.ident.decode(node.name).toLowerCase()
     if (
       node.type === 'Identifier' &&
       named &&
@@ -167,18 +226,35 @@ export function colorLiterals(value, named) {
   })
 }
 
+/**
+ * The utility base class a selector starts with, if any.
+ * @param {string} selector - the selector text.
+ * @returns {string | undefined} the encoded class name, or undefined.
+ */
 export function selectorBaseClass(selector) {
   const ast = tree.parse(selector, { context: 'selectorList' })
-  const first = ast.children.first?.children.first
+  const firstSelector = ast.type === 'SelectorList' ? ast.children.first : undefined
+  const first = firstSelector?.type === 'Selector' ? firstSelector.children.first : undefined
   return first?.type === 'ClassSelector'
     ? `.${tree.ident.encode(tree.ident.decode(first.name))}`
     : undefined
 }
 
+/**
+ * The subject class every compound selector of one selector matches.
+ * @param {string} selector - the selector text.
+ * @returns {string[]} the encoded subject class names.
+ */
 export function selectorSubjects(selector) {
+  /** @type {Set<string>} */
   const subjects = new Set()
   const ast = tree.parse(selector, { context: 'selectorList' })
+  /**
+   * @param {import('css-tree').CssNode[]} nodes
+   * @returns {string[]}
+   */
   const classes = (nodes) => {
+    /** @type {string[]} */
     const names = []
     nodes.forEach((node) => {
       if (node.type === 'ClassSelector')
@@ -195,7 +271,10 @@ export function selectorSubjects(selector) {
     })
     return names
   }
+  if (ast.type !== 'SelectorList') return []
   ast.children.forEach((one) => {
+    if (one.type !== 'Selector') return
+    /** @type {import('css-tree').CssNode[]} */
     let compound = []
     one.children.forEach((node) => {
       if (node.type === 'Combinator') compound = []
@@ -207,18 +286,36 @@ export function selectorSubjects(selector) {
   return [...subjects]
 }
 
-/** Three-valued media logic keeps disjunctions and negation from licensing exceptions. */
+/**
+ * Three-valued media logic keeps disjunctions and negation from licensing exceptions.
+ * @param {string} prelude - the at-rule prelude without the `@media` keyword.
+ * @param {string} feature - the media feature to read.
+ * @param {string} actual - the value the runtime actually has.
+ * @returns {boolean | undefined} true/false when decidable, undefined otherwise.
+ */
 function mediaMatch(prelude, feature, actual) {
   const ast = tree.parse(`${prelude}{}`)
-  const at = ast.children.first
+  const at = ast.type === 'StyleSheet' ? ast.children.first : undefined
   if (at?.type !== 'Atrule' || tree.ident.decode(at.name).toLowerCase() !== 'media')
     return undefined
-  const queries = at.prelude?.children.first
+  const queries = at.prelude?.type === 'AtrulePrelude' ? at.prelude.children.first : undefined
   if (queries?.type !== 'MediaQueryList') return undefined
+  /**
+   * @param {(boolean | undefined)[]} values
+   * @returns {boolean | undefined}
+   */
   const and = (values) =>
     values.includes(false) ? false : values.every((value) => value === true) ? true : undefined
+  /**
+   * @param {(boolean | undefined)[]} values
+   * @returns {boolean | undefined}
+   */
   const or = (values) =>
     values.includes(true) ? true : values.every((value) => value === false) ? false : undefined
+  /**
+   * @param {import('css-tree').CssNode | null | undefined} node
+   * @returns {boolean | undefined}
+   */
   const evaluate = (node) => {
     if (node?.type === 'Feature') {
       if (
@@ -241,6 +338,7 @@ function mediaMatch(prelude, feature, actual) {
   }
   return or(
     queries.children.toArray().map((query) => {
+      if (query.type !== 'MediaQuery') return undefined
       const type = query.mediaType === null || query.mediaType === 'all' ? true : undefined
       const value = and([type, query.condition === null ? true : evaluate(query.condition)])
       return query.modifier === 'not' ? (value === undefined ? undefined : !value) : value
@@ -248,12 +346,19 @@ function mediaMatch(prelude, feature, actual) {
   )
 }
 
+/**
+ * Whether a media prelude requires `feature` to be exactly `expected`.
+ * @param {string} prelude - the at-rule prelude without the `@media` keyword.
+ * @param {string} feature - the media feature to read.
+ * @param {string} expected - the value the rule requires.
+ * @returns {boolean} whether the prelude licenses exactly that value.
+ */
 export function mediaRequires(prelude, feature, expected) {
   const values = {
     hover: ['hover', 'none'],
     pointer: ['fine', 'coarse', 'none'],
     'prefers-reduced-motion': ['reduce', 'no-preference'],
-  }[feature]
+  }[/** @type {'hover' | 'pointer' | 'prefers-reduced-motion'} */ (feature)]
   return (
     values !== undefined &&
     mediaMatch(prelude, feature, expected) !== false &&
@@ -263,10 +368,22 @@ export function mediaRequires(prelude, feature, expected) {
   )
 }
 
+/**
+ * Whether a media prelude admits `feature` being `expected`.
+ * @param {string} prelude - the at-rule prelude without the `@media` keyword.
+ * @param {string} feature - the media feature to read.
+ * @param {string} expected - the value the runtime has.
+ * @returns {boolean} whether the prelude definitely covers that value.
+ */
 export function mediaCovers(prelude, feature, expected) {
   return mediaMatch(prelude, feature, expected) === true
 }
 
+/**
+ * Whether any compound of the selector carries a `:hover` pseudo-class.
+ * @param {string} selector - the selector text.
+ * @returns {boolean} whether hover appears anywhere in the selector.
+ */
 export function selectorHasHover(selector) {
   let found = false
   tree.walk(tree.parse(selector, { context: 'selectorList' }), (node) => {
@@ -279,10 +396,16 @@ export function selectorHasHover(selector) {
   return found
 }
 
-/** Only an unqualified subject disables motion for every state of that subject. */
+/**
+ * Only an unqualified subject disables motion for every state of that subject.
+ * @param {string} selector - the selector text.
+ * @returns {string[]} the subject class names the selector disables motion for.
+ */
 export function reductionSubjects(selector) {
   const ast = tree.parse(selector, { context: 'selectorList' })
+  if (ast.type !== 'SelectorList') return []
   return ast.children.toArray().flatMap((one) => {
+    if (one.type !== 'Selector') return []
     const nodes = one.children.toArray()
     if (nodes.length !== 1) return []
     if (nodes[0].type === 'ClassSelector')

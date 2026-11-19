@@ -30,13 +30,24 @@ import {
 } from './statistics.mjs'
 import { validateFrozenCandidate } from './evaluate.mjs'
 
+/**
+ * @param {number} actual
+ * @param {number} expected
+ * @param {number} [tolerance]
+ */
 const near = (actual, expected, tolerance = 1e-10) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`)
+/** @type {string[]} */
 const checks = []
+/**
+ * @param {string} name
+ * @param {() => unknown} fn
+ */
 const check = async (name, fn) => {
   await fn()
   checks.push(name)
 }
+/** @param {string} name */
 const scriptPath = (name) => fileURLToPath(new URL(name, import.meta.url))
 
 cli(async () => {
@@ -238,19 +249,34 @@ cli(async () => {
         const spec = SEMANTIC_MODELS.find((row) => row.key === 'lightweight')
         const entries = [
           ...backgroundEntries(dataset),
-          ...['train', 'calibration'].flatMap((split) => splitEntries(dataset, split)),
+          .../** @type {readonly import('./dataset.mjs').Split[]} */ ([
+            'train',
+            'calibration',
+          ]).flatMap((split) => splitEntries(dataset, split)),
         ]
         const random = randomOf(71)
         const file = {
           schemaVersion: 1,
           synthetic: true,
           generatedBy: 'synthetic-self-check: seeded random unit vectors, not model output',
-          model: modelIdentity(spec),
+          model: modelIdentity(
+            /** @type {import('../../src/enrichment-model-catalog.ts').SemanticModelEntry} */ (
+              spec
+            ),
+          ),
           datasetDigest: dataset.digest,
           backgroundDigest: dataset.backgroundDigest,
           partitionDigests: dataset.partitionDigests,
           entries: entries.map((entry) => {
-            const vector = Array.from({ length: spec.dimension }, () => random() - 0.5)
+            const vector = Array.from(
+              {
+                length:
+                  /** @type {import('../../src/enrichment-model-catalog.ts').SemanticModelEntry} */ (
+                    spec
+                  ).dimension,
+              },
+              () => random() - 0.5,
+            )
             const norm = Math.sqrt(vector.reduce((sum, x) => sum + x * x, 0))
             return { key: entry.key, vector: vector.map((x) => x / norm) }
           }),
@@ -260,16 +286,16 @@ cli(async () => {
         const embeddings = await loadEmbeddings(path, dataset, ['train', 'calibration'])
         assert.equal(embeddings.synthetic, true)
         for (const mutate of [
-          (bad) => {
+          (/** @type {typeof file} */ bad) => {
             bad.datasetDigest = 'stale'
           },
-          (bad) => {
+          (/** @type {typeof file} */ bad) => {
             bad.entries.push(bad.entries[0])
           },
-          (bad) => {
+          (/** @type {typeof file} */ bad) => {
             bad.entries[0].vector.pop()
           },
-          (bad) => {
+          (/** @type {typeof file} */ bad) => {
             bad.entries[0].key = 'query:forbidden-heldout-key'
           },
         ]) {

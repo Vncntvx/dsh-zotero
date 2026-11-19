@@ -17,7 +17,11 @@ export function resolveHarnessRoot(root) {
   return resolve(process.env.DSH_HARNESS_ROOT ?? join(root, '../deepseek-harness'))
 }
 
-/** Read a directory's package.json scoped name, or undefined when absent/unreadable. */
+/**
+ * Read a directory's package.json scoped name, or undefined when absent/unreadable.
+ * @param {string} dir - the directory whose package.json is read.
+ * @returns {string | undefined} the `@deepseek-ai/*` name, when one is declared.
+ */
 function packageNameOf(dir) {
   const manifest = join(dir, 'package.json')
   try {
@@ -35,11 +39,13 @@ function packageNameOf(dir) {
  * `packages/` and `vendor/` trees (flat vendor packages plus nested package
  * trees). A missing, malformed, or foreign manifest counts as "no name" and
  * the walk descends into the directory rather than failing.
- * @param harnessRoot - the sibling checkout root.
- * @returns the name → directory map.
+ * @param {string} harnessRoot - the sibling checkout root.
+ * @returns {Map<string, string>} the name → directory map.
  */
 export function collectHarnessPackages(harnessRoot) {
+  /** @type {Map<string, string>} */
   const map = new Map()
+  /** @param {string} dir */
   const walk = (dir) => {
     let entries
     try {
@@ -66,15 +72,17 @@ export function collectHarnessPackages(harnessRoot) {
 
 /**
  * The declarations one pin tag carries, deduplicated per name.
- * @param run - runs one git command in the sibling and returns stdout.
- * @param tag - the `dsh-v<version>` tag.
- * @returns name to the sorted, unique ranges declared across the client packages.
+ * @param {((args: string[]) => string)} run - runs one git command in the sibling and returns stdout.
+ * @param {string} tag - the `dsh-v<version>` tag.
+ * @returns {Record<string, string[]>} name to the sorted, unique ranges declared across the client packages.
  */
 export function mirroredDeclarationsOf(run, tag) {
   const packages = run(['ls-tree', '--name-only', '-d', `${tag}:packages/client`])
     .split('\n')
     .filter((line) => line.length > 0)
+  /** @type {Map<string, Set<string>>} */
   const collected = new Map()
+  /** @param {string} name @param {unknown} range */
   const declare = (name, range) => {
     if (typeof range !== 'string') return
     const list = collected.get(name)
@@ -95,9 +103,10 @@ export function mirroredDeclarationsOf(run, tag) {
   ]) {
     if (name.startsWith('@types/') && !collected.has(name)) declare(name, range)
   }
+  /** @type {Record<string, string[]>} */
   const declarations = {}
   for (const name of [...collected.keys()].sort()) {
-    declarations[name] = [...collected.get(name)].sort()
+    declarations[name] = [.../** @type {Set<string>} */ (collected.get(name))].sort()
   }
   return declarations
 }

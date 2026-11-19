@@ -35,19 +35,75 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Strip the `./` a manifest path carries so it compares to a packed path. */
+/**
+ * Strip the `./` a manifest path carries so it compares to a packed path.
+ * @param path {string} a manifest-declared path.
+ * @returns {string} the path without its `./` prefix.
+ */
 const packed = (path) => path.replace(/^\.\//, '')
+
+/**
+ * The `package.json` face the pack gate reads.
+ * @typedef {{
+ *   name?: string,
+ *   version?: string,
+ *   files?: string[],
+ *   main?: string,
+ *   icon?: string,
+ *   exports?: string | Record<string, unknown>,
+ *   dsh?: { bundle?: { patch?: string | string[] } },
+ *   dependencies?: Record<string, string>,
+ *   optionalDependencies?: Record<string, string>,
+ *   peerDependencies?: Record<string, string>,
+ *   peerDependenciesMeta?: Record<string, { optional?: boolean }>,
+ * }} VerifyManifest
+ */
+
+/**
+ * The dependency-map face both the manifest and a lockfile entry expose for
+ * the runtime-closure walk.
+ * @typedef {{
+ *   dependencies?: Record<string, string>,
+ *   optionalDependencies?: Record<string, string>,
+ *   peerDependencies?: Record<string, string>,
+ *   peerDependenciesMeta?: Record<string, { optional?: boolean }>,
+ * }} DependencyMapEntry
+ */
+
+/**
+ * One lockfile package entry's face the closure walk reads.
+ * @typedef {DependencyMapEntry & {
+ *   version?: string,
+ *   hasInstallScript?: boolean,
+ * }} LockEntry
+ */
+
+/**
+ * The lockfile face the closure walk reads.
+ * @typedef {{ packages?: Record<string, LockEntry> }} VerifyLockfile
+ */
+
+/**
+ * One `npm pack --json` report entry's face this gate checks.
+ * @typedef {{
+ *   name: string,
+ *   version: string,
+ *   size: number,
+ *   unpackedSize: number,
+ *   files: { path: string }[],
+ * }} PackReportEntry
+ */
 
 /**
  * Resolve one exports entry (string or conditions object) into concrete
  * packed paths, recording the manifest claims the disk cannot back. A `*`
  * wildcard is expanded to the concrete files this package ships under that
  * pattern (locale bundles).
- * @param paths - accumulator of packed paths.
- * @param problems - accumulator of manifest-vs-disk breaches.
- * @param key - the exports key the entry came from.
- * @param value - the exports entry (string or conditions object).
- * @param baseDir - the package root the wildcard enumerates.
+ * @param paths {Set<string>} accumulator of packed paths.
+ * @param problems {string[]} accumulator of manifest-vs-disk breaches.
+ * @param key {string} the exports key the entry came from.
+ * @param value {string | Record<string, unknown>} the exports entry (string or conditions object).
+ * @param baseDir {string} the package root the wildcard enumerates.
  */
 function addExportPaths(paths, problems, key, value, baseDir) {
   const targets = typeof value === 'string' ? [value] : Object.values(value ?? {})
@@ -95,9 +151,9 @@ function addExportPaths(paths, problems, key, value, baseDir) {
 /**
  * Every path the manifest says a consumer resolves, plus the fixed extras,
  * and every declared pattern the disk cannot back.
- * @param manifest - the parsed `package.json`.
- * @param baseDir - the package root the wildcard patterns enumerate.
- * @returns the expected packed paths and the manifest-vs-disk problems.
+ * @param manifest {VerifyManifest} the parsed `package.json`.
+ * @param baseDir {string} the package root the wildcard patterns enumerate.
+ * @returns {{ paths: string[], problems: string[] }} the expected packed paths and the manifest-vs-disk problems.
  */
 export function expectedPaths(manifest, baseDir = root) {
   const paths = new Set(['package.json', 'README.md'])
@@ -123,7 +179,13 @@ export function expectedPaths(manifest, baseDir = root) {
     paths.add(packed(exportsMap))
   } else if (exportsMap !== null && typeof exportsMap === 'object') {
     for (const [key, value] of Object.entries(exportsMap)) {
-      addExportPaths(paths, problems, key, value, baseDir)
+      addExportPaths(
+        paths,
+        problems,
+        key,
+        /** @type {string | Record<string, unknown>} */ (value),
+        baseDir,
+      )
     }
   }
   const patch = manifest.dsh?.bundle?.patch
@@ -141,8 +203,8 @@ export function expectedPaths(manifest, baseDir = root) {
  * output ahead of the payload, so the report starts at the first line opening
  * an object or an array. Locating it that way keeps this gate independent of
  * npm's lifecycle printing.
- * @param stdout - the captured stdout of `npm pack --dry-run --json`.
- * @returns the JSON text to parse.
+ * @param stdout {string} the captured stdout of `npm pack --dry-run --json`.
+ * @returns {string} the JSON text to parse.
  * @throws {Error} when the stream carries no JSON payload at all.
  */
 export function packReportOf(stdout) {
@@ -165,14 +227,17 @@ export function packReportOf(stdout) {
  * records an approval. The optional semantic runtime stays outside the closure
  * for exactly that reason (`src/enrichment/semantic/runtime.ts`); this gate
  * keeps a future runtime dependency from quietly putting a script back in.
- * @param manifest - the parsed `package.json`; only runtime `dependencies` count.
- * @param lock - the parsed `package-lock.json`.
- * @returns sorted `name@version` labels for closure packages that declare a script.
+ * @param manifest {DependencyMapEntry} the parsed `package.json`; only runtime `dependencies` count.
+ * @param lock {VerifyLockfile} the parsed `package-lock.json`.
+ * @returns {string[]} sorted `name@version` labels for closure packages that declare a script.
  */
 export function installScriptsInRuntimeClosure(manifest, lock) {
   const packages = lock.packages ?? {}
+  /** @type {Set<string>} */
   const visited = new Set()
+  /** @type {Set<string>} */
   const scripts = new Set()
+  /** @param fromPath {string} @param name {string} @param optional {boolean} */
   const visit = (fromPath, name, optional = false) => {
     const path = lockedPathOf(packages, fromPath, name)
     if (path === undefined) {
@@ -187,6 +252,7 @@ export function installScriptsInRuntimeClosure(manifest, lock) {
     if (entry.hasInstallScript === true) scripts.add(`${name}@${entry.version}`)
     edges(entry, path)
   }
+  /** @param entry {DependencyMapEntry} @param path {string} */
   const edges = (entry, path) => {
     for (const name of Object.keys(entry.dependencies ?? {}))
       visit(path, name, Object.hasOwn(entry.optionalDependencies ?? {}, name))
@@ -199,8 +265,14 @@ export function installScriptsInRuntimeClosure(manifest, lock) {
   return [...scripts].sort()
 }
 
-/** A closed output set derived from source modules and declared static assets. */
+/**
+ * A closed output set derived from source modules and declared static assets.
+ * @param manifest {VerifyManifest} the parsed `package.json`.
+ * @param base {string} the package root the manifest paths resolve against.
+ * @returns {string[]} the sorted expected packed paths.
+ */
 export function allowedPackPaths(manifest, base = root) {
+  /** @type {Set<string>} */
   const paths = new Set([
     'package.json',
     'LICENSE',
@@ -208,6 +280,7 @@ export function allowedPackPaths(manifest, base = root) {
     'lib/client.js',
     'lib/client.js.map',
   ])
+  /** @param directory {string} @param prefix {string} */
   const walk = (directory, prefix = '') => {
     for (const entry of readdirSync(resolve(base, directory, prefix), { withFileTypes: true })) {
       const path = prefix ? `${prefix}/${entry.name}` : entry.name
@@ -233,6 +306,14 @@ export function allowedPackPaths(manifest, base = root) {
   return [...paths].sort()
 }
 
+/**
+ * The packed report's breaches of the manifest identity, size ceilings, and
+ * the closed expected path set.
+ * @param entry {PackReportEntry} the one report entry this package produced.
+ * @param manifest {VerifyManifest} the checked manifest.
+ * @param allowed {readonly string[]} the closed expected path set.
+ * @returns {string[]} the report problems; empty when the report matches.
+ */
 export function packReportProblems(entry, manifest, allowed) {
   const problems = []
   if (entry?.name !== manifest.name || entry?.version !== manifest.version)
@@ -275,7 +356,7 @@ function verifyPack() {
   try {
     scripted = installScriptsInRuntimeClosure(manifest, lock)
   } catch (error) {
-    console.error(`verify-pack: ${error.message}`)
+    console.error(`verify-pack: ${/** @type {Error} */ (error).message}`)
     process.exitCode = 1
     return
   }
@@ -334,7 +415,9 @@ function verifyPack() {
     process.exitCode = 1
     return
   }
-  const files = new Set((entry?.files ?? []).map((file) => packed(file.path)))
+  const files = new Set(
+    (entry?.files ?? []).map((/** @type {{ path: string }} */ file) => packed(file.path)),
+  )
 
   const declarations = [...files]
     .filter((path) => path.endsWith('.d.ts'))

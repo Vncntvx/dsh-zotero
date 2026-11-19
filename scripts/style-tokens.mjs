@@ -57,10 +57,10 @@ const THEME_DIR = 'packages/client/ui-theme/src/styles'
  * snapshot then claimed to describe a version it had never seen. `style-guard`
  * would allowlist names the running host does not publish, and the browser
  * falls back silently.
- * @param run - runs one git command and returns its stdout.
- * @param harnessRoot - the sibling checkout.
- * @param pin - the exact harness version.
- * @returns the sheet file names, sorted, and a reader for each one.
+ * @param {(args: readonly string[]) => string} run - runs one git command and returns its stdout.
+ * @param {string} harnessRoot - the sibling checkout.
+ * @param {string} pin - the exact harness version.
+ * @returns {{ files: string[], read: (name: string) => string }} the sheet file names, sorted, and a reader for each one.
  */
 export function pinThemeSheets(run, harnessRoot, pin) {
   const listing = run(['-C', harnessRoot, 'ls-tree', '--name-only', `dsh-v${pin}:${THEME_DIR}`])
@@ -80,8 +80,8 @@ export function pinThemeSheets(run, harnessRoot, pin) {
  * The harness version the snapshot describes: the exact pin on the client
  * primitives, which is also the pin `scripts/harness-state.mjs` enforces for
  * every other `@deepseek-ai/dsh-*` line.
- * @param pkg - parsed `package.json`.
- * @returns the pinned version, or `''` when the line is absent.
+ * @param {{ dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} [pkg] - parsed `package.json`.
+ * @returns {string} the pinned version, or `''` when the line is absent.
  */
 export function pinnedHarness(pkg) {
   return (
@@ -99,9 +99,9 @@ export function pinnedHarness(pkg) {
  * Commented-out definitions are not definitions: the sheets carry retired
  * tokens behind `/* … *\/` in a few places, and a name that only survives in a
  * comment would widen the allowlist for a token nothing publishes.
- * @param css - stylesheet source.
- * @param prefix - the namespace to collect, e.g. `--dsw-` or `--ds-`.
- * @returns the token names, `--` prefix included.
+ * @param {string} css - stylesheet source.
+ * @param {string} [prefix] - the namespace to collect, e.g. `--dsw-` or `--ds-`.
+ * @returns {string[]} the token names, `--` prefix included.
  */
 export function collectThemeTokens(css, prefix = '--dsw-') {
   const live = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -110,10 +110,10 @@ export function collectThemeTokens(css, prefix = '--dsw-') {
 
 /**
  * The sorted, de-duplicated token list across a directory of stylesheets.
- * @param read - one sheet's source by file name.
- * @param files - sheet file names.
- * @param prefix - the namespace to collect.
- * @returns every token the theme defines under that prefix.
+ * @param {(file: string) => string} read - one sheet's source by file name.
+ * @param {ReadonlyArray<string>} files - sheet file names.
+ * @param {string} [prefix] - the namespace to collect.
+ * @returns {string[]} every token the theme defines under that prefix.
  */
 export function mergeThemeTokens(read, files, prefix = '--dsw-') {
   const tokens = new Set()
@@ -124,9 +124,9 @@ export function mergeThemeTokens(read, files, prefix = '--dsw-') {
 
 /**
  * Compare the snapshot with upstream.
- * @param snapshotTokens - the committed list.
- * @param upstreamTokens - the list read from the theme sheets.
- * @returns missing and extra names, both empty when they agree.
+ * @param {ReadonlyArray<string>} snapshotTokens - the committed list.
+ * @param {ReadonlyArray<string>} upstreamTokens - the list read from the theme sheets.
+ * @returns {{ missing: string[], removed: string[] }} missing and extra names, both empty when they agree.
  */
 export function diffTokens(snapshotTokens, upstreamTokens) {
   const committed = new Set(snapshotTokens)
@@ -141,15 +141,20 @@ export function diffTokens(snapshotTokens, upstreamTokens) {
  * The snapshot to write: the two generated token families, the pin they were
  * read under, and the hand-maintained seam list carried over from the current
  * file.
- * @param current - the committed snapshot, absent on first write.
- * @param facts - the pin and the freshly read token families.
- * @returns the snapshot object, keys in a stable order.
+ * @param {{ harness?: string, dsw?: string[], dsh?: string[], ds?: string[] } | undefined} current - the committed snapshot, absent on first write.
+ * @param {{ harness: string, dsw: string[], ds?: string[] }} facts - the pin and the freshly read token families.
+ * @returns {{ harness: string, dsw: string[], dsh: string[], ds: string[] }} the snapshot object, keys in a stable order.
  */
 export function snapshotOf(current, { harness, dsw, ds = [] }) {
   return { harness, dsw, dsh: [...(current?.dsh ?? [])], ds }
 }
 
-/** CI reads the exact registry package installed from the lockfile. */
+/**
+ * CI reads the exact registry package installed from the lockfile.
+ * @param {string} packageRoot
+ * @param {string} pin
+ * @returns {{ files: string[], read: (name: string) => string }}
+ */
 export function installedThemeSheets(packageRoot, pin) {
   if (lstatSync(packageRoot).isSymbolicLink())
     throw new Error('A linked theme must be read from its pin tag')
@@ -183,6 +188,10 @@ export const RUNTIME_SEAMS = {
   '--dsh-scrollbar-thumb-hover': ['ui-theme', 'src/styles/scrollbar.css', 'css'],
 }
 
+/**
+ * @param {ReadonlyArray<string>} tokens
+ * @param {(component: string, path: string) => string} read
+ */
 export function verifyRuntimeSeams(tokens, read) {
   if (JSON.stringify([...tokens].sort()) !== JSON.stringify(Object.keys(RUNTIME_SEAMS).sort()))
     throw new Error('Runtime token seams differ from their reviewed provenance')
@@ -217,6 +226,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const installed = join(root, 'node_modules/@deepseek-ai/dsh-client-ui-theme')
   let files
   let read
+  /** @type {(component: string, path: string) => string} */
   let readSeam
   if (existsSync(installed) && !lstatSync(installed).isSymbolicLink()) {
     const sheets = installedThemeSheets(installed, harness)

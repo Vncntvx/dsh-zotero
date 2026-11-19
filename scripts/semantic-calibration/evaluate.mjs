@@ -16,6 +16,25 @@ import {
 import { featureRows, loadEmbeddings } from './features.mjs'
 import { admissionSummary, perIntentOutcomes, regressionMetrics, scoreRows } from './metrics.mjs'
 
+/** @typedef {{
+ * candidateDigest?: string,
+ * kind?: string,
+ * datasetDigest?: string,
+ * backgroundDigest?: string,
+ * protocolDigest?: string,
+ * threshold?: number | null,
+ * k?: number,
+ * thresholdSelection?: { selected: number | null, candidates: { threshold: number | null, feasible: boolean }[] },
+ * embeddingProvenance?: { synthetic: boolean },
+ * classifier?: { means?: number[], scales?: number[], coefficients?: number[], converged?: boolean, lambda?: number },
+ * model?: unknown
+ * }} FrozenCandidate */
+
+/**
+ * @param {FrozenCandidate} candidate
+ * @param {import('./dataset.mjs').Dataset} dataset
+ * @param {string | undefined} freeze
+ */
 export function validateFrozenCandidate(candidate, dataset, freeze) {
   const { candidateDigest, ...content } = candidate
   invariant(
@@ -37,26 +56,31 @@ export function validateFrozenCandidate(candidate, dataset, freeze) {
   invariant(
     candidate.threshold !== null &&
       Number.isFinite(candidate.threshold) &&
-      candidate.threshold >= 0 &&
-      candidate.threshold <= 1,
+      /** @type {number} */ (candidate.threshold) >= 0 &&
+      /** @type {number} */ (candidate.threshold) <= 1,
     'No calibrated threshold; heldout evaluation is forbidden',
   )
   invariant(
-    dataset.manifest.protocol.thresholdCandidates.includes(candidate.threshold),
+    dataset.manifest.protocol.thresholdCandidates.includes(
+      /** @type {number} */ (candidate.threshold),
+    ),
     'Threshold was not predeclared',
   )
   invariant(
     candidate.thresholdSelection?.selected === candidate.threshold &&
-      candidate.thresholdSelection.candidates.some(
-        (entry) => entry.threshold === candidate.threshold && entry.feasible,
-      ),
+      /** @type {NonNullable<FrozenCandidate['thresholdSelection']>} */ (
+        candidate.thresholdSelection
+      ).candidates.some((entry) => entry.threshold === candidate.threshold && entry.feasible),
     'No calibration support for the frozen threshold',
   )
   invariant(
     candidate.embeddingProvenance?.synthetic === false,
     'Synthetic vectors cannot authorize heldout model evaluation',
   )
-  invariant(dataset.manifest.protocol.kCandidates.includes(candidate.k), 'Unknown frozen bank k')
+  invariant(
+    dataset.manifest.protocol.kCandidates.includes(/** @type {number} */ (candidate.k)),
+    'Unknown frozen bank k',
+  )
   const model = candidate.classifier
   invariant(
     model?.converged === true &&
@@ -91,19 +115,28 @@ if (isMain(import.meta.url))
     )
     const dataset = await loadDataset()
     validateDataset(dataset)
-    const candidate = await readJson(args['--candidate'])
-    validateFrozenCandidate(candidate, dataset, args['--freeze'])
-    const embeddings = await loadEmbeddings(args['--embeddings'], dataset, ['heldout'])
+    const candidate = /** @type {FrozenCandidate} */ (
+      await readJson(/** @type {string} */ (args['--candidate']))
+    )
+    validateFrozenCandidate(candidate, dataset, /** @type {string} */ (args['--freeze']))
+    const embeddings = await loadEmbeddings(/** @type {string} */ (args['--embeddings']), dataset, [
+      'heldout',
+    ])
     invariant(
       !embeddings.synthetic && digestOf(embeddings.identity) === digestOf(candidate.model),
       'Heldout model differs from the frozen calibration model',
     )
     const rows = scoreRows(
-      featureRows(dataset, pairRows(dataset, 'heldout'), embeddings, candidate.k),
-      candidate.classifier,
+      featureRows(
+        dataset,
+        pairRows(dataset, 'heldout'),
+        embeddings,
+        /** @type {number} */ (candidate.k),
+      ),
+      /** @type {import('./logistic.mjs').LogisticModel} */ (candidate.classifier),
     )
     const protocol = dataset.manifest.protocol
-    const summary = admissionSummary(rows, candidate.threshold, protocol)
+    const summary = admissionSummary(rows, /** @type {number} */ (candidate.threshold), protocol)
     print({
       schemaVersion: 1,
       kind: 'synthetic-heldout-offline-diagnostic',
@@ -113,8 +146,8 @@ if (isMain(import.meta.url))
       provenance: dataset.manifest.provenance,
       model: embeddings.identity,
       summary,
-      semanticRecall: regressionMetrics(rows, candidate.threshold),
-      outcomes: perIntentOutcomes(rows, candidate.threshold),
+      semanticRecall: regressionMetrics(rows, /** @type {number} */ (candidate.threshold)),
+      outcomes: perIntentOutcomes(rows, /** @type {number} */ (candidate.threshold)),
       numericBudgetsMet: protocol.languages.every((language) => {
         const metrics = summary.perLanguage[language]
         return (

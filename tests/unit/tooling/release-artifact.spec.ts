@@ -69,12 +69,16 @@ it('packs public declarations and removes install-time code from the checked art
   })
 })
 
-it('ends public verification on the first 404 and records which workflow to rerun', async () => {
+it('bounds public verification and records which workflow to rerun when npm stays at 404', async () => {
   await withTempDir(async (root) => {
     const { out, sha } = await artifact(root)
     const summary = join(root, 'summary.md')
     const registry = fileURLToPath(new URL('../../../scripts/npm-registry.mjs', import.meta.url))
-    const mock = `let requests = 0
+    const mock = `import { syncBuiltinESMExports } from 'node:module'
+      import timers from 'node:timers/promises'
+      timers.setTimeout = async () => {}
+      syncBuiltinESMExports()
+      let requests = 0
       globalThis.fetch = async () => {
         console.log('registry request ' + ++requests)
         return new Response(null, { status: 404 })
@@ -94,7 +98,9 @@ it('ends public verification on the first 404 and records which workflow to reru
       { encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: summary } },
     )
     expect(result.status).toBe(1)
-    expect(result.stdout.trim()).toBe('registry request 1')
+    expect(result.stdout.trim().split('\n')).toEqual(
+      Array.from({ length: 12 }, (_, index) => `registry request ${index + 1}`),
+    )
     expect(result.stderr).toContain('dsh-zotero@1.0.0 is not public yet')
     expect(await readFile(summary, 'utf8')).toContain('re-run the Verify npm Release workflow')
   })

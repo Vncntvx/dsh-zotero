@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const marker = 'lib/.build-state.json'
+/**
+ * @param {string} base - package root.
+ * @param {string} path - forward-slash relative directory to walk.
+ * @returns {string[]} forward-slash relative file paths, or empty when absent.
+ */
 function filesUnder(base, path) {
   const absolute = join(base, path)
   if (!existsSync(absolute)) return []
@@ -16,6 +21,11 @@ function filesUnder(base, path) {
     return entry.isDirectory() ? filesUnder(base, child) : [child.replaceAll('\\', '/')]
   })
 }
+/**
+ * @param {string} base - package root.
+ * @param {string[]} paths - forward-slash relative file paths to digest.
+ * @returns {{ files: Record<string, string>, digest: string }} path → sha256 map and its digest.
+ */
 function digestFiles(base, paths) {
   const files = Object.fromEntries(
     [...new Set(paths)].sort().map((path) => [
@@ -27,6 +37,7 @@ function digestFiles(base, paths) {
   )
   return { files, digest: createHash('sha256').update(JSON.stringify(files)).digest('hex') }
 }
+/** @param {string} base - package root. */
 function snapshot(base) {
   let commit = 'unknown'
   try {
@@ -61,6 +72,7 @@ function snapshot(base) {
     ...filesUnder(base, 'lib').filter((path) => path !== marker),
     ...filesUnder(base, 'assets/onnxruntime'),
   ])
+  /** @type {Record<string, string>} */
   const toolchain = { node: process.version }
   for (const name of ['typescript', 'esbuild']) {
     const path = join(base, 'node_modules', name, 'package.json')

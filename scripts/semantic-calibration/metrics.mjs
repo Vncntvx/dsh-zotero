@@ -3,16 +3,37 @@ import { digestOf, invariant } from './dataset.mjs'
 import { predict } from './logistic.mjs'
 import { binomialBounds, clusterBootstrap } from './statistics.mjs'
 
+/** @typedef {import('./dataset.mjs').PairRow & { features: number[] }} FeatureRow */
+/** @typedef {FeatureRow & { confidence: number }} ScoredRow */
+/** @typedef {{ language: string, intentId: string, familyId: string, negativeIntent: boolean, confidence: number, label: number, documentKey: string }} SummaryRow */
+/** @typedef {{ negativeAnyHit: import('./statistics.mjs').BinomialBounds, mixedReturnedPrecision: import('./statistics.mjs').BinomialBounds, negativeFamilyBootstrap: import('./statistics.mjs').ClusterBounds, precisionFamilyBootstrap: import('./statistics.mjs').ClusterBounds, rawNegativeCountSufficient: boolean, uniqueIntents: number }} AdmissionLanguageSummary */
+/** @typedef {{ unit: string, familyId: string, negative: boolean, examinedPairs: number, admitted: { queryKey: string, documentKey: string, documentLanguage: string, phrasing: number, label: number, confidence: number, rawCosine: number }[] }} IntentOutcome */
+
+/**
+ * @param {FeatureRow[]} rows
+ * @param {import('./logistic.mjs').LogisticModel} model
+ * @returns {ScoredRow[]}
+ */
 export function scoreRows(rows, model) {
   return rows.map((row) => ({ ...row, confidence: predict(row.features, model) }))
 }
+/**
+ * @param {SummaryRow[]} rows
+ * @param {number} threshold
+ * @param {import('./dataset.mjs').Protocol} protocol
+ * @param {number} [alpha]
+ */
 export function admissionSummary(rows, threshold, protocol, alpha = protocol.alpha) {
   invariant(Number.isFinite(threshold) && threshold >= 0 && threshold <= 1, 'Invalid threshold')
+  /** @type {Record<string, AdmissionLanguageSummary>} */
   const perLanguage = {}
   for (const language of protocol.languages) {
     const selected = rows.filter((row) => row.language === language)
+    /** @type {Map<string, { familyId: string, negative: boolean, admitted: boolean }>} */
     const intents = new Map()
+    /** @type {Map<string, SummaryRow>} */
     const pairs = new Map()
+    /** @type {Map<string, { numerator: number, denominator: number }>} */
     const familyTotals = new Map()
     for (const row of selected) {
       const intent = intents.get(row.intentId) ?? {
@@ -68,6 +89,10 @@ export function admissionSummary(rows, threshold, protocol, alpha = protocol.alp
       'Exact bounds assume independent Bernoulli units. Distinct synthetic queries are not proof of independence; returned pairs share queries/documents. Cluster bootstrap is diagnostic, never an external validity certificate.',
   }
 }
+/**
+ * @param {SummaryRow[]} rows
+ * @param {import('./dataset.mjs').Protocol} protocol
+ */
 export function selectThreshold(rows, protocol) {
   // Fixed finite grid makes selection multiplicity explicit. Never adapt the
   // search grid to observed scores or choose a threshold on heldout outcomes.
@@ -94,10 +119,15 @@ export function selectThreshold(rows, protocol) {
       'Lowest feasible predeclared threshold, calibration only; insufficient support produces null.',
   }
 }
+/**
+ * @param {ScoredRow[]} rows
+ * @param {number} threshold
+ */
 export function perIntentOutcomes(rows, threshold) {
   const grouped = new Map()
   for (const row of rows) {
     const key = `${row.language}/${row.intentId}`
+    /** @type {IntentOutcome} */
     const outcome = grouped.get(key) ?? {
       unit: key,
       familyId: row.familyId,
@@ -120,10 +150,16 @@ export function perIntentOutcomes(rows, threshold) {
   }
   return [...grouped.values()]
 }
+/**
+ * @param {ScoredRow[]} rows
+ * @param {number} threshold
+ */
 export function regressionMetrics(rows, threshold) {
+  /** @type {Map<string, ScoredRow[]>} */
   const grouped = new Map()
   for (const row of rows.filter((entry) => !entry.negativeIntent && entry.phrasing === 0)) {
     const key = `${row.language}-${row.documentLanguage}/${row.intentId}`
+    /** @type {ScoredRow[]} */
     const group = grouped.get(key) ?? []
     group.push(row)
     grouped.set(key, group)

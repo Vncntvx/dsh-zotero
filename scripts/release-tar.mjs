@@ -3,11 +3,18 @@ import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
+/** @param bytes {Uint8Array} @returns {string} the sha256 hex digest. */
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex')
+/**
+ * Decode a NUL-terminated tar field as UTF-8.
+ * @param bytes {Uint8Array} the raw field bytes.
+ * @returns {string} the decoded text up to the first NUL.
+ */
 function text(bytes) {
   const end = bytes.indexOf(0)
   return decoder.decode(end === -1 ? bytes : bytes.subarray(0, end))
 }
+/** @param bytes {Uint8Array} @returns {number} the decoded octal integer. */
 function octal(bytes) {
   const value = text(bytes).trim()
   if (!/^[0-7]+$/.test(value)) throw new Error('Invalid tar integer')
@@ -15,7 +22,13 @@ function octal(bytes) {
   if (!Number.isSafeInteger(number)) throw new Error('Tar integer exceeds safe range')
   return number
 }
+/**
+ * Parse one PAX extended-header body into its attribute map.
+ * @param bytes {Uint8Array} the header body.
+ * @returns {Record<string, string>} the PAX attributes.
+ */
 function pax(bytes) {
+  /** @type {Record<string, string>} */
   const result = {}
   let offset = 0
   while (offset < bytes.length) {
@@ -43,9 +56,17 @@ function pax(bytes) {
   return result
 }
 
+/**
+ * Map every regular file in an npm package tarball to its SHA-256 digest,
+ * without extracting untrusted paths.
+ * @param compressed {Uint8Array} the gzip-compressed tarball bytes.
+ * @returns {Record<string, string>} path → sha256 hex digest, sorted by path.
+ */
 export function tarFileDigests(compressed) {
   const bytes = gunzipSync(compressed, { maxOutputLength: 512 * 1024 * 1024 })
+  /** @type {Record<string, string>} */
   const files = {}
+  /** @type {Record<string, string>} */
   let attributes = {}
   let offset = 0
   while (offset + 512 <= bytes.length) {

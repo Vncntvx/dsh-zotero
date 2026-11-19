@@ -94,30 +94,73 @@ import {
   toolchainFixture,
 } from './harness-toolchain.mjs'
 
+/**
+ * The manifest and lockfile shapes this check reads and writes.
+ * @typedef {Record<string, string>} DependencyMap
+ * @typedef {{
+ *   name?: string,
+ *   version?: string,
+ *   engines?: { dsh?: string },
+ *   dependencies: DependencyMap,
+ *   devDependencies: DependencyMap,
+ *   overrides: DependencyMap,
+ *   peerDependencies: DependencyMap,
+ *   dsh?: { client?: { inject?: string[] }, harnessRange?: unknown },
+ *   dshWorkshop?: unknown,
+ * }} PackageManifest
+ * @typedef {{ version?: string, dependencies?: DependencyMap, devDependencies?: DependencyMap, peerDependencies?: DependencyMap }} LockEntry
+ * @typedef {Record<string, LockEntry>} LockPackages
+ * @typedef {{ packages: LockPackages }} Lockfile
+ */
+
+/**
+ * Referenced only so `noUnusedLocals` keeps the imported bindings.
+ * @typedef {typeof satisfies} SemverSatisfiesImport
+ * @typedef {typeof stripCommentsAndStrings} StripCommentsAndStringsImport
+ */
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const harnessRoot = resolveHarnessRoot(root)
 const pkgPath = join(root, 'package.json')
-/** Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly. */
+/**
+ * Manifest sections whose every `@deepseek-ai/dsh-*` entry must equal the pin exactly.
+ * @type {('dependencies' | 'devDependencies' | 'overrides')[]}
+ */
 const EXACT_VERSION_SECTIONS = ['dependencies', 'devDependencies', 'overrides']
 /** All manifest sections that carry `@deepseek-ai/dsh-*` entries. */
+/** @type {('dependencies' | 'devDependencies' | 'overrides' | 'peerDependencies')[]} */
 const VERSION_SECTIONS = [...EXACT_VERSION_SECTIONS, 'peerDependencies']
-/** Manifest sections whose `@deepseek-ai/*` entries may name a sibling vendor package. */
+/**
+ * Manifest sections whose `@deepseek-ai/*` entries may name a sibling vendor package.
+ * @type {('dependencies' | 'devDependencies' | 'peerDependencies')[]}
+ */
 const VENDOR_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies']
 /** Source roots scanned for the upstream imports whose artifacts must be fresh. */
 const SCAN_ROOTS = ['src', 'tests', 'scripts']
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
+/** @type {string[]} */
 const problems = []
+/** @type {string[]} */
 const notes = []
 
+/** @param {string} name - the dependency name. @returns {boolean} */
 const isDshPackage = (name) => name.startsWith('@deepseek-ai/dsh-')
 
-/** Read and parse one JSON file. */
+/**
+ * Read and parse one JSON file.
+ * @param {string} path - the file to read.
+ * @returns {any} the parsed JSON.
+ */
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
-/** The pinned harness version: the exact `devDependencies` line, validated. */
+/**
+ * The pinned harness version: the exact `devDependencies` line, validated.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @returns {string | undefined} the pin, or undefined when it cannot be determined.
+ */
 function pinnedVersion(manifest) {
   const entries = Object.entries(manifest.devDependencies ?? {}).filter(([name]) =>
     isDshPackage(name),
@@ -157,9 +200,16 @@ export function packageNameFromLockPath(path) {
   return path.slice(index + NODE_MODULES_MARKER.length)
 }
 
-/** Every problem in a lockfile relative to the pin, the manifest's overrides and the manifest's dsh declarations. */
+/**
+ * Every problem in a lockfile relative to the pin, the manifest's overrides and the manifest's dsh declarations.
+ * @param {Lockfile} lock - parsed package-lock.json.
+ * @param {PackageManifest | undefined} manifest - parsed package.json, when available.
+ * @param {string} pin - the exact pin.
+ * @returns {string[]} human-readable problems.
+ */
 export function collectLockProblems(lock, manifest, pin) {
   const problems = []
+  /** @type {Array<{name: string, version: string | undefined}>} */
   const dshLockEntries = []
   for (const [path, entry] of Object.entries(lock.packages ?? {})) {
     const name = packageNameFromLockPath(path)
@@ -211,9 +261,12 @@ export function collectLockProblems(lock, manifest, pin) {
       )
     }
 
-    const rootEntry = (lock.packages ?? {})['']
+    const rootEntry = /** @type {LockEntry | undefined} */ ((lock.packages ?? {})[''])
     if (rootEntry !== undefined) {
-      for (const section of ['devDependencies', 'peerDependencies']) {
+      for (const section of /** @type {['devDependencies', 'peerDependencies']} */ ([
+        'devDependencies',
+        'peerDependencies',
+      ])) {
         const manifestKeys = new Set(Object.keys(manifest[section] ?? {}).filter(isDshPackage))
         const lockKeys = new Set(Object.keys(rootEntry[section] ?? {}).filter(isDshPackage))
         const missing = [...manifestKeys].filter((name) => !lockKeys.has(name)).sort()
@@ -241,18 +294,20 @@ export function collectLockProblems(lock, manifest, pin) {
  * resolving the pinned copy while `package.json` asks for another. `npm ci`
  * then refuses to install, and `harness:check` would otherwise stay green.
  */
+/** @type {('dependencies' | 'devDependencies' | 'peerDependencies')[]} */
 const VENDOR_LOCK_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies']
 
 /**
  * Every non-dsh `@deepseek-ai` dependency must be declared in the lock root
  * with the same range and resolve to a version that range accepts.
- * @param lock - parsed package-lock.json.
- * @param manifest - parsed package.json.
- * @returns human-readable problems; empty when every vendored dependency agrees.
+ * @param {Lockfile} lock - parsed package-lock.json.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @returns {string[]} human-readable problems; empty when every vendored dependency agrees.
  */
 export function collectVendorLockProblems(lock, manifest) {
+  /** @type {string[]} */
   const found = []
-  const rootEntry = (lock.packages ?? {})['']
+  const rootEntry = /** @type {LockEntry | undefined} */ ((lock.packages ?? {})[''])
   if (rootEntry === undefined) return found
   for (const section of VENDOR_LOCK_SECTIONS) {
     for (const [name, range] of Object.entries(manifest[section] ?? {})) {
@@ -266,7 +321,7 @@ export function collectVendorLockProblems(lock, manifest) {
         )
         continue
       }
-      const resolved = lock.packages[`node_modules/${name}`]
+      const resolved = /** @type {LockEntry | undefined} */ (lock.packages[`node_modules/${name}`])
       if (resolved === undefined || resolved.version === undefined) {
         found.push(
           `package-lock.json has no resolved version for ${section}["${name}"]` +
@@ -286,13 +341,18 @@ export function collectVendorLockProblems(lock, manifest) {
   return found
 }
 
-/** Keep the plugin fetch and the Harness proxy dispatcher on one Undici installation. */
+/**
+ * Keep the plugin fetch and the Harness proxy dispatcher on one Undici installation.
+ * @param {Lockfile} lock - parsed package-lock.json.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @returns {string[]} human-readable problems; empty when undici agrees.
+ */
 export function collectProxyUndiciProblems(lock, manifest) {
   let expected
   try {
     expected = lockedProxyUndiciVersion(lock)
   } catch (error) {
-    return [error.message]
+    return [/** @type {Error} */ (error).message]
   }
   const packages = lock.packages ?? {}
   const plugin = lockedPathOf(packages, '', 'undici')
@@ -310,7 +370,12 @@ export function collectProxyUndiciProblems(lock, manifest) {
   ]
 }
 
-/** Check the Harness pin, vendor packages, and shared proxy dependency. */
+/**
+ * Check the Harness pin, vendor packages, and shared proxy dependency.
+ * @param {string} pin - the exact pin.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @returns {void}
+ */
 function checkLock(pin, manifest) {
   const lockPath = join(root, 'package-lock.json')
   if (!existsSync(lockPath)) {
@@ -325,9 +390,9 @@ function checkLock(pin, manifest) {
 
 /**
  * Whether a declared harness face is the exact pin (never a range or dual arm).
- * @param value - the declared string.
- * @param pin - the exact pin.
- * @returns true when the value is exactly the pin.
+ * @param {string} value - the declared string.
+ * @param {string} pin - the exact pin.
+ * @returns {boolean} true when the value is exactly the pin.
  */
 function isExactPinFace(value, pin) {
   return value === pin && VERSION_PATTERN.test(value)
@@ -335,9 +400,9 @@ function isExactPinFace(value, pin) {
 
 /**
  * Whether a declared compatibility face is >= the exact pin.
- * @param value - the declared string.
- * @param pin - the exact pin.
- * @returns true when the value is >=pin.
+ * @param {string} value - the declared string.
+ * @param {string} pin - the exact pin.
+ * @returns {boolean} true when the value is >=pin.
  */
 function isGtePinFace(value, pin) {
   return value === `>=${pin}`
@@ -349,16 +414,23 @@ function isGtePinFace(value, pin) {
  * were read against. The unbounded `>=pin` form is refused: it accepts a host
  * whose client contract this bundle was never built against, and the bundle
  * resolves the host's own copies of those modules.
- * @param value - the declared string.
- * @param pin - the exact pin.
- * @returns true when the value is the bounded tested line.
+ * @param {string | undefined} value - the declared string.
+ * @param {string} pin - the exact pin.
+ * @returns {boolean} true when the value is the bounded tested line.
  */
 function isEngineFace(value, pin) {
   const bound = harnessUpperBoundOf(pin)
   return bound !== undefined && value === `>=${pin} <${bound}`
 }
 
-/** Human-readable reason a harness face is not the exact pin. */
+/**
+ * Human-readable reason a harness face is not the exact pin.
+ * @param {string} section - the manifest section.
+ * @param {string | undefined} name - the package name, when the face is an entry.
+ * @param {string} value - the declared string.
+ * @param {string} pin - the exact pin.
+ * @returns {string} the human-readable problem.
+ */
 function exactPinProblem(section, name, value, pin) {
   const where = name === undefined ? section : `${section}["${name}"]`
   if (typeof value !== 'string' || value.length === 0) {
@@ -370,7 +442,14 @@ function exactPinProblem(section, name, value, pin) {
   return `${where} is "${value}", expected the exact pin "${pin}"`
 }
 
-/** Human-readable reason a compatibility face is not >= the exact pin. */
+/**
+ * Human-readable reason a compatibility face is not >= the exact pin.
+ * @param {string} section - the manifest section.
+ * @param {string | undefined} name - the package name, when the face is an entry.
+ * @param {string} value - the declared string.
+ * @param {string} pin - the exact pin.
+ * @returns {string} the human-readable problem.
+ */
 function gtePinProblem(section, name, value, pin) {
   const where = name === undefined ? section : `${section}["${name}"]`
   const expected = `>=${pin}`
@@ -386,9 +465,9 @@ function gtePinProblem(section, name, value, pin) {
 /**
  * Every harness-face problem in a manifest relative to one exact pin.
  * Pure: used by `checkPin` and unit-tested without the CLI side effects.
- * @param manifest - parsed package.json.
- * @param pin - the exact pin every face must equal.
- * @returns human-readable problems; empty when every face satisfies its rule.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @param {string} pin - the exact pin every face must equal.
+ * @returns {string[]} human-readable problems; empty when every face satisfies its rule.
  */
 export function collectPinFaceProblems(manifest, pin) {
   const found = []
@@ -446,7 +525,12 @@ export function collectPinFaceProblems(manifest, pin) {
   return found
 }
 
-/** Check every derived form of the pin against the source of truth. */
+/**
+ * Check every derived form of the pin against the source of truth.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @param {Map<string, string> | undefined} packages - optional pre-collected harness package map.
+ * @returns {string | undefined} the pin, or undefined when it cannot be determined.
+ */
 function checkPin(manifest, packages) {
   const pin = pinnedVersion(manifest)
   if (pin === undefined) return undefined
@@ -467,9 +551,9 @@ function checkPin(manifest, packages) {
  * packages outside the `@deepseek-ai/dsh-*` release line, so it is what makes
  * a `@deepseek-ai/*` dependency a *vendored* one rather than a harness package
  * this pin already covers.
- * @param harnessRoot - the sibling harness checkout root.
- * @param dir - the package's directory as `collectHarnessPackages` reports it.
- * @returns true when the directory sits under `<harnessRoot>/vendor`.
+ * @param {string} harnessRoot - the sibling harness checkout root.
+ * @param {string} dir - the package's directory as `collectHarnessPackages` reports it.
+ * @returns {boolean} true when the directory sits under `<harnessRoot>/vendor`.
  */
 function isVendoredPackage(harnessRoot, dir) {
   const prefix = join(harnessRoot, 'vendor') + sep
@@ -481,8 +565,8 @@ function isVendoredPackage(harnessRoot, dir) {
  * cannot be read. Such a package is skipped rather than reported: an unreadable
  * manifest is a broken checkout, not a version disagreement, and the artifact
  * check already fails on the declarations it cannot resolve.
- * @param dir - the package directory.
- * @returns the declared version, or undefined.
+ * @param {string} dir - the package directory.
+ * @returns {string | undefined} the declared version, or undefined.
  */
 function siblingVersion(dir) {
   try {
@@ -497,11 +581,11 @@ function siblingVersion(dir) {
  * Why one declared vendor dependency cannot be compared at all: a protocol
  * specifier (`link:`, `file:`, `workspace:`) is not a range, so there is no
  * floor to read and no way to tell which copy would be installed.
- * @param section - the manifest section that declares the dependency.
- * @param name - the `@deepseek-ai/*` package name.
- * @param range - the declared specifier.
- * @param installed - the version the sibling's installed copy declares.
- * @returns the human-readable problem.
+ * @param {string} section - the manifest section that declares the dependency.
+ * @param {string} name - the `@deepseek-ai/*` package name.
+ * @param {string} range - the declared specifier.
+ * @param {string} installed - the version the sibling's installed copy declares.
+ * @returns {string} the human-readable problem.
  */
 function nonRangeVendorProblem(section, name, range, installed) {
   return (
@@ -519,8 +603,8 @@ function nonRangeVendorProblem(section, name, range, installed) {
  * expressible through the three declaration sections (their floor is what the
  * lockfile resolves from), so an override is refused outright rather than
  * checked for a floor it cannot have.
- * @param name - the `@deepseek-ai/*` package name.
- * @returns the human-readable problem.
+ * @param {string} name - the `@deepseek-ai/*` package name.
+ * @returns {string} the human-readable problem.
  */
 function overriddenVendorProblem(name) {
   return (
@@ -547,10 +631,11 @@ function overriddenVendorProblem(name) {
  * is already announced once per run by `checkArtifacts`, so this returns an
  * empty list rather than a second note; the function stays pure so the unit
  * tests can drive it without the module's shared diagnostics.
- * @param harnessRoot - the sibling harness checkout root.
- * @param manifest - parsed package.json.
- * @param packages - optional pre-collected harness package map.
- * @returns human-readable problems; empty when every vendored dependency agrees.
+ * @param {string} harnessRoot - the sibling harness checkout root.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @param {Map<string, string> | undefined} packages - optional pre-collected harness package map.
+ * @param {string | undefined} pin - the exact pin, when vendor versions are read from the pin tag.
+ * @returns {string[]} human-readable problems; empty when every vendored dependency agrees.
  */
 export function collectVendorProblems(harnessRoot, manifest, packages, pin) {
   const found = []
@@ -627,6 +712,9 @@ export function collectVendorProblems(harnessRoot, manifest, packages, pin) {
  * no longer carries (upstream renames such as `dsh-code-runtime` →
  * `dsh-ptc-runtime`). A stale key pins a package the tree can never pull, so
  * it is silent rot until the rename's real name is missing from overrides.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @param {Iterable<string>} names - the package names the pinned harness carries.
+ * @returns {string[]} human-readable problems.
  */
 export function overrideNameProblems(manifest, names) {
   const known = new Set(names)
@@ -641,6 +729,11 @@ export function overrideNameProblems(manifest, names) {
   )
 }
 
+/**
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @param {Map<string, string> | undefined} packages - optional pre-collected harness package map.
+ * @returns {void}
+ */
 function checkOverrideNames(manifest, packages) {
   const known =
     packages ?? (existsSync(harnessRoot) ? collectHarnessPackages(harnessRoot) : new Map())
@@ -650,10 +743,13 @@ function checkOverrideNames(manifest, packages) {
 /**
  * Collect every `@deepseek-ai/*` import below src, tests and scripts in scanRoot.
  * Comments and literal examples are excluded; imports inside template expressions count.
- * @returns the sorted, de-duplicated specifiers.
+ * @param {string} [scanRoot] - the repository root to scan below (defaults to this repo).
+ * @returns {string[]} the sorted, de-duplicated specifiers.
  */
 export function importedSpecifiers(scanRoot = root) {
+  /** @type {Set<string>} */
   const specifiers = new Set()
+  /** @param {any} node - a Babel AST value; the walk visits arbitrary nested shapes. */
   const visit = (node) => {
     if (node === null || typeof node !== 'object') return
     if (
@@ -670,6 +766,7 @@ export function importedSpecifiers(scanRoot = root) {
       else if (value !== null && typeof value === 'object') visit(value)
     }
   }
+  /** @param {string} dir - the directory to descend into. */
   const walk = (dir) => {
     let entries
     try {
@@ -688,7 +785,7 @@ export function importedSpecifiers(scanRoot = root) {
             sourceFilename: child,
             plugins: [
               ['typescript', { dts: /\.d\.[cm]?ts$/.test(entry.name) }],
-              ...(/\.tsx$/.test(entry.name) ? ['jsx'] : []),
+              ...(/\.tsx$/.test(entry.name) ? /** @type {['jsx']} */ (['jsx']) : []),
             ],
           }).program,
         )
@@ -699,7 +796,11 @@ export function importedSpecifiers(scanRoot = root) {
   return [...specifiers].sort()
 }
 
-/** The real path of a directory, or undefined when it does not exist. */
+/**
+ * The real path of a directory, or undefined when it does not exist.
+ * @param {string} path - the path to resolve.
+ * @returns {string | undefined} the resolved path, or undefined.
+ */
 function realDirOf(path) {
   try {
     return realpathSync(path)
@@ -708,15 +809,26 @@ function realDirOf(path) {
   }
 }
 
-/** Whether `child` lies inside `parent` (both already resolved). */
+/**
+ * Whether `child` lies inside `parent` (both already resolved).
+ * @param {string} parent - the resolved parent directory.
+ * @param {string} child - the resolved child path.
+ * @returns {boolean} whether the child lies inside the parent.
+ */
 function isInside(parent, child) {
   const prefix = parent.endsWith('/') ? parent : `${parent}/`
   return child === parent || child.startsWith(prefix)
 }
 
-/** Newest modification time under a directory tree, or undefined when absent. */
+/**
+ * Newest modification time under a directory tree, or undefined when absent.
+ * @param {string} dir - the tree to walk.
+ * @returns {number | undefined} the newest mtime in milliseconds.
+ */
 function newestMtime(dir) {
+  /** @type {number | undefined} */
   let newest
+  /** @param {string} current - the directory to descend into. */
   const walk = (current) => {
     let entries
     try {
@@ -741,9 +853,9 @@ function newestMtime(dir) {
  * The declaration file TypeScript reads for one imported specifier. The
  * package's own `exports` map decides, so this check follows the same map the
  * compiler follows rather than guessing a path.
- * @param pkgDir - installed package directory.
- * @param specifier - the import specifier as written.
- * @returns absolute declaration path, or undefined when the export carries none.
+ * @param {string} pkgDir - installed package directory.
+ * @param {string} specifier - the import specifier as written.
+ * @returns {string | undefined} absolute declaration path, or undefined when the export carries none.
  */
 function declarationOf(pkgDir, specifier) {
   // A directory without a manifest is an absent or half-installed package, not
@@ -782,8 +894,8 @@ function declarationOf(pkgDir, specifier) {
 
 /**
  * Resolves the browser runtime file for a package from its `./client` export.
- * @param pkgDir - installed package directory.
- * @returns absolute client runtime path, or undefined when absent.
+ * @param {string} pkgDir - installed package directory.
+ * @returns {string | undefined} absolute client runtime path, or undefined when absent.
  */
 export function clientRuntimeOf(pkgDir) {
   let manifest
@@ -805,25 +917,33 @@ export function clientRuntimeOf(pkgDir) {
  * 1. Declarations vs src: whether generated types reflect the latest source.
  * 2. Client runtime vs declarations: whether prebuilt browser bundles are up to
  *    date with their client declarations.
- * @param harnessRoot - the sibling harness checkout root.
- * @param specifiers - upstream specifiers imported by this repository.
- * @param packages - optional pre-collected harness package map.
- * @param installedRoot - optional `node_modules` the compiler resolves through.
+ * @param {string} harnessRoot - the sibling harness checkout root.
+ * @param {string[]} specifiers - upstream specifiers imported by this repository.
+ * @param {Map<string, string> | undefined} packages - optional pre-collected harness package map.
+ * @param {string | undefined} installedRoot - optional `node_modules` the compiler resolves through.
  *   When a package's installed copy lies outside the sibling checkout, that copy
  *   is a registry install: its declarations are what typecheck reads, and the
  *   sibling's source freshness says nothing about them. Those packages are
  *   reported in `registry` instead of `stale`.
- * @returns categorized findings.
+ * @returns {{stale: string[], staleRuntime: Array<{name: string, runtime: string}>, missing: string[], outside: string[], registry: Array<{name: string, dir: string}>}} categorized findings.
  */
 export function collectArtifactProblems(harnessRoot, specifiers, packages, installedRoot) {
   const resolvedPackages = packages ?? collectHarnessPackages(harnessRoot)
+  /** @type {string[]} */
   const stale = []
+  /** @type {Array<{name: string, runtime: string}>} */
   const staleRuntime = []
+  /** @type {string[]} */
   const missing = []
+  /** @type {string[]} */
   const outside = []
+  /** @type {Array<{name: string, dir: string}>} */
   const registry = []
+  /** @type {Set<string>} */
   const registryNames = new Set()
+  /** @type {Map<string, number | undefined>} */
   const sourceMtimeCache = new Map()
+  /** @type {Set<string>} */
   const checkedClientPackages = new Set()
   const harnessReal = realDirOf(harnessRoot)
   for (const specifier of specifiers) {
@@ -854,7 +974,7 @@ export function collectArtifactProblems(harnessRoot, specifiers, packages, insta
         registryNames.add(name)
         // Only the harness packages move with the pin; the vendored libraries
         // carry their own floors and are checked as vendors.
-        if (isDshPackage(name)) registry.push({ name, dir: installedDir })
+        if (isDshPackage(name)) registry.push({ name, dir: /** @type {string} */ (installedDir) })
       }
       continue
     }
@@ -898,8 +1018,10 @@ export function collectArtifactProblems(harnessRoot, specifiers, packages, insta
  * stale ones fail only under `--strict`: a stale sibling build weakens the
  * guarantee without blocking day-to-day work, and the release path is where the
  * guarantee has to hold.
- * @param strict - treat stale artifacts as a failure.
- * @param packages - optional pre-collected harness package map.
+ * @param {boolean} strict - treat stale artifacts as a failure.
+ * @param {Map<string, string> | undefined} packages - optional pre-collected harness package map.
+ * @param {string | undefined} pin - the exact pin, when registry installs are compared to it.
+ * @returns {void}
  */
 function checkArtifacts(strict, packages, pin) {
   if (!existsSync(harnessRoot)) {
@@ -974,11 +1096,16 @@ function checkArtifacts(strict, packages, pin) {
  * suite's snapshot fixture carries the proof (CI checks nothing here — the
  * registry install ships no tsdown file to compare against).
  */
+/**
+ * @param {string | undefined} pin - the exact pin.
+ * @returns {string[]} human-readable problems.
+ */
 function collectMirrorProblems(pin) {
   if (!existsSync(harnessRoot)) return []
   const file = 'packages/client/tsdown.client.ts'
   const fileResult = pinnedFileOf(
-    (args) => execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' }),
+    /** @param {string[]} args */ (args) =>
+      execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' }),
     `dsh-v${pin}`,
     file,
   )
@@ -987,11 +1114,16 @@ function collectMirrorProblems(pin) {
   return clientMirrorProblems(upstream).map((problem) => `${problem} (dsh-v${pin}:${file})`)
 }
 
+/**
+ * @param {string | undefined} pin - the exact pin.
+ * @returns {string[]} human-readable problems.
+ */
 function collectClientPlatformProblems(pin) {
   if (!existsSync(harnessRoot)) return []
   const file = 'packages/client/web/src/platform.ts'
   const result = pinnedFileOf(
-    (args) => execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' }),
+    /** @param {string[]} args */ (args) =>
+      execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' }),
     `dsh-v${pin}`,
     file,
   )
@@ -1013,12 +1145,12 @@ function collectClientPlatformProblems(pin) {
  * the sibling declares without a local mirror are not a local obligation
  * (the mirror is a subset, and the client-graph guard catches an actual
  * inlined copy).
- * @param mirrorNames - the mirrored names, shared with deps-check.
- * @param localRanges - name to the manifest's declared range (dependencies
+ * @param {Iterable<string>} mirrorNames - the mirrored names, shared with deps-check.
+ * @param {Map<string, string>} localRanges - name to the manifest's declared range (dependencies
  *   and devDependencies merged by the caller; only mirrored names included).
- * @param siblingDecls - name to the ranges the sibling's client manifests
+ * @param {Map<string, string[]>} siblingDecls - name to the ranges the sibling's client manifests
  *   declare at the pin tag; `@types/*` fall back to the sibling root.
- * @returns `{ problems, notes }` in the collector's problem-string style.
+ * @returns {{problems: string[], notes: string[]}} in the collector's problem-string style.
  */
 export function clientDepsMirrorProblems(mirrorNames, localRanges, siblingDecls) {
   const problems = []
@@ -1087,6 +1219,11 @@ export function clientDepsMirrorProblems(mirrorNames, localRanges, siblingDecls)
  * @returns name to the ranges declared at the pin, or undefined when no
  *   authority is available (already reported).
  */
+/**
+ * @param {string | undefined} pin - the exact harness version.
+ * @returns {Record<string, string[]> | undefined} name to the ranges declared at the pin,
+ *   or undefined when no authority is available (already reported).
+ */
 function pinnedClientDeclarations(pin) {
   const fromFixture = () => {
     const fixturePath = join(root, 'tests', 'fixtures', 'harness-mirrored-deps-pin.json')
@@ -1109,6 +1246,7 @@ function pinnedClientDeclarations(pin) {
     return fixture.declarations
   }
   if (!existsSync(harnessRoot)) return fromFixture()
+  /** @param {string[]} args */
   const run = (args) => execFileSync('git', ['-C', harnessRoot, ...args], { encoding: 'utf8' })
   try {
     run(['rev-parse', '--verify', `dsh-v${pin}^{commit}`])
@@ -1122,7 +1260,7 @@ function pinnedClientDeclarations(pin) {
     return mirroredDeclarationsOf(run, `dsh-v${pin}`)
   } catch (error) {
     problems.push(
-      `tag dsh-v${pin} exists but its mirrored client contract could not be read: ${error.message}`,
+      `tag dsh-v${pin} exists but its mirrored client contract could not be read: ${/** @type {Error} */ (error).message}`,
     )
     return undefined
   }
@@ -1133,13 +1271,20 @@ function pinnedClientDeclarations(pin) {
  * mirrored ranges are diffed against the declarations at the pin tag — the
  * same authority the client-graph mirror uses, never the sibling's working
  * tree — and against the committed fixture when no sibling checkout exists.
+ * @param {string | undefined} pin - the exact harness version.
+ * @param {PackageManifest} manifest - parsed package.json.
+ * @returns {string[]} human-readable problems.
  */
 function collectClientDepsMirrorProblems(pin, manifest) {
   const declarations = pinnedClientDeclarations(pin)
   if (declarations === undefined) return []
   const siblingDecls = new Map(Object.entries(declarations))
+  /** @type {Map<string, string>} */
   const localRanges = new Map()
-  for (const section of ['dependencies', 'devDependencies']) {
+  for (const section of /** @type {['dependencies', 'devDependencies']} */ ([
+    'dependencies',
+    'devDependencies',
+  ])) {
     for (const [name, range] of Object.entries(manifest[section] ?? {})) {
       if (HARNESS_MIRRORED.has(name) && typeof range === 'string') localRanges.set(name, range)
     }
@@ -1159,10 +1304,10 @@ function collectClientDepsMirrorProblems(pin, manifest) {
  * and engines become >=pin. The manifest carries no other derived
  * face: `dsh.harnessRange` was a self-invented field the runtime never
  * read. Do not reintroduce it.
- * @param manifest - parsed package.json (mutated in place).
- * @param version - the exact new pin.
- * @param lockedPackageNames - installed harness closure to include in exact overrides.
- * @returns the same manifest for chaining/tests.
+ * @param {PackageManifest} manifest - parsed package.json (mutated in place).
+ * @param {string} version - the exact new pin.
+ * @param {string[]} [lockedPackageNames] - installed harness closure to include in exact overrides.
+ * @returns {PackageManifest} the same manifest for chaining/tests.
  */
 export function applyPinToManifest(manifest, version, lockedPackageNames = []) {
   const names = new Set([
@@ -1184,7 +1329,12 @@ export function applyPinToManifest(manifest, version, lockedPackageNames = []) {
   return manifest
 }
 
-/** Move the pin; the caller re-runs the check against what was written. */
+/**
+ * Move the pin; the caller re-runs the check against what was written.
+ * @param {string} version - the exact new pin.
+ * @param {string | undefined} previous - the pin being replaced, when known.
+ * @returns {void}
+ */
 function writePin(version, previous) {
   if (previous === undefined || !VERSION_PATTERN.test(version)) {
     problems.push(
@@ -1199,7 +1349,7 @@ function writePin(version, previous) {
     toolchain = extractHarnessToolchain(harnessRoot, version)
   } catch (error) {
     problems.push(
-      `cannot move the pin: read packageManager at dsh-v${version} in the sibling harness: ${error.message}`,
+      `cannot move the pin: read packageManager at dsh-v${version} in the sibling harness: ${/** @type {Error} */ (error).message}`,
     )
     return
   }
@@ -1208,7 +1358,7 @@ function writePin(version, previous) {
     (existsSync(lockPath) ? readJson(lockPath).packages : undefined) ?? {},
   )
     .map(packageNameFromLockPath)
-    .filter((name) => name !== undefined)
+    .filter(/** @param {string | undefined} name */ (name) => name !== undefined)
   const manifest = applyPinToManifest(readJson(pkgPath), version, lockedPackageNames)
   writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`)
   writeFileSync(toolchainFixture, `${JSON.stringify(toolchain, null, 2)}\n`)
@@ -1222,11 +1372,17 @@ function writePin(version, previous) {
   }
   for (const path of PACKAGE_VERSION_DOCS) {
     const file = join(root, path)
-    writeFileSync(file, withPackageDocVersion(readFileSync(file, 'utf8'), manifest.version))
+    writeFileSync(
+      file,
+      withPackageDocVersion(readFileSync(file, 'utf8'), /** @type {string} */ (manifest.version)),
+    )
   }
 }
 
-/** Print the accumulated diagnostics and set the exit code. */
+/**
+ * Print the accumulated diagnostics and set the exit code.
+ * @returns {void}
+ */
 function report() {
   for (const line of notes) console.log(`note: ${line}`)
   if (problems.length > 0) {
@@ -1235,15 +1391,31 @@ function report() {
   }
 }
 
-/** Check every fact and report; the success banner prints only a resolved pin. */
+/**
+ * Check every fact and report; the success banner prints only a resolved pin.
+ * @param {boolean} strict - treat stale artifacts as a failure.
+ * @returns {string | undefined} the pin, or undefined when it cannot be determined.
+ */
 function runCheck(strict) {
   const manifest = readJson(pkgPath)
   const packages = existsSync(harnessRoot) ? collectHarnessPackages(harnessRoot) : new Map()
   const pin = checkPin(manifest, packages)
   for (const path of HARNESS_PIN_DOCS)
-    problems.push(...harnessDocPinProblems(path, readFileSync(join(root, path), 'utf8'), pin))
+    problems.push(
+      ...harnessDocPinProblems(
+        path,
+        readFileSync(join(root, path), 'utf8'),
+        /** @type {string} */ (pin),
+      ),
+    )
   for (const path of HARNESS_REVIEW_DOCS)
-    problems.push(...harnessReviewProblems(path, readFileSync(join(root, path), 'utf8'), pin))
+    problems.push(
+      ...harnessReviewProblems(
+        path,
+        readFileSync(join(root, path), 'utf8'),
+        /** @type {string} */ (pin),
+      ),
+    )
   for (const path of PACKAGE_VERSION_DOCS)
     problems.push(
       ...packageDocVersionProblems(path, readFileSync(join(root, path), 'utf8'), manifest.version),
@@ -1274,7 +1446,7 @@ function runCheck(strict) {
         ),
       )
     } catch (error) {
-      problems.push(`invalid harness toolchain snapshot: ${error.message}`)
+      problems.push(`invalid harness toolchain snapshot: ${/** @type {Error} */ (error).message}`)
     }
   }
   checkArtifacts(strict, packages, pin)

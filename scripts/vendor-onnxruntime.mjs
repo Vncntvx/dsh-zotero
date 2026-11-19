@@ -28,7 +28,9 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** One packaged runtime file and the upstream path it comes from. */
+/** One packaged runtime file and the upstream path it comes from.
+ * @type {Readonly<Record<string, string>>}
+ */
 const RUNTIME_FILES = Object.freeze({
   'ort.node.min.mjs': 'dist/ort.node.min.mjs',
   'ort-wasm-simd-threaded.mjs': 'dist/ort-wasm-simd-threaded.mjs',
@@ -77,7 +79,10 @@ export function packedRuntimePaths(version = pinnedVersion()) {
   ]
 }
 
-/** Independently reviewed release identity; never generated from the installation tree. */
+/**
+ * Independently reviewed release identity; never generated from the installation tree.
+ * @param {string} version - the pinned runtime version.
+ */
 function releaseAnchor(version) {
   const anchor = JSON.parse(
     readFileSync(join(root, 'scripts/shared/onnxruntime-release.json'), 'utf8'),
@@ -90,6 +95,12 @@ function releaseAnchor(version) {
   return anchor
 }
 
+/**
+ * @param {string} path - asset path to check.
+ * @param {{ bytes: number, sha256: string } | undefined} expected - the reviewed upstream record.
+ * @param {string} label - human-readable asset label for problem messages.
+ * @returns {string[]} problems; empty when the asset matches.
+ */
 function releaseAssetProblems(path, expected, label) {
   if (!existsSync(path)) return [`${label} is missing`]
   if (
@@ -101,11 +112,16 @@ function releaseAssetProblems(path, expected, label) {
   return []
 }
 
+/** @param {string} path @returns {string} the asset's sha256 hex digest. */
 function digestOf(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-/** The provenance document for one copied tree, byte-stable across runs. */
+/**
+ * The provenance document for one copied tree, byte-stable across runs.
+ * @param {string} version - the pinned runtime version.
+ * @param {Record<string, { bytes: number, sha256: string }>} files - copied file records.
+ */
 function provenanceOf(version, files) {
   return `${JSON.stringify(
     {
@@ -142,6 +158,7 @@ export async function vendorRuntime() {
     )
   }
   await mkdir(target, { recursive: true })
+  /** @type {Record<string, { bytes: number, sha256: string }>} */
   const files = {}
   for (const [name, upstream] of Object.entries(RUNTIME_FILES).sort()) {
     const from = join(source, upstream)

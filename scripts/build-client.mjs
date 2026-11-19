@@ -1,3 +1,4 @@
+/// <reference path="./vendor-types.d.ts" />
 /**
  * Build the browser client bundle with esbuild.
  *
@@ -50,6 +51,20 @@ import {
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+/**
+ * The loader handoff a client bundle must register: the plugin id plus the
+ * CJS factory the loader's module table calls with its platform require.
+ * @typedef {{
+ *   id: string,
+ *   factory: (require: (specifier: string) => unknown) => ClientExports,
+ * }} LoaderHandoff
+ */
+
+/**
+ * The plugin face the bundle's CJS exports must present to the shell.
+ * @typedef {{ apply?: unknown, inject?: unknown }} ClientExports
+ */
 
 // The package manifest is read once; the handoff id and the stamped version
 // are faces of it, so they cannot drift from `package.json` independently.
@@ -127,10 +142,13 @@ function buildCommitOf() {
  *  primitives) carries no loader identity, so it would silently split state
  *  across two instances. Reads the specifiers the graph actually resolves (the
  *  same unit the harness's own rule is written in), so a symlinked sibling
- *  checkout and a registry install are policed identically. */
+ *  checkout and a registry install are policed identically.
+ * @type {import('esbuild').Plugin}
+ */
 const harnessPurityPlugin = {
   name: 'harness-bundle-purity',
   setup(build) {
+    /** @type {Set<string>} */
     const harnessSpecifiers = new Set()
     // Watch mode reuses one esbuild context; reset per build so a violation
     // fixed in a later rebuild stops failing the gate instead of lingering.
@@ -173,9 +191,10 @@ const harnessPurityPlugin = {
  * narrower than the harness shell's own seed table, which answers harness
  * modules too: this local gate only needs class-component evaluability, and
  * the stub keeps the bundle's harness wiring out of the verified surface.
- * @returns mapping of external specifier to module entity.
+ * @returns {Record<string, unknown>} mapping of external specifier to module entity.
  */
 function platformModuleTable() {
+  /** @type {Record<string, unknown>} */
   const table = {}
   for (const specifier of EXTERNALS) {
     if (!specifier.startsWith('@deepseek-ai/')) table[specifier] = require(specifier)
@@ -200,9 +219,9 @@ export const LEGACY_STYLESHEET_MARKER = 'data-plugin-css'
  * handles it leaves the styles unretained after a disable; the meta shape
  * against the pinned loader registers a handoff the shell ignores. Either mix
  * is silent at runtime, so it fails the build instead.
- * @param api - the constant above.
- * @param source - the produced bundle.
- * @returns void; throws when the two disagree.
+ * @param api {string} - the constant above.
+ * @param source {string} - the produced bundle.
+ * @returns {void} throws when the two disagree.
  */
 export function assertLoaderApi(api, source) {
   const legacy = source.includes(LEGACY_STYLESHEET_MARKER)
@@ -241,11 +260,12 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
         'keep host-only code out of the browser graph or raise the ceiling with a measured reason',
     )
   }
+  /** @type {LoaderHandoff | undefined} */
   let handoff
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>')
   const window = dom.window
   window.__ModuleLoader__ = {
-    load: (value) => {
+    load: (/** @type {LoaderHandoff} */ value) => {
       handoff = value
     },
   }
@@ -277,7 +297,8 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
 
 /** Inline `.module.css` files as scoped style injections (mirrors the harness
  *  tsdown preset's CSS handling; the loader executes the bundle as a classic
- *  script, so each module injects its own style tag with a per-module id). */
+ *  script, so each module injects its own style tag with a per-module id).
+ *  @type {import('esbuild').Plugin} */
 const cssModulesPlugin = {
   name: 'css-modules',
   setup(build) {
@@ -290,14 +311,20 @@ const cssModulesPlugin = {
         minify: true,
       })
       const names = Object.fromEntries(
-        Object.entries(classMap)
+        Object.entries(
+          /** @type {import('lightningcss').CSSModuleExports} */ (
+            /** @type {unknown} */ (classMap)
+          ),
+        )
           .sort(([a], [b]) => a.localeCompare(b, 'en'))
           .map(([original, info]) => [original, info.name]),
       )
       // Path-relative id: basename alone collides when two directories
       // ship the same module filename (e.g. `fields.module.css`).
       const id = `${PLUGIN_ID}/${relative(root, args.path).split('\\').join('/')}`
-      const style = code
+      // The native binding answers a Buffer; the declaration only promises the
+      // Uint8Array face, so the utf8 decode asserts the Buffer face it carries.
+      const style = /** @type {Buffer} */ (code)
         .toString('utf8')
         .replaceAll('\\', '\\\\')
         .replaceAll('`', '\\`')
@@ -323,7 +350,8 @@ const cssModulesPlugin = {
   },
 }
 
-/** Runs handoff verification on every successful build, including watch. */
+/** Runs handoff verification on every successful build, including watch.
+ *  @type {import('esbuild').Plugin} */
 const artifactVerifyPlugin = {
   name: 'client-artifact-verify',
   setup(build) {
@@ -346,7 +374,8 @@ const artifactVerifyPlugin = {
  * can drive the same authority rules against fixture graphs; `verify: false`
  * drops the artifact-verify plugin, whose default bundle path is the real
  * `lib/client.js` a fixture build must not be validated against.
- * @returns harness purity + client authority + CSS modules (+ artifact verify
+ * @param options {{ verify?: boolean }} drop the artifact-verify plugin when `verify` is false.
+ * @returns {import('esbuild').Plugin[]} harness purity + client authority + CSS modules (+ artifact verify
  * unless `verify: false`).
  */
 export function clientBuildPlugins({ verify = true } = {}) {
@@ -358,7 +387,10 @@ export function clientBuildPlugins({ verify = true } = {}) {
   ]
 }
 
-/** Metafile inputs are required for the local-source allowlist re-check. */
+/**
+ * Metafile inputs are required for the local-source allowlist re-check.
+ * @type {import('esbuild').BuildOptions}
+ */
 const options = {
   absWorkingDir: root,
   entryPoints: [join(root, 'src/client/index.ts')],
@@ -379,7 +411,7 @@ const options = {
   // sourcemap still names every frame in a stack trace.
   minify: true,
   sourcemap: true,
-  external: EXTERNALS,
+  external: /** @type {string[]} */ (EXTERNALS),
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     // The external snapshot store's dependencies (zustand/immer) probe the

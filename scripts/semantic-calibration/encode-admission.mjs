@@ -22,7 +22,9 @@ async function main() {
   )
   const model = SEMANTIC_MODELS.find((model) => model.key === args['--model'])
   invariant(model, 'Unknown model tier')
-  const request = await readJson(args['--request'])
+  const request = /** @type {import('./admission-data.mjs').AdmissionInputs} */ (
+    await readJson(/** @type {string} */ (args['--request']))
+  )
   const input = admissionInputsForModel(request, model)
   const controller = new AbortController()
   const abort = () => controller.abort(new Error('Manual model measurement cancelled'))
@@ -38,12 +40,12 @@ async function main() {
   try {
     embedder = await openWorkerEmbedder(
       model,
-      join(args['--dir'], model.physicalKey),
+      join(/** @type {string} */ (args['--dir']), model.physicalKey),
       undefined,
       controller.signal,
     )
     const vectors = new Map()
-    for (const side of ['query', 'document']) {
+    for (const side of /** @type {readonly ['query', 'document']} */ (['query', 'document'])) {
       const entries = input.entries.filter((entry) => entry.side === side)
       for (let offset = 0; offset < entries.length; offset += 8) {
         controller.signal.throwIfAborted()
@@ -82,7 +84,10 @@ async function main() {
       resourceUsage: process.resourceUsage(),
       entries: input.entries.map(({ key }) => ({ key, vector: vectors.get(key) })),
     }
-    await writeFile(args['--out'], `${JSON.stringify(output)}\n`, { flag: 'wx', mode: 0o600 })
+    await writeFile(/** @type {string} */ (args['--out']), `${JSON.stringify(output)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    })
     process.stderr.write(`${model.key}: saved ${output.entries.length} actual model vectors\n`)
   } finally {
     clearTimeout(timer)

@@ -5,8 +5,8 @@
  * generation this plugin was never built or tested against; the browser bundle
  * mirrors the pin's client dependencies verbatim, so the next minor is a
  * different client contract even when the host itself starts fine.
- * @param pin - the exact pin.
- * @returns the bound, or undefined when the pin is unreadable.
+ * @param {string} pin - the exact pin.
+ * @returns {string | undefined} the bound, or undefined when the pin is unreadable.
  */
 export function harnessUpperBoundOf(pin) {
   const match = /^(\d+)\.(\d+)\.\d+/.exec(pin)
