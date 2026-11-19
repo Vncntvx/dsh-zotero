@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
  * Each component disclosure's acknowledgement against real `localStorage`: the
- * dismissal survives a reload while the component stays on, clearing the store
- * re-opens the notice, turning the component off revokes the acknowledgement so
- * the next enable asks again, the two components keep separate keys, and a
- * storage that refuses reads, writes, or removal still honours the enable-period
- * contract for the rest of the session.
+ * dismissal survives a host restart while the component stays on, clearing the
+ * store re-opens the notice, turning the component off revokes the
+ * acknowledgement so the next enable asks again, the two components keep
+ * separate keys, and a storage that refuses reads, writes, or removal still
+ * honours the contract for the rest of the session.
  * @module tests/client/enable-notice-storage
  */
 
@@ -51,14 +51,15 @@ afterEach(() => {
 })
 
 describe('the egress acknowledgement', () => {
-  it('persists a dismissal across a reload while the component stays on', () => {
+  it('persists a dismissal across a host restart while the component stays on', () => {
     const first = noticeOf('enrichmentEnableNotice', ENRICHMENT_EGRESS_ACK_KEY)
     expect(first.open()).toBe(true)
     first.controller.dismiss()
     expect(first.open()).toBe(false)
-    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('enabled-test-epoch')
+    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('1')
     first.controller.dispose()
 
+    // A restarted host serves the same component; the browser's answer stands.
     const second = noticeOf('enrichmentEnableNotice', ENRICHMENT_EGRESS_ACK_KEY)
     expect(second.open()).toBe(false)
     second.controller.dispose()
@@ -67,7 +68,7 @@ describe('the egress acknowledgement', () => {
   it('revokes the acknowledgement when the component is turned off', () => {
     const notice = noticeOf('enrichmentEnableNotice', ENRICHMENT_EGRESS_ACK_KEY)
     notice.controller.dismiss()
-    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('enabled-test-epoch')
+    expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBe('1')
 
     notice.source.publish('unavailable')
     expect(notice.open()).toBe(false)
@@ -105,7 +106,7 @@ describe('the egress acknowledgement', () => {
     const scholarly = noticeOf('scholarlyEnableNotice', SCHOLARLY_RETRIEVAL_ACK_KEY)
     scholarly.controller.dismiss()
     scholarly.controller.dispose()
-    expect(localStorage.getItem(SCHOLARLY_RETRIEVAL_ACK_KEY)).toBe('enabled-test-epoch')
+    expect(localStorage.getItem(SCHOLARLY_RETRIEVAL_ACK_KEY)).toBe('1')
     expect(localStorage.getItem(ENRICHMENT_EGRESS_ACK_KEY)).toBeNull()
 
     // The enrichment component's disclosure is still owed in this browser.

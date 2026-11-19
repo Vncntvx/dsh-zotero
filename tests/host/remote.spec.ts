@@ -50,7 +50,6 @@ describe('the zotero status endpoint', () => {
     // the row the user just refreshed.
     expect(status).toEqual(
       statusView({
-        componentEpochs: {},
         endpoint: new URL(lane.mock.baseUrl).host,
         apiVersion: '3',
         schemaVersion: '37',

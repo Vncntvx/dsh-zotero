@@ -35,6 +35,8 @@ export function EnrichmentEnableNotice({
       open={open}
       title={t('enrichmentEnableNoticeTitle')}
       description={t('enrichmentEnableNoticeDescription')}
+      points={[t('enrichmentEnableNoticePointParse'), t('enrichmentEnableNoticePointLocal')]}
+      footnote={t('enableNoticeFootnote')}
       confirmLabel={t('enrichmentEnableNoticeConfirm')}
       onDismiss={dismiss}
     />

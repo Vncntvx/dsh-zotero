@@ -1,4 +1,3 @@
-import { componentEnablementsOf } from './component-enablement.js'
 /**
  * The dsh-zotero host Remote service (wire namespace `zotero`, cordis key
  * {@link ZOTERO_STATUS_SERVICE_KEY}; the `zotero` key is the research
@@ -248,10 +247,7 @@ export class ZoteroRuntime extends TypertRemoteService {
         diagnosis: ZOTERO_NOT_COMPOSED_MESSAGE,
       }
     }
-    return {
-      ...toStatusView(status, sourceProjection),
-      componentEpochs: componentEnablementsOf(this.ctx),
-    }
+    return toStatusView(status, sourceProjection)
   }
 
   /**

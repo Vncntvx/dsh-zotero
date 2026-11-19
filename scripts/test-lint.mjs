@@ -145,7 +145,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/host/http-client.spec.ts': 681,
   'tests/host/library-service.spec.ts': 411,
   'tests/host/lifecycle.spec.ts': 589,
-  'tests/host/remote.spec.ts': 631,
+  'tests/host/remote.spec.ts': 630,
   'tests/host/source-ledger.spec.ts': 546,
   'tests/host/write/write-http.spec.ts': 614,
   'tests/integration/zotero.integration.spec.ts': 706,

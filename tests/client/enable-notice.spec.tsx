@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 /**
  * The component enable disclosures: each component's namespace status says
- * whether it is served, and its notice is owed until this client acknowledges
- * the current enable — a deployment already enabled at boot included.
- * Dismissal covers that one enable: observing the component off revokes it, so
- * the next enable asks again, while a reload with the component still on stays
- * closed. One arbiter shows the two disclosures in registration order, so a
- * browser that owes both sees them one at a time. The rendered modals are
+ * whether it is served, and its notice is owed until this browser acknowledges
+ * the disclosure — a deployment already enabled at boot included.
+ * Dismissal covers this browser: observing the component off revokes it, so
+ * the next enable asks again, while a restart with the component still on
+ * stays closed. One arbiter shows the two disclosures in registration order,
+ * so a browser that owes both sees them one at a time. The rendered modals are
  * checked against the same controller state.
  * @module tests/client/enable-notice
  */
@@ -139,7 +139,7 @@ describe('EnableNoticeController', () => {
     }
   })
 
-  it('stays closed across a reload while the component stays on', () => {
+  it('stays closed when the host restarts while the component stays on', () => {
     const source = namespaceStatusSourceOf()
     const acknowledgement = acknowledgementOf()
     const arbiter = new EnableNoticeArbiter()
@@ -153,14 +153,14 @@ describe('EnableNoticeController', () => {
       first.controller.dispose()
     }
 
-    // The same client reloads with the component still enabled: the persisted
+    // The client mounts again with the component still enabled: the persisted
     // acknowledgement is read, so the disclosure is not owed again.
-    const reloaded = controllerOf('enrichmentEnableNotice', source, arbiter, acknowledgement)
+    const restarted = controllerOf('enrichmentEnableNotice', source, arbiter, acknowledgement)
     try {
       source.publish('ready')
-      expect(reloaded.open()).toBe(false)
+      expect(restarted.open()).toBe(false)
     } finally {
-      reloaded.controller.dispose()
+      restarted.controller.dispose()
     }
   })
 
@@ -253,6 +253,8 @@ describe('EnrichmentEnableNotice', () => {
       })
       expect(screen.getByRole('dialog', { name: zh.enrichmentEnableNoticeTitle })).toBeDefined()
       expect(screen.getByText(zh.enrichmentEnableNoticeDescription)).toBeDefined()
+      expect(screen.getByText(zh.enrichmentEnableNoticePointParse)).toBeDefined()
+      expect(screen.getByText(zh.enableNoticeFootnote)).toBeDefined()
       fireEvent.click(screen.getByRole('button', { name: zh.enrichmentEnableNoticeConfirm }))
       expect(screen.queryByRole('dialog')).toBeNull()
     } finally {
@@ -274,6 +276,8 @@ describe('ScholarlyEnableNotice', () => {
       })
       expect(screen.getByRole('dialog', { name: zh.scholarlyEnableNoticeTitle })).toBeDefined()
       expect(screen.getByText(zh.scholarlyEnableNoticeDescription)).toBeDefined()
+      expect(screen.getByText(zh.scholarlyEnableNoticePointPdf)).toBeDefined()
+      expect(screen.getByText(zh.enableNoticeFootnote)).toBeDefined()
       fireEvent.click(screen.getByRole('button', { name: zh.scholarlyEnableNoticeConfirm }))
       expect(screen.queryByRole('dialog')).toBeNull()
     } finally {

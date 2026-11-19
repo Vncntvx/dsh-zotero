@@ -128,8 +128,6 @@ export const ZOTERO_SOURCE_PROJECTION_FAILED = 'ZOTERO_SOURCE_PROJECTION_FAILED'
 /** The zotero connectivity view the web tab renders (optional facts omitted when absent). */
 export interface ZoteroStatusView {
   readonly providerId: string
-  /** Fresh per-application mount identities for component egress disclosures. */
-  readonly componentEpochs?: { readonly scholarly?: string; readonly enrichment?: string }
   /** Composition state of the full-session literature-trail projection. */
   readonly sourceProjection:
     | { readonly state: 'not-composed' }

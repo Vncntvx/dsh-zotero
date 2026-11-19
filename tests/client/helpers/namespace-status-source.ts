@@ -12,7 +12,7 @@ import type { NamespaceStatus } from '../../../src/client/helpers/namespace-stat
 
 /** The source handle a notice controller subscribes to. */
 export interface NamespaceStatusSourceHandle {
-  getSnapshot(): { readonly namespaceStatus: NamespaceStatus; readonly enableEpoch?: string }
+  getSnapshot(): { readonly namespaceStatus: NamespaceStatus }
   subscribe(listener: () => void): () => void
   publish(status: NamespaceStatus): void
 }
@@ -23,18 +23,13 @@ export interface NamespaceStatusSourceHandle {
  */
 export function namespaceStatusSourceOf(
   initial: NamespaceStatus = 'loading',
-  enableEpoch = 'enabled-test-epoch',
 ): NamespaceStatusSourceHandle {
-  const store = createSnapshotStore<{
-    readonly namespaceStatus: NamespaceStatus
-    readonly enableEpoch: string
-  }>({
+  const store = createSnapshotStore<{ readonly namespaceStatus: NamespaceStatus }>({
     namespaceStatus: initial,
-    enableEpoch,
   })
   return {
     getSnapshot: () => store.getSnapshot(),
     subscribe: (listener) => store.subscribe(listener),
-    publish: (status) => store.set({ namespaceStatus: status, enableEpoch }),
+    publish: (status) => store.set({ namespaceStatus: status }),
   }
 }

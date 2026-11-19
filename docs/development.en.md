@@ -345,9 +345,10 @@ The full Slot runtime now assembles through explicitly published production-sour
 
 ## CI Workflows
 
-Four workflows live under `.github/workflows/`:
+Five workflows live under `.github/workflows/`:
 
 - `release-branch.yml`: creates one artifact in a read-only quality job when a `v*` tag is pushed, then installs it with pnpm 11 in fresh Linux, macOS and Windows profiles and imports all four host entries. Linux also runs browser Web smoke; failures retain the profile and installation logs. Once all three platforms pass, `npm-release` submits the tarball to npm through OIDC, and `publish` verifies the artifact and updates the prebuilt `release` branch;
+- `prebuilt.yml`: on a `main` push or a manual dispatch, builds and verifies the prebuilt package and updates the `release` branch; `v*` tag pushes do not trigger it. It shares the `release-branch` concurrency group with `release-branch.yml`, so the two workflows never move that branch at the same time;
 - `verify-npm-release.yml`: starts after a successful release run and uses the `npm-publication` environment to delay execution. It reuses the original run artifact, verifies the public tarball, and creates the GitHub Release;
 - `upstream-health.yml`: runs `npm run release:check` every Monday at 02:00 UTC and compares the pinned version against the upstream harness mainline;
 - `scanner.yml`: runs the HOL Guard scanner on pull requests and pushes to `main`, failing when the normalized score drops below 75.

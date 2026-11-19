@@ -110,18 +110,6 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Verification**: `tokens:check` (inside `release:check`) and `style-tokens.spec.ts`.
 - **Follow-up**: replace the source table with the public manifest and keep the exact pin and deletion checks.
 
-## DN-22: Disclosure acknowledgement is bound to the component mount
-
-- **Upstream**: Cordis component lifecycle and `ctx.root` (marked experimental).
-- **Upstream feature**: each component's disclosure is bound to the current mount.
-- **Upstream defect**: there is no stable mount identifier; `ctx.root` is the only isolation handle.
-- **Local patch**: each scholarly/enrichment service construction generates a random UUID and isolates it with a `ctx.root` WeakMap; the status endpoint exposes only the current mount's identifier; the browser stores it as the acknowledgement value.
-- **Why this is a compromise**: it relies on an experimental property; cleanup from an older mount must not revoke a successor mount.
-- **Upstream expectation**: a stable component mount identifier.
-- **Review trigger**: Cordis root identity, component remount, status endpoint, or disclosure text.
-- **Verification**: `component-enablement`, `enable-notice-epochs`, `enable-notice-storage`, `enable-notice`, `status-probe`, and the client apply tests.
-- **Follow-up**: migrate to the stable id and delete the WeakMap.
-
 ## DN-24: Upstream mirrors, static lists, and search folding
 
 - **Upstream**: Cordis enums, the Typert generator, tool execution, and Zotero search internals.

@@ -1,7 +1,12 @@
+/* The host modal's own rhythm: 22px top, 24px sides, 12px title-to-body,
+   20px body-to-footer, and the dialog's 24px bottom padding supplies the
+   resting space under the action row. The dialog is headless, so only the
+   internal spacing and type scale are reproduced here. */
 .content {
   display: grid;
-  gap: 16px;
-  padding: 24px;
+  gap: 12px;
+  padding: 22px 24px 0;
+  color: var(--dsw-alias-label-primary);
 }
 
 .title {
@@ -9,13 +14,35 @@
   font: var(--dsw-font-base-strong-16);
 }
 
+.body {
+  display: grid;
+  gap: 8px;
+}
+
 .description {
   margin: 0;
-  white-space: pre-line;
+  font: var(--dsw-font-s-14);
   overflow-wrap: anywhere;
+}
+
+.points {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-inline-start: 20px;
+  font: var(--dsw-font-s-14);
+  overflow-wrap: anywhere;
+}
+
+.footnote {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }

@@ -19,6 +19,10 @@ function readReleaseWorkflow() {
   )
 }
 
+function readPrebuiltWorkflow() {
+  return readFileSync(new URL('../../../.github/workflows/prebuilt.yml', import.meta.url), 'utf8')
+}
+
 function installMatrixSteps() {
   const workflow = load(readReleaseWorkflow()) as {
     jobs: Record<
@@ -47,6 +51,35 @@ it('rejects tracked worktree changes before a release ref can move', () => {
 
 it('starts the release workflow only on version tag pushes', () => {
   expect(load(readReleaseWorkflow())).toHaveProperty('on', { push: { tags: ['v*'] } })
+})
+
+it('builds the prebuilt release branch on main pushes and manual dispatches only', () => {
+  expect(load(readPrebuiltWorkflow())).toHaveProperty('on', {
+    push: { branches: ['main'] },
+    workflow_dispatch: null,
+  })
+})
+
+it('publishes the verified prebuilt artifact with the release push token', () => {
+  const workflow = load(readPrebuiltWorkflow()) as {
+    jobs: Record<
+      string,
+      {
+        permissions?: Record<string, string>
+        steps: { run?: string; env?: Record<string, string> }[]
+      }
+    >
+  }
+  const job = workflow.jobs['prebuilt']!
+  expect(job.permissions).toEqual({ contents: 'write' })
+  const runs = job.steps.map((step) => step.run ?? '')
+  expect(runs).toContain('npm run build')
+  expect(runs.some((run) => run.includes('scripts/release-artifact.mjs --out'))).toBe(true)
+  const publish = job.steps.find((step) =>
+    step.run?.includes('scripts/publish-release-branch.mjs --push'),
+  )
+  expect(publish?.run).toContain('--artifact "$RUNNER_TEMP/release-artifact"')
+  expect(publish?.env).toEqual({ RELEASE_PUSH_TOKEN: '${{ github.token }}' })
 })
 
 it('keeps publishing behind both mandatory release jobs', () => {

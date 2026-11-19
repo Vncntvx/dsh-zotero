@@ -73,7 +73,6 @@ import {
   ENRICHMENT_EGRESS_ACK_KEY,
   SCHOLARLY_RETRIEVAL_ACK_KEY,
   clientAcknowledgement,
-  withEnableEpoch,
 } from './enable-notice.ts'
 import { SourcesTab, type SourcesTabFace } from './components/SourcesTab.tsx'
 import { ZOTERO_REMOTE } from './remote.ts'
@@ -325,33 +324,22 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   // Enabling dsh-zotero/enrichment accepts MinerU document egress, and
   // enabling dsh-zotero/scholarly authorizes external scholarly retrieval, so
   // the client owes the user a disclosure whenever a component is served and
-  // this browser has not acknowledged the current enable — a deployment
-  // already enabled at boot included. The acknowledgement covers one enable
-  // period and is revoked when the component is observed off, so turning it off
-  // and on again asks once more. One arbiter shows the two disclosures in
-  // registration order instead of stacking two modals. The overlays live on
-  // the shell rather than the settings page, so a disclosure can appear
-  // wherever the switch was flipped.
+  // this browser has not acknowledged the disclosure — a deployment already
+  // enabled at boot included. The acknowledgement is per browser, so a host
+  // restart does not ask again; observing the component off revokes it, so
+  // turning it off and on again asks once more. One arbiter shows the two
+  // disclosures in registration order instead of stacking two modals. The
+  // overlays live on the shell rather than the settings page, so a disclosure
+  // can appear wherever the switch was flipped.
   const noticeArbiter = new EnableNoticeArbiter()
-  const epochSource = (
-    component: 'enrichment' | 'scholarly',
-    source: import('./enable-notice.ts').NamespaceStatusSource,
-  ) =>
-    withEnableEpoch(source, async () => {
-      const result = await probe()
-      if (!result.ok) throw result.error
-      return result.value.componentEpochs?.[component]
-    })
-  const enrichmentEpoch = epochSource('enrichment', enrichmentCard.inject().hooks.enrichmentCard)
-  const scholarlyEpoch = epochSource('scholarly', scholarlyCard.inject().hooks.scholarlyCard)
   const enrichmentNotice = new EnableNoticeController(
-    enrichmentEpoch,
+    enrichmentCard.inject().hooks.enrichmentCard,
     'enrichmentEnableNotice',
     clientAcknowledgement(ENRICHMENT_EGRESS_ACK_KEY),
     noticeArbiter,
   )
   const scholarlyNotice = new EnableNoticeController(
-    scholarlyEpoch,
+    scholarlyCard.inject().hooks.scholarlyCard,
     'scholarlyEnableNotice',
     clientAcknowledgement(SCHOLARLY_RETRIEVAL_ACK_KEY),
     noticeArbiter,
@@ -360,8 +348,6 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     () => () => {
       enrichmentNotice.dispose()
       scholarlyNotice.dispose()
-      enrichmentEpoch.dispose()
-      scholarlyEpoch.dispose()
     },
     'dsh-zotero: enable notice state',
   )

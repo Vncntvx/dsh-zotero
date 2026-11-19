@@ -88,7 +88,7 @@ Every write passes a capability check, session approval, and a plan review card.
 
 ## Scholarly Retrieval (Optional Component)
 
-Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address). While the component is enabled, the client displays an outbound notice listing the destination hosts; a new mount discloses again.
+Scholarly retrieval is provided by the `dsh-zotero/scholarly` component, shipped with the package and off by default. Enabling it registers seven external tools: index searches query allowlisted academic platforms, and open-access PDF retrieval accesses public HTTP(S) hosts (with support for local proxy fake-IP mappings, while plain HTTP requires a verified public address). While the component is enabled, the client displays an outbound notice listing the destination hosts; it discloses again after observing the component off and back on.
 
 - Search covers arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP. Results are fused by relevance when they share a DOI, PMID, PMCID, or arXiv ID, or when their title tokens, first author, and publication year match. Preprint and published variants retain their own metadata, and each result is annotated with its local-library status.
 - It can read open-access full text by DOI, arXiv ID, PMID, or PMCID and locate passages, and it can follow citation networks.
@@ -99,7 +99,7 @@ External retrieval runs through agent tool calls. The literature panel supports 
 
 ## Document Enrichment (Optional Component)
 
-Document parsing is provided by the `dsh-zotero/enrichment` component, shipped with the package and off by default. The component supports user-submitted PDF parsing, read-only reuse of existing Markdown artifacts, and local semantic ranking with model management. Users can submit a specific Zotero PDF attachment or public PDF URL from the literature panel; the client displays an egress disclosure while the component is enabled; a new mount discloses again.
+Document parsing is provided by the `dsh-zotero/enrichment` component, shipped with the package and off by default. The component supports user-submitted PDF parsing, read-only reuse of existing Markdown artifacts, and local semantic ranking with model management. Users can submit a specific Zotero PDF attachment or public PDF URL from the literature panel; the client displays an egress disclosure while the component is enabled; it discloses again after observing the component off and back on.
 
 - `free` uses the lightweight API (≤10 MB, ≤20 pages, token-free); `pro` uses the precise API (≤200 MB, ≤200 pages, requires a token). Mode selection and token configuration are independent. Failed parses return an explicit error.
 - `zotero_retrieve` and `scholarly_read` query valid Markdown through the core's read-only `FulltextEnhancer.lookup` (by source) and `lookupArtifact` (by artifact id) and prioritize it; cache misses or modified source files fall back to Zotero `/fulltext` and scholarly local extraction, respectively.

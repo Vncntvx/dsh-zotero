@@ -292,12 +292,19 @@ export const en = {
   enrichmentTokenVisitMineru: 'Open mineru.net ↗',
   enrichmentEnableNoticeTitle: 'Document parsing is enabled',
   enrichmentEnableNoticeDescription:
-    'Submitting a specific Zotero PDF attachment or public PDF URL sends it to MinerU (mineru.net) for parsing, and saves the Markdown result locally. The notice reappears when the component is enabled again.',
+    'Submitting a specific Zotero PDF attachment or public PDF URL sends it off this machine.',
+  enrichmentEnableNoticePointParse: 'The file goes to MinerU (mineru.net) for parsing.',
+  enrichmentEnableNoticePointLocal: 'The Markdown result is saved locally.',
   enrichmentEnableNoticeConfirm: 'Got it',
   scholarlyEnableNoticeTitle: 'External scholarly retrieval is enabled',
   scholarlyEnableNoticeDescription:
-    'With dsh-zotero/scholarly enabled, the agent can search external scholarly sources from a conversation. Queries, DOIs, and identifiers go to the allowlisted indexes (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, and Unpaywall). Open-access full-text reading may download a PDF from any public HTTP(S) host. The notice reappears when the component is enabled again.',
+    'From a conversation, the agent can search scholarly sources. The requests below leave this machine.',
+  scholarlyEnableNoticePointIndexes:
+    'Queries, DOIs, and identifiers go to the allowlisted indexes: arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed/Europe PMC, DBLP, doi.org, and Unpaywall.',
+  scholarlyEnableNoticePointPdf:
+    'Open-access full-text reading may download a PDF from any public HTTP(S) host.',
   scholarlyEnableNoticeConfirm: 'Got it',
+  enableNoticeFootnote: 'The notice returns after the component is turned off and on again.',
   groupEnrichmentOutput: 'Output & data notice',
   groupEnrichmentOutputDesc:
     'Submitted documents are sent to MinerU for parsing. Markdown artifacts are saved in the directory below.',
@@ -1268,12 +1275,17 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   enrichmentTokenVisitMineru: '打开 mineru.net ↗',
   enrichmentEnableNoticeTitle: '文档解析组件已启用',
   enrichmentEnableNoticeDescription:
-    '提交具体的 Zotero PDF 附件或公开 PDF URL 后，文档会发往 MinerU（mineru.net）解析，Markdown 结果保存在本机。组件再次启用时会重新显示此提醒。',
+    '提交具体的 Zotero PDF 附件或公开 PDF URL 时，文档会离开本机。',
+  enrichmentEnableNoticePointParse: '文件发往 MinerU（mineru.net）解析。',
+  enrichmentEnableNoticePointLocal: 'Markdown 结果保存在本机。',
   enrichmentEnableNoticeConfirm: '我知道了',
   scholarlyEnableNoticeTitle: '外部学术检索组件已启用',
-  scholarlyEnableNoticeDescription:
-    '启用 dsh-zotero/scholarly 后，Agent 可在对话中检索外部学术资料。检索词、DOI 和标识符会发往白名单内的学术索引（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org 和 Unpaywall）。开放获取全文读取可能从任意公网 HTTP(S) 主机下载 PDF。组件再次启用时会重新显示此提醒。',
+  scholarlyEnableNoticeDescription: 'Agent 可在对话中检索外部学术资料，以下请求会离开本机。',
+  scholarlyEnableNoticePointIndexes:
+    '检索词、DOI 和标识符会发往白名单索引：arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed/Europe PMC、DBLP、doi.org 和 Unpaywall。',
+  scholarlyEnableNoticePointPdf: '读取开放获取全文时，可能从任意公网 HTTP(S) 主机下载 PDF。',
   scholarlyEnableNoticeConfirm: '我知道了',
+  enableNoticeFootnote: '组件关闭后再次启用时会重新显示此提醒。',
   groupEnrichmentOutput: '输出与数据说明',
   groupEnrichmentOutputDesc: '提交的文档会发送至 MinerU 解析，Markdown 产物保存在下方目录。',
   enrichmentOutputDir: '解析文件目录',

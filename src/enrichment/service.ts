@@ -1,4 +1,3 @@
-import { registerComponentEnablement } from '../component-enablement.js'
 import type { DisplayArtifactLookup } from './artifact-reads.js'
 import {
   discardParsedDocument,
@@ -388,7 +387,6 @@ export class EnrichmentService extends TypertRemoteService {
     deps: EnrichmentServiceDeps = {},
   ) {
     super(ctx, ZOTERO_ENRICHMENT_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
-    registerComponentEnablement(ctx, 'enrichment')
     this.downloads = deps.downloads ?? new ModelDownloadManager()
     this.loaderFactory = deps.loader ?? (() => new SemanticEmbedderLoader())
     this.client =

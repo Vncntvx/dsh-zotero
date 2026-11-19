@@ -139,7 +139,7 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 表面包括文献轨迹（`conversation.view`，id `zotero`，order 30）、文献面板（`sidebarRightTabs` + `sidebar.right.pane.tab`）、工具卡片（`tool.call.toolview`）、设置与插件管理（`plugins.bundle.config` 等）、右键菜单（`contextMenus`）、文档预览动作（`sidebar.right.tab.document.actions` / `.unpreviewable`）。面板的数据面、访问门禁、会话绑定、导航状态与写入口以 `src/client/**` 的实现为准；布局档位在 `library.module.css`，用户可见行为在 `features.md`。
 
-披露：组件被 serve 且本客户端未确认本次挂载时显示；关闭后重新 serve 重新披露；确认写入本地存储，存储失败时由会话状态承载接受与撤销。scholarly 与 enrichment 各一条披露，由共享仲裁器按注册顺序显示，不叠加模态框。
+披露：组件被 serve 且本浏览器尚未确认该披露时显示；确认按浏览器保存，客户端观察到组件关闭即撤销，之后重新 serve 再披露；存储失败时由会话状态承载接受与撤销。scholarly 与 enrichment 各一条披露，由共享仲裁器按注册顺序显示，不叠加模态框。
 
 已解析文档管理页按 `listParsedDocuments` 窗口加载；行按 artifactId 打开、重新解析或删除，删除先确认并刷新已打开解析页。解析结果页的地址只包含会话与附件 ref（URL 来源用 artifactId），宿主 `useResource` 准备完整正文与图片后一次发布；刷新期间保留旧文档，成功后整体换代。解析回执触发当前会话已打开页面的更新：客户端用免租约 `meta` 确认来源的当前索引，附件页保留地址并刷新，产物页通过 `replaceTab` 保留原位置，切换清理旧选区和 blob URL。
 

@@ -2,20 +2,18 @@
  * Disclosure state for a component's external-egress authorization.
  *
  * Enabling `dsh-zotero/enrichment` accepts MinerU document egress, and enabling
- * `dsh-zotero/scholarly` authorizes external scholarly retrieval, so the client
- * owes the user a disclosure of what each switch enables. A notice is owed
- * whenever its component is served and this client has not acknowledged the
- * current enable — including a deployment already enabled at boot, and a
- * switch flipped while the settings form was still loading.
+ * `dsh-zotero/scholarly` authorizes external scholarly retrieval. The client
+ * discloses each switch's scope whenever its component is served and this
+ * browser has not acknowledged the disclosure — including at boot and when a
+ * switch is flipped while the settings form is still loading.
  *
- * The acknowledgement belongs to one enable period. Turning the component off
- * revokes it, so every later enable asks once more; reloading while the
- * component stays on does not. A storage that refuses a write or a removal
- * cannot weaken that contract: an in-memory state carries the acceptance and
- * the revocation for the rest of the session, while `localStorage` only makes
- * an accepted disclosure survive a reload. Only one disclosure is visible at a
- * time; `EnableNoticeArbiter` admits them in registration order, so a browser
- * that owes two sees them one after the other.
+ * The acknowledgement is per browser and per disclosure version, so restarting
+ * the host while the component stays on does not ask again. Observing the
+ * component off through the namespace status revokes it, so a later enable asks
+ * once more. Session state carries the acknowledgement and its revocation when
+ * `localStorage` is unavailable; `localStorage` preserves an acknowledgement
+ * across a restart. `EnableNoticeArbiter` shows one disclosure at a time in
+ * registration order.
  * @module dsh-zotero/client/enable-notice
  */
 
@@ -33,24 +31,24 @@ export interface EnableNoticeState {
 
 /** The status subset the controller reads from its component's card store. */
 export interface NamespaceStatusSource {
-  getSnapshot(): { readonly namespaceStatus: NamespaceStatus; readonly enableEpoch?: string }
+  getSnapshot(): { readonly namespaceStatus: NamespaceStatus }
   subscribe(listener: () => void): () => void
 }
 
-/** Where one client keeps its acknowledgement of one enable period. */
+/** Where one browser keeps its acknowledgement of one disclosure. */
 export interface EnableNoticeAcknowledgement {
-  /** Whether this client already acknowledged the current enable. */
-  read(epoch?: string): boolean
-  /** Persist the acknowledgement for the current enable. */
-  remember(epoch?: string): void
-  /** Drop the acknowledgement: a new enable period owes the disclosure again. */
+  /** Whether this browser already acknowledged the disclosure. */
+  read(): boolean
+  /** Persist the acknowledgement for this browser. */
+  remember(): void
+  /** Drop the acknowledgement: a later enable owes the disclosure again. */
   forget(): void
 }
 
 /**
- * The enrichment disclosure's acknowledgement key. The trailing version moves
- * with the disclosure's wording: a user who acknowledged an older text is owed
- * the new one.
+ * The enrichment disclosure's acknowledgement key. The trailing version tracks
+ * the disclosure's wording; revising the text advances the key so the new
+ * disclosure is owed.
  */
 export const ENRICHMENT_EGRESS_ACK_KEY = 'dsh-zotero:enrichment-egress-ack:2'
 
@@ -60,91 +58,39 @@ export const SCHOLARLY_RETRIEVAL_ACK_KEY = 'dsh-zotero:scholarly-retrieval-ack:1
 /**
  * The acknowledgement as this browser keeps it.
  *
- * All three operations keep a session-level answer first, so a profile whose
- * `localStorage` refuses writes or removals still honours the enable-period
- * contract: acknowledging closes the disclosure for this enable, and observing
- * the component off revokes it even when the stored key cannot be deleted.
- * Storage only bridges a reload while the component stays on.
+ * Session state takes precedence over `localStorage`, so a profile whose
+ * `localStorage` refuses writes or removals still acknowledges and revokes the
+ * disclosure for the rest of the session. `localStorage` preserves an
+ * acknowledgement across a restart while the component stays on.
  * @param key - the disclosure's acknowledgement key.
  * @returns the acknowledgement port over this client's storage.
  */
 export function clientAcknowledgement(key: string): EnableNoticeAcknowledgement {
-  let session: { epoch?: string; acknowledged: boolean } | undefined
+  let session: boolean | undefined
   return {
-    read: (epoch) => {
-      if (session?.epoch === epoch && session !== undefined) return session.acknowledged
-      if (epoch === undefined) return false
+    read: () => {
+      if (session !== undefined) return session
       try {
-        return localStorage.getItem(key) === epoch
+        return localStorage.getItem(key) === '1'
       } catch {
         return false
       }
     },
-    remember: (epoch) => {
-      session = { epoch, acknowledged: true }
-      if (epoch === undefined) return
+    remember: () => {
+      session = true
       try {
-        localStorage.setItem(key, epoch)
+        localStorage.setItem(key, '1')
       } catch {
-        // The session state above still closes the disclosure for this enable.
+        // Session state closes the disclosure for this session.
       }
     },
     forget: () => {
-      session = { epoch: session?.epoch, acknowledged: false }
+      session = false
       try {
         localStorage.removeItem(key)
       } catch {
-        // The session state above still revokes it, so a later enable discloses.
+        // Session state revokes it, so a later enable discloses.
       }
-    },
-  }
-}
-
-/** Resolve a fresh host mount identity once per served period; failures still disclose. */
-export function withEnableEpoch(
-  source: NamespaceStatusSource,
-  load: () => Promise<string | undefined>,
-): NamespaceStatusSource & { dispose(): void } {
-  const store = createSnapshotStore<ReturnType<NamespaceStatusSource['getSnapshot']>>({
-    namespaceStatus: 'loading',
-  })
-  let generation = 0,
-    previous: NamespaceStatus | undefined,
-    disposed = false
-  const observe = () => {
-    const status = source.getSnapshot().namespaceStatus
-    if (disposed || status === previous) return
-    previous = status
-    const ticket = ++generation
-    if (status !== 'ready') {
-      store.set({ namespaceStatus: status })
-      return
-    }
-    store.set({ namespaceStatus: 'loading' })
-    void Promise.resolve()
-      .then(load)
-      .then(
-        (epoch) => {
-          if (disposed || generation !== ticket) return
-          store.set({
-            namespaceStatus: 'ready',
-            ...(epoch === undefined ? {} : { enableEpoch: epoch }),
-          })
-        },
-        () => {
-          if (!disposed && generation === ticket) store.set({ namespaceStatus: 'ready' })
-        },
-      )
-  }
-  const unsubscribe = source.subscribe(observe)
-  observe()
-  return {
-    getSnapshot: store.getSnapshot,
-    subscribe: store.subscribe,
-    dispose: () => {
-      disposed = true
-      generation++
-      unsubscribe()
     },
   }
 }
@@ -236,21 +182,21 @@ export class EnableNoticeController<Hook extends EnableNoticeHookName> {
   }
 
   /**
-   * The notice is owed exactly while the component is served and this client
-   * has not acknowledged this enable. `loading` says nothing yet, so the state
-   * it was in stays; any other status decides. Observing the component off ends
-   * the enable period, so its acknowledgement is dropped and the next enable
-   * owes the disclosure again.
+   * The notice is owed exactly while the component is served and this browser
+   * has not acknowledged the disclosure. `loading` says nothing yet, so the
+   * state it was in stays; any other status decides. Observing the component
+   * off ends the authorization, so its acknowledgement is dropped and the next
+   * enable owes the disclosure again.
    */
   private observe(): void {
     if (this.disposed) return
-    const { namespaceStatus: status, enableEpoch } = this.source.getSnapshot()
+    const status = this.source.getSnapshot().namespaceStatus
     if (status === 'loading') return
     if (status !== this.lastStatus) {
       if (status !== 'ready') this.acknowledgement.forget()
       this.lastStatus = status
     }
-    this.owed = status === 'ready' && !this.acknowledgement.read(enableEpoch)
+    this.owed = status === 'ready' && !this.acknowledgement.read()
     this.arbiter.refresh()
   }
 
@@ -261,10 +207,10 @@ export class EnableNoticeController<Hook extends EnableNoticeHookName> {
     this.store.set({ open: visible })
   }
 
-  /** Clear this enable's debt; the arbiter refreshes visibility afterwards. */
+  /** Clear the disclosure debt; the arbiter refreshes visibility afterwards. */
   private accept(): void {
     if (this.disposed || !this.owed) return
-    this.acknowledgement.remember(this.source.getSnapshot().enableEpoch)
+    this.acknowledgement.remember()
     this.owed = false
   }
 

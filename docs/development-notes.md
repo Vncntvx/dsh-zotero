@@ -110,18 +110,6 @@
 - **验证**：`tokens:check`（在 `release:check` 中）、`style-tokens.spec.ts`。
 - **后续处理**：用公开清单替换来源表，保留精确 pin 与删除检查。
 
-## DN-22：披露确认绑定组件挂载周期
-
-- **上游**：Cordis 组件生命周期与 `ctx.root`（标记为 experimental）。
-- **上游特性**：每个组件的披露绑定当前挂载。
-- **上游缺陷**：没有稳定的挂载标识；`ctx.root` 是唯一可用的隔离句柄。
-- **本地补丁**：每次 scholarly/enrichment 服务构造生成随机 UUID，用 `ctx.root` WeakMap 隔离；状态端点只公开当前有效挂载的标识；浏览器保存该标识作为确认值。
-- **为什么是妥协**：依赖 experimental 属性；旧挂载清理不能撤销后继挂载。
-- **上游期望**：稳定的组件挂载标识。
-- **复核触发**：Cordis 根上下文、组件重挂载、状态端点、披露文字。
-- **验证**：`component-enablement`、`enable-notice-epochs`、`enable-notice-storage`、`enable-notice`、`status-probe`、客户端 apply。
-- **后续处理**：迁移到稳定 id，删除 WeakMap。
-
 ## DN-24：上游镜像、静态清单与搜索折叠复验
 
 - **上游**：Cordis 枚举、Typert 生成器、工具执行、Zotero 搜索内部。

@@ -345,9 +345,10 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ## CI 工作流
 
-`.github/workflows/` 下有四个工作流：
+`.github/workflows/` 下有五个工作流：
 
 - `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新预构建的 `release` 分支；
+- `prebuilt.yml`：`main` 推送或手动触发时，构建并校验预编译产物、更新 `release` 分支；`v*` 标签推送不触发。它与 `release-branch.yml` 共用 `release-branch` 并发组，两者不会同时移动该分支；
 - `verify-npm-release.yml`：发布工作流成功完成后启动，由 `npm-publication` 环境延迟运行。它复用原运行的产物，核验公开 tarball 后创建 GitHub Release；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
 - `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。

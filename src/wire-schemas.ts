@@ -205,10 +205,6 @@ export const zoteroStatusSchema = lazySchema(() =>
   z
     .object({
       providerId: z.string(),
-      componentEpochs: z
-        .object({ scholarly: z.uuid().optional(), enrichment: z.uuid().optional() })
-        .strict()
-        .optional(),
       sourceProjection: z.discriminatedUnion('state', [
         z.object({ state: z.literal('not-composed') }).strict(),
         z.object({ state: z.literal('pending') }).strict(),

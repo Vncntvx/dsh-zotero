@@ -36,6 +36,8 @@ export function ScholarlyEnableNotice({
       open={open}
       title={t('scholarlyEnableNoticeTitle')}
       description={t('scholarlyEnableNoticeDescription')}
+      points={[t('scholarlyEnableNoticePointIndexes'), t('scholarlyEnableNoticePointPdf')]}
+      footnote={t('enableNoticeFootnote')}
       confirmLabel={t('scholarlyEnableNoticeConfirm')}
       onDismiss={dismiss}
     />
