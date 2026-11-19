@@ -456,6 +456,6 @@ it('keeps a large navigation dataset virtualized without truncating its total si
   expect(screen.getByRole('treeitem', { name: 'Collection 0' })).toBeTruthy()
   expect(screen.queryByRole('treeitem', { name: 'Collection 9999' })).toBeNull()
   expect(screen.getByRole('tree', { name: zh.libraryCollections }).getAttribute('style')).toContain(
-    `height: ${largeRoots.length * 32}px`,
+    `height: ${largeRoots.length * 34}px`,
   )
 })

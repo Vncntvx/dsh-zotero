@@ -18,8 +18,7 @@ import {
   type ListResult,
 } from './support/parsed-manager-world.tsx'
 
-const selectRow = (title: string) =>
-  screen.getByRole('checkbox', { name: en.parsedManagerSelectRow.replace('{title}', title) })
+const selectRow = (title: string) => screen.getByRole('checkbox', { name: title })
 
 afterEach(() => {
   cleanup()

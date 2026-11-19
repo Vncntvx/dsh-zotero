@@ -380,9 +380,7 @@ describe('the inspector chat actions ride the session input face', () => {
   it('asks in chat by inserting citation quote without submitting', async () => {
     const { inputActions } = mountPanel()
     const row = await screen.findByText('FlashAttention-2')
-    act(() => {
-      row.click()
-    })
+    act(() => row.click())
     const ask = await screen.findByRole('button', { name: zh.libraryAskInChat })
     act(() => {
       ask.click()

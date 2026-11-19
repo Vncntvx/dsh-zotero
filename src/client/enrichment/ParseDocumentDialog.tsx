@@ -21,6 +21,7 @@ import {
 } from './parse-controller.ts'
 import { type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
 import css from './parse.module.css'
+import noticeCss from '../components/notice.module.css'
 
 export interface ParseDocumentDialogProps {
   readonly open: boolean
@@ -166,7 +167,11 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
         </div>
       }
     >
-      {props.deploymentError && <p role="alert">{props.deploymentError}</p>}
+      {props.deploymentError && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {props.deploymentError}
+        </p>
+      )}
       <form
         id={formId}
         className={css.surface}
@@ -215,13 +220,17 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
               </p>
             )}
             <GateNotice state={state} t={t} />
-            {state.checking && <p role="status">{t('parseChecking')}</p>}
+            {state.checking && (
+              <p role="status" className={`${noticeCss.notice} ${noticeCss.noticeStatus}`}>
+                {t('parseChecking')}
+              </p>
+            )}
             {!completed && !failed && !cancelled && (
               <p className={css.secondary}>{t('parseCloseHint')}</p>
             )}
           </div>
           {state.failure && (
-            <p role="alert" className={css.error}>
+            <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError} ${css.error}`}>
               <code>{documentParseText(state.failure.code)}</code>{' '}
               {documentParseText(state.failure.message)}
             </p>
@@ -230,7 +239,14 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
           {state.artifact?.kind === 'ready' && <Artifact artifact={state.artifact} t={t} />}
           {state.operation && (
             <section className={css.result} aria-live="polite">
-              <p role={failed ? 'alert' : 'status'} className={failed ? css.error : undefined}>
+              <p
+                role={failed ? 'alert' : 'status'}
+                className={
+                  failed
+                    ? `${noticeCss.notice} ${noticeCss.noticeError} ${css.error}`
+                    : `${noticeCss.notice} ${noticeCss.noticeStatus}`
+                }
+              >
                 {cancelled ? (
                   t('parseKilled')
                 ) : failed ? (
@@ -283,8 +299,16 @@ function GateNotice({ state, t }: { state: DocumentParseState; t: ParseTranslate
   const notice = key[state.gate]
   return (
     <>
-      {notice && <p role="status">{t(notice)}</p>}
-      {!state.capabilities.readAllowed && <p role="status">{t('parseReadPermission')}</p>}
+      {notice && (
+        <p role="status" className={`${noticeCss.notice} ${noticeCss.noticeStatus}`}>
+          {t(notice)}
+        </p>
+      )}
+      {!state.capabilities.readAllowed && (
+        <p role="status" className={`${noticeCss.notice} ${noticeCss.noticeStatus}`}>
+          {t('parseReadPermission')}
+        </p>
+      )}
     </>
   )
 }

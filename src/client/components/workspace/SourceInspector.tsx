@@ -5,8 +5,18 @@
  * @module dsh-zotero/client/components/workspace/SourceInspector
  */
 
-import { useMemo } from 'react'
-import { Button, IconFolderCloseMedium, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useMemo, useRef, useState } from 'react'
+import {
+  Button,
+  IconCopyOutlineRegular,
+  IconFolderCloseMedium,
+  IconLinkOutlineRegular,
+  IconWarningOutlineRegular,
+  Tag,
+  Toast,
+  writeClipboard,
+  type MenuEntry,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
@@ -15,7 +25,8 @@ import { askDraftOf, exportDraftOf } from '../../actions/source-actions.ts'
 import { pdfCapabilityOf } from '../../sources/source-capabilities.ts'
 import { BlockedReadAction } from '../open/BlockedReadAction.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
-import { ZoteroLocateActions } from '../open/ZoteroLocateActions.tsx'
+import { MoreActionsMenu } from '../MoreActionsMenu.tsx'
+import { selectUrlOf } from '../../actions/open-zotero.ts'
 import type { MobilePane } from './ZoteroWorkspaceView.tsx'
 import { SourceEvidence } from './SourceEvidence.tsx'
 import { SourceExports } from './SourceExports.tsx'
@@ -83,6 +94,10 @@ export function SourceInspector({
     return Array.from(tags)
   }, [selected?.searches])
 
+  const [toast, setToast] = useState<{ seq: number; text: string; ok: boolean }>()
+  const toastSeq = useRef(0)
+  const seat = useRef<HTMLDivElement>(null)
+
   if (selected === undefined) {
     return (
       <main className={css.inspector}>
@@ -93,6 +108,75 @@ export function SourceInspector({
 
   const pdfCapability = pdfCapabilityOf(selected)
   const evidenceMatch = selected.evidenceMatch
+  const canonicalUrl = selectUrlOf(selected.ref)
+  const moreItems: MenuEntry[] = [
+    {
+      id: 'locate',
+      label: t('locateItem'),
+      icon: <IconLinkOutlineRegular size={14} />,
+      submenu: [
+        {
+          id: 'copyTitle',
+          label: t('copyTitle'),
+          disabled: selected.title === undefined || selected.title === '',
+        },
+        {
+          id: 'copyLink',
+          label: t('copyZoteroLink'),
+          disabled: canonicalUrl === null,
+        },
+        {
+          id: 'openLink',
+          label: t('openInZotero'),
+          disabled: canonicalUrl === null || openProtocol === undefined,
+        },
+      ],
+    },
+  ]
+  if (setDraft !== undefined) {
+    moreItems.push({
+      id: 'export',
+      label: t('exportCitation'),
+      icon: <IconCopyOutlineRegular size={14} />,
+    })
+  }
+  const report = (outcome: { ok: boolean; text: string }): void => {
+    toastSeq.current += 1
+    setToast({ seq: toastSeq.current, text: outcome.text, ok: outcome.ok })
+  }
+  const onMoreSelect = (id: string): void => {
+    if (id === 'copyTitle') {
+      if (selected.title === undefined) return
+      void writeClipboard(selected.title).then(
+        (accepted) =>
+          report({
+            ok: accepted,
+            text: accepted ? t('copied') : t('libraryCopyClipboardUnavailable'),
+          }),
+        () => report({ ok: false, text: t('libraryCopyClipboardUnavailable') }),
+      )
+      return
+    }
+    if (id === 'copyLink') {
+      if (canonicalUrl === null) return
+      void writeClipboard(canonicalUrl).then(
+        (accepted) =>
+          report({
+            ok: accepted,
+            text: accepted ? t('copied') : t('libraryCopyClipboardUnavailable'),
+          }),
+        () => report({ ok: false, text: t('libraryCopyClipboardUnavailable') }),
+      )
+      return
+    }
+    if (id === 'openLink') {
+      if (canonicalUrl !== null && openProtocol !== undefined) void openProtocol(canonicalUrl)
+      return
+    }
+    if (id === 'export' && setDraft !== undefined) {
+      setDraft(exportDraftOf(selected.ref, t))
+    }
+  }
 
   return (
     <main className={css.inspector}>
@@ -114,7 +198,7 @@ export function SourceInspector({
             {[selected.creators, selected.year, selected.venue].filter(Boolean).join(' · ')}
           </span>
         </div>
-        <div className={css.actionRow}>
+        <div className={css.actionRow} ref={seat}>
           {pdfCapability !== null &&
             (evidenceMatch === 'mismatch' ? (
               <BlockedReadAction label={t('readPdf')} t={t} />
@@ -127,12 +211,6 @@ export function SourceInspector({
                 t={t}
               />
             ))}
-          <ZoteroLocateActions
-            title={selected.title}
-            itemRef={selected.ref}
-            t={t}
-            openProtocol={openProtocol}
-          />
           {setDraft !== undefined && (
             <Button
               variant="outline"
@@ -144,16 +222,17 @@ export function SourceInspector({
               {t('askAboutItem')}
             </Button>
           )}
-          {setDraft !== undefined && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setDraft(exportDraftOf(selected.ref, t))
-              }}
-            >
-              {t('exportCitation')}
-            </Button>
+          <MoreActionsMenu label={t('moreActions')} items={moreItems} onSelect={onMoreSelect} />
+          {toast !== undefined && (
+            <Toast
+              key={toast.seq}
+              text={toast.text}
+              anchor={seat.current}
+              {...(toast.ok
+                ? { tone: 'success' as const }
+                : { icon: <IconWarningOutlineRegular size={14} /> })}
+              onDone={() => setToast(undefined)}
+            />
           )}
         </div>
       </div>

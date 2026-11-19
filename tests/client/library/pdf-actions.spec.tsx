@@ -128,7 +128,8 @@ describe('the item PDF actions', () => {
     render(<PdfActions t={mockT} attachments={[PDF, OTHER]} />)
     const button = screen.getByRole('button', { name: mockT('readPdf') }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    expect(button.getAttribute('title')).toBe(mockT('libraryNoSessionForOpen'))
+    // The reason is a Tooltip hint, not a native title attribute.
+    expect(button.getAttribute('title')).toBeNull()
   })
 
   it('seats the parse action over the same PDF list', async () => {

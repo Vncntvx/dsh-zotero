@@ -277,7 +277,7 @@ describe('lane states', () => {
       })),
     })
     const row = await screen.findByText('Flat')
-    expect(row.closest('button')?.getAttribute('title')).toBe('Flat')
+    expect(row.closest('button')?.getAttribute('title')).toBeNull()
   })
 
   it('shows the selector error when that lane fails', async () => {

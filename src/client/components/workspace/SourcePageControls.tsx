@@ -7,6 +7,7 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SourcePager } from './useSourcePage.ts'
 import css from './workspace.module.css'
+import noticeCss from '../notice.module.css'
 import { laneTextOf } from '../library/library-errors.ts'
 
 interface SourcePageControlsProps {
@@ -21,10 +22,16 @@ export function SourcePageControls({ pager, label, t }: SourcePageControlsProps)
   if (!pager.hasMore && pager.error === undefined) return null
   return (
     <div role="group" aria-label={label} className={css.actionRow}>
-      {pager.loading && <span role="status">{t('libraryLoading')}</span>}
+      {pager.loading && (
+        <span role="status" className={`${noticeCss.notice} ${noticeCss.noticeStatus}`}>
+          {t('libraryLoading')}
+        </span>
+      )}
       {pager.error !== undefined && (
         <>
-          <span role="alert">{laneTextOf(pager.error, t)}</span>
+          <span role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+            {laneTextOf(pager.error, t)}
+          </span>
           <Button variant="outline" size="sm" onClick={pager.retry}>
             {t('sourcePageRetry')}
           </Button>

@@ -412,7 +412,7 @@ export function LibraryWrite({
           className={clsx(css.writeResult, result.kind === 'failed' && css.writeResultFailed)}
           role={result.kind === 'failed' ? 'alert' : 'status'}
         >
-          <strong>
+          <span className={css.writeResultTitle}>
             {result.kind === 'declined'
               ? t('libraryWriteDeclined')
               : result.kind === 'committed-unverified'
@@ -424,7 +424,7 @@ export function LibraryWrite({
                     : result.kind === 'restored'
                       ? t('libraryWriteRestored')
                       : t('libraryWriteApplied')}
-          </strong>
+          </span>
           <div className={css.writeResultText}>
             {result.code}
             {result.code ? '\n' : ''}

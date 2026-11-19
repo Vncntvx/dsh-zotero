@@ -7,10 +7,11 @@
 
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { Button, IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLinkOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { selectUrlOf } from '../../actions/open-zotero.ts'
 import { CopyButton } from '../CopyButton.tsx'
 import linkCss from '../link.module.css'
+import openCss from './open.module.css'
 
 interface ZoteroLocateActionsProps {
   readonly title?: string | null
@@ -57,32 +58,34 @@ export function ZoteroLocateActions({
       )}
       {canonicalUrl && (
         <>
-          {isLink ? (
-            <button
-              type="button"
-              className={clsx(linkCss.link, className)}
-              onClick={handleOpen}
-              disabled={openProtocol === undefined}
-              title={t('openInZoteroTooltip')}
-              aria-label={t('openInZotero')}
-            >
-              <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
-              <span>{t('openInZotero')}</span>
-            </button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className={className}
-              icon={<IconLinkOutlineRegular size={12} />}
-              onClick={handleOpen}
-              disabled={openProtocol === undefined}
-              title={t('openInZoteroTooltip')}
-              aria-label={t('openInZotero')}
-            >
-              {t('openInZotero')}
-            </Button>
-          )}
+          <Tooltip label={t('openInZoteroTooltip')} side="bottom" delayMs={500} portal>
+            <span className={openCss.tipSeat}>
+              {isLink ? (
+                <button
+                  type="button"
+                  className={clsx(linkCss.link, className)}
+                  onClick={handleOpen}
+                  disabled={openProtocol === undefined}
+                  aria-label={t('openInZotero')}
+                >
+                  <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
+                  <span>{t('openInZotero')}</span>
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={className}
+                  icon={<IconLinkOutlineRegular size={12} />}
+                  onClick={handleOpen}
+                  disabled={openProtocol === undefined}
+                  aria-label={t('openInZotero')}
+                >
+                  {t('openInZotero')}
+                </Button>
+              )}
+            </span>
+          </Tooltip>
           <CopyButton
             value={canonicalUrl}
             label={t('copyZoteroLink')}

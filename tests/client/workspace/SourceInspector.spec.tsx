@@ -122,7 +122,11 @@ describe('SourceInspector component', () => {
     })
     expect(setDraft).toHaveBeenCalledWith(askDraftOf(item.ref, t))
 
-    const exportBtn = screen.getByRole('button', { name: t('exportCitation') })
+    const moreBtn = screen.getByRole('button', { name: t('moreActions') })
+    await act(async () => {
+      fireEvent.click(moreBtn)
+    })
+    const exportBtn = screen.getByRole('menuitem', { name: t('exportCitation') })
     await act(async () => {
       fireEvent.click(exportBtn)
     })

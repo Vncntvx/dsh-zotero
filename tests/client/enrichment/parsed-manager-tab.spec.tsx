@@ -63,7 +63,10 @@ describe('parsed document manager tab', () => {
   it('falls back to a short artifact id when no title was captured', async () => {
     world({ list: listOf([{ ...row, title: undefined }]) })
     const name = await screen.findByText(ID.slice(0, 8))
-    expect(name.getAttribute('title')).toBe(ID)
+    // The row label is truncated by CSS and explained by the shared Tooltip;
+    // the native title attribute is no longer the disclosure channel.
+    expect(name.textContent).toBe(ID.slice(0, 8))
+    expect(name.getAttribute('title')).toBeNull()
   })
 
   it('states the source, the age, the size and the counts', async () => {

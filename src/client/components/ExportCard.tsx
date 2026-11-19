@@ -24,6 +24,7 @@ import type { ExportArtifact } from '../../sources/model.js'
 import { downloadBlob } from '../download.ts'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CopyButton } from './CopyButton.tsx'
+import noticeCss from './notice.module.css'
 import css from './cards.module.css'
 import { useCompleteResult } from './useCompleteResult.ts'
 import { ResultSessionContext } from '../result-reader.ts'
@@ -146,7 +147,11 @@ function ExportCardBody({
           />
         </div>
       </DisclosureRow>
-      {state.error && <p role="alert">{state.error}</p>}
+      {state.error && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {state.error}
+        </p>
+      )}
     </section>
   )
 }

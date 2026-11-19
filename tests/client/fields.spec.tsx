@@ -44,6 +44,13 @@ describe('BooleanField', () => {
     expect(onReset).toHaveBeenCalledTimes(1)
   })
 
+  it('renders the reset as a native button that names its field', () => {
+    render(<BooleanField {...base} />)
+    const reset = screen.getByRole('button', { name: `${t('reset')}: ${base.label}` })
+    expect(reset.tagName).toBe('BUTTON')
+    expect(reset.getAttribute('type')).toBe('button')
+  })
+
   it('renders no marker while the field is not overridden', () => {
     render(<BooleanField {...base} overridden={false} />)
     expect(screen.queryByText(t('overridden'))).toBeNull()

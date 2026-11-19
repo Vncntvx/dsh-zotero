@@ -5,11 +5,15 @@
  * @module dsh-zotero/client/components/open/PdfReadButton
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button,
   IconDeliverDocRegular,
+  IconWarningOutlineRegular,
+  StateDot,
+  Toast,
+  Tooltip,
   type ButtonVariant,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -150,7 +154,9 @@ export function PdfReadButton({
     }
   }
 
-  const displayLabel = resolving ? t('pdfResolving') : (error ?? label ?? t('readPdf'))
+  const seatRef = useRef<HTMLSpanElement>(null)
+  const displayLabel = t('readPdf')
+  const accessibleLabel = label ?? displayLabel
   const tooltip = error ?? title ?? t('readPdfInSidebar')
   const unavailableReason =
     disabledReason ??
@@ -160,35 +166,69 @@ export function PdfReadButton({
         ? t('libraryNoSessionForOpen')
         : undefined)
   const disabled = resolving || unavailableReason !== undefined
+  const toast =
+    error === null ? null : (
+      <Toast
+        key={error}
+        text={error}
+        icon={<IconWarningOutlineRegular size={14} />}
+        anchor={seatRef.current}
+        onDone={() => setError(null)}
+      />
+    )
 
   if (variant === 'link') {
     return (
-      <button
-        type="button"
-        className={clsx(linkCss.link, className, resolving && css.resolving)}
-        onClick={handleClick}
-        aria-label={unavailableReason ?? displayLabel}
-        title={unavailableReason ?? tooltip}
-        disabled={disabled}
-      >
-        <IconDeliverDocRegular className={linkCss.linkIcon} />
-        {displayLabel}
-      </button>
+      <span ref={seatRef} className={css.seat}>
+        <Tooltip label={unavailableReason ?? tooltip} side="bottom" delayMs={500} portal>
+          <span className={css.tipSeat}>
+            <button
+              type="button"
+              className={clsx(linkCss.link, className, resolving && css.resolving)}
+              onClick={handleClick}
+              aria-label={unavailableReason ?? accessibleLabel}
+              aria-busy={resolving || undefined}
+              disabled={disabled}
+            >
+              {resolving ? (
+                <StateDot state="ongoing" size={14} className={linkCss.linkIcon} />
+              ) : (
+                <IconDeliverDocRegular className={linkCss.linkIcon} />
+              )}
+              {displayLabel}
+            </button>
+          </span>
+        </Tooltip>
+        {toast}
+      </span>
     )
   }
 
   return (
-    <Button
-      variant={emphasis}
-      size="sm"
-      className={clsx(className, resolving && css.resolving)}
-      onClick={handleClick}
-      aria-label={unavailableReason ?? displayLabel}
-      title={unavailableReason ?? tooltip}
-      disabled={disabled}
-      icon={<IconDeliverDocRegular size={14} />}
-    >
-      {displayLabel}
-    </Button>
+    <span ref={seatRef} className={css.seat}>
+      <Tooltip label={unavailableReason ?? tooltip} side="bottom" delayMs={500} portal>
+        <span className={css.tipSeat}>
+          <Button
+            variant={emphasis}
+            size="sm"
+            className={clsx(className, resolving && css.resolving)}
+            onClick={handleClick}
+            aria-label={unavailableReason ?? accessibleLabel}
+            aria-busy={resolving || undefined}
+            disabled={disabled}
+            icon={
+              resolving ? (
+                <StateDot state="ongoing" size={14} />
+              ) : (
+                <IconDeliverDocRegular size={14} />
+              )
+            }
+          >
+            {displayLabel}
+          </Button>
+        </span>
+      </Tooltip>
+      {toast}
+    </span>
   )
 }

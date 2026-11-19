@@ -24,6 +24,7 @@ import {
   IconTrashOutlineMedium,
   IconUserOutlineMedium,
   Tag,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FlatCollectionRow, LibraryLaneState, LibrarySelection } from './library-model.ts'
 import { lanePageOf } from './library-model.ts'
@@ -143,21 +144,49 @@ function LibraryTreeBody({
   loadMoreTree,
   retryTree,
 }: LibraryTreeProps) {
-  const { memory } = useLibraryPreferences()
+  const { memory, preferences } = useLibraryPreferences()
+  const compact = preferences?.listDensity === 'compact'
   const scroll = useLibraryScroll('tree', flatTree.length > 0, flatTree.length)
   const collectionViewport = scroll.ref
   const treeVirtualizer = useVirtualizer({
     count: flatTree.length,
     getScrollElement: () => collectionViewport.current,
     initialOffset: memory?.scroll.tree ?? 0,
-    estimateSize: () => 32,
+    // Mirrors `--tree-row-h` + `--tree-row-gap` in `library.module.css`
+    // (30+4 comfortable, 24+1 compact).
+    estimateSize: () => (compact ? 25 : 34),
     overscan: 8,
     initialRect: VIRTUAL_VIEWPORT,
     observeElementRect: observeLibraryViewportRect,
     getItemKey: (index) => flatTree[index]?.row.ref ?? index,
   })
+  // Reset cached row heights when the density scale changes.
+  const measuredScale = useRef(compact)
+  useEffect(() => {
+    if (measuredScale.current === compact) return
+    measuredScale.current = compact
+    treeVirtualizer.measure()
+  }, [compact, treeVirtualizer])
+  // Restore the saved scroll offset when the pane regains layout.
+  useEffect(() => {
+    const element = collectionViewport.current
+    if (element === null || typeof ResizeObserver === 'undefined') return
+    let visible = element.getBoundingClientRect().height > 0
+    const observer = new ResizeObserver(() => {
+      const next = element.getBoundingClientRect().height > 0
+      if (!visible && next) {
+        treeVirtualizer.measure()
+        treeVirtualizer.scrollToOffset(memory?.scroll.tree ?? 0)
+      }
+      visible = next
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [collectionViewport, memory, treeVirtualizer])
   const measureTreeRow = useCallback(
     (element: HTMLLIElement | null) => {
+      // Measure only rows with layout so a zero-height rect cannot collapse
+      // the virtual range.
       if (element !== null && element.getBoundingClientRect().height > 0) {
         treeVirtualizer.measureElement(element)
       }
@@ -269,7 +298,7 @@ function LibraryTreeBody({
   }
 
   return (
-    <nav className={css.tree} aria-label={t('libraryPanel')}>
+    <nav className={clsx(css.tree, compact && css.treeCompact)} aria-label={t('libraryPanel')}>
       {/* Fixed System Scopes */}
       <ul className={css.treeList}>
         {FIXED_SCOPES.map(({ selection: fixed, labelKey, icon: Icon }) => (
@@ -366,48 +395,53 @@ function LibraryTreeBody({
                       }}
                     />
                   )}
-                  <ContentButton
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    role="treeitem"
-                    ref={(element) => {
-                      if (element) buttons.current.set(row.ref, element)
-                      else buttons.current.delete(row.ref)
-                    }}
-                    tabIndex={focusRef === row.ref ? 0 : -1}
-                    aria-level={depth + 1}
-                    aria-expanded={childless ? undefined : isExpanded}
-                    aria-busy={lane?.phase === 'loading' || undefined}
-                    aria-selected={isSelected}
-                    aria-setsize={setSize}
-                    aria-posinset={posInSet}
-                    onFocus={() => setFocused(row.ref)}
-                    onKeyDown={(event) => keyDown(event, index)}
-                    className={css.treeRow}
-                    title={row.path.length > 0 ? row.path.join(' / ') : row.name}
-                    onClick={() =>
-                      selectScope({ kind: 'collection', ref: row.ref, name: row.name })
-                    }
+                  <Tooltip
+                    label={row.path.length > 0 ? row.path.join(' / ') : row.name}
+                    side="bottom"
+                    delayMs={500}
+                    onlyWhenClipped
+                    portal
                   >
-                    {isExpanded ? (
-                      <IconFolderOpenMedium className={css.treeRowIcon} />
-                    ) : (
-                      <IconFolderCloseMedium className={css.treeRowIcon} />
-                    )}
-                    <span className={css.treeRowLabel}>{row.name}</span>
-                    {/* Zotero counts the items directly in each collection; the
-                     * badge shows that count and nothing else. An unreported
-                     * count renders nothing rather than a false zero. */}
-                    {row.itemCount !== undefined && row.itemCount > 0 && (
-                      <span
-                        className={css.treeCount}
-                        title={t('libraryItemCountBadge', { count: row.itemCount })}
-                      >
-                        <Tag tone="quiet">{row.itemCount}</Tag>
-                      </span>
-                    )}
-                  </ContentButton>
+                    <ContentButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      role="treeitem"
+                      ref={(element) => {
+                        if (element) buttons.current.set(row.ref, element)
+                        else buttons.current.delete(row.ref)
+                      }}
+                      tabIndex={focusRef === row.ref ? 0 : -1}
+                      aria-level={depth + 1}
+                      aria-expanded={childless ? undefined : isExpanded}
+                      aria-busy={lane?.phase === 'loading' || undefined}
+                      aria-selected={isSelected}
+                      aria-setsize={setSize}
+                      aria-posinset={posInSet}
+                      onFocus={() => setFocused(row.ref)}
+                      onKeyDown={(event) => keyDown(event, index)}
+                      className={css.treeRow}
+                      onClick={() =>
+                        selectScope({ kind: 'collection', ref: row.ref, name: row.name })
+                      }
+                    >
+                      {isExpanded ? (
+                        <IconFolderOpenMedium className={css.treeRowIcon} />
+                      ) : (
+                        <IconFolderCloseMedium className={css.treeRowIcon} />
+                      )}
+                      <span className={css.treeRowLabel}>{row.name}</span>
+                      {/* Show the direct item count reported by Zotero. */}
+                      {row.itemCount !== undefined && row.itemCount > 0 && (
+                        <span
+                          className={css.treeCount}
+                          title={t('libraryItemCountBadge', { count: row.itemCount })}
+                        >
+                          <Tag tone="quiet">{row.itemCount}</Tag>
+                        </span>
+                      )}
+                    </ContentButton>
+                  </Tooltip>
                 </div>
                 {closingBranches.get(row.ref)?.map((entry) => (
                   <LibraryLaneControls

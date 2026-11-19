@@ -129,8 +129,8 @@ describe('PdfReadButton', () => {
     })
     render(<PdfReadButton filePath="/storage/test.pdf" onOpenFile={onOpenFile} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
-    expect(screen.getByRole('button', { name: 'direct string error' })).toBeTruthy()
-
+    expect(screen.getByRole('alert').textContent).toContain('direct string error')
+    expect(screen.getByRole('button', { name: mockT('readPdf') })).toBeDefined()
     const resolveAttachment = vi.fn().mockRejectedValue('async string failure')
     render(
       <PdfReadButton
@@ -140,9 +140,10 @@ describe('PdfReadButton', () => {
       />,
     )
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
+      fireEvent.click(screen.getAllByRole('button', { name: mockT('readPdf') }).at(-1)!)
     })
-    expect(screen.getByRole('button', { name: 'async string failure' })).toBeTruthy()
+    expect(screen.getAllByRole('alert').at(-1)?.textContent).toContain('async string failure')
+    expect(screen.getAllByRole('button', { name: mockT('readPdf') }).at(-1)).toBeDefined()
   })
 
   it('disables attachment resolution when no resolver prop is available', () => {
@@ -174,8 +175,7 @@ describe('PdfReadButton', () => {
       fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
     })
 
-    const button = screen.getByRole('button', { name: mockT('pdfFileNotFound') })
-    expect(button).toBeDefined()
+    expect(screen.getByRole('alert').textContent).toContain(mockT('pdfFileNotFound'))
   })
 
   it('handles resolved url attachment', async () => {
@@ -225,8 +225,7 @@ describe('PdfReadButton', () => {
       fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
     })
 
-    const button = screen.getByRole('button', { name: 'Attachment lookup error' })
-    expect(button).toBeDefined()
+    expect(screen.getByRole('alert').textContent).toContain('Attachment lookup error')
   })
 
   it('displays error message when resolver throws an exception', async () => {
@@ -244,8 +243,7 @@ describe('PdfReadButton', () => {
       fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
     })
 
-    const button = screen.getByRole('button', { name: 'Network disconnected' })
-    expect(button).toBeDefined()
+    expect(screen.getByRole('alert').textContent).toContain('Network disconnected')
   })
 
   it('displays string error when resolver throws a non-Error primitive', async () => {
@@ -263,8 +261,7 @@ describe('PdfReadButton', () => {
       fireEvent.click(screen.getByRole('button', { name: mockT('readPdf') }))
     })
 
-    const button = screen.getByRole('button', { name: 'Raw string rejection' })
-    expect(button).toBeDefined()
+    expect(screen.getByRole('alert').textContent).toContain('Raw string rejection')
   })
 
   it('falls back to window.open when resolved url has no onOpenUrl callback', async () => {
@@ -384,7 +381,8 @@ describe('PdfReadButton', () => {
     )
     const button = screen.getByRole('button', { name: 'Custom Read' })
     expect(button.className).toContain('my-custom-class')
-    expect(button.getAttribute('title')).toBe('Custom Title')
+    expect(button.className).not.toMatch(/primary/)
+    expect(button.getAttribute('title')).toBeNull()
   })
 
   it('handles in-flight resolving state and ignores duplicate clicks', async () => {
@@ -403,7 +401,9 @@ describe('PdfReadButton', () => {
     fireEvent.click(button)
 
     expect(resolveAttachment).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: mockT('pdfResolving') })).toBeDefined()
+    const pending = screen.getByRole('button', { name: mockT('readPdf') })
+    expect(pending.getAttribute('aria-busy')).toBe('true')
+    expect(pending.textContent).toBe(mockT('readPdf'))
 
     // Second click while in-flight is ignored
     fireEvent.click(button)

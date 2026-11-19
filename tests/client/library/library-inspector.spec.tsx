@@ -302,7 +302,7 @@ describe('library inspector', () => {
     const attachButton = screen.getByRole('button', { name: 'paper.pdf' })
     fireEvent.click(attachButton)
     await vi.waitFor(() => {
-      expect(attachButton.getAttribute('title')).toBe('File not found on disk')
+      expect(screen.getByRole('status').textContent).toBe('File not found on disk')
     })
   })
 

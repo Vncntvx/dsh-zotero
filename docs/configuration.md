@@ -181,7 +181,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 | 字段                     | 默认值                    | 取值与行为                                                                                   | 设置页 |
 | ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------- | ------ |
 | `rightSidebarEnabled`    | `true`                    | 显示文献面板与快捷入口，独立于文献轨迹开关                                                   | 可见   |
-| `listDensity`            | `comfortable`             | `comfortable` / `compact`，使用宿主标准 / 紧凑按钮密度                                       | 可见   |
+| `listDensity`            | `comfortable`             | `comfortable` / `compact`，同时决定目录行距、列表行高与详情间距                              | 可见   |
 | `titleLines`             | `2`                       | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                              | 可见   |
 | `detailExpandedSections` | `[abstract, attachments]` | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠               | 可见   |
 | `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                               | 可见   |

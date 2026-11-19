@@ -31,6 +31,7 @@ import {
   type SemanticModelKey,
 } from '../enrichment-model-catalog.ts'
 import { BooleanField, ChoiceField, SecretField, type ChoiceOption } from './fields.tsx'
+import { MoreActionsMenu } from './components/MoreActionsMenu.tsx'
 import type { EnrichmentCardState } from './enrichment-form-controller.ts'
 import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
@@ -325,21 +326,21 @@ export function EnrichmentSettingsForm({
               disabled={disabled}
             />
             <p className={fieldCss.hint}>{t('enrichmentModeHint')}</p>
-            <SettingsValueField
-              id="enrichment-ocr-language"
-              label={t('enrichmentOcrLanguage')}
-              hint={t('enrichmentOcrLanguageHint')}
-              text={state.ocrLanguage.text}
-              overridden={state.ocrLanguage.overridden}
-              invalid={state.ocrLanguage.invalid}
-              overriddenLabel={t('overridden')}
-              resetLabel={t('reset')}
-              invalidLabel={t('enrichmentOcrLanguageInvalid')}
-              disabled={disabled || modeValue !== 'free'}
-              onEdit={(text) => actions.edit('ocrLanguage', text)}
-              onReset={() => actions.resetField('ocrLanguage')}
-            />
           </div>
+          <SettingsValueField
+            id="enrichment-ocr-language"
+            label={t('enrichmentOcrLanguage')}
+            hint={t('enrichmentOcrLanguageHint')}
+            text={state.ocrLanguage.text}
+            overridden={state.ocrLanguage.overridden}
+            invalid={state.ocrLanguage.invalid}
+            overriddenLabel={t('overridden')}
+            resetLabel={t('reset')}
+            invalidLabel={t('enrichmentOcrLanguageInvalid')}
+            disabled={disabled || modeValue !== 'free'}
+            onEdit={(text) => actions.edit('ocrLanguage', text)}
+            onReset={() => actions.resetField('ocrLanguage')}
+          />
         </div>
       </section>
 
@@ -484,7 +485,7 @@ export function EnrichmentSettingsForm({
             <div className={fieldCss.toggleRow}>
               <span className={fieldCss.badges}>
                 <span className={fieldCss.hint}>
-                  <strong>{t('semanticModelStatus')}</strong>
+                  <span className={fieldCss.strongText}>{t('semanticModelStatus')}</span>
                 </span>
                 {state.semanticModelPhase === 'deleting' ? (
                   <Tag tone="info">{t('semanticModelStatusDeleting')}</Tag>
@@ -503,7 +504,7 @@ export function EnrichmentSettingsForm({
                 ) : (
                   <Tag tone="neutral">{t('semanticModelStatusNotDownloaded')}</Tag>
                 )}
-                {modelActions.map((action) => (
+                {modelActions.slice(0, 1).map((action) => (
                   <Button
                     key={action.id}
                     variant={action.variant}
@@ -514,6 +515,20 @@ export function EnrichmentSettingsForm({
                     {t(action.labelKey)}
                   </Button>
                 ))}
+                {modelActions.length > 1 && (
+                  <MoreActionsMenu
+                    label={t('moreActions')}
+                    items={modelActions.slice(1).map((action) => ({
+                      id: action.id,
+                      label: t(action.labelKey),
+                      disabled: action.disabled,
+                    }))}
+                    onSelect={(id) => {
+                      const action = modelActions.find((entry) => entry.id === id)
+                      action?.onClick()
+                    }}
+                  />
+                )}
               </span>
             </div>
 
@@ -589,16 +604,21 @@ export function EnrichmentSettingsForm({
         <Modal
           open={confirmDelete}
           onClose={() => setConfirmDelete(false)}
+          tone="warning"
           title={t('semanticModelDeleteTitle')}
           description={t('semanticModelDeleteDescription')}
           closeLabel={t('semanticModelDeleteClose')}
           footer={
             <>
-              <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              <Button
+                variant="outline"
+                data-modal-autofocus
+                onClick={() => setConfirmDelete(false)}
+              >
                 {t('semanticModelDeleteCancel')}
               </Button>
               <Button
-                variant="primary"
+                variant="outline"
                 disabled={disabled || deleting}
                 onClick={() => {
                   setConfirmDelete(false)

@@ -95,7 +95,7 @@ describe('the parse action seat', () => {
     const row = screen.getByRole('button', { name: 'paper.pdf' })
     fireEvent.click(row)
     await vi.waitFor(() => {
-      expect(row.getAttribute('title')).toBe('plain failure')
+      expect(screen.getByRole('status').textContent).toBe('plain failure')
     })
   })
 

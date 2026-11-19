@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import noticeCss from '../notice.module.css'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroClientFace } from '../../actions/client-face.ts'
 import { LIBRARY_TAB_KIND } from '../../library-tab.ts'
@@ -52,7 +53,11 @@ function ZoteroLibraryMenuBody({
       >
         {t('libraryClearPosition')}
       </MenuItemButton>
-      {error && <p role="alert">{t('libraryPositionError', { message: error })}</p>}
+      {error && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {t('libraryPositionError', { message: error })}
+        </p>
+      )}
       <MenuItemButton
         onSelect={() => {
           dismiss?.()

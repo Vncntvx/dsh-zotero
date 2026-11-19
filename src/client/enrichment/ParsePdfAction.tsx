@@ -1,9 +1,12 @@
 /**
- * The item-level parse action, state-aware: one button that submits a parse
+ * The item-level parse action, state-aware: one command that submits a parse
  * while no artifact exists and opens the committed artifact once one does. An
  * item carrying several PDFs asks which one first, then reports that
  * attachment's own state. The result opens as a right-sidebar tab, never as a
  * dialog or a row in the attachment list.
+ *
+ * The probe state and the one command live in {@link useParsePdfAction}; the
+ * button and its picker only render that state.
  * @module dsh-zotero/client/enrichment/ParsePdfAction
  */
 import { useEffect, useRef, useState } from 'react'
@@ -48,11 +51,27 @@ export interface ParsePdfActionProps {
 /** One attachment's committed-artifact answer. */
 type Probe = { readonly kind: 'ready' } | { readonly kind: 'absent' }
 
+/** The live command one parse action exposes to its button and picker. */
+export interface ParsePdfActionState {
+  readonly primary: ZoteroAttachmentRowView | undefined
+  readonly ready: boolean
+  readonly only: boolean
+  readonly disabled: boolean
+  readonly label: string
+  readonly ariaLabel: string | undefined
+  readonly picking: boolean
+  readonly attachments: readonly ZoteroAttachmentRowView[]
+  readonly probes: ReadonlyMap<string, Probe> | undefined
+  readonly open: () => void
+  readonly closePicker: () => void
+  readonly select: (attachment: ZoteroAttachmentRowView) => void
+}
+
 /**
- * One action, two states. The artifact probes are read-only metadata calls on
- * open; they never submit, resume, or upload anything.
+ * Track the per-attachment artifact state and expose the one command the
+ * action performs, so the button and the picker share one probe result.
  */
-export function ParsePdfAction({
+export function useParsePdfAction({
   t,
   sessionId,
   attachments,
@@ -61,7 +80,7 @@ export function ParsePdfAction({
   documents,
   onParse,
   onOpenParsed,
-}: ParsePdfActionProps) {
+}: ParsePdfActionProps): ParsePdfActionState {
   const [probes, setProbes] = useState<ReadonlyMap<string, Probe>>()
   const [picking, setPicking] = useState(false)
   const [probeEpoch, setProbeEpoch] = useState(0)
@@ -108,59 +127,87 @@ export function ParsePdfAction({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [read, sessionId, attachmentKey, revision, probeEpoch])
 
-  if (primary === undefined) return null
   const ready = attachments.some((attachment) => probes?.get(attachment.ref)?.kind === 'ready')
   const only = attachments.length === 1
   const open = () => {
     // A single PDF acts directly; several ask which one, in the same shape the
     // read action uses, because the state differs per attachment.
+    if (primary === undefined) return
     if (!only) return setPicking(true)
     if (ready && onOpenParsed !== undefined) return onOpenParsed(primary)
     onParse(primary)
   }
+  const select = (attachment: ZoteroAttachmentRowView) => {
+    setPicking(false)
+    const parsed = probes?.get(attachment.ref)?.kind === 'ready'
+    if (parsed === true && onOpenParsed !== undefined) onOpenParsed(attachment)
+    else onParse(attachment)
+  }
 
+  return {
+    primary,
+    ready,
+    only,
+    disabled: probes === undefined,
+    label: t(ready ? 'libraryParsedView' : only ? 'libraryParsePdf' : 'libraryParsePdfAny'),
+    ariaLabel:
+      only && primary !== undefined
+        ? t(ready ? 'libraryParsedResultNamed' : 'libraryParsePdfNamed', {
+            title: primary.title,
+          })
+        : undefined,
+    picking,
+    attachments,
+    probes,
+    open,
+    closePicker: () => setPicking(false),
+    select,
+  }
+}
+
+/** The chooser a multi-PDF command opens, shared by both renderings. */
+function ParsePdfPicker({ state, t }: { state: ParsePdfActionState; t: TranslateNS<'zotero'> }) {
+  if (state.only || state.primary === undefined) return null
+  return (
+    <PdfPickerDialog
+      open={state.picking}
+      onClose={state.closePicker}
+      t={t}
+      title={t('libraryPickPdf')}
+      options={state.attachments.map((attachment) => {
+        const parsed = state.probes?.get(attachment.ref)?.kind === 'ready'
+        return {
+          key: attachment.ref,
+          title: attachment.title,
+          action: t(parsed ? 'libraryParsedView' : 'libraryParsePdfAny'),
+          onSelect: () => state.select(attachment),
+        }
+      })}
+    />
+  )
+}
+
+/**
+ * One action, two states. Opening the action probes artifact metadata; the
+ * probe is a read-only call.
+ */
+export function ParsePdfAction(props: ParsePdfActionProps) {
+  const { t } = props
+  const state = useParsePdfAction(props)
+  if (state.primary === undefined) return null
   return (
     <>
-      {/* The host's only high-contrast filled family. "Read PDF" beside it is
-       * the same family, so the two stay distinguishable without inventing
-       * colours. */}
       <Button
         variant="primary"
         size="sm"
-        icon={ready ? <IconDeliverDocRegular size={14} /> : <IconSparkleRegular size={14} />}
-        disabled={probes === undefined}
-        aria-label={
-          only
-            ? t(ready ? 'libraryParsedResultNamed' : 'libraryParsePdfNamed', {
-                title: primary.title,
-              })
-            : undefined
-        }
-        onClick={open}
+        icon={state.ready ? <IconDeliverDocRegular size={14} /> : <IconSparkleRegular size={14} />}
+        disabled={state.disabled}
+        aria-label={state.ariaLabel}
+        onClick={state.open}
       >
-        {t(ready ? 'libraryParsedView' : only ? 'libraryParsePdf' : 'libraryParsePdfAny')}
+        {state.label}
       </Button>
-      {!only && (
-        <PdfPickerDialog
-          open={picking}
-          onClose={() => setPicking(false)}
-          t={t}
-          title={t('libraryPickPdf')}
-          options={attachments.map((attachment) => {
-            const parsed = probes?.get(attachment.ref)?.kind === 'ready'
-            return {
-              key: attachment.ref,
-              title: attachment.title,
-              action: t(parsed ? 'libraryParsedView' : 'libraryParsePdfAny'),
-              onSelect: () => {
-                setPicking(false)
-                if (parsed && onOpenParsed !== undefined) onOpenParsed(attachment)
-                else onParse(attachment)
-              },
-            }
-          })}
-        />
-      )}
+      <ParsePdfPicker state={state} t={t} />
     </>
   )
 }

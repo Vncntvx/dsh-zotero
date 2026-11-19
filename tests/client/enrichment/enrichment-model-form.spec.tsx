@@ -18,8 +18,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroSemanticModelDeleteResultView } from '../../../src/contract.ts'
 import { deferred } from '../../helpers/sync.js'
-import { cleanup, screen } from './support.tsx'
-import { mountHarness, modelPortOf, zh } from './support.tsx'
+import { cleanup, menuAction, mountHarness, modelPortOf, screen, zh } from './support.tsx'
 
 afterEach(() => {
   cleanup()
@@ -72,7 +71,7 @@ describe('EnrichmentSettingsSection model panel', () => {
       downloadSemanticModel,
     })
     mountHarness({}, 'page', port)
-    const redownload = await screen.findByRole('button', { name: zh.semanticModelRedownloadAction })
+    const redownload = await menuAction(zh.semanticModelRedownloadAction)
     fireEvent.click(redownload)
     await vi.waitFor(() =>
       expect(downloadSemanticModel).toHaveBeenCalledWith(
@@ -188,14 +187,14 @@ describe('EnrichmentSettingsSection model panel', () => {
         deleteSemanticModel,
       }),
     )
-    const trigger = await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    const trigger = await menuAction(zh.semanticModelDeleteAction)
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog', { name: zh.semanticModelDeleteTitle })).toBeDefined()
     expect(screen.getByText(zh.semanticModelDeleteDescription)).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteCancel }))
     expect(deleteSemanticModel).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
-    fireEvent.click(trigger)
+    fireEvent.click(await menuAction(zh.semanticModelDeleteAction))
     fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteConfirm }))
     await vi.waitFor(() => expect(deleteSemanticModel).toHaveBeenCalled())
   })
@@ -223,7 +222,7 @@ describe('EnrichmentSettingsSection model panel', () => {
         deleteSemanticModel,
       }),
     )
-    const trigger = await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    const trigger = await menuAction(zh.semanticModelDeleteAction)
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDeleteConfirm }))
     expect(await screen.findByText(zh.semanticModelStatusDeleting)).toBeDefined()
@@ -280,12 +279,12 @@ describe('EnrichmentSettingsSection model panel', () => {
         verifySemanticModel,
       }),
     )
-    await screen.findByRole('button', { name: zh.semanticModelDeleteAction })
+    await menuAction(zh.semanticModelDeleteAction)
     fireEvent.click(screen.getByRole('button', { name: zh.semanticModelDownloadAction }))
     await vi.waitFor(() => expect(downloadSemanticModel).toHaveBeenCalledTimes(1))
-    fireEvent.click(await screen.findByRole('button', { name: zh.semanticModelRedownloadAction }))
+    fireEvent.click(await menuAction(zh.semanticModelRedownloadAction))
     await vi.waitFor(() => expect(downloadSemanticModel).toHaveBeenCalledTimes(2))
-    fireEvent.click(await screen.findByRole('button', { name: zh.semanticModelVerifyAction }))
+    fireEvent.click(await menuAction(zh.semanticModelVerifyAction))
     await vi.waitFor(() => expect(verifySemanticModel).toHaveBeenCalledTimes(1))
   })
 
@@ -380,7 +379,7 @@ describe('EnrichmentSettingsSection model panel', () => {
     await vi.waitFor(() => {
       expect(screen.getByText(zh.semanticModelStatusReady)).toBeDefined()
     })
-    const redownloadBtn = screen.getByRole('button', { name: zh.semanticModelRedownloadAction })
+    const redownloadBtn = await menuAction(zh.semanticModelRedownloadAction)
     expect(redownloadBtn).toBeDefined()
     fireEvent.click(redownloadBtn)
   })

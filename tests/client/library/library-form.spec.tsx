@@ -141,7 +141,7 @@ describe('LibrarySettingsSection', () => {
     const controller = new LibraryFormController(scope)
     render(<LibraryHarness face={controller.inject()} view="page" dictionary={zh} />)
 
-    const resetButtons = screen.getAllByRole('button', { name: zh.reset })
+    const resetButtons = screen.getAllByRole('button', { name: new RegExp(`^${zh.reset}:`) })
     expect(resetButtons.length).toBe(1)
 
     fireEvent.click(resetButtons[0]!)

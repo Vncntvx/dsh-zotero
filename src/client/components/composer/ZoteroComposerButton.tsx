@@ -25,7 +25,6 @@ export function ZoteroComposerButton({ t, onClick }: ZoteroComposerButtonProps) 
         className={css.composerTone}
         onClick={onClick}
         aria-label={label}
-        title={label}
       />
     </Tooltip>
   )

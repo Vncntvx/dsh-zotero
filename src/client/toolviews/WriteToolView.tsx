@@ -16,6 +16,7 @@ import {
   IconPlusOutlineRegular,
   IconTrashOutlineRegular,
   Tag,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ArgsView } from '../../sources/block-types.js'
@@ -563,19 +564,20 @@ export function WriteToolView(props: WriteToolViewProps) {
             {parentRef && (
               <div className={css.itemActions}>
                 <span className={css.itemMeta}>{t('toolParentItemLine')}</span>
-                <button
-                  type="button"
-                  className={linkCss.linkDense}
-                  onClick={() => {
-                    const targetUrl = parentSelectUrl ?? selectUrlOf(parentRef)
-                    if (targetUrl) void client.openProtocol(targetUrl)
-                  }}
-                  title={t('openInZoteroTooltip')}
-                  aria-label={t('openInZotero')}
-                >
-                  <IconLinkOutlineRegular size={12} />
-                  <span>{parentRef}</span>
-                </button>
+                <Tooltip label={t('openInZoteroTooltip')} side="bottom" delayMs={500} portal>
+                  <button
+                    type="button"
+                    className={linkCss.linkDense}
+                    onClick={() => {
+                      const targetUrl = parentSelectUrl ?? selectUrlOf(parentRef)
+                      if (targetUrl) void client.openProtocol(targetUrl)
+                    }}
+                    aria-label={t('openInZotero')}
+                  >
+                    <IconLinkOutlineRegular size={12} />
+                    <span>{parentRef}</span>
+                  </button>
+                </Tooltip>
                 <CopyButton
                   value={parentSelectUrl ?? selectUrlOf(parentRef) ?? parentRef}
                   label={t('copyZoteroLink')}

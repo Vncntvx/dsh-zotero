@@ -181,7 +181,7 @@ The first two are two views of one form state, synced live over both channels; t
 | Field                    | Default                   | Values and behavior                                                                                           | Settings page |
 | ------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------- |
 | `rightSidebarEnabled`    | `true`                    | Show the panel and shortcuts independently of the literature trail                                            | Visible       |
-| `listDensity`            | `comfortable`             | `comfortable` / `compact`, using standard / compact host button density                                       | Visible       |
+| `listDensity`            | `comfortable`             | `comfortable` / `compact`; drives the tree pitch, list row height, and detail spacing together                | Visible       |
 | `titleLines`             | `2`                       | `1` / `2`; hover reveals the complete title                                                                   | Visible       |
 | `detailExpandedSections` | `[abstract, attachments]` | Unique subset of `abstract`, `attachments`, `notes`, `annotations`; an empty array collapses all              | Visible       |
 | `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                                                | Visible       |

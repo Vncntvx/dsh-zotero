@@ -25,7 +25,7 @@ describe('ZoteroComposerButton', () => {
     render(<ZoteroComposerButton t={t} />)
     const button = screen.getByRole('button', { name: mockT('tabLibrary') })
     expect(button).toBeDefined()
-    expect(button.getAttribute('title')).toBe(mockT('tabLibrary'))
+    expect(button.getAttribute('title')).toBeNull()
   })
 
   it('invokes onClick callback when clicked', () => {

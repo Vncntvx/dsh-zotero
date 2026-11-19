@@ -15,9 +15,10 @@
 
 import { type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCopyFeedback } from './useCopyFeedback.ts'
 import linkCss from './link.module.css'
+import tipCss from './tip.module.css'
 
 /** Which host control the copy action wears. */
 export type CopyButtonVariant = 'outline' | 'ghost' | 'link'
@@ -72,23 +73,25 @@ export function CopyButton({
 
   const shared = {
     'aria-label': label,
-    title: title ?? label,
     disabled,
     onClick: handleClick,
   }
 
-  if (variant === 'link') {
-    return (
+  const control =
+    variant === 'link' ? (
       <button type="button" className={clsx(linkCss.link, className)} {...shared}>
         {icon}
         <span>{text}</span>
       </button>
+    ) : (
+      <Button variant={variant} size="sm" icon={icon} className={className} {...shared}>
+        {text}
+      </Button>
     )
-  }
 
   return (
-    <Button variant={variant} size="sm" icon={icon} className={className} {...shared}>
-      {text}
-    </Button>
+    <Tooltip label={title ?? label} side="bottom" delayMs={500} portal>
+      {disabled === true ? <span className={tipCss.seat}>{control}</span> : control}
+    </Tooltip>
   )
 }

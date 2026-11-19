@@ -32,6 +32,7 @@ import {
   IconEllipsisOutlineMedium,
   IconRefreshOutlineMedium,
   IconSearchOutlineMedium,
+  IconWarningOutlineRegular,
   Input,
   Menu,
   SegmentedControl,
@@ -76,6 +77,7 @@ import type {
   ZoteroLibraryWriteResultView,
 } from '../../../contract.ts'
 import css from './library.module.css'
+import noticeCss from '../notice.module.css'
 
 /**
  * The injected face: the panel's wire calls plus the right-sidebar opener. The
@@ -148,9 +150,16 @@ export function ZoteroLibraryPanel(props: ZoteroLibraryPanelProps) {
   return (
     <ZoteroSurfaceBoundary t={t} surface="library" report={client.reportClientError}>
       {accepted.error ? (
-        <p role="alert">{t('libraryConfigError', { message: accepted.error })}</p>
+        <div className={css.configState} role="alert">
+          <IconWarningOutlineRegular size={20} className={css.configIcon} />
+          <p className={css.configTitle}>{t('libraryConfigErrorTitle')}</p>
+          <p className={css.configDetail}>{accepted.error}</p>
+        </div>
       ) : !accepted.preferences ? (
-        <p role="status">{t('libraryConfigLoading')}</p>
+        <div className={css.configState} role="status">
+          <StateDot state="ongoing" size={16} />
+          <p className={css.configDetail}>{t('libraryConfigLoading')}</p>
+        </div>
       ) : (
         <LibraryPreferencesContext.Provider value={accepted}>
           <ZoteroLibraryPanelBody {...props} />
@@ -494,10 +503,21 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   }, [probeState.data, t])
 
   const preferencesValue = useMemo(() => ({ ...accepted, memory }), [accepted, memory])
+  // Keep the column open while the write drawer acts on the inspected scope.
+  const writeDrawer =
+    probeState.data?.write?.enabled === true && feed.currentLibrary.type === 'user'
+  // Show the detail column when a row is selected or the write drawer is open.
+  const detailOpen = feed.selectedRef !== undefined || writeDrawer
   return (
     <LibraryPreferencesContext.Provider value={preferencesValue}>
       <div className={css.panel}>
-        {cleanupError && <p role="alert">{t('libraryPositionError', { message: cleanupError })}</p>}
+        <div className={noticeCss.noticeSlot}>
+          {cleanupError && (
+            <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+              {t('libraryPositionError', { message: cleanupError })}
+            </p>
+          )}
+        </div>
         {/* Two rows: the query the reader is asking, then the surface's own
          * actions. The hairline keeps this header distinct from the list. */}
         <header className={css.toolbar}>
@@ -520,7 +540,6 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 variant="ghost"
                 size="sm"
                 aria-label={t('libraryParsedManager')}
-                title={t('libraryParsedManager')}
                 onClick={props.openParsedManager}
                 disabled={sessionRemoved}
               >
@@ -634,15 +653,19 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
             </div>
 
             {/* 3-Column Workspace with Hairline Dividers */}
-            {feed.storageError && (
-              <p role="alert">
-                {t('libraryPositionError', { message: feed.storageError })}
-                <Button size="sm" onClick={feed.clearPosition}>
-                  {t('libraryPositionReset')}
-                </Button>
-              </p>
-            )}
-            <div className={css.columns}>
+            <div className={noticeCss.noticeSlot}>
+              {feed.storageError && (
+                <div className={noticeCss.noticeRow} role="alert">
+                  <p className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+                    {t('libraryPositionError', { message: feed.storageError })}
+                  </p>
+                  <Button size="sm" onClick={feed.clearPosition}>
+                    {t('libraryPositionReset')}
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className={clsx(css.columns, !detailOpen && css.columnsWithoutDetail)}>
               <div
                 className={clsx(
                   css.columnPane,
@@ -725,28 +748,25 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
               >
                 {/* Write Support Drawer: acts on the inspected scope, so it
                  * lives in the inspector column above the detail. */}
-                {probeState.data?.write?.enabled === true &&
-                  feed.currentLibrary.type === 'user' && (
-                    <LibraryWrite
-                      // The write targets ride the inspected scope, so a selection
-                      // or inspected row change remounts the form: a draft ref can
-                      // never outlive the item it was typed against.
-                      key={JSON.stringify([feed.scopeKey, feed.selectedRef ?? null])}
-                      t={t}
-                      write={props.write}
-                      sessionId={props.sessionId}
-                      sessionRunning={sessionRunning}
-                      writeAllowed={writeAllowed}
-                      selectedRef={feed.selectedRef}
-                      collectionRef={
-                        feed.selection.kind === 'collection' ? feed.selection.ref : undefined
-                      }
-                      searchRef={
-                        feed.selection.kind === 'savedSearch' ? feed.selection.ref : undefined
-                      }
-                      refreshAffected={feed.refreshAffected}
-                    />
-                  )}
+                {writeDrawer && (
+                  <LibraryWrite
+                    // Remount the form when the inspected scope changes.
+                    key={JSON.stringify([feed.scopeKey, feed.selectedRef ?? null])}
+                    t={t}
+                    write={props.write}
+                    sessionId={props.sessionId}
+                    sessionRunning={sessionRunning}
+                    writeAllowed={writeAllowed}
+                    selectedRef={feed.selectedRef}
+                    collectionRef={
+                      feed.selection.kind === 'collection' ? feed.selection.ref : undefined
+                    }
+                    searchRef={
+                      feed.selection.kind === 'savedSearch' ? feed.selection.ref : undefined
+                    }
+                    refreshAffected={feed.refreshAffected}
+                  />
+                )}
                 <LibraryInspector
                   t={t}
                   inspector={feed.inspector}
@@ -820,7 +840,6 @@ function LibrarySelect({
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={t('librarySelectLibrary')}
-            title={currentName}
             onClick={() => setOpen((prev) => !prev)}
           >
             <span className={css.selectorLabel}>{currentName}</span>
@@ -891,7 +910,6 @@ function SortSelect({
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={t('librarySortLabel')}
-            title={currentLabel}
             onClick={() => setOpen((prev) => !prev)}
           >
             <IconChevronsUpDownOutlineMedium size={14} className={css.sortIcon} />

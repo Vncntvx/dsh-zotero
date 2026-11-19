@@ -59,7 +59,7 @@ it('names the copy action and field, then reports success while preserving the r
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
   inspector()
   const copy = screen.getByRole('button', { name: `${zh.copy} DOI` })
-  expect(copy.getAttribute('title')).toContain('10.1234/probe')
+  expect(copy.getAttribute('title')).toBeNull()
   fireEvent.click(copy)
   await waitFor(() => expect(screen.getByRole('button', { name: `${zh.copied} DOI` })).toBe(copy))
   expect(writeText).toHaveBeenCalledWith('10.1234/probe')

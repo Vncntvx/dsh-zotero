@@ -34,6 +34,7 @@ import { joinNonEmpty } from '../../../sources/presenters.js'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import type { LibraryExportItem } from './library-feed-types.ts'
 import css from './library.module.css'
+import noticeCss from '../notice.module.css'
 
 /** The client-only action; every other action id is a host export format. */
 type CopyAction = ZoteroLibraryExportFormatView | 'itemInfo'
@@ -222,7 +223,11 @@ export function LibraryCitationActions({
           </MenuItemButton>
         ))}
       </Menu>
-      {citationPending && <span role="status">{t('libraryCitationNotReady')}</span>}
+      {citationPending && (
+        <span role="status" className={`${noticeCss.notice} ${noticeCss.noticeStatus}`}>
+          {t('libraryCitationNotReady')}
+        </span>
+      )}
       {errorText !== undefined && (
         <span className={css.listError} role="alert">
           {errorText}

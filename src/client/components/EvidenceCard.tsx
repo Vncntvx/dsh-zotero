@@ -11,7 +11,7 @@
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import { IconLinkOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconLinkOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ZoteroAttachmentLocationView } from '../../contract.ts'
 import { joinNonEmpty, shortKeyOf } from '../../sources/presenters.js'
 import { pdfUrlOf, selectUrlOf } from '../actions/open-zotero.ts'
@@ -81,18 +81,19 @@ function PassageRow({
           ))}
         {annotationUrl !== null && (
           <>
-            <button
-              type="button"
-              className={linkCss.link}
-              onClick={() => {
-                if (openProtocol !== undefined) void openProtocol(annotationUrl)
-              }}
-              title={t('openInZoteroTooltip')}
-              aria-label={t('openInZotero')}
-            >
-              <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
-              <span>{t('openInZotero')}</span>
-            </button>
+            <Tooltip label={t('openInZoteroTooltip')} side="bottom" delayMs={500} portal>
+              <button
+                type="button"
+                className={linkCss.link}
+                onClick={() => {
+                  if (openProtocol !== undefined) void openProtocol(annotationUrl)
+                }}
+                aria-label={t('openInZotero')}
+              >
+                <IconLinkOutlineRegular size={12} className={linkCss.linkIcon} />
+                <span>{t('openInZotero')}</span>
+              </button>
+            </Tooltip>
             <CopyButton
               value={annotationUrl}
               label={t('copyZoteroLink')}

@@ -7,13 +7,14 @@
  */
 
 import { useState } from 'react'
-import { Button, IconDeliverDocRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconDeliverDocRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView, ZoteroAttachmentRowView } from '../../../contract.ts'
 import { ParsePdfAction, type ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
 import { PdfPickerDialog } from '../PdfPickerDialog.tsx'
 import { PdfReadButton } from '../open/PdfReadButton.tsx'
+import tipCss from '../tip.module.css'
 
 /** The parse face the composition root supplies when enrichment is enabled. */
 export interface PdfParseFace {
@@ -80,19 +81,27 @@ export function PdfActions({
           t={t}
         />
       ) : (
-        <Button
-          variant="primary"
-          size="sm"
-          icon={<IconDeliverDocRegular size={14} />}
-          disabled={readPdf === undefined}
-          title={readPdf === undefined ? t('libraryNoSessionForOpen') : undefined}
-          onClick={() => {
-            setError(undefined)
-            setPicking(true)
-          }}
+        <Tooltip
+          label={readPdf === undefined ? t('libraryNoSessionForOpen') : t('readPdfInSidebar')}
+          side="bottom"
+          delayMs={500}
+          portal
         >
-          {t('readPdf')}
-        </Button>
+          <span className={tipCss.seat}>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<IconDeliverDocRegular size={14} />}
+              disabled={readPdf === undefined}
+              onClick={() => {
+                setError(undefined)
+                setPicking(true)
+              }}
+            >
+              {t('readPdf')}
+            </Button>
+          </span>
+        </Tooltip>
       )}
       {parse !== undefined && (
         <ParsePdfAction

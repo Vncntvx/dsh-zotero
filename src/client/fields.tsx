@@ -79,9 +79,15 @@ export function BooleanField(props: BooleanFieldProps): ReactNode {
         {props.overridden ? (
           <span className={css.badges}>
             <Tag tone="neutral">{props.overriddenLabel}</Tag>
-            <Button variant="ghost" size="sm" disabled={props.disabled} onClick={props.onReset}>
+            <button
+              type="button"
+              className={css.reset}
+              disabled={props.disabled}
+              aria-label={`${props.resetLabel}: ${props.label}`}
+              onClick={props.onReset}
+            >
               {props.resetLabel}
-            </Button>
+            </button>
           </span>
         ) : null}
       </div>
@@ -227,15 +233,15 @@ export function ChoiceField(props: ChoiceFieldProps): ReactNode {
         {props.overridden && (
           <span className={css.badges}>
             <Tag tone="neutral">{props.overriddenLabel}</Tag>
-            <Button
-              size="sm"
-              variant="ghost"
+            <button
+              type="button"
+              className={css.reset}
               disabled={props.disabled}
               aria-label={`${props.resetLabel}: ${props.label}`}
               onClick={props.onReset}
             >
               {props.resetLabel}
-            </Button>
+            </button>
           </span>
         )}
       </div>

@@ -18,7 +18,7 @@ export function BibliographyLibraryButton({
   onOpenLibrary,
 }: BibliographyLibraryButtonProps) {
   return (
-    <Button variant="outline" size="sm" onClick={onOpenLibrary} title={label} aria-label={label}>
+    <Button variant="outline" size="sm" onClick={onOpenLibrary} aria-label={label}>
       <ZoteroLibraryIcon size={12} />
       <span>{label}</span>
     </Button>

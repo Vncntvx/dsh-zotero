@@ -12,7 +12,11 @@ import preferenceCss from '../../library-settings.module.css'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import { Button, IconWorkspaceTreeOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  IconWorkspaceTreeOutlineMedium,
+  Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
 import { formatCreatorsList } from '../../../creators.ts'
 import { isPdfContentType } from '../../../media-types.ts'
@@ -240,13 +244,14 @@ function LibraryItemListBody({
             </span>
           )}
           {locate !== undefined && (
-            <IconButton
-              shape="square"
-              icon={<IconWorkspaceTreeOutlineMedium className={css.actionIcon} />}
-              aria-label={t('libraryLocate')}
-              title={t('libraryLocate')}
-              onClick={locate}
-            />
+            <Tooltip label={t('libraryLocate')} side="bottom" delayMs={500} portal>
+              <IconButton
+                shape="square"
+                icon={<IconWorkspaceTreeOutlineMedium className={css.actionIcon} />}
+                aria-label={t('libraryLocate')}
+                onClick={locate}
+              />
+            </Tooltip>
           )}
         </div>
       </header>

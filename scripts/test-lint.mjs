@@ -110,11 +110,11 @@ export const STANDARD_SPEC_LINES = 400
 export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/apply.spec.ts': 681,
   'tests/client/enrichment/enrichment-model-controller.spec.ts': 451,
-  'tests/client/enrichment/enrichment-model-form.spec.tsx': 487,
+  'tests/client/enrichment/enrichment-model-form.spec.tsx': 486,
   'tests/client/enrichment/parse-dialog.spec.tsx': 403,
   'tests/client/library/library-data-plane.spec.ts': 410,
   'tests/client/library/library-inspector.spec.tsx': 712,
-  'tests/client/library/library-panel.interaction.spec.tsx': 510,
+  'tests/client/library/library-panel.interaction.spec.tsx': 508,
   'tests/client/library/library-panel.states.spec.tsx': 486,
   'tests/client/library/library-tag-picker.spec.tsx': 418,
   'tests/client/library/library-tree.spec.tsx': 461,

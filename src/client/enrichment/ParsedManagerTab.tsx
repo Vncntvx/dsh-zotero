@@ -11,6 +11,7 @@ import {
   IconCloseOutlineRegular,
   IconDeliverDocRegular,
   IconTrashOutlineRegular,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -33,6 +34,7 @@ import { ParsedManagerRow } from './parsed-manager/ParsedManagerRow.tsx'
 import { ParsedManagerDeleteDialog } from './parsed-manager/ParsedManagerDeleteDialog.tsx'
 import type { StateFilter } from './parsed-manager/types.ts'
 import css from './parsed-manager.module.css'
+import tipCss from '../components/tip.module.css'
 
 const PAGE_SIZE = 50
 /** The widest window this panel materializes; "show more" stops there. */
@@ -389,15 +391,23 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
                   >
                     {props.t('parsedManagerDeleteSelected')}
                   </Button>
-                  <IconButton
-                    shape="round"
-                    size="sm"
-                    icon={<IconCloseOutlineRegular size={12} />}
-                    aria-label={props.t('parsedManagerClearSelection')}
-                    title={props.t('parsedManagerClearSelection')}
-                    disabled={busy}
-                    onClick={() => setSelected(EMPTY_SELECTION)}
-                  />
+                  <Tooltip
+                    label={props.t('parsedManagerClearSelection')}
+                    side="bottom"
+                    delayMs={500}
+                    portal
+                  >
+                    <span className={tipCss.seat}>
+                      <IconButton
+                        shape="round"
+                        size="sm"
+                        icon={<IconCloseOutlineRegular size={12} />}
+                        aria-label={props.t('parsedManagerClearSelection')}
+                        disabled={busy}
+                        onClick={() => setSelected(EMPTY_SELECTION)}
+                      />
+                    </span>
+                  </Tooltip>
                 </>
               )}
             </>

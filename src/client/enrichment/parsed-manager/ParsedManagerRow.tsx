@@ -1,11 +1,13 @@
 import clsx from 'clsx'
 import {
+  Checkbox,
   IconEyeOutlineRegular,
   IconLinkOutlineRegular,
   IconPaperclipOutlineRegular,
   IconSparkleRegular,
   IconTrashOutlineRegular,
   Tag,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroParsedDocumentRowView } from '../../../contract.ts'
@@ -13,6 +15,7 @@ import { formatDateTime } from '../../../sources/presenters.js'
 import { IconButton } from '../../components/IconButton.tsx'
 import { BROKEN_LABELS, STATE_LABELS, STATE_TONES, metaOf, titleOf } from './types.ts'
 import css from '../parsed-manager.module.css'
+import tipCss from '../../components/tip.module.css'
 
 export interface ParsedManagerRowProps {
   row: ZoteroParsedDocumentRowView
@@ -51,20 +54,18 @@ export function ParsedManagerRow(props: ParsedManagerRowProps) {
   return (
     <li className={clsx(css.row, { [css.rowSelected]: isSelected })}>
       <div className={css.rowHead}>
-        {/* Pairs a bare checkbox with the visible title for accessible row selection. */}
-        <label className={css.rowSelect}>
-          <input
-            type="checkbox"
-            className={css.rowCheck}
-            checked={isSelected}
-            disabled={!discardAllowed || busy}
-            aria-label={t('parsedManagerSelectRow', { title })}
-            onChange={(event) => onToggle(row.artifactId, event.target.checked)}
-          />
-          <span className={css.rowTitle} title={row.title ?? row.artifactId}>
-            {title}
+        {/* Tooltip shows the full title when the checkbox label is clipped. */}
+        <Tooltip label={title} side="bottom" delayMs={500} portal onlyWhenClipped>
+          <span className={tipCss.seat}>
+            <Checkbox
+              className={css.rowSelect}
+              checked={isSelected}
+              disabled={!discardAllowed || busy}
+              label={title}
+              onChange={(next) => onToggle(row.artifactId, next)}
+            />
           </span>
-        </label>
+        </Tooltip>
         {row.state !== 'indexed' && (
           <Tag tone={STATE_TONES[row.state]}>{t(STATE_LABELS[row.state])}</Tag>
         )}
@@ -83,30 +84,39 @@ export function ParsedManagerRow(props: ParsedManagerRowProps) {
           </span>
         )}
         <span className={css.actions}>
-          <IconButton
-            shape="square"
-            icon={<IconEyeOutlineRegular size={14} />}
-            aria-label={t('parsedManagerOpen')}
-            title={t('parsedManagerOpen')}
-            disabled={!row.actionable || row.state === 'broken'}
-            onClick={() => onOpen(sessionId, row.artifactId, title)}
-          />
-          <IconButton
-            shape="square"
-            icon={<IconSparkleRegular size={14} />}
-            aria-label={t('libraryParsedReparse')}
-            title={t('libraryParsedReparse')}
-            disabled={!row.actionable || reparseDisabled}
-            onClick={() => onReparse?.(row.artifactId, title)}
-          />
-          <IconButton
-            shape="square"
-            icon={<IconTrashOutlineRegular size={14} />}
-            aria-label={t('parsedManagerDelete')}
-            title={t('parsedManagerDelete')}
-            disabled={!discardAllowed || busy}
-            onClick={() => onDelete(row.artifactId, title)}
-          />
+          <Tooltip label={t('parsedManagerOpen')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                shape="square"
+                icon={<IconEyeOutlineRegular size={14} />}
+                aria-label={t('parsedManagerOpen')}
+                disabled={!row.actionable || row.state === 'broken'}
+                onClick={() => onOpen(sessionId, row.artifactId, title)}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip label={t('libraryParsedReparse')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                shape="square"
+                icon={<IconSparkleRegular size={14} />}
+                aria-label={t('libraryParsedReparse')}
+                disabled={!row.actionable || reparseDisabled}
+                onClick={() => onReparse?.(row.artifactId, title)}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip label={t('parsedManagerDelete')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                shape="square"
+                icon={<IconTrashOutlineRegular size={14} />}
+                aria-label={t('parsedManagerDelete')}
+                disabled={!discardAllowed || busy}
+                onClick={() => onDelete(row.artifactId, title)}
+              />
+            </span>
+          </Tooltip>
         </span>
       </div>
       {row.broken !== undefined && (

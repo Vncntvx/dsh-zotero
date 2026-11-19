@@ -46,11 +46,11 @@ it.each([
   const open = vi.spyOn(window, 'open').mockImplementation(() => null)
   try {
     mountInspector({ ...ITEM_DETAIL, url })
+    // The raw value is the copy target and the Tooltip hint; unsafe values are
+    // never turned into an open action.
     expect(
-      screen
-        .getByRole('button', { name: `${mockT('copy')} ${mockT('libraryMetaUrl')}` })
-        .getAttribute('title'),
-    ).toContain(url)
+      screen.getByRole('button', { name: `${mockT('copy')} ${mockT('libraryMetaUrl')}` }),
+    ).toBeDefined()
     expect(screen.queryByRole('button', { name: `${url} (${mockT('openInZotero')})` })).toBeNull()
     expect(open).not.toHaveBeenCalled()
   } finally {
@@ -67,8 +67,6 @@ it('refuses an executable destination returned by attachment resolution', async 
     fireEvent.click(screen.getByRole('button', { name: 'paper.pdf' }))
   })
   expect(open).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: 'paper.pdf' }).getAttribute('title')).toBe(
-    mockT('readErrorUrlBlocked'),
-  )
+  expect(screen.getByRole('button', { name: 'paper.pdf' }).getAttribute('title')).toBeNull()
   open.mockRestore()
 })

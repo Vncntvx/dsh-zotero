@@ -29,6 +29,7 @@ import {
   IconNewChatOutlineRegular,
   IconPlusOutlineRegular,
   Tag,
+  Tooltip,
   type FileTypeKind,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -57,6 +58,8 @@ import { PdfPickerDialog } from '../PdfPickerDialog.tsx'
 import { pdfAttachmentsOf, type LibraryItemState } from './library-model.ts'
 import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels.ts'
 import type { ChildKind, ChildLoadState, LibraryExportItem } from './library-feed-types.ts'
+import noticeCss from '../notice.module.css'
+import tipCss from '../tip.module.css'
 import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
 
@@ -132,35 +135,42 @@ function CopyableMetaRow({
         <div className={css.metaCopyRow}>
           <span className={css.metaText}>{value}</span>
           <div className={css.metaCopyActions}>
-            <IconButton
-              size="sm"
-              shape="square"
-              icon={
-                copied ? (
-                  <IconCheckOutlineRegular size={12} />
-                ) : (
-                  <IconCopyOutlineRegular size={12} />
-                )
-              }
-              aria-label={`${copied ? t('copied') : t('copy')} ${label}`}
-              title={copied ? t('copied') : `${value} (${t('copy')})`}
-              onClick={(e) => {
-                e.stopPropagation()
-                copyText(value)
-              }}
-            />
-            {webUrl !== undefined && (
+            <Tooltip
+              label={copied ? t('copied') : `${value} (${t('copy')})`}
+              side="bottom"
+              delayMs={500}
+              portal
+            >
               <IconButton
                 size="sm"
                 shape="square"
-                icon={<IconLinkOutlineRegular size={12} />}
-                aria-label={`${openUrl} (${t('openInZotero')})`}
-                title={openUrl}
+                icon={
+                  copied ? (
+                    <IconCheckOutlineRegular size={12} />
+                  ) : (
+                    <IconCopyOutlineRegular size={12} />
+                  )
+                }
+                aria-label={`${copied ? t('copied') : t('copy')} ${label}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  window.open(webUrl, '_blank', 'noopener,noreferrer')
+                  copyText(value)
                 }}
               />
+            </Tooltip>
+            {webUrl !== undefined && (
+              <Tooltip label={openUrl ?? t('openInZotero')} side="bottom" delayMs={500} portal>
+                <IconButton
+                  size="sm"
+                  shape="square"
+                  icon={<IconLinkOutlineRegular size={12} />}
+                  aria-label={`${openUrl} (${t('openInZotero')})`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.open(webUrl, '_blank', 'noopener,noreferrer')
+                  }}
+                />
+              </Tooltip>
             )}
           </div>
         </div>
@@ -276,28 +286,42 @@ function AttachmentItem({
           size={18}
           className={css.childFileIcon}
         />
-        <span className={css.childTitle} title={error ?? attachment.title}>
+        <span className={css.childTitle}>
           {resolving ? `${attachment.title} (${t('libraryLoading')})` : attachment.title}
         </span>
       </div>
-      <span className={css.childKind}>{attachmentKindOf(attachment.contentType, t)}</span>
+      {/* A failed resolution replaces the kind label in the same trailing slot,
+          so the row keeps its height and the reason stays visible without hover. */}
+      <span
+        className={clsx(css.childKind, error !== null && css.childKindError)}
+        role={error !== null ? 'status' : undefined}
+      >
+        {error ?? attachmentKindOf(attachment.contentType, t)}
+      </span>
     </>
   )
 
   return (
     <li className={canOpen ? css.childFrame : undefined}>
       {canOpen ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className={css.childRowSeat}
-          onClick={handleOpen}
-          disabled={resolving}
-          aria-label={attachment.title}
-          title={error ?? (supported ? t('readPdfInSidebar') : attachment.title)}
+        <Tooltip
+          label={error ?? (supported ? t('readPdfInSidebar') : attachment.title)}
+          side="bottom"
+          delayMs={500}
+          portal
         >
-          {content}
-        </Button>
+          <span className={css.childRowSeat}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleOpen}
+              disabled={resolving}
+              aria-label={attachment.title}
+            >
+              {content}
+            </Button>
+          </span>
+        </Tooltip>
       ) : (
         <div className={css.childRow}>{content}</div>
       )}
@@ -362,7 +386,6 @@ function NoteItem({
               className={css.actionSeat}
               icon={<IconNewChatOutlineRegular size={11} />}
               onClick={handleInsert}
-              title={t('libraryInsertNote')}
               aria-label={t('libraryInsertNote')}
             >
               {t('libraryInsertNote')}
@@ -431,7 +454,6 @@ function AnnotationItem({
               onClick={() => {
                 if (openProtocol !== undefined) void openProtocol(annotationUrl)
               }}
-              title={t('openInZoteroTooltip')}
               aria-label={t('openInZotero')}
             >
               {t('openInZotero')}
@@ -452,7 +474,6 @@ function AnnotationItem({
               className={css.actionSeat}
               icon={<IconNewChatOutlineRegular size={11} />}
               onClick={handleInsert}
-              title={t('libraryInsertQuote')}
               aria-label={t('libraryInsertQuote')}
             >
               {t('libraryInsertQuote')}
@@ -520,6 +541,8 @@ function LibraryInspectorBody({
     inspector?.phase === 'ready',
   )
   const preferences = useLibraryPreferences()
+  // Use the shared list-density preference for detail spacing.
+  const compact = preferences.preferences?.listDensity === 'compact'
   const [insertError, setInsertError] = useState<string>()
   const [askPicking, setAskPicking] = useState(false)
   const [askBusy, setAskBusy] = useState(false)
@@ -555,7 +578,7 @@ function LibraryInspectorBody({
   if (inspector.phase === 'error') {
     return (
       <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
-        <p className={css.listError} role="alert">
+        <p className={`${noticeCss.notice} ${noticeCss.noticeError} ${css.listError}`} role="alert">
           {laneTextOf(inspector.message, t)}
         </p>
         <Button
@@ -573,6 +596,7 @@ function LibraryInspectorBody({
   const creators = formatCreatorsList(detail.creators)
   const origin = [detail.venue, detail.date].filter(Boolean).join(' · ')
   const pdfs = pdfAttachmentsOf(detail)
+  const openUrl = selectUrlOf(detail.ref)
   const parseFace =
     parsePdf === undefined
       ? undefined
@@ -687,8 +711,16 @@ function LibraryInspectorBody({
     setAskPicking(true)
   }
   return (
-    <aside className={css.inspector} aria-label={t('libraryInspector')} {...scroll}>
-      {insertError && <p role="alert">{insertError}</p>}
+    <aside
+      className={clsx(css.inspector, compact && css.inspectorCompact)}
+      aria-label={t('libraryInspector')}
+      {...scroll}
+    >
+      {insertError && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {insertError}
+        </p>
+      )}
       <header className={css.inspectorHead}>
         <p className={clsx(css.caption, css.inspectorEyebrow)}>
           {itemTypeLabelOf(detail.itemType, localizedItemTypes, t)}
@@ -715,25 +747,26 @@ function LibraryInspectorBody({
               icon={<IconPlusOutlineRegular size={14} />}
               disabled={askBusy}
               onClick={askInChat}
-              title={t('libraryAskInChat')}
             >
               {t('libraryAskInChat')}
             </Button>
           )}
           <LibraryCitationActions detail={detail} exportItem={exportItem} t={t} />
-          {selectUrlOf(detail.ref) !== null && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<IconLinkOutlineRegular size={14} />}
-              onClick={() => {
-                const url = selectUrlOf(detail.ref)
-                if (url && openProtocol !== undefined) void openProtocol(url)
-              }}
-              title={t('openInZoteroTooltip')}
-            >
-              {t('openInZotero')}
-            </Button>
+          {openUrl !== null && (
+            <Tooltip label={t('openInZoteroTooltip')} side="bottom" delayMs={500} portal>
+              <span className={tipCss.seat}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<IconLinkOutlineRegular size={14} />}
+                  onClick={() => {
+                    if (openUrl !== null && openProtocol !== undefined) void openProtocol(openUrl)
+                  }}
+                >
+                  {t('openInZotero')}
+                </Button>
+              </span>
+            </Tooltip>
           )}
         </div>
       </header>

@@ -1,5 +1,6 @@
 import {
   IconCloseOutlineRegular,
+  Tooltip,
   IconLinkOutlineRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
@@ -67,14 +68,15 @@ export function ParsedManagerToolbar(props: ParsedManagerToolbarProps) {
           onChange={(event) => onQueryChange(event.target.value)}
         />
         {query !== '' && (
-          <IconButton
-            shape="round"
-            size="sm"
-            icon={<IconCloseOutlineRegular size={12} />}
-            aria-label={t('parsedManagerClearSearch')}
-            title={t('parsedManagerClearSearch')}
-            onClick={() => onQueryChange('')}
-          />
+          <Tooltip label={t('parsedManagerClearSearch')} side="bottom" delayMs={500} portal>
+            <IconButton
+              shape="round"
+              size="sm"
+              icon={<IconCloseOutlineRegular size={12} />}
+              aria-label={t('parsedManagerClearSearch')}
+              onClick={() => onQueryChange('')}
+            />
+          </Tooltip>
         )}
         <ResponsiveActionButton
           variant="outline"

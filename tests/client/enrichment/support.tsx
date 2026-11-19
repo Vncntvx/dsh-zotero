@@ -5,7 +5,7 @@
  * @module tests/client/enrichment/support
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { vi } from 'vitest'
 import { EnrichmentSettingsSection } from '../../../src/client/EnrichmentSettingsSection.tsx'
@@ -109,6 +109,13 @@ export function mountHarness(
     snapshot: () => face.hooks.enrichmentCard.getSnapshot(),
     writes: () => scope.writes,
   }
+}
+
+/** Open the model bar's overflow menu and return the named row. */
+export async function menuAction(name: string): Promise<HTMLElement> {
+  const more = await screen.findByRole('button', { name: zh.moreActions })
+  if (screen.queryAllByRole('menuitem').length === 0) fireEvent.click(more)
+  return await screen.findByRole('menuitem', { name })
 }
 
 export { cleanup, screen, zh, en }

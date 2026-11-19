@@ -24,7 +24,7 @@ it.each([
   })
   expect(open).not.toHaveBeenCalled()
   expect(windowOpen).not.toHaveBeenCalled()
-  expect(screen.getByRole('button').textContent).toContain(mockT('readErrorUrlBlocked'))
+  expect(screen.getByRole('alert').textContent).toContain(mockT('readErrorUrlBlocked'))
 })
 
 it.each(['javascript:alert(1)', 'https://user:secret@example.org/paper.pdf'])(
@@ -54,6 +54,6 @@ it.each(['javascript:alert(1)', 'https://user:secret@example.org/paper.pdf'])(
     })
     expect(open).not.toHaveBeenCalled()
     expect(windowOpen).not.toHaveBeenCalled()
-    expect(screen.getByRole('button').textContent).toContain(mockT('readErrorUrlBlocked'))
+    expect(screen.getByRole('alert').textContent).toContain(mockT('readErrorUrlBlocked'))
   },
 )

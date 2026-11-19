@@ -6,6 +6,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { downloadBlob } from '../download.ts'
 import { RESULT_PREVIEW_CHARS, fileNameForFormat, mimeOf } from '../export-formats.ts'
 import css from './toolviews.module.css'
+import noticeCss from '../components/notice.module.css'
 import { Button, CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 
 type Props = PropsRuntime<'tool.call.toolview'> & PropsLocale<'zotero'>
@@ -38,7 +39,6 @@ function FileResultBody(props: Props & { sessionId: string }) {
       >
         {props.t('readCompleteResult')}
       </Button>
-      {state.error && <div role="alert">{state.error}</div>}
       {state.body !== undefined && (
         <>
           <CopyButton
@@ -71,6 +71,12 @@ function FileResultBody(props: Props & { sessionId: string }) {
             className={css.rawCode}
           />
         </>
+      )}
+      {/* Failure message at the card end. */}
+      {state.error && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {state.error}
+        </p>
       )}
     </div>
   )

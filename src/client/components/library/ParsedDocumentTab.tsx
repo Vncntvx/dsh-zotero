@@ -10,6 +10,7 @@ import {
   IconRefreshOutlineRegular,
   MarkdownText,
   TextShimmer,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -34,6 +35,7 @@ import { itemInfoTextOf } from './LibraryCitationActions.tsx'
 import { IconButton } from '../IconButton.tsx'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import css from './parsed-document.module.css'
+import tipCss from '../tip.module.css'
 
 export type { ParsedArtifactRead } from '../../parsed-documents.ts'
 export interface ParsedDocumentTabFace {
@@ -542,35 +544,41 @@ function ParsedDocumentView(
           </h2>
         </div>
         <div className={css.tools}>
-          <IconButton
-            icon={
-              copyDocument.phase === 'done' ? (
-                <IconCheckOutlineRegular size={14} />
-              ) : (
-                <IconCopyOutlineRegular size={14} />
-              )
-            }
-            aria-label={t(
-              copyDocument.phase === 'done' ? 'libraryParsedCopied' : 'libraryParsedCopy',
-            )}
-            title={t('libraryParsedCopy')}
-            disabled={!document}
-            onClick={() => document && copyDocument.copyText(document.text)}
-          />
-          <IconButton
-            icon={<IconDownloadOutlineRegular size={14} />}
-            aria-label={t('libraryParsedDownload')}
-            title={t('libraryParsedDownload')}
-            disabled={!document}
-            onClick={() =>
-              document &&
-              downloadBlob(
-                document.text,
-                `${displayTitle.replace(/[^\p{L}\p{N}_.-]+/gu, '_')}.md`,
-                'text/markdown;charset=utf-8',
-              )
-            }
-          />
+          <Tooltip label={t('libraryParsedCopy')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                icon={
+                  copyDocument.phase === 'done' ? (
+                    <IconCheckOutlineRegular size={14} />
+                  ) : (
+                    <IconCopyOutlineRegular size={14} />
+                  )
+                }
+                aria-label={t(
+                  copyDocument.phase === 'done' ? 'libraryParsedCopied' : 'libraryParsedCopy',
+                )}
+                disabled={!document}
+                onClick={() => document && copyDocument.copyText(document.text)}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip label={t('libraryParsedDownload')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                icon={<IconDownloadOutlineRegular size={14} />}
+                aria-label={t('libraryParsedDownload')}
+                disabled={!document}
+                onClick={() =>
+                  document &&
+                  downloadBlob(
+                    document.text,
+                    `${displayTitle.replace(/[^\p{L}\p{N}_.-]+/gu, '_')}.md`,
+                    'text/markdown;charset=utf-8',
+                  )
+                }
+              />
+            </span>
+          </Tooltip>
           {parseSurface.openAttachment &&
             (target.artifactId === undefined || parseSurface.openArtifact) && (
               <Button
@@ -579,7 +587,6 @@ function ParsedDocumentView(
                 size="sm"
                 icon={<IconSparkleRegular size={14} />}
                 aria-label={t('libraryParsedReparse')}
-                title={t('libraryParsedReparse')}
                 onClick={() => {
                   const label = document?.metadata.targetLabel || displayTitle
                   if (target.artifactId !== undefined)
@@ -595,13 +602,16 @@ function ParsedDocumentView(
                 <span className={css.actionLabel}>{t('libraryParsedReparse')}</span>
               </Button>
             )}
-          <IconButton
-            icon={<IconRefreshOutlineRegular size={14} />}
-            aria-label={t('parsedReload')}
-            title={t('parsedReload')}
-            disabled={!artifactAllowed || !sessionAllowed}
-            onClick={reload}
-          />
+          <Tooltip label={t('parsedReload')} side="bottom" delayMs={500} portal>
+            <span className={tipCss.seat}>
+              <IconButton
+                icon={<IconRefreshOutlineRegular size={14} />}
+                aria-label={t('parsedReload')}
+                disabled={!artifactAllowed || !sessionAllowed}
+                onClick={reload}
+              />
+            </span>
+          </Tooltip>
         </div>
       </header>
       {failure && (

@@ -16,6 +16,7 @@ import {
 import type { ZoteroLocaleKey } from './locales.ts'
 import { BooleanField, ChoiceField as ChoiceFieldBase } from './fields.tsx'
 import type { LibraryCardState } from './library-form-controller.ts'
+import noticeCss from './components/notice.module.css'
 import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
 import libraryCss from './library-settings.module.css'
@@ -183,7 +184,13 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
   )
   return (
     <>
-      {state.invalid && <p role="alert">{t('libraryInvalidDraft')}</p>}
+      <div className={noticeCss.noticeSlot}>
+        {state.invalid && (
+          <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+            {t('libraryInvalidDraft')}
+          </p>
+        )}
+      </div>
       {group(
         'libraryDisplaySettings',
         <>

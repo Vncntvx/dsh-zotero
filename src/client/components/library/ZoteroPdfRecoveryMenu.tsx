@@ -1,6 +1,7 @@
 /** Explicit recovery for URL PDF tabs after their temporary bytes expire. */
 import { useState } from 'react'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import noticeCss from '../notice.module.css'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 export function ZoteroPdfRecoveryMenu(props: {
@@ -40,7 +41,11 @@ export function ZoteroPdfRecoveryMenu(props: {
       >
         {props.t(loading ? 'libraryLoading' : 'libraryPdfReload')}
       </MenuItemButton>
-      {error && <p role="alert">{props.t('libraryPdfDownloadError', { message: error })}</p>}
+      {error && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {props.t('libraryPdfDownloadError', { message: error })}
+        </p>
+      )}
     </>
   )
 }

@@ -66,7 +66,7 @@ Local attachments open in the right reader of the owning conversation; URL attac
 
 The panel loads data once the connection is confirmed. When offline, the area below the toolbar displays troubleshooting guidance until the connection is restored.
 
-Wide screens show three columns side by side (navigation, list, detail); narrow screens switch to segmented navigation. The panel remembers the selected item and current segment per Zotero instance.
+Wide screens show two columns (navigation, list) until an item is selected, which opens the detail column beside them; narrow screens switch to segmented navigation. The panel remembers the selected item and current segment per Zotero instance.
 
 The panel is dedicated to browsing and searching the local library. External literature is queried by the agent via scholarly retrieval and appears in the panel and trail once saved to the library.
 

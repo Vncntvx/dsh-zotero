@@ -203,7 +203,7 @@ describe('inspector', () => {
     view.unmount()
   })
 
-  it('keeps the blocked read action inert for a mismatched item', () => {
+  it('keeps the blocked read action inert for a mismatched item', async () => {
     const { view } = mountView(mixedFixture())
     // Item index 3 is the mismatch branch of the mixed fixture.
     fireEvent.click(optionAt(view, 3))
@@ -213,9 +213,12 @@ describe('inspector', () => {
     // Clicking a blocked action stays inert: the block is the point.
     fireEvent.click(readBtn)
     expect(screen.getAllByText(zh.databaseMismatch).length).toBeGreaterThanOrEqual(1)
-    // Clipboard actions stay active: the title is data, not a call.
-    const titleBtn = screen.getByRole('button', { name: zh.copyTitle })
-    expect(titleBtn.getAttribute('aria-disabled')).toBeNull()
+    // Clipboard actions stay active in the locate submenu: the title is data,
+    // not a call.
+    fireEvent.click(screen.getByRole('button', { name: zh.moreActions }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: zh.locateItem }))
+    const titleItem = await screen.findByRole('menuitem', { name: zh.copyTitle })
+    expect(titleItem.getAttribute('aria-disabled')).toBeNull()
     view.unmount()
   })
 })
@@ -243,10 +246,13 @@ describe('overview panel', () => {
   it('copies the canonical link from a visible action-row button and confirms it', async () => {
     const workspace = singleFixture()
     const { view } = mountView(workspace)
-    // The copy sits beside its siblings, not behind an overflow trigger.
+    // Locate actions share the row's overflow; opening the submenu reveals both
+    // the canonical-link copy and the Zotero open command.
     expect(view.container.querySelector('[data-menu]')).toBeNull()
-    expect(screen.getByRole('button', { name: zh.openInZotero })).toBeDefined()
-    fireEvent.click(screen.getByLabelText(zh.copyZoteroLink))
+    fireEvent.click(screen.getByRole('button', { name: zh.moreActions }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: zh.locateItem }))
+    expect(await screen.findByRole('menuitem', { name: zh.openInZotero })).toBeDefined()
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.copyZoteroLink }))
     expect(writeClipboard).toHaveBeenCalledWith('zotero://select/library/items/PPPP0001')
     // A successful write earns the feedback, and the label persists now, so
     // the button can say so.
@@ -254,11 +260,13 @@ describe('overview panel', () => {
     view.unmount()
   })
 
-  it('prefills the export-citation ask from the overview action', () => {
+  it('prefills the export-citation ask from the overview action', async () => {
     const workspace = singleFixture()
     const setDraft = vi.fn()
     const { view } = mountView(workspace, CONNECTED, setDraft)
-    fireEvent.click(screen.getByText(zh.exportCitation))
+    // The source action row keeps one primary read, one ask, and an overflow.
+    fireEvent.click(screen.getByRole('button', { name: zh.moreActions }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: zh.exportCitation }))
     expect(setDraft).toHaveBeenCalledWith(
       zh.citeTemplate.replace('{ref}', 'zotero://user/0/item/PPPP0001'),
     )
