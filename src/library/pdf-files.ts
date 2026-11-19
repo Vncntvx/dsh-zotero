@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm, realpath, readdir, lstat } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { ZoteroError } from '../errors.js'
+import { ZoteroError, ZOTERO_URL_PDF_BUSY } from '../errors.js'
 
 export class PdfReadingFiles {
   private readonly files = new Map<string, string>()
@@ -47,7 +47,7 @@ export class PdfReadingFiles {
   }
   async stage(data: Uint8Array, signal: AbortSignal): Promise<{ path: string; lease: string }> {
     if (this.disposed || this.files.size + this.pending.size >= 16)
-      throw new ZoteroError('Close a URL PDF reader before opening another.', 'ZOTERO_URL_PDF_BUSY')
+      throw new ZoteroError('Close a URL PDF reader before opening another.', ZOTERO_URL_PDF_BUSY)
     const task = this.create(data, signal)
     this.pending.add(task)
     try {

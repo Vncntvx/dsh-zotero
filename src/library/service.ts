@@ -27,7 +27,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { isOwnConfigFiber } from '../service-lifecycle.js'
-import { domainCall, invalid, ZoteroError, ZOTERO_FILE_UNREADABLE } from '../errors.js'
+import {
+  domainCall,
+  invalid,
+  ZoteroError,
+  ZOTERO_FILE_UNREADABLE,
+  ZOTERO_URL_PDF_DISABLED,
+} from '../errors.js'
 import { assertExportRefsWithinCap } from '../export-limits.js'
 import { executeLibraryWrite } from '../library-write.js'
 import {
@@ -117,7 +123,7 @@ export class ZoteroLibraryService extends TypertRemoteService {
       if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
         throw new ZoteroError(
           'URL PDF reading is disabled in Literature panel settings.',
-          'ZOTERO_URL_PDF_DISABLED',
+          ZOTERO_URL_PDF_DISABLED,
         )
       const ref = zoteroReadUrlPdfRequestSchema.parse(request).ref
       const attachment = await requireZoteroService(this.ctx, signal).resolveAttachment(ref, signal)
@@ -138,7 +144,7 @@ export class ZoteroLibraryService extends TypertRemoteService {
     if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
       throw new ZoteroError(
         'URL PDF reading is disabled in Literature panel settings.',
-        'ZOTERO_URL_PDF_DISABLED',
+        ZOTERO_URL_PDF_DISABLED,
       )
     const fs = this.ctx.get('fs')
     if (!fs)
@@ -163,7 +169,7 @@ export class ZoteroLibraryService extends TypertRemoteService {
         )
       signal.throwIfAborted()
       if (!resolveLibraryConfig(this.config).allowUrlPdfRead)
-        throw new ZoteroError('URL PDF reading permission was revoked.', 'ZOTERO_URL_PDF_DISABLED')
+        throw new ZoteroError('URL PDF reading permission was revoked.', ZOTERO_URL_PDF_DISABLED)
       return {
         ref: pdf.ref,
         title: pdf.title,

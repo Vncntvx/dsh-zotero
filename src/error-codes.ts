@@ -101,19 +101,40 @@ export const ZOTERO_WRITE_RATE_LIMITED = 'ZOTERO_WRITE_RATE_LIMITED'
  */
 export const ZOTERO_WRITE_APPROVAL_UNAVAILABLE = 'ZOTERO_WRITE_APPROVAL_UNAVAILABLE'
 
+/** URL PDF reading is disabled by configuration or capability. */
+export const ZOTERO_URL_PDF_DISABLED = 'ZOTERO_URL_PDF_DISABLED'
+/** Another URL PDF read is already running for this attachment or session. */
+export const ZOTERO_URL_PDF_BUSY = 'ZOTERO_URL_PDF_BUSY'
+/** The supplied string is not a URL. */
+export const ZOTERO_URL_PDF_NOT_URL = 'ZOTERO_URL_PDF_NOT_URL'
+/** A redirect left the allowlisted HTTPS host path. */
+export const ZOTERO_URL_PDF_REDIRECT = 'ZOTERO_URL_PDF_REDIRECT'
+/** The download answered with a non-2xx status. */
+export const ZOTERO_URL_PDF_HTTP = 'ZOTERO_URL_PDF_HTTP'
+/** The downloaded bytes are not a PDF. */
+export const ZOTERO_URL_PDF_NOT_PDF = 'ZOTERO_URL_PDF_NOT_PDF'
+/** The download exceeded its deadline. */
+export const ZOTERO_URL_PDF_TIMEOUT = 'ZOTERO_URL_PDF_TIMEOUT'
+/** The target address is not a public host the policy admits. */
+export const ZOTERO_URL_PDF_FORBIDDEN_TARGET = 'ZOTERO_URL_PDF_FORBIDDEN_TARGET'
+/** The download exceeded the byte cap. */
+export const ZOTERO_URL_PDF_TOO_LARGE = 'ZOTERO_URL_PDF_TOO_LARGE'
+/** The download failed below the HTTP layer (DNS, TLS, connection). */
+export const ZOTERO_URL_PDF_NETWORK = 'ZOTERO_URL_PDF_NETWORK'
+
 /** Every stable error code a `ZoteroError` may carry, in documentation order. */
 export const ZOTERO_ERROR_CODES = [
   ZOTERO_SOURCE_PAGE_STALE,
-  'ZOTERO_URL_PDF_DISABLED',
-  'ZOTERO_URL_PDF_BUSY',
-  'ZOTERO_URL_PDF_NOT_URL',
-  'ZOTERO_URL_PDF_REDIRECT',
-  'ZOTERO_URL_PDF_HTTP',
-  'ZOTERO_URL_PDF_NOT_PDF',
-  'ZOTERO_URL_PDF_TIMEOUT',
-  'ZOTERO_URL_PDF_FORBIDDEN_TARGET',
-  'ZOTERO_URL_PDF_TOO_LARGE',
-  'ZOTERO_URL_PDF_NETWORK',
+  ZOTERO_URL_PDF_DISABLED,
+  ZOTERO_URL_PDF_BUSY,
+  ZOTERO_URL_PDF_NOT_URL,
+  ZOTERO_URL_PDF_REDIRECT,
+  ZOTERO_URL_PDF_HTTP,
+  ZOTERO_URL_PDF_NOT_PDF,
+  ZOTERO_URL_PDF_TIMEOUT,
+  ZOTERO_URL_PDF_FORBIDDEN_TARGET,
+  ZOTERO_URL_PDF_TOO_LARGE,
+  ZOTERO_URL_PDF_NETWORK,
 
   ZOTERO_NOT_RUNNING,
   ZOTERO_API_DISABLED,

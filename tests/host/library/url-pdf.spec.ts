@@ -68,6 +68,19 @@ it('resolves and pins a new public host on redirect', async () => {
   expect(dependencies.resolver).toHaveBeenCalledWith('cdn.example', expect.any(AbortSignal))
   expect(close).toHaveBeenCalledTimes(2)
 })
+
+it('rechecks reading permission before following a redirect', async () => {
+  let allowed = true
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+    allowed = false
+    return new Response(null, { status: 302, headers: { location: '/again' } })
+  })
+  const { reader } = setup({ fetch, allowed: () => allowed })
+  await expect(reader.read(attachment, signal())).rejects.toMatchObject({
+    code: 'ZOTERO_URL_PDF_DISABLED',
+  })
+  expect(fetch).toHaveBeenCalledOnce()
+})
 it.each([
   'http://127.0.0.1/private',
   'https://10.0.0.1/private',

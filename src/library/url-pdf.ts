@@ -11,11 +11,24 @@ import {
 import { readBoundedBytes, ResponseTooLargeError } from '../transport-bounds.js'
 import type { PublicFetch } from '../transport/connections.js'
 import { egressRouteFor } from '../transport/connections.js'
-import { ZoteroError } from '../errors.js'
+import {
+  ZoteroError,
+  ZOTERO_URL_PDF_DISABLED,
+  ZOTERO_URL_PDF_BUSY,
+  ZOTERO_URL_PDF_NOT_URL,
+  ZOTERO_URL_PDF_REDIRECT,
+  ZOTERO_URL_PDF_HTTP,
+  ZOTERO_URL_PDF_NOT_PDF,
+  ZOTERO_URL_PDF_TIMEOUT,
+  ZOTERO_URL_PDF_FORBIDDEN_TARGET,
+  ZOTERO_URL_PDF_TOO_LARGE,
+  ZOTERO_URL_PDF_NETWORK,
+} from '../errors.js'
 import type { ZoteroAttachmentLocationView } from '../contract.js'
 
 export const URL_PDF_MAX_BYTES = 32 * 1024 * 1024
 export const URL_PDF_TIMEOUT_MS = 60_000
+const URL_PDF_MAX_REDIRECTS = 5
 /** The deadline's TimeoutReason code for a panel PDF download. */
 const URL_PDF_TIMEOUT_REASON = 'zotero/url-pdf-download-timeout'
 export interface UrlPdfDependencies {
@@ -24,28 +37,15 @@ export interface UrlPdfDependencies {
   readonly dispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
   readonly fetch: PublicFetch
 }
-const failure = (
-  suffix:
-    | 'DISABLED'
-    | 'BUSY'
-    | 'NOT_URL'
-    | 'REDIRECT'
-    | 'HTTP'
-    | 'NOT_PDF'
-    | 'TIMEOUT'
-    | 'FORBIDDEN_TARGET'
-    | 'TOO_LARGE'
-    | 'NETWORK',
-  message: string,
-) => new ZoteroError(message, `ZOTERO_URL_PDF_${suffix}`)
-
 export class UrlPdfReader {
   private readonly running = new Set<AbortController>()
   constructor(private readonly deps: UrlPdfDependencies) {}
   revoke(): void {
     if (this.deps.allowed()) return
     for (const controller of this.running)
-      controller.abort(failure('DISABLED', 'URL PDF reading permission was revoked.'))
+      controller.abort(
+        new ZoteroError('URL PDF reading permission was revoked.', ZOTERO_URL_PDF_DISABLED),
+      )
   }
   /**
    * Stop every in-flight download because the capability itself is going
@@ -62,9 +62,15 @@ export class UrlPdfReader {
     signal: AbortSignal,
   ): Promise<{ ref: string; title: string; contentType: 'application/pdf'; data: Uint8Array }> {
     if (!this.deps.allowed())
-      throw failure('DISABLED', 'URL PDF reading is disabled in Literature panel settings.')
+      throw new ZoteroError(
+        'URL PDF reading is disabled in Literature panel settings.',
+        ZOTERO_URL_PDF_DISABLED,
+      )
     if (this.running.size >= 2)
-      throw failure('BUSY', 'Two PDF downloads are already running. Try again after one finishes.')
+      throw new ZoteroError(
+        'Two PDF downloads are already running. Try again after one finishes.',
+        ZOTERO_URL_PDF_BUSY,
+      )
     const controller = new AbortController()
     this.running.add(controller)
     // The download deadline fused with the caller's cancellation and the
@@ -75,11 +81,12 @@ export class UrlPdfReader {
     const combined = AbortSignal.any([timeout, controller.signal])
     try {
       if (attachment.kind !== 'url' || !attachment.url)
-        throw failure('NOT_URL', 'This attachment is not a URL PDF.')
+        throw new ZoteroError('This attachment is not a URL PDF.', ZOTERO_URL_PDF_NOT_URL)
       let url = new URL(attachment.url)
-      for (let hop = 0; hop <= 5; hop++) {
+      for (let hop = 0; ; hop++) {
         combined.throwIfAborted()
-        if (!this.deps.allowed()) throw failure('DISABLED', 'URL PDF reading is disabled.')
+        if (!this.deps.allowed())
+          throw new ZoteroError('URL PDF reading is disabled.', ZOTERO_URL_PDF_DISABLED)
         if (url.username || url.password || !isPublicUrl(url.href))
           throw new PublicAddressError(
             'PDF address is not a permitted public HTTP(S) address.',
@@ -110,8 +117,11 @@ export class UrlPdfReader {
           if ([301, 302, 303, 307, 308].includes(response.status)) {
             const location = response.headers.get('location')
             await response.body?.cancel()
-            if (!location || hop === 5)
-              throw failure('REDIRECT', 'PDF redirect limit exceeded or Location is missing.')
+            if (!location || hop === URL_PDF_MAX_REDIRECTS)
+              throw new ZoteroError(
+                'PDF redirect limit exceeded or Location is missing.',
+                ZOTERO_URL_PDF_REDIRECT,
+              )
             const next = new URL(location, url)
             if (url.protocol === 'https:' && next.protocol !== 'https:')
               throw new PublicAddressError(
@@ -123,7 +133,10 @@ export class UrlPdfReader {
           }
           if (!response.ok) {
             await response.body?.cancel()
-            throw failure('HTTP', `PDF server returned HTTP ${response.status}.`)
+            throw new ZoteroError(
+              `PDF server returned HTTP ${response.status}.`,
+              ZOTERO_URL_PDF_HTTP,
+            )
           }
           const length = Number(response.headers.get('content-length'))
           if (length > URL_PDF_MAX_BYTES) {
@@ -133,13 +146,19 @@ export class UrlPdfReader {
           const type = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
           if (type && type !== 'application/pdf' && type !== 'application/octet-stream') {
             await response.body?.cancel()
-            throw failure('NOT_PDF', 'The attachment website returned a non-PDF response.')
+            throw new ZoteroError(
+              'The attachment website returned a non-PDF response.',
+              ZOTERO_URL_PDF_NOT_PDF,
+            )
           }
           const bytes = await readBoundedBytes(response, URL_PDF_MAX_BYTES)
           combined.throwIfAborted()
           const prefix = new TextDecoder('ascii').decode(bytes.subarray(0, 1024))
           if (!/^\s*%PDF-\d\.\d(?:\s|$)/.test(prefix))
-            throw failure('NOT_PDF', 'The response does not contain a PDF file signature.')
+            throw new ZoteroError(
+              'The response does not contain a PDF file signature.',
+              ZOTERO_URL_PDF_NOT_PDF,
+            )
           return {
             ref: attachment.ref,
             title: attachment.title,
@@ -152,25 +171,25 @@ export class UrlPdfReader {
           await closePinnedQuietly(connection)
         }
       }
-      throw failure('REDIRECT', 'PDF redirect limit exceeded.')
     } catch (error) {
       if (signal.aborted || controller.signal.aborted) throw combined.reason
-      if (timeout.aborted) throw failure('TIMEOUT', 'The PDF download exceeded 60 seconds.')
+      if (timeout.aborted)
+        throw new ZoteroError('The PDF download exceeded 60 seconds.', ZOTERO_URL_PDF_TIMEOUT)
       if (error instanceof PublicAddressError) {
         if (error.reason === 'resolution-failed')
-          throw failure(
-            'NETWORK',
+          throw new ZoteroError(
             'The PDF hostname could not be resolved. Check the local DNS proxy and retry explicitly.',
+            ZOTERO_URL_PDF_NETWORK,
           )
-        throw failure('FORBIDDEN_TARGET', error.message)
+        throw new ZoteroError(error.message, ZOTERO_URL_PDF_FORBIDDEN_TARGET)
       }
       if (error instanceof ResponseTooLargeError)
-        throw failure('TOO_LARGE', 'The PDF exceeds the 32 MiB reading limit.')
+        throw new ZoteroError('The PDF exceeds the 32 MiB reading limit.', ZOTERO_URL_PDF_TOO_LARGE)
       if (error instanceof ZoteroError) throw error
       // Fetch errors can contain a full signed URL: never surface their raw text.
-      throw failure(
-        'NETWORK',
+      throw new ZoteroError(
         'The PDF download failed. Check the source website and retry explicitly.',
+        ZOTERO_URL_PDF_NETWORK,
       )
     } finally {
       this.running.delete(controller)

@@ -22,6 +22,7 @@ import {
   normalizeCreator,
   requireCreatableItemType,
   requireTitleOrUrl,
+  requireUniqueBatchItemKey,
 } from '../write-item-rules.js'
 import { runPreview } from './degradable.js'
 import { renderDeclined } from './present.js'
@@ -254,12 +255,17 @@ export function buildBatchItemsRequest(
     )
   }
 
-  const validatedDeletes = deletes.map((ref) => {
-    return parseWritableRef(assertNonBlank('delete item', ref), ['item'])
+  const deleteKeys = new Set<string>()
+  const validatedDeletes = deletes.map((value) => {
+    const ref = parseWritableRef(assertNonBlank('delete item', value), ['item'])
+    requireUniqueBatchItemKey(deleteKeys, ref.key, 'delete')
+    return ref
   })
 
+  const updateKeys = new Set<string>()
   const validatedUpdates: ZoteroBatchUpdateItemInput[] = updates.map((u) => {
     const ref = parseWritableRef(assertNonBlank('update item ref', u.ref), ['item'])
+    requireUniqueBatchItemKey(updateKeys, ref.key, 'update')
     const addTags = u.addTags?.map((t) => assertNonBlank('addTags', t))
     const removeTags = u.removeTags?.map((t) => assertNonBlank('removeTags', t))
     const addCols = u.addCollections?.map((c) => assertNonBlank('addCollections', c))
@@ -280,7 +286,6 @@ export function buildBatchItemsRequest(
       ...(removeCols && removeCols.length > 0 ? { removeCollections: removeCols } : {}),
     }
   })
-
   const validatedCreates: ZoteroBatchCreateItemInput[] = creates.map((c) => {
     const itemType = requireCreatableItemType(assertNonBlank('itemType', c.itemType))
     const title = c.title?.trim() ?? ''

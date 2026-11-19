@@ -450,12 +450,14 @@ export class ZoteroWriteHttpClient {
         }
       }
       const observedServerId = response.headers.get(ZOTERO_SERVER_ID_HEADER)
-      // A response from another instance is never translated as this write's
-      // refusal. This check also covers error responses, whose bodies may use
-      // different wording than the read transport's identity statement.
+      // A pre-commit refusal still proves the write did not reach object commit.
+      // A success from another instance cannot prove what it committed.
       if (observedServerId !== null && observedServerId !== opts.serverId) {
         void response.body?.cancel()
-        throw new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH)
+        throw commitUnknownOr(
+          new ZoteroError(SERVER_MISMATCH_MESSAGE, ZOTERO_SERVER_MISMATCH),
+          commitSensitive && !isPreCommitWriteStatus(response.status),
+        )
       }
       if (!response.ok) {
         // Zotero states its refusals in the body for the statuses the write

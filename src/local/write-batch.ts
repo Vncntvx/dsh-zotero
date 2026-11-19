@@ -13,6 +13,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { formatRef, libraryPrefix, PERSONAL_LIBRARY, requireWritableRef } from '../refs.js'
+import { requireUniqueBatchItemKey } from '../write-item-rules.js'
 import { preflightTrashGraphs, type TrashSnapshot } from './trash-item.js'
 import { patchTrashNodes, trashWalkProgress, verifyTrashGraph } from './write-trash-graph.js'
 import {
@@ -69,9 +70,7 @@ function prevalidateBatchDeletes(
   return deletes.map((ref) => {
     const writable = requireWritableRef(ref, ['item'])
     const checked = requireWritableRefAtServer(writable, ['item'], serverId)
-    if (keys.has(checked.key))
-      throw new ZoteroError(`Batch delete repeats item ${checked.key}.`, ZOTERO_INVALID_ARGUMENT)
-    keys.add(checked.key)
+    requireUniqueBatchItemKey(keys, checked.key, 'delete')
     return checked
   })
 }
@@ -84,12 +83,7 @@ function prevalidateBatchUpdates(
   return updates.map((u) => {
     const writable = requireWritableRef(u.ref, ['item'])
     const ref = requireWritableRefAtServer(writable, ['item'], serverId)
-    if (keys.has(ref.key))
-      throw new ZoteroError(
-        'A batch cannot update one item more than once.',
-        ZOTERO_INVALID_ARGUMENT,
-      )
-    keys.add(ref.key)
+    requireUniqueBatchItemKey(keys, ref.key, 'update')
     const addTags = normalizeWriteList('addTags', u.addTags ?? [])
     const removeTags = normalizeWriteList('removeTags', u.removeTags ?? [])
     const addColInputs = (u.addCollections ?? []).map((c) =>
@@ -643,12 +637,7 @@ export async function batchItems(
       ...new Set(unverified.map((u) => u.ref).filter((ref): ref is string => ref !== undefined)),
     ]
 
-    if (
-      completedRefs.length > 0 ||
-      unverifiedRefs.length > 0 ||
-      unverified.length > 0 ||
-      failed.length > 0
-    ) {
+    if (completedRefs.length > 0 || unverified.length > 0 || failed.length > 0) {
       const code =
         error instanceof HarnessError
           ? error.code

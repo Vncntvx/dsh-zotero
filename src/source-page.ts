@@ -20,7 +20,7 @@ import {
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
 } from './constants.js'
-import { ZoteroError, ZOTERO_SOURCE_PAGE_STALE, invalid } from './errors.js'
+import { ZoteroError, ZOTERO_NOT_FOUND, ZOTERO_SOURCE_PAGE_STALE, invalid } from './errors.js'
 import { requireZoteroService } from './service.js'
 import { filterSources } from './sources/filters.js'
 import type { SourceItem } from './sources/model.js'
@@ -67,7 +67,7 @@ export async function readSourcePage(
   authorize()
   const session = ctx.get('sessions')?.get(sessionId)
   if (session === undefined)
-    throw new ZoteroError('The requested session is not open.', 'ZOTERO_NOT_FOUND')
+    throw new ZoteroError('The requested session is not open.', ZOTERO_NOT_FOUND)
   const { workspace: full, revision } = await requireZoteroService(ctx, signal).sourceWorkspace(
     session,
     signal,
@@ -76,7 +76,7 @@ export async function readSourcePage(
   signal.throwIfAborted()
   authorize()
   if (ctx.get('sessions')?.get(sessionId) !== session) {
-    throw new ZoteroError('The requested session is no longer open.', 'ZOTERO_NOT_FOUND')
+    throw new ZoteroError('The requested session is no longer open.', ZOTERO_NOT_FOUND)
   }
   if (request.revision !== undefined && request.revision !== revision) {
     throw new ZoteroError(
@@ -101,7 +101,7 @@ export async function readSourcePage(
   } else if (target.kind === 'source') {
     const item = full.sources.find((source) => source.key === target.key)
     if (item === undefined)
-      throw new ZoteroError('The requested source is not in this session.', 'ZOTERO_NOT_FOUND')
+      throw new ZoteroError('The requested source is not in this session.', ZOTERO_NOT_FOUND)
     const rows = target.rows
     const list: readonly unknown[] =
       rows === 'searches'

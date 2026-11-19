@@ -23,6 +23,22 @@ const CREATABLE_ITEM_TYPES: ReadonlySet<string> = new Set(ZOTERO_CREATABLE_ITEM_
 
 const UPDATABLE_FIELDS: ReadonlySet<string> = new Set(ZOTERO_UPDATABLE_ITEM_FIELDS)
 
+/** Reject repeated targets within one batch operation. */
+export function requireUniqueBatchItemKey(
+  seen: Set<string>,
+  key: string,
+  operation: 'delete' | 'update',
+): void {
+  if (seen.has(key))
+    throw new ZoteroError(
+      operation === 'delete'
+        ? `Batch delete repeats item ${key}.`
+        : 'A batch cannot update one item more than once.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  seen.add(key)
+}
+
 /** Refuse an update that carries no mutation before approval or source I/O. */
 export function requireUpdateField(fields: Readonly<Record<string, unknown>>): void {
   if (Object.values(fields).every((value) => value === undefined))

@@ -268,6 +268,8 @@ export async function askPlanApproval(
       signal: exec.signal,
     })
     const items = answer.answers.filter((a) => a.id === WRITE_PLAN_QUESTION_ID)
+    // Exactly one answer carries the plan question. More than one is a client
+    // protocol violation; deny rather than guess which answer to honor.
     const item = items.length === 1 ? items[0] : undefined
     if (item === undefined) return { approved: false }
     if (item.custom !== undefined) return { approved: false, feedback: item.custom }
