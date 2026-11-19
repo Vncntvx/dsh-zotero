@@ -1,11 +1,17 @@
 /**
  * The Scholarly literature subsystem settings form body.
  *
- * Two card containers: API credentials and identification (the polite pool
- * contact email and the external scholarly API keys), and search and
- * full-text quotas (search limit and content character ceiling).
+ * Three card containers: API credentials and identification (the polite pool
+ * contact email and the write-only external scholarly API keys), search and
+ * full-text quotas (search limit and content character ceiling), and the
+ * background-job policy.
  *
- * Shared by the unified 7-tab settings view (Tab 5) and the dedicated
+ * The credential-reference fields stay in the schema and the controller state
+ * but are not rendered: the controller stages a suggested reference with the
+ * first key save. The scholarly `foregroundWaitMs` field is likewise
+ * config-only, so the scholarly job group does not repeat it.
+ *
+ * Shared by the unified 4-tab settings view (Tab 3) and the dedicated
  * `dsh-zotero#scholarly` row configuration page.
  * @module dsh-zotero/client/ScholarlySettingsForm
  */
@@ -61,9 +67,6 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
         </div>
         <div className={css.fields}>
           {renderValueField(t, state, actions, 'email')}
-          {renderValueField(t, state, actions, 's2ApiKeyEnv')}
-          {renderValueField(t, state, actions, 'ncbiApiKeyEnv')}
-          {renderValueField(t, state, actions, 'openalexApiKeyEnv')}
           {renderSecretField(t, state, actions, 's2Key')}
           {renderSecretField(t, state, actions, 'ncbiKey')}
           {renderSecretField(t, state, actions, 'openalexKey')}
@@ -81,15 +84,14 @@ export function ScholarlySettingsForm(props: ScholarlySettingsFormProps): ReactN
         </div>
       </section>
 
-      <section className={css.group} aria-label={t('groupJobs')}>
+      <section className={css.group} aria-label={t('groupScholarlyJobs')}>
         <div className={css.groupHeader}>
-          <h3 className={css.groupHeading}>{t('groupJobs')}</h3>
-          <p className={css.groupNote}>{t('groupJobsDesc')}</p>
+          <h3 className={css.groupHeading}>{t('groupScholarlyJobs')}</h3>
+          <p className={css.groupNote}>{t('groupScholarlyJobsDesc')}</p>
         </div>
         <div className={css.fields}>
           {renderBooleanField(t, state, actions, 'enableRunInBackground')}
           {renderBooleanField(t, state, actions, 'promoteOnTimeout')}
-          {renderJobWaitField(t, state, actions)}
         </div>
       </section>
     </>
@@ -105,7 +107,6 @@ function renderValueField(
   const field = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey
   const hintKey = `${labelKey}Hint` as ZoteroLocaleKey
-  const credentialRef = key.endsWith('ApiKeyEnv')
   return (
     <SettingsValueField
       key={key}
@@ -117,37 +118,11 @@ function renderValueField(
       invalid={field.invalid}
       overriddenLabel={t('overridden')}
       resetLabel={t('reset')}
-      invalidLabel={t(credentialRef ? 'invalidCredentialRef' : 'invalidNumber')}
+      invalidLabel={t('invalidNumber')}
       disabled={!state.writable || state.saving}
       numeric={NUMERIC_FIELDS.has(key)}
       onEdit={(text) => actions.edit(key, text)}
       onReset={() => actions.resetField(key)}
-    />
-  )
-}
-
-function renderJobWaitField(
-  t: (key: ZoteroLocaleKey) => string,
-  state: ScholarlyCardState,
-  actions: ScholarlyFormActions,
-): ReactNode {
-  const field = state.foregroundWaitMs
-  return (
-    <SettingsValueField
-      key="foregroundWaitMs"
-      id="scholarly-settings-foregroundWaitMs"
-      label={t('foregroundWaitMs')}
-      hint={t('foregroundWaitMsHint')}
-      text={field.text}
-      overridden={field.overridden}
-      invalid={field.invalid}
-      overriddenLabel={t('overridden')}
-      resetLabel={t('reset')}
-      invalidLabel={t('invalidNumber')}
-      disabled={!state.writable || state.saving}
-      numeric
-      onEdit={(text) => actions.edit('foregroundWaitMs', text)}
-      onReset={() => actions.resetField('foregroundWaitMs')}
     />
   )
 }
@@ -184,11 +159,9 @@ function renderSecretField(
   const secret = state[key]
   const labelKey = `scholarly${key.charAt(0).toUpperCase()}${key.slice(1)}` as ZoteroLocaleKey
   const hintKey =
-    secret.referenceState === 'missing'
-      ? 'scholarlyKeyNeedsReference'
-      : secret.referenceState === 'invalid'
-        ? 'invalidCredentialRef'
-        : (`${labelKey}Hint` as ZoteroLocaleKey)
+    secret.referenceState === 'invalid'
+      ? 'invalidCredentialRef'
+      : (`${labelKey}Hint` as ZoteroLocaleKey)
   return (
     <SettingsSecretField
       key={key}

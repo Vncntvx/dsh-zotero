@@ -206,7 +206,7 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 | 参数         | 类型     | 默认值                       | 说明                                                                                        |
 | ------------ | -------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | —                            | 条目 ref 列表（必填，单次受 `maxExportRefs` 限制，默认 50）                                 |
+| `refs`       | string[] | —                            | 条目 ref 列表（必填，单次受配置文件字段 `maxExportRefs` 限制，默认 50）                     |
 | `format`     | string   | —                            | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
 | `style`      | string   | 配置默认值                   | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
 | `locale`     | string   | 配置默认值（默认 `"en-US"`） | CSL 语言环境（仅用于 citation 和 bibliography；默认取配置 `defaultLocale`）                 |
@@ -230,8 +230,8 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ### 说明
 
-- refs 总数受 `maxExportRefs` 限制（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条；超出时返回错误；
-- `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。默认 `maxExportRefs` 同为 50，因此需先将该配置调至 50 以上，分批才会实际发生；
+- refs 总数受配置文件字段 `maxExportRefs` 限制（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条；超出时返回错误；
+- `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。配置文件字段 `maxExportRefs` 默认同为 50，因此需先在配置文件中将该字段调至 50 以上，分批才会实际发生；
 - `bibtex`、`biblatex`、`ris`、`csljson` 各使用 1 次 translator 请求和 1 次有界原始元数据批处理，用于 citekey 与字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对；无法定位的 ref 在结果中只保留自身。元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）仍会抛出；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
@@ -319,9 +319,9 @@ zotero_browse(kind="tags", q="review", match="contains")
 - `cursor`：仅在当前批次完整读取且期间未发生并发写入时返回，用于后续增量请求。`cursor.include` 仅包含当前 Zotero 版本实际支持跟踪的资源类别；未提供对应端点的类别（如缺少 `/deleted` 路由的旧版本）会记入 `cursor.unserved`，不计入覆盖声明，但后续增量请求仍可原样带回；
 - `unobservable`：标明因版本或端点限制无法观测的资源类别及原因。端点未提供（`not-served`）不影响游标生成；若存在不支持的键范围（`range-not-covered`）或读取失败（`unreadable`），当前批次将不返回游标，防止推进游标时遗漏未成功读取的变更行。
 
-每个 `changed` / `deleted` 资源列表最多返回 `maxChangesResults` 条（默认 50），这会限制模型拿到的规范结果列表；`totals` 保留真实数量，`truncated` 标记超限。工具完整读取上游版本映射后才签发游标；列表截断只限制模型可见行数，不影响游标的签发。
+每个 `changed` / `deleted` 资源列表最多返回配置文件字段 `maxChangesResults` 条（默认 50），这会限制模型拿到的规范结果列表；`totals` 保留真实数量，`truncated` 标记超限。工具完整读取上游版本映射后才签发游标；列表截断只限制模型可见行数，不影响游标的签发。
 
-较大的版本区间可能超过 `maxResponseBytes`，导致 `ZOTERO_RESPONSE_TOO_LARGE`，本次调用不返回新游标。需要保留该区间时，提高响应字节预算并使用原 `since` 重试。省略 `since` 只会建立当前基线，不会补回期间变更；全量重新同步后才可将该新基线用于后续增量。
+较大的版本区间可能超过配置文件字段 `maxResponseBytes`，导致 `ZOTERO_RESPONSE_TOO_LARGE`，本次调用不返回新游标。需要保留该区间时，在配置文件中提高响应字节预算并使用原 `since` 重试。省略 `since` 只会建立当前基线，不会补回期间变更；全量重新同步后才可将该新基线用于后续增量。
 
 ### 示例
 

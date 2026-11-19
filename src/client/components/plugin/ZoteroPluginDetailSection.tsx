@@ -1,6 +1,7 @@
 /**
  * Custom section rendered at the bottom of the plugin manager detail page
- * (plugins.detail.section slot). Shows readiness status.
+ * (plugins.detail.section slot). One section owns the connection card and,
+ * when diagnostic mode is on, the diagnostics log card beneath it.
  * @module dsh-zotero/client/components/plugin/ZoteroPluginDetailSection
  */
 
@@ -12,16 +13,19 @@ import { DiagnosisBox } from '../DiagnosisBox.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import type { PluginDetailProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
+import { DiagnosticsCard } from '../DiagnosticsCard.tsx'
+import type { ErrorReporter } from '../../actions/error-reporter.ts'
 import type { ZoteroClientFace } from '../../actions/client-face.ts'
-import type { ZoteroProbeFace } from './faces.ts'
+import type { ZoteroDetailFace } from './faces.ts'
 import css from './plugin-cards.module.css'
 
 export interface ZoteroPluginDetailSectionProps
-  extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroProbeFace {
+  extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroDetailFace {
   readonly useZoteroClient: () => ZoteroClientFace
 }
 
-type DetailSectionBodyProps = Pick<ZoteroPluginDetailSectionProps, 'probe'> & PropsLocale<'zotero'>
+type DetailSectionBodyProps = Pick<ZoteroPluginDetailSectionProps, 'probe' | 'diagnostics'> &
+  PropsLocale<'zotero'> & { readonly report: ErrorReporter }
 
 /**
  * Slot entry: subject guard only, so the body's hook count never varies with
@@ -31,18 +35,27 @@ export function ZoteroPluginDetailSection({
   subject,
   t,
   probe,
+  diagnostics,
   useZoteroClient,
 }: ZoteroPluginDetailSectionProps): ReactNode {
   const pkgName = subject.kind === 'bundle' || subject.kind === 'row' ? subject.pkg.name : undefined
   if (pkgName !== ZOTERO_REMOTE_PACKAGE) {
     return null
   }
-  return <ZoteroPluginDetailMatched t={t} probe={probe} useZoteroClient={useZoteroClient} />
+  return (
+    <ZoteroPluginDetailMatched
+      t={t}
+      probe={probe}
+      diagnostics={diagnostics}
+      useZoteroClient={useZoteroClient}
+    />
+  )
 }
 
 function ZoteroPluginDetailMatched({
   t,
   probe,
+  diagnostics,
   useZoteroClient,
 }: Omit<ZoteroPluginDetailSectionProps, 'subject'>): ReactNode {
   const client = useZoteroClient()
@@ -53,12 +66,22 @@ function ZoteroPluginDetailMatched({
       resetKey={ZOTERO_REMOTE_PACKAGE}
       report={client.reportClientError}
     >
-      <ZoteroPluginDetailSectionBody t={t} probe={probe} />
+      <ZoteroPluginDetailSectionBody
+        t={t}
+        probe={probe}
+        diagnostics={diagnostics}
+        report={client.reportClientError}
+      />
     </ZoteroSurfaceBoundary>
   )
 }
 
-function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): ReactNode {
+function ZoteroPluginDetailSectionBody({
+  t,
+  probe,
+  diagnostics,
+  report,
+}: DetailSectionBodyProps): ReactNode {
   const { state, runProbe } = useZoteroProbe(probe, {
     initialAutoRun: true,
   })
@@ -72,39 +95,38 @@ function ZoteroPluginDetailSectionBody({ t, probe }: DetailSectionBodyProps): Re
       <div className={css.sectionHead}>
         <h4 className={css.sectionTitle}>{t('detailSectionTitle')}</h4>
       </div>
-      <div className={css.sectionGrid}>
-        <div className={css.card}>
-          <div className={css.cardHead}>
-            <span className={css.cardTitle}>{t('detailsLabel')}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={state.loading}
-              onClick={() => {
-                void runProbe()
-              }}
-            >
-              {state.loading ? t('checking') : t('refresh')}
-            </Button>
-          </div>
-          <div className={css.statusRow} data-state={connected ? 'connected' : 'disconnected'}>
-            <StateDot state={state.loading ? 'ongoing' : connected ? 'done' : 'error'} />
-            <span>
-              {state.loading
-                ? t('checking')
-                : connected
-                  ? t('statusConnectedNote')
-                  : t('statusUnavailable')}
-            </span>
-          </div>
-          {version ? (
-            <p className={css.statusDetail}>
-              {t('zoteroVersionLabel')}: {version}
-            </p>
-          ) : null}
-          {diagnosis ? <DiagnosisBox diagnosis={diagnosis} t={t} /> : null}
+      <div className={css.card} data-zotero-status-card>
+        <div className={css.cardHead}>
+          <span className={css.cardTitle}>{t('connectionStatusLabel')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={state.loading}
+            onClick={() => {
+              void runProbe()
+            }}
+          >
+            {state.loading ? t('checking') : t('refresh')}
+          </Button>
         </div>
+        <div className={css.statusRow} data-state={connected ? 'connected' : 'disconnected'}>
+          <StateDot state={state.loading ? 'ongoing' : connected ? 'done' : 'error'} />
+          <span>
+            {state.loading
+              ? t('checking')
+              : connected
+                ? t('statusConnectedNote')
+                : t('statusUnavailable')}
+          </span>
+        </div>
+        {version ? (
+          <p className={css.statusDetail}>
+            {t('zoteroVersionLabel')}: {version}
+          </p>
+        ) : null}
+        {diagnosis ? <DiagnosisBox diagnosis={diagnosis} t={t} /> : null}
       </div>
+      <DiagnosticsCard t={t} diagnostics={diagnostics} status={state.data} report={report} />
     </section>
   )
 }

@@ -62,7 +62,8 @@ Agent 在对话里用工具检索、阅读与引用文献；文献轨迹核对�
 
 - 最新版（推荐）：`dsh-zotero`
 - 指定版本：`dsh-zotero@1.3.0`
-- GitHub 预构建分支：`github:Vncntvx/dsh-zotero#release`
+- GitHub 稳定版预构建分支（最近一次 tag 发布）：`github:Vncntvx/dsh-zotero#stable`
+- GitHub 滚动预构建分支（跟随 main）：`github:Vncntvx/dsh-zotero#release`
 
 ### 命令行安装
 
@@ -73,13 +74,16 @@ dsh plugin --profile <name> add dsh-zotero
 # 安装指定版本
 dsh plugin --profile <name> add dsh-zotero@<version>
 
-# 从 GitHub 预构建分支安装
+# 从 GitHub 稳定版预构建分支安装（最近一次 tag 发布）
+dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#stable
+
+# 从 GitHub 滚动预构建分支安装（跟随 main）
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
 安装完成后新建会话即可使用。在插件管理器中打开 **dsh-zotero** 详情页，其配置区提供完整配置表单。
 
-> 提示：从 `main` 源码分支直接安装需要本地执行 `prepare` 构建，并在 profile 的 `pnpm-workspace.yaml` 中允许 `dsh-zotero` 的构建脚本；改用 `#release` 分支或 npm 包可免除这一步。本地语义检索的 WASM 运行时随插件发布，无需另行安装；模型在设置中下载，详见[快速入门](docs/getting-started.md)。
+> 提示：从 `main` 源码分支直接安装需要本地执行 `prepare` 构建，并在 profile 的 `pnpm-workspace.yaml` 中允许 `dsh-zotero` 的构建脚本；改用 `#stable` / `#release` 分支或 npm 包可免除这一步。本地语义检索的 WASM 运行时随插件发布，无需另行安装；模型在设置中下载，详见[快速入门](docs/getting-started.md)。
 
 ## 前置条件
 

@@ -31,14 +31,19 @@ export function assertReleaseSource({ actualSha, expectedSha, status }) {
   }
 }
 
+/** The reviewed channels: `release` follows main; `stable` follows tag releases. */
+export const RELEASE_CHANNELS = Object.freeze(['release', 'stable'])
+
 /**
  * The installation channel is one reviewed branch on the project's own remote.
  * @param target {ReleaseTargetFacts} the branch, remote name, and remote URL.
  * @returns {void}
  */
 export function assertReleaseTarget({ branch, remote, remoteUrl }) {
-  if (branch !== 'release' || remote !== 'origin')
-    throw new Error('[release-branch] Only origin refs/heads/release is a release target')
+  if (!RELEASE_CHANNELS.includes(branch) || remote !== 'origin')
+    throw new Error(
+      '[release-branch] Only origin refs/heads/release and refs/heads/stable are release targets',
+    )
   const normalized = (remoteUrl ?? '')
     .trim()
     .replace(/\/+$/, '')
@@ -54,33 +59,45 @@ export function assertReleaseTarget({ branch, remote, remoteUrl }) {
 }
 
 /**
- * A legacy channel can be initialized only from current main; later moves are
- * monotonic.
+ * The rolling channel mirrors current main, so a rewritten main reinitializes
+ * it; the stable channel only moves forward along main history.
  * @param advance {{
+ *   branch: string,
  *   sourceSha: string,
  *   mainSha: string,
  *   previous: ReleaseChannelState | undefined,
  *   sourceDescendsFromPrevious: boolean,
+ *   mainDescendsFromSource: boolean,
  *   artifactDigest: string,
  * }} the candidate release move.
  * @returns {void}
  */
 export function assertReleaseAdvance({
+  branch,
   sourceSha,
   mainSha,
   previous,
   sourceDescendsFromPrevious,
+  mainDescendsFromSource,
   artifactDigest,
 }) {
+  if (!RELEASE_CHANNELS.includes(branch))
+    throw new Error(`[release-branch] Unknown release channel: ${branch}`)
   if (previous === undefined) {
-    if (sourceSha !== mainSha)
-      throw new Error('[release-branch] Initialize provenance from current main')
+    if (branch === 'release') {
+      if (sourceSha !== mainSha)
+        throw new Error('[release-branch] Initialize the rolling channel from current main')
+    } else if (!mainDescendsFromSource) {
+      throw new Error('[release-branch] Initialize the stable channel from main history')
+    }
     return
   }
-  if (!sourceDescendsFromPrevious)
+  if (!sourceDescendsFromPrevious) {
+    if (branch === 'release' && sourceSha === mainSha) return
     throw new Error(
-      `[release-branch] Refusing to move the release channel backwards or across unrelated history (HEAD ${sourceSha} does not descend from previous release source ${previous.sourceSha})`,
+      `[release-branch] Refusing to move the ${branch} channel backwards or across unrelated history (HEAD ${sourceSha} does not descend from previous release source ${previous.sourceSha})`,
     )
+  }
   if (previous.sourceSha === sourceSha && previous.artifactDigest !== artifactDigest)
     throw new Error('[release-branch] The same source commit produced different release bytes')
 }

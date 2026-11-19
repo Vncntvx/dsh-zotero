@@ -1,3 +1,4 @@
+export const RELEASE_CHANNELS: readonly string[]
 export function assertReleaseSource(args: {
   actualSha: string
   expectedSha: string
@@ -9,9 +10,11 @@ export function assertReleaseTarget(args: {
   remoteUrl: string
 }): void
 export function assertReleaseAdvance(args: {
+  branch: string
   sourceSha: string
   mainSha: string
   previous?: { sourceSha: string; artifactDigest: string }
   sourceDescendsFromPrevious: boolean
+  mainDescendsFromSource: boolean
   artifactDigest: string
 }): void

@@ -85,7 +85,7 @@ import { EnrichmentFormController } from './enrichment-form-controller.ts'
 import type { EnrichmentCredentialPort, EnrichmentModelPort } from './enrichment-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
 import { CitationFormController } from './citation-form-controller.ts'
-import type { ZoteroProbeFace } from './components/plugin/faces.ts'
+import type { ZoteroDetailFace, ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   artifactIdOf,
   ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
@@ -101,7 +101,6 @@ import {
 import type {} from './plugin-slots.d.ts'
 import { ZoteroActivationGuide } from './components/plugin/ZoteroActivationGuide.tsx'
 import { ZoteroPluginDetailSection } from './components/plugin/ZoteroPluginDetailSection.tsx'
-import { DiagnosticsCard } from './components/DiagnosticsCard.tsx'
 import { LibrarySettingsSection } from './LibrarySettingsSection.tsx'
 import {
   ZoteroLibraryPanel,
@@ -398,7 +397,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   )
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
-  // The page renders the unified 7-tab form through ZoteroSettingsSection and stages edits
+  // The page renders the unified 4-tab form through ZoteroSettingsSection and stages edits
   // over zotero, scholarly, library, and enrichment namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
@@ -511,7 +510,12 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
     'dsh-zotero: library row config',
   )
 
-  // Service status section at the bottom of the plugin manager detail page
+  // Service status section at the bottom of the plugin manager detail page:
+  // the connection card and, when diagnostic mode is on, the diagnostics log
+  // card beneath it in the same section. The diagnostics snapshot rides the
+  // same face so the log card's copied facts use this section's one probe.
+  const diagnostics = (): Promise<RemoteResult<ZoteroDiagnosticsView>> =>
+    ctx.remote.zotero.diagnostics()
   ctx.slots.inject('plugins.detail.section', () =>
     ctx.slots.register(
       {
@@ -519,28 +523,9 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
         id: 'zotero-status',
         locale: NS,
         registrant: REGISTRANT,
-        inject: (): ZoteroProbeFace => ({ probe }),
+        inject: (): ZoteroDetailFace => ({ probe, diagnostics }),
       },
       ZoteroPluginDetailSection,
-    ),
-  )
-
-  // The diagnostics panel, beside the status card: the host ring the seams
-  // write, polled while the page shows it. It lives in the settings plane so
-  // it survives the conversation tab's own crashes. The card component renders
-  // only when diagnostic mode (the `debug` config flag) is enabled.
-  const diagnostics = (): Promise<RemoteResult<ZoteroDiagnosticsView>> =>
-    ctx.remote.zotero.diagnostics()
-  ctx.slots.inject('plugins.detail.section', () =>
-    ctx.slots.register(
-      {
-        name: 'plugins.detail.section',
-        id: 'zotero-diagnostics',
-        locale: NS,
-        registrant: REGISTRANT,
-        inject: () => ({ probe, diagnostics }),
-      },
-      DiagnosticsCard,
     ),
   )
 }

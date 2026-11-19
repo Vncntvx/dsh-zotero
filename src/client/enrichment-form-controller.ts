@@ -12,6 +12,10 @@
  * reference name; the value is written through `ctx.remote.credentials.set`
  * under the committed reference, exactly as the scholarly keys are.
  *
+ * `semanticModelDir` stays in the field specs and card state because parsing
+ * targets, commit signatures, and model RPCs are keyed by it; it is configured
+ * only through the profile and is not rendered.
+ *
  * The model half is a small state machine. Every operation is bound to one
  * `{model, normalizedDir, generation}` observation target: an edit, reset,
  * discard, save, or external settings update bumps the generation so an

@@ -19,7 +19,8 @@ In the DeepSeek Harness desktop app under **Plugins** (or **Settings → Plugins
 
 - Latest version (recommended): `dsh-zotero`
 - Specific version: `dsh-zotero@<version>` (e.g. `dsh-zotero@1.3.0`)
-- GitHub prebuilt branch: `github:Vncntvx/dsh-zotero#release`
+- GitHub stable prebuilt branch (latest tagged release): `github:Vncntvx/dsh-zotero#stable`
+- GitHub rolling prebuilt branch (follows main): `github:Vncntvx/dsh-zotero#release`
 - GitHub specific tag or commit: `github:Vncntvx/dsh-zotero#v1.3.0` or `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### Command line
@@ -36,7 +37,13 @@ Install a specific version:
 dsh plugin --profile <profile-name> add dsh-zotero@<version>
 ```
 
-From GitHub prebuilt branch:
+From the GitHub stable prebuilt branch (latest tagged release):
+
+```sh
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#stable
+```
+
+From the GitHub rolling prebuilt branch (follows main):
 
 ```sh
 dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
@@ -51,7 +58,7 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ### Build-script approval at install time
 
-The npm package, the GitHub `#release` branch, and a local tarball install without build approval on pnpm 10 or pnpm 11. An install from the `main` source branch runs a `prepare` build and needs this entry in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
+The npm package, the GitHub `#stable` / `#release` branches, and a local tarball install without build approval on pnpm 10 or pnpm 11. An install from the `main` source branch runs a `prepare` build and needs this entry in the profile's `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml`:
 
 ```yaml
 allowBuilds:
@@ -100,7 +107,7 @@ The literature trail is a read-only view that records completed tool calls and s
 The literature panel lives in the right sidebar. Make sure both are on:
 
 1. The `dsh-zotero/library` row under "Included components" in the plugin list is enabled (on by default);
-2. "Show in right sidebar" (`rightSidebarEnabled`) on the "Literature panel" tab of the settings page is on (on by default).
+2. "Show in right sidebar" (`rightSidebarEnabled`) on the "Library" tab of the settings page is on (on by default).
 
 `webEnabled` in General settings controls the literature trail at the top of the session; `rightSidebarEnabled` controls the literature panel.
 

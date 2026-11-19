@@ -206,7 +206,7 @@ Every export format requires unique item identities. The same library and key is
 
 | Parameter    | Type     | Default                          | Description                                                                                                     |
 | ------------ | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | none                             | Item ref list (required; one call is bounded by `maxExportRefs`, default 50)                                    |
+| `refs`       | string[] | none                             | Item ref list (required; one call is bounded by the config-file field `maxExportRefs`, default 50)              |
 | `format`     | string   | none                             | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
 | `style`      | string   | config value                     | CSL style identifier (citation and bibliography only)                                                           |
 | `locale`     | string   | config value (default `"en-US"`) | CSL locale (citation and bibliography only; defaults to the configured `defaultLocale`)                         |
@@ -230,8 +230,8 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 
 ### Notes
 
-- Total refs are bounded by `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call; exceeding this returns an error;
-- `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The default `maxExportRefs` is also 50, so batching only happens after that setting is raised above 50;
+- Total refs are bounded by the config-file field `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call; exceeding this returns an error;
+- `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The config-file field `maxExportRefs` also defaults to 50, so batching only happens after that field is raised above 50 in the configuration file;
 - `bibtex`, `biblatex`, `ris`, and `csljson` use one translator request and one bounded raw-metadata batch for citekeys and alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint; a ref that cannot be located keeps only its own ref in the result. If the metadata request fails (for example Zotero returns 5xx), the export still completes: the raw body is retained and refs that could not be paired stay in their bare `ref`-only shape. A caller abort still throws;
 - A single export only accepts refs from the same library; mixed cross-library exports are not supported.
 
@@ -319,9 +319,9 @@ A synchronous foreground call returns:
 - `cursor`: returned only when the current batch was read completely and no concurrent write happened during the read; use it for later incremental requests. `cursor.include` contains only the resource classes the active Zotero build actually supports tracking; classes with no matching endpoint (such as older builds lacking the `/deleted` route) are recorded in `cursor.unserved`, are not counted toward coverage claims, and can still be passed back as-is in later incremental requests;
 - `unobservable`: names the resource classes that cannot be observed because of version or endpoint limits, plus the reason. A missing endpoint (`not-served`) does not stop cursor generation; an unsupported key range (`range-not-covered`) or a read failure (`unreadable`) suppresses the cursor for the current batch, so advancing the cursor never skips change rows that were not read successfully.
 
-Each `changed` / `deleted` resource list returns at most `maxChangesResults` rows (default 50), including in the canonical result the model receives. `totals` retains true counts and `truncated` marks a capped list. A cursor is issued only after the complete upstream version map is read; the row cap bounds the model-visible list only and does not affect cursor issuance.
+Each `changed` / `deleted` resource list returns at most the config-file field `maxChangesResults` rows (default 50), including in the canonical result the model receives. `totals` retains true counts and `truncated` marks a capped list. A cursor is issued only after the complete upstream version map is read; the row cap bounds the model-visible list only and does not affect cursor issuance.
 
-A large version range can exceed `maxResponseBytes` and fail with `ZOTERO_RESPONSE_TOO_LARGE`, without returning a new cursor. To retain that range, increase the response-byte budget and retry the original `since`. Omitting `since` only creates a current baseline and does not recover intervening changes; complete a full resynchronization before using that new baseline for later increments.
+A large version range can exceed the config-file field `maxResponseBytes` and fail with `ZOTERO_RESPONSE_TOO_LARGE`, without returning a new cursor. To retain that range, increase the response-byte budget in the configuration file and retry the original `since`. Omitting `since` only creates a current baseline and does not recover intervening changes; complete a full resynchronization before using that new baseline for later increments.
 
 ### Example
 

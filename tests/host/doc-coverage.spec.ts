@@ -309,16 +309,18 @@ describe('the documentation set stays complete', () => {
 })
 
 describe('component and settings docs stay in lockstep', () => {
-  it('describes four namespaces and seven tabs everywhere, never the stale three/six', () => {
+  it('describes four namespaces and four component tabs everywhere, never the stale seven', () => {
     const zhConfig = docOf('docs/configuration.md')
-    expect(zhConfig).toContain('7 标签页')
+    expect(zhConfig).toContain('4 标签页')
     expect(zhConfig).toContain('四个命名空间')
+    expect(zhConfig).not.toContain('7 标签页')
     expect(zhConfig).not.toContain('6 标签页')
     expect(zhConfig).not.toContain('三个命名空间')
 
     const enConfig = docOf('docs/configuration.en.md')
-    expect(enConfig).toContain('7-tab')
+    expect(enConfig).toContain('4-tab')
     expect(enConfig).toContain('four namespaces')
+    expect(enConfig).not.toContain('7-tab')
     expect(enConfig).not.toContain('6-tab')
     expect(enConfig).not.toContain('three namespaces')
 
@@ -365,13 +367,16 @@ describe('component and settings docs stay in lockstep', () => {
     }
   })
 
-  it('keeps the client comments on the seven-tab surface', () => {
+  it('keeps the client comments on the four-tab surface', () => {
     for (const path of [
       'src/client/ZoteroSettingsSection.tsx',
       'src/client/index.ts',
       'src/client/ScholarlySettingsForm.tsx',
     ]) {
       const text = docOf(path)
+      expect(text, `${path} does not say 4-tab`).toContain('4-tab')
+      expect(text, `${path} still says 7-tab`).not.toContain('7-tab')
+      expect(text, `${path} still says 7 标签`).not.toContain('7 标签')
       expect(text, `${path} still says 6-tab`).not.toContain('6-tab')
       expect(text, `${path} still says 6 标签`).not.toContain('6 标签')
     }

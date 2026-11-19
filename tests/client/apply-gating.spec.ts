@@ -87,7 +87,6 @@ describe('the browser-half entry behind the webEnabled gate', () => {
       'plugins.row.config',
       'plugins.row.config',
       'plugins.detail.section',
-      'plugins.detail.section',
     ])
   })
 

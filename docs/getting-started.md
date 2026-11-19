@@ -19,7 +19,8 @@ dsh-zotero 将本地 Zotero 文献库接入 DeepSeek Harness：Agent 在对话�
 
 - npm 最新版（推荐）：`dsh-zotero`
 - npm 指定版本：`dsh-zotero@<version>`（如 `dsh-zotero@1.3.0`）
-- GitHub 预构建分支：`github:Vncntvx/dsh-zotero#release`
+- GitHub 稳定版预构建分支（最近一次 tag 发布）：`github:Vncntvx/dsh-zotero#stable`
+- GitHub 滚动预构建分支（跟随 main）：`github:Vncntvx/dsh-zotero#release`
 - GitHub 指定版本或 commit：`github:Vncntvx/dsh-zotero#v1.3.0` 或 `github:Vncntvx/dsh-zotero#<commit-hash>`
 
 ### 命令行安装
@@ -36,7 +37,13 @@ dsh plugin --profile <profile-name> add dsh-zotero
 dsh plugin --profile <profile-name> add dsh-zotero@<version>
 ```
 
-从 GitHub 预构建分支安装：
+从 GitHub 稳定版预构建分支安装（最近一次 tag 发布）：
+
+```sh
+dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#stable
+```
+
+从 GitHub 滚动预构建分支安装（跟随 main）：
 
 ```sh
 dsh plugin --profile <profile-name> add github:Vncntvx/dsh-zotero#release
@@ -51,7 +58,7 @@ dsh plugin --profile <profile-name> add ./dsh-zotero-*.tgz
 
 ### 安装时的构建脚本批准
 
-npm 包、GitHub `#release` 分支与本地 tarball 在 pnpm 10/11 上可直接安装，无需构建批准。只有从 `main` 源码分支安装才会执行一次 `prepare` 构建，需要在 profile 的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 写入：
+npm 包、GitHub `#stable` / `#release` 分支与本地 tarball 在 pnpm 10/11 上可直接安装，无需构建批准。只有从 `main` 源码分支安装才会执行一次 `prepare` 构建，需要在 profile 的 `~/.dsh/profiles/<profile-name>/pnpm-workspace.yaml` 写入：
 
 ```yaml
 allowBuilds:

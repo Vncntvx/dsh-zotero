@@ -11,65 +11,74 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 
 四组合计 69 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
-## 设置页标签与字段归属
+设置页直接渲染 37 个 schema 字段和 4 个只写密钥控件，合计 41 个可见控件；其余 32 个字段不在表单中直接渲染，仅通过配置文件设置（见下文《设置页可见性》）。
 
-插件详情页的配置区是一个 7 标签页表单，同时编辑上述四个命名空间。标签、命名空间与字段的对应关系如下：
+## 设置页标签与可见控件
 
-| 标签     | 设置命名空间        | 字段数 | 分组与字段                                                                                                                                                                                                                                                                                                                           |
-| -------- | ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 基础设置 | `zotero`            | 7      | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`、`writeNoteMaxChars`、`writeFieldMaxChars`、`writeListMaxItems`、`writeAuthorizeDeadlineMs`                                                                                                                                                                          |
-| 本地连接 | `zotero`            | 5      | 连接：`baseUrl`、`provider`、`timeoutMs`、`maxInFlightRequests`、`scopeListingTtlMs`                                                                                                                                                                                                                                                 |
-| 检索提取 | `zotero`            | 14     | 检索与并发：`maxSearchResults`、`maxNoteScanRecords`、`searchConcurrency`、`graphConcurrency`、`retrieveAttachmentCap`；片段与全文提取：`maxEvidenceChars`、`maxEvidencePassages`、`maxNoteChars`、`maxNoteRecords`、`maxAnnotationRecords`、`maxAttachmentRecords`、`fulltextChunkWords`、`maxFulltextChars`、`fulltextWindowChars` |
-| 文献面板 | `library`、`zotero` | 13     | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                                                  |
-| 学术检索 | `scholarly`         | 9      | 数据源身份与凭据引用名：`email`、`s2ApiKeyEnv`、`ncbiApiKeyEnv`、`openalexApiKeyEnv`；学术检索与全文配额：`maxResults`、`maxContentChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`                                                                                                                 |
-| 文档解析 | `enrichment`        | 10     | 解析模式与输出：`mode`、`ocrLanguage`、`mineruTokenRef`、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`、`semanticModelDir`、`semanticIdleTimeoutMs`；部署限额：`artifactReader`                                                                                                     |
-| 高级选项 | `zotero`            | 11     | 输出限制：`maxInlineResultTokens`、`maxInlineResultBytes`、`maxResponseBytes`、`maxExportChars`、`maxExportRefs`、`maxBrowseResults`、`maxChangesResults`；后台任务：`enableRunInBackground`、`promoteOnTimeout`、`foregroundWaitMs`；诊断：`debug`                                                                                  |
+插件详情页的配置区是一个 4 标签页表单，按组件划分，同时编辑上述四个命名空间。标签与可见控件的对应关系如下；「可见控件」包含 schema 字段和 4 个只写密钥控件，仅配置文件字段见各字段表最后一列。
+
+| 标签     | 设置命名空间        | 可见控件数 | 分组与字段                                                                                                                                                                                                                                                                                             |
+| -------- | ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 基础设置 | `zotero`            | 13         | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`；连接：`baseUrl`、`timeoutMs`；检索与浏览：`maxSearchResults`、`maxBrowseResults`；片段与全文读取：`maxEvidenceChars`、`maxEvidencePassages`、`maxFulltextChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`；诊断：`debug` |
+| 文献面板 | `library`、`zotero` | 13         | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                    |
+| 学术检索 | `scholarly`         | 8          | 数据源身份与密钥：`email` 与 3 个只写密钥控件；学术检索与全文配额：`maxResults`、`maxContentChars`；学术检索后台任务：`enableRunInBackground`、`promoteOnTimeout`                                                                                                                                      |
+| 文档解析 | `enrichment`        | 7          | 解析模式与输出：`mode`、`ocrLanguage`、MinerU Token 密钥控件、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`                                                                                                                                           |
+
+可见控件合计 41 个（37 个 schema 字段 + 4 个只写密钥控件）。设置页「文献面板」标签与侧边栏面板标题同名，引文默认值也在这个标签内。
+
+### 设置页可见性
+
+- 各字段表最后一列标出「可见」「仅配置文件」或「内部」。「仅配置文件」字段保留在 schema 与控制器状态中；表单只提交已修改的字段。
+- `provider` 仅在嵌入方注册其他 provider 时才需要改动；内置值为 `local`。
+- 部分隐藏字段存在硬约束：`writeListMaxItems` 为 1–50；`fulltextWindowChars` 大于 64,000 会被拒绝；`maxExportRefs` 受 Zotero 条目键批量上限 50 约束，非 citation 格式超过 50 直接拒绝。
+- `maxBrowseResults` 归入「基础设置 → 检索与浏览」。
+- 标为「内部」的 `mineruTokenRef` 由文档解析页的 MinerU Token 密钥控件隐式使用。
 
 `webEnabled` 位于「基础设置 → 文献轨迹」，开关名为「显示文献轨迹」；它决定会话顶部的文献轨迹标签页是否出现。文献面板还需要 `dsh-zotero/library` 组件行已组合、且本组件的 `rightSidebarEnabled` 开启，见下文《文献面板组件配置》。
 
 ## 核心字段（`zotero`，39 个）
 
-| 字段                       | 默认值                       | 说明                                                                                                                                                                                  |
-| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API 地址，必须为 loopback HTTP，路径以 `/api` 为前缀（`localhost` 运行时解析为 `127.0.0.1`）                                                                             |
-| `provider`                 | `local`                      | 选用的 provider 标识                                                                                                                                                                  |
-| `timeoutMs`                | `5000`                       | 单次 HTTP 请求超时时间（毫秒）                                                                                                                                                        |
-| `maxInFlightRequests`      | `8`                          | 对 Local API 的并发在途请求数上限                                                                                                                                                     |
-| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限；同时钳制文献面板的搜索页大小（响应携带实际生效的 `limit`）                                                                                              |
-| `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                                                                                                      |
-| `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数                                                                                                                                                      |
-| `maxEvidenceChars`         | `6000`                       | 原文片段总字符预算                                                                                                                                                                    |
-| `maxEvidencePassages`      | `4`                          | 原文片段数量上限                                                                                                                                                                      |
-| `maxNoteChars`             | `2000`                       | 面板 childPage 笔记预览预算；工具完整正文不受其截断                                                                                                                                   |
-| `maxNoteRecords`           | `50`                         | 显式笔记页大小上限；完整读取不受其截断                                                                                                                                                |
-| `maxAnnotationRecords`     | `100`                        | 显式批注页大小上限；完整读取不受其截断                                                                                                                                                |
-| `maxAttachmentRecords`     | `50`                         | 显式附件页大小上限；完整读取不受其截断                                                                                                                                                |
-| `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                                                                                                |
-| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 接受的最大全文字符数：证据模式为单次排序预算（多附件时均分），全文模式为整篇文档上限                                                                                |
-| `fulltextWindowChars`      | `12000`                      | 全文读取模式每次窗口的字符数；默认配置可内联，增大窗口或降低内联预算时可能以完整文件交付                                                                                              |
-| `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                                                                                       |
-| `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                                                                                                    |
-| `maxInlineResultTokens`    | `4000`                       | canonical 与展示结果的 Harness 官方 Token 估算上限，须为正安全整数。                                                                                                                  |
-| `maxInlineResultBytes`     | `65536`                      | 独立的内联序列化字节上限，超过任一预算必须持久化文件交付。                                                                                                                            |
-| `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                                                                                               |
-| `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                                                                                                      |
-| `maxExportRefs`            | `50`                         | 单次 `zotero_export` 调用的引用条数上限；文献面板的 `zotero/export` 端点共用这一上限                                                                                                  |
-| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限；同时钳制文献面板的浏览页大小（集合树/标签/保存搜索，响应携带实际生效的 `limit`）                                                                   |
-| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源的模型可见列表上限；列表会截断，真实数量保留在 `totals`                                                                                                 |
-| `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的信任时长（毫秒），超时后重新读取                                                                                                                                  |
-| `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                     |
-| `defaultLocale`            | `en-US`                      | CSL 引用语言；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                                       |
-| `writeEnabled`             | `false`                      | 是否注册并启用个人库写入工具                                                                                                                                                          |
-| `writePersistKey`          | `true`                       | 是否将 Always-Allow 写入密钥保存到宿主凭据管理器；已保存的授权可在设置页「写入」分组撤销                                                                                              |
-| `writeFieldMaxChars`       | `16384`                      | 其他写入字段字符上限；请求体另受 1 MiB 上限约束                                                                                                                                       |
-| `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                                                                                              |
-| `writeListMaxItems`        | `50`                         | 列表类写入参数的条目上限（1–50）：`update_item_tags`/`update_item_collections` 的 `add`/`remove`、`delete_library_tags` 的 `tags`、`create_note` 的 `collections`/`tags`/`sourceRefs` |
-| `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                                                                                              |
-| `webEnabled`               | `true`                       | 是否显示会话顶部的文献轨迹标签页                                                                                                                                                      |
-| `enableRunInBackground`    | `true`                       | 是否允许 `run_in_background: true` 的请求进入后台执行（`zotero_export` / `zotero_changes` 仅在开关打开且宿主挂载 `jobs` 服务时声明该参数；未声明时传 `true` 仍返回结构化拒绝）        |
-| `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                        |
-| `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                                    |
-| `debug`                    | `false`                      | 是否开启诊断模式；开启后在插件详情页底部显示诊断面板并记录请求路径与工具调用细节；日志仅保存在进程内存中，不持久化到磁盘，亦不向外发送                                                |
+| 字段                       | 默认值                       | 说明                                                                                                                                                                                  | 设置页           |
+| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `baseUrl`                  | `http://127.0.0.1:23119/api` | Zotero Local API 地址，必须为 loopback HTTP，路径以 `/api` 为前缀（`localhost` 运行时解析为 `127.0.0.1`）                                                                             | 可见             |
+| `provider`                 | `local`                      | 选用的 provider 标识                                                                                                                                                                  | 仅配置文件       |
+| `timeoutMs`                | `5000`                       | 单次 HTTP 请求超时时间（毫秒）                                                                                                                                                        | 可见             |
+| `maxInFlightRequests`      | `8`                          | 对 Local API 的并发在途请求数上限                                                                                                                                                     | 仅配置文件       |
+| `maxSearchResults`         | `20`                         | `zotero_search` 返回条目上限；同时钳制文献面板的搜索页大小（响应携带实际生效的 `limit`）                                                                                              | 可见             |
+| `maxNoteScanRecords`       | `200`                        | 搜索笔记内容时扫描的笔记条目上限                                                                                                                                                      | 仅配置文件       |
+| `searchConcurrency`        | `4`                          | `zotero_search` 归属查询的并发数                                                                                                                                                      | 仅配置文件       |
+| `maxEvidenceChars`         | `6000`                       | 原文片段总字符预算                                                                                                                                                                    | 可见             |
+| `maxEvidencePassages`      | `4`                          | 原文片段数量上限                                                                                                                                                                      | 可见             |
+| `maxNoteChars`             | `2000`                       | 面板 childPage 笔记预览预算；工具完整正文不受其截断                                                                                                                                   | 仅配置文件       |
+| `maxNoteRecords`           | `50`                         | 显式笔记页大小上限；完整读取不受其截断                                                                                                                                                | 仅配置文件       |
+| `maxAnnotationRecords`     | `100`                        | 显式批注页大小上限；完整读取不受其截断                                                                                                                                                | 仅配置文件       |
+| `maxAttachmentRecords`     | `50`                         | 显式附件页大小上限；完整读取不受其截断                                                                                                                                                | 仅配置文件       |
+| `fulltextChunkWords`       | `200`                        | 进入排名的全文分块词数                                                                                                                                                                | 仅配置文件       |
+| `maxFulltextChars`         | `250000`                     | `zotero_retrieve` 接受的最大全文字符数：证据模式为单次排序预算（多附件时均分），全文模式为整篇文档上限                                                                                | 可见             |
+| `fulltextWindowChars`      | `12000`                      | 全文读取模式每次窗口的字符数；默认配置可内联，增大窗口或降低内联预算时可能以完整文件交付                                                                                              | 仅配置文件       |
+| `retrieveAttachmentCap`    | `16`                         | 单次 `zotero_retrieve` 参与全文排名的附件数上限                                                                                                                                       | 仅配置文件       |
+| `graphConcurrency`         | `4`                          | `zotero_retrieve` 读取附件的并发数                                                                                                                                                    | 仅配置文件       |
+| `maxInlineResultTokens`    | `4000`                       | canonical 与展示结果的 Harness 官方 Token 估算上限，须为正安全整数。                                                                                                                  | 仅配置文件       |
+| `maxInlineResultBytes`     | `65536`                      | 独立的内联序列化字节上限，超过任一预算必须持久化文件交付。                                                                                                                            | 仅配置文件       |
+| `maxResponseBytes`         | `16777216`                   | 单次 API 响应流式读取字节上限（16 MiB）                                                                                                                                               | 仅配置文件       |
+| `maxExportChars`           | `1000000`                    | 导出输出字符硬上限（100 万字符）                                                                                                                                                      | 仅配置文件       |
+| `maxExportRefs`            | `50`                         | 单次 `zotero_export` 调用的引用条数上限；文献面板的 `zotero/export` 端点共用这一上限                                                                                                  | 仅配置文件       |
+| `maxBrowseResults`         | `50`                         | 单次 `zotero_browse` 返回条目上限；同时钳制文献面板的浏览页大小（集合树/标签/保存搜索，响应携带实际生效的 `limit`）                                                                   | 可见             |
+| `maxChangesResults`        | `50`                         | 单次 `zotero_changes` 每种资源的模型可见列表上限；列表会截断，真实数量保留在 `totals`                                                                                                 | 仅配置文件       |
+| `scopeListingTtlMs`        | `30000`                      | 合集与检索范围列表的信任时长（毫秒），超时后重新读取                                                                                                                                  | 仅配置文件       |
+| `defaultStyle`             | `apa`                        | CSL 引用样式（需 Zotero 内置）；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                     | 可见（文献面板） |
+| `defaultLocale`            | `en-US`                      | CSL 引用语言；用于 `citation` 与 `bibliography`，工具导出与文献面板复制引用共用                                                                                                       | 可见（文献面板） |
+| `writeEnabled`             | `false`                      | 是否注册并启用个人库写入工具                                                                                                                                                          | 可见             |
+| `writePersistKey`          | `true`                       | 是否将 Always-Allow 写入密钥保存到宿主凭据管理器；已保存的授权可在设置页「写入」分组撤销                                                                                              | 可见             |
+| `writeFieldMaxChars`       | `16384`                      | 其他写入字段字符上限；请求体另受 1 MiB 上限约束                                                                                                                                       | 仅配置文件       |
+| `writeNoteMaxChars`        | `65536`                      | 单条研究笔记正文字符上限                                                                                                                                                              | 仅配置文件       |
+| `writeListMaxItems`        | `50`                         | 列表类写入参数的条目上限（1–50）：`update_item_tags`/`update_item_collections` 的 `add`/`remove`、`delete_library_tags` 的 `tags`、`create_note` 的 `collections`/`tags`/`sourceRefs` | 仅配置文件       |
+| `writeAuthorizeDeadlineMs` | `120000`                     | 写入时等待 Zotero 授权弹窗的时限（毫秒）                                                                                                                                              | 仅配置文件       |
+| `webEnabled`               | `true`                       | 是否显示会话顶部的文献轨迹标签页                                                                                                                                                      | 可见             |
+| `enableRunInBackground`    | `true`                       | 是否允许 `run_in_background: true` 的请求进入后台执行（`zotero_export` / `zotero_changes` 仅在开关打开且宿主挂载 `jobs` 服务时声明该参数；未声明时传 `true` 仍返回结构化拒绝）        | 可见             |
+| `promoteOnTimeout`         | `true`                       | 前台导出或变更同步超时时是否自动提升为后台任务                                                                                                                                        | 可见             |
+| `foregroundWaitMs`         | `4000`                       | 前台执行等待上限（毫秒），超时后自动提升为后台 Job                                                                                                                                    | 仅配置文件       |
+| `debug`                    | `false`                      | 是否开启诊断模式；开启后在插件详情页底部显示诊断面板并记录请求路径与工具调用细节；日志仅保存在进程内存中，不持久化到磁盘，亦不向外发送                                                | 可见             |
 
 说明：`foregroundWaitMs` 控制前台任务等待时长，超时后自动转为后台 Job；`timeoutMs` 控制单次 Zotero HTTP 请求超时，两者相互独立。
 
@@ -100,7 +109,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 ## 插件配置页
 
-在插件管理器中打开 **dsh-zotero** 的详情页，其配置区承载完整的 7 标签页表单（通过 harness 官方 `SettingsForm` 与 `SettingsFormModel`），一次编辑 `zotero`、`library`、`scholarly` 与 `enrichment` 四个命名空间：
+在插件管理器中打开 **dsh-zotero** 的详情页，其配置区承载完整的 4 标签页表单（通过 harness 官方 `SettingsForm` 与 `SettingsFormModel`；每个标签页一个保存按钮，文献面板标签页把面板偏好与 CSL 默认值合并到同一次保存），一次编辑 `zotero`、`library`、`scholarly` 与 `enrichment` 四个命名空间：
 
 - 修改结果写入当前 profile 的 `cordis.patch.yml` 中对应条目的 `config` 覆盖层；
 - 保存即时生效：传输层配置与写入开关变更时在服务实例内重建对应组件，纯限额字段由 provider 实时读取；
@@ -110,7 +119,7 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 同一份表单状态还有两处入口，三者关系如下：
 
-1. **统一设置页标签页**：插件详情页配置区的 7 标签页表单；
+1. **统一设置页标签页**：插件详情页配置区的 4 标签页表单；
 2. **组件行配置**：「包含的组件」中 `dsh-zotero#library`、`dsh-zotero#scholarly` 与 `dsh-zotero#enrichment` 行的「配置」按钮，分别编辑对应命名空间；
 3. **配置文件**：直接编辑当前 profile 的 `cordis.patch.yml` 中对应条目的 `config`。
 
@@ -135,25 +144,25 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 组件随包发布，默认关闭。开关只有插件管理器「包含的组件」里的 `dsh-zotero/scholarly` 那一行：启用该行即挂载组件，注册它的 7 个模型工具，并允许发起外部请求——索引检索仅限显式允许列表中的外部学术索引，开放获取 PDF 全文臂是唯一例外（任意公网 HTTP(S) 主机，受公网地址双门校验；本机代理的 fake-IP 占位地址只对白名单索引主机与 HTTPS 全文目标放行，由已审阅主机名和 TLS 绑定身份，明文 HTTP 目标仍要求真实公网地址）。组件未挂载时，其服务、传输层与工具都不存在，无法发起学术检索请求；手改等价路径是在当前 profile 的 `cordis.patch.yml` 中写 `- id: scholarly` + `disabled: false`。启用后客户端在组件处于已启用状态且本浏览器尚未确认时显示外部检索提醒，确认按浏览器保存，保持启用时刷新或重启宿主不会重复提醒；客户端观察到组件关闭即撤销确认，之后再次启用会重新提醒。外部检索的授权边界见[产品模型](product-model.md)的「四条边界」。
 
-组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。字段变更在下一次工具调用时生效，无需重启 profile：
+组件字段有三处入口：统一设置页的「学术检索」标签页、插件列表中 `dsh-zotero#scholarly` 行的「配置」按钮，或当前 profile 的 `cordis.patch.yml` 中该行的 `config`。前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。设置页只渲染 8 个可见控件：邮箱、3 个只写密钥框、2 个配额和 2 个后台开关；三个引用名与 `foregroundWaitMs` 仅通过配置文件设置。字段变更在下一次工具调用时生效，无需重启 profile：
 
-| 字段                    | 默认值  | 说明                                                                                                        |
-| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `email`                 | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额）          |
-| `s2ApiKeyEnv`           | `''`    | Semantic Scholar API Key 的凭据引用名（建议 `S2_API_KEY`）；空串禁用该 key，配置后可避免共享 IP 池限速      |
-| `ncbiApiKeyEnv`         | `''`    | NCBI / PubMed API Key 的凭据引用名（建议 `NCBI_API_KEY`）；空串禁用该 key，配置后每秒请求上限从 3 提升至 10 |
-| `openalexApiKeyEnv`     | `''`    | OpenAlex API Key 的凭据引用名（建议 `OPENALEX_API_KEY`）；空串禁用该 key，配置后每秒请求上限提升至 100      |
-| `maxResults`            | `20`    | 单次检索返回的最大论文数量（1-100）                                                                         |
-| `maxContentChars`       | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                                      |
-| `enableRunInBackground` | `true`  | 是否允许 `scholarly_read` / `scholarly_search` / `scholarly_verify` 显式转入后台任务执行                    |
-| `promoteOnTimeout`      | `true`  | 前台等待超时时是否自动提升为后台任务                                                                        |
-| `foregroundWaitMs`      | `30000` | 前台等待毫秒数，超时后提升为后台任务（1-240,000）                                                           |
+| 字段                    | 默认值  | 说明                                                                                                        | 设置页     |
+| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------- | ---------- |
+| `email`                 | —       | 联系邮箱，附加于 Crossref、OpenAlex 和 NCBI/Europe PMC 请求头（加入 Polite Pool 获得更优限速配额）          | 可见       |
+| `s2ApiKeyEnv`           | `''`    | Semantic Scholar API Key 的凭据引用名（建议 `S2_API_KEY`）；空串禁用该 key，配置后可避免共享 IP 池限速      | 仅配置文件 |
+| `ncbiApiKeyEnv`         | `''`    | NCBI / PubMed API Key 的凭据引用名（建议 `NCBI_API_KEY`）；空串禁用该 key，配置后每秒请求上限从 3 提升至 10 | 仅配置文件 |
+| `openalexApiKeyEnv`     | `''`    | OpenAlex API Key 的凭据引用名（建议 `OPENALEX_API_KEY`）；空串禁用该 key，配置后每秒请求上限提升至 100      | 仅配置文件 |
+| `maxResults`            | `20`    | 单次检索返回的最大论文数量（1-100）                                                                         | 可见       |
+| `maxContentChars`       | `12000` | 全文分块读取字符数上限（1,000-50,000）                                                                      | 可见       |
+| `enableRunInBackground` | `true`  | 是否允许 `scholarly_read` / `scholarly_search` / `scholarly_verify` 显式转入后台任务执行                    | 可见       |
+| `promoteOnTimeout`      | `true`  | 前台等待超时时是否自动提升为后台任务                                                                        | 可见       |
+| `foregroundWaitMs`      | `30000` | 前台等待毫秒数，超时后提升为后台任务（1-240,000）                                                           | 仅配置文件 |
 
 组件未启用时，设置页的「学术检索」标签页指向「包含的组件」并隐藏字段；启用组件后，标签页变为可编辑表单，并注册组件行配置入口。全文缓存在 `$DSH_HOME/cache/zotero-scholarly/` 下，每个 key 保存一份 JSON 正文。内存与磁盘记录均在获取后 7 天过期；每次写入先清理过期记录，再按写入时间从旧到新回收，使磁盘正文总量保持在 128 MiB、记录数保持在 256 条以内。缓存由系统管理，不提供独立设置。
 
-密钥值写在哪里：配置保存凭据引用名；设置页「学术检索 → 数据源身份与密钥」中的三个密码框把输入的密钥值写入宿主凭据存储（credentials seam）。引用名解析失败时工具调用直接失败。
+密钥值写在哪里：配置保存凭据引用名，设置页以三个密码框代替引用名。保存密钥时，表单把建议引用名（`S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`）写入配置，再把密钥值写入宿主凭据存储（credentials seam）；配置中已有的自定义引用名保持原样。若配置写入成功而凭据写入失败，工具按 fail-closed 拒绝，表单保留密钥草稿，重新保存即可重试。要恢复匿名访问或改用自定义引用名，请在 profile 的 `cordis.patch.yml` 中清空或改写对应引用字段。引用名解析失败时工具调用直接失败。
 
-从旧版升级：旧字段 `s2Key` / `ncbiKey` / `openalexKey` 已从 schema 移除。携带这些字段的 profile 会在组件挂载时被显式拒绝（错误消息列出字段与迁移步骤）。请从 profile 的 `cordis.patch.yml` 删除旧字段，在设置页把密钥重新输入到对应的密码框（引用名建议 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`），并轮换旧密钥：旧值曾以明文保存在配置里，不会自动迁移。
+从旧版升级：旧字段 `s2Key` / `ncbiKey` / `openalexKey` 已从 schema 移除。携带这些字段的 profile 会在组件挂载时被显式拒绝（错误消息列出字段与迁移步骤）。请从 profile 的 `cordis.patch.yml` 删除旧字段，在设置页把密钥重新输入到对应的密码框（保存时写入建议引用名 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`），并轮换旧密钥：旧值曾以明文保存在配置里，不会自动迁移。
 
 ---
 
@@ -163,27 +172,27 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 组件字段有三处入口：
 
-1. **统一设置页「文献面板」标签页**：在插件详情页的 7 标签页表单中切换至「文献面板」；
+1. **统一设置页「文献面板」标签页**：在插件详情页的 4 标签页表单中切换至「文献面板」；
 2. **包含的组件列表行配置**：在「包含的组件」中点击 `dsh-zotero#library` 行的「配置」按钮；
 3. **配置文件**：在当前 profile 的 `cordis.patch.yml` 对应条目的 `config` 下声明。
 
-前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。
+前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。设置页标签、侧边栏面板标题、会话旁的面板入口与 Composer 按钮都名为「文献面板」。
 
-| 字段                     | 默认值                    | 取值与行为                                                                                   |
-| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `rightSidebarEnabled`    | `true`                    | 显示文献面板与快捷入口，独立于文献轨迹开关                                                   |
-| `listDensity`            | `comfortable`             | `comfortable` / `compact`，使用宿主标准 / 紧凑按钮密度                                       |
-| `titleLines`             | `2`                       | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                              |
-| `detailExpandedSections` | `[abstract, attachments]` | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠               |
-| `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                               |
-| `urlPdfOpenTarget`       | `sidebar`                 | `sidebar` / `float`，通过宿主校验并下载后阅读                                                |
-| `allowUrlPdfRead`        | `false`                   | 独立外网阅读授权，表单开启前需确认；不依赖 scholarly 组件                                    |
-| `reopenBehavior`         | `restore`                 | `restore` 恢复上次位置；`allItems` 在新建标签页或刷新后从个人库全部条目开始                  |
-| `scopeChangeBehavior`    | `preserve`                | `preserve` / `clear`；只影响同库合集与全部条目之间的关键词及附加筛选                         |
-| `defaultCopyFormat`      | `citation`                | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo` |
-| `chatInsertContent`      | `reference`               | `reference` 条目信息；`referenceAndAbstract` 另附摘要，缺失及截断均明确标注                  |
+| 字段                     | 默认值                    | 取值与行为                                                                                   | 设置页 |
+| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------- | ------ |
+| `rightSidebarEnabled`    | `true`                    | 显示文献面板与快捷入口，独立于文献轨迹开关                                                   | 可见   |
+| `listDensity`            | `comfortable`             | `comfortable` / `compact`，使用宿主标准 / 紧凑按钮密度                                       | 可见   |
+| `titleLines`             | `2`                       | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                              | 可见   |
+| `detailExpandedSections` | `[abstract, attachments]` | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠               | 可见   |
+| `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                               | 可见   |
+| `urlPdfOpenTarget`       | `sidebar`                 | `sidebar` / `float`，通过宿主校验并下载后阅读                                                | 可见   |
+| `allowUrlPdfRead`        | `false`                   | 独立外网阅读授权，表单开启前需确认；不依赖 scholarly 组件                                    | 可见   |
+| `reopenBehavior`         | `restore`                 | `restore` 恢复上次位置；`allItems` 在新建标签页或刷新后从个人库全部条目开始                  | 可见   |
+| `scopeChangeBehavior`    | `preserve`                | `preserve` / `clear`；只影响同库合集与全部条目之间的关键词及附加筛选                         | 可见   |
+| `defaultCopyFormat`      | `citation`                | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo` | 可见   |
+| `chatInsertContent`      | `reference`               | `reference` 条目信息；`referenceAndAbstract` 另附摘要，缺失及截断均明确标注                  | 可见   |
 
-两个设置入口均使用暂存、保存、放弃、重置继承值的同一模型。实际面板只消费已保存的配置。修改显示、展开范围和默认动作会即时生效，不重挂载组件；当前条目手动调整过的展开状态优先。复制菜单选择只用于本次操作，不改变默认格式。CSL 样式和语言复用核心 `defaultStyle` / `defaultLocale`，完整编辑控件已移到文献面板的「引文默认值」分组，直接在本页保存与重置；该组独立保存，不提交其他标签页未保存的修改。基础设置不再显示这两个字段。
+两个设置入口均使用暂存、保存、放弃、重置继承值的同一模型。实际面板只消费已保存的配置。修改显示、展开范围和默认动作会即时生效，不重挂载组件；当前条目手动调整过的展开状态优先。复制菜单选择只用于本次操作，不改变默认格式。CSL 样式和语言复用核心 `defaultStyle` / `defaultLocale`，完整编辑控件已移到「文献面板」标签页的「引文默认值」分组，直接在本页保存与重置；该组独立保存，不提交其他标签页未保存的修改。
 
 浏览位置使用 v3 格式，按浏览器、Zotero 实例 `serverId` 和会话隔离。保存库、范围、关键词、模式、排序、筛选、分页、展开前缀、选中条目、窄屏分区和滚动位置；不保存目录载荷。临时隐藏、切换会话或打开阅读器后返回，保留当前标签页的位置，`allItems` 也不会中途重置。清除会话浏览位置由面板标签菜单触发，与恢复配置继承值分开。存储读取或写入失败会就地显示错误与重置入口。切换库、保存搜索或回收站总是清空关键词与附加筛选，保留检索模式和排序。
 
@@ -203,22 +212,24 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 
 组件字段有三处入口：
 
-1. **统一设置页「文档解析」标签页**：在插件详情页的 7 标签页表单中切换至「文档解析」；
+1. **统一设置页「文档解析」标签页**：在插件详情页的 4 标签页表单中切换至「文档解析」；
 2. **包含的组件列表行配置**：在「包含的组件」中点击 `dsh-zotero#enrichment` 行的「配置」按钮；
 3. **配置文件**：在当前 profile 的 `cordis.patch.yml` 对应条目的 `config` 下声明。
 
-| 字段                     | 默认值               | 取值与行为                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`                   | `free`               | `free` 使用免 Token 的 Agent 轻量解析接口（IP 限频、API 侧 ≤10 MB、≤20 页）；`pro` 使用精准解析接口（API 侧 ≤200 MB、≤200 页），需配置 Token（单用户每日可免费解析 5000 份文件，限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。页数与 API 字节上限由 MinerU 侧限制，客户端不预检页数                                                                                         |
-| `ocrLanguage`            | `'ch'`               | 免费模式 PDF OCR 语言代码，例如 `ch`（中文）或 `en`（英文）。默认沿用 MinerU 官方默认值；具体语言包由服务端校验。精准模式忽略此字段。切换语言会改变免费模式的缓存键，须明确提交解析后生成新产物。                                                                                                                                                                                   |
-| `mineruTokenRef`         | `'MINERU_API_TOKEN'` | MinerU 精准接口 Token 的凭据引用名（默认插件专属 `MINERU_API_TOKEN`）；在 `pro` 模式下读取凭据存储中该引用名对应的 Token（Token 有效期为 3 个月）。表单默认使用该专属引用名，无需手动输入                                                                                                                                                                                           |
-| `outputDir`              | `''`                 | 解析产物目录的绝对路径（或以 `~/` 开头）；空串表示运行时解析默认位置 `~/.dsh/zotero-parsed`。相对路径在 Schema/表单保存时被拒绝                                                                                                                                                                                                                                                     |
-| `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型不可用时读取明确失败，不回退 BM25；模型需手动下载，WASM 运行时随包发布                                                                                                                                                                                                                                                         |
-| `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） |
-| `semanticDownloadSource` | `'hf-mirror'`        | 模型资源下载渠道：`hf-mirror`（国内镜像加速，推荐国内直连）、`huggingface`（Hugging Face 官方直连）                                                                                                                                                                                                                                                                                 |
-| `semanticModelDir`       | `''`                 | 下载模型的绝对存储目录（或以 `~/` 开头）；空串表示使用默认目录 `~/.dsh/models/`                                                                                                                                                                                                                                                                                                     |
-| `semanticIdleTimeoutMs`  | `600000`             | 常驻嵌入模型的空闲回收毫秒数：该时长内没有新的排序准入时释放模型实例，下次排序从磁盘重新打开；`0` 表示直到卸载前一直常驻                                                                                                                                                                                                                                                            |
-| `artifactReader`         | 见下表               | 完整图文准备、读取快照和 ZIP Worker 的部署限额；在 profile 配置中设置                                                                                                                                                                                                                                                                                                               |
+设置页只渲染 7 个可见控件（解析模式、OCR 语言、MinerU Token、输出目录、语义检索开关、模型档位和下载渠道）；配置文件仍可设置全部 10 个字段。
+
+| 字段                     | 默认值               | 取值与行为                                                                                                                                                                                                                                                                                                                                                                          | 设置页           |
+| ------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `mode`                   | `free`               | `free` 使用免 Token 的 Agent 轻量解析接口（IP 限频、API 侧 ≤10 MB、≤20 页）；`pro` 使用精准解析接口（API 侧 ≤200 MB、≤200 页），需配置 Token（单用户每日可免费解析 5000 份文件，限流：提交任务 50 文件/分钟，获取结果 1000 次/分钟）。页数与 API 字节上限由 MinerU 侧限制，客户端不预检页数                                                                                         | 可见             |
+| `ocrLanguage`            | `'ch'`               | 免费模式 PDF OCR 语言代码，例如 `ch`（中文）或 `en`（英文）。默认沿用 MinerU 官方默认值；具体语言包由服务端校验。精准模式忽略此字段。切换语言会改变免费模式的缓存键，须明确提交解析后生成新产物。                                                                                                                                                                                   | 可见             |
+| `mineruTokenRef`         | `'MINERU_API_TOKEN'` | MinerU 精准接口 Token 的凭据引用名（默认插件专属 `MINERU_API_TOKEN`）；在 `pro` 模式下读取凭据存储中该引用名对应的 Token（Token 有效期为 3 个月）。内部引用，由 MinerU Token 密钥控件隐式使用，无需手动填写                                                                                                                                                                         | 内部（令牌控件） |
+| `outputDir`              | `''`                 | 解析产物目录的绝对路径（或以 `~/` 开头）；空串表示运行时解析默认位置 `~/.dsh/zotero-parsed`。相对路径在 Schema/表单保存时被拒绝                                                                                                                                                                                                                                                     | 可见             |
+| `enableSemanticSearch`   | `false`              | 是否启用本地语义检索：关闭时使用完整 BM25；开启但模型不可用时读取明确失败，不回退 BM25；模型需手动下载，WASM 运行时随包发布                                                                                                                                                                                                                                                         | 可见             |
+| `semanticModel`          | `'balanced'`         | 选用的本地嵌入模型语义档位：`balanced`（通用平衡，当前绑定 Qwen3-0.6B，默认推荐）、`lightweight`（极速轻量，当前绑定 Granite-97M，内存 <250MB）、`bilingual`（中英双语，当前绑定 KaLM-0.5B，学术指令微调）、`english`（英文长文，当前绑定 Nomic-137M，8K 上下文）、`hybrid`（多路混合，当前绑定 BGE-M3，多向量混合召回）、`academic`（经典学术，当前绑定 GTE-Base，768 维经典基准） | 可见             |
+| `semanticDownloadSource` | `'hf-mirror'`        | 模型资源下载渠道：`hf-mirror`（国内镜像加速，推荐国内直连）、`huggingface`（Hugging Face 官方直连）                                                                                                                                                                                                                                                                                 | 可见             |
+| `semanticModelDir`       | `''`                 | 下载模型的绝对存储目录（或以 `~/` 开头）；空串表示使用默认目录 `~/.dsh/models/`                                                                                                                                                                                                                                                                                                     | 仅配置文件       |
+| `semanticIdleTimeoutMs`  | `600000`             | 常驻嵌入模型的空闲回收毫秒数：该时长内没有新的排序准入时释放模型实例，下次排序从磁盘重新打开；`0` 表示直到卸载前一直常驻                                                                                                                                                                                                                                                            | 仅配置文件       |
+| `artifactReader`         | 见下表               | 完整图文准备、读取快照和 ZIP Worker 的部署限额；在 profile 配置中设置                                                                                                                                                                                                                                                                                                               | 仅配置文件       |
 
 `artifactReader` 的各值必须为正整数。新值用于后续准入，已准入的快照保持原配置。
 

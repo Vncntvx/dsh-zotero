@@ -1,8 +1,9 @@
-/* Styles for the plugin manager detail page contributions: the status card
- * (`plugins.detail.section`, `ZoteroPluginDetailSection.tsx`), the activation
- * guide (`plugins.bundle.activation`, `ZoteroActivationGuide.tsx`), and the
- * diagnostics card (`DiagnosticsCard.tsx`). The configuration page's own
- * chrome lives in `ZoteroSettingsSection.module.css`. */
+/* Styles for the plugin manager detail page contributions: the service status
+ * section with its connection card (`plugins.detail.section`,
+ * `ZoteroPluginDetailSection.tsx`), the activation guide
+ * (`plugins.bundle.activation`, `ZoteroActivationGuide.tsx`), and the
+ * diagnostics log card nested in that section (`DiagnosticsCard.tsx`). The
+ * configuration page's own chrome lives in `ZoteroSettingsSection.module.css`. */
 
 .section {
   display: flex;
@@ -21,12 +22,6 @@
   font: var(--dsw-font-s-14);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
-}
-
-.sectionGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
 }
 
 .card {
@@ -154,9 +149,9 @@
   gap: 8px;
 }
 
-/* Diagnostics card (plugins.detail.section): filter toolbar, newest-first
- * entry list, and footer facts. Entries reuse the caption scale; the level
- * dot borrows the status row's state colors. */
+/* Diagnostics log card inside the service status section: filter toolbar,
+ * newest-first entry list, and footer facts. Entries reuse the caption scale;
+ * the level dot borrows the status row's state colors. */
 .diagToolbar {
   display: flex;
   align-items: center;

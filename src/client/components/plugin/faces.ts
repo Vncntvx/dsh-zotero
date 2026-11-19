@@ -6,14 +6,21 @@
  */
 
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroStatusView } from '../../remote.ts'
+import type { ZoteroDiagnosticsView, ZoteroStatusView } from '../../remote.ts'
 
 /**
- * The probe face the two status cards inject (activation guide, detail
- * section). The translator is not part of the face: both registrations
- * declare `locale: NS`, so the renderer synthesizes the `t` seat
- * (`ui-renderer/src/client/scoped-slots.tsx`).
+ * The probe face the activation guide injects. The translator is not part of
+ * the face: the registration declares `locale: NS`, so the renderer
+ * synthesizes the `t` seat (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 export interface ZoteroProbeFace {
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
+}
+
+/**
+ * The detail section's face: the shared connectivity probe plus the
+ * diagnostics snapshot the log card renders inside the same section.
+ */
+export interface ZoteroDetailFace extends ZoteroProbeFace {
+  readonly diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
 }

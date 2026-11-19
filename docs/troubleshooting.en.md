@@ -24,7 +24,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 ## 4. Scholarly tools do not appear
 
-- Symptom: the model cannot see the seven scholarly tools such as `scholarly_search`, or the "Scholarly Search" tab of the settings page shows only a pointer and no field.
+- Symptom: the model cannot see the seven scholarly tools such as `scholarly_search`, or the "Scholarly" tab of the settings page shows only a pointer and no field.
 - Cause: the `dsh-zotero/scholarly` component is not mounted. The component ships with the package and is off by default; the row under "Included components" is its only switch, and enabling it registers the service, transport, and tools.
 - Fix: turn on the `dsh-zotero/scholarly` row under "Included components" in the plugin manager; the tools and the settings page take effect without a restart. The authorization boundary for external retrieval is in [Product model](product-model.en.md).
 
@@ -52,7 +52,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 - Symptom: `dsh plugin --profile <profile> add` fails with `nothing installable: the plugin(s) need a build step`.
 - Cause: installing from a GitHub source branch builds locally, and pnpm blocks dependency builds by default.
 - Fix:
-  - Recommended: install through the npm package name or a GitHub `#release` prebuilt branch.
+  - Recommended: install through the npm package name or a GitHub `#stable` / `#release` prebuilt branch.
   - To build from source: add `dsh-zotero` to the `allowBuilds` list in the current profile's `pnpm-workspace.yaml`, then retry.
 
 ## 9. Literature trail does not appear
@@ -68,7 +68,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 - Symptom: a tool call returns the `ZOTERO_INVALID_ARGUMENT` error and says the ref count is over the limit.
 - Cause: the five formats other than `citation` (`bibliography`, BibTeX, BibLaTeX, RIS, and CSL JSON) export at most 50 items per call, which comes from Zotero's `itemKey` request cap.
-- Fix: call `zotero_export` in batches of at most 50 items; or switch to `citation`, which batches automatically in groups of 50, though `maxExportRefs` must be raised above 50 first.
+- Fix: call `zotero_export` in batches of at most 50 items; or switch to `citation`, which batches automatically in groups of 50, though the config-file field `maxExportRefs` must be raised above 50 first.
 
 ## 11. Server ID or ref mismatch
 
@@ -117,32 +117,32 @@ This document lists common issues, possible causes, and the matching fixes when 
 
 When the error message alone is not enough to track an issue down (a feature fails silently, a card or tab renders wrongly, a result comes back odd), export a diagnostic log as follows:
 
-1. Open the **dsh-zotero** detail page in the plugin manager, turn on "Diagnostic mode" in the "Advanced → Diagnostics" group of the configuration area, and save.
-2. Once it is on, a "Diagnostics" card appears at the bottom of the detail page; reproduce the issue once, then click "Copy diagnostics" in that card and attach the content to your report.
+1. Open the **dsh-zotero** detail page in the plugin manager, turn on "Diagnostic mode" in the "General → Diagnostics" group of the configuration area, and save.
+2. Once it is on, a "Diagnostics log" card appears in the "Service status" section at the bottom of the detail page; reproduce the issue once, then click "Copy diagnostics" in that card and attach the content to your report.
 3. The exported bundle contains the plugin version, the running Zotero endpoint and version, the debug toggle state, and log entries in reverse chronological order (frontend component render failures are also summarized there).
 
 Note: diagnostic records stay in the current process memory and are cleared when the host restarts. If you need to keep them, copy the bundle before restarting the host.
 
 ## 19. Literature panel does not appear
 
-- Symptom: the right sidebar has no "Literature panel" tab or quick entry; the "Literature panel" tab of the settings page shows only a pointer to "Included components".
+- Symptom: the right sidebar has no "Literature panel" tab or quick entry; the "Library" tab of the settings page shows only a pointer to "Included components".
 - Cause: the literature panel needs two gates at once: the `dsh-zotero/library` component row is composed; the component's own `rightSidebarEnabled` ("Literature panel → Sidebar Display → Show in right sidebar") is on. If any one is off, no panel surface is registered and no `zotero/browse|collectionPath|search|item|childPage|export|write` request is issued.
 - Fix:
   1. Under "Included components" in the plugin manager, confirm the `dsh-zotero/library` row is enabled and reload the plugin;
-  2. Open the "Literature panel" tab of the settings page or the "Configure" button on the `dsh-zotero#library` row, confirm "Show in right sidebar" is on and saved; the toggle takes effect at once after saving;
+  2. Open the "Library" tab of the settings page or the "Configure" button on the `dsh-zotero#library` row, confirm "Show in right sidebar" is on and saved; the toggle takes effect at once after saving;
   3. If both gates hold and the panel still does not appear, copy diagnostics as in item 18 and check whether the plugin failed to load.
 
 ## 20. Literature panel is offline
 
 - Symptom: the status lamp at the top of the panel shows "Offline", everything below the toolbar is replaced by the offline note, and browse, search, and detail requests pause.
 - Cause: local Zotero is not running, the local API is not enabled, `baseUrl` points at the wrong local port, or the current Zotero instance does not match the source the panel refers to (Server ID mismatch).
-- Fix: launch Zotero and check "Allow other applications on this computer to communicate with Zotero" in Settings → Advanced; confirm `baseUrl` on the "Connection" tab of the configuration area matches the current instance; click "Refresh" in the panel to probe again, and the list and detail reload once the connection is back. The status lamp and the diagnosis text in the offline note tell "not running" apart from "local API disabled".
+- Fix: launch Zotero and check "Allow other applications on this computer to communicate with Zotero" in Settings → Advanced; confirm `baseUrl` in the "Connection" group on the General tab of the configuration area matches the current instance; click "Refresh" in the panel to probe again, and the list and detail reload once the connection is back. The status lamp and the diagnosis text in the offline note tell "not running" apart from "local API disabled".
 
 ## 21. Citation copy fails
 
 - Symptom: "Copy citation", "Copy BibTeX", or one entry under "More formats" in the literature panel item inspector action row fails, and the action row shows "Copy failed: <reason>" inline; or the control shows "Formatting…" during the request and no clipboard content arrives.
 - Cause: the `zotero/export` endpoint request failed (local API unreachable, timeout, export content over a limit, unsupported ref or format), or the browser refused the clipboard write (insecure context, no clipboard permission).
-- Fix: confirm the Zotero connection is fine (see items 1 and 2), then click that format once more; a single-item copy is not affected by `maxExportRefs`, so if the error points at oversized export content, check `maxExportChars` and `maxExportRefs` under "Advanced → Output limits"; when the clipboard is unavailable, copy the text from "Copy Zotero link" or "Read PDF" instead. If the failure persists, copy diagnostics as in item 18.
+- Fix: confirm the Zotero connection is fine (see items 1 and 2), then click that format once more; a single-item copy is not affected by `maxExportRefs`, so if the error points at oversized export content, check `maxExportChars` and `maxExportRefs` in the profile configuration; when the clipboard is unavailable, copy the text from "Copy Zotero link" or "Read PDF" instead. If the failure persists, copy diagnostics as in item 18.
 
 ## 22. Literature trail is empty
 
@@ -154,13 +154,13 @@ Note: diagnostic records stay in the current process memory and are cleared when
 
 - Symptom: the `dsh-zotero/scholarly` component row fails to load with an error that names `s2Key` / `ncbiKey` / `openalexKey` and says they were replaced by credential references.
 - Cause: an older configuration stored API keys as literal values in `scholarly.config`; the current schema removes those three fields, and the component refuses to mount a profile that still carries them (schema resolution keeps unknown keys, so without this gate the keys would be lost silently).
-- Fix: open the current profile's `cordis.patch.yml`, remove `s2Key` / `ncbiKey` / `openalexKey` from the `scholarly` entry's `config`, re-enter each key in the matching password control under "Scholarly Search → identity and credential references" (this writes the value into the host credentials store; suggested references `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`), and rotate the old key because it was stored as plaintext and is not migrated automatically. Restart the profile and retry.
+- Fix: open the current profile's `cordis.patch.yml`, remove `s2Key` / `ncbiKey` / `openalexKey` from the `scholarly` entry's `config`, re-enter each key in the matching password control under "Scholarly Search" (saving writes the suggested reference `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY` into the configuration and the value into the host credentials store), and rotate the old key because it was stored as plaintext and is not migrated automatically. Restart the profile and retry.
 
 ## 24. Scholarly calls fail with `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` / `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`
 
 - Symptom: a `scholarly_*` tool call fails with one of these codes.
 - Cause: `UNRESOLVED` means the configured reference name is not a valid environment-variable name, or the credentials store holds no value for it; `UNAVAILABLE` means a reference is configured but no credentials service is mounted. Neither case falls back to anonymous access.
-- Fix: check the reference spelling and grammar in the Scholarly settings (a letter or underscore first, then letters, digits, or underscores); confirm the reference has a value in the host credentials store (saved through the settings password controls, or supplied by the credentials manager/environment layer); for anonymous access, clear the reference and remove the key; for `UNAVAILABLE`, mount a credentials provider (for example `@deepseek-ai/dsh-credentials-local`).
+- Fix: check the reference spelling and grammar in the profile configuration for Scholarly Search (a letter or underscore first, then letters, digits, or underscores); confirm the reference has a value in the host credentials store (saved through the settings password controls, or supplied by the credentials manager/environment layer); for anonymous access, clear the reference in the configuration and remove the key; for `UNAVAILABLE`, mount a credentials provider (for example `@deepseek-ai/dsh-credentials-local`).
 
 ## 25. Revoke a saved write grant
 
@@ -181,8 +181,8 @@ Note: diagnostic records stay in the current process memory and are cleared when
 
 ## 27. Installing from the main source branch fails with ERR_PNPM_IGNORED_BUILDS
 
-- Symptom: `dsh plugin --profile <profile> add github:Vncntvx/dsh-zotero` (without `#release`) fails with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-zotero@…` and exit code 1; the package links, but the command reports failure.
-- Cause: the source branch carries no prebuilt `lib/`, so the plugin's own `prepare` script builds it during installation, and from pnpm 11 on a dependency build script with no explicit decision fails the whole install. The npm package, the `#release` branch, and a local tarball ship prebuilt artifacts and install without this error. The semantic-ranking WASM runtime also ships inside the package and needs no approval.
+- Symptom: `dsh plugin --profile <profile> add github:Vncntvx/dsh-zotero` (without `#stable` or `#release`) fails with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-zotero@…` and exit code 1; the package links, but the command reports failure.
+- Cause: the source branch carries no prebuilt `lib/`, so the plugin's own `prepare` script builds it during installation, and from pnpm 11 on a dependency build script with no explicit decision fails the whole install. The npm package, the `#stable` / `#release` branches, and a local tarball ship prebuilt artifacts and install without this error. The semantic-ranking WASM runtime also ships inside the package and needs no approval.
 - Fix: approve that one script in the current profile's `pnpm-workspace.yaml`, then re-run the same `add`:
 
   ```yaml

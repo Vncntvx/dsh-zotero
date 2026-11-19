@@ -80,9 +80,10 @@ function mountSettings(
             } as unknown as LibrarySettingsSectionProps)}
           />,
         )
-  if (entrance === 'bundle') fireEvent.click(screen.getByRole('tab', { name: zh.tabLibrary }))
+  if (entrance === 'bundle')
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabSettingsLibrary }))
   const defaults = within(screen.getByRole('region', { name: zh.groupDefaults }))
-  return { scope, coreFace, citationFace, accepted, view, defaults }
+  return { scope, libraryScope, coreFace, citationFace, accepted, view, defaults }
 }
 it.each(['bundle', 'row'] as const)(
   'edits and saves both shared CSL defaults directly from the %s entrance',
@@ -93,7 +94,8 @@ it.each(['bundle', 'row'] as const)(
     fireEvent.change(defaults.getByLabelText(zh.defaultStyle), { target: { value: 'vancouver' } })
     fireEvent.change(defaults.getByLabelText(zh.defaultLocale), { target: { value: 'zh-CN' } })
     expect(accepted.getSnapshot().citation).toEqual({ style: 'apa', locale: 'en-US' })
-    await act(async () => fireEvent.click(defaults.getByRole('button', { name: zh.save })))
+    expect(screen.getAllByRole('button', { name: zh.save })).toHaveLength(1)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.save })))
     expect(mutate).toHaveBeenCalledExactlyOnceWith(
       [
         { op: 'set', path: ['defaultStyle'], value: 'vancouver' },
@@ -107,15 +109,30 @@ it.each(['bundle', 'row'] as const)(
     expect(citationFace.hooks.citationCard.getSnapshot().dirty).toBe(false)
     expect(screen.queryByText(/前往基础设置|外观预览|恢复继承设置/)).toBeNull()
     if (entrance === 'bundle') {
-      fireEvent.click(screen.getByRole('tab', { name: zh.tabFeatures }))
+      fireEvent.click(screen.getByRole('tab', { name: zh.tabGeneral }))
       expect(
-        within(screen.getByRole('tabpanel', { name: zh.tabFeatures })).queryByLabelText(
+        within(screen.getByRole('tabpanel', { name: zh.tabGeneral })).queryByLabelText(
           zh.defaultStyle,
         ),
       ).toBeNull()
-      fireEvent.click(screen.getByRole('tab', { name: zh.tabLibrary }))
+      fireEvent.click(screen.getByRole('tab', { name: zh.tabSettingsLibrary }))
       expect((defaults.getByLabelText(zh.defaultStyle) as HTMLInputElement).value).toBe('vancouver')
     }
+  },
+)
+it.each(['bundle', 'row'] as const)(
+  'writes library preferences and CSL drafts from the single tab save in the %s entrance',
+  async (entrance) => {
+    const { scope, libraryScope, accepted, defaults } = mountSettings(entrance)
+    fireEvent.click(screen.getByLabelText(zh.rightSidebarEnabled))
+    fireEvent.change(defaults.getByLabelText(zh.defaultStyle), { target: { value: 'vancouver' } })
+    expect(screen.getAllByRole('button', { name: zh.save })).toHaveLength(1)
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.save })))
+
+    expect(libraryScope.writes).toEqual([{ op: 'set', field: 'rightSidebarEnabled', value: false }])
+    expect(scope.writes).toEqual([{ op: 'set', field: 'defaultStyle', value: 'vancouver' }])
+    expect(accepted.getSnapshot().citation).toEqual({ style: 'vancouver', locale: 'en-US' })
   },
 )
 it('preserves CSL drafts when the host refuses the save', async () => {
@@ -127,8 +144,8 @@ it('preserves CSL drafts when the host refuses the save', async () => {
     }),
   )
   fireEvent.change(defaults.getByLabelText(zh.defaultStyle), { target: { value: 'vancouver' } })
-  await act(async () => fireEvent.click(defaults.getByRole('button', { name: zh.save })))
-  expect(defaults.getByText(zh.saveFailed)).toBeTruthy()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.save })))
+  expect(screen.getByText(zh.saveFailed)).toBeTruthy()
   expect((defaults.getByLabelText(zh.defaultStyle) as HTMLInputElement).value).toBe('vancouver')
   expect(citationFace.hooks.citationCard.getSnapshot().dirty).toBe(true)
   expect(scope.writes).toEqual([])
@@ -144,7 +161,7 @@ it('resets a CSL field locally and commits its unset from the panel', async () =
   )
   fireEvent.click(defaults.getByRole('button', { name: zh.reset }))
   expect(scope.writes).toEqual([])
-  await act(async () => fireEvent.click(defaults.getByRole('button', { name: zh.save })))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.save })))
   expect(scope.writes).toEqual([{ op: 'unset', field: 'defaultStyle' }])
 })
 it('discards unsaved CSL edits when leaving the settings page', () => {
@@ -164,5 +181,5 @@ it('keeps CSL controls disabled when the core settings document is read-only', (
   )
   expect((defaults.getByLabelText(zh.defaultStyle) as HTMLInputElement).disabled).toBe(true)
   expect((defaults.getByLabelText(zh.defaultLocale) as HTMLInputElement).disabled).toBe(true)
-  expect((defaults.getByRole('button', { name: zh.save }) as HTMLButtonElement).disabled).toBe(true)
+  expect((screen.getByRole('button', { name: zh.save }) as HTMLButtonElement).disabled).toBe(true)
 })

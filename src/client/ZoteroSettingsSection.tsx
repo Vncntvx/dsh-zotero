@@ -1,20 +1,23 @@
 /**
  * The Zotero settings page: rendered in the Plugins manager detail page
- * (`plugins.bundle.config` slot, keyed by package name). It edits every field
- * of the `zotero`, `library`, `scholarly`, and `enrichment` namespaces across a
- * unified 7-tab interface.
+ * (`plugins.bundle.config` slot, keyed by package name). It renders the visible
+ * settings of the `zotero`, `library`, `scholarly`, and `enrichment` namespaces
+ * across a unified 4-tab interface, one tab per component.
  *
- * Tab 1: General (conversation tab and personal library write gate)
- * Tab 2: Connection (API URL, timeout, max requests, cache TTL)
- * Tab 3: Search & Extraction (query/concurrency quotas, passage and fulltext limits)
- * Tab 4: Library (panel preferences and shared CSL defaults)
- * Tab 5: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
- * Tab 6: Document Enrichment (MinerU mode, token, output directory,
- * Tab 7: Advanced (output limits, background job policy, diagnostics)
+ * Tab 1: General (conversation tab, personal library write gate, Local API
+ * connection, search and reading budgets, background jobs, diagnostics)
+ * Tab 2: Literature panel (panel preferences and shared CSL defaults)
+ * Tab 3: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
+ * Tab 4: Document Enrichment (MinerU mode, token, output directory, and
+ * semantic model controls)
  *
- * Both the Zotero and Scholarly SettingsForm containers remain mounted in the DOM
- * to prevent unmount-triggered discard of uncommitted drafts when navigating between
- * tabs. Visibility is toggled via CSS hidden attributes.
+ * All four tab panels remain mounted in the DOM to prevent unmount-triggered
+ * discard of uncommitted drafts when navigating between tabs. Visibility is
+ * toggled via CSS hidden attributes. Each tab renders one harness `SettingsForm`
+ * and therefore one save; the Literature panel tab composes the `library` and
+ * `zotero` namespaces into that save the same way the harness composes its
+ * Subagent settings card.
+ *
  * @module dsh-zotero/client/ZoteroSettingsSection
  */
 
@@ -44,6 +47,7 @@ import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
 import { EnrichmentSettingsForm } from './EnrichmentSettingsForm.tsx'
 import { CitationDefaultsForm } from './CitationDefaultsForm.tsx'
 import type { CitationCardFace, CitationCardState } from './citation-form-controller.ts'
+import { composeSettingsForm, type ComposedSettingsPart } from './composed-settings.ts'
 import css from './ZoteroSettingsSection.module.css'
 
 /** Props the renderer binds for the Zotero settings page in plugins.bundle.config. */
@@ -74,14 +78,14 @@ export function formLabels(t: TranslateNS<'zotero'>): SettingsFormLabels {
 }
 
 /**
- * Render the unified 7-tab Zotero settings page.
+ * Render the unified 4-tab Zotero settings page.
  * @param props - locale copy, the page snapshot, and its form actions.
  * @returns the page, with the official chrome around its grouped form.
  */
 export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactNode {
   const { t } = props
   const citationState = props.useCitationCard((snapshot) => snapshot)
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('features')
+  const [activeTab, setActiveTab] = useState<SettingsTabId>('general')
   const zoteroState = props.useZoteroCard((snapshot) => snapshot)
   const scholarlyState = props.useScholarlyCard
     ? props.useScholarlyCard((snapshot) => snapshot)
@@ -93,6 +97,15 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
     ? props.useLibraryCard((snapshot) => snapshot)
     : undefined
   const labels = useMemo(() => formLabels(t), [t])
+  const library = props.library
+  const libraryAvailable =
+    library !== undefined && libraryState !== undefined && libraryState.available
+  const libraryParts: ComposedSettingsPart[] = [
+    { state: citationState, save: props.citation.save, discard: props.citation.discard },
+  ]
+  if (library !== undefined && libraryState !== undefined)
+    libraryParts.unshift({ state: libraryState, save: library.save, discard: library.discard })
+  const libraryTab = composeSettingsForm(libraryParts)
 
   const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
     useMemo(
@@ -119,7 +132,10 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
 
       <div
         className={css.tabPanel}
-        hidden={activeTab === 'scholarly' || activeTab === 'library' || activeTab === 'enrichment'}
+        role="tabpanel"
+        id="zotero-panel-general"
+        aria-labelledby="zotero-tab-general"
+        hidden={activeTab !== 'general'}
       >
         <SettingsForm
           labels={labels}
@@ -131,8 +147,6 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             t={t}
             state={zoteroState}
             actions={props}
-            activeTab={activeTab}
-            showTabs={false}
             probe={props.probe}
             revokeWriteGrant={props.revokeWriteGrant}
           />
@@ -146,31 +160,42 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
         id="zotero-panel-library"
         aria-labelledby="zotero-tab-library"
       >
-        {props.library && libraryState?.available ? (
-          <div data-library-preferences>
-            <SettingsForm
-              labels={labels}
-              state={libraryState}
-              onSave={props.library.save}
-              onDiscard={props.library.discard}
-            >
-              <LibrarySettingsForm t={t} state={libraryState} actions={props.library} />
-            </SettingsForm>
-          </div>
-        ) : (
-          <p className={css.note} role="status">
-            {t('libraryDisabled')}
-          </p>
-        )}
-        <CitationDefaultsForm
-          t={t}
-          state={citationState}
-          actions={props.citation}
+        <SettingsForm
           labels={labels}
-        />
+          state={libraryTab.state}
+          onSave={libraryTab.save}
+          onDiscard={libraryTab.discard}
+        >
+          {libraryAvailable ? (
+            <div data-library-preferences>
+              <LibrarySettingsForm
+                t={t}
+                state={{ ...libraryState, saving: libraryTab.state.saving }}
+                actions={library}
+              />
+            </div>
+          ) : (
+            <p className={css.note} role="status">
+              {t('libraryDisabled')}
+            </p>
+          )}
+          {citationState.available ? (
+            <CitationDefaultsForm
+              t={t}
+              state={{ ...citationState, saving: libraryTab.state.saving }}
+              actions={props.citation}
+            />
+          ) : null}
+        </SettingsForm>
       </div>
 
-      <div className={css.tabPanel} hidden={activeTab !== 'scholarly'}>
+      <div
+        className={css.tabPanel}
+        role="tabpanel"
+        id="zotero-panel-scholarly"
+        aria-labelledby="zotero-tab-scholarly"
+        hidden={activeTab !== 'scholarly'}
+      >
         {props.scholarly && scholarlyState?.available ? (
           <SettingsForm
             labels={labels}
@@ -178,30 +203,22 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             onSave={props.scholarly.save}
             onDiscard={props.scholarly.discard}
           >
-            <div
-              role="tabpanel"
-              id="zotero-panel-scholarly"
-              aria-labelledby="zotero-tab-scholarly"
-              className={css.tabPanel}
-            >
-              <ScholarlySettingsForm t={t} state={scholarlyState} actions={props.scholarly} />
-            </div>
+            <ScholarlySettingsForm t={t} state={scholarlyState} actions={props.scholarly} />
           </SettingsForm>
         ) : (
-          <div
-            role="tabpanel"
-            id="zotero-panel-scholarly"
-            aria-labelledby="zotero-tab-scholarly"
-            className={css.tabPanel}
-          >
-            <p className={css.note} role="status">
-              {t('scholarlyDisabled')}
-            </p>
-          </div>
+          <p className={css.note} role="status">
+            {t('scholarlyDisabled')}
+          </p>
         )}
       </div>
 
-      <div className={css.tabPanel} hidden={activeTab !== 'enrichment'}>
+      <div
+        className={css.tabPanel}
+        role="tabpanel"
+        id="zotero-panel-enrichment"
+        aria-labelledby="zotero-tab-enrichment"
+        hidden={activeTab !== 'enrichment'}
+      >
         {props.enrichment && enrichmentState?.available ? (
           <SettingsForm
             labels={labels}
@@ -209,26 +226,12 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
             onSave={props.enrichment.save}
             onDiscard={props.enrichment.discard}
           >
-            <div
-              role="tabpanel"
-              id="zotero-panel-enrichment"
-              aria-labelledby="zotero-tab-enrichment"
-              className={css.tabPanel}
-            >
-              <EnrichmentSettingsForm t={t} state={enrichmentState} actions={props.enrichment} />
-            </div>
+            <EnrichmentSettingsForm t={t} state={enrichmentState} actions={props.enrichment} />
           </SettingsForm>
         ) : (
-          <div
-            role="tabpanel"
-            id="zotero-panel-enrichment"
-            aria-labelledby="zotero-tab-enrichment"
-            className={css.tabPanel}
-          >
-            <p className={css.note} role="status">
-              {t('enrichmentDisabled')}
-            </p>
-          </div>
+          <p className={css.note} role="status">
+            {t('enrichmentDisabled')}
+          </p>
         )}
       </div>
     </div>

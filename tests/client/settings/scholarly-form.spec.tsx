@@ -9,7 +9,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ScholarlyFormController,
   type ScholarlyCardFace,
@@ -267,21 +267,6 @@ describe('ScholarlyFormController credential lifecycle', () => {
     controller.dispose()
   })
 
-  it('refuses a key draft with no committed reference without calling the Host', async () => {
-    const scope = fakeScope({ value: {} })
-    const credentials = fakeCredentials()
-    const set = vi.spyOn(credentials, 'set')
-    const controller = new ScholarlyFormController(scope, credentials)
-    const face = controller.inject()
-    face.edit('s2Key', 'key-1')
-    face.save()
-
-    await vi.waitFor(() => expect(face.hooks.scholarlyCard.getSnapshot().saving).toBe(false))
-    expect(set).not.toHaveBeenCalled()
-    expect(face.hooks.scholarlyCard.getSnapshot().failed).toBe(true)
-    controller.dispose()
-  })
-
   it('reads credentials once the settings section arrives', async () => {
     const scope = fakeScope({ status: 'loading' })
     const credentials = fakeCredentials({ S2_API_KEY: { configured: true, writable: true } })
@@ -346,39 +331,6 @@ describe('ScholarlyFormController credential lifecycle', () => {
     expect(face.hooks.scholarlyCard.getSnapshot().s2Key.configured).toBe(true)
     controller.dispose()
   })
-
-  it('reports a refused credential write as a failed save', async () => {
-    const scope = fakeScope({ value: { s2ApiKeyEnv: 'S2_API_KEY' } })
-    const refusing: ScholarlyCredentialPort = {
-      describe: async (refs) => ({
-        ok: true,
-        value: Object.fromEntries(refs.map((ref) => [ref, { configured: false, writable: true }])),
-      }),
-      set: async () => ({
-        ok: false,
-        error: new RemoteError('gateway/internal', 'credentials store refused the write', {}),
-      }),
-    }
-    const controller = new ScholarlyFormController(scope, refusing)
-    const face = controller.inject()
-    face.edit('s2Key', 'key-1')
-    face.save()
-
-    await vi.waitFor(() => expect(face.hooks.scholarlyCard.getSnapshot().saving).toBe(false))
-    expect(face.hooks.scholarlyCard.getSnapshot().failed).toBe(true)
-    expect(face.hooks.scholarlyCard.getSnapshot().s2Key.configured).toBe(false)
-    controller.dispose()
-  })
-
-  it('disables a key control until its committed reference is valid', () => {
-    const controller = new ScholarlyFormController(fakeScope({ value: {} }), emptyCredentialPort)
-    render(<ScholarlyHarness face={controller.inject()} view="page" dictionary={zh} />)
-
-    const input = screen.getByLabelText(zh.scholarlyS2Key) as HTMLInputElement
-    expect(input.disabled).toBe(true)
-    expect(screen.getAllByText(zh.scholarlyKeyNeedsReference)).toHaveLength(3)
-    controller.dispose()
-  })
 })
 
 describe('ScholarlySettingsSection', () => {
@@ -400,7 +352,7 @@ describe('ScholarlySettingsSection', () => {
     controller.dispose()
   })
 
-  it('renders reference fields, key controls, and quotas in page view', () => {
+  it('renders credentials, quotas, and background switches in page view', () => {
     const controller = new ScholarlyFormController(
       fakeScope({ value: { s2ApiKeyEnv: 'S2_API_KEY' } }),
       fakeCredentials({ S2_API_KEY: { configured: true, writable: true } }),
@@ -409,24 +361,22 @@ describe('ScholarlySettingsSection', () => {
 
     expect(screen.getByLabelText(zh.groupScholarlyAuth)).toBeDefined()
     expect(screen.getByLabelText(zh.groupScholarlyLimits)).toBeDefined()
+    expect(screen.getByLabelText(zh.groupScholarlyJobs)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyEmail)).toBeDefined()
-    expect(screen.getByLabelText(zh.scholarlyS2ApiKeyEnv)).toBeDefined()
-    expect(screen.getByLabelText(zh.scholarlyNcbiApiKeyEnv)).toBeDefined()
-    expect(screen.getByLabelText(zh.scholarlyOpenalexApiKeyEnv)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyS2Key)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyNcbiKey)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyOpenalexKey)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxResults)).toBeDefined()
     expect(screen.getByLabelText(zh.scholarlyMaxContentChars)).toBeDefined()
-    expect(screen.getByLabelText(zh.groupJobs)).toBeDefined()
     expect(screen.getByLabelText(zh.enableRunInBackground)).toBeDefined()
     expect(screen.getByLabelText(zh.promoteOnTimeout)).toBeDefined()
-    expect(screen.getByLabelText(zh.foregroundWaitMs)).toBeDefined()
+    expect(document.getElementById('scholarly-settings-s2ApiKeyEnv')).toBeNull()
+    expect(document.getElementById('scholarly-settings-foregroundWaitMs')).toBeNull()
     expect(screen.getAllByRole('checkbox')).toHaveLength(2)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(3)
+    expect(document.querySelectorAll('input[inputmode="numeric"]')).toHaveLength(2)
 
     fireEvent.click(screen.getByLabelText(zh.enableRunInBackground))
-    fireEvent.change(screen.getByLabelText(zh.foregroundWaitMs), { target: { value: '5000' } })
     expect((screen.getByLabelText(zh.enableRunInBackground) as HTMLInputElement).checked).toBe(true)
     controller.dispose()
   })

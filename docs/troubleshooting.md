@@ -52,7 +52,7 @@
 - **现象**：执行 `dsh plugin --profile <profile> add` 时报错 `nothing installable: the plugin(s) need a build step`。
 - **原因**：从 GitHub 源码分支安装时需在本地编译，而 pnpm 默认拦截依赖构建。
 - **排查**：
-  - 推荐：改用 npm 包名或 GitHub `#release` 预构建分支安装。
+  - 推荐：改用 npm 包名或 GitHub `#stable` / `#release` 预构建分支安装。
   - 若需从源码构建：在当前 profile 的 `pnpm-workspace.yaml` 中将 `dsh-zotero` 加入 `allowBuilds` 列表后重试。
 
 ## 9. 文献轨迹不显示
@@ -68,7 +68,7 @@
 
 - **现象**：工具调用返回 `ZOTERO_INVALID_ARGUMENT` 错误，提示 refs 数量超出限制。
 - **原因**：除 `citation` 外的五种格式（`bibliography`、BibTeX、BibLaTeX、RIS 与 CSL JSON）单次最多导出 50 篇条目，来源是 Zotero `itemKey` 的请求上限。
-- **排查**：分批次调用 `zotero_export`，每批控制在 50 篇以内；或改用 `citation` 格式，它按 50 一组自动分批，但需先将 `maxExportRefs` 调至 50 以上。
+- **排查**：分批次调用 `zotero_export`，每批控制在 50 篇以内；或改用 `citation` 格式，它按 50 一组自动分批，但需先将配置文件中的 `maxExportRefs` 调至 50 以上。
 
 ## 11. Server ID 或 ref 不匹配
 
@@ -117,8 +117,8 @@
 
 当报错信息不足以排查问题（如功能静默失效、卡片或标签页渲染异常、返回结果异常）时，可按以下步骤导出诊断日志：
 
-1. 在插件管理器中打开 **dsh-zotero** 的详情页，在配置区「高级选项 → 诊断」分组中开启「开启诊断」并保存。
-2. 开启后，详情页底部会出现「诊断」卡片；复现一次问题后，点击卡片中的「复制诊断信息」，将内容附在问题反馈中。
+1. 在插件管理器中打开 **dsh-zotero** 的详情页，在配置区「基础设置 → 诊断」分组中开启「开启诊断」并保存。
+2. 开启后，详情页底部的「服务状态」区块中会出现「诊断记录」卡片；复现一次问题后，点击卡片中的「复制诊断信息」，将内容附在问题反馈中。
 3. 导出的诊断包包含插件版本、Zotero 运行端点与版本、调试开关状态以及按时间倒序保存的日志条目（前端组件渲染异常也会自动汇总至此）。
 
 注意：诊断记录仅保留在当前进程内存中，宿主重启后将被清空。如需保留排查信息，请在重启宿主前完成复制。
@@ -136,13 +136,13 @@
 
 - **现象**：面板顶部状态灯显示「未连接」，工具栏以下替换为离线说明，浏览、检索与详情请求暂停。
 - **原因**：本机 Zotero 未运行、本地 API 未启用、`baseUrl` 指向了错误的本机端口，或当前 Zotero 实例与面板引用的来源不一致（Server ID 不匹配）。
-- **排查**：启动 Zotero 并在 **设置 → 高级** 中勾选“允许此计算机上的其他应用程序与 Zotero 通信”；核对配置区「本地连接 → 连接」中的 `baseUrl` 为当前实例地址；在面板点击「刷新」重新探测，恢复连接后列表与详情自动重载。状态灯与离线说明中的诊断文案可用于区分“未运行”与“本地 API 未启用”。
+- **排查**：启动 Zotero 并在 **设置 → 高级** 中勾选“允许此计算机上的其他应用程序与 Zotero 通信”；核对配置区「基础设置 → 连接」中的 `baseUrl` 为当前实例地址；在面板点击「刷新」重新探测，恢复连接后列表与详情自动重载。状态灯与离线说明中的诊断文案可用于区分“未运行”与“本地 API 未启用”。
 
 ## 21. 复制引用失败
 
 - **现象**：文献面板条目检视器动作行的「复制引用」「复制 BibTeX」或「更多格式」中的某一项失败，动作行内联显示「复制失败：<原因>」；或控件在请求期间显示「正在生成…」后没有产生剪贴板内容。
 - **原因**：`zotero/export` 端点请求失败（本地 API 不可达、超时、导出内容超出限制、ref 或格式不受支持），或浏览器拒绝剪贴板写入（非安全上下文、无剪贴板权限）。
-- **排查**：确认 Zotero 连接正常（见第 1、2 项）后重新点击该格式一次；单条复制不受 `maxExportRefs` 影响，若错误信息指向导出内容过大，检查「高级选项 → 输出限制」中的 `maxExportChars` 与 `maxExportRefs`；剪贴板不可用时改用「复制Zotero链接」或「阅读 PDF」抄录。若失败持续，按第 18 项复制诊断信息。
+- **排查**：确认 Zotero 连接正常（见第 1、2 项）后重新点击该格式一次；单条复制不受 `maxExportRefs` 影响，若错误信息指向导出内容过大，检查 profile 配置中的 `maxExportChars` 与 `maxExportRefs`；剪贴板不可用时改用「复制Zotero链接」或「阅读 PDF」抄录。若失败持续，按第 18 项复制诊断信息。
 
 ## 22. 文献轨迹为空
 
@@ -154,13 +154,13 @@
 
 - **现象**：插件列表中的 `dsh-zotero/scholarly` 组件加载失败，错误消息含 `s2Key` / `ncbiKey` / `openalexKey`，并提示这些字段已改为凭据引用。
 - **原因**：旧版配置把 API 密钥字面量存进 `scholarly.config`；当前 schema 已删除这三个字段，组件挂载时对仍携带旧字段的 profile 显式拒绝（schemas 非严格校验会保留未知键，因此不做该检查就会静默丢失密钥）。
-- **修复**：打开当前 profile 的 `cordis.patch.yml`，从 `scholarly` 条目的 `config` 删除 `s2Key` / `ncbiKey` / `openalexKey`；在设置页「学术检索 → 数据源身份与密钥」把密钥重新输入到三个密码框（写入宿主凭据存储，引用名建议 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY`）；轮换旧密钥（旧值曾以明文存储，不会自动迁移）；重启 profile 后重试。
+- **修复**：打开当前 profile 的 `cordis.patch.yml`，从 `scholarly` 条目的 `config` 删除 `s2Key` / `ncbiKey` / `openalexKey`；在设置页「学术检索 → 数据源身份与密钥」把密钥重新输入到三个密码框（保存时把建议引用名 `S2_API_KEY` / `NCBI_API_KEY` / `OPENALEX_API_KEY` 写入配置，并把密钥值写入宿主凭据存储）；轮换旧密钥（旧值曾以明文存储，不会自动迁移）；重启 profile 后重试。
 
 ## 24. 学术检索报 `ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED` / `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`
 
 - **现象**：`scholarly_*` 工具调用失败并返回上述错误码之一。
 - **原因**：`UNRESOLVED` 表示配置的引用名不是合法环境变量名，或凭据存储中没有该引用的值；`UNAVAILABLE` 表示配置了引用，但宿主没有装载凭据服务。两种情况都不会静默降级为匿名请求。
-- **修复**：检查「学术检索」设置中的引用名拼写与语法（首字符为字母或下划线，其后仅字母、数字、下划线）；确认该引用在宿主凭据存储中有值（设置页密码框保存，或由凭据管理/环境变量层提供）；只想匿名访问时清空引用并删除对应密钥；`UNAVAILABLE` 时让宿主装载凭据 provider（如 `@deepseek-ai/dsh-credentials-local`）。
+- **修复**：检查 profile 配置中「学术检索」的引用名拼写与语法（首字符为字母或下划线，其后仅字母、数字、下划线）；确认该引用在宿主凭据存储中有值（设置页密码框保存，或由凭据管理/环境变量层提供）；只想匿名访问时在配置中清空引用并删除对应密钥；`UNAVAILABLE` 时让宿主装载凭据 provider（如 `@deepseek-ai/dsh-credentials-local`）。
 
 ## 25. 撤销已保存的写入授权
 
@@ -181,8 +181,8 @@
 
 ## 27. 从 main 源码分支安装报 ERR_PNPM_IGNORED_BUILDS
 
-- **现象**：执行 `dsh plugin --profile <profile> add github:Vncntvx/dsh-zotero`（未带 `#release`）时 pnpm 以 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-zotero@…` 失败，退出码 1；包已链接，但命令报告失败。
-- **原因**：源码分支不带预构建的 `lib/`，安装时由插件自己的 `prepare` 脚本现场构建；pnpm 11 起，依赖的构建脚本没有显式决定会让整次安装判为失败。npm 包、`#release` 分支与本地 tarball 都带预构建产物，安装时直接使用这些产物。语义排序的 WASM 运行时也随包发布，不需要任何批准。
+- **现象**：执行 `dsh plugin --profile <profile> add github:Vncntvx/dsh-zotero`（未带 `#stable` 或 `#release`）时 pnpm 以 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: dsh-zotero@…` 失败，退出码 1；包已链接，但命令报告失败。
+- **原因**：源码分支不带预构建的 `lib/`，安装时由插件自己的 `prepare` 脚本现场构建；pnpm 11 起，依赖的构建脚本没有显式决定会让整次安装判为失败。npm 包、`#stable` / `#release` 分支与本地 tarball 都带预构建产物，安装时直接使用这些产物。语义排序的 WASM 运行时也随包发布，不需要任何批准。
 - **排查**：在当前 profile 的 `pnpm-workspace.yaml` 中批准这一个脚本，然后重跑同一条 `add`：
 
   ```yaml

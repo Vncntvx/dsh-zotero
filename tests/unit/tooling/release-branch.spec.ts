@@ -78,6 +78,7 @@ it('publishes the verified prebuilt artifact with the release push token', () =>
   const publish = job.steps.find((step) =>
     step.run?.includes('scripts/publish-release-branch.mjs --push'),
   )
+  expect(publish?.run).toContain('--branch release')
   expect(publish?.run).toContain('--artifact "$RUNNER_TEMP/release-artifact"')
   expect(publish?.env).toEqual({ RELEASE_PUSH_TOKEN: '${{ github.token }}' })
 })
@@ -94,6 +95,7 @@ it('keeps publishing behind both mandatory release jobs', () => {
   expect(workflow).toContain('node scripts/harness-toolchain.mjs')
   const publish = workflow.slice(workflow.indexOf('  publish:'))
   expect(publish).not.toMatch(/npm (?:ci|install|run build)/)
+  expect(publish).toContain('--branch stable')
   expect(publish).toContain('--artifact "$RUNNER_TEMP/release-artifact"')
   expect(publish).toContain('RELEASE_PUSH_TOKEN: ${{ github.token }}')
   expect(workflow).toContain('persist-credentials: false')
@@ -220,12 +222,21 @@ it.each([
   { branch: 'release', remote: 'origin', remoteUrl: 'git@github.com:Vncntvx/dsh-zotero.git' },
   { branch: 'release', remote: 'origin', remoteUrl: 'ssh://git@github.com/Vncntvx/dsh-zotero' },
   { branch: 'release', remote: 'origin', remoteUrl: 'ssh://git@github.com/Vncntvx/dsh-zotero.git' },
+  { branch: 'stable', remote: 'origin', remoteUrl: 'https://github.com/Vncntvx/dsh-zotero' },
+  { branch: 'stable', remote: 'origin', remoteUrl: 'git@github.com:Vncntvx/dsh-zotero.git' },
+  { branch: 'stable', remote: 'origin', remoteUrl: 'ssh://git@github.com/Vncntvx/dsh-zotero' },
 ])('accepts a reviewed canonical release target: $branch $remote $remoteUrl', (target) => {
   expect(() => assertReleaseTarget(target)).not.toThrow()
 })
 
 it.each([
   { branch: 'main', remote: 'origin', remoteUrl: 'https://github.com/Vncntvx/dsh-zotero.git' },
+  {
+    branch: 'release-tag',
+    remote: 'origin',
+    remoteUrl: 'https://github.com/Vncntvx/dsh-zotero.git',
+  },
+  { branch: 'stable', remote: 'fork', remoteUrl: 'https://github.com/Vncntvx/dsh-zotero.git' },
   { branch: 'release', remote: 'fork', remoteUrl: 'https://github.com/Vncntvx/dsh-zotero.git' },
   { branch: 'release', remote: 'origin', remoteUrl: 'https://github.com/attacker/dsh-zotero.git' },
 ])('refuses an unreviewed release target: $branch $remote $remoteUrl', (target) => {
@@ -235,22 +246,64 @@ it.each([
 it('accepts a forward source change but refuses history rollback and rebuilt source bytes', () => {
   const previous = { sourceSha: 'old', artifactDigest: 'old-bytes' }
   const request = {
+    branch: 'release',
     sourceSha: 'new',
     mainSha: 'new',
     previous,
     sourceDescendsFromPrevious: true,
+    mainDescendsFromSource: true,
     artifactDigest: 'new-bytes',
   }
   expect(() => assertReleaseAdvance(request)).not.toThrow()
-  expect(() => assertReleaseAdvance({ ...request, sourceDescendsFromPrevious: false })).toThrow(
-    'backwards',
-  )
+  expect(() =>
+    assertReleaseAdvance({
+      ...request,
+      sourceSha: 'side',
+      sourceDescendsFromPrevious: false,
+      mainDescendsFromSource: false,
+    }),
+  ).toThrow('backwards')
   expect(() => assertReleaseAdvance({ ...request, sourceSha: 'old' })).toThrow(
     'different release bytes',
   )
   expect(() =>
     assertReleaseAdvance({ ...request, previous: undefined, sourceSha: 'stale' }),
   ).toThrow('current main')
+})
+
+it('reinitializes the rolling channel from rewritten main but keeps stable monotonic', () => {
+  const rewritten = {
+    branch: 'release',
+    sourceSha: 'rewritten',
+    mainSha: 'rewritten',
+    previous: { sourceSha: 'old', artifactDigest: 'old-bytes' },
+    sourceDescendsFromPrevious: false,
+    mainDescendsFromSource: true,
+    artifactDigest: 'new-bytes',
+  }
+  expect(() => assertReleaseAdvance(rewritten)).not.toThrow()
+  expect(() => assertReleaseAdvance({ ...rewritten, branch: 'stable' })).toThrow('backwards')
+  expect(() =>
+    assertReleaseAdvance({ ...rewritten, sourceSha: 'side', mainSha: 'rewritten' }),
+  ).toThrow('backwards')
+})
+
+it('initializes the stable channel from main history and the rolling channel from main tip', () => {
+  const first = {
+    branch: 'stable',
+    sourceSha: 'tag',
+    mainSha: 'tip',
+    previous: undefined,
+    sourceDescendsFromPrevious: false,
+    mainDescendsFromSource: true,
+    artifactDigest: 'bytes',
+  }
+  expect(() => assertReleaseAdvance(first)).not.toThrow()
+  expect(() => assertReleaseAdvance({ ...first, mainDescendsFromSource: false })).toThrow(
+    'main history',
+  )
+  expect(() => assertReleaseAdvance({ ...first, branch: 'release' })).toThrow('current main')
+  expect(() => assertReleaseAdvance({ ...first, branch: 'nightly' })).toThrow('Unknown')
 })
 
 it('keeps the upstream-health workflow resilient to direct dependency drift', () => {

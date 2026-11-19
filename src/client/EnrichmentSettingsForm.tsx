@@ -480,22 +480,6 @@ export function EnrichmentSettingsForm({
             onReset={() => actions.resetField('semanticDownloadSource')}
           />
 
-          <SettingsValueField
-            id="enrichment-settings-semantic-dir"
-            label={t('semanticModelDir')}
-            hint={t('semanticModelDirHint')}
-            text={state.semanticModelDir.text}
-            overridden={state.semanticModelDir.overridden}
-            invalid={state.semanticModelDir.invalid}
-            overriddenLabel={t('overridden')}
-            resetLabel={t('reset')}
-            invalidLabel={t('enrichmentOutputDirInvalid')}
-            placeholder={t('semanticModelDirDefault')}
-            disabled={disabled}
-            onEdit={(text) => actions.edit('semanticModelDir', text)}
-            onReset={() => actions.resetField('semanticModelDir')}
-          />
-
           <div className={fieldCss.field}>
             <div className={fieldCss.toggleRow}>
               <span className={fieldCss.badges}>

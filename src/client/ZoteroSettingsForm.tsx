@@ -1,36 +1,30 @@
 /**
- * The Zotero settings form body: 4 partitioned tabs holding the 35 connection, capability and runtime
- * configuration fields, as elevated cards.
+ * The general settings form body: the 13 visible connection, capability and
+ * runtime configuration fields, grouped as elevated cards. The other 24
+ * namespace fields stay in the schema and the profile config file; they are
+ * not rendered here.
  *
- * Tab 1: General & Features (conversation tab, personal library write gate)
- * Tab 2: Local Connection (API URL, timeout, max requests, cache TTL)
- * Tab 3: Local Search & Passages (query/concurrency quotas, passage and fulltext limits)
- * Tab 4: Advanced & Tasks (output limits, background job policy, diagnostics)
+ * Groups: conversation tab and personal library write gate, Local API
+ * connection, search and browsing limits, passage and full-text budgets,
+ * background job policy, and diagnostics.
  *
  * The form renders inside the `plugins.bundle.config` slot on the Zotero
  * plugin details page. The official `<SettingsForm>` supplies the chrome
- * (status lines, failed notice, save button); this module owns the segmented
- * tabs, group cards, and per-field controls.
+ * (status lines, failed notice, save button); this module owns the group cards
+ * and per-field controls.
  * @module dsh-zotero/client/ZoteroSettingsForm
  */
 
-import { useMemo, useState, type ReactNode } from 'react'
-import {
-  SegmentedTabs,
-  SettingsValueField,
-  type SegmentedTab,
-  type SettingsFormActions,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ReactNode } from 'react'
+import { SettingsValueField, type SettingsFormActions } from '@deepseek-ai/dsh-client-ui-primitives'
 import { BooleanField } from './fields.tsx'
 import { writeRiskCopy } from './risk-gate.ts'
 import {
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
   NUMERIC_FIELD_KEYS,
-  SETTINGS_TABS,
-  type FieldKey,
   type GroupKey,
-  type SettingsTabId,
+  type VisibleFieldKey,
   type ZoteroCardState,
 } from './zotero-card-controller.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
@@ -50,100 +44,29 @@ interface ZoteroSettingsFormProps {
   state: ZoteroCardState
   /** The form's staged-edit actions. */
   actions: ZoteroFormActions
-  /** Controlled active tab identifier. */
-  activeTab?: SettingsTabId
-  /** Fired when the active tab changes. */
-  onTabChange?: (tab: SettingsTabId) => void
-  /** Whether to render the internal SegmentedTabs (false when hoisted). */
-  showTabs?: boolean
   /** Live connectivity probe, for the write-grant row. */
   probe?: () => Promise<RemoteResult<ZoteroStatusView>>
   /** Revoke the persisted write grant, for the write-grant row. */
   revokeWriteGrant?: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
 }
 
-/** Field map by group key, for quick lookups. */
-const FIELDS_BY_GROUP: ReadonlyMap<GroupKey, readonly FieldKey[]> = new Map(
-  FIELD_GROUPS.map(({ key, fields }) => [key, fields]),
-)
-
 /**
- * Render the 4-tab settings view.
+ * Render the grouped general settings view.
  * @param props - copy, snapshot, and staged-edit actions.
- * @returns the tabbed form view.
+ * @returns the grouped form view.
  */
 export function ZoteroSettingsForm(props: ZoteroSettingsFormProps) {
-  const { t, state, actions, showTabs = true } = props
-  const [internalTab, setInternalTab] = useState<SettingsTabId>('features')
-
-  const handleTabChange = (next: string) => {
-    const tabId = next as SettingsTabId
-    if (props.onTabChange) {
-      props.onTabChange(tabId)
-    } else {
-      setInternalTab(tabId)
-    }
-  }
-
-  // The strip offers exactly the tabs that render a panel. A tab without a
-  // group (library, scholarly, enrichment) lives in its own settings section,
-  // so showing it here would hide every panel on click.
-  const tabItems: readonly [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]] =
-    useMemo(
-      () =>
-        SETTINGS_TABS.filter((tab) => tab.groupKeys.length > 0).map((tab) => ({
-          value: tab.id,
-          label: t(tab.labelKey),
-          id: `zotero-tab-${tab.id}`,
-          panelId: `zotero-panel-${tab.id}`,
-        })) as [SegmentedTab<SettingsTabId>, ...SegmentedTab<SettingsTabId>[]],
-      [t],
-    )
-  // A requested tab that renders no panel is clamped to the first one, so the
-  // strip and the panels can never disagree about what is visible.
-  const requestedTab = props.activeTab ?? internalTab
-  const activeTab = tabItems.some((item) => item.value === requestedTab)
-    ? requestedTab
-    : tabItems[0].value
-
-  const groupFieldsOf = (group: GroupKey): readonly FieldKey[] => FIELDS_BY_GROUP.get(group) ?? []
+  const { t, state, actions } = props
+  const grant =
+    props.probe !== undefined && props.revokeWriteGrant !== undefined
+      ? { probe: props.probe, revoke: props.revokeWriteGrant }
+      : undefined
 
   return (
     <>
-      {showTabs && (
-        <div className={css.tabsContainer}>
-          <SegmentedTabs
-            items={tabItems}
-            value={activeTab}
-            onChange={handleTabChange}
-            label={t('configTabsLabel')}
-          />
-        </div>
+      {FIELD_GROUPS.map(({ key, fields }) =>
+        renderGroupSection(t, state, actions, key, fields, grant),
       )}
-
-      {SETTINGS_TABS.filter((tab) => tab.groupKeys.length > 0).map((tab) => (
-        <div
-          key={tab.id}
-          role="tabpanel"
-          id={`zotero-panel-${tab.id}`}
-          aria-labelledby={`zotero-tab-${tab.id}`}
-          hidden={activeTab !== tab.id}
-          className={css.tabPanel}
-        >
-          {tab.groupKeys.map((group) =>
-            renderGroupSection(
-              t,
-              state,
-              actions,
-              group,
-              groupFieldsOf(group),
-              props.probe !== undefined && props.revokeWriteGrant !== undefined
-                ? { probe: props.probe, revoke: props.revokeWriteGrant }
-                : undefined,
-            ),
-          )}
-        </div>
-      ))}
     </>
   )
 }
@@ -153,7 +76,7 @@ function renderGroupSection(
   state: ZoteroCardState,
   actions: ZoteroFormActions,
   groupKey: GroupKey,
-  fields: readonly FieldKey[],
+  fields: readonly VisibleFieldKey[],
   grant?: {
     readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
     readonly revoke: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
@@ -187,7 +110,7 @@ function field(
   t: (key: ZoteroLocaleKey) => string,
   state: ZoteroCardState,
   actions: ZoteroFormActions,
-  key: FieldKey,
+  key: VisibleFieldKey,
 ): ReactNode {
   const shared = {
     overriddenLabel: t('overridden'),

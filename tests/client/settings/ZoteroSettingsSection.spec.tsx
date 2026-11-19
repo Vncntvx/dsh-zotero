@@ -18,7 +18,6 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroSettingsSection } from '../../../src/client/ZoteroSettingsSection.tsx'
 import type { ZoteroSettingsSectionProps } from '../../../src/client/ZoteroSettingsSection.tsx'
-import { ZoteroSettingsForm } from '../../../src/client/ZoteroSettingsForm.tsx'
 import { en, zh } from '../../../src/client/locales.ts'
 import {
   FIELD_GROUPS,
@@ -176,33 +175,24 @@ describe('ZoteroSettingsSection', () => {
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })
 
-  it('renders the full grouped form and the official save control', () => {
+  it('renders the visible grouped form and the official save control', () => {
     scope = fakeScope({ value: { baseUrl: 'http://127.0.0.1:23119/api', timeoutMs: 5000 } })
     mount()
-    // Every field of the namespace is on the page, with no disclosure to open:
-    // one control per field table row (numeric/text inputs and boolean
-    // checkboxes alike). The count derives from that table, so a field added
-    // or dropped fails here instead of silently changing the page.
+    // The page renders the visible subset of the namespace, with no disclosure
+    // to open: one control per visible field table row (numeric/text inputs and
+    // boolean checkboxes alike). The count derives from that table, so a field
+    // added or dropped fails here instead of silently changing the page.
     expect([...document.querySelectorAll('input')]).toHaveLength(
       FIELD_GROUPS.flatMap((group) => group.fields).length + CITATION_FIELD_KEYS.length,
     )
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders the changes cap with the hint that says it is display-only', () => {
-    scope = fakeScope({ value: { maxChangesResults: 50 } })
-    mount()
-    // The two strings this change reworded, rendered in place by the field:
-    // the cap bounds the listing, not the read.
-    expect(screen.getByLabelText(zh.maxChangesResults)).toBeDefined()
-    expect(screen.getByText(zh.maxChangesResultsHint)).toBeDefined()
-  })
-
-  it('renders the same field from the English dictionary', () => {
-    scope = fakeScope({ value: { maxChangesResults: 50 } })
+  it('renders a visible field from the English dictionary', () => {
+    scope = fakeScope({ value: { timeoutMs: 5000 } })
     mount(en)
-    expect(screen.getByLabelText(en.maxChangesResults)).toBeDefined()
-    expect(screen.getByText(en.maxChangesResultsHint)).toBeDefined()
+    expect(screen.getByLabelText(en.timeoutMs)).toBeDefined()
+    expect(screen.getByText(en.timeoutMsHint)).toBeDefined()
   })
 
   it('toggles the web tab and saves the boolean write from the official save control', async () => {
@@ -346,7 +336,7 @@ describe('ZoteroSettingsSection', () => {
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders SegmentedTabs with all 7 tabs and features as default selected tab', () => {
+  it('renders four equal-width component tabs with General selected', () => {
     scope = fakeScope({ value: {} })
     mount()
 
@@ -354,26 +344,26 @@ describe('ZoteroSettingsSection', () => {
     expect(tabList).toBeDefined()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(7)
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      zh.tabFeatures,
-      zh.tabConnection,
-      zh.tabSearch,
-      zh.tabLibrary,
+      zh.tabGeneral,
+      zh.tabSettingsLibrary,
       zh.tabScholarly,
       zh.tabEnrichment,
-      zh.tabAdvanced,
     ])
+    // The strip divides its width equally. Four-character Chinese labels stay
+    // on one line at every supported width, so every tab renders at one height.
+    for (const label of [zh.tabGeneral, zh.tabSettingsLibrary, zh.tabScholarly, zh.tabEnrichment]) {
+      expect(label).toHaveLength(4)
+    }
 
-    const featuresTab = screen.getByRole('tab', { name: zh.tabFeatures })
-    expect(featuresTab.getAttribute('aria-selected')).toBe('true')
-    expect(featuresTab.getAttribute('aria-controls')).toBe('zotero-panel-features')
+    const generalTab = screen.getByRole('tab', { name: zh.tabGeneral })
+    expect(generalTab.getAttribute('aria-selected')).toBe('true')
+    expect(generalTab.getAttribute('aria-controls')).toBe('zotero-panel-general')
 
-    const featuresPanel = document.getElementById('zotero-panel-features')
-    expect(featuresPanel?.getAttribute('hidden')).toBeNull()
-
-    const connectionPanel = document.getElementById('zotero-panel-connection')
-    expect(connectionPanel?.getAttribute('hidden')).toBe('')
+    expect(document.getElementById('zotero-panel-general')?.getAttribute('hidden')).toBeNull()
+    expect(document.getElementById('zotero-panel-library')?.getAttribute('hidden')).toBe('')
+    expect(document.getElementById('zotero-panel-scholarly')?.getAttribute('hidden')).toBe('')
+    expect(document.getElementById('zotero-panel-enrichment')?.getAttribute('hidden')).toBe('')
   })
 
   it('renders the enrichment tab form when the enrichment namespace is served', () => {
@@ -394,35 +384,25 @@ describe('ZoteroSettingsSection', () => {
     scope = fakeScope({ value: {} })
     mount()
 
-    const connectionTab = screen.getByRole('tab', { name: zh.tabConnection })
-    fireEvent.click(connectionTab)
+    const generalTab = screen.getByRole('tab', { name: zh.tabGeneral })
+    expect(generalTab.getAttribute('aria-selected')).toBe('true')
 
-    expect(connectionTab.getAttribute('aria-selected')).toBe('true')
-    const featuresTab = screen.getByRole('tab', { name: zh.tabFeatures })
-    expect(featuresTab.getAttribute('aria-selected')).toBe('false')
-
-    const connectionPanel = document.getElementById('zotero-panel-connection')
-    expect(connectionPanel?.getAttribute('hidden')).toBeNull()
-    const featuresPanel = document.getElementById('zotero-panel-features')
-    expect(featuresPanel?.getAttribute('hidden')).toBe('')
-
-    const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
-    fireEvent.click(scholarlyTab)
-    expect(scholarlyTab.getAttribute('aria-selected')).toBe('true')
-    const scholarlyPanel = document.getElementById('zotero-panel-scholarly')
-    expect(scholarlyPanel?.getAttribute('hidden')).toBeNull()
-
-    const libraryTab = screen.getByRole('tab', { name: zh.tabLibrary })
-    fireEvent.click(libraryTab)
-    expect(libraryTab.getAttribute('aria-selected')).toBe('true')
-    const libraryPanel = document.getElementById('zotero-panel-library')
-    expect(libraryPanel?.getAttribute('hidden')).toBeNull()
-
-    const advancedTab = screen.getByRole('tab', { name: zh.tabAdvanced })
-    fireEvent.click(advancedTab)
-    expect(advancedTab.getAttribute('aria-selected')).toBe('true')
-    const advancedPanel = document.getElementById('zotero-panel-advanced')
-    expect(advancedPanel?.getAttribute('hidden')).toBeNull()
+    for (const [label, id] of [
+      [zh.tabSettingsLibrary, 'library'],
+      [zh.tabScholarly, 'scholarly'],
+      [zh.tabEnrichment, 'enrichment'],
+      [zh.tabGeneral, 'general'],
+    ] as const) {
+      const tab = screen.getByRole('tab', { name: label })
+      fireEvent.click(tab)
+      expect(tab.getAttribute('aria-selected')).toBe('true')
+      expect(document.getElementById(`zotero-panel-${id}`)?.getAttribute('hidden')).toBeNull()
+      for (const other of ['general', 'library', 'scholarly', 'enrichment']) {
+        if (other !== id) {
+          expect(document.getElementById(`zotero-panel-${other}`)?.getAttribute('hidden')).toBe('')
+        }
+      }
+    }
   })
 
   it('renders library form inside library tab when libraryFace is supplied', () => {
@@ -433,7 +413,7 @@ describe('ZoteroSettingsSection', () => {
     const libraryController = new LibraryFormController(libraryScope)
     mount(zh, undefined, libraryController.inject())
 
-    const libraryTab = screen.getByRole('tab', { name: zh.tabLibrary })
+    const libraryTab = screen.getByRole('tab', { name: zh.tabSettingsLibrary })
     fireEvent.click(libraryTab)
 
     expect(screen.getByText(zh.libraryDisplaySettings)).toBeDefined()
@@ -487,26 +467,24 @@ describe('ZoteroSettingsSection', () => {
     const scholarlyController = new ScholarlyFormController(scholarlyScope, emptyCredentialPort)
     mount(zh, scholarlyController.inject())
 
-    // 1. Edit a Zotero field on Tab 2 (Connection)
-    const connectionTab = screen.getByRole('tab', { name: zh.tabConnection })
-    fireEvent.click(connectionTab)
+    // 1. Edit a Zotero field on the General tab
     const timeoutInput = screen.getByLabelText(zh.timeoutMs) as HTMLInputElement
     fireEvent.change(timeoutInput, { target: { value: '9999' } })
     expect(timeoutInput.value).toBe('9999')
 
-    // 2. Switch to Tab 4 (Scholarly) and edit a Scholarly field
+    // 2. Switch to the Scholarly tab and edit a Scholarly field
     const scholarlyTab = screen.getByRole('tab', { name: zh.tabScholarly })
     fireEvent.click(scholarlyTab)
     const emailInput = screen.getByLabelText(zh.scholarlyEmail) as HTMLInputElement
     fireEvent.change(emailInput, { target: { value: 'updated@example.com' } })
     expect(emailInput.value).toBe('updated@example.com')
 
-    // 3. Switch back to Tab 2 (Connection) - Zotero edit must be preserved!
-    fireEvent.click(connectionTab)
+    // 3. Switch back to General - the Zotero edit must be preserved!
+    fireEvent.click(screen.getByRole('tab', { name: zh.tabGeneral }))
     const timeoutInputAgain = screen.getByLabelText(zh.timeoutMs) as HTMLInputElement
     expect(timeoutInputAgain.value).toBe('9999')
 
-    // 4. Switch back to Tab 4 (Scholarly) - Scholarly edit must be preserved!
+    // 4. Switch back to Scholarly - the Scholarly edit must be preserved!
     fireEvent.click(scholarlyTab)
     const emailInputAgain = screen.getByLabelText(zh.scholarlyEmail) as HTMLInputElement
     expect(emailInputAgain.value).toBe('updated@example.com')
@@ -530,50 +508,9 @@ describe('ZoteroSettingsSection', () => {
     expect(screen.getByText(zh.groupSearchQueryDesc)).toBeDefined()
     expect(screen.getByText(zh.groupSearchEvidence)).toBeDefined()
     expect(screen.getByText(zh.groupSearchEvidenceDesc)).toBeDefined()
-    expect(screen.getByText(zh.groupOutput)).toBeDefined()
-    expect(screen.getByText(zh.groupOutputDesc)).toBeDefined()
     expect(screen.getByText(zh.groupJobs)).toBeDefined()
     expect(screen.getByText(zh.groupJobsDesc)).toBeDefined()
     expect(screen.getByText(zh.groupDiagnostics)).toBeDefined()
     expect(screen.getByText(zh.groupDiagnosticsDesc)).toBeDefined()
-  })
-
-  it('fires onTabChange callback when controlled tab changes', () => {
-    const onTabChange = vi.fn()
-    scope = fakeScope({ value: {} })
-    const controller = new ZoteroCardController(scope)
-    const face = controller.inject()
-    const state = face.hooks.zoteroCard.getSnapshot()
-
-    render(
-      <ZoteroSettingsForm
-        t={makeTranslate(zh)}
-        state={state}
-        actions={face}
-        activeTab="features"
-        onTabChange={onTabChange}
-      />,
-    )
-
-    const searchTab = screen.getByRole('tab', { name: zh.tabSearch })
-    fireEvent.click(searchTab)
-    expect(onTabChange).toHaveBeenCalledWith('search')
-
-    controller.dispose()
-  })
-
-  it('switches internal tab when uncontrolled (no onTabChange)', () => {
-    scope = fakeScope({ value: {} })
-    const controller = new ZoteroCardController(scope)
-    const face = controller.inject()
-    const state = face.hooks.zoteroCard.getSnapshot()
-
-    render(<ZoteroSettingsForm t={makeTranslate(zh)} state={state} actions={face} />)
-
-    const searchTab = screen.getByRole('tab', { name: zh.tabSearch })
-    fireEvent.click(searchTab)
-    expect(screen.getByText(zh.groupSearchQuery)).toBeDefined()
-
-    controller.dispose()
   })
 })

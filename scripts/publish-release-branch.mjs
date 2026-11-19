@@ -79,7 +79,7 @@ try {
   } else {
     // Read the latest remote state before deciding advancement and use that
     // exact commit as the push lease; a concurrent publisher cannot be erased.
-    const refs = git(['ls-remote', '--heads', remote, 'refs/heads/main', 'refs/heads/release'])
+    const refs = git(['ls-remote', '--heads', remote, 'refs/heads/main', `refs/heads/${branch}`])
     const refMap = new Map(
       refs
         .split('\n')
@@ -89,10 +89,15 @@ try {
           return [ref, sha]
         }),
     )
-    const oldRelease = refMap.get('refs/heads/release')
+    const oldRelease = refMap.get(`refs/heads/${branch}`)
     const mainSha = refMap.get('refs/heads/main')
     if (!mainSha) throw new Error('The remote main branch is missing')
-    git(['fetch', '--no-tags', remote, 'main', ...(oldRelease ? ['release'] : [])])
+    git(['fetch', '--no-tags', remote, 'main', ...(oldRelease ? [branch] : [])])
+    let mainDescendsFromSource = false
+    try {
+      git(['merge-base', '--is-ancestor', sourceSha, mainSha])
+      mainDescendsFromSource = true
+    } catch {}
     let previous
     if (oldRelease) {
       let present = false
@@ -110,15 +115,19 @@ try {
       } catch {}
     }
     assertReleaseAdvance({
+      branch,
       sourceSha,
       mainSha,
       previous,
       sourceDescendsFromPrevious: descends,
+      mainDescendsFromSource,
       artifactDigest: verified.provenance.artifactDigest,
     })
+    if (previous !== undefined && !descends)
+      console.log(`[release-branch] Reinitialized ${branch} after a main history rewrite`)
     const stage = join(temporary, 'repository')
     cpSync(verified.stage, stage, { recursive: true })
-    git(['init', '--initial-branch=release'], stage)
+    git(['init', `--initial-branch=${branch}`], stage)
     git(['add', '--all'], stage)
     git(
       [
@@ -150,13 +159,15 @@ try {
         'git',
         [
           'push',
-          `--force-with-lease=refs/heads/release:${oldRelease ?? ''}`,
+          `--force-with-lease=refs/heads/${branch}:${oldRelease ?? ''}`,
           git(['remote', 'get-url', remote]),
-          'HEAD:refs/heads/release',
+          `HEAD:refs/heads/${branch}`,
         ],
         { cwd: stage, env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 },
       )
-      console.log(`[release-branch] Published ${sourceSha} (${verified.provenance.artifactDigest})`)
+      console.log(
+        `[release-branch] Published ${sourceSha} to ${branch} (${verified.provenance.artifactDigest})`,
+      )
     } else
       console.log(
         `[release-branch] Verified commit ${git(['rev-parse', 'HEAD'], stage)}; pass --push with the checked artifact to publish`,

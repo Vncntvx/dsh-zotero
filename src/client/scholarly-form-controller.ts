@@ -1,16 +1,15 @@
 /**
  * The staged form controller for the `scholarly` namespace: the contact email,
- * the credential references for the external scholarly API keys, the key
- * values themselves, the search and read quotas, and the background-job
- * policy.
+ * the write-only external scholarly API keys, the search and read quotas, and
+ * the background-job policy.
  *
- * Key values never enter settings. The reference fields and the three
- * write-only key controls are separate: a save writes the settings document
- * first, then each typed key through `ctx.remote.credentials.set` under the
- * reference the committed section names. The configured badge comes from
- * `ctx.remote.credentials.describe`, never from a redacted settings value, and
- * every credential read is driven by the committed section: a draft edit never
- * calls the remote domain.
+ * Key values go to the host credentials store, not into settings. The reference
+ * fields stay in the schema and card state but have no control: a key edit
+ * stages the suggested reference when the committed one is empty, then a save
+ * writes the settings document first and each typed key through
+ * `ctx.remote.credentials.set` under the effective reference. A committed custom
+ * reference is kept, and reads use committed references only. The configured
+ * badge comes from `ctx.remote.credentials.describe`.
  *
  * It follows the harness's own `SettingsFormModel` pattern: staged edits,
  * revision-fenced atomic mutations, discard on unmount.
@@ -34,7 +33,10 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { asFormScope } from './helpers/form-scope.ts'
 import type { NamespaceStatus } from './helpers/namespace-status.ts'
-import { SCHOLARLY_KEY_FIELD_PAIRS } from '../credential-names.js'
+import {
+  SCHOLARLY_CREDENTIAL_REFERENCE_NAMES,
+  SCHOLARLY_KEY_FIELD_PAIRS,
+} from '../credential-names.js'
 
 /** Settings text fields, including the three credential references. */
 const SCHOLARLY_TEXT_KEYS = ['email', 's2ApiKeyEnv', 'ncbiApiKeyEnv', 'openalexApiKeyEnv'] as const
@@ -50,6 +52,13 @@ export type ScholarlySecretKey = (typeof SECRET_KEYS)[number]
 export const SECRET_REF_FIELDS = Object.fromEntries(
   SCHOLARLY_KEY_FIELD_PAIRS.map(([secret, reference]) => [secret, reference]),
 ) as Readonly<Record<ScholarlySecretKey, string>>
+
+/** The reference each key uses when the profile has not committed one. */
+const SUGGESTED_REFERENCE: Readonly<Record<ScholarlySecretKey, string>> = {
+  s2Key: SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.semanticScholar,
+  ncbiKey: SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.ncbi,
+  openalexKey: SCHOLARLY_CREDENTIAL_REFERENCE_NAMES.openalex,
+}
 
 /** The inverse map, for clearing the right control's draft. */
 export const SECRET_FOR_REFERENCE: Readonly<Record<string, ScholarlySecretKey>> =
@@ -82,8 +91,8 @@ interface ScholarlyCredentialAnswer extends ScholarlyCredentialInfo {
   readonly ref: string
 }
 
-/** Whether a key control has a usable committed reference. */
-type ScholarlyReferenceState = 'ready' | 'missing' | 'invalid'
+/** Whether a key control has an unusable committed reference. */
+type ScholarlyReferenceState = 'ready' | 'invalid'
 
 interface ScholarlySecretFieldState {
   readonly text: string
@@ -220,7 +229,16 @@ export class ScholarlyFormController {
           // A key draft belongs to the reference it was typed under; changing
           // the reference makes the draft meaningless, so drop it locally.
           actions.edit(secret, '')
+          return
         }
+        const secretKey = SECRET_KEYS.find((key) => key === field)
+        if (secretKey === undefined || this.rawRefOf(secretKey) !== '') return
+        // The reference fields are not rendered. Stage the suggested name with
+        // the first key save, and undo that draft when the key draft is cleared.
+        actions.edit(
+          SECRET_REF_FIELDS[secretKey],
+          text.trim() === '' ? '' : SUGGESTED_REFERENCE[secretKey],
+        )
       },
       resetField: (field) => {
         actions.resetField(field)
@@ -258,6 +276,13 @@ export class ScholarlyFormController {
     return raw !== '' && CREDENTIAL_REFERENCE.test(raw) ? raw : ''
   }
 
+  /** The reference a key write uses: the committed custom name, or the suggested name. */
+  private effectiveRefOf(field: ScholarlySecretKey): string {
+    const raw = this.rawRefOf(field)
+    if (raw === '') return SUGGESTED_REFERENCE[field]
+    return CREDENTIAL_REFERENCE.test(raw) ? raw : ''
+  }
+
   /** The committed raw reference text, before grammar validation. */
   private rawRefOf(field: ScholarlySecretKey): string {
     const value = this.form.getSnapshot().value
@@ -265,11 +290,10 @@ export class ScholarlyFormController {
     return typeof raw === 'string' ? raw.trim() : ''
   }
 
-  /** Whether the control has a missing, invalid, or usable committed reference. */
+  /** Whether the control has an invalid committed reference. */
   private referenceStateOf(field: ScholarlySecretKey): ScholarlyReferenceState {
     const raw = this.rawRefOf(field)
-    if (raw === '') return 'missing'
-    return CREDENTIAL_REFERENCE.test(raw) ? 'ready' : 'invalid'
+    return raw === '' || CREDENTIAL_REFERENCE.test(raw) ? 'ready' : 'invalid'
   }
 
   /** Coalesce reads requested by a published section into one remote call. */
@@ -336,9 +360,9 @@ export class ScholarlyFormController {
     return response.value
   }
 
-  /** Write one key under its committed reference, then confirm the Host holds it. */
+  /** Write one key under its effective reference, then confirm the Host holds it. */
   private async writeCredential(field: ScholarlySecretKey, text: string): Promise<boolean> {
-    const ref = this.committedRefOf(field)
+    const ref = this.effectiveRefOf(field)
     if (ref === '' || text.trim() === '') return false
     const response = await this.credentialsPort.set(ref, text.trim())
     if (!response.ok) return false

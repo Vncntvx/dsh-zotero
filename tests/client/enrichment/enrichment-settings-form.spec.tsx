@@ -181,10 +181,8 @@ describe('EnrichmentSettingsSection', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: zh.semanticSourceHuggingFace }))
     expect(harness.snapshot().semanticDownloadSource.text).toBe('huggingface')
 
-    // Directory input
-    const dirInput = screen.getByLabelText(zh.semanticModelDir) as HTMLInputElement
-    fireEvent.change(dirInput, { target: { value: '/custom/models' } })
-    expect(harness.snapshot().semanticModelDir.text).toBe('/custom/models')
+    // Directory input: the model directory is config-only and not rendered.
+    expect(document.getElementById('enrichment-settings-semantic-dir')).toBeNull()
   })
 
   it('resets overridden semantic search fields', () => {
@@ -193,13 +191,11 @@ describe('EnrichmentSettingsSection', () => {
         enableSemanticSearch: true,
         semanticModel: 'bilingual',
         semanticDownloadSource: 'huggingface',
-        semanticModelDir: '/custom/models',
       },
       user: {
         enableSemanticSearch: true,
         semanticModel: 'bilingual',
         semanticDownloadSource: 'huggingface',
-        semanticModelDir: '/custom/models',
       },
     })
 
@@ -218,7 +214,6 @@ describe('EnrichmentSettingsSection', () => {
     expect(state.enableSemanticSearch.overridden).toBe(false)
     expect(state.semanticModel.overridden).toBe(false)
     expect(state.semanticDownloadSource.overridden).toBe(false)
-    expect(state.semanticModelDir.overridden).toBe(false)
   })
 
   it('renders a warning box and mineru link when pro mode is selected without a token', () => {

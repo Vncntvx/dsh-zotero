@@ -37,61 +37,89 @@ import { asFormScope } from './helpers/form-scope.ts'
 import { booleanFieldSpec } from './helpers/settings-fields.ts'
 import type { CitationFieldKey } from './citation-form-controller.ts'
 
+/** The visible display groups; each is a locale key. */
+export type GroupKey =
+  | 'groupWeb'
+  | 'groupWrite'
+  | 'groupConnection'
+  | 'groupSearchQuery'
+  | 'groupSearchEvidence'
+  | 'groupJobs'
+  | 'groupDiagnostics'
+
+type FieldKind = 'text' | 'number' | 'boolean'
+
+interface VisibleFieldSpec {
+  readonly key: keyof ResolvedConfig
+  readonly kind: FieldKind
+  readonly group: GroupKey
+  readonly hidden?: false
+}
+
+interface HiddenFieldSpec {
+  readonly key: keyof ResolvedConfig
+  readonly kind: FieldKind
+  readonly hidden: true
+}
+
+type FieldSpec = VisibleFieldSpec | HiddenFieldSpec
+
 /**
- * The section fields this card edits: the host `Config` surface except the two CSL defaults,
- * in display order. `group` names the page's display group (a locale key).
- * The Web toggle leads the page because it gates the whole conversation tab,
+ * The namespace fields this card models: the host `Config` surface except the two CSL defaults.
+ * Visible specs carry a display group and render; hidden specs stay in the schema and the
+ * profile config file, and are projected into state so the form can still stage them.
+ * The Web toggle leads the visible page because it gates the whole conversation tab,
  * so a visitor sees it first. The write family sits under it: the sensitive
  * surface a visitor should see before the technical limits.
  */
 const FIELD_SPECS = [
-  { key: 'webEnabled', kind: 'boolean', group: 'groupWeb' },
-  { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite' },
-  { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite' },
-  { key: 'writeNoteMaxChars', kind: 'number', group: 'groupWrite' },
-  { key: 'writeFieldMaxChars', kind: 'number', group: 'groupWrite' },
-  { key: 'writeListMaxItems', kind: 'number', group: 'groupWrite' },
-  { key: 'writeAuthorizeDeadlineMs', kind: 'number', group: 'groupWrite' },
-  { key: 'baseUrl', kind: 'text', group: 'groupConnection' },
-  { key: 'provider', kind: 'text', group: 'groupConnection' },
-  { key: 'timeoutMs', kind: 'number', group: 'groupConnection' },
-  { key: 'maxInFlightRequests', kind: 'number', group: 'groupConnection' },
-  { key: 'scopeListingTtlMs', kind: 'number', group: 'groupConnection' },
-  { key: 'maxSearchResults', kind: 'number', group: 'groupSearchQuery' },
-  { key: 'maxNoteScanRecords', kind: 'number', group: 'groupSearchQuery' },
-  { key: 'searchConcurrency', kind: 'number', group: 'groupSearchQuery' },
-  { key: 'graphConcurrency', kind: 'number', group: 'groupSearchQuery' },
-  { key: 'retrieveAttachmentCap', kind: 'number', group: 'groupSearchQuery' },
-  { key: 'maxEvidenceChars', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxEvidencePassages', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxNoteChars', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxNoteRecords', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxAnnotationRecords', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxAttachmentRecords', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'fulltextChunkWords', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxFulltextChars', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'fulltextWindowChars', kind: 'number', group: 'groupSearchEvidence' },
-  { key: 'maxInlineResultTokens', kind: 'number', group: 'groupOutput' },
-  { key: 'maxInlineResultBytes', kind: 'number', group: 'groupOutput' },
-  { key: 'maxResponseBytes', kind: 'number', group: 'groupOutput' },
-  { key: 'maxExportChars', kind: 'number', group: 'groupOutput' },
-  { key: 'maxExportRefs', kind: 'number', group: 'groupOutput' },
-  { key: 'maxBrowseResults', kind: 'number', group: 'groupOutput' },
-  { key: 'maxChangesResults', kind: 'number', group: 'groupOutput' },
-  { key: 'enableRunInBackground', kind: 'boolean', group: 'groupJobs' },
-  { key: 'promoteOnTimeout', kind: 'boolean', group: 'groupJobs' },
-  { key: 'foregroundWaitMs', kind: 'number', group: 'groupJobs' },
-  { key: 'debug', kind: 'boolean', group: 'groupDiagnostics' },
-] as const satisfies readonly {
-  key: keyof ResolvedConfig
-  kind: 'text' | 'number' | 'boolean'
-  group: string
-}[]
+  { key: 'webEnabled', kind: 'boolean', group: 'groupWeb', hidden: false },
+  { key: 'writeEnabled', kind: 'boolean', group: 'groupWrite', hidden: false },
+  { key: 'writePersistKey', kind: 'boolean', group: 'groupWrite', hidden: false },
+  { key: 'baseUrl', kind: 'text', group: 'groupConnection', hidden: false },
+  { key: 'timeoutMs', kind: 'number', group: 'groupConnection', hidden: false },
+  { key: 'maxSearchResults', kind: 'number', group: 'groupSearchQuery', hidden: false },
+  { key: 'maxBrowseResults', kind: 'number', group: 'groupSearchQuery', hidden: false },
+  { key: 'maxEvidenceChars', kind: 'number', group: 'groupSearchEvidence', hidden: false },
+  { key: 'maxEvidencePassages', kind: 'number', group: 'groupSearchEvidence', hidden: false },
+  { key: 'maxFulltextChars', kind: 'number', group: 'groupSearchEvidence', hidden: false },
+  { key: 'enableRunInBackground', kind: 'boolean', group: 'groupJobs', hidden: false },
+  { key: 'promoteOnTimeout', kind: 'boolean', group: 'groupJobs', hidden: false },
+  { key: 'debug', kind: 'boolean', group: 'groupDiagnostics', hidden: false },
+  { key: 'writeNoteMaxChars', kind: 'number', hidden: true },
+  { key: 'writeFieldMaxChars', kind: 'number', hidden: true },
+  { key: 'writeListMaxItems', kind: 'number', hidden: true },
+  { key: 'writeAuthorizeDeadlineMs', kind: 'number', hidden: true },
+  { key: 'provider', kind: 'text', hidden: true },
+  { key: 'maxInFlightRequests', kind: 'number', hidden: true },
+  { key: 'scopeListingTtlMs', kind: 'number', hidden: true },
+  { key: 'maxNoteScanRecords', kind: 'number', hidden: true },
+  { key: 'searchConcurrency', kind: 'number', hidden: true },
+  { key: 'graphConcurrency', kind: 'number', hidden: true },
+  { key: 'retrieveAttachmentCap', kind: 'number', hidden: true },
+  { key: 'maxNoteChars', kind: 'number', hidden: true },
+  { key: 'maxNoteRecords', kind: 'number', hidden: true },
+  { key: 'maxAnnotationRecords', kind: 'number', hidden: true },
+  { key: 'maxAttachmentRecords', kind: 'number', hidden: true },
+  { key: 'fulltextChunkWords', kind: 'number', hidden: true },
+  { key: 'fulltextWindowChars', kind: 'number', hidden: true },
+  { key: 'maxInlineResultTokens', kind: 'number', hidden: true },
+  { key: 'maxInlineResultBytes', kind: 'number', hidden: true },
+  { key: 'maxResponseBytes', kind: 'number', hidden: true },
+  { key: 'maxExportChars', kind: 'number', hidden: true },
+  { key: 'maxExportRefs', kind: 'number', hidden: true },
+  { key: 'maxChangesResults', kind: 'number', hidden: true },
+  { key: 'foregroundWaitMs', kind: 'number', hidden: true },
+] as const satisfies readonly FieldSpec[]
 
-/** The section field names the card edits; also the page's copy and state member names. */
+/** The namespace field names the card models; also the page's copy and state member names. */
 export type FieldKey = (typeof FIELD_SPECS)[number]['key']
-/** The display group a field belongs to; a page locale key. */
-export type GroupKey = (typeof FIELD_SPECS)[number]['group']
+
+/** The field names the page renders: those whose spec carries a display group. */
+export type VisibleFieldKey = Extract<
+  (typeof FIELD_SPECS)[number],
+  { readonly hidden?: false }
+>['key']
 
 /** Host Config fields the card does not list; a non-empty union fails the client build. */
 type MissingConfigField = Exclude<keyof ResolvedConfig, FieldKey | CitationFieldKey>
@@ -112,10 +140,23 @@ function fieldSpecs(): SettingsFieldSpec[] {
   })
 }
 
-/** The page's field keys grouped by the host schema's families, in display order. */
+/** Every namespace field the card models, including the ones the page does not render. */
+export const ALL_FIELD_KEYS: readonly FieldKey[] = FIELD_SPECS.map((spec) => spec.key)
+
+/** The fields the page renders, in display order. */
+export const VISIBLE_FIELD_KEYS: readonly FieldKey[] = FIELD_SPECS.filter(
+  (spec) => !spec.hidden,
+).map((spec) => spec.key)
+
+/** The fields that exist only in the schema and the profile config file. */
+export const HIDDEN_FIELD_KEYS: readonly FieldKey[] = FIELD_SPECS.filter((spec) => spec.hidden).map(
+  (spec) => spec.key,
+)
+
+/** The page's visible field keys grouped by the host schema's families, in display order. */
 export const FIELD_GROUPS: readonly {
   readonly key: GroupKey
-  readonly fields: readonly FieldKey[]
+  readonly fields: readonly VisibleFieldKey[]
 }[] = groupFields(FIELD_SPECS)
 
 /** The whole-number fields, rendered with a numeric keypad hint. */
@@ -123,65 +164,25 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
-/** The tab partition identifiers for the 7-tab settings view. */
-export type SettingsTabId =
-  'features' | 'connection' | 'search' | 'library' | 'scholarly' | 'enrichment' | 'advanced'
+/** The component-level tab identifiers for the 4-tab settings view. */
+export type SettingsTabId = 'general' | 'library' | 'scholarly' | 'enrichment'
 
-/** Description of one tab partition and the configuration groups it carries. */
+/** Description of one tab partition. */
 interface SettingsTabDescriptor {
   readonly id: SettingsTabId
-  readonly labelKey:
-    | 'tabFeatures'
-    | 'tabConnection'
-    | 'tabSearch'
-    | 'tabLibrary'
-    | 'tabScholarly'
-    | 'tabEnrichment'
-    | 'tabAdvanced'
-  readonly groupKeys: readonly GroupKey[]
+  readonly labelKey: 'tabGeneral' | 'tabSettingsLibrary' | 'tabScholarly' | 'tabEnrichment'
 }
 
 /**
- * The seven tab partitions, in display order. `groupKeys` lists the configuration
- * groups each one carries; library, scholarly, and enrichment leave it empty because
- * their own form controllers manage them.
+ * The four tab partitions, in display order: one per component. The general tab
+ * carries every core configuration group; the other three are managed by their
+ * own form controllers.
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
-  {
-    id: 'features',
-    labelKey: 'tabFeatures',
-    groupKeys: ['groupWeb', 'groupWrite'],
-  },
-  {
-    id: 'connection',
-    labelKey: 'tabConnection',
-    groupKeys: ['groupConnection'],
-  },
-  {
-    id: 'search',
-    labelKey: 'tabSearch',
-    groupKeys: ['groupSearchQuery', 'groupSearchEvidence'],
-  },
-  {
-    id: 'library',
-    labelKey: 'tabLibrary',
-    groupKeys: [],
-  },
-  {
-    id: 'scholarly',
-    labelKey: 'tabScholarly',
-    groupKeys: [],
-  },
-  {
-    id: 'enrichment',
-    labelKey: 'tabEnrichment',
-    groupKeys: [],
-  },
-  {
-    id: 'advanced',
-    labelKey: 'tabAdvanced',
-    groupKeys: ['groupOutput', 'groupJobs', 'groupDiagnostics'],
-  },
+  { id: 'general', labelKey: 'tabGeneral' },
+  { id: 'library', labelKey: 'tabSettingsLibrary' },
+  { id: 'scholarly', labelKey: 'tabScholarly' },
+  { id: 'enrichment', labelKey: 'tabEnrichment' },
 ] as const
 
 /** The boolean fields, rendered as toggles. */
@@ -237,12 +238,13 @@ export class ZoteroCardController {
   }
 }
 
-/** Group the ordered field specs into display groups, preserving declaration order. */
+/** Group the visible field specs into display groups, preserving declaration order. */
 function groupFields(
-  specs: typeof FIELD_SPECS,
-): readonly { readonly key: GroupKey; readonly fields: readonly FieldKey[] }[] {
-  const groups: { key: GroupKey; fields: FieldKey[] }[] = []
+  specs: readonly (typeof FIELD_SPECS)[number][],
+): readonly { readonly key: GroupKey; readonly fields: readonly VisibleFieldKey[] }[] {
+  const groups: { key: GroupKey; fields: VisibleFieldKey[] }[] = []
   for (const spec of specs) {
+    if (spec.hidden) continue
     const last = groups[groups.length - 1]
     if (last !== undefined && last.key === spec.group) last.fields.push(spec.key)
     else groups.push({ key: spec.group, fields: [spec.key] })

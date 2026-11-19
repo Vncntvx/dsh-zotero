@@ -2,19 +2,6 @@
  * matching the official settings surface (plain sections, fields separated by
  * hairlines) rather than nested cards. */
 
-.tabsContainer {
-  margin: 16px 0 20px;
-}
-
-.tabPanel {
-  display: flex;
-  flex-direction: column;
-}
-
-.tabPanel[hidden] {
-  display: none !important;
-}
-
 .group {
   display: flex;
   flex-direction: column;

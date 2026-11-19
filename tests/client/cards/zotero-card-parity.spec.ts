@@ -19,9 +19,12 @@ import {
 } from '../../../src/client/citation-form-controller.ts'
 import { Config, type ResolvedConfig } from '../../../src/config.ts'
 import {
+  ALL_FIELD_KEYS,
   BOOLEAN_FIELD_KEYS,
   FIELD_GROUPS,
+  HIDDEN_FIELD_KEYS,
   NUMERIC_FIELD_KEYS,
+  VISIBLE_FIELD_KEYS,
   type FieldKey,
 } from '../../../src/client/zotero-card-controller.ts'
 
@@ -38,8 +41,53 @@ const CONTROL_OF_SCHEMA_TYPE = {
 
 /** The visible field keys, in display order. */
 const FIELD_KEYS: readonly (FieldKey | CitationFieldKey)[] = [
-  ...FIELD_GROUPS.flatMap((group) => group.fields),
+  ...ALL_FIELD_KEYS,
   ...CITATION_FIELD_KEYS,
+]
+
+/** The 13 fields the settings page renders, in display order. */
+const VISIBLE_FIELDS: readonly FieldKey[] = [
+  'webEnabled',
+  'writeEnabled',
+  'writePersistKey',
+  'baseUrl',
+  'timeoutMs',
+  'maxSearchResults',
+  'maxBrowseResults',
+  'maxEvidenceChars',
+  'maxEvidencePassages',
+  'maxFulltextChars',
+  'enableRunInBackground',
+  'promoteOnTimeout',
+  'debug',
+]
+
+/** The 24 fields that remain in the schema and the profile config file only. */
+const HIDDEN_FIELDS: readonly FieldKey[] = [
+  'writeNoteMaxChars',
+  'writeFieldMaxChars',
+  'writeListMaxItems',
+  'writeAuthorizeDeadlineMs',
+  'provider',
+  'maxInFlightRequests',
+  'scopeListingTtlMs',
+  'maxNoteScanRecords',
+  'searchConcurrency',
+  'graphConcurrency',
+  'retrieveAttachmentCap',
+  'maxNoteChars',
+  'maxNoteRecords',
+  'maxAnnotationRecords',
+  'maxAttachmentRecords',
+  'fulltextChunkWords',
+  'fulltextWindowChars',
+  'maxInlineResultTokens',
+  'maxInlineResultBytes',
+  'maxResponseBytes',
+  'maxExportChars',
+  'maxExportRefs',
+  'maxChangesResults',
+  'foregroundWaitMs',
 ]
 
 const numericKeys: ReadonlySet<string> = NUMERIC_FIELD_KEYS
@@ -71,6 +119,22 @@ describe('Zotero settings card parity with the host Config schema', () => {
     expect(declared.length).toBeGreaterThan(0)
     expect([...FIELD_KEYS].sort()).toEqual([...declared].sort())
     expect(new Set(FIELD_KEYS).size).toBe(FIELD_KEYS.length)
+  })
+
+  it('keeps the visible and hidden partitions exact and disjoint', () => {
+    expect(VISIBLE_FIELD_KEYS).toEqual(VISIBLE_FIELDS)
+    expect(HIDDEN_FIELD_KEYS).toEqual(HIDDEN_FIELDS)
+    expect([...VISIBLE_FIELD_KEYS, ...HIDDEN_FIELD_KEYS].sort()).toEqual([...ALL_FIELD_KEYS].sort())
+    expect(FIELD_GROUPS.flatMap((group) => group.fields)).toEqual(VISIBLE_FIELD_KEYS)
+    expect(FIELD_GROUPS.map((group) => group.key)).toEqual([
+      'groupWeb',
+      'groupWrite',
+      'groupConnection',
+      'groupSearchQuery',
+      'groupSearchEvidence',
+      'groupJobs',
+      'groupDiagnostics',
+    ])
   })
 
   it('renders each field with the control its schema type requires', () => {

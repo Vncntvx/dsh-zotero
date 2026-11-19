@@ -108,7 +108,7 @@ export const MAX_SPEC_LINES = 726
 export const STANDARD_SPEC_LINES = 400
 
 export const SPEC_SIZE_BASELINE = Object.freeze({
-  'tests/client/apply.spec.ts': 717,
+  'tests/client/apply.spec.ts': 681,
   'tests/client/enrichment/enrichment-model-controller.spec.ts': 451,
   'tests/client/enrichment/enrichment-model-form.spec.tsx': 487,
   'tests/client/enrichment/parse-dialog.spec.tsx': 403,
@@ -121,8 +121,8 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/library/library-write.spec.tsx': 591,
   'tests/client/library/remote-contract-library.spec.ts': 503,
   'tests/client/open/PdfReadButton.spec.tsx': 463,
-  'tests/client/settings/ZoteroSettingsSection.spec.tsx': 579,
-  'tests/client/settings/scholarly-form.spec.tsx': 485,
+  'tests/client/settings/ZoteroSettingsSection.spec.tsx': 516,
+  'tests/client/settings/scholarly-form.spec.tsx': 435,
   'tests/client/slot-crash-intake.spec.ts': 445,
   'tests/client/sources/decoders.spec.ts': 490,
   'tests/client/sources/reducer-evidence.spec.ts': 483,
@@ -136,7 +136,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/workspace/ExportsLens.spec.tsx': 506,
   'tests/client/workspace/SourceAuditPanel.spec.tsx': 408,
   'tests/client/workspace/SourceEvidence.spec.tsx': 596,
-  'tests/host/doc-coverage.spec.ts': 414,
+  'tests/host/doc-coverage.spec.ts': 419,
   'tests/host/doc-examples.spec.ts': 549,
   'tests/host/enrichment-api-contract.spec.ts': 465,
   'tests/host/enrichment-artifact-store.spec.ts': 410,

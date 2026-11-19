@@ -21,7 +21,7 @@ import { REGISTRATIONS } from '../../src/client/toolviews/index.ts'
 import { applyEntry, fakeWorld, type FakeApplyWorld } from './helpers/apply-world.ts'
 import { fakeScope } from './helpers/fake-scope.ts'
 import type { ZoteroLibraryPanelFace } from '../../src/client/components/library/ZoteroLibraryPanel.tsx'
-import type { ZoteroProbeFace } from '../../src/client/components/plugin/faces.ts'
+import type { ZoteroDetailFace } from '../../src/client/components/plugin/faces.ts'
 import { searchResult } from '../helpers/library-fixtures.ts'
 import { snapshotWhen } from '../helpers/sync.ts'
 
@@ -86,7 +86,6 @@ describe('the browser-half entry', () => {
       'plugins.row.config',
       'plugins.row.config',
       'plugins.row.config',
-      'plugins.detail.section',
       'plugins.detail.section',
       'conversation.view',
       'sidebar.right.pane.tab',
@@ -305,53 +304,18 @@ describe('the browser-half entry', () => {
     expect(entry).toBeDefined()
     expect(entry?.register()).toBeDefined()
 
-    const section = world.registered.find((e) => e.name === 'plugins.detail.section')
+    const sections = world.registered.filter((e) => e.name === 'plugins.detail.section')
+    expect(sections).toHaveLength(1)
+    const section = sections[0]
     expect(section?.options.id).toBe('zotero-status')
     expect(section?.options.locale).toBe('zotero')
     expect(typeof section?.component).toBe('function')
-    const sectionInject = (section?.options.inject as () => { probe: () => Promise<unknown> })()
-    expect(typeof sectionInject.probe).toBe('function')
-  })
-
-  it('injects the diagnostics card as the second plugins.detail.section entry', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-
-    for (const entry of world.injected.filter((e) => e.name === 'plugins.detail.section')) {
-      entry.register()
-    }
-    const sections = world.registered.filter((e) => e.name === 'plugins.detail.section')
-    expect(sections).toHaveLength(2)
-    const diagnostics = sections.find((e) => e.options.id === 'zotero-diagnostics')
-    expect(diagnostics).toBeDefined()
-    expect(diagnostics?.options.locale).toBe('zotero')
-    const face = (
-      diagnostics?.options.inject as () => {
-        probe: () => Promise<unknown>
-        diagnostics: () => Promise<unknown>
-      }
-    )()
+    // Typed as the declared face: a registration that drops a member fails to
+    // compile rather than rendering a section that cannot answer its reads.
+    const face = (section?.options.inject as () => ZoteroDetailFace)()
+    expect(typeof face.probe).toBe('function')
     expect(typeof face.diagnostics).toBe('function')
     await face.diagnostics()
-    expect(typeof face.probe).toBe('function')
-  })
-
-  it('injects the detail face, and every member reaches the remote namespace', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-
-    for (const entry of world.injected.filter((e) => e.name === 'plugins.detail.section')) {
-      entry.register()
-    }
-    const sections = world.registered.filter((e) => e.name === 'plugins.detail.section')
-    expect(sections).toHaveLength(2)
-    const statusSection = sections.find((e) => e.options.id === 'zotero-status')
-    expect(statusSection).toBeDefined()
-    expect(statusSection?.options.locale).toBe('zotero')
-    // Typed as the declared face: a registration that drops a member fails to
-    // compile rather than rendering a section that cannot answer its probe.
-    const face = (statusSection?.options.inject as () => ZoteroProbeFace)()
-    expect(typeof face.probe).toBe('function')
   })
 
   it('rejects instead of degrading when the mount rejects', async () => {

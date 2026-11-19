@@ -62,7 +62,8 @@ In the DeepSeek Harness desktop app, open **Plugins** in the sidebar, click **Ad
 
 - Latest version (recommended): `dsh-zotero`
 - Specific version: `dsh-zotero@1.3.0`
-- GitHub prebuilt branch: `github:Vncntvx/dsh-zotero#release`
+- GitHub stable prebuilt branch (latest tagged release): `github:Vncntvx/dsh-zotero#stable`
+- GitHub rolling prebuilt branch (follows main): `github:Vncntvx/dsh-zotero#release`
 
 ### Command line
 
@@ -73,13 +74,16 @@ dsh plugin --profile <name> add dsh-zotero
 # Install a specific version
 dsh plugin --profile <name> add dsh-zotero@<version>
 
-# Install from GitHub prebuilt branch
+# Install from the GitHub stable prebuilt branch (latest tagged release)
+dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#stable
+
+# Install from the GitHub rolling prebuilt branch (follows main)
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
 Start a new session after installation. Open the **dsh-zotero** detail page in the plugin manager; its configuration section carries the full configuration form.
 
-> Note: installing directly from the `main` source branch needs a local `prepare` build plus an `allowBuilds` entry for `dsh-zotero` in the profile's `pnpm-workspace.yaml`; the `#release` branch or the npm package skips that step. The WASM runtime behind local semantic search ships inside the plugin, so nothing is installed on demand; download a model in settings — see [Getting Started](docs/getting-started.en.md).
+> Note: installing directly from the `main` source branch needs a local `prepare` build plus an `allowBuilds` entry for `dsh-zotero` in the profile's `pnpm-workspace.yaml`; the `#stable` / `#release` branches or the npm package skip that step. The WASM runtime behind local semantic search ships inside the plugin, so nothing is installed on demand; download a model in settings — see [Getting Started](docs/getting-started.en.md).
 
 ## Prerequisites
 

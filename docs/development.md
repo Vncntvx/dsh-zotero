@@ -218,7 +218,7 @@ node scripts/semantic-calibration/measure-admission.mjs --embeddings /tmp/<key>-
 
 ## 工程约束
 
-- **构建与发布身份**：`scripts/build-state.mjs` 在完整 build/prepare 后记录源文件、脚本、配置、lockfile、工具链与全部产物的摘要；release artifact 是去掉脚本、开发依赖与开发用 overrides 的单一 tarball。`release-artifact.mjs`、`release-tar.mjs` 与 `publish-release-branch.mjs` 绑定源 SHA、文件闭集、逐文件摘要、tarball 摘要与包内内容；publish 作业以读取到的旧 ref 作 CAS lease，来源回退和字节变化都被拒绝。验证：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`、`release:check`。
+- **构建与发布身份**：`scripts/build-state.mjs` 在完整 build/prepare 后记录源文件、脚本、配置、lockfile、工具链与全部产物的摘要；release artifact 是去掉脚本、开发依赖与开发用 overrides 的单一 tarball。`release-artifact.mjs`、`release-tar.mjs` 与 `publish-release-branch.mjs` 绑定源 SHA、文件闭集、逐文件摘要、tarball 摘要与包内内容；publish 作业以读取到的旧 ref 作 CAS lease，`stable` 通道的来源回退和字节变化都被拒绝；滚动 `release` 通道在 main 历史重写后以当前 main 重新初始化。验证：`build-state.spec.ts`、`release-artifact.spec.ts`、`release-branch.spec.ts`、`release:check`。
 - **样式 token 来源**：CI 用 lockfile 安装的精确 theme 源码核对 dsw/ds，链接开发用 sibling 的 pin tag；`scripts/style-tokens.mjs` 的 `RUNTIME_SEAMS` 逐项对应当前 pin 的设置、CSS 定义或 `setProperty` 调用，来源表与快照闭合。验证：`tokens:check`（在 `release:check` 中）、`style-tokens.spec.ts`。
 - **客户端平台清单**：`scripts/client-graph-authority.mjs` 在 sibling 在场时用 TypeScript AST 读取 pin tag 的 `PLATFORM_MODULES`，逐项拒绝宿主未提供的 external；无 sibling 的注册表检查由固定输入的门禁测试覆盖。手动 UI 验收复用 `pinnedHarness`/`pinThemeSheets`，记录 DOM、控制台错误与截图。验证：`client-graph-authority` 变异测试、`harness:check`、`smoke-parsed-ui.mjs`。
 - **React Hook 与脚本类型**：客户端源码与浏览器测试执行 `rules-of-hooks` 与 `exhaustive-deps`，任何告警使 `lint:hooks` 失败；Babel 解析 TS/JSX，`.ts` 保持无 JSX 语义；`tsconfig.scripts.json` 以 `checkJs` 检查 `scripts/` 下的全部 `.mjs`；`typecheck:after-build` 在 build 之后运行，覆盖其余四个工程的类型检查。验证：`react-hooks.spec.ts`、`harness-artifacts.spec.ts`、`npm run lint:hooks`、`npm run typecheck`。
@@ -259,10 +259,10 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 诊断面板与诊断包
 
-排查插件运行问题时，可在配置区开启「开启诊断」后，在插件详情页底部的「诊断」卡片中查看运行时状态与日志：
+排查插件运行问题时，可在配置区开启「开启诊断」后，在插件详情页底部的「服务状态」区块中查看连接状态与「诊断记录」卡片：
 
 - **日志收集与过滤**：开启诊断后，收集并保留相关条目，支持按级别筛选（「仅问题」筛选 warn 与 error）。条目按时间倒序排列，连续出现的重复记录会自动合并计数；
-- **诊断模式**：在 dsh-zotero 配置区的「高级选项 → 诊断」分组中开启「开启诊断」并保存后，详情页底部即展示诊断面板并记录详细排障日志；
+- **诊断模式**：在 dsh-zotero 配置区的「基础设置 → 诊断」分组中开启「开启诊断」并保存后，「服务状态」区块中出现「诊断记录」卡片并记录详细排障日志；
 - **前端异常捕获**：前端界面（文献轨迹、文献面板、工具卡片等）发生渲染崩溃时，错误边界会自动记录异常信息，并在 `surface` 字段标明触发位置（如 `sources`、`tool:zotero_search`）；
 - **导出诊断包**：点击「复制诊断信息」可生成包含插件版本、Zotero 端点与版本、debug 状态及全部缓冲记录的文本包，便于粘贴至问题报告。
 
@@ -341,14 +341,14 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 工具测试通过公开的 `@deepseek-ai/dsh-tool-testkit` 执行真实单调用管线，locale fixture 使用同 pin 的 `@deepseek-ai/dsh-client-test-runtime/src/translate.ts`：这个子路径由包的 `./src/*` 显式导出，且注册表包实际发布 `src`。该纯函数入口移除了本地翻译算法副本。工具包和客户端测试支持均只进入 devDependencies，并由精确 overrides 绑定 harness pin。
 
-完整 Slot runtime 已通过包显式发布的生产源码契约装配，并实际用于 slot 创建/销毁与资源组合测试。测试仅对加载器形式的 `/client` 入口使用该映射，普通 ESM 入口仍读取编译产物；原始资源编译包另有真实执行用例。Vitest 依赖按同一运行实例解析。入口组合测试另以公开 `TestClient` 运行生产 `bootClient`，渲染七个设置页签并验证保存、重载和完整卸载；本地记录替身仅用于故障注入，不能替代装配验收。升级 runtime、浏览器导出或测试运行器时，重跑发布源码映射的正反例、slot 生命周期与编译包执行用例。
+完整 Slot runtime 已通过包显式发布的生产源码契约装配，并实际用于 slot 创建/销毁与资源组合测试。测试仅对加载器形式的 `/client` 入口使用该映射，普通 ESM 入口仍读取编译产物；原始资源编译包另有真实执行用例。Vitest 依赖按同一运行实例解析。入口组合测试另以公开 `TestClient` 运行生产 `bootClient`，渲染四个设置页签并验证保存、重载和完整卸载；本地记录替身仅用于故障注入，不能替代装配验收。升级 runtime、浏览器导出或测试运行器时，重跑发布源码映射的正反例、slot 生命周期与编译包执行用例。
 
 ## CI 工作流
 
 `.github/workflows/` 下有五个工作流：
 
-- `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新预构建的 `release` 分支；
-- `prebuilt.yml`：`main` 推送或手动触发时，构建并校验预编译产物、更新 `release` 分支；`v*` 标签推送不触发。它与 `release-branch.yml` 共用 `release-branch` 并发组，两者不会同时移动该分支；
+- `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新 tag 发布通道 `stable` 分支；
+- `prebuilt.yml`：`main` 推送或手动触发时，构建并校验预编译产物、更新滚动通道 `release` 分支；`v*` 标签推送不触发。它与 `release-branch.yml` 共用 `release-branch` 并发组，两者不会同时移动各自的分支；
 - `verify-npm-release.yml`：发布工作流成功完成后启动，由 `npm-publication` 环境延迟运行。它复用原运行的产物，核验公开 tarball 后创建 GitHub Release；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
 - `scanner.yml`：在 pull request 与 `main` 推送时运行 HOL Guard 扫描器，规范化分数低于 75 即失败。
@@ -383,7 +383,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。预发布版本使用 SemVer 写法（如 `1.3.0-alpha.1`），npm 发布时显式选择首个预发布标识作为 dist-tag（此例为 `alpha`；纯数字或 `latest` 标识使用 `next`），GitHub Release 同步标记为 prerelease 且不设为 Latest。正式版本发布到 `latest`。
 
-CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 release 分支。该作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
+CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 tag 发布通道 `stable` 分支；`prebuilt.yml` 则更新跟随 main 的滚动通道 `release`。两个通道各自记录来源：main 被 amend 或 force push 重写后，滚动通道在下一次运行中自动以当前 main 重新初始化，`stable` 仍只允许沿 main 历史前进。发布作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
 
 npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。发布前查询 `registry.npmjs.org`。已有版本的名称、版本和 SHA-512 integrity 必须与产物一致。首次查询返回 404 时，作业通过 OIDC 将 `artifact.json` 指定的原 tarball 提交给 npm，符合条件的公开包自动附带 provenance。
 
@@ -393,6 +393,6 @@ npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-r
 
 可信发布要求 npmjs.com 上为 `Vncntvx/dsh-zotero` 配置可信发布者，workflow 文件名须精确为 `release-branch.yml`（区分大小写，含扩展名），并允许 `npm publish`；配置绑定文件名，重命名会导致发布中断。一次性配置步骤与故障排查见本节。
 
-本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的 release 分支。
+本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的滚动 `release` 分支；加 `--branch stable` 审阅或发布 tag 通道。
 
 发布与 harness 升级的浏览器验收：在完整 `release:check` 之后运行 `npm run smoke:web-composition`，保留临时 profile、浏览器报告和错误日志；保证范围按实际测试的精确 pin 计。

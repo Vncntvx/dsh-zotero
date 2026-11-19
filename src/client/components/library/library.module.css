@@ -1285,9 +1285,12 @@
   min-width: 0;
 }
 
-/* The host Button owns section-header spacing; this class arranges the heading and chevron. */
+/* The host Button owns section-header spacing; this class arranges the heading
+ * and chevron, and the negative inline margin cancels the button's own padding
+ * so the label starts on the inspector's shared column. */
 .sectionHeaderSeat {
-  width: 100%;
+  width: calc(100% + 20px);
+  margin-inline: -10px;
   justify-content: space-between;
   text-align: left;
 }

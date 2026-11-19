@@ -39,7 +39,7 @@ jobs:
       - name: Prepare verified prebuilt package
         run: node scripts/release-artifact.mjs --out "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
 
-      - name: Update the release branch
+      - name: Update the rolling release branch
         env:
           RELEASE_PUSH_TOKEN: ${{ github.token }}
-        run: node scripts/publish-release-branch.mjs --push --artifact "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"
+        run: node scripts/publish-release-branch.mjs --push --branch release --artifact "$RUNNER_TEMP/release-artifact" --source-sha "${{ github.sha }}"

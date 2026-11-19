@@ -117,7 +117,7 @@ it('boots the actual entry and withdraws its registered surfaces on unload', asy
   )
   try {
     expect(client.ctx.slots.entries('plugins.bundle.config').length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('tab')).toHaveLength(7)
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
     fireEvent.click(screen.getByRole('tab', { name: 'tabEnrichment' }))
     const language = screen.getByLabelText('enrichmentOcrLanguage')
     expect(language).toHaveProperty('value', 'ch')

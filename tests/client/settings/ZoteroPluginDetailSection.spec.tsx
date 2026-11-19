@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Unit tests for ZoteroPluginDetailSection component (plugins.detail.section slot).
+ * Unit tests for ZoteroPluginDetailSection (plugins.detail.section slot): the
+ * connection-card cases. The diagnostics integration (same section, single
+ * probe, crash isolation) lives in
+ * `ZoteroPluginDetailSection.diagnostics.spec.tsx`.
  * @module tests/client/settings/ZoteroPluginDetailSection
  */
 
@@ -9,8 +12,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZoteroPluginDetailSection } from '../../../src/client/components/plugin/ZoteroPluginDetailSection.tsx'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ZoteroStatusView } from '../../../src/client/remote.ts'
+import type { ZoteroDiagnosticsView, ZoteroStatusView } from '../../../src/client/remote.ts'
 import { zoteroClientStub } from '../helpers/zotero-client.ts'
+import { okView } from '../helpers/diagnostics-fixtures.ts'
 
 import { mockT } from '../helpers/mock-translate.ts'
 import { statusView } from '../../helpers/status-view.ts'
@@ -62,12 +66,18 @@ const rowSubject: PluginsSubject = {
   },
 }
 
+/** The usual off fixture: the log card never appears for these cases. */
+function diagnosticsOff() {
+  return vi.fn(async (): Promise<RemoteResult<ZoteroDiagnosticsView>> => okView({ debug: false }))
+}
+
 describe('ZoteroPluginDetailSection', () => {
   it('returns null when subject is for another package or item kind', () => {
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => ({
       ok: true as const,
       value: statusView(),
     }))
+    const diagnostics = diagnosticsOff()
 
     const { container: c1 } = render(
       <ZoteroPluginDetailSection
@@ -75,6 +85,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnostics}
       />,
     )
     expect(c1.innerHTML).toBe('')
@@ -86,10 +97,12 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnostics}
       />,
     )
     expect(c2.innerHTML).toBe('')
     expect(probe).not.toHaveBeenCalled()
+    expect(diagnostics).not.toHaveBeenCalled()
   })
 
   it('renders section when subject is a row belonging to dsh-zotero', () => {
@@ -104,6 +117,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
     expect(container.querySelector('[data-zotero-plugin-section]')).not.toBeNull()
@@ -123,10 +137,12 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
     expect(screen.getByText(t('detailSectionTitle'))).toBeDefined()
+    expect(screen.getByText(t('connectionStatusLabel'))).toBeDefined()
 
     await waitFor(() => {
       expect(screen.getByText(t('statusConnectedNote'))).toBeDefined()
@@ -150,6 +166,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
@@ -175,6 +192,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
@@ -197,6 +215,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
@@ -218,6 +237,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
@@ -228,7 +248,7 @@ describe('ZoteroPluginDetailSection', () => {
     expect(screen.getByText('Network fatal')).toBeDefined()
   })
 
-  it('allows manual refresh via refresh button', async () => {
+  it('allows manual refresh via the connection card button', async () => {
     let callCount = 0
     const probe = vi.fn(async (): Promise<RemoteResult<ZoteroStatusView>> => {
       callCount += 1
@@ -250,6 +270,7 @@ describe('ZoteroPluginDetailSection', () => {
         t={t}
         useZoteroClient={client}
         probe={probe}
+        diagnostics={diagnosticsOff()}
       />,
     )
 
@@ -257,8 +278,7 @@ describe('ZoteroPluginDetailSection', () => {
       expect(screen.getByText(t('statusUnavailable'))).toBeDefined()
     })
 
-    const refreshBtn = screen.getByText(t('refresh'))
-    fireEvent.click(refreshBtn)
+    fireEvent.click(screen.getByText(t('refresh')))
 
     await waitFor(() => {
       expect(screen.getByText(t('statusConnectedNote'))).toBeDefined()
