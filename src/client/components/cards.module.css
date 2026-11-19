@@ -261,7 +261,7 @@
 .surfaceErrorTitle {
   margin: 0;
   font: var(--dsw-font-xs-13);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -286,7 +286,7 @@
 .cardErrorTitle {
   margin: 0;
   font: var(--dsw-font-xxs-12);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 

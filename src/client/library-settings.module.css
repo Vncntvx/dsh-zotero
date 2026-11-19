@@ -16,13 +16,13 @@
   width: 100%;
   min-width: 0;
   font-family: inherit;
-  font-size: var(--dsh-content-font-size);
-  line-height: calc(var(--dsw-font-xs-13-line-height) + var(--dsh-content-font-delta));
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
 }
 
 /* Settings rows follow the shared form: label/reset, full-width value, hint. */
 .sectionChoices {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--dsw-font-xs-13-font-size);
+  gap: 8px;
 }

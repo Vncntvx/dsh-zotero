@@ -117,6 +117,9 @@ export const MASK_PROPERTIES = ['mask', 'mask-image', '-webkit-mask-image']
  */
 const SIDES = ['top', 'right', 'bottom', 'left']
 
+// Focus rules inherit the base field's border width.
+const FOCUS_STATE = /:focus(?:-visible|-within)?(?![\w-])/
+
 /**
  * The physical sides each logical border shorthand paints.
  * @type {Record<string, Side[]>}
@@ -493,7 +496,7 @@ function resolveBaseWidths(baseWidths, key) {
  * class it qualifies; the effective width is therefore resolved across the
  * pair, both for attribute variants and for suffix-composed class names. A
  * variant that neither states nor inherits a full pixel is the failure this
- * catches.
+ * catches. Focus rules inherit the base field's width.
  * @param {StyleSource} source - one stylesheet.
  * @returns {StyleViolation[]} the violations, empty when every state border is full weight.
  */
@@ -513,6 +516,7 @@ export function stateBorderViolations(source) {
     const declarations = declarationsOf(rule.body)
     const sides = stateSidesOf(declarations)
     if (sides.length === 0) continue
+    if (FOCUS_STATE.test(rule.selector)) continue
     const stated = sideWidthsOf(declarations)
     const inherited = resolveBaseWidths(baseWidths, baseClassOf(rule.selector) ?? '')
     const thin = sides.filter((side) => {
@@ -699,6 +703,51 @@ export function unreducedMotionViolations(source) {
   return violations
 }
 
+/** Maximum font weight feature CSS may use; emphasis comes from size and ink. */
+export const FONT_WEIGHT_CEILING = 500
+
+/**
+ * The weight a `font-weight` value or `font` shorthand requests.
+ * @param {string} property - `font-weight` or `font`.
+ * @param {string} value - the declaration value.
+ * @returns the numeric weight, or `undefined` for token or relative values.
+ */
+function requestedWeight(property, value) {
+  const tokens = value.trim().split(/\s+/)
+  for (const token of tokens) {
+    const lower = token.toLowerCase()
+    if (lower === 'bold' || lower === 'bolder') return 700
+    if (/^[1-9]00$/.test(lower)) return Number(lower)
+    if (lower.includes('var(')) return undefined
+  }
+  return undefined
+}
+
+/**
+ * Report font weights above {@link FONT_WEIGHT_CEILING}.
+ * @param {StyleSource} source - one stylesheet.
+ * @returns {StyleViolation[]} the violations, empty when every weight is at or below the ceiling.
+ */
+export function fontWeightViolations(source) {
+  const css = stripComments(source.css)
+  const violations = []
+  for (const rule of rulesOf(css)) {
+    for (const { property, value } of declarationsOf(rule.body)) {
+      if (property !== 'font-weight' && property !== 'font') continue
+      const weight = requestedWeight(property, value)
+      if (weight === undefined || weight <= FONT_WEIGHT_CEILING) continue
+      violations.push({
+        file: source.file,
+        line: lineOf(css, rule.at),
+        selector: rule.selector,
+        detail: `${property}: ${value} asks for ${String(weight)}`,
+        fix: 'keep feature weights at 500 or below; carry hierarchy with size and ink tokens instead',
+      })
+    }
+  }
+  return violations
+}
+
 /**
  * Every stylesheet guard, in the order they are reported. Each guard reads one
  * stylesheet; only `unknownTokenViolations` consumes the palette, so the rest
@@ -708,6 +757,7 @@ export function unreducedMotionViolations(source) {
 export const STYLE_GUARDS = [
   unknownTokenViolations,
   bareFontScaleViolations,
+  fontWeightViolations,
   literalColorViolations,
   fullRoundRadiusViolations,
   stateBorderViolations,

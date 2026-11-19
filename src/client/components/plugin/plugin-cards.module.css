@@ -45,7 +45,7 @@
 .cardTitle {
   margin: 0;
   font: var(--dsw-font-xs-13);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
   white-space: nowrap;
   flex-shrink: 0;
@@ -114,7 +114,7 @@
   background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .activationStepBody {

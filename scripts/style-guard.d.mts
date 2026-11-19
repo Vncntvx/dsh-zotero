@@ -129,6 +129,12 @@ export declare const hoverMediaViolations: StyleGuard
 /** Classes that animate with no `prefers-reduced-motion` reduction in their sheet. */
 export declare const unreducedMotionViolations: StyleGuard
 
+/** Maximum font weight feature CSS may use; emphasis comes from size and ink. */
+export declare const FONT_WEIGHT_CEILING: 500
+
+/** Declarations above {@link FONT_WEIGHT_CEILING}, including `bold` and font shorthand. */
+export declare const fontWeightViolations: StyleGuard
+
 /** Every stylesheet guard, in the order they are reported. */
 export declare const STYLE_GUARDS: readonly StyleGuard[]
 

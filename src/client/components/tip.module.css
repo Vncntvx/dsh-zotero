@@ -1,0 +1,5 @@
+/* Hoverable seat for a tooltip anchor when its control is disabled. */
+.seat {
+  display: inline-flex;
+  min-width: 0;
+}

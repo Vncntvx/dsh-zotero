@@ -54,7 +54,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--dsw-radius-xs);
+  gap: 6px;
 }
 
 /* The label column sizes to its longest label, so the values line up without
@@ -99,10 +99,4 @@
 .error {
   color: var(--dsw-alias-state-error-primary);
   overflow-wrap: anywhere;
-}
-
-@media (pointer: coarse) {
-  .field input:focus {
-    font-size: 16px;
-  }
 }

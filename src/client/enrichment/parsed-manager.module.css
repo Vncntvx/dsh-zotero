@@ -115,11 +115,13 @@
 }
 
 .empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: safe center;
   gap: 6px;
-  padding: 40px 8px;
+  padding: 24px 8px;
   text-align: center;
 }
 
@@ -227,21 +229,16 @@
   cursor: pointer;
 }
 
-.rowCheck {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin: 0 1px;
-  accent-color: var(--dsw-alias-state-business-primary);
-}
-
-.rowTitle {
+/* Style the host checkbox label with the row's 13px scale and truncation. */
+.rowSelect > span:last-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xs-strong-13);
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
+  font-weight: 500;
 }
 
 .rowMeta {

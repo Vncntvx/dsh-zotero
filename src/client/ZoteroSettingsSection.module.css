@@ -25,7 +25,7 @@
 /* Inert tab copy: a tab whose backing component is off, or a namespace the
  * deployment does not serve. Matches the official SettingsForm unavailable line. */
 .note {
-  margin: 0;
+  margin: 0 0 12px;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
 }

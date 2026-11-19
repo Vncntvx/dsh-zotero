@@ -19,7 +19,6 @@
 
 /* The shared business content axis: one frame for every page-level
  * surface (see the header comment). */
-.lensBar,
 .workspace,
 .exportsPage,
 .evidencePage {
@@ -125,14 +124,6 @@
   flex: none;
 }
 
-/* The top lens bar: 文献 | 导出 as the host's segmented tabs, page-level
- * navigation. The class only places the row; the control draws itself. */
-.lensBar {
-  flex: none;
-  display: flex;
-  padding: 0 4px;
-}
-
 .lensTabCount {
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-caption);
@@ -146,10 +137,6 @@
   min-height: 0;
   display: grid;
   grid-template-columns: clamp(320px, 24cqi, 380px) minmax(0, 1fr) clamp(340px, 28cqi, 420px);
-}
-
-.sidebar {
-  grid-column: 1;
 }
 
 .inspector {
@@ -174,6 +161,7 @@
  * scrolls, one vertical scroll container per pane, never two. The bottom
  * padding clears the floating composer at every width. */
 .sidebar {
+  grid-column: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -361,7 +349,7 @@
 
 .inspectorTitle {
   font: var(--dsw-font-s-14);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -440,9 +428,9 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--dsw-alias-bg-layer-2);
-  border-radius: var(--dsw-radius-md);
+  border-radius: var(--dsw-radius-lg);
   border: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -656,14 +644,16 @@
 .coverageBarTrack {
   width: 100%;
   height: 6px;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-border-l2);
   overflow: hidden;
 }
 
 .coverageBarFill {
   height: 100%;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-brand-primary);
 }
 
@@ -870,8 +860,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: safe center;
   gap: 8px;
-  padding: 72px 16px calc(var(--dsh-composer-height, 152px) + 32px);
+  padding: 24px 16px;
 }
 
 .emptyIcon {
@@ -898,9 +889,9 @@
  * back action revealed.
  *
  * The threshold is the width at which the master-detail pair stops fitting,
- * not a comfortable one above it: the sidebar's floor is 280px (`.workspace`'s
+ * not a comfortable one above it: the sidebar's floor is 320px (`.workspace`'s
  * clamp) and the inspector needs ~360px for its title, meta, panel tabs, and
- * action row, so 640px is the last width that holds both. Sitting higher than
+ * action row, so 679px is the last width that holds both. Sitting higher than
  * that collapsed the pair on any ordinary column: the shell's right panel or
  * a half-screen window is enough to drop the pane under 760px while the window
  * itself is still wide, which reads as the layout giving up with room to
@@ -970,12 +961,8 @@
 }
 
 /* Tighter gutters, one step inside the single-pane threshold so the ladder
- * stays ordered: collapse at 640, gutters at 560, toolbar at 460. */
+ * stays ordered: collapse at 679, gutters at 560, toolbar at 460. */
 @container (max-width: 560px) {
-  .lensBar {
-    padding: 4px 8px 0;
-  }
-
   /* The composer clearance survives the tighter gutters, so a narrower pane
    * does not move the floating composer out of the way. */
   .sidebar {

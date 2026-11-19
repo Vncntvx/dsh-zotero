@@ -175,15 +175,48 @@
 
 /* ── Offline note ─────────────────────────────────────────────────────── */
 
+/* Whole-panel leaf state. Both variants use the same 13px title / 12px detail
+ * scale and center in the free area. */
+.configState {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.configIcon {
+  color: var(--dsw-alias-label-caption);
+}
+
+.configTitle {
+  margin: 0;
+  font: var(--dsw-font-s-14);
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.configDetail {
+  margin: 0;
+  max-width: 480px;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
 .offline {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   gap: 6px;
-  padding: 48px 24px;
+  padding: 24px;
   text-align: center;
 }
 
@@ -502,6 +535,15 @@
     display: flex;
   }
 
+  /* Use two tracks until a row opens the detail column. */
+  .columns.columnsWithoutDetail {
+    grid-template-columns: clamp(180px, 20cqi, 260px) minmax(240px, 1fr);
+  }
+
+  .columns.columnsWithoutDetail .inspectorPane {
+    display: none;
+  }
+
   .treePane,
   .listPane {
     border-right: 0.5px solid var(--dsw-alias-border-l2);
@@ -516,6 +558,15 @@
   gap: 12px;
   flex: 1;
   min-height: 0;
+  /* Row metrics mirrored by the virtualizer's `estimateSize`:
+   * 30+4 comfortable, 24+1 compact. */
+  --tree-row-h: 30px;
+  --tree-row-gap: 4px;
+}
+
+.treeCompact {
+  --tree-row-h: 24px;
+  --tree-row-gap: 1px;
 }
 
 .treeList {
@@ -524,7 +575,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--tree-row-gap);
 }
 
 .virtualViewport {
@@ -544,6 +595,8 @@
   inset-inline: 0;
   top: 0;
   width: 100%;
+  /* Carry the density gap in each measured virtual row. */
+  padding-bottom: var(--tree-row-gap);
 }
 
 .treeSectionHeader {
@@ -561,6 +614,7 @@
 .treeRowWrap {
   display: flex;
   align-items: center;
+  min-height: var(--tree-row-h);
   padding-left: calc(var(--tree-depth, 0) * 14px + 4px);
   border-left: 2px solid transparent;
   border-radius: var(--dsw-radius-sm);
@@ -592,7 +646,8 @@
 .treeExpanderPlaceholder {
   flex: none;
   width: 20px;
-  height: 18px;
+  /* Matches the 20px expander IconButton height. */
+  height: 20px;
 }
 
 .treeRow {
@@ -695,7 +750,7 @@
   margin: 0;
   min-width: 0;
   font: var(--dsw-font-xs-13);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -816,7 +871,7 @@
   border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-state-business-primary);
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.04em;
   user-select: none;
 }
@@ -843,7 +898,7 @@
   box-sizing: border-box;
   border-radius: var(--dsw-radius-xs);
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.04em;
 }
 
@@ -882,7 +937,7 @@
   padding: 0 6px;
   border-radius: var(--dsw-radius-xs);
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.035em;
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-tertiary);
@@ -952,6 +1007,40 @@
   box-sizing: border-box;
 }
 
+/* Compact density, matching the tree's 24px rows. */
+.inspectorCompact {
+  gap: 4px;
+}
+
+.inspectorCompact .inspectorHead {
+  gap: 1px;
+}
+
+.inspectorCompact .inspectorActions {
+  margin-top: 4px;
+}
+
+.inspectorCompact .section {
+  gap: 4px;
+}
+
+.inspectorCompact .section + .section,
+.inspectorCompact .inspectorHead + .section {
+  padding-top: 6px;
+}
+
+.inspectorCompact .childList {
+  gap: 2px;
+}
+
+.inspectorCompact .childRow {
+  padding-block: 2px;
+}
+
+.inspectorCompact .metaTable {
+  row-gap: 2px;
+}
+
 .inspectorEmpty {
   display: flex;
   align-items: center;
@@ -1008,7 +1097,7 @@
 .inspectorOrigin {
   margin: 0;
   font: var(--dsw-font-xxs-12);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -1074,16 +1163,24 @@
  * `Full Text PDF — PDF` geometry. */
 .childKind {
   flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.035em;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.childKindError {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .inspectorTitle {
   margin: 0;
   font: var(--dsw-font-s-14);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
   white-space: normal;
   word-break: break-word;
@@ -1260,6 +1357,15 @@
 .childRowSeat {
   display: flex;
   width: 100%;
+  min-width: 0;
+}
+
+/* The host Button fills the tooltip seat and spreads its two ends, so the kind
+ * label sits on the row's right edge and a long filename truncates first. */
+.childRowSeat > button {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   justify-content: space-between;
   text-align: left;
 }
@@ -1471,7 +1577,7 @@
 .writeField {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   border: 0;
   margin: 0;
   padding: 0;
@@ -1486,24 +1592,31 @@
 
 .writeSelect,
 .writeTextarea {
-  font: var(--dsw-font-xxs-12);
-  padding: 4px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
+  font: var(--dsw-font-s-14);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   box-sizing: border-box;
 }
 
+/* Single-line select tracks the host Input's H32; the textarea keeps the same
+ * type, stroke, radius and fill but grows with its rows. */
+.writeSelect {
+  height: 32px;
+  padding: 0 8px;
+}
+
 .writeTextarea {
+  min-height: 32px;
+  padding: 6px 8px;
   resize: vertical;
 }
 
 .writeSelect:focus-visible,
 .writeTextarea:focus-visible {
-  outline: var(--dsw-focus-ring-width, 1px) solid
-    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -1px;
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .writeConditionRow {
@@ -1528,7 +1641,7 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.writeResult strong {
+.writeResultTitle {
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -1545,7 +1658,7 @@
 }
 
 .writeResultFailed,
-.writeResultFailed strong {
+.writeResultFailed .writeResultTitle {
   color: var(--dsw-alias-state-error-primary);
 }
 

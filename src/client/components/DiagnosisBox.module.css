@@ -16,7 +16,7 @@
 
 .diagnosisLabelText {
   font: var(--dsw-font-xxxs-11);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--dsw-alias-label-secondary);
 }
 

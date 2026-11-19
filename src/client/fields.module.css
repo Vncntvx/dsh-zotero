@@ -21,10 +21,40 @@
   gap: 8px;
 }
 
+.reset {
+  border: none;
+  background: none;
+  padding: 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.reset:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.reset:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+@media (hover: hover) {
+  .reset:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
 .hint {
   margin: 0;
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
+}
+
+.strongText {
+  font-weight: 500;
 }
 
 .toggleRow {
@@ -39,14 +69,16 @@
   width: 100%;
   height: 6px;
   background: var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 999px;
+  corner-shape: round;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
   background: var(--dsw-alias-brand-primary);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 999px;
+  corner-shape: round;
 }
 
 .statusError {
@@ -76,8 +108,8 @@
 
 .warningTitle {
   font-family: inherit;
-  font-size: var(--dsh-content-font-size);
-  line-height: calc(var(--dsw-font-xs-13-line-height) + var(--dsh-content-font-delta, 0px));
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -93,13 +125,13 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: calc(var(--dsw-font-xs-13-font-size) / 2);
+  gap: 8px;
 }
 
 .fieldLabel {
   font-family: inherit;
-  font-size: var(--dsh-content-font-size);
-  line-height: calc(var(--dsw-font-xs-13-line-height) + var(--dsh-content-font-delta));
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height);
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
@@ -129,7 +161,6 @@
 
 .secretInput:focus-visible {
   outline: none;
-  border-width: 1px;
   border-color: var(--dsw-alias-state-business-primary);
 }
 

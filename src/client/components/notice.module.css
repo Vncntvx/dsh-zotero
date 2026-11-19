@@ -1,0 +1,39 @@
+/**
+ * Shared inline notice geometry.
+ *
+ * A notice is a single 18px line of 12px copy. The slot reserves that line;
+ * long errors wrap inside the container.
+ */
+.notice {
+  margin: 0;
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
+.noticeError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.noticeStatus {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Reserved row for a notice that appears above a control. */
+.noticeSlot {
+  min-height: 18px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.noticeSlot > * {
+  min-width: 0;
+}
+
+/* A notice plus its recovery or inline action, wrapping on narrow panes. */
+.noticeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
