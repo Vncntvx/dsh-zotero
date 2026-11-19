@@ -13,8 +13,8 @@ import { ParsedArtifactStore } from '../../src/enrichment/artifact-store.js'
 import { parseDigest } from '../../src/enrichment/parse-target.js'
 import { sourceKeyOf } from '../../src/enrichment/source-stamp.js'
 import {
-  ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT,
+  ZOTERO_FILE_UNREADABLE,
   ZOTERO_NOT_FOUND,
 } from '../../src/errors.js'
 import {
@@ -389,13 +389,12 @@ describe('explicit document parsing through the pinned Gateway', () => {
       endpointRequest('documentArtifact'),
       fixture.guest,
     )
-    expect(failure.wire).toMatchObject({
-      code: 'zotero/enrichment',
-      details: { code: ZOTERO_ENRICHMENT_TASK_FAILED },
-    })
+    expect(failure.wire.code).toBe('zotero/file-unreadable')
+    expect(failure.wire.details).toMatchObject({ code: ZOTERO_FILE_UNREADABLE })
     expect(failure.error).toMatchObject({
+      message: expect.not.stringContaining('MinerU'),
       cause: expect.objectContaining({
-        code: ZOTERO_ENRICHMENT_TASK_FAILED,
+        code: ZOTERO_FILE_UNREADABLE,
         cause: expect.any(SyntaxError),
       }),
     })

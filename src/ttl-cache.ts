@@ -35,10 +35,6 @@ export class LruTtlCache<V extends { fetchedAt: number }> {
     this.entries.set(key, value)
   }
 
-  put(key: string, value: V): void {
-    this.entries.set(key, value)
-  }
-
   delete(key: string): void {
     this.entries.delete(key)
   }

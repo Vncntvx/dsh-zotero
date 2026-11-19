@@ -109,7 +109,7 @@ function cached(
 }
 
 describe('PDF cache source revalidation', () => {
-  it('returns usable MinerU text and a tool issue when the stale disk record cannot be removed', async () => {
+  it('returns usable MinerU text and a tool issue when the refreshed record cannot be written', async () => {
     const { http, fetch } = httpOf()
     const host = createMockHost(http)
     const store = host.cache
@@ -125,15 +125,14 @@ describe('PDF cache source revalidation', () => {
       EXEC_CONTEXT as Parameters<typeof tool.execute>[1],
     )
     expect(output).toMatchObject({
-      text: expect.stringContaining('Cache notice: cache: disk eviction failed'),
+      text: expect.stringContaining('Cache notice: cache: write failed'),
       document: { provider: 'mineru', text: longText },
-      issues: expect.arrayContaining([expect.stringContaining('disk eviction failed')]),
+      issues: expect.arrayContaining([expect.stringContaining('write failed')]),
     })
     expect(fetch).toHaveBeenCalledOnce()
-    expect(await store.get(`url-${pdfUrl}`)).toMatchObject({
-      kind: 'miss',
-      issue: expect.stringContaining('disk eviction failed'),
-    })
+    // The failed overwrite keeps the previous local extraction as the cache's
+    // own graceful degradation; only this call sees the fresh artifact record.
+    expect(await store.get(`url-${pdfUrl}`)).toMatchObject({ kind: 'hit' })
   })
 
   it.each(['memory', 'disk'] as const)(

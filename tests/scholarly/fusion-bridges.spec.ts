@@ -57,3 +57,51 @@ it('prioritizes the published DOI over a linked arXiv preprint', () => {
     `arXiv:${arxiv}`,
   )
 })
+
+it.each([false, true])(
+  'keeps a distinct work reachable after conflicting bridges (reverse=%s)',
+  (reverse) => {
+    const other = '10.1000/other'
+    const bridged = [
+      { sourceId: 'openalex', papers: [record('First work', { doi })] },
+      { sourceId: 'crossref', papers: [record('Other work', { doi: other, arxiv })] },
+      { sourceId: 'pubmed', papers: [record('Bridge record', { doi, arxiv })] },
+    ]
+    if (reverse) [bridged[0], bridged[1]] = [bridged[1]!, bridged[0]!]
+    const fused = fuseRankedLists([
+      ...bridged,
+      { sourceId: 'repeat-bridge', papers: [record('Bridge reindex', { doi, arxiv })] },
+      { sourceId: 'repeat-other', papers: [record('Other work reindex', { doi: other, arxiv })] },
+    ])
+    expect(fused).toHaveLength(2)
+    expect(fused.map(({ title }) => title).sort()).toEqual(['First work', 'Other work'])
+    expect(fused.find(({ title }) => title === 'First work')?.versions).toBeUndefined()
+    expect(fused.find(({ doi }) => doi === other)?.sources).toContain('repeat-other')
+  },
+)
+
+it('stands a late paper alone when its only index key is stale on the entry', () => {
+  const stale = '10.1000/stale'
+  const decayed = [
+    { sourceId: 'openalex', papers: [record('Primary work', { doi, arxiv })] },
+    { sourceId: 'crossref', papers: [record('Version record', { doi: stale, arxiv })] },
+    { sourceId: 'pubmed', papers: [record('Stale-key work', { doi: stale })] },
+  ]
+  const fused = fuseRankedLists(decayed)
+  expect(fused).toHaveLength(2)
+  expect(fused[0]?.doi).toBe(doi)
+  expect(fused[0]?.versions).toEqual([expect.objectContaining({ doi: stale })])
+  expect(fused[1]?.title).toBe('Stale-key work')
+})
+
+it('continues past a conflicting stale key to another compatible candidate', () => {
+  const stale = '10.1000/stale'
+  const fused = fuseRankedLists([
+    { sourceId: 'primary', papers: [record('Primary work', { doi, arxiv })] },
+    { sourceId: 'version', papers: [record('Version record', { doi: stale, arxiv })] },
+    { sourceId: 'pmid', papers: [record('Biomedical entry', { pmid })] },
+    { sourceId: 'bridge', papers: [record('PMID and DOI bridge', { doi: stale, pmid })] },
+  ])
+  expect(fused).toHaveLength(2)
+  expect(fused.find(({ doi }) => doi === stale)?.sources).toEqual(['bridge', 'pmid'])
+})

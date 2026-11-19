@@ -65,7 +65,7 @@ type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
  * hostname, the factory that pins a validated closed address set into the
  * open-access PDF arm's per-attempt connection, and the factory for the
  * validating pool the allowlist arm connects through. The host composition
- * supplies them from `host-connections.ts`; a test supplies stubs. When the
+ * supplies them from `src/transport/connections.ts`; a test supplies stubs. When the
  * transport runs without them, every external request fails loud instead of
  * connecting to an unjudged address. The pool factory takes the allowlist's
  * fake-IP acceptance predicate; the PDF arm's policy is decided per URL by
@@ -363,7 +363,7 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
             'policy',
           )
         }
-        route = egressRouteFor(new URL(currentUrl))
+        route = egressRouteFor(target)
         if (!route.proxied && publicOnly) {
           // An HTTPS target binds the peer's identity to the requested name,
           // so the fake-IP placeholder is acceptable there. A plain-HTTP
@@ -437,12 +437,12 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           if (location === null) {
             throw new ScholarlyHttpError(response.status, hostname)
           }
-          const nextUrl = new URL(location, currentUrl).href
-          assertAllowedScholarlyUrl(nextUrl, publicOnly)
-          if (new URL(currentUrl).protocol === 'https:' && new URL(nextUrl).protocol !== 'https:')
+          const next = new URL(location, target)
+          assertAllowedScholarlyUrl(next.href, publicOnly)
+          if (target.protocol === 'https:' && next.protocol !== 'https:')
             throw new ScholarlySecurityError('HTTPS redirects must remain HTTPS.', 'policy')
           if (
-            new URL(nextUrl).origin !== new URL(currentUrl).origin &&
+            next.origin !== target.origin &&
             Object.keys(reqOptions.headers ?? {}).some((key) =>
               /^(?:authorization|proxy-authorization|x-api-key|api-key|cookie)$/i.test(key),
             )
@@ -451,8 +451,8 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
               'Credentialed redirects must remain on their original origin.',
               'policy',
             )
-          if (new URL(nextUrl).hostname !== hostname) releaseProbe(hostname)
-          currentUrl = nextUrl
+          if (next.hostname !== hostname) releaseProbe(hostname)
+          currentUrl = next.href
           // The next hop re-runs the lexical gate and its own resolution at
           // the top of the loop; no spacing is owed between hops.
           retryDelayMs = 0

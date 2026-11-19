@@ -31,6 +31,12 @@ export interface RankedSourceList {
   papers: readonly ScholarlyPaper[]
 }
 
+/** An identity bridge can join complementary records with no conflicting claims. */
+function hasIdentityConflict(a: ScholarlyPaper, b: ScholarlyPaper): boolean {
+  const verdict = identityRelationOf(a, b)
+  return verdict.relation === 'distinct' && verdict.conflicting
+}
+
 interface MergedEntry {
   paper: ScholarlyPaper
   score: number
@@ -95,7 +101,7 @@ function absorbEntry(entry: MergedEntry, incoming: MergedEntry, titleMatch: bool
  */
 export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPaper[] {
   const merged = new Set<MergedEntry>()
-  const identityIndex = new Map<string, MergedEntry>()
+  const identityIndex = new Map<string, Set<MergedEntry>>()
   const titleIndex = new Map<string, Set<MergedEntry>>()
   let order = 0
 
@@ -121,40 +127,59 @@ export function fuseRankedLists(lists: readonly RankedSourceList[]): ScholarlyPa
       const keys = new Set([paper, ...(paper.versions ?? [])].flatMap(identityKeysOf))
       const candidates = new Set<MergedEntry>()
       for (const key of keys) {
-        const hit = identityIndex.get(key)
-        if (hit !== undefined) candidates.add(hit)
+        for (const hit of identityIndex.get(key) ?? []) candidates.add(hit)
       }
+      const compatible = [...candidates]
+        .filter((candidate) => !hasIdentityConflict(candidate.paper, paper))
+        .sort((left, right) => left.order - right.order)
+      const doi = publishedDoiOf(paper)?.toLowerCase()
+      // A bridge may also reach a different publication via a preprint key.
+      let target =
+        (doi === undefined
+          ? undefined
+          : compatible.find(
+              (candidate) => publishedDoiOf(candidate.paper)?.toLowerCase() === doi,
+            )) ?? compatible[0]
       let titleMatch = false
 
       // A title signature proposes candidates; the gate checks the title token
       // set, first author, year window, and strong-identifier compatibility.
-      if (candidates.size === 0) {
+      if (target === undefined) {
         const signature = titleSignature(paper.title)
         for (const candidate of signature ? (titleIndex.get(signature) ?? []) : []) {
           const verdict = identityRelationOf(candidate.paper, paper)
           if (verdict.relation !== 'distinct' || verdict.conflicting) continue
           if (!titleVersionMatch(candidate.paper, paper)) continue
-          candidates.add(candidate)
+          target = candidate
           titleMatch = true
           break
         }
       }
 
-      const [first, ...rest] = [...candidates].sort((left, right) => left.order - right.order)
       const incoming = { paper, score: weight / (RRF_K + rank), keys, order, primaryOrder: order }
       order += 1
-      const entry = first ?? incoming
-      if (first !== undefined) {
-        removeTitle(first)
-        for (const absorbed of rest) {
+      if (target !== undefined) {
+        removeTitle(target)
+        absorbEntry(target, incoming, titleMatch)
+        for (const absorbed of compatible) {
+          if (absorbed === target) continue
+          // A repeated bridge can leave both entries carrying its secondary key.
+          // Coalesce conflicting entries only when they share a published DOI.
+          const verdict = identityRelationOf(target.paper, absorbed.paper)
+          if (verdict.conflicting && verdict.relation !== 'same') continue
           removeTitle(absorbed)
-          absorbEntry(entry, absorbed, false)
+          absorbEntry(target, absorbed, false)
           merged.delete(absorbed)
+          for (const key of absorbed.keys) identityIndex.get(key)?.delete(absorbed)
         }
-        absorbEntry(entry, incoming, titleMatch)
       }
+      const entry = target ?? incoming
       merged.add(entry)
-      for (const key of entry.keys) identityIndex.set(key, entry)
+      for (const key of entry.keys) {
+        const bucket = identityIndex.get(key) ?? new Set<MergedEntry>()
+        bucket.add(entry)
+        identityIndex.set(key, bucket)
+      }
       const signature = titleSignature(entry.paper.title)
       if (signature !== undefined) {
         const bucket = titleIndex.get(signature) ?? new Set<MergedEntry>()

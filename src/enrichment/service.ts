@@ -214,11 +214,6 @@ export interface EnrichmentServiceDeps {
   readonly loader?: () => SemanticEmbedderLoader
 }
 
-/** A ZoteroError with its code preserved, so diagnostics and callers can route. */
-function parsingErrorOf(error: unknown): Error {
-  return error instanceof ZoteroError ? error : parseFailureOf(error)
-}
-
 /** Wrap a bare error from a MinerU parse task: that task, not a read, failed. */
 export function parseFailureOf(error: unknown): ZoteroError {
   return new ZoteroError(
@@ -446,7 +441,7 @@ export class EnrichmentService extends TypertRemoteService {
           return await this.displayCandidate(input, config, signal, targetLabel, record)
         } catch (error) {
           if (signal.aborted) throw signal.reason
-          throw parsingErrorOf(error)
+          throw artifactReadFailureOf(error)
         }
       },
       metadata: async (config, request, signal) => {
@@ -454,7 +449,7 @@ export class EnrichmentService extends TypertRemoteService {
           return await storedMetadata(this.metadataDeps(config), config, request, signal)
         } catch (error) {
           if (signal.aborted) throw signal.reason
-          throw parsingErrorOf(error)
+          throw artifactReadFailureOf(error)
         }
       },
       probe: async (config, request, signal) => {
@@ -462,7 +457,7 @@ export class EnrichmentService extends TypertRemoteService {
           return await probeAttachments(this.metadataDeps(config), config, request, signal)
         } catch (error) {
           if (signal.aborted) throw signal.reason
-          throw parsingErrorOf(error)
+          throw artifactReadFailureOf(error)
         }
       },
       persistence,

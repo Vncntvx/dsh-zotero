@@ -342,7 +342,9 @@ export async function resolveScholarlyFullText(
     const lookup = await lookupPdfArtifact(cachedPdf.url, enhancer, signal)
     if (typeof lookup !== 'string') {
       if (!cachedPdf.record) return resultOf(lookup)
-      report(await store!.delete(cacheKey))
+      // The record just revalidated against the artifact store, so overwrite
+      // the stale cache entry directly; deleting first would drop the old
+      // record if the write then failed, and the cache is only an optimization.
       return await remember(lookup)
     }
     if (lookup === 'absent' && cachedPdf.record) return cachedPdf.record

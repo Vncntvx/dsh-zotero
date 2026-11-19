@@ -133,7 +133,6 @@ export class SemanticEmbedderLoader {
   >()
   private readonly open: (target: SemanticModelTarget, signal: AbortSignal) => Promise<Embedder>
   private closed = false
-  private generation = 0
   private nextId = 1
   /** The latched one-time close; every `dispose()` call awaits this. */
   private disposal: Promise<void> | undefined
@@ -411,7 +410,6 @@ export class SemanticEmbedderLoader {
   private async disposeOnce(): Promise<void> {
     this.closed = true
     this.bundleFailures.clear()
-    this.generation += 1
     const all = new Set(this.owned)
     for (const managed of all) {
       managed.retiring = true

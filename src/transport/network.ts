@@ -22,7 +22,7 @@ export interface ResolvedAddress {
 }
 
 /**
- * The DNS seam. Production resolves through `host-connections.ts`'s
+ * The DNS seam. Production resolves through `connections.ts`'s
  * `node:dns` adapter; a test stubs this to decide what a name resolves to.
  * There is no test-only bypass flag: the transport always resolves through
  * whatever resolver it was built with.
@@ -289,7 +289,7 @@ export type HostnamePredicate = (hostname: string) => boolean
  * Resolve one hostname and require every answer to be public.
  * @param hostname - the name to resolve.
  * @param resolver - the DNS seam; production resolves through the
- *   `node:dns` adapter in `host-connections.ts`.
+ *   `node:dns` adapter in `connections.ts`.
  * @param options - the caller's cancellation and acceptance policy; absent
  *   means public-only.
  * @returns the resolved addresses, all acceptable, in answer order.
@@ -423,7 +423,7 @@ export function pinnedLookup(addresses: readonly ResolvedAddress[]): PinnedLooku
  * Only the scholarly allowlist supplies it, where the reviewed name and the
  * TLS certificate bind the peer's identity.
  * @param resolver - the DNS seam; production resolves through the
- *   `node:dns` adapter in `host-connections.ts`.
+ *   `node:dns` adapter in `connections.ts`.
  * @param acceptFakeIpFor - per-hostname fake-IP acceptance; absent is strict.
  * @returns the validating lookup.
  */

@@ -31,6 +31,18 @@ import { fakeIpPolicyIssues } from './fake-ip-guard.mjs'
 // Re-exported so `tests/unit/tooling/test-lint` keeps driving the one shared stripper.
 export { stripCommentsAndStrings }
 
+/**
+ * One focused or disabled test construct found in a spec, mirroring
+ * `FocusViolation` in `test-lint.d.mts`.
+ * @typedef {{ line: number, construct: string }} FocusViolation
+ */
+
+/**
+ * One helper whose size exceeds its limit or frozen baseline, mirroring
+ * `HelperSizeViolation` in `test-lint.d.mts`.
+ * @typedef {{ kind: 'grown' | 'shrunk' | 'new' | 'stale', path: string, lines: number, limit: number }} HelperSizeViolation
+ */
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Directories that carry the project's source, tests, tooling, prose, and locale copy. */
@@ -128,7 +140,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/host/doc-examples.spec.ts': 549,
   'tests/host/enrichment-api-contract.spec.ts': 465,
   'tests/host/enrichment-artifact-store.spec.ts': 410,
-  'tests/host/enrichment-parse-endpoints.spec.ts': 405,
+  'tests/host/enrichment-parse-endpoints.spec.ts': 404,
   'tests/host/enrichment-parse-once.spec.ts': 494,
   'tests/host/http-client.spec.ts': 681,
   'tests/host/library-service.spec.ts': 411,
@@ -215,6 +227,10 @@ const failures = []
  * but the repository does not, and a guard that fires on them trains its
  * reader to ignore it.
  */
+/**
+ * @param {string} dir
+ * @returns {string[]} every file, as absolute paths.
+ */
 function filesUnder(dir) {
   const found = []
   for (const entry of readdirSync(dir)) {
@@ -226,13 +242,21 @@ function filesUnder(dir) {
   return found
 }
 
-/** The line count of one file, without counting the newline that ends the last line. */
+/**
+ * The line count of one file, without counting the newline that ends the last line.
+ * @param {string} path
+ * @returns {number}
+ */
 function lineCountOf(path) {
   const text = readFileSync(path, 'utf8')
   return text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
 }
 
-/** File paths of every spec, as paths relative to the repo root. */
+/**
+ * File paths of every spec, as paths relative to the repo root.
+ * @param {string} [base]
+ * @returns {string[]}
+ */
 export function specFiles(base = root) {
   return filesUnder(join(base, 'tests'))
     .filter((path) => /\.spec\.(?:[cm]?ts|tsx)$/.test(path))
@@ -247,8 +271,8 @@ export function specFiles(base = root) {
  * `support/` belongs here because it is where a module's shared fixtures live
  * (`tests/README.md`: specs → module support → shared helpers), so a budget
  * that only read `helpers/` let two support modules grow past it unnoticed.
- * @param path - a path relative to the repository root.
- * @returns true for a helper or support module.
+ * @param {string} path - a path relative to the repository root.
+ * @returns {boolean} true for a helper or support module.
  */
 export function isHelperFile(path) {
   return /[\\/](?:helpers|support)[\\/]/.test(path) && /\.(?:[cm]?ts|tsx)$/.test(path)
@@ -265,6 +289,8 @@ function helperFiles() {
 /**
  * A file must read as text end to end. The byte offset and a short context
  * are named because the offending byte is invisible in every editor view.
+ * @param {string} [base]
+ * @returns {string[]} the file paths, as absolute paths.
  */
 export function textFiles(base = root) {
   const tree = TEXT_ROOTS.flatMap((dir) =>
@@ -308,6 +334,8 @@ function checkTextFiles() {
  * text extension or a declared binary one. A file type that is neither would
  * otherwise be skipped by the control-byte guard without anyone deciding it
  * should be.
+ * @param {ReadonlyArray<string>} paths - file paths to inventory.
+ * @returns {string[]} the sorted undeclared extensions.
  */
 export function unscannedExtensionsOf(paths) {
   const declared = new Set([...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS])
@@ -355,16 +383,17 @@ function checkSpecSize() {
  * A baselined helper must match its lowered baseline; a helper outside the baseline
  * may not exceed the limit; a baseline entry whose file disappeared is stale
  * and must be removed with the split.
- * @param entries - `{ path, lines }` for every helper.
- * @param baseline - frozen path → line count.
- * @param limit - the new-helper limit.
- * @returns violations with the kind, path, actual lines, and applicable limit.
+ * @param {ReadonlyArray<{ path: string, lines: number }>} entries - `{ path, lines }` for every helper.
+ * @param {Readonly<Record<string, number>>} [baseline] - frozen path → line count.
+ * @param {number} [limit] - the new-helper limit.
+ * @returns {HelperSizeViolation[]} violations with the kind, path, actual lines, and applicable limit.
  */
 export function helperSizeViolations(
   entries,
   baseline = HELPER_SIZE_BASELINE,
   limit = MAX_HELPER_LINES,
 ) {
+  /** @type {HelperSizeViolation[]} */
   const found = []
   const seen = new Set()
   for (const { path, lines } of entries) {
@@ -383,10 +412,19 @@ export function helperSizeViolations(
   return found
 }
 
+/**
+ * @param {ReadonlyArray<{ path: string, lines: number }>} entries
+ * @param {Readonly<Record<string, number>>} [baseline]
+ * @returns {HelperSizeViolation[]}
+ */
 export function specSizeViolations(entries, baseline = SPEC_SIZE_BASELINE) {
   return helperSizeViolations(entries, baseline, STANDARD_SPEC_LINES)
 }
 
+/**
+ * @param {ReadonlyArray<string>} paths
+ * @returns {Array<{ path: string, lines: number }>}
+ */
 function fileSizes(paths) {
   return paths.map((path) => ({
     path: path.replaceAll('\\', '/'),
@@ -401,6 +439,10 @@ function checkHelperSize() {
   return `${entries.length} helpers`
 }
 
+/**
+ * @param {string} kind
+ * @param {ReadonlyArray<HelperSizeViolation>} violations
+ */
 function checkFileSizes(kind, violations) {
   for (const violation of violations) {
     if (violation.kind === 'grown') {
@@ -449,7 +491,12 @@ function checkLanes() {
   }
 }
 
-/** The first non-whitespace index at or after `index`, clamped to the end. */
+/**
+ * The first non-whitespace index at or after `index`, clamped to the end.
+ * @param {string} text
+ * @param {number} index
+ * @returns {number}
+ */
 function skipSpace(text, index) {
   let i = index
   while (i < text.length && /\s/.test(text[i])) i += 1
@@ -462,6 +509,11 @@ function skipSpace(text, index) {
  * Strings, comments and regex bodies are already blanked by the token-aware
  * scanner, so their parentheses cannot affect this balance. Template
  * expressions remain code and participate normally.
+ */
+/**
+ * @param {string} text
+ * @param {number} open
+ * @returns {number}
  */
 function afterCall(text, open) {
   let depth = 0
@@ -496,8 +548,8 @@ const MEMBER_NAME = /^[A-Za-z_$][\w$]*/
  * `runIf` stays the sanctioned gate. Its unconditional-disable spelling,
  * `runIf(false)`, is refused exactly like `skipIf(true)`: a conditional gate
  * is the author's call, an unconditional one is a hidden decision.
- * @param source - the file content.
- * @returns each violation with its 1-based line and the construct named.
+ * @param {string} source - the file content.
+ * @returns {FocusViolation[]} each violation with its 1-based line and the construct named.
  */
 export function focusViolationsOf(source) {
   const stripped = stripCommentsAndStrings(source)
@@ -589,6 +641,10 @@ const PUBLISHED_TEST_SUPPORT_ENTRIES = new Set([
   '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts',
 ])
 
+/**
+ * @param {string} source
+ * @returns {Array<{ line: number, specifier: string }>} each offending import with its 1-based line and module specifier.
+ */
 export function upstreamSourceImportsOf(source) {
   const noComments = stripCommentsAndStrings(source, false)
   const codeOnly = stripCommentsAndStrings(source)
@@ -624,14 +680,18 @@ const NO_ARG_PRIMITIVE_MOCK = new RegExp(
   String.raw`vi\.mock\(\s*['"](${PRIMITIVE_MODULES.join('|')})['"]\s*,\s*(?:async\s+)?(?:function\s*)?\(\s*\)`,
   'g',
 )
+// The AST walk below enforces these two patterns; the compiled regexes are kept
+// as their readable spellings, and the references keep them read.
+void WHOLESALE_PRIMITIVE_MOCK
+void NO_ARG_PRIMITIVE_MOCK
 
 /**
  * Each offending primitive mock with its 1-based line.
- * @param source - the spec's content.
- * @returns the violations.
+ * @param {string} source - the spec's content.
+ * @returns {Array<{ line: number, module: string }>} the violations.
  */
 export function wholesalePrimitiveMocksOf(source) {
-  const nodes = sourceNodes(source)
+  const nodes = /** @type {ReadonlyArray<{ node: any, parent: any }>} */ (sourceNodes(source))
   const bindings = new Map()
   const aliases = new Set(['vi', 'vitest'])
   for (const { node } of nodes) {
@@ -641,6 +701,7 @@ export function wholesalePrimitiveMocksOf(source) {
       for (const entry of node.specifiers)
         if (['vi', 'vitest'].includes(entry.imported?.name)) aliases.add(entry.local.name)
   }
+  /** @param {any} [node] a Babel AST fragment; `@babel/parser` ships no usable node types. @param {Set<string>} [visited] @returns {string | undefined} */
   const stringOf = (node, visited = new Set()) => {
     if (node?.type === 'StringLiteral') return node.value
     if (node?.type === 'Identifier' && !visited.has(node.name))
@@ -651,17 +712,21 @@ export function wholesalePrimitiveMocksOf(source) {
       if (left !== undefined && right !== undefined) return left + right
     }
   }
+  /** @param {any} factory @returns {boolean} */
   const partialFactory = (factory) => {
     if (factory?.type === 'Identifier') factory = bindings.get(factory.name)
     if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(factory?.type)) return false
     const importer = factory.params[0]?.name
     if (!importer) return false
+    /** @param {any} [node] @returns {boolean} */
     const originalCall = (node) => {
       if (node?.type === 'AwaitExpression') return originalCall(node.argument)
       return node?.type === 'CallExpression' && node.callee.name === importer
     }
     const originals = new Set()
+    /** @type {any[]} */
     const own = []
+    /** @param {any} [node] */
     const walk = (node) => {
       if (!node || typeof node !== 'object') return
       if (
@@ -684,13 +749,14 @@ export function wholesalePrimitiveMocksOf(source) {
         node.id.type === 'Identifier'
       )
         originals.add(node.id.name)
+    /** @param {any} [node] @returns {boolean} */
     const preservesOriginal = (node) => {
       if (node?.type === 'ConditionalExpression')
         return preservesOriginal(node.consequent) && preservesOriginal(node.alternate)
       return (
         node?.type === 'ObjectExpression' &&
         node.properties.some(
-          (property) =>
+          /** @param {any} property */ (property) =>
             property.type === 'SpreadElement' &&
             (originalCall(property.argument) ||
               (property.argument.type === 'Identifier' && originals.has(property.argument.name))),
@@ -767,15 +833,17 @@ function checkUpstreamSourceImports() {
 /**
  * The fetch-ownership violations in one source file, as formatted findings.
  * Exported so the guard's own spec exercises the rule instead of trusting it.
- * @param rel - the repo-relative path.
- * @param source - the file's content.
- * @returns one formatted violation per offending line.
+ * @param {string} rel - the repo-relative path.
+ * @param {string} source - the file's content.
+ * @returns {string[]} one formatted violation per offending line.
  */
 export function fetchOwnershipIssuesOf(rel, source) {
   const owner = 'src/transport/connections.ts'
   const allowed = new Set([owner, 'src/http-client.ts', 'src/write-http.ts'])
+  /** @type {string[]} */
   const issues = []
   const seen = new Set()
+  /** @param {any} node a Babel AST fragment; `@babel/parser` ships no usable node types. @param {string} message */
   const add = (node, message) => {
     const line = node.loc.start.line
     const key = `${line}:${message}`
@@ -783,7 +851,9 @@ export function fetchOwnershipIssuesOf(rel, source) {
     seen.add(key)
     issues.push(`${rel}:${line} ${message} — use the publicFetch seam from ${owner}`)
   }
-  for (const { node, parent } of sourceNodes(source)) {
+  for (const { node, parent } of /** @type {ReadonlyArray<{ node: any, parent: any }>} */ (
+    sourceNodes(source)
+  )) {
     if (rel.startsWith('src/')) {
       if (node.type === 'ImportDeclaration' && node.source.value === 'undici' && rel !== owner)
         add(node, 'imports undici')
@@ -795,7 +865,8 @@ export function fetchOwnershipIssuesOf(rel, source) {
         node.id.type === 'ObjectPattern' &&
         ['window', 'globalThis', 'self'].includes(node.init?.name) &&
         node.id.properties.some(
-          (property) => (property.key?.name ?? property.key?.value) === 'fetch',
+          /** @param {any} property */ (property) =>
+            (property.key?.name ?? property.key?.value) === 'fetch',
         )
       )
         add(node, 'uses the runtime fetch')
@@ -823,7 +894,7 @@ export function fetchOwnershipIssuesOf(rel, source) {
         node.callee.type === 'MemberExpression' &&
         ['vi', 'vitest'].includes(node.callee.object?.name) &&
         ['stubGlobal', 'spyOn'].includes(node.callee.property?.name) &&
-        node.arguments.some((arg) => arg.value === 'fetch')
+        node.arguments.some(/** @param {any} arg */ (arg) => arg.value === 'fetch')
       )
         add(node, 'stubs the runtime fetch')
       if (
