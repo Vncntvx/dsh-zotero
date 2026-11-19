@@ -61,7 +61,7 @@ Agent 在对话里用工具检索、阅读与引用文献；文献轨迹核对�
 在 DeepSeek Harness 桌面端打开侧栏的**插件**，点击**添加插件**，输入对应标识：
 
 - 最新版（推荐）：`dsh-zotero`
-- 指定版本：`dsh-zotero@1.3.0`
+- 指定版本：`dsh-zotero@1.4.0`
 - GitHub 稳定版预构建分支（最近一次 tag 发布）：`github:Vncntvx/dsh-zotero#stable`
 - GitHub 滚动预构建分支（跟随 main）：`github:Vncntvx/dsh-zotero#release`
 
