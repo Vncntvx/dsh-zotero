@@ -120,7 +120,6 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
     () => () => {
       discardAbort.current?.abort()
       moreAbort.current?.abort()
-      setConfirming(undefined)
     },
     [],
   )

@@ -29,7 +29,8 @@ export function MatchReferencesToolView(props: Props) {
       Array.isArray(refs) ? refs.length : 0,
     )
     const raw = (resultTextOf(block) ?? '').trim()
-    return { ...decoded, rows: decoded.items ?? [], raw, error: errorSummaryOf(block, raw) }
+    const rows = decoded.items?.filter((row) => row.inputId) ?? []
+    return { ...decoded, rows, raw, error: errorSummaryOf(block, raw) }
   }, [block])
 
   return (
@@ -59,59 +60,66 @@ export function MatchReferencesToolView(props: Props) {
               <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>
             )}
             <div className={css.cardList}>
-              {view.rows
-                .filter((row) => row.inputId)
-                .map((row, index) => (
-                  <ToolItemRow
-                    data-match-row
-                    key={`${row.inputId}-${index}`}
-                    title={<>{row.inputId}</>}
-                    trailing={
-                      <>
-                        <span className={css.itemMeta}>{row.status}</span>
-                      </>
-                    }
-                  >
-                    {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
-                    {(row.selected.length > 0 ? row.selected : row.candidates).map(
-                      (candidate, index) => (
-                        <div key={`${candidate.ref ?? ''}-${index}`}>
-                          <div className={css.itemMeta}>
-                            {[
-                              candidate.ref,
-                              candidate.citationKey &&
-                                t('toolCitationKeyField', { key: candidate.citationKey }),
-                              candidate.exportKey &&
-                                t('toolExportKeyField', { key: candidate.exportKey }),
-                              candidate.title,
-                              candidate.matchMethod,
-                              candidate.confidence,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </div>
-                          {/* The stricter both-fields-truthy guard stays: an empty
-                        field renders as nothing, as before. */}
-                          {candidate.citationKeyConflict?.native &&
-                            candidate.citationKeyConflict.extra && (
-                              <CitationKeyConflictNotice
-                                conflict={candidate.citationKeyConflict}
-                                t={t}
-                              />
-                            )}
+              {view.rows.map((row, index) => (
+                <ToolItemRow
+                  data-match-row
+                  key={`${row.inputId}-${index}`}
+                  title={<>{row.inputId}</>}
+                  trailing={
+                    <>
+                      <span className={css.itemMeta}>{row.status}</span>
+                    </>
+                  }
+                >
+                  {row.reason && <div className={css.coverageNotice}>{row.reason}</div>}
+                  {(row.selected.length > 0 ? row.selected : row.candidates).map(
+                    (candidate, index) => (
+                      <div key={`${candidate.ref ?? ''}-${index}`}>
+                        <div className={css.itemMeta}>
+                          {[
+                            candidate.ref,
+                            candidate.citationKey &&
+                              t('toolCitationKeyField', { key: candidate.citationKey }),
+                            candidate.exportKey &&
+                              t('toolExportKeyField', { key: candidate.exportKey }),
+                            candidate.title,
+                            candidate.matchMethod,
+                            candidate.confidence,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </div>
-                      ),
-                    )}
-                  </ToolItemRow>
-                ))}
+                        {/* The stricter both-fields-truthy guard stays: an empty
+                        field renders as nothing, as before. */}
+                        {candidate.citationKeyConflict?.native &&
+                          candidate.citationKeyConflict.extra && (
+                            <CitationKeyConflictNotice
+                              conflict={candidate.citationKeyConflict}
+                              t={t}
+                            />
+                          )}
+                      </div>
+                    ),
+                  )}
+                </ToolItemRow>
+              ))}
               {view.omitted > 0 && (
                 <div className={css.coverageNotice}>
                   {t('omittedRowsNote', { count: view.omitted })}
                 </div>
               )}
-              {view.raw && (
-                <RawTextFallback text={view.raw} copyLabel={t('copy')} copiedLabel={t('copied')} />
-              )}
+              {(view.rows.length === 0 ||
+                view.omitted > 0 ||
+                view.detailOmitted ||
+                view.rows.length < view.requested ||
+                view.rows.length !== view.items?.length) &&
+                view.raw && (
+                  <RawTextFallback
+                    text={view.raw}
+                    copyLabel={t('copy')}
+                    copiedLabel={t('copied')}
+                  />
+                )}
             </div>
             {view.rows.length === 0 && !view.raw && !view.detailOmitted && view.omitted === 0 && (
               <div className={css.coverageNotice}>{t('toolMatchCandidatesEmpty')}</div>

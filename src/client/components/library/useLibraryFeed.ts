@@ -58,7 +58,8 @@ import {
 import { librarySessionKeyOf } from './library-view-store.ts'
 import type { ChildKind, ChildLoadState, LibraryFeedFace } from './library-feed-types.ts'
 
-const SEARCH_DEBOUNCE_MS = 300
+// Match the host Workspace Browser search delay.
+const SEARCH_DEBOUNCE_MS = 250
 const LOADING_LIST: LibraryListState = Object.freeze({ phase: 'loading' })
 
 const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachments', 'annotations']

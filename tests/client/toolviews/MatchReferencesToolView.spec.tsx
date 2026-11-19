@@ -96,6 +96,41 @@ describe('MatchReferencesToolView', () => {
     expect(screen.queryByText('Malformed row without an input id.')).toBeNull()
   })
 
+  it('hides the raw payload when every row is projected without omissions', () => {
+    const block = settled({
+      call: {
+        name: 'zotero_match_references',
+        argsRaw: JSON.stringify({}),
+      },
+      meta: {
+        items: [
+          {
+            inputId: 'entry-1',
+            status: 'matched',
+            selected: {
+              ref: 'zotero://user/0/item/AAAA1111',
+              title: 'Projected paper',
+              matchMethod: 'title',
+            },
+          },
+        ],
+      },
+      content: [{ type: 'text', text: 'Raw match payload' }],
+    })
+    render(
+      <MatchReferencesToolView
+        {...createToolViewProps({
+          toolName: 'zotero_match_references',
+          block,
+          useDisclosure: mockUseDisclosure(true),
+          t: mockT,
+        })}
+      />,
+    )
+    expect(screen.getByText('entry-1')).toBeTruthy()
+    expect(screen.queryByText('Raw match payload')).toBeNull()
+  })
+
   it('uses the complete matched count when only the first result rows are projected', () => {
     const block = settled({
       call: {
