@@ -44,7 +44,6 @@ export function encodeExcludeTag(tag: string): string {
  * adds `start`/`limit` on top.
  */
 function searchQueryOf(request: ZoteroSearchRequest): URLSearchParams {
-  assertLiteralSearchTags(request)
   const params = new URLSearchParams()
   if (request.query !== undefined && request.query !== '') params.set('q', request.query)
   if (request.mode === 'everything') params.set('qmode', 'everything')

@@ -3,13 +3,9 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeSearchItem } from '../normalize-search.js'
 import { formatRef, libraryPrefix, parseSupportedRef, refStringFor } from '../refs.js'
-import {
-  attachmentTypeMessage,
-  ZoteroError,
-  ZOTERO_INVALID_ARGUMENT,
-  ZOTERO_UNEXPECTED,
-} from '../errors.js'
+import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
 import type { SupportedLocalLibrary, ZoteroFulltextItem } from '../types.js'
+import { assertAttachmentTarget } from './detail.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 
 export interface FulltextIdentity {
@@ -43,13 +39,7 @@ export async function fulltextIdentityOf(
       ZOTERO_UNEXPECTED,
     )
   const itemType = asString(data?.itemType)
-  if (itemType !== 'attachment')
-    throw new ZoteroError(
-      itemType
-        ? attachmentTypeMessage(itemType)
-        : `The referenced object ${ref.key} could not be confirmed as an attachment.`,
-      ZOTERO_INVALID_ARGUMENT,
-    )
+  assertAttachmentTarget(itemType ?? '', ref.key)
   const attachmentContentType = asString(data?.contentType)
   const identity = () => ({
     serverId,

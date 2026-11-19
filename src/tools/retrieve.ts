@@ -504,6 +504,12 @@ export const ATTACHMENT_UNINDEXED_NOTE = "no full text in Zotero's index"
 /** The model-facing note for an attachment this call's cap left unread. */
 export const ATTACHMENT_LIMIT_NOTE = 'not read: this call was already at its attachment limit'
 
+/** The model-facing note for indexed text that yielded no passage within the budget. */
+export const ATTACHMENT_BUDGET_EXHAUSTED_NOTE =
+  'no passage within this call\u2019s character budget'
+
+export const ATTACHMENT_NO_PASSAGES_NOTE = 'indexed text yielded no passages'
+
 /**
  * The honesty line under the full-text sources: how many of them contributed
  * no text, so whatever they contain is not covered.
@@ -525,9 +531,12 @@ function attachmentSourceLine(source: ZoteroRetrieveAttachment): string {
     source.coverage?.indexedChars === undefined
       ? ''
       : `, ${source.coverage.indexedChars}/${source.coverage.totalChars ?? '?'} chars indexed`
+  const passages = source.passages ?? 0
+  if (passages === 0)
+    return `${source.ref}${type}: ${source.inputTruncated ? ATTACHMENT_BUDGET_EXHAUSTED_NOTE : ATTACHMENT_NO_PASSAGES_NOTE}${chars}`
   const cut =
     source.inputTruncated === true ? ', text cut by this call\u2019s character budget' : ''
-  return `${source.ref}${type}: ${source.passages ?? 0} passages${chars}${cut}`
+  return `${source.ref}${type}: ${passages} passages${chars}${cut}`
 }
 
 /**
@@ -565,7 +574,7 @@ export const NO_MATCH_REMEDY =
  * test did not run.
  */
 export const NO_SOURCES_MESSAGE =
-  'This item offered no rankable passage \u2014 no annotation, note, abstract, or indexed full text \u2014 so no overlap test ran. It is not evidence about the item\u2019s content.'
+  'The selected sources yielded no rankable passage within this call\u2019s limits, so no overlap test ran.'
 
 /** The remedy half of {@link NO_SOURCES_MESSAGE}. */
 export const NO_SOURCES_REMEDY =

@@ -430,7 +430,7 @@ export class ZoteroJobRunner {
             if (
               result !== undefined &&
               task.outputLimitBytes !== undefined &&
-              new TextEncoder().encode(result).byteLength > task.outputLimitBytes
+              Buffer.byteLength(result) > task.outputLimitBytes
             )
               throw new ZoteroError(
                 'The complete job result exceeds its delivery byte budget; file delivery is required.',
@@ -551,20 +551,20 @@ export class ZoteroJobRunner {
     }
     const { id, done } = started
     const owner = task.exec.agent?.id
-    /**
-     * Publish a body the run already produced. The job body itself publishes
-     * too (same owning call, deduplicated in `ResultDelivery`), so a promotion
-     * that races the settle still has one receipt before the caller sees it.
-     */
-    const publishSettled = async (value: T | undefined): Promise<void> => {
-      if (value === undefined || this.delivery === undefined) return
-      await this.delivery.prepare(
-        task.exec,
-        value as JsonValue,
-        (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
-        task.exec.signal,
-        id,
-      )
+    const publishSettled = async (): Promise<void> => {
+      if (resultValue === undefined || this.delivery === undefined) return
+      try {
+        await this.delivery.prepare(
+          task.exec,
+          resultValue as JsonValue,
+          (data) => [{ type: 'text', text: task.renderResult?.(data as T) ?? '' }],
+          task.exec.signal,
+          id,
+        )
+      } catch (error) {
+        // The caller still needs the job ID to inspect the promoted job.
+        this.sink?.warn('job.publish-failed', errorMessageOf(error), { jobId: id })
+      }
     }
 
     let view: JobView
@@ -600,7 +600,7 @@ export class ZoteroJobRunner {
         },
       )
       promoted = true
-      await publishSettled(resultValue)
+      await publishSettled()
       return {
         kind: 'promoted',
         jobId: id,
@@ -616,7 +616,7 @@ export class ZoteroJobRunner {
         waitMs: waitTimeoutMs,
       })
       promoted = true
-      await publishSettled(resultValue)
+      await publishSettled()
       return {
         kind: 'promoted',
         jobId: id,

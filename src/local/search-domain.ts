@@ -24,7 +24,7 @@ import {
   nextOffsetOf,
   setPage,
 } from './pagination.js'
-import { serverIdFromHeaders } from './identity.js'
+import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { fetchItemKeyBatches, ItemBatchVersionDriftError } from './item-batch.js'
 import { assertLiteralSearchTags } from './search-query.js'
 import { parseRef, libraryPrefix } from '../refs.js'
@@ -149,14 +149,10 @@ export async function runSearch(
       serverId: scope.serverId,
     },
   )
+  let serverId = serverIdFromHeaders(headers, scope.serverId)
+  assertServerIdMatches(serverId, scope.serverId)
   const rows = requireArrayBody(json, 'items top listing')
-  const responseServerId = serverIdFromHeaders(headers, scope.serverId)
   const libraryForItems = libraryOfResolvedScope(scope.resolved)
-  const ctxForSearch: { library: SupportedLocalLibrary; serverId?: string } = {
-    library: libraryForItems,
-    serverId: responseServerId,
-  }
-  const items = rows.map((row) => normalizeSearchItem(row, ctxForSearch))
   // Pagination honesty is uniform across every paged listing: without a
   // valid Total-Results header the call fails instead of guessing a total.
   const apiTotal = requireTotalResults(headers, 'items top listing')
@@ -164,7 +160,7 @@ export async function runSearch(
   // breached the total it just reported; `nextOffsetOrFail` fails loud.
   const nextOffset = nextOffsetOrFail(
     request.offset,
-    items.length,
+    rows.length,
     apiTotal,
     'search results',
     request.limit,
@@ -196,9 +192,12 @@ export async function runSearch(
       )
       // Resolve each page's parent membership before charging accepted hits
       // against headroom. An out-of-scope child must not hide a later match.
-      const matched: { row: unknown; key: string; parentKey?: string }[] = []
+      const matched: unknown[] = []
       const memberships = new Map<string, Set<string>>()
-      const collect = async (added: readonly unknown[]): Promise<boolean> => {
+      const collect = async (
+        added: readonly unknown[],
+        noteServerId?: string,
+      ): Promise<boolean> => {
         const candidates = added.flatMap((row) => {
           const key = asString(asRecord(row)?.key)
           if (
@@ -212,7 +211,7 @@ export async function runSearch(
             scope.collectionKey === undefined
               ? undefined
               : asString(asRecord(asRecord(row)?.data)?.parentItem)
-          return [{ row, key, ...(parentKey === undefined ? {} : { parentKey }) }]
+          return [{ row, parentKey }]
         })
         const missing = [
           ...new Set(
@@ -228,7 +227,7 @@ export async function runSearch(
             deps,
             libraryForItems,
             missing,
-            scope.serverId,
+            noteServerId,
             signal,
           ))
             memberships.set(key, collections)
@@ -239,27 +238,19 @@ export async function runSearch(
             !memberships.get(entry.parentKey)?.has(scope.collectionKey!)
           )
             continue
-          matched.push(entry)
+          matched.push(entry.row)
           if (matched.length >= headroom) return true
         }
         return false
       }
-      const scan = await fetchNoteRows(deps, scope, request, signal, collect)
-      const supplementItems: ZoteroSearchItem[] = []
-      for (const entry of matched) {
-        if (
-          entry.parentKey !== undefined &&
-          !memberships?.get(entry.parentKey)?.has(scope.collectionKey!)
-        ) {
-          continue
-        }
-        seen.add(entry.key)
-        supplementItems.push(normalizeSearchItem(entry.row, ctxForSearch))
-      }
-      if (supplementItems.length > 0) {
+      const scan = await fetchNoteRows(deps, scope, request, signal, serverId, collect)
+      serverId = scan.serverId
+      if (matched.length > 0) {
         supplemental = {
           kind: 'noteBody',
-          items: supplementItems,
+          items: matched.map((row) =>
+            normalizeSearchItem(row, { library: libraryForItems, serverId }),
+          ),
           scanned: scan.scanned,
           truncated: scan.truncated,
         }
@@ -268,6 +259,7 @@ export async function runSearch(
   }
   // Omit (rather than null) the pagination cursor on the final page, so the
   // result stays a pure lossless-JSON value for the tool output snapshot.
+  const items = rows.map((row) => normalizeSearchItem(row, { library: libraryForItems, serverId }))
   const result = searchResultOf(scope.resolved, request, items, apiTotal, nextOffset)
   if (supplemental !== undefined) result.supplemental = supplemental
   return result
@@ -584,8 +576,9 @@ async function fetchNoteRows(
   scope: ResolvedScopeResult,
   request: ZoteroSearchRequest,
   signal: AbortSignal | undefined,
-  shouldStop?: (added: readonly unknown[]) => boolean | Promise<boolean>,
-): Promise<{ scanned: number; truncated: boolean }> {
+  serverId: string | undefined,
+  shouldStop: (added: readonly unknown[], serverId: string | undefined) => Promise<boolean>,
+): Promise<{ scanned: number; truncated: boolean; serverId: string | undefined }> {
   const libraryForScan = libraryOfResolvedScope(scope.resolved)
   // A publications-scoped scan must stay inside My Publications; the bare
   // library prefix would leak note matches from outside the segment.
@@ -601,10 +594,13 @@ async function fetchNoteRows(
     params.set('direction', 'desc')
     setPage(params, start, limit)
     if (request.includeTrashed) params.set('includeTrashed', '1')
-    const { json } = await deps.client.getJson<unknown>(basePath, params, {
+    const { json, headers } = await deps.client.getJson<unknown>(basePath, params, {
       signal,
-      serverId: scope.serverId,
+      serverId,
     })
+    const observed = serverIdFromHeaders(headers, serverId)
+    assertServerIdMatches(observed, serverId)
+    serverId = observed
     const rows = requireArrayBody(json, 'note scan')
     if (rows.length > limit)
       throw new ZoteroError('The note scan returned more rows than requested.', ZOTERO_UNEXPECTED)
@@ -623,7 +619,7 @@ async function fetchNoteRows(
     const added = rows.slice(0, wanted)
     scanned += added.length
     start += added.length
-    if ((await shouldStop?.(added)) === true) break
+    if (await shouldStop(added, serverId)) break
     // Fewer rows than requested means the library has no more notes.
     if (rows.length < wanted) {
       endedByEof = true
@@ -639,7 +635,7 @@ async function fetchNoteRows(
     const rest = await readRows(start, 1)
     truncated = rest.length > 0
   }
-  return { scanned, truncated }
+  return { scanned, truncated, serverId }
 }
 
 /**

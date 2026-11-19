@@ -22,6 +22,7 @@ const entries = [
 ]
 
 it.each([
+  { budget: 1, allocation: [1, 0, 0, 0] },
   { budget: 2, allocation: [0, 1, 1, 0] },
   { budget: 6, allocation: [1, 2, 3, 0] },
 ])(

@@ -498,10 +498,10 @@ export function attachmentFactOf(
  * at most the configured `retrieveAttachmentCap` attachments are read at all
  * (the rest report `unread` instead of silently vanishing), the whole call
  * accepts at most `maxFulltextChars` code units, shared among sources with text.
- * Short sources return unused quota to longer ones, so no source can starve the others and the result
- * does not depend on which read finished first, and an unindexed member
- * degrades alone rather than failing the call. Workers retain only a bounded
- * prefix per source until the deterministic allocation, then release it after chunking.
+ * Short sources return unused quota to longer ones. If the budget is below
+ * the number of contributors, some receive zero characters. Allocation uses
+ * length and candidate order, independent of read completion order. Workers
+ * retain only a bounded prefix per source until chunking.
  */
 export async function readFulltextSources(
   deps: FulltextDeps,

@@ -1,15 +1,17 @@
 /** All search entry points share Zotero's literal-tag boundary. */
 import { expect, it } from 'vitest'
 import { zoteroLibraryFiltersSchema } from '../../src/wire-schemas.js'
-import { buildSearchParams } from '../../src/local/search-query.js'
+import { assertLiteralSearchTags, buildSearchParams } from '../../src/local/search-query.js'
 import { request } from '../helpers/provider-harness.js'
 
 it.each(['A||B', ' ', '\n\t', ''])(
   'rejects the ambiguous tag %j at both panel and domain boundaries',
   (tag) => {
     expect(zoteroLibraryFiltersSchema.safeParse({ tags: [tag] }).success).toBe(false)
-    expect(() => buildSearchParams(request({ tags: [tag] }))).toThrow('literal tag')
-    expect(() => buildSearchParams(request({ excludeTags: [tag] }))).toThrow('literal tag')
+    // The domain gate (search-domain's pre-I/O assert) and the tool layer both
+    // route through this check; the encoder only escapes what survived it.
+    expect(() => assertLiteralSearchTags(request({ tags: [tag] }))).toThrow('literal tag')
+    expect(() => assertLiteralSearchTags(request({ excludeTags: [tag] }))).toThrow('literal tag')
   },
 )
 
