@@ -1,0 +1,176 @@
+/**
+ * The evidence-ranking seam shared by `zotero_retrieve` and
+ * `scholarly_read query=`.
+ *
+ * Both tools rank passages over the same chunk boundaries and must return the
+ * same result. Ranking sits behind this interface rather than being called
+ * directly. `bm25EvidenceRanker` is the core's lexical ranker; the enrichment
+ * component installs a hybrid ranker over it while mounted. The core holds the
+ * slot and does not import the component, its model runtime, or its transport.
+ *
+ * The seam exposes three facts to the tools:
+ *
+ * - `matchKind` says *why* a passage came back. A meaning-level hit must never
+ *   be reported as wording the paper contains, so the label travels with the
+ *   passage rather than being inferred later from a score.
+ * - `score` is the fused, normalized ordering value in `[0, 1]`. It is derived
+ *   from reciprocal rank, so it orders the answer and says nothing about how
+ *   strong the match was. Callers that need magnitude read `lexicalScore` /
+ *   `semanticScore`, which are each route's own value on its own scale.
+ * - An empty result means no route hit any chunk. Chunks that no route matches
+ *   are not returned.
+ *
+ * Reciprocal-rank fusion, equal weights, `k = 60`, matching the scholarly
+ * subsystem's constant in `src/scholarly/fusion.ts`.
+ * @module dsh-zotero/local/evidence-ranker
+ */
+import { type EvidenceChunk } from '../evidence.js';
+import type { EvidenceMatchKind } from '../evidence-item.js';
+export type { EvidenceMatchKind };
+/**
+ * The reciprocal-rank constant, equal weights across routes; aliases the
+ * shared constant used by scholarly fusion.
+ */
+export declare const EVIDENCE_RRF_K = 60;
+/**
+ * An opaque, per-request handle produced by `EvidenceRanker.admit()`. The core
+ * carries it through the read so the ranker uses the scope admitted before
+ * source I/O, including under concurrent reads.
+ */
+export type RankingScopeHandle = symbol;
+/** One ranking request: the query, any paraphrases of it, and the corpus. */
+export interface EvidenceRankRequest {
+    /** The caller's own query text. */
+    readonly query: string;
+    /**
+     * Additional phrasings of the same question. Each is scored independently
+     * and the best score per chunk wins, so a paraphrase raises a passage
+     * without pooling weights with the original query.
+     */
+    readonly queryVariants?: readonly string[];
+    /** The passages to rank; `index` is the caller's own handle on each. */
+    readonly chunks: readonly EvidenceChunk[];
+    /** Caller cancellation, checked before each costly step. */
+    readonly signal?: AbortSignal;
+    /** The admitted scope handle, when the ranker uses lifecycle scopes. */
+    readonly scope?: RankingScopeHandle;
+}
+/**
+ * Refuse an ambiguous corpus. Each caller handle identifies exactly one
+ * passage; a duplicate makes ranked results unaddressable and can collapse
+ * two distinct sources into one.
+ */
+export declare function assertUniqueChunkIndexes(chunks: readonly EvidenceChunk[]): void;
+/** One ranked passage: the caller's index plus why and how strongly it matched. */
+export interface RankedEvidence {
+    /** The `index` of the chunk this describes. */
+    readonly index: number;
+    /** Fused, normalized ordering value in `[0, 1]`; orders the answer only. */
+    readonly score: number;
+    /** Which routes hit this chunk. */
+    readonly matchKind: EvidenceMatchKind;
+    /** 1-based position on the lexical route; absent when that route missed. */
+    readonly lexicalRank?: number;
+    /** 1-based position on the semantic route; absent when that route missed. */
+    readonly semanticRank?: number;
+    /** The lexical route's own value (BM25); absent when that route missed. */
+    readonly lexicalScore?: number;
+    /** The semantic route's own value (cosine); absent when that route missed. */
+    readonly semanticScore?: number;
+}
+/**
+ * One admitted foreground read. Admission happens before any source I/O and
+ * fixes the committed ranking config, model target and service generation; the
+ * caller releases it in `finally`. A scope that has not ranked yet can still
+ * lazily load its fixed target after the component unmounts, on the original
+ * request deadline. The core's lexical ranker admits a no-op scope.
+ */
+export interface RankingScope {
+    /** Release this scope after the read finishes, in a `finally` block. */
+    readonly release: () => void;
+    /** Opaque handle the caller passes back as `EvidenceRankRequest.scope`. */
+    readonly handle: RankingScopeHandle;
+}
+/** A ranking strategy; a semantic route runs asynchronously. */
+export interface EvidenceRanker {
+    /**
+     * Admit one foreground read before its source I/O. Optional so the core's
+     * own ranker and test doubles need no lifecycle machinery.
+     */
+    readonly admit?: () => RankingScope;
+    /**
+     * Rank `chunks` against the request's query.
+     * @param request - the query, its paraphrases, the corpus, and cancellation.
+     * @returns the matching passages best first, plus the routes that ran — the
+     * fact a caller needs to phrase an empty answer honestly ("nothing matched
+     * the words" vs "nothing matched the words or the meaning").
+     */
+    rank(request: EvidenceRankRequest): Promise<EvidenceRankResult>;
+}
+/** Which scoring routes a ranking call actually ran. */
+export type EvidenceRoute = 'lexical' | 'semantic';
+/** One ranking outcome: the hits and the routes that produced them. */
+export interface EvidenceRankResult {
+    /** The matching passages, best first; empty when no route hit any chunk. */
+    readonly matches: readonly RankedEvidence[];
+    /** The routes that ran, in a fixed order (`lexical` before `semantic`). */
+    readonly routes: readonly EvidenceRoute[];
+}
+/**
+ * The query texts to score, in order: the caller's query, then each distinct
+ * non-empty paraphrase. Blank and duplicate paraphrases are dropped.
+ * @param query - the caller's query.
+ * @param variants - paraphrases supplied by the caller.
+ * @returns the texts to score, query first.
+ */
+export declare function queryTextsOf(query: string, variants?: readonly string[]): string[];
+/**
+ * The distinct lexical terms the ranking actually scores across the query and
+ * every paraphrase, in first-occurrence order. This is what the result reports
+ * as `queryTerms`, so a caller can see that a query of pure function words left
+ * nothing to score instead of guessing why the answer was empty.
+ * @param query - the caller's query.
+ * @param variants - paraphrases supplied by the caller.
+ * @returns the distinct content terms.
+ */
+export declare function queryTermsAcross(query: string, variants?: readonly string[]): string[];
+/** One route's per-chunk values, keyed by the caller's chunk index. */
+export type RouteScores = ReadonlyMap<number, number>;
+/**
+ * The lexical route's per-chunk BM25 scores, best score per chunk across the
+ * query and every paraphrase, positives only. A score of zero shares no
+ * content word with any phrasing, which is exactly "the lexical route did not
+ * hit this chunk"; negative BM25 is not a thing, but a guard keeps the route's
+ * contract explicit for the fusion below.
+ * @param texts - the query texts to score, query first.
+ * @param chunks - the caller's corpus.
+ * @returns the per-chunk best positive score.
+ */
+export declare function lexicalRouteScores(texts: readonly string[], chunks: readonly EvidenceChunk[]): RouteScores;
+/**
+ * Fuse the routes that ran into one ordered list.
+ *
+ * Each route contributes `1 / (k + rank)`. The sum is divided by the largest
+ * value the participating routes could jointly reach — `routes / (k + 1)` — so
+ * the result is in `[0, 1]` whatever the number of routes, and a rank-1 hit on
+ * every route is exactly `1`. `matchKind` names the routes that scored the
+ * chunk at all: a positive lexical score already means a content-word overlap,
+ * so no rank cutoff is involved and the label cannot change with how many
+ * passages the caller happened to ask for.
+ * @param lexical - the lexical route's values, if it ran.
+ * @param semantic - the semantic route's values, if it ran.
+ * @returns the fused ranking, best first.
+ */
+export declare function fuseEvidenceRoutes(lexical: RouteScores | undefined, semantic: RouteScores | undefined): RankedEvidence[];
+/**
+ * The core's lexical ranker: BM25 over the caller's chunk corpus, scored once
+ * per query text, best score per chunk. It is the full answer when the
+ * enrichment component is absent; with the component mounted, the hybrid
+ * ranker uses it for the lexical route.
+ *
+ * `rank` is `async` so a throw before its first `await` rejects as a promise
+ * instead of throwing synchronously into the caller's stack. Cancellation
+ * rejects like any other strategy.
+ */
+export declare const bm25EvidenceRanker: EvidenceRanker;
+//# sourceMappingURL=evidence-ranker.d.ts.map

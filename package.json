@@ -1,0 +1,178 @@
+{
+  "name": "dsh-zotero",
+  "version": "1.4.0",
+  "description": "Zotero plugin for DeepSeek Harness: search and read papers in conversation, audit the literature trail, and browse the literature panel for citations and approved writes.",
+  "keywords": [
+    "zotero",
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "research",
+    "literature"
+  ],
+  "author": "Wenjie Xu <wenjie.xu.cn@outlook.com>",
+  "type": "module",
+  "icon": "./docs/images/icon.png",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./scholarly": {
+      "types": "./lib/scholarly/index.d.ts",
+      "default": "./lib/scholarly/index.js"
+    },
+    "./library": {
+      "types": "./lib/library/index.d.ts",
+      "default": "./lib/library/index.js"
+    },
+    "./enrichment": {
+      "types": "./lib/enrichment/index.d.ts",
+      "default": "./lib/enrichment/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./library/locale/*.json": "./locale/library/*.json",
+    "./library/icon": "./docs/images/icon.png",
+    "./scholarly/locale/*.json": "./locale/scholarly/*.json",
+    "./scholarly/icon": "./docs/images/icon.png",
+    "./enrichment/locale/*.json": "./locale/enrichment/*.json",
+    "./enrichment/icon": "./docs/images/icon.png"
+  },
+  "engines": {
+    "node": ">=24.15.0",
+    "dsh": ">=0.2.2-rc.4 <0.3.0"
+  },
+  "files": [
+    "lib",
+    "assets/onnxruntime",
+    "cordis.patch.yml",
+    "docs/images/icon.png",
+    "docs/plugin-detail.md",
+    "docs/plugin-detail.en.md",
+    "locale",
+    "README.md",
+    "README.en.md",
+    "release-provenance.json"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-remote-access",
+        "@deepseek-ai/dsh-api-job-controller",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-resources"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-agent": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-api-job-controller": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-api-remote-access": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-api-remotes": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-api-session-controller": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-atomic-write": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-attachment": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-brand": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-resources": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-store": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-context-menu": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-session": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-ui-tool": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-credentials": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-error": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-http-proxy": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-jobs": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-llm": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-native-command": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-session": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-session-persistence": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-session-projection": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-session-query": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-settings": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-skill": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-spill": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-spill-policy": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-storage-domain": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-subprocess": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-timeout": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-token-meter": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-typert-registry": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-user-approval": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-user-questions": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-util-values": ">=0.2.2-rc.4",
+    "@deepseek-ai/dsh-util-workspace-path": ">=0.2.2-rc.4"
+  },
+  "dependencies": {
+    "@deepseek-ai/cosmokit": "1.9.0",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@huggingface/tokenizers": "0.2.0",
+    "clsx": "2.1.1",
+    "fast-xml-parser": "5.11.1",
+    "fflate": "0.8.3",
+    "lru-cache": "11.5.3",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-math": "3.0.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-math": "3.1.0",
+    "onnxruntime-common": "1.31.1",
+    "parse5": "8.1.1",
+    "undici": "8.11.2",
+    "unpdf": "2.2.1",
+    "zod": "4.6.6"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vncntvx/dsh-zotero.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vncntvx/dsh-zotero/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

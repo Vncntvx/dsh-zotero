@@ -1,0 +1,21 @@
+{
+  "package": "onnxruntime-web",
+  "version": "1.31.1",
+  "source": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.31.1.tgz",
+  "integrity": "sha512-5GeH+bWQ+HxM10z7erGlsWqryrwMbSvm/1tkIsKTT48g0fI19VXVVC435t4t7VsPdSQeS7NmuZPXrQ73k82URw==",
+  "license": "MIT; see assets/onnxruntime/LICENSE",
+  "files": {
+    "ort-wasm-simd-threaded.mjs": {
+      "bytes": 24738,
+      "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+    },
+    "ort-wasm-simd-threaded.wasm": {
+      "bytes": 14848852,
+      "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+    },
+    "ort.node.min.mjs": {
+      "bytes": 29181,
+      "sha256": "9bdb8aaab1d0deabe6f38572ad4d6f8b793bad8a5e184f8aa4fcc0d8cace7810"
+    }
+  }
+}

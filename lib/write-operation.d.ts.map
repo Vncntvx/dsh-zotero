@@ -1,0 +1,1 @@
+{"version":3,"file":"write-operation.d.ts","sourceRoot":"","sources":["../src/write-operation.ts"],"names":[],"mappings":"AAEA,OAAO,EAAe,eAAe,EAAE,MAAM,kBAAkB,CAAA;AAG/D,2FAA2F;AAC3F,eAAO,MAAM,2BAA2B,QAAc,CAAA;AAEtD,wBAAsB,iBAAiB,CAAC,CAAC,EACvC,IAAI,EAAE,eAAe,EACrB,MAAM,EAAE,WAAW,EACnB,SAAS,EAAE,CAAC,MAAM,EAAE,WAAW,KAAK,OAAO,CAAC,CAAC,CAAC,GAC7C,OAAO,CAAC,CAAC,CAAC,CAqBZ"}

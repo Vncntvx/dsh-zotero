@@ -1,0 +1,1 @@
+{"version":3,"file":"write-preflight.d.ts","sourceRoot":"","sources":["../../src/local/write-preflight.ts"],"names":[],"mappings":"AAAA,4FAA4F;AAC5F,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,aAAa,CAAA;AAEvD,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,iBAAiB,CAAA;AAStD,wBAAsB,cAAc,CAClC,IAAI,EAAE,eAAe,EACrB,KAAK,EAAE,oBAAoB,EAC3B,MAAM,CAAC,EAAE,WAAW,GACnB,OAAO,CAAC,IAAI,CAAC,CAcf"}

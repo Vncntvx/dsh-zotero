@@ -1,0 +1,1 @@
+{"version":3,"file":"scope-paths.d.ts","sourceRoot":"","sources":["../../src/local/scope-paths.ts"],"names":[],"mappings":"AAAA;;GAEG;AAGH,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,aAAa,CAAA;AAElD,wGAAwG;AACxG,wBAAgB,eAAe,CAAC,SAAS,CAAC,EAAE,eAAe,GAAG,MAAM,CAEnE;AAED,qFAAqF;AACrF,wBAAgB,qBAAqB,IAAI,MAAM,CAE9C;AAED,uDAAuD;AACvD,wBAAgB,oBAAoB,IAAI,MAAM,CAE7C"}

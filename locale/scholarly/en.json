@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/scholarly",
+    "description": "Scholarly literature component for DeepSeek Harness: search Semantic Scholar, Crossref, arXiv, OpenAlex, PubMed, Europe PMC, and DBLP; follow citations, verify references, and read open-access full text."
+  }
+}
