@@ -1,0 +1,1 @@
+{"version":3,"file":"define-tool.d.ts","sourceRoot":"","sources":["../src/define-tool.ts"],"names":[],"mappings":"AAAA,wFAAwF;AACxF,OAAO,EAIL,KAAK,iBAAiB,EACtB,KAAK,mBAAmB,EACxB,KAAK,cAAc,EACnB,KAAK,eAAe,EACrB,MAAM,wBAAwB,CAAA;AAG/B,wBAAgB,gBAAgB,CAC9B,KAAK,CAAC,CAAC,SAAS,mBAAmB,EACnC,KAAK,CAAC,CAAC,SAAS,eAAe,EAC/B,OAAO,EAAE,iBAAiB,CAAC,CAAC,EAAE,CAAC,CAAC,GAAG,cAAc,CAiBlD"}

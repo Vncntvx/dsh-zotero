@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/scholarly",
+    "description": "DeepSeek Harness 的学术文献检索组件：在 Semantic Scholar、Crossref、arXiv、OpenAlex、PubMed、Europe PMC 和 DBLP 中检索论文，追踪引文、核验参考文献并读取开放获取全文。"
+  }
+}
