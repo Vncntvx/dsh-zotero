@@ -13,6 +13,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  allowedPackPaths,
   expectedPaths,
   installScriptsInRuntimeClosure,
   packReportOf,
@@ -154,6 +155,19 @@ describe('expectedPaths', () => {
       expect(paths).toContain('lib/index.js')
       expect(paths).not.toContain('lib')
       expect(paths).not.toContain('locale')
+    })
+  })
+
+  it('requires the declared README screenshots in the packed file list', async () => {
+    await withTempDir(async (root) => {
+      const directory = 'docs/images/readme'
+      const image = `${directory}/tour.webp`
+      const manifest = { files: [directory] }
+      await mkdir(join(root, directory), { recursive: true })
+      await mkdir(join(root, 'src'))
+      await writeFile(join(root, image), '')
+      expect(expectedPaths(manifest, root).paths).toContain(image)
+      expect(allowedPackPaths(manifest, root)).toContain(image)
     })
   })
 })

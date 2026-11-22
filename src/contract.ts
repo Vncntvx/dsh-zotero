@@ -726,7 +726,13 @@ export function zoteroDocumentParseInvocation(
     | typeof ZOTERO_DOCUMENT_ARTIFACT_METHOD
     | typeof ZOTERO_DOCUMENT_PARSE_RECEIPT_METHOD
     | typeof ZOTERO_LIST_PARSED_DOCUMENTS_METHOD
-    | typeof ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD,
+    | typeof ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD
+    | 'parsedIndexStatus'
+    | 'rebuildParsedIndex'
+    | 'batchPdfCatalog'
+    | 'startBatchParse'
+    | 'batchParseStatus'
+    | 'cancelBatchParse',
   param: InvocationDescriptor['parameters'][number]['codec'],
   result: InvocationDescriptor['result'],
 ): InvocationDescriptor {
@@ -807,6 +813,111 @@ export type ZoteroDiscardParsedDocumentResultView =
 
 export const ZOTERO_LIST_PARSED_DOCUMENTS_METHOD = 'listParsedDocuments'
 export const ZOTERO_DISCARD_PARSED_DOCUMENT_METHOD = 'discardParsedDocument'
+
+export interface ZoteroSessionRequestView {
+  readonly sessionId: string
+}
+
+export interface ZoteroParsedIndexStatusView {
+  readonly indexed: number
+  readonly total: number
+  readonly unreadable: number
+  readonly obsolete: number
+  readonly progress?: { readonly done: number; readonly total: number }
+  readonly rebuild?: {
+    readonly jobId: string
+    readonly state: 'running' | 'stopping' | 'completed' | 'cancelled' | 'failed'
+    readonly error?: string
+  }
+}
+
+export type ZoteroBatchCatalogRequestView = ZoteroSessionRequestView &
+  (
+    | { readonly kind: 'libraries' }
+    | {
+        readonly kind: 'pdfs'
+        readonly source:
+          { readonly library: SupportedLocalLibrary } | { readonly catalogId: string }
+        readonly query: string
+        readonly offset: number
+      }
+  )
+
+export interface ZoteroBatchPdfView {
+  readonly ref: string
+  readonly title: string
+  readonly authors?: string
+  readonly venue?: string
+  readonly year?: number
+  readonly fileLabel?: string
+}
+
+export type ZoteroBatchCatalogView =
+  | {
+      readonly kind: 'libraries'
+      readonly libraries: readonly { library: SupportedLocalLibrary; name: string }[]
+    }
+  | {
+      readonly kind: 'pdfs'
+      readonly catalogId: string
+      readonly rows: readonly ZoteroBatchPdfView[]
+      readonly total: number
+      readonly matching: number
+    }
+
+export interface ZoteroStartBatchParseRequestView extends ZoteroSessionRequestView {
+  readonly catalogId: string
+  readonly operationId: string
+  readonly selection: { readonly all: boolean; readonly refs: readonly string[] }
+}
+
+export interface ZoteroBatchParseStatusRequestView extends ZoteroSessionRequestView {
+  readonly offset: number
+}
+
+export interface ZoteroBatchParseView {
+  readonly operationId: string
+  readonly state: 'running' | 'stopping' | 'completed' | 'cancelled' | 'failed'
+  readonly total: number
+  readonly parsed: number
+  readonly reused: number
+  readonly failed: number
+  readonly skipped: number
+  readonly current?: ZoteroBatchPdfView
+  readonly error?: string
+  readonly failures: readonly {
+    readonly target: ZoteroBatchPdfView
+    readonly code: string
+    readonly message: string
+  }[]
+}
+
+export interface ZoteroDocumentMaintenanceRemote {
+  parsedIndexStatus: (
+    request: ZoteroSessionRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroParsedIndexStatusView>>
+  rebuildParsedIndex: (
+    request: ZoteroSessionRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<{ readonly jobId: string }>>
+  batchPdfCatalog: (
+    request: ZoteroBatchCatalogRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroBatchCatalogView>>
+  startBatchParse: (
+    request: ZoteroStartBatchParseRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroBatchParseView>>
+  batchParseStatus: (
+    request: ZoteroBatchParseStatusRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroBatchParseView | null>>
+  cancelBatchParse: (
+    request: ZoteroSessionRequestView & { operationId: string },
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroBatchParseView>>
+}
 
 export interface ZoteroSemanticModelStatusRequestView {
   readonly model?: string
@@ -1600,7 +1711,7 @@ export function zoteroSemanticModelVerifyInvocation(
 }
 
 /** Typed wire methods; both client endpoint and namespace maps derive from this face. */
-export interface ZoteroRemoteContract {
+export interface ZoteroRemoteContract extends ZoteroDocumentMaintenanceRemote {
   startDocumentParse: (
     request: ZoteroStartDocumentParseRequestView,
     signal?: AbortSignal,

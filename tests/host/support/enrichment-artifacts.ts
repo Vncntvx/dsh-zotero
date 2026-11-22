@@ -39,11 +39,11 @@ export const SOURCE_RECORD: SourceIndexRecord = {
   stamp: FILE_STAMP,
 }
 
-export function parsedIndexOf(directory: string): ParsedIndex {
+export function parsedIndexOf(): ParsedIndex {
   // The test runner can be on a shared or removable scratch volume. Exercise
   // the real worker and private files below the runner-owned test directory.
-  return new ParsedIndex(directory, async () => {
-    await mkdir(directory, { recursive: true, mode: 0o700 })
-    return directory
+  return new ParsedIndex(async ({ defaultRoot, create }) => {
+    if (create) await mkdir(defaultRoot, { recursive: true, mode: 0o700 })
+    return defaultRoot
   })
 }

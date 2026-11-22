@@ -80,6 +80,18 @@
   min-height: 28px;
 }
 
+.indexStatus {
+  display: grid;
+  gap: 4px;
+}
+
+.batchActivity {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
 .listBarSpacer {
   flex: 1 1 auto;
 }

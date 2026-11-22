@@ -2,6 +2,7 @@ import {
   IconCloseOutlineRegular,
   Tooltip,
   IconLinkOutlineRegular,
+  IconDeliverDocRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   Input,
@@ -23,6 +24,7 @@ interface ParsedManagerToolbarProps {
   listAllowed: boolean
   urlParseDisabled: boolean
   onOpenUrl?: () => void
+  onOpenBatch?: () => void
   onRefresh: () => void
   t: TranslateNS<'zotero'>
 }
@@ -37,6 +39,7 @@ export function ParsedManagerToolbar(props: ParsedManagerToolbarProps) {
     listAllowed,
     urlParseDisabled,
     onOpenUrl,
+    onOpenBatch,
     onRefresh,
     t,
   } = props
@@ -87,6 +90,16 @@ export function ParsedManagerToolbar(props: ParsedManagerToolbarProps) {
           disabled={urlParseDisabled}
           onClick={onOpenUrl}
         />
+        {onOpenBatch && (
+          <ResponsiveActionButton
+            variant="outline"
+            size="sm"
+            className={css.textSeat}
+            label={t('batchTitle')}
+            icon={<IconDeliverDocRegular size={13} />}
+            onClick={onOpenBatch}
+          />
+        )}
         <IconButton
           shape="square"
           variant="outline"

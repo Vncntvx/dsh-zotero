@@ -760,6 +760,14 @@ export class ZoteroService extends Service {
     LocalApiProvider,
     'parsedSearchAuthority' | 'parsedSearchAttachment'
   > {
+    return this.parsedLibraryProvider()
+  }
+
+  parsePdfProvider(): Pick<LocalApiProvider, 'parsePdfCatalog' | 'parsePdfLibraries'> {
+    return this.parsedLibraryProvider()
+  }
+
+  private parsedLibraryProvider(): LocalApiProvider {
     const provider = this.resolveProvider()
     if (!(provider instanceof LocalApiProvider))
       throw new ZoteroError(

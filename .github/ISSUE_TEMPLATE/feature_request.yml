@@ -1,0 +1,37 @@
+name: 功能建议
+description: 提交功能补充或优化建议；开放式想法请用 Discussions 的 Ideas。
+title: '[建议] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前先搜索已有的 issue 与 Discussions。开放式想法请到 [Discussions · Ideas](https://github.com/Vncntvx/dsh-zotero/discussions/categories/ideas)。
+        安全问题请按 [SECURITY.md](https://github.com/Vncntvx/dsh-zotero/blob/main/SECURITY.md) 私下报告。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题
+      description: 现在怎么做、遇到什么问题。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的做法
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+      description: 可选。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 已搜索已有 issue 与 Discussions
+          required: true
+        - label: 已查阅功能概览、配置参考与工具参考
+          required: true

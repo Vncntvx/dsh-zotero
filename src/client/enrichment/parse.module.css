@@ -45,6 +45,83 @@
   min-width: 0;
 }
 
+.batchControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batchCard.batchCard {
+  width: min(680px, 100%);
+}
+
+.batchContent > :last-child {
+  margin-top: 6px;
+}
+
+.batchBody {
+  gap: 12px;
+}
+
+.batchSearch {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.batchRows {
+  max-height: min(45dvh, 408px);
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.batchRow {
+  padding: 8px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.batchCheck.batchCheck {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.batchCheck input {
+  margin-top: 2px;
+}
+
+.batchCheck > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.batchMetadata {
+  padding-inline-start: 22px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.batchList:empty {
+  display: none;
+}
+
 .body p,
 .notes p,
 .facts {

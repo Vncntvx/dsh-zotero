@@ -28,6 +28,7 @@ import type {
   ZoteroListParsedDocumentsResultView,
   ZoteroDiscardParsedDocumentRequestView,
   ZoteroDiscardParsedDocumentResultView,
+  ZoteroDocumentMaintenanceRemote,
 } from '../../contract.ts'
 import { artifactIdOf } from '../../contract.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -55,6 +56,7 @@ export type DocumentParseDeployment = Pick<
 
 /** The management endpoints are separate from the parse dialog's transport. */
 export interface ParsedDocumentManagementRemote {
+  readonly maintenance?: ZoteroDocumentMaintenanceRemote
   listParsedDocuments(
     request: ZoteroListParsedDocumentsRequestView,
     signal?: AbortSignal,

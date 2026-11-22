@@ -24,7 +24,6 @@ import type {
 } from '../../../src/contract.js'
 import { EnrichmentService } from '../../../src/enrichment/index.js'
 import { DiskParseJobPersistence } from '../../../src/enrichment/parse-jobs.js'
-import { ParsedIndex } from '../../../src/enrichment/parsed-index.js'
 import type { EnrichmentConfig } from '../../../src/enrichment/config.js'
 import { MineruClient } from '../../../src/enrichment/transport.js'
 import { setupHostLane } from '../../helpers/lanes/host-lane.js'
@@ -45,10 +44,10 @@ const UPLOAD = 'https://upload.example.org/document'
 export const RESULT = 'https://cdn.example.org/full.md'
 export const ENDPOINTS = ['startDocumentParse', 'documentArtifact', 'documentParseReceipt'] as const
 export type ParseEndpoint = (typeof ENDPOINTS)[number]
-
+type EnrichmentEndpoint =
+  ParseEndpoint | keyof import('../../../src/contract.js').ZoteroDocumentMaintenanceRemote
 /** Every PDF the fixture serves; each parse needs a source of its own. */
 const isDocumentUrl = (url: string): boolean => /\.pdf(?:$|\?)/.test(url)
-
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface PrincipalMap {
     'parse-endpoint-guest': { readonly kind: 'parse-endpoint-guest' }
@@ -220,7 +219,6 @@ export async function endpointFixture(
     new EnrichmentService(enrichmentCtx, config, {
       client: http.client,
       parsePersistence: new DiskParseJobPersistence(async () => root),
-      parsedIndex: new ParsedIndex(join(root, 'zotero')),
       ...(options.store ? { store: async () => options.store! } : {}),
     })
   })
@@ -230,7 +228,7 @@ export async function endpointFixture(
   const started = vi.spyOn(ctx.jobs, 'start')
   const resolved = vi.spyOn(ctx.zotero, 'resolveAttachment')
   const invoke = async (
-    method: ParseEndpoint,
+    method: EnrichmentEndpoint,
     request: unknown,
     peer: Peer = owner,
   ): Promise<unknown> =>
@@ -250,7 +248,7 @@ export async function endpointFixture(
     resolved,
     sessionCalls,
     attachmentTarget: { kind: 'attachment' as const, ref: attachmentRef() },
-    grant(sessionId: SessionId = OWNER, methods: readonly ParseEndpoint[] = ENDPOINTS) {
+    grant(sessionId: SessionId = OWNER, methods: readonly EnrichmentEndpoint[] = ENDPOINTS) {
       bindings = [
         {
           resource: { kind: 'session', id: sessionId },

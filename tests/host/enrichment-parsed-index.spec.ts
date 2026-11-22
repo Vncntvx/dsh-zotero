@@ -24,7 +24,6 @@ import {
 
 it('indexes all sections and verifies a reopened artifact index against committed Markdown', async () => {
   await withTempDir(async (root) => {
-    const directory = join(root, 'database')
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const markdown =
       '# 水库调度\n\nAnnual discharge.\n\n## 防洪风险\n\n暴雨期间，水库降低洪峰流量。'
@@ -42,7 +41,7 @@ it('indexes all sections and verifies a reopened artifact index against committe
     }
     const signal = new AbortController().signal
     for (let pass = 0; pass < 2; pass++) {
-      const index = indexOf(directory)
+      const index = indexOf()
       try {
         const result = await index.search({ store, provider, probe }, request, signal)
         expect(result.coverage).toEqual({
@@ -63,7 +62,7 @@ it('indexes all sections and verifies a reopened artifact index against committe
     }
     expect(provider).not.toHaveBeenCalled()
     expect(probe).not.toHaveBeenCalled()
-    const db = new DatabaseSync(join(directory, 'index.db'), { readOnly: true })
+    const db = new DatabaseSync(join(store.root, 'index.db'), { readOnly: true })
     try {
       const definitions = db
         .prepare('SELECT sql FROM sqlite_schema WHERE sql LIKE ?')
@@ -74,7 +73,7 @@ it('indexes all sections and verifies a reopened artifact index against committe
     }
 
     await store.discardArtifact(CACHE_KEY)
-    const index = indexOf(directory)
+    const index = indexOf()
     try {
       const result = await index.search({ store, provider, probe }, request, signal)
       expect(result.coverage).toMatchObject({ status: 'unavailable', missing: 1 })
@@ -87,7 +86,7 @@ it('indexes all sections and verifies a reopened artifact index against committe
 
 it('filters by the current collection and generation before ranking and caps each document at three passages', async () => {
   await withTempDir(async (root) => {
-    const index = indexOf(join(root, 'database'))
+    const index = indexOf()
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const myCollection = 'COLL0001'
     const allowedRef = 'zotero://user/0/attachment/ATTACH01?server=local'
@@ -163,12 +162,12 @@ it('rejects a foreign database without changing its contents', async () => {
     db.exec("CREATE TABLE original (value TEXT); INSERT INTO original VALUES ('keep')")
     db.close()
     await chmod(path, 0o600)
-    const index = indexOf(root)
+    const index = indexOf()
     try {
       await expect(
         index.search(
           {
-            store: new ParsedArtifactStore(join(root, 'artifacts')),
+            store: new ParsedArtifactStore(root),
             provider: () => {
               throw new Error('unexpected Zotero request')
             },
@@ -191,15 +190,13 @@ it.runIf(process.platform !== 'win32')('rejects a linked SQLite side file', asyn
   await withTempDir(async (root) => {
     const path = join(root, 'index.db')
     await symlink(join(root, 'unrelated'), path + '-wal')
-    const index = indexOf(root)
+    const index = indexOf()
     try {
-      await expect(
-        index.publish(new ParsedArtifactStore(join(root, 'artifacts')), CACHE_KEY),
-      ).resolves.toBeUndefined()
+      await expect(index.publish(new ParsedArtifactStore(root), CACHE_KEY)).resolves.toBeUndefined()
       await expect(
         index.search(
           {
-            store: new ParsedArtifactStore(join(root, 'artifacts')),
+            store: new ParsedArtifactStore(root),
             provider: () => {
               throw new Error('unexpected Zotero request')
             },
@@ -217,8 +214,7 @@ it.runIf(process.platform !== 'win32')('rejects a linked SQLite side file', asyn
 
 it('reports missing and stale scoped sources and excludes another Zotero instance', async () => {
   await withTempDir(async (root) => {
-    const directory = join(root, 'database')
-    const index = indexOf(directory)
+    const index = indexOf()
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const one = 'zotero://user/0/attachment/ATTACH01?server=S1'
     const two = 'zotero://user/0/attachment/ATTACH02?server=S1'
@@ -284,7 +280,7 @@ it('reports missing and stale scoped sources and excludes another Zotero instanc
       await store.withSourcePublicationLock(async () => {
         await index.discard(store.root, ids[0]!)
       }, signal)
-      using db = new DatabaseSync(join(directory, 'index.db'), { readOnly: true })
+      using db = new DatabaseSync(join(store.root, 'index.db'), { readOnly: true })
       const table = db.prepare("SELECT name FROM sqlite_master WHERE name GLOB '*_doc'").get()!
       expect(
         db.prepare(`SELECT artifactId FROM ${table.name} WHERE artifactId=?`).get(ids[0]!),
@@ -297,7 +293,7 @@ it('reports missing and stale scoped sources and excludes another Zotero instanc
 
 it('releases query admission after the caller cancels source validation', async () => {
   await withTempDir(async (root) => {
-    const index = indexOf(join(root, 'db'))
+    const index = indexOf()
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const received = deferred<AbortSignal>()
     const controller = new AbortController()

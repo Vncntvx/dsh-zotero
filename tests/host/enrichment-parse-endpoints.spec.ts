@@ -201,7 +201,7 @@ describe('explicit document parsing through the pinned Gateway', () => {
       expect(fixture.agent.status).toBe('idle')
       expect(fixture.ctx.agents.turnBoundaryOf(fixture.agent.session).openTurnStartSeq).toBeNull()
       const { started, receipt } = await complete(fixture, startRequest(target), fixture.guest)
-      using index = new DatabaseSync(join(fixture.root, 'zotero', 'index.db'), { readOnly: true })
+      using index = new DatabaseSync(join(fixture.root, 'parsed', 'index.db'), { readOnly: true })
       const tables = index.prepare('SELECT name FROM sqlite_master WHERE name LIKE ?').all('%_doc')
       expect(tables).toHaveLength(1)
       expect(index.prepare(`SELECT artifactId FROM ${tables[0]!.name}`).get()?.artifactId).toBe(

@@ -51,6 +51,7 @@
     "assets/onnxruntime",
     "cordis.patch.yml",
     "docs/images/icon.png",
+    "docs/images/readme",
     "docs/plugin-detail.md",
     "docs/plugin-detail.en.md",
     "locale",

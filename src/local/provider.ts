@@ -19,6 +19,7 @@
 
 import { readCollectionPath } from './collection-path.js'
 import type {
+  ZoteroBatchPdfView,
   ZoteroCollectionPathRequestView,
   ZoteroCollectionPathResultView,
 } from '../contract.js'
@@ -26,11 +27,19 @@ import type {
 import {
   LOCAL_PROVIDER_ID,
   ZOTERO_API_VERSION_HEADER,
+  ZOTERO_LIBRARY_VERSION_HEADER,
   ZOTERO_SCHEMA_VERSION_HEADER,
   ZOTERO_VERSION_HEADER,
 } from '../constants.js'
 import { serverIdFromHeaders } from './identity.js'
-import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
+import { refStringFor, libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
+import { readAllPages } from './pagination.js'
+import { numericHeader } from './wire.js'
+import { asRecord, asString } from '../json.js'
+import { parentKeyOf, truncateText } from '../normalize-context.js'
+import { normalizeSearchItem, parsedYearOf } from '../normalize-search.js'
+import { formatCreatorsList } from '../creators.js'
+import { fetchItemKeyBatches } from './item-batch.js'
 import { fulltextIdentityOf } from './fulltext-identity.js'
 import { ZOTERO_DIAGNOSIS_OK } from '../contract.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
@@ -58,7 +67,7 @@ import {
   exportText as exportTextDomain,
 } from './export-domain.js'
 import { changes as changesDomain } from './changes-domain.js'
-import { runBrowse } from './browse-domain.js'
+import { discoverLibraries, runBrowse } from './browse-domain.js'
 import { ItemSchemaDirectory } from './item-schema-directory.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import {
@@ -412,6 +421,105 @@ export class LocalApiProvider implements ZoteroProvider {
 
   async parsedSearchAttachment(ref: string, signal: AbortSignal) {
     return await fulltextIdentityOf(this.client, ref, signal, true)
+  }
+
+  /** Enumerate PDFs and their parent metadata in one versioned library snapshot. */
+  async parsePdfCatalog(
+    library: SupportedLocalLibrary,
+    signal: AbortSignal,
+  ): Promise<ZoteroBatchPdfView[]> {
+    const serverId = await this.parsedSearchAuthority(library, undefined, undefined, signal)
+    const rows = new Map<string, { title: string; filename: string; parentKey?: string }>()
+    const parentCounts = new Map<string, number>()
+    let listingVersion: number | undefined
+    const what = { body: 'PDF attachment listing', page: 'PDF attachment listing' }
+    await readAllPages(
+      this.client,
+      `${libraryPrefix(library)}/items`,
+      { itemType: 'attachment', sort: 'dateAdded', direction: 'asc' },
+      serverId,
+      signal,
+      what,
+      undefined,
+      (page, headers) => {
+        listingVersion = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
+        if (serverIdFromHeaders(headers) !== serverId || listingVersion === undefined)
+          throw new ZoteroError(
+            'The Zotero PDF listing has no stable database identity or library version.',
+            ZOTERO_PROVIDER_UNAVAILABLE,
+          )
+        for (const row of page) {
+          const item = asRecord(row)
+          const data = asRecord(item?.data)
+          if (data?.deleted || data?.itemType !== 'attachment') continue
+          if (asString(data.contentType)?.split(';')[0]?.trim().toLowerCase() !== 'application/pdf')
+            continue
+          const key = asString(item?.key)
+          if (key === undefined || !/^[A-Z0-9]{8}$/.test(key))
+            throw new ZoteroError(
+              'Zotero returned a PDF without a valid key.',
+              ZOTERO_PROVIDER_UNAVAILABLE,
+            )
+          const ref = refStringFor(library, 'attachment', key, serverId)
+          if (rows.has(ref))
+            throw new ZoteroError(
+              'The Zotero PDF listing changed during paging.',
+              ZOTERO_PROVIDER_UNAVAILABLE,
+            )
+          const filename = asString(data.filename)?.trim()
+          const title = asString(data.title)?.trim() || filename || key
+          const parentKey = parentKeyOf(data)
+          rows.set(ref, { title, filename: filename || title, parentKey })
+          if (parentKey !== undefined)
+            parentCounts.set(parentKey, (parentCounts.get(parentKey) ?? 0) + 1)
+        }
+      },
+    )
+    const parents = await fetchItemKeyBatches(
+      { client: this.client, limits: this.getLimits() },
+      library,
+      [...parentCounts.keys()],
+      {
+        serverId,
+        signal,
+        requiredLibraryVersion: listingVersion,
+        what: 'PDF parent metadata',
+        onMissingKey: 'throw',
+        mapRow: (row, key) => {
+          const data = asRecord(asRecord(row)?.data)
+          if (!parentCounts.has(key) || data?.deleted) return undefined
+          const item = normalizeSearchItem(row, { library, serverId })
+          const authors = item.authors?.length
+            ? formatCreatorsList(item.authors.map((name) => ({ name })))
+            : item.creatorSummary
+          return {
+            title: item.title.trim(),
+            authors: authors.trim(),
+            venue: item.venue?.trim(),
+            year: item.year ?? parsedYearOf(asString(data?.date)?.trim()),
+          }
+        },
+      },
+    )
+    await this.parsedSearchAuthority(library, undefined, serverId, signal)
+    const clip = (value: string) => truncateText(value, 512).text
+    return [...rows].map(([ref, { title, filename, parentKey }]) => {
+      const parent = parentKey === undefined ? undefined : parents.byKey.get(parentKey)
+      return {
+        ref,
+        title: clip(parent?.title || title),
+        ...(parent?.authors && { authors: clip(parent.authors) }),
+        ...(parent?.venue && { venue: clip(parent.venue) }),
+        ...(parent?.year !== undefined && { year: parent.year }),
+        ...(parent?.title &&
+          parentKey !== undefined &&
+          (parentCounts.get(parentKey) ?? 0) > 1 && { fileLabel: clip(filename) }),
+      }
+    })
+  }
+
+  async parsePdfLibraries(signal: AbortSignal) {
+    return (await discoverLibraries(this.client, signal)).items
   }
 
   async getBatch(

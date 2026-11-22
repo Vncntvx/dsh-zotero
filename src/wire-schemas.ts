@@ -1543,8 +1543,138 @@ export const zoteroDiscardParsedDocumentResultSchema = lazySchema(() =>
   ]),
 ) satisfies z.ZodType<ZoteroDiscardParsedDocumentResultView>
 
+const count = lazySchema(() => z.number().int().nonnegative())
+const batchPdf = lazySchema(() =>
+  z
+    .object({
+      ref: z.string().min(1),
+      title: z.string().max(512),
+      authors: z.string().max(512).optional(),
+      venue: z.string().max(512).optional(),
+      year: count.optional(),
+      fileLabel: z.string().max(512).optional(),
+    })
+    .strict(),
+)
+const sessionRequest = () => z.object({ sessionId: z.string().min(1) }).strict()
+const batchCatalogRequest = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    sessionRequest().extend({ kind: z.literal('libraries') }),
+    sessionRequest().extend({
+      kind: z.literal('pdfs'),
+      source: z.union([
+        z.object({ library: zoteroLibrarySchema }).strict(),
+        z.object({ catalogId: z.uuid() }).strict(),
+      ]),
+      query: z.string().max(512),
+      offset: count,
+    }),
+  ]),
+) satisfies z.ZodType<Contract.ZoteroBatchCatalogRequestView>
+const batchCatalogResult = lazySchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('libraries'),
+        libraries: z.array(z.object({ library: zoteroLibrarySchema, name: z.string() }).strict()),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('pdfs'),
+        catalogId: z.uuid(),
+        rows: z.array(batchPdf).max(50),
+        total: count,
+        matching: count,
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<Contract.ZoteroBatchCatalogView>
+const indexStatus = lazySchema(() =>
+  z
+    .object({
+      indexed: count,
+      total: count,
+      unreadable: count,
+      obsolete: count,
+      progress: z.object({ done: count, total: count }).strict().optional(),
+      rebuild: z
+        .object({
+          jobId: z.string().min(1),
+          state: z.enum(['running', 'stopping', 'completed', 'cancelled', 'failed']),
+          error: z.string().optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
+) satisfies z.ZodType<Contract.ZoteroParsedIndexStatusView>
+const startBatchRequest = lazySchema(() =>
+  sessionRequest().extend({
+    catalogId: z.uuid(),
+    operationId: z.uuid(),
+    selection: z.object({ all: z.boolean(), refs: z.array(z.string().min(1)) }).strict(),
+  }),
+) satisfies z.ZodType<Contract.ZoteroStartBatchParseRequestView>
+const batchStatus = lazySchema(() =>
+  z
+    .object({
+      operationId: z.uuid(),
+      state: z.enum(['running', 'stopping', 'completed', 'cancelled', 'failed']),
+      total: count,
+      parsed: count,
+      reused: count,
+      failed: count,
+      skipped: count,
+      current: batchPdf.unwrap().optional(),
+      error: z.string().optional(),
+      failures: z
+        .array(z.object({ target: batchPdf, code: z.string(), message: z.string() }).strict())
+        .max(25),
+    })
+    .strict(),
+) satisfies z.ZodType<Contract.ZoteroBatchParseView>
+
+function maintenanceInvocation(
+  method: Parameters<typeof zoteroDocumentParseInvocation>[0],
+  request: z.ZodType,
+  result: z.ZodType,
+) {
+  return zoteroDocumentParseInvocation(
+    method,
+    strictCodec(`dsh-zotero#${method}Request`, request),
+    strictCodec(`dsh-zotero#${method}Result`, result),
+  )
+}
+
 /** Exhaustive typed method registry; Host metadata and browser contributions consume it. */
 export const ZOTERO_INVOCATION_BY_METHOD = Object.freeze({
+  parsedIndexStatus: maintenanceInvocation(
+    'parsedIndexStatus',
+    lazySchema(sessionRequest),
+    indexStatus,
+  ),
+  rebuildParsedIndex: maintenanceInvocation(
+    'rebuildParsedIndex',
+    lazySchema(sessionRequest),
+    lazySchema(() => z.object({ jobId: z.string().min(1) }).strict()),
+  ),
+  batchPdfCatalog: maintenanceInvocation(
+    'batchPdfCatalog',
+    batchCatalogRequest,
+    batchCatalogResult,
+  ),
+  startBatchParse: maintenanceInvocation('startBatchParse', startBatchRequest, batchStatus),
+  batchParseStatus: maintenanceInvocation(
+    'batchParseStatus',
+    lazySchema(() => sessionRequest().extend({ offset: count })),
+    lazySchema(() => batchStatus.nullable()),
+  ),
+  cancelBatchParse: maintenanceInvocation(
+    'cancelBatchParse',
+    lazySchema(() => sessionRequest().extend({ operationId: z.uuid() })),
+    batchStatus,
+  ),
   startDocumentParse: zoteroDocumentParseInvocation(
     ZOTERO_START_DOCUMENT_PARSE_METHOD,
     strictCodec(

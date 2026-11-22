@@ -2,6 +2,7 @@ import { ArtifactReads, type DisplayArtifactLookup } from './artifact-reads.js'
 import { expandRequestTarget } from './artifact-target.js'
 import type { ParsedArtifactStore, SourceIndexRecord } from './artifact-store.js'
 import { mapWithConcurrency } from '../concurrency.js'
+import { findInCauseChain } from '../cause-chain.js'
 /** Session-owned explicit parsing jobs; the UI observes jobs without owning their lifetime. */
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
@@ -34,12 +35,16 @@ import {
   ZoteroParseTargetView,
   ZoteroStartDocumentParseRequestView,
   ZoteroStartDocumentParseResultView,
+  type ZoteroBatchParseView,
+  type ZoteroBatchPdfView,
+  type ZoteroParsedIndexStatusView,
 } from '../contract.js'
 import type { EnrichmentPreferences } from '../enrichment-preferences.js'
 import {
   errorMessageOf,
   ZoteroError,
   ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE,
+  ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
   ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
   ZOTERO_ENRICHMENT_OUTPUT_INVALID,
   ZOTERO_ENRICHMENT_TASK_FAILED,
@@ -47,6 +52,7 @@ import {
   ZOTERO_JOBS_LIMIT_REACHED,
   ZOTERO_NOT_FOUND,
   ZOTERO_PROVIDER_UNAVAILABLE,
+  ZOTERO_SERVER_MISMATCH,
 } from '../errors.js'
 import { raceWithSignal } from '../race-signal.js'
 import {
@@ -60,7 +66,8 @@ import { PARSE_TOTAL_TIMEOUT_MS } from './limits.js'
 import type { ParseDocumentResult } from './parse-document.js'
 import type { ParsePhase } from './parse-once.js'
 import type { MetadataResult } from './artifact-metadata.js'
-import { sanitizedErrorDetail } from './transport.js'
+import { MineruHttpError, sanitizedErrorDetail } from './transport.js'
+import { isMineruApiHost } from './hosts.js'
 import {
   parseDigest,
   parseTargetOf,
@@ -74,6 +81,7 @@ import type { ParseSourceInput } from './types.js'
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
     'zotero-enrichment': 'zotero-enrichment'
+    'zotero-index': 'zotero-index'
   }
 }
 
@@ -347,6 +355,65 @@ interface Operation {
   readonly registry: JobRegistry
   readonly cancel: () => void
   readonly done: Promise<JobOutcome>
+  batchBlocked?: boolean
+}
+
+function mineruBlocksBatch(error: unknown): boolean {
+  return (
+    findInCauseChain(error, (cause) =>
+      cause instanceof MineruHttpError &&
+      isMineruApiHost(cause.host) &&
+      [401, 403, 429].includes(cause.status)
+        ? cause
+        : undefined,
+    ) !== undefined
+  )
+}
+
+type Batch = {
+  id: string
+  binding: string
+  total: number
+  state: ZoteroBatchParseView['state']
+  parsed: number
+  reused: number
+  skipped: number
+  failures: ZoteroBatchParseView['failures'][number][]
+  current?: ZoteroBatchPdfView
+  error?: string
+  controller: AbortController
+  stopCurrent?: () => void
+  done: Promise<void>
+}
+
+type IndexRebuild = {
+  owner: SessionId
+  root: string
+  result: NonNullable<ZoteroParsedIndexStatusView['rebuild']>
+  cancel(): void
+  done: Promise<JobOutcome>
+}
+
+function batchView(batch: Batch, offset = 0): ZoteroBatchParseView {
+  return {
+    operationId: batch.id,
+    state: batch.state,
+    total: batch.total,
+    parsed: batch.parsed,
+    reused: batch.reused,
+    failed: batch.failures.length,
+    skipped: batch.skipped,
+    ...(batch.current === undefined ? {} : { current: batch.current }),
+    ...(batch.error === undefined ? {} : { error: batch.error }),
+    failures: batch.failures.slice(offset, offset + 25),
+  }
+}
+
+function stopBatch(batch: Batch): void {
+  if (batch.state !== 'running') return
+  batch.state = 'stopping'
+  batch.controller.abort(cancelled())
+  batch.stopCurrent?.()
 }
 interface SharedGeneration {
   readonly generation: string
@@ -379,6 +446,9 @@ export class EnrichmentParseJobs {
   private closed = false
   private disposal: Promise<void> | undefined
   private readonly operations = new Map<string, Operation>()
+  private readonly batches = new Map<SessionId, Batch>()
+  private activeRebuild?: IndexRebuild
+  private readonly rebuildResults = new LRUCache<SessionId, IndexRebuild>({ max: 64 })
   private readonly removingGenerations = new Set<string>()
   private readonly owned = new Set<Operation>()
   private readonly admissions = new Map<
@@ -433,7 +503,16 @@ export class EnrichmentParseJobs {
       metadata: async (request, signal) => await this.deps.metadata(this.config(), request, signal),
       probe: async (request, signal) => await this.deps.probe(this.config(), request, signal),
     })
-    ctx.on('agent/disposed', ({ agent }) => this.reads.retireAgent(agent))
+    ctx.on('agent/disposed', ({ agent }) => {
+      this.reads.retireAgent(agent)
+      if (this.activeRebuild?.owner === agent.session.id) this.activeRebuild.cancel()
+      this.rebuildResults.delete(agent.session.id)
+      const batch = this.batches.get(agent.session.id)
+      if (batch !== undefined) {
+        stopBatch(batch)
+        this.batches.delete(agent.session.id)
+      }
+    })
   }
 
   private open(): void {
@@ -557,15 +636,256 @@ export class EnrichmentParseJobs {
     signal: AbortSignal,
     currentCtx: Context = this.ctx,
   ): Promise<ZoteroStartDocumentParseResultView> {
+    const { operation, replay } = await this.getOrStart(
+      input,
+      signal,
+      currentCtx,
+      'startDocumentParse',
+      this.config(),
+    )
+    const completed =
+      operation.record.state.kind === 'completed' ? operation.record.state.receipt : undefined
+    return {
+      operationId: input.operationId,
+      generation: operation.record.generation,
+      jobId: operation.record.jobId,
+      status:
+        completed !== undefined
+          ? 'completed'
+          : replay || operation.replayed === true
+            ? 'joined'
+            : 'started',
+      ...(completed !== undefined ? { receipt: completed } : {}),
+    }
+  }
+
+  async startBatchParse(
+    session: string,
+    operationId: string,
+    binding: string,
+    select: () => readonly ZoteroBatchPdfView[],
+    signal: AbortSignal,
+    currentCtx: Context,
+  ): Promise<ZoteroBatchParseView> {
+    const owner = SessionId(session)
+    await this.owner(owner, 'startBatchParse', signal, currentCtx)
+    const previous = this.batches.get(owner)
+    if (previous?.id === operationId && previous.binding === binding) return batchView(previous)
+    if (
+      previous?.id === operationId ||
+      previous?.state === 'running' ||
+      previous?.state === 'stopping'
+    )
+      throw new ZoteroError(
+        'Another batch owns this session or operation id.',
+        ZOTERO_ENRICHMENT_OPERATION_CONFLICT,
+      )
+    const config = this.config()
+    const targets = select()
+    const batch: Batch = {
+      id: operationId,
+      binding,
+      total: targets.length,
+      state: 'running',
+      parsed: 0,
+      reused: 0,
+      skipped: 0,
+      failures: [],
+      controller: new AbortController(),
+      done: Promise.resolve(),
+    }
+    this.batches.set(owner, batch)
+    batch.done = this.runBatch(batch, owner, targets, config, currentCtx)
+    return batchView(batch)
+  }
+
+  indexRebuildStatus(sessionId: string, root: string): ZoteroParsedIndexStatusView['rebuild'] {
+    const rebuild = this.rebuildResults.get(SessionId(sessionId))
+    return rebuild?.root === root ? rebuild.result : undefined
+  }
+
+  async startIndexRebuild(
+    session: string,
+    root: string,
+    rebuild: (
+      signal: AbortSignal,
+      authorize: () => void,
+      report: (done: number, total: number) => void,
+    ) => Promise<void>,
+    signal: AbortSignal,
+    currentCtx: Context,
+  ): Promise<{ jobId: string }> {
+    const owner = SessionId(session)
+    const registry = await this.owner(owner, 'rebuildParsedIndex', signal, currentCtx)
+    if (this.activeRebuild !== undefined) {
+      if (this.activeRebuild.owner === owner && this.activeRebuild.root === root)
+        return { jobId: this.activeRebuild.result.jobId }
+      throw new ZoteroError(
+        'A parsed index rebuild is already running.',
+        ZOTERO_PROVIDER_UNAVAILABLE,
+      )
+    }
+    const authorize = () => this.authorizeManagement(session, 'rebuildParsedIndex', currentCtx)
+    let jobId: JobId
+    try {
+      jobId = registry.start({
+        kind: 'zotero-index',
+        label: 'Rebuild Zotero full-text index',
+        owner,
+        run: (job): JobHooks => {
+          const controller = new AbortController()
+          const entry: IndexRebuild = {
+            owner,
+            root,
+            result: { jobId: job.id, state: 'running' },
+            cancel: () => {
+              entry.result = { jobId: job.id, state: 'stopping' }
+              controller.abort(cancelled())
+            },
+            done: Promise.resolve().then(async (): Promise<JobOutcome> => {
+              try {
+                await rebuild(controller.signal, authorize, (done, total) =>
+                  job.updateProgress(`FTS5 ${done}/${total}`),
+                )
+                entry.result = { jobId: job.id, state: 'completed' }
+                return { status: 'completed' }
+              } catch (error) {
+                if (controller.signal.aborted) {
+                  entry.result = { jobId: job.id, state: 'cancelled' }
+                  return { status: 'killed' }
+                }
+                const message = failureMessageOf(error)
+                entry.result = { jobId: job.id, state: 'failed', error: message }
+                return { status: 'failed', detail: message }
+              } finally {
+                this.activeRebuild = undefined
+              }
+            }),
+          }
+          this.activeRebuild = entry
+          this.rebuildResults.set(owner, entry)
+          return { cancel: entry.cancel, done: entry.done }
+        },
+      })
+    } catch (error) {
+      const code =
+        error instanceof JobError && error.code === 'JOB_LIMIT_REACHED'
+          ? ZOTERO_JOBS_LIMIT_REACHED
+          : ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE
+      throw new ZoteroError('Could not start the parsed index rebuild job.', code, { cause: error })
+    }
+    this.holdNotice(registry, jobId, owner)
+    return { jobId }
+  }
+
+  batchParseStatus(
+    session: string,
+    offset: number,
+    currentCtx: Context,
+  ): ZoteroBatchParseView | null {
+    this.authorizeManagement(session, 'batchParseStatus', currentCtx)
+    const batch = this.batches.get(SessionId(session))
+    return batch === undefined ? null : batchView(batch, offset)
+  }
+
+  cancelBatchParse(
+    session: string,
+    operationId: string,
+    currentCtx: Context,
+  ): ZoteroBatchParseView {
+    this.authorizeManagement(session, 'cancelBatchParse', currentCtx)
+    const batch = this.batches.get(SessionId(session))
+    if (batch === undefined || batch.id !== operationId)
+      throw new ZoteroError('No matching parsing batch belongs to this session.', ZOTERO_NOT_FOUND)
+    stopBatch(batch)
+    return batchView(batch)
+  }
+
+  private async runBatch(
+    batch: Batch,
+    sessionId: SessionId,
+    targets: readonly ZoteroBatchPdfView[],
+    config: EnrichmentPreferences,
+    currentCtx: Context,
+  ): Promise<void> {
+    const { signal } = batch.controller
+    try {
+      for (const target of targets) {
+        signal.throwIfAborted()
+        this.authorize(sessionId, 'startBatchParse', currentCtx)
+        batch.current = target
+        let code: string
+        let message: string
+        let blocked = false
+        try {
+          const { operation } = await this.getOrStart(
+            {
+              sessionId,
+              operationId: randomUUID(),
+              action: 'parse',
+              target: { kind: 'attachment', ref: target.ref },
+            },
+            signal,
+            currentCtx,
+            'startBatchParse',
+            config,
+          )
+          batch.stopCurrent = operation.cancel
+          if (signal.aborted) operation.cancel()
+          await operation.done
+          const state = operation.record.state
+          if (state.kind === 'completed') {
+            if (state.receipt.cached) batch.reused += 1
+            else batch.parsed += 1
+            continue
+          }
+          signal.throwIfAborted()
+          code = state.kind === 'pending' ? ZOTERO_ENRICHMENT_TASK_FAILED : state.code
+          message = state.kind === 'pending' ? PARSE_FAILED_MESSAGE : state.message
+          blocked = operation.batchBlocked === true
+        } catch (error) {
+          signal.throwIfAborted()
+          if (error instanceof RemoteError) throw error
+          code = error instanceof ZoteroError ? error.code : ZOTERO_ENRICHMENT_TASK_FAILED
+          message = failureMessageOf(error)
+        } finally {
+          delete batch.stopCurrent
+        }
+        batch.failures.push({ target, code, message })
+        if (
+          blocked ||
+          code === ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED ||
+          code === ZOTERO_SERVER_MISMATCH ||
+          code === ZOTERO_JOBS_LIMIT_REACHED ||
+          code === ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE
+        )
+          throw new Error(message)
+      }
+      batch.state = 'completed'
+    } catch (error) {
+      batch.state = signal.aborted ? 'cancelled' : 'failed'
+      if (!signal.aborted) batch.error = failureMessageOf(error)
+    } finally {
+      delete batch.current
+      batch.skipped = batch.total - batch.parsed - batch.reused - batch.failures.length
+    }
+  }
+
+  private async getOrStart(
+    input: ZoteroStartDocumentParseRequestView,
+    signal: AbortSignal,
+    currentCtx: Context,
+    method: 'startDocumentParse' | 'startBatchParse',
+    config: EnrichmentPreferences,
+  ): Promise<{ operation: Operation; replay: boolean }> {
     signal.throwIfAborted()
     this.open()
-    const config = this.config()
     const parsed = parseWire(zoteroStartDocumentParseRequestSchema, input)
     const resolved = await this.expand(parsed.target, config, signal)
     const request = { ...parsed, target: resolved.target }
     const target = parseTargetOf(request.target)
     const sessionId = SessionId(request.sessionId)
-    const registry = await this.owner(sessionId, 'startDocumentParse', signal, currentCtx)
+    const registry = await this.owner(sessionId, method, signal, currentCtx)
     const key = parseDigest(JSON.stringify([sessionId, request.operationId]))
     const binding = parseDigest(JSON.stringify([target.target, snapshotKey(config)]))
     const existing = this.operations.get(key)
@@ -601,6 +921,7 @@ export class EnrichmentParseJobs {
         registry,
         signal,
         currentCtx,
+        method,
         retry ? existing : undefined,
         revoked,
       ).then((operation) => {
@@ -618,21 +939,8 @@ export class EnrichmentParseJobs {
     }
     this.open()
     this.assertGenerationAvailable(operation.record.generation)
-    this.authorize(sessionId, 'startDocumentParse', currentCtx)
-    const completed =
-      operation.record.state.kind === 'completed' ? operation.record.state.receipt : undefined
-    return {
-      operationId: request.operationId,
-      generation: operation.record.generation,
-      jobId: operation.record.jobId,
-      status:
-        completed !== undefined
-          ? 'completed'
-          : replay || operation.replayed === true
-            ? 'joined'
-            : 'started',
-      ...(completed !== undefined ? { receipt: completed } : {}),
-    }
+    this.authorize(sessionId, method, currentCtx)
+    return { operation, replay }
   }
 
   private async admit(
@@ -643,6 +951,7 @@ export class EnrichmentParseJobs {
     registry: JobRegistry,
     signal: AbortSignal,
     currentCtx: Context,
+    method: 'startDocumentParse' | 'startBatchParse',
     retry: Operation | undefined,
     revoked: ReadonlySet<string>,
   ): Promise<Operation> {
@@ -651,7 +960,7 @@ export class EnrichmentParseJobs {
       retry?.record ?? (await this.deps.persistence.get(config, owner, request.operationId))
     signal.throwIfAborted()
     this.open()
-    this.authorize(SessionId(request.sessionId), 'startDocumentParse', currentCtx)
+    this.authorize(SessionId(request.sessionId), method, currentCtx)
     if (saved !== undefined) {
       if (
         saved.binding !== binding ||
@@ -696,7 +1005,7 @@ export class EnrichmentParseJobs {
       (await this.deps.persistence.generation(config, source))
     signal.throwIfAborted()
     this.open()
-    this.authorize(SessionId(request.sessionId), 'startDocumentParse', currentCtx)
+    this.authorize(SessionId(request.sessionId), method, currentCtx)
     const generation = request.action === 'reparse' ? randomUUID() : (previous ?? randomUUID())
     this.assertGenerationAvailable(generation, revoked)
     let operation!: Operation
@@ -736,7 +1045,7 @@ export class EnrichmentParseJobs {
           const check = (): void => {
             try {
               this.open()
-              this.authorize(SessionId(request.sessionId), 'startDocumentParse', currentCtx)
+              this.authorize(SessionId(request.sessionId), method, currentCtx)
               if (currentCtx.get('agents')?.get(SessionId(request.sessionId)) === undefined)
                 throw cancelled()
             } catch (error) {
@@ -771,6 +1080,7 @@ export class EnrichmentParseJobs {
                 // Publication can reject after cancellation. Its actual failure
                 // remains a failure; an already-aborted signal cannot replace it.
                 const wasCancelled = error instanceof Error && error.name === 'AbortError'
+                if (method === 'startBatchParse') operation.batchBlocked = mineruBlocksBatch(error)
                 controller.abort(error)
                 await waiting
                 const state: ReceiptState = {
@@ -1085,6 +1395,9 @@ export class EnrichmentParseJobs {
     // would keep the process alive with nothing left to announce.
     for (const cadence of this.noticeCadences) clearInterval(cadence)
     this.noticeCadences.clear()
+    const rebuild = this.activeRebuild
+    rebuild?.cancel()
+    for (const batch of this.batches.values()) stopBatch(batch)
     for (const operation of this.owned) {
       if (operation.record.state.kind !== 'pending') continue
       operation.cancel()
@@ -1104,6 +1417,10 @@ export class EnrichmentParseJobs {
       await this.reads.dispose()
       await Promise.allSettled([...this.admissions.values()].map(({ task }) => task))
       await Promise.allSettled([...this.owned].map(({ done }) => done))
+      await Promise.allSettled([...this.batches.values()].map(({ done }) => done))
+      this.batches.clear()
+      await rebuild?.done
+      this.rebuildResults.clear()
       await Promise.allSettled(this.tails.values())
     })()
     return this.disposal

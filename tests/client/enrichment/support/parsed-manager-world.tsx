@@ -16,6 +16,7 @@ import type {
   ZoteroDiscardParsedDocumentResultView,
   ZoteroListParsedDocumentsResultView,
   ZoteroParsedDocumentRowView,
+  ZoteroDocumentMaintenanceRemote,
 } from '../../../../src/contract.ts'
 import { artifactIdOf } from '../../../../src/contract.ts'
 import { makeTranslate } from '../../helpers/mock-translate.ts'
@@ -70,6 +71,7 @@ export function listOf(
 }
 
 export interface WorldOptions {
+  readonly maintenance?: ZoteroDocumentMaintenanceRemote
   readonly list?: ListResult
   /** A first page the spec settles itself, for the loading state. */
   readonly pendingList?: () => Promise<ListResult>
@@ -100,6 +102,7 @@ export function world(options: WorldOptions = {}) {
   let listIndex = 0
   let discardIndex = 0
   const management = {
+    maintenance: options.maintenance,
     listParsedDocuments: vi.fn(
       async (request: {
         readonly sessionId: string
@@ -131,7 +134,14 @@ export function world(options: WorldOptions = {}) {
       },
     ),
   }
-  const deployment = { mounted: options.mounted ?? true }
+  const deployment = {
+    mounted: options.mounted ?? true,
+    connected: options.maintenance !== undefined,
+    mode: 'free',
+    revision: 'ready',
+    maxFileBytes: 50 * 1024 * 1024,
+    maxPages: 100,
+  }
   const parse = {
     deployment: { subscribe: () => () => {}, getSnapshot: () => deployment },
     remote: {},

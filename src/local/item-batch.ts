@@ -35,6 +35,8 @@ export class ItemBatchVersionDriftError extends ZoteroError {
 interface ItemKeyBatchOptions<T> {
   /** The instance claim every request must match; absent lets the headers choose. */
   readonly serverId?: string
+  /** A listing already in progress may require proof of the same snapshot. */
+  readonly requiredLibraryVersion?: number
   /**
    * Whether the read must see trashed rows. `true` switches to per-key single
    * reads, because the `itemKey=` scope cannot answer them.
@@ -101,6 +103,12 @@ async function fetchItemKeyScopes<T>(
       )
       assertServerIdMatches(serverIdFromHeaders(headers, options.serverId), options.serverId)
       const version = numericHeader(headers, ZOTERO_LIBRARY_VERSION_HEADER)
+      if (
+        options.requiredLibraryVersion !== undefined &&
+        (version !== options.requiredLibraryVersion ||
+          serverIdFromHeaders(headers) !== options.serverId)
+      )
+        throw new ItemBatchVersionDriftError(options.what)
       return { byKey: rowsByKey(requireArrayBody(json, options.what), options), version }
     },
     { signal: options.signal },

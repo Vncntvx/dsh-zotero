@@ -1,3 +1,8 @@
+export function formatParseFileLimit(bytes: number): string {
+  const megabytes = bytes / (1024 * 1024)
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`
+}
+
 /** Standalone locale additions; the composition root merges these into its locale map. */
 export const parseEn = {
   parseTitle: 'Parse document with MinerU',
@@ -45,6 +50,50 @@ export const parseEn = {
   parseReadPermission:
     'This session does not have permission to inspect artifacts or parse receipts.',
   parseOffline: 'Reconnect to the host to inspect or submit a parse.',
+  indexLabel: 'Full-text search',
+  indexCoverage: 'Full-text search · {indexed} of {total} documents searchable',
+  indexEmpty: 'Parse a PDF to make its text searchable',
+  indexUnreadable: 'Unreadable documents ({count})',
+  indexObsolete: 'Stale search entries ({count})',
+  indexLoading: 'Checking full-text search…',
+  indexOffline: 'Reconnect to check full-text search',
+  indexUnavailable: 'Full-text search status unavailable',
+  indexRebuild: 'Rebuild full-text search index',
+  indexWaiting: 'Preparing to rebuild full-text search…',
+  indexRunning: 'Rebuilding full-text search · {done}/{total}',
+  indexStopping: 'Cancelling the search rebuild…',
+  indexRebuilt: 'Full-text search index rebuilt',
+  indexCancelled: 'Search index rebuild cancelled',
+  indexCancel: 'Cancel search rebuild',
+  batchTitle: 'Batch parse PDFs',
+  batchProgress: 'Batch parsing progress',
+  batchProgressCount: 'Batch parsing · {done}/{total} processed',
+  batchProgressPaused: 'Batch progress unavailable',
+  batchViewProgress: 'View progress',
+  batchLibrary: 'Zotero library',
+  batchPersonal: 'My Library',
+  batchFind: 'Search titles, authors, or publications',
+  batchSelectAll: 'Select all {count} PDFs in this library',
+  batchSelected: '{count} PDFs selected',
+  batchClear: 'Clear selection',
+  batchLoading: 'Loading Zotero PDFs…',
+  batchReload: 'Reload PDF list',
+  batchEmpty: 'No PDFs match this listing.',
+  batchPage: '{first}–{last} of {total}',
+  batchPrevious: 'Previous',
+  batchNext: 'Next',
+  batchReview: 'Review submission',
+  batchBack: 'Back to selection',
+  batchConsent:
+    'You selected {count} PDFs from {library}. PDFs that need parsing will be sent to MinerU (mineru.net). Existing valid results will be reused.',
+  batchSubmit: 'Submit {count} PDFs to MinerU',
+  batchSummary:
+    '{done}/{total} processed · {parsed} parsed · {reused} reused · {failed} failed · {skipped} skipped',
+  batchCurrent: 'Processing {title}',
+  batchCloseHint:
+    'PDFs are processed one at a time in the background. You can reopen this dialog to check progress.',
+  batchNew: 'New batch',
+  batchResultFailed: 'Batch stopped',
 } as const
 
 export const parseZh: Record<keyof typeof parseEn, string> = {
@@ -89,6 +138,49 @@ export const parseZh: Record<keyof typeof parseEn, string> = {
   parsePermission: '当前会话没有执行此解析操作的权限',
   parseReadPermission: '当前会话没有查看产物或解析回执的权限',
   parseOffline: '重新连接宿主后即可查看或提交解析',
+  indexLabel: '全文检索',
+  indexCoverage: '全文检索 · {indexed}/{total} 篇文档可搜索',
+  indexEmpty: '解析 PDF 后可搜索全文',
+  indexUnreadable: '{count} 篇文档不可读',
+  indexObsolete: '{count} 条检索记录已失效',
+  indexLoading: '正在检查全文检索状态…',
+  indexOffline: '重新连接后可查看全文检索状态',
+  indexUnavailable: '暂时无法查看全文检索状态',
+  indexRebuild: '重建全文检索索引',
+  indexWaiting: '正在准备重建全文检索…',
+  indexRunning: '正在重建全文检索 · {done}/{total} 篇',
+  indexStopping: '正在取消重建…',
+  indexRebuilt: '全文检索索引已重建',
+  indexCancelled: '全文检索重建已取消',
+  indexCancel: '取消重建全文检索',
+  batchTitle: '批量解析 PDF',
+  batchProgress: '批量解析进度',
+  batchProgressCount: '批量解析 · 已处理 {done}/{total} 份',
+  batchProgressPaused: '暂时无法更新批量解析进度',
+  batchViewProgress: '查看进度',
+  batchLibrary: 'Zotero 文献库',
+  batchPersonal: '我的文献库',
+  batchFind: '搜索文献题名、作者或期刊',
+  batchSelectAll: '全选本库 {count} 份 PDF',
+  batchSelected: '已选 {count} 份 PDF',
+  batchClear: '清除选择',
+  batchLoading: '正在读取 Zotero PDF…',
+  batchReload: '重新载入 PDF 清单',
+  batchEmpty: '此范围内没有符合条件的 PDF',
+  batchPage: '第 {first}–{last} 项，共 {total} 项',
+  batchPrevious: '上一页',
+  batchNext: '下一页',
+  batchReview: '核对提交范围',
+  batchBack: '返回选择',
+  batchConsent:
+    '已选中「{library}」中的 {count} 份 PDF。需要解析的 PDF 将发送至 MinerU（mineru.net），有效的已有产物将直接复用',
+  batchSubmit: '将 {count} 份 PDF 提交至 MinerU',
+  batchSummary:
+    '已处理 {done}/{total} 份 · 解析 {parsed} · 复用 {reused} · 失败 {failed} · 跳过 {skipped}',
+  batchCurrent: '正在处理《{title}》',
+  batchCloseHint: 'PDF 在后台逐份处理。可关闭此窗口，稍后重新打开查看进度',
+  batchNew: '新建批次',
+  batchResultFailed: '批量解析已停止',
 }
 
 export type ParseLocaleKey = keyof typeof parseEn

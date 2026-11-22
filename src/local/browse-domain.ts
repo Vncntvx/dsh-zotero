@@ -195,19 +195,28 @@ async function browseLibraries(
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroBrowseResult> {
+  const { items, serverId } = await discoverLibraries(deps.client, signal)
+  const total = items.length
+  const slice = items.slice(request.offset, request.offset + request.limit)
+  return browsePage('libraries', {
+    items: slice,
+    total,
+    offset: request.offset,
+    next: nextOffsetOf(request.offset, slice.length, total),
+    ...(serverId !== undefined ? { serverId } : {}),
+  })
+}
+
+export async function discoverLibraries(client: ZoteroHttpClient, signal?: AbortSignal) {
   let serverId: string | undefined
   const items: ZoteroLibraryInfo[] = []
   // personal always present
   items.push({ library: PERSONAL_LIBRARY, name: 'My Library' })
   // try to discover groups; Zotero 7/8/9 may 404
   try {
-    const { json, headers } = await deps.client.getJson<unknown>(
-      PERSONAL_GROUPS_DISCOVERY,
-      undefined,
-      {
-        signal,
-      },
-    )
+    const { json, headers } = await client.getJson<unknown>(PERSONAL_GROUPS_DISCOVERY, undefined, {
+      signal,
+    })
     serverId = serverIdFromHeaders(headers)
     const groups = requireArrayBody(json, 'groups')
     for (const row of groups) {
@@ -235,15 +244,7 @@ async function browseLibraries(
       throw error
     }
   }
-  const total = items.length
-  const slice = items.slice(request.offset, request.offset + request.limit)
-  return browsePage('libraries', {
-    items: slice,
-    total,
-    offset: request.offset,
-    next: nextOffsetOf(request.offset, slice.length, total),
-    ...(serverId !== undefined ? { serverId } : {}),
-  })
+  return { items, serverId }
 }
 
 /**

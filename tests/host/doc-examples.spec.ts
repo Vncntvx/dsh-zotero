@@ -273,7 +273,7 @@ describe('documented tool calls match the tool schemas', () => {
     // A parser that silently matched nothing would pass every later check;
     // this count is the guard that the scan still covers what it claims to.
     expect(examples.length).toBeGreaterThan(20)
-    for (const file of ['README.md', 'README.en.md', 'docs/tools.md', 'docs/tools.en.md']) {
+    for (const file of ['docs/tools.md', 'docs/tools.en.md']) {
       expect(examples.filter((example) => example.file === file).length).toBeGreaterThan(0)
     }
   })

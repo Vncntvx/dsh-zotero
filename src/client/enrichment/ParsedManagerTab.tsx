@@ -11,6 +11,7 @@ import {
   IconCloseOutlineRegular,
   IconDeliverDocRegular,
   IconTrashOutlineRegular,
+  StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -32,6 +33,10 @@ import { IconButton } from '../components/IconButton.tsx'
 import { ParsedManagerToolbar } from './parsed-manager/ParsedManagerToolbar.tsx'
 import { ParsedManagerRow } from './parsed-manager/ParsedManagerRow.tsx'
 import { ParsedManagerDeleteDialog } from './parsed-manager/ParsedManagerDeleteDialog.tsx'
+import { ParsedIndexStatus } from './parsed-manager/ParsedIndexStatus.tsx'
+import { BatchParseDialog } from './BatchParseDialog.tsx'
+import { batchDone, BatchProgressBar } from './BatchProgressBar.tsx'
+import { batchIsActive, useBatchParseStatus } from './use-batch-parse-status.ts'
 import type { StateFilter } from './parsed-manager/types.ts'
 import css from './parsed-manager.module.css'
 import tipCss from '../components/tip.module.css'
@@ -79,6 +84,12 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const startAllowed = props.useAccess('zotero/startDocumentParse')
   const readAllowed = props.useAccess('zotero/documentArtifact')
   const cancelAllowed = props.useAccess('job/kill')
+  const indexAllowed = props.useAccess('zotero/parsedIndexStatus')
+  const rebuildAllowed = props.useAccess('zotero/rebuildParsedIndex')
+  const batchSelectAllowed = props.useAccess('zotero/batchPdfCatalog')
+  const batchStartAllowed = props.useAccess('zotero/startBatchParse')
+  const batchStatusAllowed = props.useAccess('zotero/batchParseStatus')
+  const batchCancelAllowed = props.useAccess('zotero/cancelBatchParse')
   const deployment = useSyncExternalStore<DocumentParseDeployment>(
     parse.deployment.subscribe,
     parse.deployment.getSnapshot,
@@ -106,6 +117,31 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   const [confirming, setConfirming] = useState<{ ids: readonly string[]; title?: string }>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [revision, setRevision] = useState(0)
+  const [indexRevision, setIndexRevision] = useState(0)
+  const [batchOpen, setBatchOpen] = useState(false)
+  const refresh = useCallback(() => setRevision((previous) => previous + 1), [])
+  const batchStatus = useBatchParseStatus(
+    management.maintenance,
+    sessionId,
+    deployment.mounted &&
+      deployment.connected &&
+      batchStatusAllowed &&
+      !!sessionId &&
+      !sessionRemoved &&
+      tab.visible !== false,
+  )
+  const batch = batchStatus.batch
+  const openBatch = () => {
+    if (batch !== undefined && !batchIsActive(batch)) batchStatus.refresh()
+    setBatchOpen(true)
+  }
+  const settledBatch = useRef<string>()
+  useEffect(() => {
+    if (batch && !batchIsActive(batch) && settledBatch.current !== batch.operationId) {
+      settledBatch.current = batch.operationId
+      refresh()
+    }
+  }, [batch, refresh])
   /** Aborts on unmount, like every other owned read. */
   const discardAbort = useRef<AbortController>()
   const moreAbort = useRef<AbortController>()
@@ -115,6 +151,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
   useEffect(() => {
     if (tab.visible === false) {
       setConfirming(undefined)
+      setBatchOpen(false)
     }
   }, [tab.visible])
 
@@ -276,6 +313,7 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         notify(props.t('parsedManagerBatchPartial', { removed, failed: failed.length }))
       }
       await reloadWindow(Math.max(0, loaded - removed), abort.signal, generation)
+      if (!abort.signal.aborted && removed > 0) setIndexRevision((previous) => previous + 1)
     } catch (cause) {
       if (!abort.signal.aborted && generation === listGeneration.current) setError(messageOf(cause))
     } finally {
@@ -312,9 +350,48 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         listAllowed={listAllowed}
         urlParseDisabled={parseSurface.openUrl === undefined}
         onOpenUrl={() => parseSurface.openUrl?.()}
-        onRefresh={() => setRevision((previous) => previous + 1)}
+        onOpenBatch={
+          management.maintenance && batchStatusAllowed && !sessionRemoved ? openBatch : undefined
+        }
+        onRefresh={() => {
+          refresh()
+          batchStatus.refresh()
+        }}
         t={props.t}
       />
+      {management.maintenance && indexAllowed && !sessionRemoved && tab.visible !== false && (
+        <ParsedIndexStatus
+          key={`index:${sessionId}:${deployment.revision}`}
+          remote={management.maintenance}
+          jobs={parse.jobs}
+          sessionId={sessionId}
+          revision={revision + parseSurface.revision + indexRevision}
+          rebuildAllowed={rebuildAllowed}
+          cancelAllowed={cancelAllowed}
+          connected={deployment.connected}
+          notify={notify}
+          t={props.t}
+        />
+      )}
+      {batch && batchIsActive(batch) && batchStatusAllowed && !sessionRemoved && !batchOpen && (
+        <section className={css.batchActivity} aria-label={props.t('batchProgress')}>
+          <div className={css.listBar}>
+            <StateDot
+              state={deployment.connected && !batchStatus.error ? 'ongoing' : 'idle'}
+              size={12}
+            />
+            <span className={css.listBarText} role="status">
+              {deployment.connected && !batchStatus.error
+                ? props.t('batchProgressCount', { done: batchDone(batch), total: batch.total })
+                : props.t('batchProgressPaused')}
+            </span>
+            <Button size="sm" variant="ghost" onClick={openBatch}>
+              {props.t('batchViewProgress')}
+            </Button>
+          </div>
+          <BatchProgressBar batch={batch} t={props.t} />
+        </section>
+      )}
       {error !== undefined && (
         <div className={css.errorRow}>
           <p className={css.error} role="alert">
@@ -453,6 +530,20 @@ export function ParsedManagerTab(props: ParsedManagerTabProps) {
         t={props.t}
       />
       {parseSurface.dialog}
+      {batchOpen && management.maintenance && batchStatusAllowed && !sessionRemoved && (
+        <BatchParseDialog
+          key={`batch:${sessionId}`}
+          remote={management.maintenance}
+          sessionId={sessionId}
+          deployment={deployment}
+          canStart={batchStartAllowed}
+          canSelect={batchSelectAllowed}
+          canCancel={batchCancelAllowed}
+          status={batchStatus}
+          onClose={() => setBatchOpen(false)}
+          t={props.t}
+        />
+      )}
     </section>
   )
 }

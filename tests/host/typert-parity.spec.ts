@@ -49,6 +49,7 @@ const NON_WIRE_MEMBERS: Readonly<Record<string, readonly string[]>> = {
     'maybeDisposeCacheGeneration',
     'metadataDeps',
     'parseWire',
+    'pdfCatalog',
     'releaseCacheGeneration',
     'retireActiveCache',
     'storeFor',

@@ -1420,10 +1420,9 @@ function registerUi(ctx: ClientContext): void {
           })
       },
       management: {
-        listParsedDocuments: (request, signal) =>
-          ctx.remote.zotero.listParsedDocuments(request, signal),
-        discardParsedDocument: (request, signal) =>
-          ctx.remote.zotero.discardParsedDocument(request, signal),
+        maintenance: ctx.remote.zotero,
+        listParsedDocuments: ctx.remote.zotero.listParsedDocuments,
+        discardParsedDocument: ctx.remote.zotero.discardParsedDocument,
       },
       // The parse dialog's "Read Markdown" action opens the same address the
       // manager and library use: one artifact-addressed tab per document, so a

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { refFieldsOf } from '../ref-grammar.js'
 import type { DisplayArtifactLookup } from './artifact-reads.js'
@@ -75,6 +75,14 @@ import type {
   ZoteroListParsedDocumentsResultView,
   ZoteroDiscardParsedDocumentRequestView,
   ZoteroDiscardParsedDocumentResultView,
+  ZoteroBatchCatalogRequestView,
+  ZoteroBatchCatalogView,
+  ZoteroBatchPdfView,
+  ZoteroBatchParseStatusRequestView,
+  ZoteroBatchParseView,
+  ZoteroParsedIndexStatusView,
+  ZoteroSessionRequestView,
+  ZoteroStartBatchParseRequestView,
 } from '../contract.js'
 import type { EnrichmentPreferences } from '../enrichment-preferences.js'
 import { ZOTERO_ENRICHMENT_SERVICE_KEY, ZOTERO_SETTINGS_NAMESPACE } from '../settings-namespace.js'
@@ -315,6 +323,13 @@ export class EnrichmentService extends TypertRemoteService {
   private readonly parsing: EnrichmentParseJobs
   private readonly management: ArtifactManagementDeps
   private readonly parsedIndex: ParsedIndex
+  private readonly pdfCatalogs = new LRUCache<
+    string,
+    {
+      sessionId: string
+      pdfs: readonly ZoteroBatchPdfView[]
+    }
+  >({ max: 16, ttl: 30 * 60_000, updateAgeOnGet: true })
 
   /** The enhancer installed into the core. Stable identity for cleanup. */
   public readonly enhancer: FulltextEnhancer
@@ -384,6 +399,10 @@ export class EnrichmentService extends TypertRemoteService {
   ) {
     super(ctx, ZOTERO_ENRICHMENT_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
     this.parsedIndex = deps.parsedIndex ?? new ParsedIndex()
+    ctx.on('agent/disposed', ({ agent }) => {
+      for (const [id, catalog] of this.pdfCatalogs)
+        if (catalog.sessionId === agent.session.id) this.pdfCatalogs.delete(id)
+    })
     this.downloads = deps.downloads ?? new ModelDownloadManager()
     this.loaderFactory = deps.loader ?? (() => new SemanticEmbedderLoader())
     this.client =
@@ -581,10 +600,10 @@ export class EnrichmentService extends TypertRemoteService {
     // cannot skip the model and cache release: those hold real resources
     // (an ONNX session, vectors) and outlive any single job's cleanup.
     ctx.effect(() => async () => {
+      this.pdfCatalogs.clear()
       const settled = await Promise.allSettled([
-        this.parsing.dispose(),
+        this.parsing.dispose().finally(() => this.parsedIndex.close()),
         this.downloads.dispose(),
-        this.parsedIndex.close(),
       ])
       for (const outcome of settled) {
         if (outcome.status === 'rejected')
@@ -788,6 +807,150 @@ export class EnrichmentService extends TypertRemoteService {
       if (result.kind === 'discarded') this.documents.retire(request.artifactId)
       return result
     })
+  }
+
+  async parsedIndexStatus(
+    request: ZoteroSessionRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroParsedIndexStatusView> {
+    return await domainCall(async () => {
+      this.parsing.authorizeManagement(request.sessionId, 'parsedIndexStatus', this.ctx)
+      const store = await this.storeFactory(resolveEnrichmentConfig(this.config), false)
+      const status = await this.parsedIndex.status(store, signal)
+      this.parsing.authorizeManagement(request.sessionId, 'parsedIndexStatus', this.ctx)
+      const rebuild = this.parsing.indexRebuildStatus(request.sessionId, store.root)
+      return rebuild === undefined ? status : { ...status, rebuild }
+    })
+  }
+
+  async rebuildParsedIndex(
+    request: ZoteroSessionRequestView,
+    signal: AbortSignal,
+  ): Promise<{ jobId: string }> {
+    return await domainCall(async () => {
+      this.parsing.authorizeManagement(request.sessionId, 'rebuildParsedIndex', this.ctx)
+      const store = await this.storeFactory(resolveEnrichmentConfig(this.config), false)
+      return await this.parsing.startIndexRebuild(
+        request.sessionId,
+        store.root,
+        (jobSignal, authorize, report) =>
+          this.parsedIndex.rebuild(store, jobSignal, authorize, report),
+        signal,
+        this.ctx,
+      )
+    })
+  }
+
+  async batchPdfCatalog(
+    request: ZoteroBatchCatalogRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroBatchCatalogView> {
+    return await domainCall(async () => {
+      const authorize = () =>
+        this.parsing.authorizeManagement(request.sessionId, 'batchPdfCatalog', this.ctx)
+      authorize()
+      const core = this.ctx.get('zotero')
+      if (core === undefined)
+        throw new ZoteroError('The Zotero service is unavailable.', ZOTERO_PROVIDER_UNAVAILABLE)
+      if (request.kind === 'libraries') {
+        const libraries = await core.parsePdfProvider().parsePdfLibraries(signal)
+        authorize()
+        return { kind: 'libraries', libraries }
+      }
+      const { source } = request
+      let catalogId: string
+      let pdfs: readonly ZoteroBatchPdfView[]
+      if ('catalogId' in source) {
+        catalogId = source.catalogId
+        pdfs = this.pdfCatalog(request.sessionId, catalogId)
+      } else {
+        pdfs = await core.parsePdfProvider().parsePdfCatalog(source.library, signal)
+        authorize()
+        signal.throwIfAborted()
+        catalogId = randomUUID()
+        this.pdfCatalogs.set(catalogId, { sessionId: request.sessionId, pdfs })
+      }
+      const query = request.query.trim().toLowerCase()
+      const matches =
+        query === ''
+          ? pdfs
+          : pdfs.filter(({ title, authors, venue, year, fileLabel }) =>
+              [title, authors, venue, year, fileLabel].some((field) =>
+                String(field ?? '')
+                  .toLowerCase()
+                  .includes(query),
+              ),
+            )
+      return {
+        kind: 'pdfs',
+        catalogId,
+        rows: matches.slice(request.offset, request.offset + 50),
+        matching: matches.length,
+        total: pdfs.length,
+      }
+    })
+  }
+
+  private pdfCatalog(sessionId: string, catalogId: string): readonly ZoteroBatchPdfView[] {
+    const catalog = this.pdfCatalogs.get(catalogId)
+    if (catalog?.sessionId !== sessionId)
+      throw new ZoteroError(
+        'The PDF listing expired. Reload the Zotero library before submitting.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    return catalog.pdfs
+  }
+
+  async startBatchParse(
+    request: ZoteroStartBatchParseRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroBatchParseView> {
+    return await domainCall(async () => {
+      const { sessionId, catalogId, operationId, selection } = request
+      const refs = new Set(selection.refs)
+      const binding = createHash('sha256')
+        .update(JSON.stringify([catalogId, selection.all, [...refs].sort()]))
+        .digest('hex')
+      return await this.parsing.startBatchParse(
+        sessionId,
+        operationId,
+        binding,
+        () => {
+          const catalog = this.pdfCatalog(sessionId, catalogId)
+          const targets = catalog.filter((pdf) => refs.has(pdf.ref) !== selection.all)
+          const expected = selection.all ? catalog.length - refs.size : refs.size
+          if (targets.length === 0 || targets.length !== expected)
+            throw new ZoteroError(
+              'Select at least one PDF from the current listing.',
+              ZOTERO_INVALID_ARGUMENT,
+            )
+          this.pdfCatalogs.delete(catalogId)
+          return targets
+        },
+        signal,
+        this.ctx,
+      )
+    })
+  }
+
+  async batchParseStatus(
+    request: ZoteroBatchParseStatusRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroBatchParseView | null> {
+    signal.throwIfAborted()
+    return await domainCall(async () =>
+      this.parsing.batchParseStatus(request.sessionId, request.offset, this.ctx),
+    )
+  }
+
+  async cancelBatchParse(
+    request: ZoteroSessionRequestView & { operationId: string },
+    signal: AbortSignal,
+  ): Promise<ZoteroBatchParseView> {
+    signal.throwIfAborted()
+    return await domainCall(async () =>
+      this.parsing.cancelBatchParse(request.sessionId, request.operationId, this.ctx),
+    )
   }
 
   /** The model endpoints live here, on the component: unmounting the row

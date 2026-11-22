@@ -23,8 +23,8 @@ it('allows retry after an unwritable index path is repaired', async () => {
   await withTempDir(async (root) => {
     const obstruction = join(root, 'obstruction')
     await writeFile(obstruction, 'keep')
-    const store = new ParsedArtifactStore(join(root, 'artifacts'))
-    const index = indexOf(join(obstruction, 'database'))
+    const store = new ParsedArtifactStore(join(obstruction, 'artifacts'))
+    const index = indexOf()
     try {
       await expect(index.discard(store.root, CACHE_KEY)).rejects.toMatchObject({ code: 'ENOTDIR' })
       const request = {
@@ -54,7 +54,7 @@ it('allows retry after an unwritable index path is repaired', async () => {
 
 it('rejects an artifact revision that changes before indexing and re-reads it on retry', async () => {
   await withTempDir(async (root) => {
-    const index = indexOf(join(root, 'database'))
+    const index = indexOf()
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const identity = 'zotero://user/0/attachment/ATTACH01?server=S1'
     const meta = { ...ARTIFACT.meta, identity, sourceId: sourceKeyOf(identity) }
@@ -98,7 +98,7 @@ it('rejects an artifact revision that changes before indexing and re-reads it on
 
 it('counts disappeared files only within their current collection and refuses a removed member', async () => {
   await withTempDir(async (root) => {
-    const index = indexOf(join(root, 'database'))
+    const index = indexOf()
     const store = new ParsedArtifactStore(join(root, 'artifacts'))
     const collection = 'COLL0001'
     const identities = ['ATTACH01', 'ATTACH02', 'ATTACH03'].map(

@@ -19,7 +19,7 @@ import {
   type DocumentParseState,
   type ParseSnapshotSource,
 } from './parse-controller.ts'
-import { type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
+import { formatParseFileLimit, type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
 import css from './parse.module.css'
 import noticeCss from '../components/notice.module.css'
 
@@ -34,12 +34,6 @@ interface ParseDocumentDialogProps {
   /** Opens the committed artifact in its own reading tab; absent when enrichment reads are off. */
   readonly onOpenParsed?: (sessionId: string, artifactId: string, title: string) => void
   readonly t: ParseTranslate
-}
-
-/** The dialog states the byte cap in human units, not as a raw byte integer. */
-function formatLimit(bytes: number): string {
-  const megabytes = bytes / (1024 * 1024)
-  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`
 }
 
 /** The only start action is a user form submission; opening only inspects artifacts. */
@@ -214,7 +208,7 @@ export function ParseDocumentDialog(props: ParseDocumentDialogProps) {
             {state.capabilities.maxFileBytes > 0 && (
               <p className={css.secondary}>
                 {t('parseLimits', {
-                  size: formatLimit(state.capabilities.maxFileBytes),
+                  size: formatParseFileLimit(state.capabilities.maxFileBytes),
                   pages: state.capabilities.maxPages,
                 })}
               </p>

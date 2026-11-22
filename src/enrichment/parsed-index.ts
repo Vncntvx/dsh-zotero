@@ -1,9 +1,8 @@
 /** Foreground reconciliation of committed MinerU artifacts with the derived FTS5 index. */
 import { createHash } from 'node:crypto'
 import { Worker } from 'node:worker_threads'
-import { lstat } from 'node:fs/promises'
-import { join } from 'node:path'
-import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import { lstat, mkdtemp, open, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { mapWithConcurrency } from '../concurrency.js'
 import {
   isNotFoundError,
@@ -27,6 +26,7 @@ import type {
 import type { IndexOperation, IndexedDocument, IndexedPassage } from './parsed-index-worker.js'
 import { resolveSafeDirectory } from './safe-directory.js'
 import { sourceKeyOf } from './source-stamp.js'
+import type { ZoteroParsedIndexStatusView } from '../contract.js'
 
 type ParsedArtifactMeta = StoredArtifactMeta['meta']
 
@@ -104,8 +104,10 @@ class IndexConnection {
     { resolve(value: unknown): void; reject(error: unknown): void }
   >()
 
-  private connect(path: string) {
-    const worker = workerOf(path)
+  constructor(private readonly path: string) {}
+
+  private connect() {
+    const worker = workerOf(this.path)
     this.worker = worker
     const fail = (error: unknown) => {
       if (this.worker !== worker) return
@@ -125,9 +127,9 @@ class IndexConnection {
     return worker
   }
 
-  async run<T>(path: string, operation: IndexOperation, signal?: AbortSignal): Promise<T> {
+  async run<T>(operation: IndexOperation, signal?: AbortSignal): Promise<T> {
     signal?.throwIfAborted()
-    const worker = this.worker ?? this.connect(path)
+    const worker = this.worker ?? this.connect()
     worker.ref()
     const id = ++this.sequence
     const task = new Promise<unknown>((resolve, reject) => {
@@ -161,9 +163,12 @@ function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function partitionOf(root: string): string {
-  return digest(root) + digest('[]')
-}
+// One index belongs to one output directory. The partition must survive
+// moving that directory to another absolute path.
+const ROOT_PARTITION = digest('zotero-parsed')
+// The worker uses a 64-character root prefix for discard and requires a
+// 128-character partition name. The second digest denotes the unfiltered index.
+const PARTITION = ROOT_PARTITION + digest('[]')
 
 function unavailable(error: unknown): boolean {
   return (
@@ -185,49 +190,235 @@ const readMarkdown = (store: ParsedArtifactStore, candidate: Candidate) =>
     candidate.meta.markdownSha256,
   )
 
+const versionOf = (document: IndexedDocument) =>
+  JSON.stringify([document.artifactId, document.sourceId, document.generation, document.digest])
+
+async function inventoryOf(store: ParsedArtifactStore, signal: AbortSignal) {
+  const entries = await store.inventory(signal, undefined, true)
+  const candidates: Candidate[] = []
+  for (const { cacheKey, stored } of entries) {
+    if (stored === undefined) continue
+    candidates.push({ document: indexedDocument(cacheKey, stored.meta), meta: stored.meta })
+  }
+  return { candidates, unreadable: entries.length - candidates.length }
+}
+
+type IndexCoverage = Omit<ZoteroParsedIndexStatusView, 'progress' | 'rebuild'>
+
 export class ParsedIndex {
-  private readonly connection = new IndexConnection()
+  private readonly databases = new Map<string, { connection: IndexConnection; users: number }>()
+  private latestPath?: string
   private readonly shutdown = new AbortController()
-  private ready?: Promise<string>
   private active = false
+  private rebuildProgress?: {
+    root: string
+    done: number
+    total: number
+    coverage: Promise<IndexCoverage>
+  }
+  private rebuilding = false
 
-  constructor(
-    private readonly directory = dshHomePath('zotero'),
-    private readonly resolveDirectory = resolveSafeDirectory,
-  ) {}
+  constructor(private readonly resolveDirectory = resolveSafeDirectory) {}
 
-  private path(): Promise<string> {
-    this.ready ??= this.resolveDirectory({
+  private async path(root: string, create: boolean): Promise<string> {
+    const directory = await this.resolveDirectory({
       configured: '',
-      defaultRoot: this.directory,
-      create: true,
+      defaultRoot: root,
+      create,
+      readOnly: !create,
+      allowMissing: !create,
       privateOwner: true,
       errorCode: ZOTERO_FILE_UNREADABLE,
       label: 'parsed document index directory',
     })
-      .then((root) => join(root, 'index.db'))
-      .catch((error) => {
-        delete this.ready
-        throw error
-      })
-    return this.ready
+    if (directory !== root)
+      throw new ZoteroError('The parsed output directory changed.', ZOTERO_FILE_UNREADABLE)
+    return join(directory, 'index.db')
+  }
+
+  private async existingPath(root: string): Promise<string | undefined> {
+    const path = await this.path(root, false)
+    try {
+      await lstat(path)
+      return path
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      return undefined
+    }
+  }
+
+  private async retireIdle(path: string): Promise<void> {
+    const entry = this.databases.get(path)
+    if (path !== this.latestPath && entry?.users === 0) {
+      this.databases.delete(path)
+      await entry.connection.close()
+    }
+  }
+
+  private async useDatabase<T>(
+    path: string,
+    task: (connection: IndexConnection) => Promise<T>,
+  ): Promise<T> {
+    this.shutdown.signal.throwIfAborted()
+    const previous = this.latestPath
+    const entry = this.databases.get(path) ?? { connection: new IndexConnection(path), users: 0 }
+    this.databases.set(path, entry)
+    this.latestPath = path
+    entry.users += 1
+    try {
+      if (previous !== undefined && previous !== path) await this.retireIdle(previous)
+      this.shutdown.signal.throwIfAborted()
+      return await task(entry.connection)
+    } finally {
+      entry.users -= 1
+      await this.retireIdle(path)
+    }
   }
 
   async close(): Promise<void> {
     this.shutdown.abort(new DOMException('Parsed document search is closed.', 'AbortError'))
-    await this.connection.close()
+    await Promise.all([...this.databases.values()].map(({ connection }) => connection.close()))
+    this.databases.clear()
+  }
+
+  async status(
+    store: ParsedArtifactStore,
+    externalSignal: AbortSignal,
+  ): Promise<ZoteroParsedIndexStatusView> {
+    const signal = AbortSignal.any([externalSignal, this.shutdown.signal])
+    const progress = this.rebuildProgress
+    if (progress?.root === store.root) {
+      const current = await raceWithSignal(progress.coverage, signal).catch(() => {
+        signal.throwIfAborted()
+        return undefined
+      })
+      if (current && progress === this.rebuildProgress)
+        return { ...current, progress: { done: progress.done, total: progress.total } }
+    }
+    const inventory = await inventoryOf(store, signal)
+    return await this.coverage(store.root, inventory, signal)
+  }
+
+  private async coverage(
+    root: string,
+    { candidates, unreadable }: Awaited<ReturnType<typeof inventoryOf>>,
+    signal: AbortSignal,
+  ): Promise<IndexCoverage> {
+    const path = await this.existingPath(root)
+    const known =
+      path === undefined
+        ? []
+        : await this.useDatabase(path, (connection) =>
+            connection.run<IndexedDocument[]>({ kind: 'inspect', partition: PARTITION }, signal),
+          )
+    const stored = new Set(known.map(versionOf))
+    const indexed = candidates.filter(({ document }) => stored.has(versionOf(document))).length
+    const liveIds = new Set(candidates.map(({ document }) => document.artifactId))
+    return {
+      indexed,
+      total: candidates.length,
+      unreadable,
+      obsolete: known.filter(({ artifactId }) => !liveIds.has(artifactId)).length,
+    }
+  }
+
+  async rebuild(
+    store: ParsedArtifactStore,
+    externalSignal: AbortSignal,
+    authorize: () => void = () => {},
+    report?: (done: number, total: number) => void,
+  ): Promise<void> {
+    const signal = AbortSignal.any([externalSignal, this.shutdown.signal])
+    signal.throwIfAborted()
+    if (this.rebuilding)
+      throw new ZoteroError(
+        'A parsed index rebuild is already running.',
+        ZOTERO_PROVIDER_UNAVAILABLE,
+      )
+    this.rebuilding = true
+    const inventory = inventoryOf(store, signal)
+    const progress = {
+      root: store.root,
+      done: 0,
+      total: 0,
+      coverage: inventory.then(async (entries) => await this.coverage(store.root, entries, signal)),
+    }
+    this.rebuildProgress = progress
+    const cancelled = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
+    const cancel = () => {
+      Atomics.store(cancelled, 0, 1)
+    }
+    signal.addEventListener('abort', cancel, { once: true })
+    try {
+      await progress.coverage
+      const { candidates } = await inventory
+      progress.total = candidates.length
+      report?.(0, progress.total)
+      const path = await this.path(store.root, true)
+      await this.useDatabase(path, async (connection) => {
+        const scratch = await mkdtemp(join(dirname(path), '.index-rebuild-'))
+        const stage = join(scratch, 'staging.db')
+        let attached = false
+        try {
+          await (await open(stage, 'wx', 0o600)).close()
+          signal.throwIfAborted()
+          await connection.run({ kind: 'rebuild-start', path: stage })
+          attached = true
+          for (const candidate of candidates) {
+            signal.throwIfAborted()
+            const markdown = await readMarkdown(store, candidate)
+            signal.throwIfAborted()
+            await connection.run({ kind: 'rebuild-stage', document: candidate.document, markdown })
+            progress.done += 1
+            if (
+              progress.done === progress.total ||
+              progress.done % Math.max(1, Math.ceil(progress.total / 100)) === 0
+            )
+              report?.(progress.done, progress.total)
+          }
+          const versions = new Set(candidates.map(({ document }) => versionOf(document)))
+          await store.withSourcePublicationLock(async () => {
+            const current = (await inventoryOf(store, signal)).candidates
+            if (
+              current.length !== versions.size ||
+              current.some(({ document }) => !versions.has(versionOf(document)))
+            )
+              throw new ZoteroError(
+                'Parsed documents changed during the rebuild. Run the rebuild again.',
+                ZOTERO_PROVIDER_UNAVAILABLE,
+              )
+            signal.throwIfAborted()
+            authorize()
+            await connection.run({ kind: 'rebuild-commit', partition: PARTITION, cancelled })
+          }, signal)
+        } finally {
+          try {
+            if (attached && !this.shutdown.signal.aborted)
+              await connection.run({ kind: 'rebuild-drop' }).catch(() => connection.close())
+          } finally {
+            await rm(scratch, { recursive: true, force: true })
+          }
+        }
+      })
+    } catch (error) {
+      signal.throwIfAborted()
+      if (error instanceof ZoteroError) throw error
+      throw new ZoteroError('The parsed index could not be rebuilt.', ZOTERO_FILE_UNREADABLE, {
+        cause: error,
+      })
+    } finally {
+      signal.removeEventListener('abort', cancel)
+      this.rebuildProgress = undefined
+      this.rebuilding = false
+    }
   }
 
   async discard(root: string, artifactId: string): Promise<void> {
-    try {
-      await lstat(join(this.directory, 'index.db'))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
-      throw error
-    }
-    const path = await this.path()
-    this.shutdown.signal.throwIfAborted()
-    await this.connection.run(path, { kind: 'discard', root: digest(root), artifactId })
+    const path = await this.existingPath(root)
+    if (path === undefined) return
+    await this.useDatabase(path, (connection) =>
+      connection.run({ kind: 'discard', root: ROOT_PARTITION, artifactId }),
+    )
   }
 
   async search(deps: SearchDependencies, request: SearchRequest, externalSignal: AbortSignal) {
@@ -240,7 +431,10 @@ export class ParsedIndex {
       )
     this.active = true
     try {
-      return await this.searchActive(deps, request, signal)
+      const path = await this.path(deps.store.root, true)
+      return await this.useDatabase(path, (connection) =>
+        this.searchActive(deps, request, connection, signal),
+      )
     } catch (error) {
       signal.throwIfAborted()
       if (error instanceof ZoteroError) throw error
@@ -256,14 +450,16 @@ export class ParsedIndex {
 
   async publish(store: ParsedArtifactStore, artifactId: string): Promise<void> {
     const signal = this.shutdown.signal
-    const path = await this.path()
-    await this.indexCurrent(store, artifactId, path, signal)
+    const path = await this.path(store.root, true)
+    await this.useDatabase(path, (connection) =>
+      this.indexCurrent(store, artifactId, connection, signal),
+    )
   }
 
   private async indexCurrent(
     store: ParsedArtifactStore,
     artifactId: string,
-    path: string,
+    connection: IndexConnection,
     signal: AbortSignal,
     expected?: IndexedDocument,
   ): Promise<void> {
@@ -283,9 +479,9 @@ export class ParsedIndex {
       // Keep the filesystem lock until SQLite settles even if the caller
       // cancels. Otherwise a discard could overtake an in-flight put.
       signal.throwIfAborted()
-      await this.connection.run(path, {
+      await connection.run({
         kind: 'put',
-        partition: partitionOf(store.root),
+        partition: PARTITION,
         document,
         markdown,
       })
@@ -295,13 +491,12 @@ export class ParsedIndex {
   private async searchActive(
     deps: SearchDependencies,
     request: SearchRequest,
+    connection: IndexConnection,
     signal: AbortSignal,
   ) {
     const { store } = deps
-    const path = await this.path()
-    const run = async <T>(operation: IndexOperation) =>
-      await this.connection.run<T>(path, operation, signal)
-    const partition = partitionOf(store.root)
+    const run = <T>(operation: IndexOperation) => connection.run<T>(operation, signal)
+    const partition = PARTITION
     const known = await run<IndexedDocument[]>({ kind: 'known', partition })
     const versions = new Map(known.map((doc) => [doc.artifactId, doc]))
     const explicit = request.scope.kind === 'artifacts'
@@ -332,7 +527,7 @@ export class ParsedIndex {
       const document = indexedDocument(artifactId, stored.meta)
       const old = versions.get(artifactId)
       if (old?.generation !== document.generation || old.digest !== document.digest)
-        await this.indexCurrent(store, artifactId, path, signal, document)
+        await this.indexCurrent(store, artifactId, connection, signal, document)
     }
     const requested = new Set(ids)
     for (const doc of known)
@@ -344,7 +539,7 @@ export class ParsedIndex {
         for (const doc of stale)
           if ((await store.metaFor(doc.artifactId)) === undefined) absent.push(doc)
         signal.throwIfAborted()
-        await this.connection.run(path, { kind: 'prune', partition, stale: absent })
+        await connection.run({ kind: 'prune', partition, stale: absent })
       }, signal)
     let entries: readonly Entry[]
     let collection: string | undefined

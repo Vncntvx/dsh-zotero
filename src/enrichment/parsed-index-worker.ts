@@ -22,6 +22,11 @@ export interface IndexedPassage {
 
 export type IndexOperation =
   | { kind: 'known'; partition: string }
+  | { kind: 'inspect'; partition: string }
+  | { kind: 'rebuild-start'; path: string }
+  | { kind: 'rebuild-drop' }
+  | { kind: 'rebuild-stage'; document: IndexedDocument; markdown: string }
+  | { kind: 'rebuild-commit'; partition: string; cancelled: Int32Array }
   | { kind: 'put'; partition: string; document: IndexedDocument; markdown: string }
   | { kind: 'prune'; partition: string; stale: readonly IndexedDocument[] }
   | { kind: 'discard'; root: string; artifactId: string }
@@ -155,51 +160,52 @@ function* markdownWindows(markdown: string, start: number, end: number) {
   }
 }
 
-function replace(db: DatabaseSync, name: string, document: IndexedDocument, markdown: string) {
+function insertDocument(
+  db: DatabaseSync,
+  name: string,
+  document: IndexedDocument,
+  markdown: string,
+  staged = false,
+) {
   const headings = markdownHeadingsOf(markdown)
   const sections = [{ start: 0, title: '', level: 0 }, ...headings]
-  transaction(db, () => {
-    const present = db
-      .prepare(`SELECT generation,digest FROM ${name}_doc WHERE artifactId=?`)
-      .get(document.artifactId)
-    if (present?.generation === document.generation && present.digest === document.digest) return
-    discard(db, name, document.artifactId)
-    db.prepare(`INSERT INTO ${name}_doc VALUES (?,?,?,?)`).run(
-      document.artifactId,
-      document.sourceId,
-      document.generation,
-      document.digest,
-    )
-    const passage = db.prepare(`INSERT INTO ${name}_passage
+  db.prepare(`INSERT INTO ${name}_doc VALUES (?,?,?,?)`).run(
+    document.artifactId,
+    document.sourceId,
+    document.generation,
+    document.digest,
+  )
+  const passage = db.prepare(`INSERT INTO ${name}_passage
       (artifactId,sourceId,start,end,heading,terms) VALUES (?,?,?,?,?,?)`)
-    const index = db.prepare(`INSERT INTO ${name}_fts (rowid,terms) VALUES (?,?)`)
-    const path: { readonly title: string; readonly level: number }[] = []
-    for (let i = 0; i < sections.length; i++) {
-      const section = sections[i]!
-      while (path.length > 0 && path.at(-1)!.level >= section.level) path.pop()
-      if (section.title !== '') path.push(section)
-      const heading = path
-        .map(({ title }) => title)
-        .join(' / ')
-        .slice(0, 1024)
-      const end = sections[i + 1]?.start ?? markdown.length
-      for (const window of markdownWindows(markdown, section.start, end)) {
-        for (const chunk of chunkText(window.text, 180, 1800)) {
-          const terms = tokenize(chunk.text).map(encoded).join(' ')
-          if (terms === '') continue
-          const row = passage.run(
-            document.artifactId,
-            document.sourceId,
-            window.start + chunk.start!,
-            window.start + chunk.end!,
-            heading,
-            terms,
-          )
-          index.run(row.lastInsertRowid, terms)
-        }
+  const index = staged
+    ? undefined
+    : db.prepare(`INSERT INTO ${name}_fts (rowid,terms) VALUES (?,?)`)
+  const path: { readonly title: string; readonly level: number }[] = []
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i]!
+    while (path.length > 0 && path.at(-1)!.level >= section.level) path.pop()
+    if (section.title !== '') path.push(section)
+    const heading = path
+      .map(({ title }) => title)
+      .join(' / ')
+      .slice(0, 1024)
+    const end = sections[i + 1]?.start ?? markdown.length
+    for (const window of markdownWindows(markdown, section.start, end)) {
+      for (const chunk of chunkText(window.text, 180, 1800)) {
+        const terms = tokenize(chunk.text).map(encoded).join(' ')
+        if (terms === '') continue
+        const row = passage.run(
+          document.artifactId,
+          document.sourceId,
+          window.start + chunk.start!,
+          window.start + chunk.end!,
+          heading,
+          terms,
+        )
+        index?.run(row.lastInsertRowid, terms)
       }
     }
-  })
+  }
 }
 
 function discard(db: DatabaseSync, name: string, artifactId: string) {
@@ -272,6 +278,35 @@ function match(
 }
 
 function execute(db: DatabaseSync, operation: IndexOperation): unknown {
+  const staging = schemaOf('rebuild')
+  if (operation.kind === 'rebuild-start') {
+    if (!ensureRegularFile(operation.path)) throw new Error('Missing prepared rebuild file.')
+    db.prepare('ATTACH DATABASE ? AS stage').run(operation.path)
+    try {
+      db.exec(`PRAGMA stage.journal_mode=MEMORY; PRAGMA stage.synchronous=OFF;
+        ${staging.documents.replace('CREATE TABLE ', 'CREATE TABLE stage.')};
+        ${staging.passages.replace('CREATE TABLE ', 'CREATE TABLE stage.')}`)
+    } catch (error) {
+      db.exec('DETACH DATABASE stage')
+      throw error
+    }
+    return
+  }
+  if (operation.kind === 'rebuild-drop') {
+    db.exec('DETACH DATABASE stage')
+    return
+  }
+  if (operation.kind === 'rebuild-stage') {
+    db.exec('BEGIN')
+    try {
+      insertDocument(db, 'stage.rebuild', operation.document, operation.markdown, true)
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+    return
+  }
   if (operation.kind === 'discard') {
     if (!/^[a-f0-9]{64}$/.test(operation.root)) throw new Error('Invalid parsed artifact root.')
     transaction(db, () => {
@@ -282,12 +317,43 @@ function execute(db: DatabaseSync, operation: IndexOperation): unknown {
     })
     return
   }
+  if (!('partition' in operation)) throw new Error('Unknown parsed index operation.')
+  if (operation.kind === 'inspect') {
+    const name = TABLE_PREFIX + operation.partition
+    if (!db.prepare('SELECT 1 FROM parsed_partitions WHERE name = ?').get(name)) return []
+    if (!/^parsed_[a-f0-9]{128}$/.test(name)) throw new Error('Invalid parsed index partition.')
+    return db.prepare(`SELECT artifactId,sourceId,generation,digest FROM ${name}_doc`).all()
+  }
   const name = ensurePartition(db, operation.partition)
   switch (operation.kind) {
     case 'known':
       return db.prepare(`SELECT artifactId,sourceId,generation,digest FROM ${name}_doc`).all()
     case 'put':
-      replace(db, name, operation.document, operation.markdown)
+      transaction(db, () => {
+        const { document, markdown } = operation
+        const present = db
+          .prepare(`SELECT generation,digest FROM ${name}_doc WHERE artifactId=?`)
+          .get(document.artifactId)
+        if (present?.generation === document.generation && present.digest === document.digest)
+          return
+        discard(db, name, document.artifactId)
+        insertDocument(db, name, document, markdown)
+      })
+      return
+    case 'rebuild-commit':
+      transaction(db, () => {
+        const check = () => {
+          if (Atomics.load(operation.cancelled, 0)) throw new Error('Index rebuild cancelled.')
+        }
+        check()
+        db.exec(`DROP TABLE ${name}_fts;
+          ${schemaOf(name).fts};
+          DELETE FROM ${name}_doc;
+          INSERT INTO ${name}_doc SELECT * FROM stage.rebuild_doc;
+          INSERT INTO ${name}_passage SELECT * FROM stage.rebuild_passage;
+          INSERT INTO ${name}_fts (rowid,terms) SELECT id,terms FROM ${name}_passage;`)
+        check()
+      })
       return
     case 'prune':
       transaction(db, () => {

@@ -90,7 +90,7 @@ export const TEXT_EXTENSIONS = [
  * the guard, so the next binary asset has to be declared rather than silently
  * skipped.
  */
-export const BINARY_EXTENSIONS = ['.png']
+export const BINARY_EXTENSIONS = ['.png', '.webp']
 
 /**
  * The control bytes a text file may contain: tab, newline, carriage return.
@@ -150,7 +150,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/host/write/write-http.spec.ts': 614,
   'tests/integration/zotero.integration.spec.ts': 706,
   'tests/local/browse.spec.ts': 430,
-  'tests/local/export.spec.ts': 593,
+  'tests/local/export.spec.ts': 565,
   'tests/local/get.spec.ts': 418,
   'tests/local/path-resolution.spec.ts': 468,
   'tests/local/retrieve/retrieve-sources.spec.ts': 538,
@@ -183,7 +183,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/tools/write/write-presentation.spec.ts': 726,
   'tests/unit/enrichment-model-downloader.spec.ts': 427,
   'tests/unit/enrichment-parse-wire.spec.ts': 464,
-  'tests/unit/export-mapping.spec.ts': 703,
+  'tests/unit/export-mapping.spec.ts': 666,
   'tests/unit/library-views.spec.ts': 706,
   'tests/unit/normalize/normalize-item-detail.spec.ts': 711,
   'tests/unit/presentation-meta.spec.ts': 559,

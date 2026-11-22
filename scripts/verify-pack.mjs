@@ -43,6 +43,23 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const packed = (path) => path.replace(/^\.\//, '')
 
 /**
+ * Expand declared files and the README screenshot directory. Other directory
+ * inventories come from their builders or the locale and export contracts.
+ * @param path {string}
+ * @param baseDir {string}
+ * @returns {string[]}
+ */
+function declaredPackFiles(path, baseDir) {
+  const full = resolve(baseDir, path)
+  const target = packed(path)
+  if (statSync(full).isFile()) return [target]
+  if (target !== 'docs/images/readme') return []
+  return readdirSync(full, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.webp'))
+    .map((entry) => `${target}/${entry.name}`)
+}
+
+/**
  * The `package.json` face the pack gate reads.
  * @typedef {{
  *   name?: string,
@@ -167,9 +184,7 @@ export function expectedPaths(manifest, baseDir = root) {
         problems.push(`the manifest "files" entry "${file}" does not exist on disk`)
         continue
       }
-      if (statSync(full).isFile()) paths.add(packed(file))
-      // A directory entry contributes its tree at pack time; the tarball
-      // comparison below proves the concrete files arrived.
+      for (const path of declaredPackFiles(file, baseDir)) paths.add(path)
     }
   }
   if (typeof manifest.main === 'string') paths.add(packed(manifest.main))
@@ -297,8 +312,8 @@ export function allowedPackPaths(manifest, base = root) {
   }
   walk('src')
   for (const path of manifest.files ?? []) {
-    const absolute = resolve(base, path)
-    if (existsSync(absolute) && statSync(absolute).isFile()) paths.add(packed(path))
+    if (existsSync(resolve(base, path)))
+      for (const file of declaredPackFiles(path, base)) paths.add(file)
   }
   for (const component of ['', 'library/', 'scholarly/', 'enrichment/'])
     for (const language of ['en', 'zh']) paths.add(`locale/${component}${language}.json`)

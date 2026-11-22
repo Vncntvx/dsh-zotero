@@ -617,8 +617,10 @@ export class ParsedArtifactStore {
   async inventory(
     signal?: AbortSignal,
     provided?: Awaited<ReturnType<ParsedArtifactStore['snapshot']>>,
+    fresh = false,
   ): Promise<readonly InventoryEntry[]> {
-    if (this.inventoryCache?.generation === this.#writes) return this.inventoryCache.entries
+    const generation = this.#writes
+    if (!fresh && this.inventoryCache?.generation === generation) return this.inventoryCache.entries
     const snapshot = provided ?? (await this.sourceSnapshot())
     const ids = new Set<string>([
       ...Object.values(snapshot.sources).map((record) => record.cacheKey),
@@ -637,7 +639,7 @@ export class ParsedArtifactStore {
         })
       }
     }
-    this.inventoryCache = { generation: this.#writes, entries }
+    if (generation === this.#writes) this.inventoryCache = { generation, entries }
     return entries
   }
 
