@@ -139,6 +139,52 @@ it('opens verified targets with permission and renders labels read-only after re
   expect(screen.queryByText(/turnZoteroEvidence/)).toBeNull()
 })
 
+it('counts only evidence with a displayable target in a replayed result', () => {
+  type Props = Parameters<typeof TurnZoteroEvidence>[0]
+  const replay = (ref: string) =>
+    toolRow(
+      settled({
+        callId: ref,
+        name: 'zotero_retrieve',
+        meta: {
+          mode: 'fulltext',
+          fulltextRead: {
+            attachmentRef: ref,
+            sourceKind: 'attachment',
+            textFormat: 'markdown',
+            sourceLabel: 'Paper',
+            totalChars: 10,
+            start: 0,
+            end: 10,
+            inputTruncated: false,
+            isTruncated: false,
+          },
+        },
+      }),
+    )
+  const from =
+    (...refs: string[]): Props['useChat'] =>
+    (select) => {
+      const state = chatOf(refs.map(replay))
+      return select({ ...state, locations: { getTurn: () => state.order, getStep: () => [] } })
+    }
+  const props = {
+    openRef: vi.fn(),
+    openParsed: undefined,
+    t: mockT,
+    turn: { turn: 1 },
+    sessionId: 's',
+    useAccess: () => false,
+  } as Props
+  const { rerender } = render(
+    <TurnZoteroEvidence {...props} useChat={from('old-invalid-ref', three)} />,
+  )
+  expect(screen.getByText(`${mockT('turnZoteroEvidence')} (1)`)).toBeTruthy()
+  expect(screen.getAllByRole('listitem', { hidden: true })).toHaveLength(1)
+  rerender(<TurnZoteroEvidence {...props} useChat={from('old-invalid-ref')} />)
+  expect(screen.queryByText(mockT('turnZoteroEvidence'), { exact: false })).toBeNull()
+})
+
 it('uses fulltext targets and ignores an unreadable or empty result', () => {
   const result = (callId: string, facts: unknown) =>
     toolRow(

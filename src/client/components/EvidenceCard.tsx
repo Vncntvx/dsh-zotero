@@ -148,6 +148,9 @@ export function EvidenceCard({
       : coverageLineOf(item.retrievalFacts.coverage, t)
   const availabilityEntries =
     item.retrievalFacts === undefined ? [] : Object.entries(item.retrievalFacts.sourceAvailability)
+  const truncated = item.retrievalFacts?.truncated === true
+  const reportedCount = item.facts.reportedEvidenceCount
+  const hasEvidence = item.evidence.length > 0
   return (
     <section className={css.card} data-evidence-match={item.evidenceMatch}>
       <header className={css.cardHead}>
@@ -180,8 +183,8 @@ export function EvidenceCard({
         {evidenceMatch === 'unknown' && <Tag tone="warning">{t('instanceUnverified')}</Tag>}
       </header>
       {coverageLine !== '' && <p className={css.note}>{coverageLine}</p>}
-      {item.retrievalFacts?.truncated === true && (
-        <p className={css.note}>{t('budgetLimitedNote')}</p>
+      {truncated && (hasEvidence || reportedCount > 0) && (
+        <p className={css.note}>{t('evidenceRetrievalPartial')}</p>
       )}
       <ul className={css.passages}>
         {item.evidence.map((passage, index) => (
@@ -210,8 +213,8 @@ export function EvidenceCard({
           ))}
         </ul>
       )}
-      {item.retrievalFacts !== undefined && item.evidence.length === 0 && (
-        <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
+      {item.retrievalFacts !== undefined && !hasEvidence && (
+        <p className={css.note}>{emptyEvidenceNoteOf(reportedCount, t, truncated)}</p>
       )}
     </section>
   )

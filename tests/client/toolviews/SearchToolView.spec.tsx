@@ -261,7 +261,7 @@ describe('SearchToolView', () => {
     expect(screen.getByText('Item 1: Fallback Raw Title')).toBeTruthy()
   })
 
-  it('renders detail omitted notice when presentation meta budget stripped the rows', () => {
+  it('falls back to the raw text when presentation meta budget stripped the rows', () => {
     const block = settled({
       call: {
         name: 'zotero_search',
@@ -284,7 +284,6 @@ describe('SearchToolView', () => {
       t: mockT,
     })
 
-    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
     expect(screen.getByText('Item 1: Fallback Raw Title')).toBeTruthy()
   })
 

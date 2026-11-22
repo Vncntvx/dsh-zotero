@@ -31,45 +31,43 @@ export function SearchToolView(props: SearchToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
   const client = props.useZoteroClient()
 
-  const { icon, query, summary, errorSummary, rows, omitted, detailOmitted, rawText } =
-    useMemo(() => {
-      const args = argsViewOf(block)
-      const q = (textArg(args, 'query') ?? '').trim()
-      const meta = metaOf(block)
-      const searchView = meta !== null ? searchMetaOf(meta) : null
-      const noteMatches = searchView?.noteMatches ?? 0
-      const raw = (resultTextOf(block) ?? '').trim()
+  const { icon, query, summary, errorSummary, rows, omitted, rawText } = useMemo(() => {
+    const args = argsViewOf(block)
+    const q = (textArg(args, 'query') ?? '').trim()
+    const meta = metaOf(block)
+    const searchView = meta !== null ? searchMetaOf(meta) : null
+    const noteMatches = searchView?.noteMatches ?? 0
+    const raw = (resultTextOf(block) ?? '').trim()
 
-      let sum = ''
-      if (isToolRunning(block)) {
-        sum = t('toolSearchRunning')
-      } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
-        // The hit count is the call's, not the projection's: `rows` is the
-        // bounded page the card draws, which is capped independently of the
-        // search's own `maxSearchResults`. Counting rows read 20 on a
-        // deployment that raised the cap past the projection's.
-        const count = searchView.returned ?? searchView.rows.length
-        sum =
-          noteMatches > 0
-            ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
-            : t('toolSummaryFound', { count })
-      } else {
-        sum = t('toolTitleSearch')
-      }
+    let sum = ''
+    if (isToolRunning(block)) {
+      sum = t('toolSearchRunning')
+    } else if (searchView?.rows !== null && searchView?.rows !== undefined) {
+      // The hit count is the call's, not the projection's: `rows` is the
+      // bounded page the card draws, which is capped independently of the
+      // search's own `maxSearchResults`. Counting rows read 20 on a
+      // deployment that raised the cap past the projection's.
+      const count = searchView.returned ?? searchView.rows.length
+      sum =
+        noteMatches > 0
+          ? t('toolSummaryFoundWithNotes', { count, notes: noteMatches })
+          : t('toolSummaryFound', { count })
+    } else {
+      sum = t('toolTitleSearch')
+    }
 
-      const errSummary = errorSummaryOf(block, raw)
+    const errSummary = errorSummaryOf(block, raw)
 
-      return {
-        icon: <IconSearchOutlineRegular size={14} />,
-        query: q,
-        summary: sum,
-        errorSummary: errSummary,
-        rows: searchView?.rows ?? [],
-        omitted: searchView?.omitted ?? 0,
-        detailOmitted: searchView?.detailOmitted === true,
-        rawText: raw,
-      }
-    }, [block, t])
+    return {
+      icon: <IconSearchOutlineRegular size={14} />,
+      query: q,
+      summary: sum,
+      errorSummary: errSummary,
+      rows: searchView?.rows ?? [],
+      omitted: searchView?.omitted ?? 0,
+      rawText: raw,
+    }
+  }, [block, t])
 
   return (
     <ZoteroToolRow
@@ -91,7 +89,6 @@ export function SearchToolView(props: SearchToolViewProps) {
 
         return (
           <>
-            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
             {rows.length > 0 ? (
               <>
                 <div className={css.cardList}>

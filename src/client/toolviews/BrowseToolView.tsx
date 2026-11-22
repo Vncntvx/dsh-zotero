@@ -250,8 +250,6 @@ function ChangesBody({
           {t('toolChangesNoCursor')}
         </div>
       )}
-
-      {changes.detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
     </>
   )
 }
@@ -262,107 +260,93 @@ export function BrowseToolView(props: BrowseToolViewProps) {
   const isChanges = toolName === 'zotero_changes'
   const title = isChanges ? t('toolTitleChanges') : t('toolTitleBrowse')
 
-  const {
-    icon,
-    summary,
-    errorSummary,
-    rows,
-    empty,
-    nextOffset,
-    changes,
-    job,
-    detailOmitted,
-    omitted,
-    rawText,
-  } = useMemo(() => {
-    const raw = (resultTextOf(block) ?? '').trim()
-    const errSummary = errorSummaryOf(block, raw)
-    const args = argsViewOf(block)
-    // The kind the call asked for is the only label available before the
-    // result lands, and the fallback when a malformed replay record leaves the
-    // projection without one. It is the tool's required parameter, unlike the
-    // old `category` fallback that named a parameter the tool never had.
-    const askedKind = textArg(args, 'kind')
-    const meta = metaOf(block)
+  const { icon, summary, errorSummary, rows, empty, nextOffset, changes, job, omitted, rawText } =
+    useMemo(() => {
+      const raw = (resultTextOf(block) ?? '').trim()
+      const errSummary = errorSummaryOf(block, raw)
+      const args = argsViewOf(block)
+      // The kind the call asked for is the only label available before the
+      // result lands, and the fallback when a malformed replay record leaves the
+      // projection without one. It is the tool's required parameter, unlike the
+      // old `category` fallback that named a parameter the tool never had.
+      const askedKind = textArg(args, 'kind')
+      const meta = metaOf(block)
 
-    let sum = ''
-    let rowViews: BrowseRowView[] = []
-    // A page the projection reports as empty is a finding, not a gap: the card
-    // says so instead of printing the bare `kind: 0 of 0` header as a code box.
-    let empty = false
-    let next: number | null = null
-    let browseDetailOmitted = false
-    let omittedRows = 0
-    let changesView: ChangesMetaView | null = null
-    let job: JobArmView | null = null
+      let sum = ''
+      let rowViews: BrowseRowView[] = []
+      // A page the projection reports as empty is a finding, not a gap: the card
+      // says so instead of printing the bare `kind: 0 of 0` header as a code box.
+      let empty = false
+      let next: number | null = null
+      let omittedRows = 0
+      let changesView: ChangesMetaView | null = null
+      let job: JobArmView | null = null
 
-    if (isToolRunning(block)) {
-      sum = t('toolRunning')
-    } else if (isChanges) {
-      // A long diff is handed to a background job rather than answered inline.
-      // Read that arm first: the job id is the one value the reader needs to
-      // collect the result, and the diff shape below would render an empty
-      // page and report no changes.
-      job = meta !== null ? jobArmOf(meta) : null
-      if (job === null) {
-        const changes = meta !== null ? changesMetaOf(meta) : null
-        changesView = changes
-        // Removals are not changes: counting the `deleted*` totals into the
-        // changed total reported more changes than the library had, and a diff
-        // that deleted two of four changed items read as six.
-        sum =
-          changes?.changedTotal != null
-            ? t('toolSummaryChanges', { count: changes.changedTotal })
-            : t('toolTitleChanges')
+      if (isToolRunning(block)) {
+        sum = t('toolRunning')
+      } else if (isChanges) {
+        // A long diff is handed to a background job rather than answered inline.
+        // Read that arm first: the job id is the one value the reader needs to
+        // collect the result, and the diff shape below would render an empty
+        // page and report no changes.
+        job = meta !== null ? jobArmOf(meta) : null
+        if (job === null) {
+          const changes = meta !== null ? changesMetaOf(meta) : null
+          changesView = changes
+          // Removals are not changes: counting the `deleted*` totals into the
+          // changed total reported more changes than the library had, and a diff
+          // that deleted two of four changed items read as six.
+          sum =
+            changes?.changedTotal != null
+              ? t('toolSummaryChanges', { count: changes.changedTotal })
+              : t('toolTitleChanges')
+        } else {
+          sum = t(jobSummaryKeyOf(job), { jobId: job.jobId })
+        }
       } else {
-        sum = t(jobSummaryKeyOf(job), { jobId: job.jobId })
+        const browse = meta !== null ? browseMetaOf(meta) : null
+        const kind = browse?.kind ?? askedKind
+        // The page facts come from the projection, never from counting text
+        // lines: the rendered listing is one header line, two lines per library
+        // row, and a closing page pointer, so a line count is never an item
+        // count.
+        if (browse !== null && browse.returned !== null && browse.total !== null) {
+          sum = t('toolSummaryBrowsePage', {
+            kind: kind ?? t('toolTitleBrowse'),
+            returned: browse.returned,
+            total: browse.total,
+          })
+        } else if (kind !== undefined) {
+          sum = t('toolSummaryBrowseKind', { kind })
+        } else {
+          sum = t('toolTitleBrowse')
+        }
+        rowViews = (browse?.rows ?? []).map(browseRowView)
+        empty = browse?.rows != null && browse.rows.length === 0 && browse.returned === 0
+        omittedRows = browse?.omitted ?? 0
+        next = browse?.nextOffset ?? null
       }
-    } else {
-      const browse = meta !== null ? browseMetaOf(meta) : null
-      const kind = browse?.kind ?? askedKind
-      // The page facts come from the projection, never from counting text
-      // lines: the rendered listing is one header line, two lines per library
-      // row, and a closing page pointer, so a line count is never an item
-      // count.
-      if (browse !== null && browse.returned !== null && browse.total !== null) {
-        sum = t('toolSummaryBrowsePage', {
-          kind: kind ?? t('toolTitleBrowse'),
-          returned: browse.returned,
-          total: browse.total,
-        })
-      } else if (kind !== undefined) {
-        sum = t('toolSummaryBrowseKind', { kind })
-      } else {
-        sum = t('toolTitleBrowse')
-      }
-      rowViews = (browse?.rows ?? []).map(browseRowView)
-      empty = browse?.rows != null && browse.rows.length === 0 && browse.returned === 0
-      omittedRows = browse?.omitted ?? 0
-      next = browse?.nextOffset ?? null
-      browseDetailOmitted = browse?.detailOmitted === true
-    }
 
-    return {
-      // The icon rides the memo with everything else the header renders, so a
-      // re-render that leaves the call's own facts alone reuses the same node
-      // and the `DisclosureRow` above it can skip the work.
-      icon: isChanges ? (
-        <IconRefreshOutlineRegular size={14} />
-      ) : (
-        <IconBrowseOutlineRegular size={14} />
-      ),
-      summary: sum,
-      errorSummary: errSummary,
-      rows: rowViews,
-      empty,
-      nextOffset: next,
-      changes: changesView,
-      job,
-      detailOmitted: browseDetailOmitted,
-      omitted: omittedRows,
-      rawText: raw,
-    }
-  }, [block, isChanges, t])
+      return {
+        // The icon rides the memo with everything else the header renders, so a
+        // re-render that leaves the call's own facts alone reuses the same node
+        // and the `DisclosureRow` above it can skip the work.
+        icon: isChanges ? (
+          <IconRefreshOutlineRegular size={14} />
+        ) : (
+          <IconBrowseOutlineRegular size={14} />
+        ),
+        summary: sum,
+        errorSummary: errSummary,
+        rows: rowViews,
+        empty,
+        nextOffset: next,
+        changes: changesView,
+        job,
+        omitted: omittedRows,
+        rawText: raw,
+      }
+    }, [block, isChanges, t])
 
   return (
     <ZoteroToolRow
@@ -385,7 +369,21 @@ export function BrowseToolView(props: BrowseToolViewProps) {
             changes !== null &&
             (changes.changed.length > 0 || changes.deleted.length > 0 || changes.detailOmitted)
           ) {
-            return <ChangesBody changes={changes} t={t} />
+            return (
+              <>
+                <ChangesBody changes={changes} t={t} />
+                {changes.detailOmitted &&
+                  (rawText ? (
+                    <RawTextFallback
+                      text={rawText}
+                      copyLabel={t('copy')}
+                      copiedLabel={t('copied')}
+                    />
+                  ) : (
+                    <div className={css.coverageNotice}>{t('toolChangesDetailsUnavailable')}</div>
+                  ))}
+              </>
+            )
           }
           if (job !== null) {
             // The diff is still running. Its own text says where it is; the
@@ -410,20 +408,14 @@ export function BrowseToolView(props: BrowseToolViewProps) {
           }
           // The rows are unavailable (an over-budget projection, an absent
           // meta, or a malformed record), so the tool's own text is all there is.
-          return (
-            <>
-              {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
-              {rawText ? (
-                <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
-              ) : (
-                <div className={css.coverageNotice}>{t('toolNoResults')}</div>
-              )}
-            </>
+          return rawText ? (
+            <RawTextFallback text={rawText} copyLabel={t('copy')} copiedLabel={t('copied')} />
+          ) : (
+            <div className={css.coverageNotice}>{t('toolNoResults')}</div>
           )
         }
         return (
           <>
-            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
             <div className={css.cardList}>
               {rows.map((row) => (
                 <ToolItemRow

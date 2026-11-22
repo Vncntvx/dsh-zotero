@@ -24,58 +24,56 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
   const { toolName, block, useDisclosure, inspect, t } = props
   const client = props.useZoteroClient()
 
-  const { icon, summary, errorSummary, items, coverageLine, omittedNote, detailOmitted, rawText } =
-    useMemo(() => {
-      const raw = (resultTextOf(block) ?? '').trim()
-      const errSummary = errorSummaryOf(block, raw)
-      const meta = metaOf(block)
-      const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
-      const evidenceView = retrieveView?.kind === 'evidence' ? retrieveView : null
-      const fulltextView = retrieveView?.kind === 'fulltext' ? retrieveView : null
+  const { icon, summary, errorSummary, items, coverageLine, omittedNote, rawText } = useMemo(() => {
+    const raw = (resultTextOf(block) ?? '').trim()
+    const errSummary = errorSummaryOf(block, raw)
+    const meta = metaOf(block)
+    const retrieveView = meta !== null ? retrieveMetaOf(meta) : null
+    const evidenceView = retrieveView?.kind === 'evidence' ? retrieveView : null
+    const fulltextView = retrieveView?.kind === 'fulltext' ? retrieveView : null
 
-      let sum = ''
-      if (isToolRunning(block)) {
-        sum = t('toolRetrieveRunning')
-      } else if (fulltextView !== null) {
-        sum = t('toolSummaryFulltextWindow', {
-          start: fulltextView.fulltextRead.start,
-          end: fulltextView.fulltextRead.end,
-          total: fulltextView.fulltextRead.totalChars,
-        })
-      } else if (evidenceView?.items !== null && evidenceView?.items !== undefined) {
-        // `items` is the bounded page the card draws, capped at four regardless of
-        // `maxEvidencePassages`; `count` is the call's own total. Counting rows
-        // would report "4 passages" over a body listing 4 of 20, the same
-        // bounded-listing mistake the search card had.
-        sum = t('toolSummaryEvidence', { count: evidenceView.count ?? evidenceView.items.length })
-      } else {
-        sum = t('toolTitleRetrieve')
-      }
+    let sum = ''
+    if (isToolRunning(block)) {
+      sum = t('toolRetrieveRunning')
+    } else if (fulltextView !== null) {
+      sum = t('toolSummaryFulltextWindow', {
+        start: fulltextView.fulltextRead.start,
+        end: fulltextView.fulltextRead.end,
+        total: fulltextView.fulltextRead.totalChars,
+      })
+    } else if (evidenceView?.items !== null && evidenceView?.items !== undefined) {
+      // `items` is the bounded page the card draws, capped at four regardless of
+      // `maxEvidencePassages`; `count` is the call's own total. Counting rows
+      // would report "4 passages" over a body listing 4 of 20, the same
+      // bounded-listing mistake the search card had.
+      sum = t('toolSummaryEvidence', { count: evidenceView.count ?? evidenceView.items.length })
+    } else {
+      sum = t('toolTitleRetrieve')
+    }
 
-      const coverage = evidenceView?.coverage ?? fulltextView?.fulltextRead.coverage
-      const covLine = coverage ? coverageLineOf(coverage, t) : null
-      // Passages the call found but the projection could not carry. The card
-      // cannot show them, and a reader who sees "20 passages" above four rows
-      // deserves to be told the four are all the card kept.
-      const shown = evidenceView?.items?.length ?? 0
-      const omitted =
-        evidenceView?.count != null && evidenceView.count > shown ? evidenceView.count - shown : 0
-      const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
+    const coverage = evidenceView?.coverage ?? fulltextView?.fulltextRead.coverage
+    const covLine = coverage ? coverageLineOf(coverage, t) : null
+    // Passages the call found but the projection could not carry. The card
+    // cannot show them, and a reader who sees "20 passages" above four rows
+    // deserves to be told the four are all the card kept.
+    const shown = evidenceView?.items?.length ?? 0
+    const omitted =
+      evidenceView?.count != null && evidenceView.count > shown ? evidenceView.count - shown : 0
+    const omittedNote = omitted > 0 ? t('toolOmittedPassages', { count: omitted }) : null
 
-      return {
-        // The icon rides the memo with the rest of the header, so a re-render
-        // that leaves this call's facts alone reuses the same node and the
-        // memo'd `DisclosureRow` above it can skip the work.
-        icon: <IconBrowseOutlineRegular size={14} />,
-        summary: sum,
-        errorSummary: errSummary,
-        items: evidenceView?.items ?? [],
-        coverageLine: covLine,
-        omittedNote,
-        detailOmitted: evidenceView?.detailOmitted === true,
-        rawText: raw,
-      }
-    }, [block, t])
+    return {
+      // The icon rides the memo with the rest of the header, so a re-render
+      // that leaves this call's facts alone reuses the same node and the
+      // memo'd `DisclosureRow` above it can skip the work.
+      icon: <IconBrowseOutlineRegular size={14} />,
+      summary: sum,
+      errorSummary: errSummary,
+      items: evidenceView?.items ?? [],
+      coverageLine: covLine,
+      omittedNote,
+      rawText: raw,
+    }
+  }, [block, t])
 
   return (
     <ZoteroToolRow
@@ -103,8 +101,6 @@ export function RetrieveToolView(props: RetrieveToolViewProps) {
                 so a card that listed the cap in its summary would leave the
                 reader unable to tell a short answer from a truncated one. */}
             {omittedNote && <div className={css.coverageNotice}>{omittedNote}</div>}
-
-            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
 
             {items.length > 0 ? (
               <div className={css.cardList}>

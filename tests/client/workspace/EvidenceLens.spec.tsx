@@ -138,7 +138,7 @@ describe('EvidenceCard', () => {
     expect(container.querySelectorAll('[data-source]')).toHaveLength(2)
   })
 
-  it('renders coverage, the budget note, and the availability lines', () => {
+  it('renders coverage and the availability lines', () => {
     render(
       <EvidenceCard
         item={EVIDENCE_ITEM}
@@ -148,17 +148,16 @@ describe('EvidenceCard', () => {
       />,
     )
     expect(screen.getByText(`${zh.coverageLabel} 5/10 页 · 未完整`)).toBeDefined()
-    expect(screen.getByText(zh.budgetLimitedNote)).toBeDefined()
     expect(screen.getByText(/该来源不可用/)).toBeDefined()
     expect(screen.getAllByText(/返回 1 条匹配/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/没有返回匹配/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows the retrieved-but-empty summary and the per-source availability lines', () => {
+  it.each([false, true])('reports an empty retrieve with truncated=%s', (truncated) => {
     const item = sourceOf({
       title: 'Notes Only',
       retrievalFacts: {
-        truncated: false,
+        truncated,
         sourceAvailability: {
           note: { requested: true, returnedPassages: 0, unavailable: false },
           fulltext: { requested: true, returnedPassages: 0, unavailable: false },
@@ -173,7 +172,10 @@ describe('EvidenceCard', () => {
         openProtocol={openProtocol}
       />,
     )
-    expect(screen.getByText(zh.evidenceRetrievedNone)).toBeDefined()
+    expect(
+      screen.getByText(truncated ? zh.evidenceRetrievedNonePartial : zh.evidenceRetrievedNone),
+    ).toBeTruthy()
+    if (truncated) expect(screen.queryByText(zh.evidenceRetrievedNone)).toBeNull()
     expect(screen.getAllByText(/没有返回匹配/).length).toBeGreaterThanOrEqual(2)
   })
 
@@ -200,7 +202,6 @@ describe('EvidenceCard', () => {
     )
     expect(screen.queryByText(zh.evidenceRetrievedNone)).toBeNull()
     expect(screen.getByText(zh.evidenceReportedNoPreview.replace('{count}', '25'))).toBeDefined()
-    expect(screen.getByText(zh.budgetLimitedNote)).toBeDefined()
   })
 
   it('renders an evidence card with no retrieval facts without crashing', () => {

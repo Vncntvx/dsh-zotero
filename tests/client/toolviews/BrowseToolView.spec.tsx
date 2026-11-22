@@ -67,6 +67,17 @@ function viewBrowse(block: ReturnType<typeof settled>) {
   })
 }
 
+function viewChanges(block: ReturnType<typeof settled>) {
+  return renderBrowseView({
+    callId: 'c1',
+    toolName: 'zotero_changes',
+    phase: 'result',
+    block,
+    useDisclosure: mockUseDisclosure(true),
+    t: mockT,
+  })
+}
+
 describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
   it('reads the browsed kind from the projection, never from a category argument', () => {
     viewBrowse(
@@ -225,7 +236,6 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
         mockT('toolSummaryBrowsePage', { kind: 'collections', returned: 20, total: 900 }),
       ),
     ).toBeTruthy()
-    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
     expect(container.querySelector('pre')?.textContent).toBe('collections: 20 of 900')
   })
 
@@ -263,14 +273,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Changes 10 → 20' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(screen.getByText(mockT('toolSummaryChanges', { count: 4 }))).toBeTruthy()
     // The removals get their own section, counted on their own.
@@ -296,14 +299,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Changes 10 → 20' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(
       Array.from(container.querySelectorAll('[data-changes-kind]')).map((s) =>
@@ -336,17 +332,25 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Changes 10 → 20' }],
     })
 
-    renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    viewChanges(block)
 
     expect(screen.getByText(mockT('countOfReturned', { total: 500, shown: 1 }))).toBeTruthy()
   })
+
+  it.each(['Changed item AAAA1111', ''])(
+    'retains the cursor when projected detail is omitted (%s)',
+    (text) => {
+      const { container } = viewChanges(
+        settled({
+          call: { name: 'zotero_changes', argsRaw: JSON.stringify({ since: { version: 10 } }) },
+          meta: { fromVersion: 10, cursor: { version: 20, serverId: 'abc' }, detailOmitted: true },
+          content: text === '' ? [] : [{ type: 'text', text }],
+        }),
+      )
+      expect(container.querySelector('[data-changes-cursor]')).toBeTruthy()
+      expect(screen.getByText(text || mockT('toolChangesDetailsUnavailable'))).toBeTruthy()
+    },
+  )
 
   it('names the removals it cannot list individually', () => {
     // `totals.deletedOther` counts tombstones of kinds this tool does not
@@ -366,14 +370,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Other deleted objects: 4' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(screen.getByText(mockT('toolDeletedTitle', { count: 4 }))).toBeTruthy()
     // The four reported tombstone families render empty; the unlistable bucket
@@ -403,14 +400,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Changes 10 → 20' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(container.querySelector('[data-changes-range]')?.textContent).toBe(
       mockT('toolChangesRange', { from: 10, to: 20 }),
@@ -435,14 +425,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Changes 10 → version not advanced' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(container.querySelector('[data-changes-no-cursor]')?.textContent).toBe(
       mockT('toolChangesNoCursor'),
@@ -468,14 +451,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Not served by this Zotero build: collections' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     const withheld = container.querySelector('[data-changes-withheld]')
     expect(withheld?.textContent).toContain('collections')
@@ -501,14 +477,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Full-text reindexed: 1 changed' }],
     })
 
-    const { container } = renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    const { container } = viewChanges(block)
 
     expect(
       container.querySelector('[data-changes-kind="fulltextAttachments"] [data-changes-caveat]')
@@ -527,14 +496,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
         content: [{ type: 'text', text: `Zotero changes: ${kind} job job-7` }],
       })
 
-      const { container, unmount } = renderBrowseView({
-        callId: 'c1',
-        toolName: 'zotero_changes',
-        phase: 'result',
-        block,
-        useDisclosure: mockUseDisclosure(true),
-        t: mockT,
-      })
+      const { container, unmount } = viewChanges(block)
 
       expect(
         screen.getAllByText(
@@ -559,14 +521,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Change 1: version 11' }],
     })
 
-    renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    viewChanges(block)
 
     expect(screen.getAllByText(zh.toolTitleChanges).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Change 1: version 11')).toBeTruthy()
@@ -587,14 +542,7 @@ describe('BrowseToolView (zotero_browse & zotero_changes)', () => {
       content: [{ type: 'text', text: 'Change details...' }],
     })
 
-    renderBrowseView({
-      callId: 'c1',
-      toolName: 'zotero_changes',
-      phase: 'result',
-      block,
-      useDisclosure: mockUseDisclosure(true),
-      t: mockT,
-    })
+    viewChanges(block)
 
     expect(screen.getByText(mockT('toolSummaryChanges', { count: 6 }))).toBeTruthy()
   })

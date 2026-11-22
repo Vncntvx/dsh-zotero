@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The SourceEvidence component: passages feed, retrieval summary head,
- * truncated budget limits, jump-to-sidebar PDF actions (direct and resolved),
- * grounding context hints, and empty/omitted state notes.
+ * jump-to-sidebar PDF actions (direct and resolved), grounding context
+ * hints, and empty/omitted state notes.
  * @module tests/client/workspace/SourceEvidence
  */
 
@@ -25,7 +25,7 @@ afterEach(() => {
 })
 
 describe('SourceEvidence helpers', () => {
-  it('formats retrieval summary line with and without budget truncation', () => {
+  it('formats retrieval summary line from runs, kept, and reported counts', () => {
     const itemWithoutSummary = sourceOf({ retrievalSummary: undefined })
     expect(retrievalSummaryLineOf(itemWithoutSummary, t)).toBe('')
 
@@ -35,26 +35,16 @@ describe('SourceEvidence helpers', () => {
       facts: { reportedEvidenceCount: 7 },
       retrievalSummary: {
         runCount: 2,
-        truncated: false,
+        truncated: true,
       },
     })
     const lineNormal = retrievalSummaryLineOf(itemNormal, t)
     expect(lineNormal).toContain(t('retrievalRunCount', { count: 2 }))
     expect(lineNormal).toContain(t('retrievalKeptCount', { count: 5 }))
     expect(lineNormal).toContain(t('retrievalReportedCount', { count: 7 }))
-    expect(lineNormal).not.toContain(t('budgetLimitedNote'))
-
-    const itemTruncated = sourceOf({
-      fulltextReads: [],
-      evidenceTotal: 5,
-      facts: { reportedEvidenceCount: 7 },
-      retrievalSummary: {
-        runCount: 2,
-        truncated: true,
-      },
-    })
-    const lineTruncated = retrievalSummaryLineOf(itemTruncated, t)
-    expect(lineTruncated).toContain(t('budgetLimitedNote'))
+    // The summary states counts only; budget justification stays out of the UI.
+    expect(lineNormal).toBe(lineNormal.trim())
+    expect(lineNormal.split(' · ')).toHaveLength(3)
   })
 })
 
@@ -65,19 +55,23 @@ describe('SourceEvidence component', () => {
     expect(screen.getByText(t('evidenceNotRetrieved'))).toBeTruthy()
   })
 
-  it('renders empty evidence note when evidence list is empty', () => {
+  it.each([false, true])('renders the empty evidence note with truncated=%s', (truncated) => {
     const itemNone = sourceOf({
       retrievalFacts: {
-        truncated: false,
+        truncated,
         sourceAvailability: {},
       },
       facts: { reportedEvidenceCount: 0 },
       evidence: [],
     })
-    const { unmount } = render(<SourceEvidence item={itemNone} t={t} />)
-    expect(screen.getByText(t('evidenceRetrievedNone'))).toBeTruthy()
-    unmount()
+    render(<SourceEvidence item={itemNone} t={t} />)
+    expect(
+      screen.getByText(t(truncated ? 'evidenceRetrievedNonePartial' : 'evidenceRetrievedNone')),
+    ).toBeTruthy()
+    if (truncated) expect(screen.queryByText(t('evidenceRetrievedNone'))).toBeNull()
+  })
 
+  it('distinguishes reported passages from absent previews', () => {
     const itemReportedOnly = sourceOf({
       retrievalFacts: {
         truncated: false,

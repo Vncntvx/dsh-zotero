@@ -58,9 +58,6 @@ export function GetBatchToolView(props: Props) {
           <RunningNotice text={t('toolGetBatchRunning')} />
         ) : (
           <>
-            {view.detailOmitted && (
-              <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>
-            )}
             {view.rows.length > 0 && (
               <div className={css.cardList}>
                 {view.rows.map((row, index) => (

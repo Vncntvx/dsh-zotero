@@ -49,8 +49,6 @@ export interface SemanticModelEntry {
   readonly label: string
   /** Underlying model name for display. */
   readonly physicalModel: string
-  /** Short display name shown in pickers (e.g. `Qwen3-0.6B`). */
-  readonly shortModel: string
   /** Human-facing summary of architecture, scope, and trade-offs. */
   readonly note: string
   /** Upstream repository id on Hugging Face / HF-Mirror. */
@@ -92,8 +90,7 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'qwen3-0.6b',
     label: '通用平衡型 (balanced · Qwen3-0.6B)',
     physicalModel: 'Qwen3-Embedding-0.6B',
-    shortModel: 'Qwen3-0.6B',
-    note: 'General-purpose 0.6B embedding model with 1024 dimensions and 32K context. Strong Chinese semantic matching.',
+    note: 'General-purpose 0.6B embedding model with 1024 dimensions and 32K context. Strong Chinese semantic matching; recommended default.',
     modelId: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
     revision: 'c25a394dd583836952667c12f008335071b3f43d',
     dimension: 1024,
@@ -138,7 +135,6 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'granite-97m',
     label: '极速轻量型 (lightweight · Granite-97M)',
     physicalModel: 'IBM Granite 97M (ModernBERT)',
-    shortModel: 'Granite-97M',
     note: 'Lightweight multilingual ModernBERT model. Uses ~200MB RAM with ~15ms CPU latency, suitable for fast batch indexing on resource-constrained devices.',
     modelId: 'onnx-community/granite-embedding-97m-multilingual-r2-ONNX',
     revision: '536a9f241cb3f02a9c5995a1e708c784bd274859',
@@ -183,7 +179,6 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'kalm-0.5b',
     label: '中英双语型 (bilingual · KaLM-0.5B)',
     physicalModel: 'KaLM-Embedding-V2.5 0.5B',
-    shortModel: 'KaLM-0.5B',
     note: 'Bilingual 0.5B model tuned for Chinese/English research literature and instruction retrieval with 32K context.',
     modelId: 'thomasht86/KaLM-embedding-multilingual-mini-instruct-v2.5-ONNX',
     revision: '1ef826ab24cfcf52243ea16fefaf239b8c7fa285',
@@ -228,7 +223,6 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'nomic-137m',
     label: '英文代码型 (english · Nomic-137M)',
     physicalModel: 'Nomic Embed 137M v1.5',
-    shortModel: 'Nomic-137M',
     note: 'English and technical embedding model with 8K context and Matryoshka dimension truncation. Best for English literature; weaker on Chinese.',
     modelId: 'nomic-ai/nomic-embed-text-v1.5',
     revision: 'e9b6763023c676ca8431644204f50c2b100d9aab',
@@ -273,7 +267,6 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'bge-m3',
     label: '多路混合型 (hybrid · BGE-M3)',
     physicalModel: 'BAAI BGE-M3 Multilingual',
-    shortModel: 'BGE-M3',
     note: 'Widely adopted multilingual model with 8192 context and 1024-dim space. Reliable for long paper sections and cross-lingual retrieval.',
     modelId: 'onnx-community/bge-m3-ONNX',
     revision: '25b9af8e87a38eb120cfe87125383677b9cd309e',
@@ -318,7 +311,6 @@ const CATALOG: Record<SemanticModelKey, SemanticModelEntry> = {
     physicalKey: 'gte-base',
     label: '经典学术型 (academic · GTE-Base)',
     physicalModel: 'Alibaba NLP GTE Multilingual Base',
-    shortModel: 'GTE-Base',
     note: 'Multilingual model covering 75+ languages with 8K context and 768-dim space. Balanced performance for mixed-language libraries.',
     modelId: 'onnx-community/gte-multilingual-base',
     revision: '2edbf5e672aab465f9ed4c154a8b61791c082c69',

@@ -330,7 +330,7 @@ describe('RetrieveToolView', () => {
     expect(screen.getByText(new RegExp(zh.truncatedPreview))).toBeTruthy()
   })
 
-  it('reports when the byte budget dropped the meta detail', () => {
+  it('keeps counting omitted passages when the byte budget dropped the meta detail', () => {
     const block = settled({
       call: {
         name: 'zotero_retrieve',
@@ -348,7 +348,7 @@ describe('RetrieveToolView', () => {
       t: mockT,
     })
 
-    expect(screen.getByText(mockT('detailOmittedNote'))).toBeTruthy()
+    expect(screen.getByText(mockT('toolOmittedPassages', { count: 2 }))).toBeTruthy()
   })
 
   it('renders index coverage notice when coverage is present in meta', () => {

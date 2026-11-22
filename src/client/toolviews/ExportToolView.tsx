@@ -49,7 +49,6 @@ export function ExportToolView(props: ExportToolViewProps) {
     items,
     rawText,
     job,
-    detailOmitted,
   } = useMemo(() => {
     const raw = resultTextOf(block) ?? ''
     const errSummary = errorSummaryOf(block, raw)
@@ -97,7 +96,6 @@ export function ExportToolView(props: ExportToolViewProps) {
       // surface.
       rawText: job === null && rowStateOf(block) === 'ok' ? (resultFirstTextOf(block) ?? '') : '',
       job,
-      detailOmitted: exportView?.detailOmitted === true,
     }
   }, [block, t])
 
@@ -205,8 +203,6 @@ export function ExportToolView(props: ExportToolViewProps) {
                 </div>
               </div>
             )}
-
-            {detailOmitted && <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>}
           </>
         )
       }}

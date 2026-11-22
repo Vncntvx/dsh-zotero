@@ -28,8 +28,6 @@ import {
   SEMANTIC_DOWNLOAD_SOURCES,
   SEMANTIC_MODEL_KEYS,
   SEMANTIC_MODELS,
-  semanticModelBytes,
-  type SemanticModelEntry,
   type SemanticModelKey,
 } from '../enrichment-model-catalog.ts'
 import { BooleanField, ChoiceField, SecretField, type ChoiceOption } from './fields.tsx'
@@ -70,17 +68,6 @@ const SEMANTIC_MODEL_DESCRIPTION_KEYS = {
   hybrid: 'semanticModelHybridDesc',
   academic: 'semanticModelAcademicDesc',
 } as const satisfies Record<SemanticModelKey, ZoteroLocaleKey>
-
-/**
- * Picker label for one tier: the localized tier name plus a catalog-derived
- * parenthetical (key · short model · download size), so the label cannot drift
- * from the catalog it names. Two decimal places keep the six pinned bundles
- * distinguishable where one decimal would collapse them.
- */
-function semanticModelOptionLabel(model: SemanticModelEntry, t: T): string {
-  const gb = (semanticModelBytes(model) / 1e9).toFixed(2)
-  return `${t(SEMANTIC_MODEL_LABEL_KEYS[model.key])} (${model.key} · ${model.shortModel} · ${gb} GB)`
-}
 
 /** One semantic-model action button, derived once from the model state. */
 interface SemanticModelAction {
@@ -269,17 +256,14 @@ export function EnrichmentSettingsForm({
     ? state.mode.text
     : ENRICHMENT_DEFAULTS.mode
 
-  // The option list is the catalog's, ordered smallest download first, with one
-  // locale key per tier enforced at compile time: adding a model without
-  // labelling it fails the build.
+  // The option list is the catalog's, with one locale key per tier enforced at
+  // compile time: adding a model without labelling it fails the build.
   const modelOptions: readonly ChoiceOption[] = useMemo(
     () =>
-      [...SEMANTIC_MODELS]
-        .sort((a, b) => semanticModelBytes(a) - semanticModelBytes(b))
-        .map((model) => ({
-          value: model.key,
-          label: semanticModelOptionLabel(model, t),
-        })),
+      SEMANTIC_MODELS.map((model) => ({
+        value: model.key,
+        label: t(SEMANTIC_MODEL_LABEL_KEYS[model.key]),
+      })),
     [t],
   )
   const modelValue = (SEMANTIC_MODEL_KEYS as readonly string[]).includes(state.semanticModel.text)

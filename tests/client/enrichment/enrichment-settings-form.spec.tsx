@@ -18,11 +18,6 @@ import {
 import { cleanup, en, mountHarness, screen, zh } from './support.tsx'
 import { fakeScope } from '../helpers/fake-scope.ts'
 import { makeTranslate } from '../helpers/mock-translate.ts'
-import {
-  SEMANTIC_MODELS,
-  semanticModelBytes,
-  type SemanticModelKey,
-} from '../../../src/enrichment-model-catalog.ts'
 
 afterEach(() => {
   cleanup()
@@ -120,28 +115,8 @@ describe('EnrichmentSettingsSection', () => {
     })
     const modelBtn = screen.getByRole('button', { name: zh.semanticModel })
     expect(modelBtn.textContent).toContain(zh.semanticModelBalanced)
-    expect(modelBtn.textContent).toContain('Qwen3-0.6B')
     const sourceBtn = screen.getByRole('button', { name: zh.semanticDownloadSource })
     expect(sourceBtn.textContent).toContain(zh.semanticSourceHfMirror)
-  })
-
-  it('lists model options smallest download first, each labelled with its size', () => {
-    mountHarness()
-    fireEvent.click(screen.getByRole('button', { name: zh.semanticModel }))
-    const labels = screen.getAllByRole('menuitem').map((item) => item.textContent ?? '')
-    const tierOf: Record<SemanticModelKey, string> = {
-      balanced: zh.semanticModelBalanced,
-      lightweight: zh.semanticModelLightweight,
-      bilingual: zh.semanticModelBilingual,
-      english: zh.semanticModelEnglish,
-      hybrid: zh.semanticModelHybrid,
-      academic: zh.semanticModelAcademic,
-    }
-    const expectedTiers = [...SEMANTIC_MODELS]
-      .sort((a, b) => semanticModelBytes(a) - semanticModelBytes(b))
-      .map((model) => tierOf[model.key])
-    expect(labels).toEqual(expectedTiers.map((tier) => expect.stringContaining(tier)))
-    for (const label of labels) expect(label).toMatch(/ · \d+\.\d{2} GB\)$/)
   })
 
   it('keeps the token control disabled for an invalid committed reference', () => {
@@ -196,12 +171,9 @@ describe('EnrichmentSettingsSection', () => {
     fireEvent.click(toggle)
     expect(harness.snapshot().enableSemanticSearch.text).toBe('true')
 
-    // Model selection: the option label carries the catalog parenthetical, so
-    // match on the tier-name prefix.
+    // Model selection
     fireEvent.click(screen.getByRole('button', { name: zh.semanticModel }))
-    fireEvent.click(
-      screen.getByRole('menuitem', { name: new RegExp(`^${zh.semanticModelBilingual}`) }),
-    )
+    fireEvent.click(screen.getByRole('menuitem', { name: zh.semanticModelBilingual }))
     expect(harness.snapshot().semanticModel.text).toBe('bilingual')
 
     // Download channel selection

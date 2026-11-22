@@ -121,20 +121,23 @@ export function TurnZoteroEvidence({
         (value, i) => value.ref === after[i]?.ref && value.referenced === after[i]?.referenced,
       ),
   )
-  if (refs.length === 0) return null
+  const displayable = refs.flatMap((target) => {
+    const key = target.artifactId?.slice(0, 12) ?? refFieldsOf(target.ref)?.key
+    return key === undefined ? [] : [{ ...target, key }]
+  })
+  if (displayable.length === 0) return null
   return (
     <details>
       <summary>
-        {t('turnZoteroEvidence')} ({refs.length})
+        {t('turnZoteroEvidence')} ({displayable.length})
       </summary>
       <ul>
-        {refs.map(({ ref, referenced, artifactId }) => {
-          const key = artifactId === undefined ? refFieldsOf(ref)?.key : artifactId.slice(0, 12)
+        {displayable.map(({ ref, referenced, artifactId, key }) => {
           const permitted =
             artifactId === undefined
               ? canRead && canOpen
               : canReadArtifact && openParsed !== undefined
-          return key === undefined ? null : (
+          return (
             <li key={ref}>
               {permitted ? (
                 <Button

@@ -24,17 +24,15 @@ import { SourcePageControls } from './SourcePageControls.tsx'
 import type { SourcePager } from './useSourcePage.ts'
 import css from './workspace.module.css'
 
-/** The summary line of one item's retrieves: runs, kept, reported, truncated. */
+/** The summary line of one item's retrieves: runs, kept, reported. */
 export function retrievalSummaryLineOf(item: SourceItem, t: TranslateNS<'zotero'>): string {
   const summary = item.retrievalSummary
   if (summary === undefined) return ''
-  const parts = [
+  return [
     t('retrievalRunCount', { count: summary.runCount }),
     t('retrievalKeptCount', { count: item.evidenceTotal }),
     t('retrievalReportedCount', { count: item.facts.reportedEvidenceCount }),
-  ]
-  if (summary.truncated) parts.push(t('budgetLimitedNote'))
-  return parts.join(' · ')
+  ].join(' · ')
 }
 
 interface SourceEvidenceProps {
@@ -158,10 +156,16 @@ export function SourceEvidence({
   }
 
   const summaryLine = retrievalSummaryLineOf(item, t)
+  const truncated = (item.retrievalSummary ?? item.retrievalFacts)?.truncated === true
+  const reportedCount = item.facts.reportedEvidenceCount
+  const showEmpty = item.evidence.length === 0 && !hasFulltextReads
 
   return (
     <div className={css.panel}>
       {summaryLine !== '' && <p className={css.summaryLine}>{summaryLine}</p>}
+      {truncated && (!showEmpty || reportedCount > 0) && (
+        <p className={css.note}>{t('evidenceRetrievalPartial')}</p>
+      )}
       {hasFulltextReads && (
         <div className={css.passages}>
           {item.fulltextReads.map((read) => (
@@ -204,9 +208,7 @@ export function SourceEvidence({
         </p>
       )}
       {item.evidence.length === 0 ? (
-        hasFulltextReads ? null : (
-          <p className={css.note}>{emptyEvidenceNoteOf(item.facts.reportedEvidenceCount, t)}</p>
-        )
+        showEmpty && <p className={css.note}>{emptyEvidenceNoteOf(reportedCount, t, truncated)}</p>
       ) : (
         <div className={css.passages}>
           {item.evidence.map((passage, index) => (

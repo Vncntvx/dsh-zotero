@@ -122,7 +122,7 @@ export function countOfLabel(
   return t('countOfReturned', { total, shown })
 }
 
-/** The per-source availability line: unavailable, returned, or no match. */
+/** The per-source availability line reports how many passages were returned. */
 export function availabilityLineOf(
   entry: SourceAvailabilityEntry,
   t: TranslateNS<'zotero'>,
@@ -132,12 +132,13 @@ export function availabilityLineOf(
   return t('availNoMatch')
 }
 
-/** The honest empty-passages note: reported-but-unkept count, or no match. */
+/** Distinguish an empty retrieval from an incomplete one and from omitted previews. */
 export function emptyEvidenceNoteOf(
   reportedEvidenceCount: number,
   t: TranslateNS<'zotero'>,
+  truncated = false,
 ): string {
-  return reportedEvidenceCount > 0
-    ? t('evidenceReportedNoPreview', { count: reportedEvidenceCount })
-    : t('evidenceRetrievedNone')
+  if (reportedEvidenceCount > 0)
+    return t('evidenceReportedNoPreview', { count: reportedEvidenceCount })
+  return t(truncated ? 'evidenceRetrievedNonePartial' : 'evidenceRetrievedNone')
 }

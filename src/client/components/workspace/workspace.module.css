@@ -508,7 +508,6 @@
   margin: 0;
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);
-  word-break: break-all;
   overflow-wrap: anywhere;
 }
 
@@ -699,7 +698,6 @@
   font-family: var(--dsw-font-markdown-code-font-family);
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
-  word-break: break-all;
   overflow-wrap: anywhere;
   max-height: 180px;
   overflow-y: auto;
@@ -896,11 +894,13 @@
  * a half-screen window is enough to drop the pane under 760px while the window
  * itself is still wide, which reads as the layout giving up with room to
  * spare. */
-/* Medium containers (680px ~ 1099px): standard two-column layout with stacked audit */
+/* Medium containers (680px ~ 1099px): standard two-column layout with stacked audit.
+ * The audit track is capped so a tall citation/search feed scrolls inside its own
+ * pane instead of starving the inspector row to a sliver. */
 @container (max-width: 1099px) and (min-width: 680px) {
   .workspace {
     grid-template-columns: clamp(300px, 32cqi, 380px) minmax(0, 1fr);
-    grid-template-rows: 1fr auto;
+    grid-template-rows: minmax(0, 1fr) fit-content(45%);
   }
 
   .sidebar {
@@ -925,7 +925,13 @@
 @container (max-width: 679px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: minmax(0, 1fr) fit-content(45%);
+  }
+
+  /* List mode shows only the sidebar, so the capped audit track must not
+     idle at 45% of the height. */
+  .workspace[data-pane='list'] {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .workspace[data-pane='list'] .inspector,

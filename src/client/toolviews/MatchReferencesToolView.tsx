@@ -56,9 +56,6 @@ export function MatchReferencesToolView(props: Props) {
           <RunningNotice text={t('toolMatchReferencesRunning')} />
         ) : (
           <>
-            {view.detailOmitted && (
-              <div className={css.coverageNotice}>{t('detailOmittedNote')}</div>
-            )}
             <div className={css.cardList}>
               {view.rows.map((row, index) => (
                 <ToolItemRow

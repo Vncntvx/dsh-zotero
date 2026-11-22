@@ -59,7 +59,6 @@ function spec(): SemanticModelEntry {
     physicalKey: 'arms',
     label: 'arms',
     physicalModel: 'arms',
-    shortModel: 'arms',
     note: 'arms',
     modelId: 'test/arms',
     revision: 'a'.repeat(40),

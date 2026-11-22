@@ -88,11 +88,11 @@ describe('inspector', () => {
     view.unmount()
   })
 
-  it('shows the truncated summary for repeated retrieves', () => {
+  it('shows the repeated-retrieve summary line', () => {
     const { view } = mountView(repeatedRetrieveFixture())
     fireEvent.click(view.container.querySelector('[data-inspector-panel="evidence"]')!)
     expect(screen.getByText(/检索 3 次/)).toBeDefined()
-    expect(screen.getByText(new RegExp(zh.budgetLimitedNote))).toBeDefined()
+    expect(screen.getByText(zh.evidenceRetrievalPartial)).toBeTruthy()
     view.unmount()
   })
 
