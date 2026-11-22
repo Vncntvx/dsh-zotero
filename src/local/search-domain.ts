@@ -270,7 +270,7 @@ export async function runSearch(
  * supplement. The exact path serves paged primary hits only and cannot scan
  * note bodies.
  */
-export const FILTERED_SEARCH_SUPPLEMENT_MESSAGE =
+const FILTERED_SEARCH_SUPPLEMENT_MESSAGE =
   'Year and attachment filters are panel-only and do not support the note-body supplement.'
 
 /**

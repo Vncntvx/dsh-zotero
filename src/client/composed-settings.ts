@@ -17,7 +17,7 @@ export interface ComposedSettingsPart {
 }
 
 /** The merged shell and shared actions one tab renders. */
-export interface ComposedSettingsForm {
+interface ComposedSettingsForm {
   readonly state: SettingsFormShell
   readonly save: () => void
   readonly discard: () => void

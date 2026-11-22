@@ -99,7 +99,7 @@ export function assertAttachmentTarget(itemType: string, key: string): void {
  * The detail read and the dedicated child-page read share this rule, so a
  * page the panel pages by is the page the host actually serves.
  */
-export function childPageWindowOf(
+function childPageWindowOf(
   request: { readonly kind: ZoteroInclude; readonly offset: number; readonly limit: number },
   limits: Pick<LocalApiLimits, 'maxNoteRecords' | 'maxAttachmentRecords' | 'maxAnnotationRecords'>,
 ): { offset: number; limit: number } {

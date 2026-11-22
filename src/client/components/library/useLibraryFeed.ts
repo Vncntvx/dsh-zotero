@@ -66,7 +66,7 @@ const INSPECTOR_INCLUDE: readonly ZoteroChildListingKind[] = ['notes', 'attachme
 
 type CollectionRow = CollectionRowView
 
-export interface LibraryFeed {
+interface LibraryFeed {
   readonly storageError?: string
   readonly clearPosition: () => boolean
   readonly locate: () => void

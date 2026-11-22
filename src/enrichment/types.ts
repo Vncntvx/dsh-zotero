@@ -70,7 +70,7 @@ export interface ParsedArtifactMeta {
 }
 
 /** One figure kept beside the Markdown it belongs to. */
-export interface ParsedImageMeta {
+interface ParsedImageMeta {
   /** `images/<file>`, exactly the reference `full.md` carries. */
   readonly name: string
   readonly mediaType: ZoteroArtifactImageMediaType

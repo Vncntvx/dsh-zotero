@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { ConcurrencyGate, GateAbortedError, mapWithConcurrency } from '../../src/concurrency.js'
-import { raceWithSignal } from '../../src/race-signal.js'
+import { awaitSharedWaiter, raceWithSignal } from '../../src/race-signal.js'
 import { deferred, progress } from '../helpers/sync.js'
 
 describe('mapWithConcurrency', () => {
@@ -214,5 +214,66 @@ describe('raceWithSignal', () => {
     const removeSpy = vi.spyOn(controller.signal, 'removeEventListener')
     await expect(raceWithSignal(Promise.resolve('won'), controller.signal)).resolves.toBe('won')
     expect(removeSpy.mock.calls.map((call) => call[0])).toEqual(['abort'])
+  })
+})
+
+describe('awaitSharedWaiter', () => {
+  it('resolves with the shared value and runs the leave hook once on settlement', async () => {
+    const done = deferred<number>()
+    let joins = 0
+    const leaves: boolean[] = []
+    const waiting = awaitSharedWaiter(done.promise, new AbortController().signal, {
+      onJoin: () => {
+        joins += 1
+      },
+      onLeave: (aborted) => leaves.push(aborted),
+    })
+    done.resolve(7)
+    await expect(waiting).resolves.toBe(7)
+    expect(joins).toBe(1)
+    expect(leaves).toEqual([false])
+  })
+
+  it('rejects with the caller reason and reports the abort to its hooks', async () => {
+    const done = deferred<number>()
+    const controller = new AbortController()
+    const leaves: boolean[] = []
+    const waiting = awaitSharedWaiter(done.promise, controller.signal, {
+      onLeave: (aborted) => leaves.push(aborted),
+    })
+    controller.abort(new Error('caller left'))
+    await expect(waiting).rejects.toThrow('caller left')
+    expect(leaves).toEqual([true])
+  })
+
+  it('handles an already-aborted signal with a paired join and leave', async () => {
+    const done = deferred<number>()
+    const controller = new AbortController()
+    controller.abort(new Error('gone'))
+    let joins = 0
+    const leaves: boolean[] = []
+    await expect(
+      awaitSharedWaiter(done.promise, controller.signal, {
+        onJoin: () => {
+          joins += 1
+        },
+        onLeave: (aborted) => leaves.push(aborted),
+      }),
+    ).rejects.toThrow('gone')
+    expect(joins).toBe(1)
+    expect(leaves).toEqual([true])
+  })
+
+  it('waits uncancellably without a signal', async () => {
+    const done = deferred<number>()
+    let joins = 0
+    const waiting = awaitSharedWaiter(done.promise, undefined, {
+      onJoin: () => {
+        joins += 1
+      },
+    })
+    done.resolve(3)
+    await expect(waiting).resolves.toBe(3)
+    expect(joins).toBe(0)
   })
 })

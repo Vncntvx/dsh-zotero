@@ -31,7 +31,7 @@ import { cosineSimilarity } from './tensor.js'
 import type { VectorCache } from './vector-cache.js'
 import type { Embedder } from './session.js'
 
-export interface SemanticRankerDeps {
+interface SemanticRankerDeps {
   /**
    * Resolve the embedder for the selected model. Implementations load lazily
    * and throw `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` when the model cannot

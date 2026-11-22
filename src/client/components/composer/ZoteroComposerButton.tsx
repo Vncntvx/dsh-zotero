@@ -10,7 +10,7 @@ import { ZoteroLibraryIcon } from '../library/ZoteroLibraryIcon.tsx'
 import { IconButton } from '../IconButton.tsx'
 import css from './composer.module.css'
 
-export interface ZoteroComposerButtonProps {
+interface ZoteroComposerButtonProps {
   readonly t: TranslateNS<'zotero'>
   readonly onClick?: () => void
 }
@@ -30,7 +30,7 @@ export function ZoteroComposerButton({ t, onClick }: ZoteroComposerButtonProps) 
   )
 }
 
-export interface ZoteroComposerSlotProps {
+interface ZoteroComposerSlotProps {
   readonly t: TranslateNS<'zotero'>
   readonly onOpen?: () => void
 }

@@ -33,7 +33,7 @@ interface SectionNode {
 }
 
 /** One ranked passage, carrying the character span it occupies in the source. */
-export interface RankedPassage {
+interface RankedPassage {
   /** First character index, inclusive. */
   start: number
   /** Last character index, exclusive. */
@@ -118,7 +118,7 @@ export function findSection(
 }
 
 /** One ranking request over a source text. */
-export interface RankPassagesOptions {
+interface RankPassagesOptions {
   /** The ranking strategy: the core's lexical ranker, or the hybrid one. */
   readonly ranker: EvidenceRanker
   /** The source text to cut into passages. */

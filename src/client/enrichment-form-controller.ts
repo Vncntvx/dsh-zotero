@@ -73,8 +73,8 @@ import {
 } from '../credential-names.ts'
 
 /** The single write-only secret control and the reference field that feeds it. */
-export const ENRICHMENT_SECRET_KEY = ENRICHMENT_KEY_FIELD_PAIRS[0][0]
-export const ENRICHMENT_REFERENCE_FIELD = ENRICHMENT_KEY_FIELD_PAIRS[0][1]
+const ENRICHMENT_SECRET_KEY = ENRICHMENT_KEY_FIELD_PAIRS[0][0]
+const ENRICHMENT_REFERENCE_FIELD = ENRICHMENT_KEY_FIELD_PAIRS[0][1]
 
 /** Only this exact wire code means the enrichment component is not composed. */
 export const COMPONENT_ABSENT_CODE = 'gateway/service-unavailable'
@@ -122,14 +122,14 @@ export interface EnrichmentModelPort {
 }
 
 /** A recoverable model failure, preserving the wire code and structured details. */
-export interface SemanticModelFailure {
+interface SemanticModelFailure {
   readonly code: string
   readonly message: string
   readonly details?: unknown
 }
 
 /** A transient user-initiated operation; a status refresh must not clear it. */
-export type SemanticModelPhase = 'idle' | 'checking' | 'cancelling' | 'deleting'
+type SemanticModelPhase = 'idle' | 'checking' | 'cancelling' | 'deleting'
 
 /** One valid, trimmed model-operation target parsed from the staged drafts. */
 export interface SemanticModelTarget {
@@ -159,17 +159,7 @@ export function parseSemanticModelTarget(
 }
 
 /** The wire status view minus its `model` field, which the form already knows. */
-export type SemanticModelState = Omit<ZoteroSemanticModelStatusResultView, 'model'>
-
-export const SEMANTIC_MODEL_UNAVAILABLE: SemanticModelState = {
-  ready: false,
-  downloading: false,
-  path: '',
-  downloadedBytes: 0,
-  totalBytes: 0,
-  percent: 0,
-  error: 'unavailable',
-}
+type SemanticModelState = Omit<ZoteroSemanticModelStatusResultView, 'model'>
 
 function blankModelState(): SemanticModelState {
   return {
@@ -837,4 +827,4 @@ export class EnrichmentFormController {
 }
 
 /** Suggested credential reference name, for the form hint. */
-export const ENRICHMENT_SUGGESTED_REF = ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru
+const ENRICHMENT_SUGGESTED_REF = ENRICHMENT_CREDENTIAL_REFERENCE_NAMES.mineru

@@ -34,14 +34,14 @@ export class ModelRemovalError extends HarnessError {
   }
 }
 
-export interface RemoveModelBundleOptions {
+interface RemoveModelBundleOptions {
   /** Canonical `<root>/<physicalKey>` directory. */
   readonly dir: string
   readonly expected: SemanticModelManifest
   readonly signal?: AbortSignal
 }
 
-export interface RemoveModelBundleResult {
+interface RemoveModelBundleResult {
   readonly removed: boolean
   readonly removedFiles: number
   readonly removedBytes: number

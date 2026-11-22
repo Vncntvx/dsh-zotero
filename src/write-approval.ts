@@ -78,7 +78,7 @@ export const WRITE_PLAN_QUESTION_ID = 'zotero-write-plan'
  * Appended by every tool that can report a committed-unverified outcome, so
  * the do-not-retry contract is stated once and cannot drift between tools.
  */
-export const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
+const WRITE_COMMITTED_UNVERIFIED_DESCRIPTION =
   ' Treat committed-unverified and per-item unverified receipts as committed: do not retry; reconcile by key/ref.'
 
 /** Shared approval, declined and reconciliation contracts for every write tool. */

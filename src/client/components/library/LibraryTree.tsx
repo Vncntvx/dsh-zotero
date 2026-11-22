@@ -80,7 +80,7 @@ function observeLibraryViewportRect(
   )
 }
 
-export interface LibraryTreeProps {
+interface LibraryTreeProps {
   readonly locatedRef?: string
   readonly t: TranslateNS<'zotero'>
   readonly flatTree: readonly FlatCollectionRow[]

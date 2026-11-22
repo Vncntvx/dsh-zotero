@@ -33,7 +33,7 @@ export const STATE_TONES: Record<ZoteroParsedDocumentState, TagTone> = {
   broken: 'danger',
 }
 
-export const AGO_LABELS = {
+const AGO_LABELS = {
   minutes: 'parsedManagerAgoMinutes',
   hours: 'parsedManagerAgoHours',
   days: 'parsedManagerAgoDays',
@@ -55,7 +55,7 @@ export function titleOf(row: ZoteroParsedDocumentRowView): string {
     : shortArtifactId(row.artifactId)
 }
 
-export function agoOf(at: number, now: number, t: TranslateNS<'zotero'>): string {
+function agoOf(at: number, now: number, t: TranslateNS<'zotero'>): string {
   const age = relativeTime(at, now)
   return age.unit === 'now' ? t('parsedManagerAgoNow') : t(AGO_LABELS[age.unit], { count: age.n })
 }

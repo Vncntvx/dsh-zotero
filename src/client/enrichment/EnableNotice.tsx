@@ -13,7 +13,7 @@ import { EnableNoticeModal } from '../components/EnableNoticeModal.tsx'
 import type { EnableNoticeFace } from '../enable-notice.ts'
 
 /** The hook name the enrichment entry publishes its snapshot under. */
-export type EnrichmentEnableNoticeFace = EnableNoticeFace<'enrichmentEnableNotice'>
+type EnrichmentEnableNoticeFace = EnableNoticeFace<'enrichmentEnableNotice'>
 
 export type EnrichmentEnableNoticeProps = PropsRuntime<'shell.overlay'> &
   PropsLocale<'zotero'> &

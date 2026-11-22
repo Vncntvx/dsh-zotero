@@ -77,7 +77,7 @@ export interface ParseOnceDeps {
 export type ParsePhase =
   'acquiring' | 'uploading' | 'waiting' | 'downloading' | 'validating' | 'writing'
 
-export interface ParseOnceInput {
+interface ParseOnceInput {
   /** Stable identity (attachment ref or URL); also the cache-key input. */
   readonly identity: string
   /** Job-owned parse attempt: retries keep it; explicit re-parses replace it. */

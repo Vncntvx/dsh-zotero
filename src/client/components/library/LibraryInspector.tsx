@@ -64,7 +64,7 @@ import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
 
 /** The browser face the parsed-artifact actions need: the session, its read, and the tab opener. */
-export interface ParsedArtifactFace {
+interface ParsedArtifactFace {
   readonly sessionId: string
   readonly read: PdfParseFace['read']
   /** Bumped when a parse finishes so every PDF re-probes the store. */

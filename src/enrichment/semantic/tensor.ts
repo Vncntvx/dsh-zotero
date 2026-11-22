@@ -10,7 +10,7 @@
  */
 
 /** How one `[seq, dim]` hidden state collapses into a single `[dim]` vector. */
-export type PoolingKind = 'cls' | 'mean' | 'last_token'
+type PoolingKind = 'cls' | 'mean' | 'last_token'
 
 /**
  * Pool one sequence's token embeddings into one vector.

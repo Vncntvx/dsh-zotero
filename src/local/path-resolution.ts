@@ -23,13 +23,13 @@ import { isWsl } from '../environment.js'
 import { missingAttachmentFileMessage } from './attachment-messages.js'
 
 /** Matches a Windows drive letter at the start of a POSIX-mapped path: `/C:/...` or `/c:/...`. */
-export const POSIX_WINDOWS_DRIVE_PATTERN = /^\/([A-Za-z]):(?:\/|$)/
+const POSIX_WINDOWS_DRIVE_PATTERN = /^\/([A-Za-z]):(?:\/|$)/
 
 /** Matches a POSIX WSL drive mount: `/mnt/c/...` or `/c/...`. */
-export const POSIX_WSL_MOUNT_PATTERN = /^(?:\/mnt)?\/([a-zA-Z])(?:\/|$)/
+const POSIX_WSL_MOUNT_PATTERN = /^(?:\/mnt)?\/([a-zA-Z])(?:\/|$)/
 
 /** Matches WSL interop UNC host names: `wsl.localhost` or `wsl$`. */
-export const WSL_UNC_HOST_PATTERN = /^wsl(?:\.localhost|\$)$/i
+const WSL_UNC_HOST_PATTERN = /^wsl(?:\.localhost|\$)$/i
 
 /** Model-facing message when a foreign drive is not mounted in the current environment. */
 export function unmountedDriveMessage(drive: string, reported: string): string {
@@ -47,7 +47,7 @@ export function unsupportedWslUncMessage(reported: string): string {
 }
 
 /** Convert a drive letter and POSIX subpath to a native Win32 path. */
-export function toWin32Path(drive: string, subpath: string): string {
+function toWin32Path(drive: string, subpath: string): string {
   return `${drive.toUpperCase()}:${subpath.replace(/\//g, '\\')}`
 }
 
@@ -96,32 +96,33 @@ export function parseWslMounts(mountsContent: string): Map<string, string[]> {
   return mapping
 }
 
-/** Process-level singleton cache for discovered WSL mounts. */
-let processWslMountsCache: Map<string, string[]> | null = null
-
-/** Clear the process-level WSL mounts cache (primarily for tests). */
-export function clearWslMountsCache(): void {
-  processWslMountsCache = null
+/**
+ * One mount-table reader per owning instance. The mount table rarely changes
+ * during a provider's lifetime, so the memo keeps one `/proc/mounts` read per
+ * instance instead of one per attachment resolution; a provider rebuild (a
+ * transport reconfiguration) simply reads again.
+ */
+export function createWslMountsMemo(
+  deps: { readFileSync?: (path: string, encoding: 'utf-8') => string } = {},
+): () => Map<string, string[]> {
+  let cache: Map<string, string[]> | null = null
+  return () => {
+    if (cache === null) cache = discoverWslMounts(deps)
+    return cache
+  }
 }
 
 /**
- * Read active WSL mount points from `/proc/mounts` if available.
- * Memoizes results at the module level when running against the default filesystem.
+ * Read active WSL mount points from `/proc/mounts` if available. Pure per
+ * call: callers that repeat the read own the memo (`createWslMountsMemo`),
+ * and tests inject `readFileSync` directly.
  */
 export function discoverWslMounts(
   deps: { readFileSync?: (path: string, encoding: 'utf-8') => string } = {},
 ): Map<string, string[]> {
-  if (deps.readFileSync === undefined && processWslMountsCache !== null) {
-    return processWslMountsCache
-  }
   const readFileSync = deps.readFileSync ?? defaultReadFileSync
   try {
-    const content = readFileSync('/proc/mounts', 'utf-8')
-    const parsed = parseWslMounts(content)
-    if (deps.readFileSync === undefined) {
-      processWslMountsCache = parsed
-    }
-    return parsed
+    return parseWslMounts(readFileSync('/proc/mounts', 'utf-8'))
   } catch {
     return new Map()
   }
@@ -166,7 +167,7 @@ export function candidateMountRootsForDrive(
 }
 
 /** Structured representation of a parsed attachment file URL. */
-export type ParsedAttachmentLocation =
+type ParsedAttachmentLocation =
   | {
       readonly kind: 'windows-drive'
       readonly drive: string
@@ -363,6 +364,11 @@ export interface PathResolutionDeps {
   readonly mountRoot?: string
   readonly signal?: AbortSignal
   readonly missingFileMessage?: (path: string) => string
+  /**
+   * The owning instance's memoized mount-table reader. Absent (tests, ad-hoc
+   * callers) resolves live.
+   */
+  readonly wslMounts?: () => Map<string, string[]>
 }
 
 /**
@@ -403,7 +409,7 @@ export async function resolveExistingAttachmentPath(
   let mountPointsMap: Map<string, string[]> | undefined
   // Only probe WSL mounts on Linux hosts running under WSL
   if (parsed.kind === 'windows-drive' && platform === 'linux' && isWsl(env, platform)) {
-    mountPointsMap = discoverWslMounts(deps)
+    mountPointsMap = deps.wslMounts !== undefined ? deps.wslMounts() : discoverWslMounts(deps)
   }
 
   const candidates = candidateLocalPaths(parsed, {

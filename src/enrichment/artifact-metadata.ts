@@ -111,7 +111,7 @@ export class AttachmentResolutionCache {
  * @param cache - the owner's memo; absent means every call resolves.
  * @returns the resolver the probe should use.
  */
-export function cachedAttachmentResolver(
+function cachedAttachmentResolver(
   resolve: ParseAttachmentResolver,
   cache: AttachmentResolutionCache | undefined,
 ): ParseAttachmentResolver {
@@ -129,7 +129,7 @@ export function cachedAttachmentResolver(
 export type MetadataResult =
   | { readonly metadata: ZoteroArtifactMetadataView; readonly currentArtifactId?: string }
   | { readonly kind: 'missing' }
-export type ProbeResult = Extract<ZoteroDocumentArtifactResultView, { kind: 'probed' }>
+type ProbeResult = Extract<ZoteroDocumentArtifactResultView, { kind: 'probed' }>
 type MetaRequest = Extract<ZoteroDocumentArtifactRequestView, { op: 'meta' }>
 type ProbeRequest = Extract<ZoteroDocumentArtifactRequestView, { op: 'probe' }>
 

@@ -9,7 +9,7 @@ import {
 } from '../library-preferences.ts'
 import type { LibraryViewMemory } from './components/library/library-view-store.ts'
 
-export interface LibraryPreferenceSnapshot {
+interface LibraryPreferenceSnapshot {
   readonly preferences?: LibraryPreferences
   readonly citation?: { readonly style: string; readonly locale: string }
   readonly citationPending?: boolean

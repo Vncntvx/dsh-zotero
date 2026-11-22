@@ -5,7 +5,7 @@
  * @module dsh-zotero/client/components/CommentIcon
  */
 
-export interface CommentIconProps {
+interface CommentIconProps {
   readonly size?: number
   readonly className?: string
 }

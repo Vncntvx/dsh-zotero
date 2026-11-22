@@ -73,7 +73,7 @@ import {
 import type { ZoteroResolvedScope } from '../contract.js'
 
 /** How one workspace read shapes its lists. */
-export interface BuildSourceWorkspaceOptions {
+interface BuildSourceWorkspaceOptions {
   /** The connected instance's Server ID from the status probe, when known. */
   readonly currentServerId?: string
   /** Keep the existing bounded view; internal session paging requests the full fold. */

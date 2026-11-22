@@ -8,7 +8,7 @@ import type { SupportedLocalLibrary, ZoteroFulltextItem } from '../types.js'
 import { assertAttachmentTarget } from './detail.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 
-export interface FulltextIdentity {
+interface FulltextIdentity {
   readonly serverId: string | undefined
   readonly attachmentRef: string
   readonly attachmentContentType?: string

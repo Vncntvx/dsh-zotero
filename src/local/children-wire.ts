@@ -51,7 +51,7 @@ import type { SupportedLocalLibrary } from '../types.js'
 const ANNOTATION_SEARCH = new URLSearchParams({ itemType: 'annotation' })
 
 /** The detail request's child kinds, in the panel's own spelling. */
-export type ChildListingKind = 'notes' | 'attachments' | 'annotations'
+type ChildListingKind = 'notes' | 'attachments' | 'annotations'
 
 /** The wire `itemType` filter each child kind reads through. */
 const CHILD_ITEM_TYPE: Record<ChildListingKind, string> = {
@@ -111,7 +111,7 @@ export async function fetchAnnotationChildren(
 }
 
 /** One child listing read: which key, which kind, and the window to serve. */
-export interface ChildListingRequest {
+interface ChildListingRequest {
   readonly key: string
   readonly library: SupportedLocalLibrary
   readonly serverId: string | undefined

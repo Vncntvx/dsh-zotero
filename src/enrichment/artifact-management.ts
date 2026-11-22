@@ -30,8 +30,8 @@ import { refFieldsOf } from '../ref-grammar.js'
 import { safeParseText } from './parse-target.js'
 
 /** The wire views are the single row contract; the zod schema is satisfies-checked. */
-export type ParsedDocumentRow = ZoteroParsedDocumentRowView
-export type ParsedDocumentList = ZoteroListParsedDocumentsResultView
+type ParsedDocumentRow = ZoteroParsedDocumentRowView
+type ParsedDocumentList = ZoteroListParsedDocumentsResultView
 export type DiscardResult = ZoteroDiscardParsedDocumentResultView
 
 export interface ArtifactManagementDeps {
@@ -46,7 +46,7 @@ const ARTIFACT_ID = ZOTERO_ARTIFACT_ID_PATTERN
 const BROKEN_DETAIL_LIMIT = 512
 
 /** A list window without its session id: authorization belongs to the service seam. */
-export type ParsedDocumentQuery = Pick<
+type ParsedDocumentQuery = Pick<
   ZoteroListParsedDocumentsRequestView,
   'offset' | 'limit' | 'state' | 'query'
 >

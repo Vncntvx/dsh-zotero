@@ -33,12 +33,12 @@ export type PublicFetch = typeof globalThis.fetch
 
 /**
  * The one external fetch: undici's own, from the copy whose `Agent` classes
- * the pinned dispatchers below instantiate. The cast is deliberate — undici's
- * `RequestInit`/`Response` declarations describe the same web API but are
- * nominally incompatible with the runtime's (`ArrayBufferView` body variants),
- * so only this seam restates them as the runtime shape.
+ * the pinned dispatchers below instantiate. The single restatement is the
+ * seam's declaration — undici's `RequestInit`/`Response` describe the same
+ * web API as the runtime's (nominally incompatible on `ArrayBufferView` body
+ * variants), so this seam is the one place the two spellings meet.
  */
-export const publicFetch = undiciFetch as unknown as PublicFetch
+export const publicFetch = undiciFetch as PublicFetch
 
 /** The production resolver: every answer, IPv4 and IPv6, in answer order. */
 export const dnsAddressResolver = async (hostname: string): Promise<readonly ResolvedAddress[]> => {
@@ -68,7 +68,7 @@ export function createPinnedDispatcher(addresses: readonly ResolvedAddress[]): P
  * here, and the proxy performs the DNS, so no address pinning applies. A
  * direct route keeps the closed-set pinned path.
  */
-export type EgressRoute =
+type EgressRoute =
   | { readonly proxied: true; readonly dispatcher: PinnedDispatcher['dispatcher'] }
   | { readonly proxied: false }
 

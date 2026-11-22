@@ -69,7 +69,7 @@ export const SCHOLARLY_NUMERIC_KEYS = ['maxResults', 'maxContentChars', 'foregro
 export type ScholarlyNumericKey = (typeof SCHOLARLY_NUMERIC_KEYS)[number]
 
 /** Background-job policy toggles. */
-export const SCHOLARLY_BOOLEAN_KEYS = ['enableRunInBackground', 'promoteOnTimeout'] as const
+const SCHOLARLY_BOOLEAN_KEYS = ['enableRunInBackground', 'promoteOnTimeout'] as const
 export type ScholarlyBooleanKey = (typeof SCHOLARLY_BOOLEAN_KEYS)[number]
 
 /** One credential answer, reduced to the two facts the form renders. */

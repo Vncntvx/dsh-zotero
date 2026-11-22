@@ -130,7 +130,7 @@ export async function inlineJson(
   return { bytes, canonical }
 }
 
-export function isDelivered(value: unknown): value is DeliveredResult {
+function isDelivered(value: unknown): value is DeliveredResult {
   const record = asRecord(value)
   return record?.delivery === 'inline' || record?.delivery === 'file'
 }

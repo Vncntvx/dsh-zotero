@@ -525,7 +525,7 @@ export function attachmentMetaOf(meta: Record<string, unknown>): AttachmentMetaV
 }
 
 /** One decoded get-batch row: the bibliographic facts the fold can attribute. */
-export interface GetBatchRowMetaView {
+interface GetBatchRowMetaView {
   readonly ref: string
   readonly status: 'ok' | 'error' | null
   readonly title: string | null
@@ -540,7 +540,7 @@ export interface GetBatchRowMetaView {
 }
 
 /** The get-batch projection view; `rows === null` means the items were malformed. */
-export interface GetBatchMetaView {
+interface GetBatchMetaView {
   readonly rows: ReadonlyMap<string, GetBatchRowMetaView> | null
   readonly requested: number
   readonly succeeded: number | undefined
@@ -610,7 +610,7 @@ export function getBatchMetaOf(
 }
 
 /** One decoded match-references candidate. */
-export interface MatchReferenceCandidateView {
+interface MatchReferenceCandidateView {
   readonly ref: string
   readonly title: string
   readonly authors: readonly string[]
@@ -624,7 +624,7 @@ export interface MatchReferenceCandidateView {
 }
 
 /** One decoded match-references input row: its selected and listed candidates. */
-export interface MatchReferenceItemView {
+interface MatchReferenceItemView {
   readonly inputId: string | undefined
   readonly status: 'matched' | 'ambiguous' | 'notFound' | 'conflict' | undefined
   readonly reason: string | undefined
@@ -632,7 +632,7 @@ export interface MatchReferenceItemView {
   readonly candidates: readonly MatchReferenceCandidateView[]
 }
 
-export interface MatchReferencesMetaView {
+interface MatchReferencesMetaView {
   readonly items: readonly MatchReferenceItemView[] | null
   readonly requested: number
   readonly matched: number | undefined

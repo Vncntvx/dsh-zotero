@@ -23,7 +23,7 @@ import { type ParseTranslate, type ParseLocaleKey } from './parse-locales.ts'
 import css from './parse.module.css'
 import noticeCss from '../components/notice.module.css'
 
-export interface ParseDocumentDialogProps {
+interface ParseDocumentDialogProps {
   readonly open: boolean
   readonly selection: DocumentParseSelection
   readonly remote: DocumentParseRemote

@@ -138,7 +138,7 @@ function buildRequest(args: Args): ZoteroMatchReferencesRequest {
   }
 }
 
-export function renderMatchReferences(_args: Args, value: Output): ContentBlock[] {
+function renderMatchReferences(_args: Args, value: Output): ContentBlock[] {
   return [
     {
       type: 'text',

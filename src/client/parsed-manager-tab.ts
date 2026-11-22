@@ -12,7 +12,7 @@ export const PARSED_MANAGER_TAB_PATTERN = 'dsh-resource://zotero-parsed-manager/
 
 const PREFIX = 'dsh-resource://zotero-parsed-manager/'
 
-export interface ParsedManagerTabTarget {
+interface ParsedManagerTabTarget {
   readonly sessionId: string
 }
 

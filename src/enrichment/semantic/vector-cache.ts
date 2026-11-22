@@ -28,7 +28,7 @@ import { createHash } from 'node:crypto'
 import { LRUCache } from 'lru-cache'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 import { EMBED_BATCH_SIZE } from './batching.js'
-import { awaitSharedWaiter } from '../../waiter-flight.js'
+import { awaitSharedWaiter } from '../../race-signal.js'
 import { ConcurrencyGate } from '../../concurrency.js'
 
 export const VECTOR_CACHE_MAX_ITEMS = 16_384
@@ -127,7 +127,7 @@ export interface VectorCache {
 }
 
 /** A queued shared batch owns its encoder independently of the requesting scope. */
-export interface VectorRunLease {
+interface VectorRunLease {
   run(texts: readonly string[], signal: AbortSignal): Promise<readonly Float32Array[]>
   release(): void | Promise<void>
 }

@@ -38,7 +38,7 @@ const selection = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('savedSearch'), ref: z.string().min(1), name: z.string() }).strict(),
 ])
 
-export const libraryStoredStateSchema = z
+const libraryStoredStateSchema = z
   .object({
     version: z.literal(4),
     library: zoteroLibrarySchema,

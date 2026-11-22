@@ -22,7 +22,7 @@ import { writeKeyedItems, throwKeyedVerdict } from './write-keyed-batch.js'
 import { ZOTERO_WRITE_OBJECT_BATCH } from '../constants.js'
 
 /** The bookkeeping one graph's patch accumulates as its nodes settle. */
-export interface TrashWalkProgress {
+interface TrashWalkProgress {
   /** Refs of the nodes patched so far, in patch order. */
   readonly completedRefs: string[]
   /** The library version of the newest acknowledged PATCH, when one landed. */
@@ -34,7 +34,7 @@ export function trashWalkProgress(): TrashWalkProgress {
   return { completedRefs: [] }
 }
 
-export interface PatchTrashNodesOptions {
+interface PatchTrashNodesOptions {
   /** The polarity the PATCH writes and the settled nodes must end up in. */
   readonly wantDeleted: boolean
   /** Caller-owned; mutated in place so partial progress survives a throw. */

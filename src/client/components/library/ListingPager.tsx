@@ -15,7 +15,7 @@ import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
 
 /** The pager window one served page reports. */
-export interface ListingPage {
+interface ListingPage {
   readonly label: string
   readonly offset: number
   readonly limit: number

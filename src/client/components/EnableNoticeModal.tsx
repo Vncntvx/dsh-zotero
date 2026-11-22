@@ -15,7 +15,7 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './EnableNoticeModal.module.css'
 
 /** Props of the disclosure modal. */
-export interface EnableNoticeModalProps {
+interface EnableNoticeModalProps {
   /** Whether this client still owes the disclosure. */
   readonly open: boolean
   readonly title: string

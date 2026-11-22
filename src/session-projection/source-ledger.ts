@@ -36,7 +36,7 @@ import type { SourceWorkspace } from '../sources/model.js'
 import { sourceWorkspaceSchema } from '../sources/workspace-schema.js'
 
 /** The projection key the browser reads. */
-export const SOURCE_LEDGER_KEY = 'zoteroSources'
+const SOURCE_LEDGER_KEY = 'zoteroSources'
 
 const blockFactSchema = z
   .object({

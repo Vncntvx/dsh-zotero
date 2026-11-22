@@ -12,7 +12,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroLocaleKey } from '../../locales.ts'
 
 /** The dictionary key for every standard Zotero item type. */
-export const ITEM_TYPE_LOCALE_KEYS = {
+const ITEM_TYPE_LOCALE_KEYS = {
   annotation: 'libraryItemTypeAnnotation',
   artwork: 'libraryItemTypeArtwork',
   attachment: 'libraryItemTypeAttachment',

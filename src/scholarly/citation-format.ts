@@ -12,7 +12,7 @@ import { cleanDoi } from './sources/helpers.js'
 /** The citation formats this tool asks a registration agency for. */
 export type CiteFormat = 'bibtex' | 'ris' | 'csljson' | 'text'
 
-export type CitationValidation =
+type CitationValidation =
   { ok: true; value: string; resolvedDoi: string } | { ok: false; reason: string }
 
 /** Compare DOIs case-insensitively after the same cleanup the registry output uses. */

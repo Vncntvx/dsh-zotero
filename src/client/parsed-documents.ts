@@ -30,7 +30,7 @@ export interface PreparedParsedDocument {
   readonly images: Readonly<Record<string, string>>
   readonly bytes: number
 }
-export interface ParsedDocumentProgress {
+interface ParsedDocumentProgress {
   readonly pages: number
   readonly totalPages: number
   readonly images: number
@@ -651,7 +651,7 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
 }
 
 /** The lease-free title state for one parsed-document tab address. */
-export interface ParsedTitleMeta {
+interface ParsedTitleMeta {
   readonly state: 'missing' | 'resolving' | 'ready'
   readonly title?: string
 }

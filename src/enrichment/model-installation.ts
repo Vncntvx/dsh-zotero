@@ -111,7 +111,7 @@ export interface ModelBundleInspectorPort {
   ): Promise<BundleInspection>
 }
 
-export interface ModelInstallationOptions {
+interface ModelInstallationOptions {
   /** Canonical `<root>/<physicalKey>` directory. */
   readonly dir: string
   readonly expected: SemanticModelManifest
@@ -131,7 +131,7 @@ export interface ModelInstallationOptions {
   readonly cleanup?: (stagingDir: string) => Promise<void>
 }
 
-export interface ModelInstallationResult {
+interface ModelInstallationResult {
   readonly status: 'installed' | 'already-ready'
   readonly dir: string
   /** Cleanup failure after a committed publication; never turns success into failure. */

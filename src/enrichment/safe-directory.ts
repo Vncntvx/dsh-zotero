@@ -10,7 +10,7 @@ import { ZoteroError, type ZoteroErrorCode } from '../errors.js'
 export type SafeDirectoryDeps = SafePathDeps
 export const hostSafeDirectoryDeps: SafeDirectoryDeps = hostSafePathDeps
 
-export interface SafeDirectoryOptions extends Omit<SafePathOptions, 'deps' | 'refuse'> {
+interface SafeDirectoryOptions extends Omit<SafePathOptions, 'deps' | 'refuse'> {
   readonly errorCode: ZoteroErrorCode
   readonly label: string
   readonly deps?: SafeDirectoryDeps

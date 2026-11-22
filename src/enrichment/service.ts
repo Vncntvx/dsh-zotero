@@ -40,7 +40,6 @@ import {
   domainCall,
   ZOTERO_INVALID_ARGUMENT,
   ZOTERO_FILE_UNREADABLE,
-  ZOTERO_ENRICHMENT_TASK_FAILED,
   ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE,
   ZOTERO_PROVIDER_UNAVAILABLE,
   ZoteroError,
@@ -201,7 +200,7 @@ interface EnrichmentCoreLink {
 }
 
 /** Host seams, injectable so a spec never opens a socket or writes to disk. */
-export interface EnrichmentServiceDeps {
+interface EnrichmentServiceDeps {
   readonly client?: MineruClient
   readonly parse?: typeof parseOnce
   readonly store?: (config: EnrichmentPreferences, create: boolean) => Promise<ParsedArtifactStore>
@@ -213,16 +212,6 @@ export interface EnrichmentServiceDeps {
   readonly loader?: () => SemanticEmbedderLoader
 }
 
-/** Wrap a bare error from a MinerU parse task: that task, not a read, failed. */
-export function parseFailureOf(error: unknown): ZoteroError {
-  return new ZoteroError(
-    `MinerU parsing failed: ${errorMessageOf(error)}`,
-    ZOTERO_ENRICHMENT_TASK_FAILED,
-    {
-      cause: error,
-    },
-  )
-}
 
 /**
  * Wrap a bare error from a read-only artifact lookup. The lookup never talks
@@ -230,7 +219,7 @@ export function parseFailureOf(error: unknown): ZoteroError {
  * stored artifact could not be read from its own store. A ZoteroError already
  * carries its domain code and message, so it passes through unchanged.
  */
-export function artifactReadFailureOf(error: unknown): Error {
+function artifactReadFailureOf(error: unknown): Error {
   return error instanceof ZoteroError
     ? error
     : new ZoteroError(

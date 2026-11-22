@@ -15,11 +15,11 @@ export {
   ZIP_MAX_FILE_BYTES,
   ZIP_MAX_ARCHIVE_BYTES,
 } from './archive-limits.js'
-export const ZIP_MAX_IMAGES = ARCHIVE_MAX_IMAGES
-export const ZIP_MAX_IMAGE_BYTES = ARCHIVE_MAX_IMAGE_BYTES
-export const ZIP_MAX_IMAGE_TOTAL_BYTES = ARCHIVE_MAX_IMAGE_TOTAL_BYTES
+const ZIP_MAX_IMAGES = ARCHIVE_MAX_IMAGES
+const ZIP_MAX_IMAGE_BYTES = ARCHIVE_MAX_IMAGE_BYTES
+const ZIP_MAX_IMAGE_TOTAL_BYTES = ARCHIVE_MAX_IMAGE_TOTAL_BYTES
 
-export interface ExtractedImage {
+interface ExtractedImage {
   readonly name: string
   readonly mediaType: ZoteroArtifactImageMediaType
   readonly data: Uint8Array
@@ -33,7 +33,7 @@ export interface ExtractedParsedFiles {
   readonly images: readonly ExtractedImage[]
 }
 
-export class ArchiveValidationError extends Error {
+class ArchiveValidationError extends Error {
   readonly code = 'ZOTERO_ENRICHMENT_ARCHIVE_INVALID'
   constructor(reason: string) {
     super(`MinerU result archive is invalid: ${reason}`)

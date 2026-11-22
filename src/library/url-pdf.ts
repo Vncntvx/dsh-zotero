@@ -27,7 +27,7 @@ import {
 import type { ZoteroAttachmentLocationView } from '../contract.js'
 
 export const URL_PDF_MAX_BYTES = 32 * 1024 * 1024
-export const URL_PDF_TIMEOUT_MS = 60_000
+const URL_PDF_TIMEOUT_MS = 60_000
 const URL_PDF_MAX_REDIRECTS = 5
 /** The deadline's TimeoutReason code for a panel PDF download. */
 const URL_PDF_TIMEOUT_REASON = 'zotero/url-pdf-download-timeout'

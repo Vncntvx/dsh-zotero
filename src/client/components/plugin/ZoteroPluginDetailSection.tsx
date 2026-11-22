@@ -19,7 +19,7 @@ import type { ZoteroClientFace } from '../../actions/client-face.ts'
 import type { ZoteroDetailFace } from './faces.ts'
 import css from './plugin-cards.module.css'
 
-export interface ZoteroPluginDetailSectionProps
+interface ZoteroPluginDetailSectionProps
   extends PluginDetailProps, PropsLocale<'zotero'>, ZoteroDetailFace {
   readonly useZoteroClient: () => ZoteroClientFace
 }

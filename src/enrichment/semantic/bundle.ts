@@ -8,7 +8,7 @@ import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../error
 import { openEmbedder, type Embedder } from './session.js'
 import { SemanticBundleFailure } from './bundle-failure.js'
 
-export interface SemanticBundleVerifier {
+interface SemanticBundleVerifier {
   verify(dir: string, spec: SemanticModelEntry): Promise<void>
 }
 

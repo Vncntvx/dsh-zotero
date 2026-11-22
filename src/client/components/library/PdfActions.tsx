@@ -27,7 +27,7 @@ export interface PdfParseFace {
   readonly onOpenParsed?: (attachment: ZoteroAttachmentRowView) => void
 }
 
-export interface PdfActionsProps {
+interface PdfActionsProps {
   readonly t: TranslateNS<'zotero'>
   /** The item's PDF attachments, Zotero's best choice first. */
   readonly attachments: readonly ZoteroAttachmentRowView[]

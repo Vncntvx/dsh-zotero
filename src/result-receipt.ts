@@ -9,7 +9,7 @@ import { RESULT_RECEIPT_PREFIX } from './constants.js'
 import { isRecord } from './json.js'
 
 /** One parsed receipt line: the persisted-result announcement a file block carries. */
-export type ResultReceipt = Record<string, unknown>
+type ResultReceipt = Record<string, unknown>
 
 export const RESULT_RECEIPT_REQUIRED_KEYS = [
   'delivery',

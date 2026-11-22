@@ -102,7 +102,7 @@ function buildRequest(args: Args): ZoteroGetBatchRequest {
   return request
 }
 
-export function renderGetBatch(_args: Args, value: Output): ContentBlock[] {
+function renderGetBatch(_args: Args, value: Output): ContentBlock[] {
   const lines = [
     `Read ${value.counts.succeeded} of ${value.counts.requested} refs (${value.counts.failed} failed):`,
   ]

@@ -21,7 +21,7 @@ export interface ArgsView {
 }
 
 /** Structured failure identity carried by a settled tool result. */
-export interface ToolBlockError {
+interface ToolBlockError {
   readonly name: string
   readonly code: string
   readonly reason?: string

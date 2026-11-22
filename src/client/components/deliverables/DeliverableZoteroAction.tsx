@@ -21,7 +21,7 @@ export interface DeliverableZoteroActionProps
     }> {}
 
 /** Pin-reviewed upstream route adapter; every unsupported shape is reported by the slot. */
-export function supportsDeliverableActionUrl(actionUrl: string | undefined): boolean {
+function supportsDeliverableActionUrl(actionUrl: string | undefined): boolean {
   if (!actionUrl || !/^(?:\/)?api\/present\.open\?/.test(actionUrl)) return false
   const params = new URLSearchParams(actionUrl.slice(actionUrl.indexOf('?') + 1))
   return (

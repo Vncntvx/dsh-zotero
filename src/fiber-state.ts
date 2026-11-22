@@ -20,7 +20,8 @@ export const FIBER_STATE = {
   UNLOADING: 5 as FiberState.UNLOADING,
 } as const
 
-/** Exhaustiveness guard: a moved or added `FiberState` member breaks the typecheck. */
+/** Exhaustiveness guard: a moved or added `FiberState` member breaks the typecheck.
+ * The export is the usage — the compiler evaluates the `satisfies` bound. */
 export const FIBER_STATE_COVERAGE = {
   [FIBER_STATE.PENDING]: true,
   [FIBER_STATE.LOADING]: true,

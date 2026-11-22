@@ -236,10 +236,10 @@ export const zoteroStatusSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroStatusView>
 
 /** Wire schema: resolveAttachment parameter (a non-empty string ref). */
-export const zoteroRefSchema = lazySchema(() => z.string().min(1))
+const zoteroRefSchema = lazySchema(() => z.string().min(1))
 
 /** Wire schema: resolveAttachment result. */
-export const zoteroAttachmentLocationSchema = lazySchema(() =>
+const zoteroAttachmentLocationSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -254,12 +254,12 @@ export const zoteroAttachmentLocationSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroAttachmentLocationView>
 
 /** Wire schema: the write-grant revocation result (strict). */
-export const zoteroWriteGrantRevokeSchema = lazySchema(() =>
+const zoteroWriteGrantRevokeSchema = lazySchema(() =>
   z.object({ removed: z.boolean() }).strict(),
 ) satisfies z.ZodType<Contract.ZoteroWriteGrantRevokeView>
 
 /** Wire schema: one diagnostics snapshot (strict; the ring pre-strips absent optionals). */
-export const zoteroDiagnosticsSchema = lazySchema(() =>
+const zoteroDiagnosticsSchema = lazySchema(() =>
   z
     .object({
       entries: z
@@ -289,7 +289,7 @@ export const zoteroDiagnosticsSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroDiagnosticsView>
 
 /** Wire schema: reportClientError parameter (surface + message required, stacks optional). */
-export const zoteroClientErrorReportSchema = lazySchema(() =>
+const zoteroClientErrorReportSchema = lazySchema(() =>
   z
     .object({
       surface: z.string().min(1),
@@ -302,7 +302,7 @@ export const zoteroClientErrorReportSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroClientErrorReport>
 
 /** Wire schema: reportClientError result (the ring sequence the report was assigned). */
-export const zoteroReportResultSchema = lazySchema(() =>
+const zoteroReportResultSchema = lazySchema(() =>
   z.object({ seq: z.number() }).strict().readonly(),
 ) satisfies z.ZodType<Contract.ZoteroReportResultView>
 
@@ -312,7 +312,7 @@ export const zoteroProtocolUrlSchema = lazySchema(() =>
 )
 
 /** Wire schema: openProtocol result. */
-export const zoteroOpenProtocolResultSchema = lazySchema(() =>
+const zoteroOpenProtocolResultSchema = lazySchema(() =>
   z
     .object({
       success: z.literal(true),
@@ -321,7 +321,7 @@ export const zoteroOpenProtocolResultSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroOpenProtocolResultView>
 
-export const zoteroSourcePageTargetSchema = lazySchema(() =>
+const zoteroSourcePageTargetSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
     z
       .object({
@@ -390,7 +390,7 @@ export const zoteroSourcePageResultSchema = lazySchema(() =>
 // ── Library panel endpoints ────────────────────────────────────────────────
 
 /** Wire schema: the canonical personal library (user/0) on its own. */
-export const zoteroPersonalLibrarySchema = lazySchema(() =>
+const zoteroPersonalLibrarySchema = lazySchema(() =>
   z
     .object({ type: z.literal('user'), id: z.literal(0) })
     .strict()
@@ -409,7 +409,7 @@ export const zoteroLibrarySchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.SupportedLocalLibrary>
 
 /** Wire schema: the resolved scope a search result echoes back. */
-export const zoteroResolvedScopeSchema = lazySchema(() =>
+const zoteroResolvedScopeSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
     z
       .object({ kind: z.literal('library'), library: zoteroLibrarySchema })
@@ -435,7 +435,7 @@ export const zoteroResolvedScopeSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroResolvedScope>
 
 /** Wire schema: browse request (one bounded navigation listing). */
-export const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
+const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
   z
     .object({
       kind: z.enum(['libraries', 'collections', 'savedSearches', 'tags', 'itemTypes']),
@@ -451,7 +451,7 @@ export const zoteroLibraryBrowseRequestSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryBrowseRequestView>
 
 /** Wire schema: browse result rows, discriminated by `kind` unlike the domain union. */
-export const zoteroSavedSearchConditionSchema = lazySchema(() =>
+const zoteroSavedSearchConditionSchema = lazySchema(() =>
   z
     .object({
       condition: z.string(),
@@ -463,7 +463,7 @@ export const zoteroSavedSearchConditionSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroSavedSearchConditionView>
 
 /** Wire schema: one collection row, shared by browse listings and path breadcrumbs. */
-export const zoteroCollectionRowSchema = lazySchema(() =>
+const zoteroCollectionRowSchema = lazySchema(() =>
   z
     .object({
       kind: z.literal('collection'),
@@ -479,7 +479,7 @@ export const zoteroCollectionRowSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroCollectionRowView>
 
-export const zoteroLibraryBrowseItemSchema = lazySchema(() =>
+const zoteroLibraryBrowseItemSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
     z
       .object({ kind: z.literal('tag'), tag: z.string() })
@@ -511,7 +511,7 @@ export const zoteroLibraryBrowseItemSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryBrowseItemView>
 
 /** Wire schema: browse result (the requested page of one navigation listing). */
-export const zoteroLibraryBrowseResultSchema = lazySchema(() =>
+const zoteroLibraryBrowseResultSchema = lazySchema(() =>
   z
     .object({
       libraryVersion: z.number().int().nonnegative().optional(),
@@ -534,7 +534,7 @@ export const zoteroLibraryBrowseResultSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryBrowseResultView>
 
 /** Wire schema: search request scope (the panel's scope set, including trash). */
-export const zoteroLibrarySearchScopeSchema = lazySchema(() =>
+const zoteroLibrarySearchScopeSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
     z
       .object({ kind: z.literal('library') })
@@ -600,7 +600,7 @@ export const zoteroLibrarySearchRequestSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibrarySearchRequestView>
 
 /** Wire schema: one item row of a listing (the domain's compact hit, mirrored). */
-export const zoteroSearchItemSchema = lazySchema(() =>
+const zoteroSearchItemSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -622,7 +622,7 @@ export const zoteroSearchItemSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroSearchItemView>
 
 /** Wire schema: search result (paged primary hits only; no note supplement crosses). */
-export const zoteroSearchResultSchema = lazySchema(() =>
+const zoteroSearchResultSchema = lazySchema(() =>
   z
     .object({
       scope: zoteroResolvedScopeSchema,
@@ -649,7 +649,7 @@ const childPageSchema = lazySchema(() =>
 )
 
 /** Wire schema: item-detail request (one ref plus the child kinds to include). */
-export const zoteroLibraryItemRequestSchema = lazySchema(() =>
+const zoteroLibraryItemRequestSchema = lazySchema(() =>
   z
     .object({
       ref: z.string().min(1),
@@ -669,7 +669,7 @@ export const zoteroLibraryItemRequestSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryItemRequestView>
 
 /** Wire schema: one child listing the detail view serves. */
-export function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRowsView<T>> {
+function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRowsView<T>> {
   return z
     .object({
       total: z.number().int().nonnegative(),
@@ -683,7 +683,7 @@ export function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRow
     .readonly()
 }
 
-export const zoteroNoteRowSchema = lazySchema(() =>
+const zoteroNoteRowSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -695,7 +695,7 @@ export const zoteroNoteRowSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroNoteRowView>
 
-export const zoteroAnnotationRowSchema = lazySchema(() =>
+const zoteroAnnotationRowSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -710,7 +710,7 @@ export const zoteroAnnotationRowSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroAnnotationRowView>
 
-export const zoteroAttachmentRowSchema = lazySchema(() =>
+const zoteroAttachmentRowSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -722,7 +722,7 @@ export const zoteroAttachmentRowSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroAttachmentRowView>
 
 /** Wire schema: one paged child-listing request. */
-export const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
+const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
   z
     .object({
       ref: z.string().min(1),
@@ -735,7 +735,7 @@ export const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryChildPageRequestView>
 
 /** Wire schema: one child page, discriminated by the kind it carries. */
-export const zoteroChildPageSchema = lazySchema(() =>
+const zoteroChildPageSchema = lazySchema(() =>
   z.discriminatedUnion('kind', [
     z
       .object({ kind: z.literal('notes'), page: childRowsSchema(zoteroNoteRowSchema) })
@@ -753,7 +753,7 @@ export const zoteroChildPageSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroChildPageView>
 
 /** Wire schema: the item detail view (panel include set applied, absent sets stay absent). */
-export const zoteroItemDetailSchema = lazySchema(() =>
+const zoteroItemDetailSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -834,7 +834,7 @@ export const zoteroLibraryExportRequestSchema = lazySchema(() =>
  * The panel endpoint serves rendered text only, so the translator arm carries
  * no per-document itemization.
  */
-export const zoteroLibraryExportResultSchema = lazySchema(() =>
+const zoteroLibraryExportResultSchema = lazySchema(() =>
   z
     .discriminatedUnion('format', [
       z
@@ -992,7 +992,7 @@ export const zoteroLibraryWriteRequestSchema = lazySchema(() =>
     }),
   ]),
 ) satisfies z.ZodType<ZoteroLibraryWriteRequestView>
-export const zoteroLibraryWriteResultSchema = lazySchema(() =>
+const zoteroLibraryWriteResultSchema = lazySchema(() =>
   z
     .object({
       kind: z.enum([
@@ -1010,7 +1010,7 @@ export const zoteroLibraryWriteResultSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroLibraryWriteResultView>
 
-export const zoteroCollectionPathRequestSchema = lazySchema(() =>
+const zoteroCollectionPathRequestSchema = lazySchema(() =>
   z
     .object({
       library: zoteroLibrarySchema,
@@ -1020,7 +1020,7 @@ export const zoteroCollectionPathRequestSchema = lazySchema(() =>
     .strict()
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroCollectionPathRequestView>
-export const zoteroCollectionPathResultSchema = lazySchema(() =>
+const zoteroCollectionPathResultSchema = lazySchema(() =>
   z
     .object({
       library: zoteroLibrarySchema,
@@ -1047,7 +1047,7 @@ export const zoteroReadUrlPdfRequestSchema = lazySchema(() =>
     })
     .strict(),
 ) satisfies z.ZodType<Contract.ZoteroReadUrlPdfRequestView>
-export const zoteroUrlPdfSchema = lazySchema(() =>
+const zoteroUrlPdfSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
@@ -1058,7 +1058,7 @@ export const zoteroUrlPdfSchema = lazySchema(() =>
     })
     .strict(),
 ) satisfies z.ZodType<ZoteroUrlPdfView>
-export const ZOTERO_URL_PDF_CODEC = strictCodec(ZOTERO_URL_PDF_TYPE_SYMBOL, zoteroUrlPdfSchema)
+const ZOTERO_URL_PDF_CODEC = strictCodec(ZOTERO_URL_PDF_TYPE_SYMBOL, zoteroUrlPdfSchema)
 export const zoteroReleaseUrlPdfSchema = lazySchema(() =>
   z.object({ lease: z.uuid() }).strict(),
 ) satisfies z.ZodType<Contract.ZoteroReleaseUrlPdfRequestView>
@@ -1084,7 +1084,7 @@ export const zoteroSemanticModelStatusRequestSchema = lazySchema(() =>
     .strict(),
 ) satisfies z.ZodType<ZoteroSemanticModelStatusRequestView>
 
-export const zoteroSemanticModelStatusResultSchema = lazySchema(() =>
+const zoteroSemanticModelStatusResultSchema = lazySchema(() =>
   z
     .object({
       model: z.string(),
@@ -1112,7 +1112,7 @@ export const zoteroSemanticModelDownloadRequestSchema = lazySchema(() =>
     .strict(),
 ) satisfies z.ZodType<ZoteroSemanticModelDownloadRequestView>
 
-export const zoteroSemanticModelDownloadResultSchema = lazySchema(() =>
+const zoteroSemanticModelDownloadResultSchema = lazySchema(() =>
   z
     .object({
       success: z.boolean(),
@@ -1132,7 +1132,7 @@ export const zoteroSemanticModelCancelRequestSchema = lazySchema(() =>
     .strict(),
 ) satisfies z.ZodType<ZoteroSemanticModelCancelRequestView>
 
-export const zoteroSemanticModelCancelResultSchema = lazySchema(() =>
+const zoteroSemanticModelCancelResultSchema = lazySchema(() =>
   z
     .object({
       cancelled: z.boolean(),
@@ -1149,7 +1149,7 @@ export const zoteroSemanticModelDeleteRequestSchema = lazySchema(() =>
     .strict(),
 ) satisfies z.ZodType<ZoteroSemanticModelDeleteRequestView>
 
-export const zoteroSemanticModelDeleteResultSchema = lazySchema(() =>
+const zoteroSemanticModelDeleteResultSchema = lazySchema(() =>
   z
     .object({
       success: z.boolean(),

@@ -24,7 +24,7 @@ export const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
 export const SHA256 = /^[0-9a-f]{64}$/
 
 /** One pinned file of a bundle, as the catalog declares it. */
-export interface CatalogFilePin {
+interface CatalogFilePin {
   readonly path: string
   readonly bytes: number
   readonly sha256: string

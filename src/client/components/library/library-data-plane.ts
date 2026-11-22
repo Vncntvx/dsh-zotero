@@ -29,7 +29,7 @@ import type {
   ZoteroLibrarySearchRequestView,
 } from '../../../contract.ts'
 import type { LibraryPanelWireFace } from './library-feed-types.ts'
-import { awaitSharedWaiter } from '../../../waiter-flight.ts'
+import { awaitSharedWaiter } from '../../../race-signal.ts'
 
 /** The wire reads the plane deduplicates. */
 type PlaneMethod = 'collectionPath' | 'browse' | 'search' | 'item' | 'childPage' | 'export'
@@ -101,7 +101,7 @@ function joinFlight<R>(
   })
 }
 
-export interface LibraryDataPlane extends LibraryPanelWireFace {
+interface LibraryDataPlane extends LibraryPanelWireFace {
   /** Drop every cached read; later requests re-fetch. */
   invalidate: () => void
   /** Re-key the cache to one Zotero instance; a change clears it. */

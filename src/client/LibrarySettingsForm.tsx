@@ -23,7 +23,7 @@ import libraryCss from './library-settings.module.css'
 
 type LibraryFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
 type T = (key: ZoteroLocaleKey) => string
-export const LIBRARY_CHOICE_LABELS: Record<string, ZoteroLocaleKey> = {
+const LIBRARY_CHOICE_LABELS: Record<string, ZoteroLocaleKey> = {
   comfortable: 'libraryComfortable',
   compact: 'libraryCompact',
   '1': 'libraryOneLine',
@@ -130,7 +130,7 @@ const GROUP_DESCRIPTIONS = {
   libraryActionSettings: 'libraryActionSettingsHint',
 } as const
 
-export interface LibrarySettingsFormProps {
+interface LibrarySettingsFormProps {
   t: T
   state: LibraryCardState
   actions: LibraryFormActions

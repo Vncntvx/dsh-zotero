@@ -88,12 +88,12 @@ export const PARSE_JOB_LABEL = '文档解析 · MinerU'
  * lifetime.
  */
 export const PARSE_NOTICE_WAIT_MS = PARSE_TOTAL_TIMEOUT_MS
-export const PARSE_NOTICE_REARM_MS = PARSE_TOTAL_TIMEOUT_MS / 2
+const PARSE_NOTICE_REARM_MS = PARSE_TOTAL_TIMEOUT_MS / 2
 export const PARSE_CANCELLED_MESSAGE = 'Document parsing was cancelled.'
 export const PARSE_FAILED_MESSAGE =
   'Document parsing failed. Retry the operation to resume its generation.'
 /** Real phase labels for the jobs roster; no invented percentages. */
-export const PARSE_JOB_PHASES: Readonly<Record<ParsePhase, string>> = {
+const PARSE_JOB_PHASES: Readonly<Record<ParsePhase, string>> = {
   acquiring: '读取 PDF',
   uploading: '上传 PDF 到 MinerU',
   waiting: 'MinerU 解析中',
@@ -101,7 +101,7 @@ export const PARSE_JOB_PHASES: Readonly<Record<ParsePhase, string>> = {
   validating: '校验解析结果',
   writing: '保存解析产物',
 }
-export type ParseJobPhase = ParsePhase
+type ParseJobPhase = ParsePhase
 
 /**
  * The failed receipt's line: the request's own reason, not only its code.

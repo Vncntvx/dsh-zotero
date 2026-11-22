@@ -34,7 +34,7 @@ export type SemanticDownloadSource = (typeof SEMANTIC_DOWNLOAD_SOURCES)[number]
 
 export const DEFAULT_SEMANTIC_DOWNLOAD_SOURCE: SemanticDownloadSource = 'hf-mirror'
 
-export interface SemanticModelFileEntry {
+interface SemanticModelFileEntry {
   readonly path: string
   readonly bytes: number
   readonly sha256: string

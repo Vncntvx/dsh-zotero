@@ -29,7 +29,7 @@ import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
 
-export interface ParsedArtifactProbeFace {
+interface ParsedArtifactProbeFace {
   readonly sessionId: string
   readonly read?: ParsedArtifactReader
   readonly revision?: number

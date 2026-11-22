@@ -125,7 +125,7 @@ const POWERSHELL_LAUNCHER_BASE64 = Buffer.from(POWERSHELL_LAUNCHER_SCRIPT, 'utf1
 )
 
 /** Options for launching a native zotero:// protocol deep link. */
-export interface OpenProtocolOptions {
+interface OpenProtocolOptions {
   readonly platform?: NodeJS.Platform
   readonly launcher?: ProtocolLauncher
   readonly signal?: AbortSignal

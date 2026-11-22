@@ -13,7 +13,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from './IconButton.tsx'
 
-export interface MoreActionsMenuProps {
+interface MoreActionsMenuProps {
   /** The accessible name and tooltip of the trigger, localized by the caller. */
   readonly label: string
   /** Data-driven rows (including separators and submenu parents). */

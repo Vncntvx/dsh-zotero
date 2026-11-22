@@ -174,6 +174,8 @@ const fulltextReadSchema = lazySchema(() =>
  * at the projection boundary, so the omission is a type error here instead of
  * a runtime rejection later. Removing the field from the schema, or adding one
  * to {@link FulltextRead} without adding it above, flips this to `false`.
+ * The export is the usage: the conditional type is evaluated because the
+ * declaration is exported.
  */
 export const FULLTEXT_READ_SCHEMA_MATCHES_MODEL: Exclude<
   keyof FulltextRead,
@@ -279,7 +281,7 @@ const attachmentHintSchema = lazySchema(() =>
     .strict(),
 )
 
-export const sourceItemSchema = lazySchema(() =>
+const sourceItemSchema = lazySchema(() =>
   z
     .object({
       key: z.string().min(1),

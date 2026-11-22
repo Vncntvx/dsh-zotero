@@ -19,7 +19,7 @@ export interface KeyedItemUpdate {
   readonly version: number
   readonly fields: Readonly<Record<string, unknown>>
 }
-export type KeyedItemVerdict =
+type KeyedItemVerdict =
   | {
       readonly kind: 'applied'
       readonly key: string

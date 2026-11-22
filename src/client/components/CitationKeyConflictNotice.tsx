@@ -10,7 +10,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CitationKeyConflict } from '../../citation-key.ts'
 import css from '../toolviews/toolviews.module.css'
 
-export interface CitationKeyConflictNoticeProps {
+interface CitationKeyConflictNoticeProps {
   /**
    * Present when the row's citation key disagrees with the native one. The
    * decoders' partial shapes (`null`, or fields that may be absent) degrade

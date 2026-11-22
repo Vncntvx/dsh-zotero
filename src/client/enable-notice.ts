@@ -30,7 +30,7 @@ export interface EnableNoticeState {
 }
 
 /** The status subset the controller reads from its component's card store. */
-export interface NamespaceStatusSource {
+interface NamespaceStatusSource {
   getSnapshot(): { readonly namespaceStatus: NamespaceStatus }
   subscribe(listener: () => void): () => void
 }
@@ -96,7 +96,7 @@ export function clientAcknowledgement(key: string): EnableNoticeAcknowledgement 
 }
 
 /** The snapshot store one entry publishes under its own hook name. */
-export type EnableNoticeHooks<Hook extends EnableNoticeHookName> = {
+type EnableNoticeHooks<Hook extends EnableNoticeHookName> = {
   readonly [K in Hook]: SnapshotStore<EnableNoticeState>
 }
 

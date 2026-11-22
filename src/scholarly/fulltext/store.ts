@@ -26,14 +26,14 @@ export type MarkdownRecord = FullTextBody & {
   readonly provenance?: never
 }
 
-export type PdfTextRecord = FullTextBody & {
+type PdfTextRecord = FullTextBody & {
   readonly provider: 'pdf-extract'
   readonly format: 'text'
   readonly provenance?: never
 }
 
 /** The actual artifact provenance may identify a verified attachment alias. */
-export type MineruRecord = FullTextBody & {
+type MineruRecord = FullTextBody & {
   readonly provider: 'mineru'
   readonly format: 'markdown'
   readonly provenance: FulltextArtifactProvenance
@@ -51,7 +51,7 @@ export type FullTextCacheEntry =
       readonly record?: PdfTextRecord
     }
 
-export type FullTextRead =
+type FullTextRead =
   | { readonly kind: 'hit'; readonly entry: FullTextCacheEntry }
   | { readonly kind: 'miss'; readonly issue?: string }
   | { readonly kind: 'corrupt'; readonly reason: string; readonly issue?: string }

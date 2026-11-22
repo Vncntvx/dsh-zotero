@@ -2,7 +2,7 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import css from '../parsed-manager.module.css'
 
-export interface ParsedManagerDeleteDialogProps {
+interface ParsedManagerDeleteDialogProps {
   pendingDelete?: { ids: readonly string[]; title?: string }
   busy: boolean
   onClose: () => void

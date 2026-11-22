@@ -157,14 +157,14 @@ async function readManifest(
   }
 }
 
-export interface BundleInspectorOptions {
+interface BundleInspectorOptions {
   /** Skip the coalescing cache and hash every pinned file. */
   readonly forceHash?: boolean
   readonly runtime?: boolean
   readonly signal?: AbortSignal
 }
 
-export interface BundleInspector extends ModelBundleInspectorPort {
+interface BundleInspector extends ModelBundleInspectorPort {
   readonly inspect: (
     target: ModelBundleTarget,
     options?: BundleInspectorOptions,

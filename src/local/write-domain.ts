@@ -77,7 +77,7 @@ import {
 } from '../types.js'
 
 type ItemTags = readonly { readonly tag: string; readonly type?: number }[]
-export type ItemStateReader<S> = (data: Record<string, unknown>) => S
+type ItemStateReader<S> = (data: Record<string, unknown>) => S
 
 export function tagState(data: Record<string, unknown>): { tags: ItemTags } {
   const tags = tagsOf(data)
@@ -403,7 +403,7 @@ export function strictCollectionKeysOf(
 import { collectionRef, itemRef } from './write-refs.js'
 
 /** What one read-merge-write plan receives, and how it sends its patch. */
-export interface ItemWriteContext<S> {
+interface ItemWriteContext<S> {
   /** The item's write-relevant state as read under the pinned instance. */
   readonly snapshot: ItemSnapshot & S
   /** The serving instance id the read was answered under. */
@@ -467,7 +467,7 @@ export interface CheckedCreateItem {
   readonly colInputs: string[]
 }
 
-export interface CreateItemFieldsInput {
+interface CreateItemFieldsInput {
   readonly itemType: string
   readonly title?: string
   readonly url?: string

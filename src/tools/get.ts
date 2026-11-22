@@ -210,7 +210,7 @@ function buildRequest(args: GetArgs): ZoteroGetRequest {
   }
 }
 
-export const FILE_ENVIRONMENT_MESSAGE =
+const FILE_ENVIRONMENT_MESSAGE =
   'File environment: local filesystem or host mount (e.g. WSL /mnt/…). A reader elsewhere (a sandbox without mounts, an isolated container, a remote host) may not see this path.'
 
 export function renderGet(_args: GetArgs, value: GetOutput): ContentBlock[] {

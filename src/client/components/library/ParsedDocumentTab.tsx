@@ -65,7 +65,7 @@ export function extractMarkdownTitle(markdown: string): string | undefined {
   return extractMarkdownTitleOf(markdown)
 }
 
-export interface ParsedDocumentTitleFace {
+interface ParsedDocumentTitleFace {
   /** The lease-free title source; the chip never opens the full document. */
   readonly documents: ParsedDocuments
 }

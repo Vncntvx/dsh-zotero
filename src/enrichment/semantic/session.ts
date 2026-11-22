@@ -40,7 +40,7 @@ export interface SessionTensor {
  * plus `position_ids`. The values come from the bundle's `config.json`, never
  * from a hardcoded guess.
  */
-export interface CacheInputSpec {
+interface CacheInputSpec {
   readonly kvHeads: number
   readonly headDim: number
   readonly layers: number

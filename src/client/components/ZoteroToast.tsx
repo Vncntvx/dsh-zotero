@@ -45,7 +45,7 @@ export function ZoteroToast({ useToast, dismiss, t }: ZoteroToastProps): ReactNo
 }
 
 /** Props of the panel-notice overlay entry: the notice hook and its dismissal. */
-export type ZoteroSurfaceToastProps = PropsRuntime<'shell.overlay'> &
+type ZoteroSurfaceToastProps = PropsRuntime<'shell.overlay'> &
   InjectFace<{
     hooks: { readonly toast: HostObservable<ZoteroSurfaceNotice | null> }
     readonly dismiss: () => void

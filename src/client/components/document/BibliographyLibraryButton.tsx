@@ -8,7 +8,7 @@
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroLibraryIcon } from '../library/ZoteroLibraryIcon.tsx'
 
-export interface BibliographyLibraryButtonProps {
+interface BibliographyLibraryButtonProps {
   readonly label: string
   readonly onOpenLibrary?: () => void
 }

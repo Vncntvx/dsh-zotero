@@ -31,7 +31,7 @@ import { asRecord } from './json.js'
 const INVALID_ARGS_CODE = 'INVALID_ARGS'
 
 /** One undeclared argument and the declared parameter it was meant for. */
-export interface ParameterCorrection {
+interface ParameterCorrection {
   readonly input: string
   readonly expected: string
 }
@@ -40,7 +40,7 @@ export interface ParameterCorrection {
 export type ParameterCorrectionLookup = (exec: ToolExecution) => ToolDefinition | undefined
 
 /** The shape of one `tools/post-execute` listener. */
-export type ParameterCorrectionListener = (
+type ParameterCorrectionListener = (
   exec: ToolExecution,
   result: Readonly<ToolExecutionResult>,
   next: () => Promise<PostToolDecision>,

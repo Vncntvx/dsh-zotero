@@ -16,7 +16,7 @@ import {
 export type OutputDirDeps = SafeDirectoryDeps
 export const hostDeps: OutputDirDeps = hostSafeDirectoryDeps
 
-export interface OutputDirOptions {
+interface OutputDirOptions {
   /** Override the default policy: create the default root, require configured roots to exist. */
   readonly create?: boolean
   readonly readOnly?: boolean

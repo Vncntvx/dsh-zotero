@@ -65,13 +65,13 @@ export interface DocumentParseSelection {
   readonly operation?: DocumentParseOperation
 }
 
-export interface DocumentParseFailure {
+interface DocumentParseFailure {
   readonly code: string
   readonly message: string
   readonly details?: unknown
 }
 
-export type DocumentParseGate = 'ready' | 'not-available' | 'permission' | 'offline' | 'invalid'
+type DocumentParseGate = 'ready' | 'not-available' | 'permission' | 'offline' | 'invalid'
 
 export interface DocumentParseState {
   readonly open: boolean

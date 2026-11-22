@@ -12,7 +12,7 @@ import css from './PdfPickerDialog.module.css'
 import tipCss from './tip.module.css'
 
 /** One PDF the dialog offers, and what choosing it does. */
-export interface PdfPickerOption {
+interface PdfPickerOption {
   readonly key: string
   readonly title: string
   /** The trailing hint naming this row's action. */
@@ -20,7 +20,7 @@ export interface PdfPickerOption {
   readonly onSelect: () => void
 }
 
-export interface PdfPickerDialogProps {
+interface PdfPickerDialogProps {
   readonly open: boolean
   readonly onClose: () => void
   readonly t: TranslateNS<'zotero'>

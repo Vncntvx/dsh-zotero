@@ -15,7 +15,7 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
  * @param form - the Zotero settings form the flag lives in.
  * @returns whether the flag currently permits browser surfaces.
  */
-export function webEnabledOf(form: ConfigForm<Record<string, unknown>>): boolean {
+function webEnabledOf(form: ConfigForm<Record<string, unknown>>): boolean {
   const snapshot = form.getSnapshot()
   return snapshot.status !== 'ready' || snapshot.value?.webEnabled !== false
 }
@@ -39,7 +39,7 @@ export function watchWebEnabled(
 }
 
 /** A mount the gate drives without remounting what is already up. */
-export interface GatedMount {
+interface GatedMount {
   /** Mount when enabled, withdraw when not; repeating a value does nothing. */
   sync: (enabled: boolean) => void
   /** Withdraw the mounted group, if any. */

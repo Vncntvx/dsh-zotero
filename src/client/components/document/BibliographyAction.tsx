@@ -9,7 +9,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { isBibliographyPath } from '../../bibliography.ts'
 import { BibliographyLibraryButton } from './BibliographyLibraryButton.tsx'
 
-export interface BibliographyActionProps {
+interface BibliographyActionProps {
   readonly absolutePath: string | undefined
   readonly t: TranslateNS<'zotero'>
   readonly onOpenLibrary: () => void

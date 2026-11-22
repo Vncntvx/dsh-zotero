@@ -591,7 +591,7 @@ export const FULLTEXT_TRUNCATED_REMEDY =
   'Continue with start=nextStart and the returned continuation token until isTruncated is false; concatenate the windows in order to obtain the complete document.'
 export const FULLTEXT_INPUT_TRUNCATED_REMEDY =
   'The document exceeded maxFulltextChars; the windows above cover only its first bounded portion.'
-export const FULLTEXT_SPILL_NOTE =
+const FULLTEXT_SPILL_NOTE =
   'The whole bounded document is also saved in spill storage; read it through that handle instead of walking every window.'
 export const FULLTEXT_COMPLETE_SPILL_NOTE =
   'The complete document is in the handle above; read it through that handle.'

@@ -6,7 +6,7 @@ const catalogSchema = z
   .array(z.tuple([z.string(), z.object({ ref: z.string() }).strict()]))
   .max(MAX_CATALOG_ROWS)
 
-export interface PdfReaderInventory {
+interface PdfReaderInventory {
   getSnapshot(): readonly { readonly contentId: string }[]
   subscribe(listener: () => void): () => void
 }

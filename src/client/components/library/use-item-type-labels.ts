@@ -14,7 +14,7 @@ import { LIBRARY_PAGE_SIZE } from './library-model.ts'
 import { messageOf } from '../../error-text.ts'
 
 /** One item-type row: the camelCase schema name and Zotero's localized name. */
-export interface ItemTypeRow {
+interface ItemTypeRow {
   readonly itemType: string
   readonly localized?: string
 }

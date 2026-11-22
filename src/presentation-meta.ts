@@ -172,7 +172,7 @@ interface ZoteroSourceAvailabilityView {
  * payload keys only — the window text, its continuation cursor and token, and
  * the spill handle, which stay in the tool result and never enter a card.
  */
-export type ZoteroFulltextReadFact = Omit<
+type ZoteroFulltextReadFact = Omit<
   ZoteroFulltextRead,
   'text' | 'nextStart' | 'continuation' | 'spillRef'
 >

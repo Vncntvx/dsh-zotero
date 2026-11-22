@@ -17,7 +17,7 @@ import { BROKEN_LABELS, STATE_LABELS, STATE_TONES, metaOf, titleOf } from './typ
 import css from '../parsed-manager.module.css'
 import tipCss from '../../components/tip.module.css'
 
-export interface ParsedManagerRowProps {
+interface ParsedManagerRowProps {
   row: ZoteroParsedDocumentRowView
   isSelected: boolean
   discardAllowed: boolean

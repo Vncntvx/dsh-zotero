@@ -47,6 +47,7 @@ import { getBatch as getBatchDomain } from './get-batch-domain.js'
 import { matchReferences as matchReferencesDomain } from './match-references-domain.js'
 import { retrieve as retrieveDomain } from './retrieve.js'
 import { getAttachmentLocation as attachmentLocationDomain } from './attachment-location.js'
+import { createWslMountsMemo } from './path-resolution.js'
 import {
   exportItems as exportItemsDomain,
   exportText as exportTextDomain,
@@ -149,7 +150,7 @@ import type {
 } from '../types.js'
 
 /** Everything one provider instance needs, named so a swap cannot mis-wire two facts. */
-export interface LocalApiProviderOptions {
+interface LocalApiProviderOptions {
   readonly client: ZoteroHttpClient
   readonly limits: () => LocalApiLimits
   readonly writer?: ZoteroWriteHttpClient
@@ -177,6 +178,8 @@ export class LocalApiProvider implements ZoteroProvider {
   private readonly itemSchema: ItemSchemaDirectory
   private readonly getLimits: () => LocalApiLimits
   private readonly searchCaches: SearchIndexCaches
+  /** One memoized WSL mount-table read per provider instance. */
+  private readonly wslMounts = createWslMountsMemo()
   private readonly sink: DiagnosticSink | undefined
   private readonly getFulltextEnhancer: () => FulltextEnhancer | undefined
   private readonly getEvidenceRanker: () => EvidenceRanker
@@ -422,7 +425,11 @@ export class LocalApiProvider implements ZoteroProvider {
     ref: ZoteroObjectRef,
     signal?: AbortSignal,
   ): Promise<ZoteroAttachmentLocation> {
-    return attachmentLocationDomain(this.deps(), ref, signal)
+    return attachmentLocationDomain(
+      { ...this.deps(), pathResolution: { wslMounts: this.wslMounts } },
+      ref,
+      signal,
+    )
   }
 
   /**

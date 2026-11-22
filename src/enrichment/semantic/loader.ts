@@ -25,7 +25,7 @@ import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../error
 import { resolveSemanticModelDirSafe } from '../model-dir.js'
 import { openWorkerEmbedder } from './worker-embedder.js'
 import type { Embedder } from './session.js'
-import { awaitSharedWaiter } from '../../waiter-flight.js'
+import { awaitSharedWaiter } from '../../race-signal.js'
 import { createBundleInspector } from '../model-bundle-inspector.js'
 import { catalogFingerprintOf } from '../model-manifest.js'
 import type { ModelBundleInspectorPort } from '../model-installation.js'
@@ -45,7 +45,7 @@ export interface SemanticModelTarget {
   readonly configuredDir?: string
 }
 
-export interface SemanticEmbedderLoaderDeps {
+interface SemanticEmbedderLoaderDeps {
   /**
    * Open one embedder; defaults to the isolated verifier + WASM worker.
    * Injectable so tests never touch disk or WASM.

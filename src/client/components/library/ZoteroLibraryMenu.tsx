@@ -10,7 +10,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ZoteroClientFace } from '../../actions/client-face.ts'
 import { LIBRARY_TAB_KIND } from '../../library-tab.ts'
 
-export interface ZoteroLibraryMenuProps {
+interface ZoteroLibraryMenuProps {
   readonly tab?: { readonly kind?: string; readonly id?: string }
   readonly sessionId?: string
   readonly dismiss?: () => void

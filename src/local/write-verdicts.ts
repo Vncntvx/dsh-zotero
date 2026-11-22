@@ -29,13 +29,13 @@ import type {
  * The object vocabulary a committed-unverified receipt can name. A `tag`
  * settles a library-wide tag write, which names no object and carries no ref.
  */
-export type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search'
+type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search'
 
 export function isWriteReceiptIndex(index: string, length: number): boolean {
   return /^(?:0|[1-9][0-9]*)$/.test(index) && Number(index) < length
 }
 
-export interface CommittedUnverifiedOptions {
+interface CommittedUnverifiedOptions {
   readonly kind: CommittedUnverifiedKind
   readonly serverId: string
   readonly batch?: ZoteroBatchWrite
@@ -163,7 +163,7 @@ async function sendSingleCreate(
   }
 }
 
-export interface SettledEntry<P> {
+interface SettledEntry<P> {
   readonly key: string
   readonly version: number
   readonly data: Record<string, unknown>
@@ -171,7 +171,7 @@ export interface SettledEntry<P> {
   readonly payload: P
 }
 
-export type CreateSettlement<P> =
+type CreateSettlement<P> =
   | { status: 'applied'; entry: SettledEntry<P> }
   | { status: 'unverified'; result: ZoteroWriteCommittedUnverified }
 

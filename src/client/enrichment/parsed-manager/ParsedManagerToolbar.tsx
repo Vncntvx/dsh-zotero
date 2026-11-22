@@ -14,7 +14,7 @@ import { IconButton } from '../../components/IconButton.tsx'
 import { FILTERS, FILTER_LABELS, type StateFilter } from './types.ts'
 import css from '../parsed-manager.module.css'
 
-export interface ParsedManagerToolbarProps {
+interface ParsedManagerToolbarProps {
   filter: StateFilter
   onFilterChange: (next: StateFilter) => void
   query: string

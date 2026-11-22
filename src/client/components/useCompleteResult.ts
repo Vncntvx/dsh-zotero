@@ -9,19 +9,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { rawExportText, readCompleteResult, type ResultCoordinates } from '../result-reader.ts'
 
 /** One loaded body: the text the user copies plus the format its file name follows. */
-export interface CompleteResultBody {
+interface CompleteResultBody {
   readonly text: string
   readonly format: string
 }
 
 /** The reader's render state; a settled body and an error are mutually exclusive. */
-export interface CompleteResultState {
+interface CompleteResultState {
   readonly body?: CompleteResultBody
   readonly error?: string
   readonly loading?: boolean
 }
 
-export interface CompleteResultOptions {
+interface CompleteResultOptions {
   /** The owning session; a missing session is an unreadable coordinate, not a failure. */
   readonly sessionId?: string
   /** The recorded event coordinates, or undefined when the block carries none. */
@@ -32,7 +32,7 @@ export interface CompleteResultOptions {
   readonly failureMessage: string
 }
 
-export interface CompleteResultReader {
+interface CompleteResultReader {
   readonly state: CompleteResultState
   load: () => Promise<void>
 }

@@ -60,7 +60,7 @@ interface Lease {
   detach?: () => void
 }
 
-export interface ArtifactReadDependencies {
+interface ArtifactReadDependencies {
   readonly policy: () => ArtifactReaderPreferences
   readonly owner: (sessionId: string, signal: AbortSignal, ctx: Context) => Promise<ReadOwner>
   readonly candidate: (

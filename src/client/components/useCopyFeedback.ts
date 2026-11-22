@@ -32,10 +32,10 @@ import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 export const COPY_FEEDBACK_MS = 1500
 
 /** One clipboard attempt at a time: pending, succeeded, refused, or failed. */
-export type CopyPhase = 'idle' | 'pending' | 'done' | 'rejected' | 'error'
+type CopyPhase = 'idle' | 'pending' | 'done' | 'rejected' | 'error'
 
 /** What the hook exposes: the phase, the thrown value, and the copy controls. */
-export interface CopyFeedback {
+interface CopyFeedback {
   readonly phase: CopyPhase
   readonly error: unknown
   readonly copy: (load: () => Promise<string>) => void

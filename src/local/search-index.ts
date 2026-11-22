@@ -33,7 +33,7 @@ const FILTERED_INDEX_LIMIT = 4
 /** How many libraries' attachment parent sets stay cached. */
 const ATTACHMENT_PARENTS_LIMIT = 2
 /** Memory bound for both caches. Freshness is the version fence's job. */
-export const SEARCH_INDEX_TTL_MS = 30_000
+const SEARCH_INDEX_TTL_MS = 30_000
 
 /** One scanned candidate: the facts the in-memory filters read. */
 export interface FilteredCandidate {
@@ -82,7 +82,7 @@ export function filteredCandidatesOf(
 }
 
 /** The parent keys of every attachment in one library, for existence filters. */
-export interface AttachmentParents {
+interface AttachmentParents {
   readonly parents: ReadonlySet<string>
   readonly libraryVersion?: number
   readonly fetchedAt: number

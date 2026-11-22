@@ -16,7 +16,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { messageOf } from '../../error-text.ts'
 
 /** The locale keys a client-authored navigation failure can name. */
-export type LibraryFailureKey =
+type LibraryFailureKey =
   | 'libraryErrorVersion'
   | 'libraryErrorChanging'
   | 'libraryErrorPagination'

@@ -68,10 +68,10 @@ export const DEFAULT_SOURCE_ORDER: readonly SemanticDownloadSource[] = Object.fr
 const MAX_REDIRECTS = 5
 
 /** One file may take this long in total, mirrors included. */
-export const DOWNLOAD_FILE_TIMEOUT_MS = 30 * 60 * 1000
+const DOWNLOAD_FILE_TIMEOUT_MS = 30 * 60 * 1000
 
 /** No bytes for this long aborts the attempt; mirrors stall silently. */
-export const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
+const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
 
 /** The slice of undici's Response the client relies on; tests stub it. */
 export interface FetchLike {
@@ -92,7 +92,7 @@ export interface FetchLike {
 }
 
 /** Filesystem seams, injectable so tests never write to real disk. */
-export interface DownloadFsDeps {
+interface DownloadFsDeps {
   readonly mkdir: (path: string) => Promise<void>
   readonly rename: (from: string, to: string) => Promise<void>
   readonly rm: (path: string) => Promise<void>
@@ -154,7 +154,7 @@ export interface DownloadClientDeps {
   readonly fs?: DownloadFsDeps
 }
 
-export interface DownloadPinnedFileOptions {
+interface DownloadPinnedFileOptions {
   readonly model: SemanticModelSpec
   readonly file: { readonly path: string; readonly bytes: number; readonly sha256: string }
   readonly dir: string
@@ -166,7 +166,7 @@ export interface DownloadPinnedFileOptions {
   readonly deps?: DownloadClientDeps
 }
 
-export interface DownloadPinnedFileResult {
+interface DownloadPinnedFileResult {
   readonly source: SemanticDownloadSource
   readonly bytes: number
   readonly sha256: string
@@ -291,7 +291,7 @@ export async function downloadPinnedFile(
   // An already-aborted caller must not create a directory or open a socket.
   options.signal?.throwIfAborted()
   const fs = options.deps?.fs ?? hostDownloadFsDeps
-  const fetchFn = options.deps?.fetch ?? (publicFetch as unknown as FetchLike)
+  const fetchFn = options.deps?.fetch ?? (publicFetch as FetchLike)
   const resolver = options.deps?.resolver ?? dnsAddressResolver
   const dispatcher = options.deps?.dispatcher ?? createPinnedDispatcher
   const gatedDeps = { fetch: fetchFn, resolver, dispatcher }

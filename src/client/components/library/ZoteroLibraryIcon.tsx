@@ -5,7 +5,7 @@
  * @module dsh-zotero/client/components/library/ZoteroLibraryIcon
  */
 
-export interface ZoteroLibraryIconProps {
+interface ZoteroLibraryIconProps {
   readonly size?: number
   readonly className?: string
 }

@@ -49,7 +49,7 @@ export interface EmbeddingTokenizer {
  * The minimal tokenizer config fields this module reads. `pad_token` is a
  * string in most exports and an object in others; both shapes occur.
  */
-export interface TokenizerConfigLike {
+interface TokenizerConfigLike {
   readonly pad_token?: string | { readonly content?: string } | null
   readonly pad_token_id?: number
 }
@@ -130,9 +130,12 @@ export async function createEmbeddingTokenizer(
   },
 ): Promise<EmbeddingTokenizer> {
   const { Tokenizer } = await import('@huggingface/tokenizers')
-  const tokenizer = new Tokenizer(
-    tokenizerJson as object,
-    tokenizerConfig as object,
-  ) as unknown as TokenizerLike
+  const native = new Tokenizer(tokenizerJson as object, tokenizerConfig as object)
+  // Delegate through the structural slice the module relies on, instead of
+  // re-typing the binding's whole class.
+  const tokenizer: TokenizerLike = {
+    encode: (text, options) => native.encode(text, options),
+    token_to_id: (token) => native.token_to_id(token),
+  }
   return embeddingTokenizerOf(tokenizer, tokenizerConfig as TokenizerConfigLike, spec)
 }

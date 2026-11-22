@@ -213,7 +213,7 @@ export const RUN_IN_BACKGROUND_PARAMETER = {
 type JobSpecKind = JobSpec['kind']
 
 /** One heavy operation the shared job runner can start or promote. */
-export interface ZoteroJobTask<T> {
+interface ZoteroJobTask<T> {
   readonly label: string
   readonly exec: ToolExecution
   readonly kind?: JobSpecKind

@@ -31,7 +31,7 @@ export type ParsedArtifactReader = (
   signal?: AbortSignal,
 ) => Promise<RemoteResult<ZoteroDocumentArtifactResultView>>
 
-export interface ParsePdfActionProps {
+interface ParsePdfActionProps {
   readonly t: TranslateNS<'zotero'>
   readonly sessionId: string
   /** The item's PDF attachments, Zotero's best choice first. */
@@ -52,7 +52,7 @@ export interface ParsePdfActionProps {
 type Probe = { readonly kind: 'ready' } | { readonly kind: 'absent' }
 
 /** The live command one parse action exposes to its button and picker. */
-export interface ParsePdfActionState {
+interface ParsePdfActionState {
   readonly primary: ZoteroAttachmentRowView | undefined
   readonly ready: boolean
   readonly only: boolean
@@ -71,7 +71,7 @@ export interface ParsePdfActionState {
  * Track the per-attachment artifact state and expose the one command the
  * action performs, so the button and the picker share one probe result.
  */
-export function useParsePdfAction({
+function useParsePdfAction({
   t,
   sessionId,
   attachments,

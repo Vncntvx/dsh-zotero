@@ -29,7 +29,7 @@ import type {
 /** The artifact id itself is the cache key: a SHA-256 hex string. */
 const ARTIFACT_ID = ZOTERO_ARTIFACT_ID_PATTERN
 
-export interface ArtifactTarget {
+interface ArtifactTarget {
   readonly target: ParseTarget
   readonly generation: string
   readonly aliases: readonly string[]

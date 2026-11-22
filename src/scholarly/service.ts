@@ -75,7 +75,7 @@ declare module '@deepseek-ai/cordis' {
  * @param host - the scholarly tool host whose optional link is read.
  * @returns whether the save tool may be admitted to a step.
  */
-export function canSaveScholarlyToZotero(host: Pick<ScholarlyToolHost, 'zoteroService'>): boolean {
+function canSaveScholarlyToZotero(host: Pick<ScholarlyToolHost, 'zoteroService'>): boolean {
   return host.zoteroService?.()?.writeEnabled?.() === true
 }
 

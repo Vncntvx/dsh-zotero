@@ -45,7 +45,7 @@ import css from './plugin/plugin-cards.module.css'
 /** How many filtered entries render before the "latest N" note takes over. */
 const RENDER_LIMIT = 100
 
-export interface DiagnosticsCardProps {
+interface DiagnosticsCardProps {
   readonly t: TranslateNS<'zotero'>
   readonly diagnostics: () => Promise<RemoteResult<ZoteroDiagnosticsView>>
   /** The service status section's latest probe answer, for the copied facts. */

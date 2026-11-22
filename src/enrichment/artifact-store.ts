@@ -218,7 +218,7 @@ const taskReceipt = z.discriminatedUnion('uploaded', [
     })
     .strict(),
 ])
-export type ParseTaskRecord = z.infer<typeof taskReceipt>
+type ParseTaskRecord = z.infer<typeof taskReceipt>
 
 export class ParsedArtifactStore {
   private rootEnsured: Promise<void> | undefined

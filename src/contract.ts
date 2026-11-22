@@ -295,19 +295,19 @@ export const ZOTERO_STATUS_SERVICE_KEY = 'zoteroRemote'
 export const ZOTERO_STATUS_METHOD = 'status'
 
 /** Wire method name for resolveAttachment. */
-export const ZOTERO_RESOLVE_ATTACHMENT_METHOD = 'resolveAttachment'
+const ZOTERO_RESOLVE_ATTACHMENT_METHOD = 'resolveAttachment'
 
 /** Wire method name for the diagnostics snapshot. */
-export const ZOTERO_DIAGNOSTICS_METHOD = 'diagnostics'
+const ZOTERO_DIAGNOSTICS_METHOD = 'diagnostics'
 
 /** Wire method name for the client error report. */
-export const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
+const ZOTERO_REPORT_CLIENT_ERROR_METHOD = 'reportClientError'
 
 /** Wire method name for openProtocol. */
-export const ZOTERO_OPEN_PROTOCOL_METHOD = 'openProtocol'
+const ZOTERO_OPEN_PROTOCOL_METHOD = 'openProtocol'
 
 /** Wire method name for revokeWriteGrant. */
-export const ZOTERO_REVOKE_WRITE_GRANT_METHOD = 'revokeWriteGrant'
+const ZOTERO_REVOKE_WRITE_GRANT_METHOD = 'revokeWriteGrant'
 
 /** Invocation kind for direct service calls (no Context receiver). */
 export const ZOTERO_STATUS_INVOCATION_KIND = 'direct'
@@ -513,8 +513,8 @@ export interface ZoteroSourcePageResultView {
   readonly workspace: SourceWorkspace
 }
 
-export const ZOTERO_SOURCE_PAGE_METHOD = 'sourcePage'
-export const ZOTERO_SOURCE_PAGE_INVOCATION_ID = 'dsh-zotero#zotero/sourcePage'
+const ZOTERO_SOURCE_PAGE_METHOD = 'sourcePage'
+const ZOTERO_SOURCE_PAGE_INVOCATION_ID = 'dsh-zotero#zotero/sourcePage'
 export const ZOTERO_SOURCE_PAGE_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroSourcePageRequestView'
 export const ZOTERO_SOURCE_PAGE_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroSourcePageResultView'
 
@@ -646,7 +646,7 @@ export type ZoteroDocumentArtifactRequestView =
   | { readonly sessionId: string; readonly op: 'probe'; readonly refs: readonly string[] }
 
 /** How one probed attachment relates to its committed artifact. */
-export type ZoteroArtifactProbeState = 'ready' | 'missing' | 'expired'
+type ZoteroArtifactProbeState = 'ready' | 'missing' | 'expired'
 
 export interface ZoteroArtifactImageView {
   readonly name: string
@@ -667,7 +667,7 @@ export interface ZoteroArtifactMetadataView {
   readonly title?: string
 }
 
-export interface ZoteroArtifactProbeResultView {
+interface ZoteroArtifactProbeResultView {
   readonly ref: string
   readonly state: ZoteroArtifactProbeState
 }
@@ -757,7 +757,7 @@ export interface ZoteroListParsedDocumentsRequestView {
 }
 
 /** Why one row's meta could not be read; the detail is sanitized at the boundary. */
-export interface ZoteroParsedDocumentBrokenView {
+interface ZoteroParsedDocumentBrokenView {
   readonly code: 'missing-meta' | 'unreadable-meta'
   readonly detail?: string
 }
@@ -827,8 +827,8 @@ export interface ZoteroSemanticModelStatusResultView {
   readonly warning?: string
 }
 
-export const ZOTERO_SEMANTIC_MODEL_STATUS_METHOD = 'semanticModelStatus'
-export const ZOTERO_SEMANTIC_MODEL_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/semanticModelStatus'
+const ZOTERO_SEMANTIC_MODEL_STATUS_METHOD = 'semanticModelStatus'
+const ZOTERO_SEMANTIC_MODEL_STATUS_INVOCATION_ID = 'dsh-zotero#zotero/semanticModelStatus'
 export const ZOTERO_SEMANTIC_MODEL_STATUS_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelStatusRequestView'
 export const ZOTERO_SEMANTIC_MODEL_STATUS_RESULT_TYPE_SYMBOL =
@@ -865,8 +865,8 @@ export interface ZoteroSemanticModelDownloadResultView {
   readonly path: string
 }
 
-export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD = 'downloadSemanticModel'
-export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID =
+const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD = 'downloadSemanticModel'
+const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID =
   'dsh-zotero#zotero/downloadSemanticModel'
 export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelDownloadRequestView'
@@ -898,8 +898,8 @@ export interface ZoteroSemanticModelCancelResultView {
   readonly cancelled: boolean
 }
 
-export const ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD = 'cancelSemanticModelDownload'
-export const ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID =
+const ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD = 'cancelSemanticModelDownload'
+const ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID =
   'dsh-zotero#zotero/cancelSemanticModelDownload'
 export const ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelCancelRequestView'
@@ -936,8 +936,8 @@ export interface ZoteroSemanticModelDeleteResultView {
   readonly removedBytes: number
 }
 
-export const ZOTERO_SEMANTIC_MODEL_DELETE_METHOD = 'deleteSemanticModel'
-export const ZOTERO_SEMANTIC_MODEL_DELETE_INVOCATION_ID = 'dsh-zotero#zotero/deleteSemanticModel'
+const ZOTERO_SEMANTIC_MODEL_DELETE_METHOD = 'deleteSemanticModel'
+const ZOTERO_SEMANTIC_MODEL_DELETE_INVOCATION_ID = 'dsh-zotero#zotero/deleteSemanticModel'
 export const ZOTERO_SEMANTIC_MODEL_DELETE_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelDeleteRequestView'
 export const ZOTERO_SEMANTIC_MODEL_DELETE_RESULT_TYPE_SYMBOL =
@@ -960,7 +960,7 @@ export function zoteroSemanticModelDeleteInvocation(
 }
 
 /** The browse kinds the library panel lists; the tool-facing kinds stay tool-only. */
-export type ZoteroLibraryBrowseKind = Exclude<ZoteroBrowseKind, 'itemFields'>
+type ZoteroLibraryBrowseKind = Exclude<ZoteroBrowseKind, 'itemFields'>
 
 /** A panel browse request: one bounded listing of a navigation endpoint. */
 export interface ZoteroLibraryBrowseRequestView {
@@ -1121,7 +1121,7 @@ export interface ZoteroLibraryChildPageRequestView {
 }
 
 /** One creator of an item (the domain's creator record, mirrored). */
-export interface ZoteroCreatorView {
+interface ZoteroCreatorView {
   readonly creatorType: string
   readonly name?: string
   readonly firstName?: string
@@ -1289,19 +1289,19 @@ const ZOTERO_LIBRARY_CHILD_PAGE_INVOCATION_ID = 'dsh-zotero#zotero/childPage'
 const ZOTERO_LIBRARY_EXPORT_INVOCATION_ID = 'dsh-zotero#zotero/export'
 
 /** Wire method name for the library browse. */
-export const ZOTERO_LIBRARY_BROWSE_METHOD = 'browse'
+const ZOTERO_LIBRARY_BROWSE_METHOD = 'browse'
 
 /** Wire method name for the library search. */
-export const ZOTERO_LIBRARY_SEARCH_METHOD = 'search'
+const ZOTERO_LIBRARY_SEARCH_METHOD = 'search'
 
 /** Wire method name for the library item detail. */
-export const ZOTERO_LIBRARY_ITEM_METHOD = 'item'
+const ZOTERO_LIBRARY_ITEM_METHOD = 'item'
 
 /** Wire method name for one paged child listing. */
-export const ZOTERO_LIBRARY_CHILD_PAGE_METHOD = 'childPage'
+const ZOTERO_LIBRARY_CHILD_PAGE_METHOD = 'childPage'
 
 /** Wire method name for one citation/BibTeX export. */
-export const ZOTERO_LIBRARY_EXPORT_METHOD = 'export'
+const ZOTERO_LIBRARY_EXPORT_METHOD = 'export'
 
 /**
  * Settings namespace of the library panel's configuration section. Must spell
@@ -1327,7 +1327,7 @@ interface ZoteroLibraryWriteRequest<Operation extends string, Args> {
   readonly operation: Operation
   readonly args: Args
 }
-export interface ZoteroLibraryWriteFields {
+interface ZoteroLibraryWriteFields {
   readonly title?: string
   readonly date?: string
   readonly url?: string
@@ -1336,13 +1336,13 @@ export interface ZoteroLibraryWriteFields {
   readonly publicationTitle?: string
   readonly extra?: string
 }
-export interface ZoteroLibraryWriteCreator {
+interface ZoteroLibraryWriteCreator {
   readonly creatorType: string
   readonly name?: string
   readonly firstName?: string
   readonly lastName?: string
 }
-export interface ZoteroLibraryWriteCreateItem {
+interface ZoteroLibraryWriteCreateItem {
   readonly itemType: string
   readonly title?: string
   readonly url?: string
@@ -1354,14 +1354,14 @@ export interface ZoteroLibraryWriteCreateItem {
   readonly collections?: readonly string[]
   readonly creators?: readonly ZoteroLibraryWriteCreator[]
 }
-export interface ZoteroLibraryWriteBatchUpdate {
+interface ZoteroLibraryWriteBatchUpdate {
   readonly ref: string
   readonly addTags?: readonly string[]
   readonly removeTags?: readonly string[]
   readonly addCollections?: readonly string[]
   readonly removeCollections?: readonly string[]
 }
-export interface ZoteroLibraryWriteCondition {
+interface ZoteroLibraryWriteCondition {
   readonly condition: string
   readonly operator: string
   readonly value: string
@@ -1418,7 +1418,7 @@ export interface ZoteroLibraryWriteResultView {
   readonly message: string
   readonly code?: string
 }
-export const ZOTERO_LIBRARY_WRITE_METHOD = 'write'
+const ZOTERO_LIBRARY_WRITE_METHOD = 'write'
 export const ZOTERO_LIBRARY_WRITE_REQUEST_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryWriteRequestView'
 export const ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL = 'dsh-zotero#ZoteroLibraryWriteResultView'
 /**
@@ -1556,7 +1556,7 @@ export interface ZoteroReadUrlPdfRequestView {
 export interface ZoteroReleaseUrlPdfRequestView {
   readonly lease: string
 }
-export interface ZoteroPdfReleaseResultView {
+interface ZoteroPdfReleaseResultView {
   readonly released: true
 }
 export function zoteroReadUrlPdfInvocation(
@@ -1578,8 +1578,8 @@ export interface ZoteroSemanticModelVerifyRequestView {
   readonly modelDir?: string
 }
 
-export const ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD = 'verifySemanticModel'
-export const ZOTERO_SEMANTIC_MODEL_VERIFY_INVOCATION_ID = 'dsh-zotero#zotero/verifySemanticModel'
+const ZOTERO_SEMANTIC_MODEL_VERIFY_METHOD = 'verifySemanticModel'
+const ZOTERO_SEMANTIC_MODEL_VERIFY_INVOCATION_ID = 'dsh-zotero#zotero/verifySemanticModel'
 export const ZOTERO_SEMANTIC_MODEL_VERIFY_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelVerifyRequestView'
 export const ZOTERO_SEMANTIC_MODEL_VERIFY_RESULT_TYPE_SYMBOL =

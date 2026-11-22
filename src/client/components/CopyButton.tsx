@@ -21,7 +21,7 @@ import linkCss from './link.module.css'
 import tipCss from './tip.module.css'
 
 /** Which host control the copy action wears. */
-export type CopyButtonVariant = 'outline' | 'ghost' | 'link'
+type CopyButtonVariant = 'outline' | 'ghost' | 'link'
 
 interface CopyButtonProps {
   readonly value: string

@@ -43,7 +43,7 @@ export const EVIDENCE_RRF_K = ZOTERO_RRF_K
  * carries it through the read so the ranker uses the scope admitted before
  * source I/O, including under concurrent reads.
  */
-export type RankingScopeHandle = symbol
+type RankingScopeHandle = symbol
 
 /** One ranking request: the query, any paraphrases of it, and the corpus. */
 export interface EvidenceRankRequest {
@@ -79,7 +79,7 @@ export function assertUniqueChunkIndexes(chunks: readonly EvidenceChunk[]): void
 }
 
 /** One ranked passage: the caller's index plus why and how strongly it matched. */
-export interface RankedEvidence {
+interface RankedEvidence {
   /** The `index` of the chunk this describes. */
   readonly index: number
   /** Fused, normalized ordering value in `[0, 1]`; orders the answer only. */

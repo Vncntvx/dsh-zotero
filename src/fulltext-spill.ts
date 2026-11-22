@@ -4,7 +4,9 @@
  * handle instead of walking every window. The tool layer supplies it from the
  * host spill store; the domain only decides when a document is large enough
  * to be worth one. Returning undefined means no store was available, which
- * leaves the window chain as the only read path.
+ * leaves the window chain as the only read path. The type lives in its own
+ * node-free module: `spill.ts` imports the host spill seam, and provider
+ * contracts reference the sink from the browser type graph.
  */
 export type FulltextSpillSink = (
   text: string,

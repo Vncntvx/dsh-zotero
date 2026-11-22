@@ -12,12 +12,12 @@ import { requireAgreedServerId, serverIdFromHeaders } from './identity.js'
 import { requireArrayBody } from './pagination.js'
 import type { ZoteroCreatorTypeInfo, ZoteroItemFieldInfo } from '../types.js'
 
-export interface ItemTypesSchema {
+interface ItemTypesSchema {
   readonly serverId?: string
   readonly items: readonly { itemType: string; localized?: string }[]
 }
 
-export interface ItemFieldsSchema {
+interface ItemFieldsSchema {
   readonly serverId?: string
   readonly items: readonly (ZoteroItemFieldInfo | ZoteroCreatorTypeInfo)[]
 }

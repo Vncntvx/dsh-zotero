@@ -42,7 +42,7 @@ export interface SourceBytesDeps {
 }
 
 /** Bytes plus the source stamp the cache records. */
-export interface SourceBytesResult {
+interface SourceBytesResult {
   readonly bytes: Uint8Array
   readonly stamp: FulltextSourceStamp
   /** Present only for an actual URL acquisition, including linked attachments. */
@@ -63,7 +63,7 @@ function refuse(reason: string): never {
 }
 
 /** Validate PDF signature and size; return the bytes unchanged. */
-export function validatedPdfBytes(bytes: Uint8Array, maxBytes: number): Uint8Array {
+function validatedPdfBytes(bytes: Uint8Array, maxBytes: number): Uint8Array {
   if (bytes.byteLength > maxBytes) {
     refuse(`the file is ${bytes.byteLength} bytes, over the ${maxBytes}-byte limit`)
   }
@@ -99,7 +99,7 @@ function headerOf(headers: Headers, name: string): string | undefined {
 }
 
 /** Build a URL stamp from response headers, keeping only useful validators. */
-export function urlStampOf(url: string, headers: Headers): FulltextSourceStamp {
+function urlStampOf(url: string, headers: Headers): FulltextSourceStamp {
   const etag = headerOf(headers, 'etag')
   const lastModified = headerOf(headers, 'last-modified')
   const rawLength = headerOf(headers, 'content-length')

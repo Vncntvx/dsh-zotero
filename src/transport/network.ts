@@ -270,7 +270,7 @@ export function isPublicIpAddress(ip: string): boolean {
 }
 
 /** How strict one resolution is, and whose cancellation bounds it. */
-export interface PublicAddressOptions {
+interface PublicAddressOptions {
   /** The caller's cancellation, when one exists. */
   readonly signal?: AbortSignal
   /**
@@ -342,7 +342,7 @@ export async function resolvePublicAddresses(
  * because the connector may ask for either address family and may hand back
  * generic lookup answers.
  */
-export type PinnedLookup = (
+type PinnedLookup = (
   hostname: string,
   options: { family?: number | string | undefined; all?: boolean | undefined },
   callback: (

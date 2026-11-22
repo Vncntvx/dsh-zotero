@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE, ZoteroError } from '../../errors.js'
 
 /** The upstream package the vendored build artifacts come from. */
-export const SEMANTIC_RUNTIME_PACKAGE = 'onnxruntime-web'
+const SEMANTIC_RUNTIME_PACKAGE = 'onnxruntime-web'
 
 /** The version the model catalog was verified against and the assets pin. */
 export const SEMANTIC_RUNTIME_VERSION = '1.31.1'

@@ -70,7 +70,7 @@ const SEMANTIC_MODEL_DESCRIPTION_KEYS = {
 } as const satisfies Record<SemanticModelKey, ZoteroLocaleKey>
 
 /** One semantic-model action button, derived once from the model state. */
-export interface SemanticModelAction {
+interface SemanticModelAction {
   readonly id: 'cancel' | 'delete' | 'download' | 'redownload' | 'verify'
   readonly labelKey: ZoteroLocaleKey
   readonly variant: 'primary' | 'ghost'

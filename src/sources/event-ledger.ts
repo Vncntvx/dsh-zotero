@@ -23,7 +23,7 @@ import { receiptOf } from './receipt.js'
 import type { SettledToolBlock, ToolBlockLike } from './block-types.js'
 
 /** One settled Zotero outcome as pure JSON. */
-export interface LedgerBlockFact {
+interface LedgerBlockFact {
   readonly callId: string
   readonly seq: number
   readonly time: number
@@ -37,7 +37,7 @@ export interface LedgerBlockFact {
 }
 
 /** One call whose result has not landed yet. */
-export interface LedgerPendingCall {
+interface LedgerPendingCall {
   readonly callId: string
   readonly name: string
   readonly argsRaw: string
@@ -132,8 +132,12 @@ function isTrailTool(name: string): boolean {
  * (the durable event payload's own type) and replays them as content blocks
  * the workspace builder reads. The two shapes are compatible by construction:
  * `record` writes block content into a fact, and facts are only ever built
- * from block content, so the re-interpretation is declared once here instead
- * of scattered as per-call-site casts.
+ * from block content, so the re-interpretation is declared once per direction
+ * here instead of scattered as per-call-site casts. The double assertion is
+ * load-bearing: `ContentBlock`'s members are named interfaces, which TypeScript
+ * does not relate to the JSON index-signature record, so neither direction is
+ * comparable enough for a single cast — and a validating rewrite would change
+ * what the fold accepts on this hot path.
  */
 function contentAsBlocks(content: readonly JsonValue[]): readonly ContentBlock[] {
   return content as unknown as readonly ContentBlock[]

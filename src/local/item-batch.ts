@@ -32,7 +32,7 @@ export class ItemBatchVersionDriftError extends ZoteroError {
 }
 
 /** One batched read's behavior. */
-export interface ItemKeyBatchOptions<T> {
+interface ItemKeyBatchOptions<T> {
   /** The instance claim every request must match; absent lets the headers choose. */
   readonly serverId?: string
   /**
@@ -50,7 +50,7 @@ export interface ItemKeyBatchOptions<T> {
 }
 
 /** The rows one batched read returned, keyed by object key. */
-export interface ItemKeyBatchResult<T> {
+interface ItemKeyBatchResult<T> {
   readonly byKey: Map<string, T>
   readonly libraryVersion?: number
 }

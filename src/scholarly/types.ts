@@ -51,7 +51,7 @@ export const SCHOLARLY_SOURCE_NAMES: Record<ScholarlySourceId, string> = {
   dblp: 'DBLP',
 }
 
-export interface InLibraryInfo {
+interface InLibraryInfo {
   itemKey: string
   libraryId: string
   collections: string[]

@@ -51,7 +51,7 @@ export function isLocalAddressRejection(error: unknown): boolean {
 }
 
 /** What the tool was looking for when every index failed. */
-export type SourceFailureSubject = 'these keywords' | 'this identifier'
+type SourceFailureSubject = 'these keywords' | 'this identifier'
 
 /** The action to take when every failure was a local address condition. */
 export const LOCAL_CONDITION_NOTE =

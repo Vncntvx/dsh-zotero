@@ -6,12 +6,11 @@
  * @module tests/local/path-resolution-arms
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ZOTERO_FILE_MISSING } from '../../src/errors.js'
 import {
   candidateLocalPaths,
-  clearWslMountsCache,
-  discoverWslMounts,
+  createWslMountsMemo,
   parseAttachmentFileUrl,
   parseWslMounts,
   resolveExistingAttachmentPath,
@@ -28,12 +27,7 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 beforeEach(() => {
-  clearWslMountsCache()
   fsMock.readFileSync.mockReset()
-})
-
-afterEach(() => {
-  clearWslMountsCache()
 })
 
 describe('parseWslMounts line filtering', () => {
@@ -58,11 +52,12 @@ describe('parseWslMounts line filtering', () => {
   })
 })
 
-describe('discoverWslMounts process cache', () => {
-  it('reads the default mount table once across default calls', () => {
+describe('createWslMountsMemo', () => {
+  it('reads the default mount table once per owning memo and shares one mapping', () => {
     fsMock.readFileSync.mockReturnValue('C:\\ /mnt/c 9p rw 0 0\n')
-    const first = discoverWslMounts()
-    const second = discoverWslMounts()
+    const memo = createWslMountsMemo()
+    const first = memo()
+    const second = memo()
     expect(fsMock.readFileSync).toHaveBeenCalledTimes(1)
     expect(fsMock.readFileSync).toHaveBeenCalledWith('/proc/mounts', 'utf-8')
     expect(first.get('c')).toEqual(['/mnt/c'])

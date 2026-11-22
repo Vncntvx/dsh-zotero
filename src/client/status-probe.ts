@@ -2,7 +2,7 @@
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroStatusView } from '../contract.ts'
 
-export const STATUS_PROBE_TIMEOUT_MS = 30_000
+const STATUS_PROBE_TIMEOUT_MS = 30_000
 
 export function createStatusProbe(
   read: (signal: AbortSignal) => Promise<RemoteResult<ZoteroStatusView>>,

@@ -10,7 +10,7 @@ import clsx from 'clsx'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './IconButton.module.css'
 
-export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Full round or a small rounded square. */
   readonly shape?: 'round' | 'square'
   /** 28px or 20px square. */

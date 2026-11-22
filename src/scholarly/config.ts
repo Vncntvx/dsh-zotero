@@ -110,7 +110,7 @@ export const ScholarlyConfig = Schema.object({
 export const ScholarlyConfigSchema = ScholarlyConfig
 
 /** Credential config fields of the pre-reference schema. */
-export const LEGACY_CREDENTIAL_FIELDS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
+const LEGACY_CREDENTIAL_FIELDS = ['s2Key', 'ncbiKey', 'openalexKey'] as const
 
 /**
  * The legacy credential fields a raw section still carries, in schema order.

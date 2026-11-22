@@ -9,10 +9,7 @@ import { isWsl, appendWslEnv } from '../../src/environment.js'
 import {
   candidateLocalPaths,
   candidateMountRootsForDrive,
-  clearWslMountsCache,
-  discoverWslMounts,
   parseAttachmentFileUrl,
-  parseWslMounts,
   resolveExistingAttachmentPath,
   unmountedDriveMessage,
   unsupportedUncShareMessage,
@@ -56,45 +53,6 @@ describe('isWsl and appendWslEnv', () => {
     expect(appendWslEnv({}, 'VAR_A')).toBe('VAR_A')
     expect(appendWslEnv({ WSLENV: 'VAR_A' }, 'VAR_A')).toBe('VAR_A')
     expect(appendWslEnv({ WSLENV: 'VAR_A:VAR_B' }, 'VAR_C')).toBe('VAR_A:VAR_B:VAR_C')
-  })
-})
-
-describe('parseWslMounts and discoverWslMounts', () => {
-  const mountsText = `
-rootfs / 9p rw,dirsync,noatime,aname=drvfs;path=/;uid=1000;gid=1000 0 0
-sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
-proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
-C:\\ /mnt/c 9p rw,noatime,dirsync,aname=drvfs;path=C:\\;uid=1000;gid=1000 0 0
-D:\\134 /d drvfs rw,noatime,dirsync,uid=1000;gid=1000 0 0
-none /custom/e 9p rw,noatime,dirsync,aname=drvfs;path=E:\\134;uid=1000;gid=1000 0 0
-`
-
-  it('extracts drive letters and mount paths including Linux kernel \\134 octal escaping', () => {
-    const mapping = parseWslMounts(mountsText)
-    expect(mapping.get('c')).toEqual(['/mnt/c'])
-    expect(mapping.get('d')).toEqual(['/d'])
-    expect(mapping.get('e')).toEqual(['/custom/e'])
-    expect(mapping.get('f')).toBeUndefined()
-  })
-
-  it('gracefully handles empty or unreadable /proc/mounts', () => {
-    const empty = parseWslMounts('')
-    expect(empty.size).toBe(0)
-
-    const map = discoverWslMounts({
-      readFileSync: () => {
-        throw new Error('ENOENT')
-      },
-    })
-    expect(map.size).toBe(0)
-  })
-
-  it('caches discovered mounts across calls', () => {
-    clearWslMountsCache()
-    const reader = vi.fn(() => mountsText)
-    const first = discoverWslMounts({ readFileSync: reader })
-    expect(first.get('c')).toEqual(['/mnt/c'])
-    expect(reader).toHaveBeenCalledTimes(1)
   })
 })
 

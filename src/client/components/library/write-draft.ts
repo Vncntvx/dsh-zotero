@@ -6,14 +6,14 @@
  */
 
 /** One condition row as the form edits it. */
-export interface ConditionDraftRow {
+interface ConditionDraftRow {
   readonly condition: string
   readonly operator: string
   readonly value: string
 }
 
 /** The draft's verdict. */
-export type ConditionsDraft =
+type ConditionsDraft =
   { kind: 'ok'; conditions: ConditionDraftRow[] } | { kind: 'empty' } | { kind: 'invalid' }
 
 /** Trim, drop all-empty rows, and classify what remains. */

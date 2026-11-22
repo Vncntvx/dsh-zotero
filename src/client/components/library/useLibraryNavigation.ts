@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
-import { awaitSharedWaiter } from '../../../waiter-flight.ts'
+import { awaitSharedWaiter } from '../../../race-signal.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
 import { LibraryFailure, laneFailureOf } from './library-errors.ts'
 import {
@@ -26,14 +26,14 @@ import {
 } from './library-model.ts'
 
 /** One navigation prefix: rows accumulated from offset 0 and the version they were read at. */
-export type NavigationPage<T> = LibraryLanePage<T> & { readonly libraryVersion: number }
+type NavigationPage<T> = LibraryLanePage<T> & { readonly libraryVersion: number }
 
 /**
  * The lane arms of {@link LibraryLaneState} with every `previous` and the ready
  * page fenced by the library version. Derived from the model's own arms, so a
  * field a lane arm gains cannot be forgotten here.
  */
-export type NavigationLane<T> =
+type NavigationLane<T> =
   | NavigationPage<T>
   | (Omit<Extract<LibraryLaneState<T>, { phase: 'loading' }>, 'previous'> & {
       previous?: NavigationPage<T>
@@ -67,7 +67,7 @@ function samePath(a: readonly string[] | undefined, b: readonly string[] | undef
 }
 
 /** Everything the navigation owns, grouped by what re-creates it. */
-export interface LibraryNavigationOptions {
+interface LibraryNavigationOptions {
   readonly face: LibraryFeedFace
   /** The confirmed instance and the library the lanes read. */
   readonly instance: {

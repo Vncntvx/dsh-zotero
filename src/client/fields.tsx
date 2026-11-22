@@ -188,7 +188,7 @@ export interface ChoiceOption {
 }
 
 /** Props of the shared choice row; the label doubles as the accessible name. */
-export interface ChoiceFieldProps {
+interface ChoiceFieldProps {
   /** Stable DOM id for the trigger button. */
   id: string
   /** Visible label above the control. */

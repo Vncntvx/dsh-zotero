@@ -10,7 +10,7 @@
  */
 
 /** The fixed MinerU API host. */
-export const MINERU_API_HOST = 'mineru.net'
+const MINERU_API_HOST = 'mineru.net'
 
 /** Base origin for every submit/poll call. */
 export const MINERU_API_ORIGIN = `https://${MINERU_API_HOST}`

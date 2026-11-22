@@ -14,7 +14,7 @@ import { EnableNoticeModal } from '../components/EnableNoticeModal.tsx'
 import type { EnableNoticeFace } from '../enable-notice.ts'
 
 /** The hook name the scholarly entry publishes its snapshot under. */
-export type ScholarlyEnableNoticeFace = EnableNoticeFace<'scholarlyEnableNotice'>
+type ScholarlyEnableNoticeFace = EnableNoticeFace<'scholarlyEnableNotice'>
 
 export type ScholarlyEnableNoticeProps = PropsRuntime<'shell.overlay'> &
   PropsLocale<'zotero'> &

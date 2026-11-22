@@ -136,7 +136,7 @@ export async function awaitSharedOperation<T>(
  * callers share one in-flight load under, the cache hit test for the current
  * caller, and the cache keys one successful load is stored under.
  */
-export interface SharedReadKeys<T> {
+interface SharedReadKeys<T> {
   /** Key under which concurrent callers share one in-flight load. */
   readonly flightKey: string
   /** A cache hit for the current caller, or undefined on a miss. */
@@ -146,7 +146,7 @@ export interface SharedReadKeys<T> {
 }
 
 /** The cache surface {@link sharedRead} needs; `Map` and the bounded caches both satisfy it. */
-export interface SharedReadCache<T> {
+interface SharedReadCache<T> {
   get(key: string): T | undefined
   set(key: string, value: T): void
 }

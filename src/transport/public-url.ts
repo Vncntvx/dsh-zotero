@@ -16,7 +16,7 @@ import { findInCauseChain } from '../cause-chain.js'
  * The reason travels with the error so a wrapped `fetch failed` can be
  * classified without guessing from a message string.
  */
-export type PublicAddressReason = 'non-public-address' | 'resolution-failed' | 'policy'
+type PublicAddressReason = 'non-public-address' | 'resolution-failed' | 'policy'
 
 export class PublicAddressError extends Error {
   constructor(

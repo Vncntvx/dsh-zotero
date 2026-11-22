@@ -44,7 +44,7 @@ const sourceValidator = z
   .max(8192)
   .refine((value) => value.trim() === value)
 
-export const sourceStampSchema = z.discriminatedUnion('kind', [
+const sourceStampSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('file'),

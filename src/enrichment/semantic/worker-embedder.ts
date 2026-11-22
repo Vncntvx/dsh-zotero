@@ -10,7 +10,7 @@ export const SEMANTIC_OPEN_DEADLINE_MS = 180_000
 export const SEMANTIC_RUN_DEADLINE_MS = 120_000
 export type SemanticWorkerFactory = (spec: SemanticModelEntry, dir: string) => Worker
 
-export const spawnSemanticWorker: SemanticWorkerFactory = (spec, dir) => {
+const spawnSemanticWorker: SemanticWorkerFactory = (spec, dir) => {
   const entry = new URL('./model-worker.js', import.meta.url)
   const options = {
     workerData: { spec, dir },

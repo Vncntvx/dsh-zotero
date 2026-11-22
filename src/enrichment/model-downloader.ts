@@ -62,14 +62,14 @@ export interface SemanticModelStatus {
   readonly warning?: string
 }
 
-export interface SemanticModelDownloadResult {
+interface SemanticModelDownloadResult {
   readonly success: boolean
   readonly model: string
   readonly status: 'started' | 'already-ready' | 'downloading'
   readonly path: string
 }
 
-export interface SemanticModelDeleteResult {
+interface SemanticModelDeleteResult {
   readonly success: boolean
   readonly model: string
   readonly path: string
@@ -97,7 +97,7 @@ interface ActiveDownload {
   settled: boolean
 }
 
-export interface ModelDownloadManagerDeps {
+interface ModelDownloadManagerDeps {
   /** Client seams for the streaming downloader; tests inject scripted ones. */
   readonly client?: DownloadClientDeps
   /** Filesystem seams for the safe-directory resolver; tests inject theirs. */

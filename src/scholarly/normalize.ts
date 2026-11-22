@@ -62,9 +62,9 @@ export function titleSignature(title: string): string | undefined {
 }
 
 /** The fields every strong-identity check reads. */
-export type IdentityFields = Pick<ScholarlyPaper, 'doi' | 'arxiv' | 'pmid' | 'pmcid'>
+type IdentityFields = Pick<ScholarlyPaper, 'doi' | 'arxiv' | 'pmid' | 'pmcid'>
 
-export interface PaperIdentity {
+interface PaperIdentity {
   publishedDois: ReadonlySet<string>
   arxivIds: ReadonlySet<string>
   pmids: ReadonlySet<string>
@@ -72,7 +72,7 @@ export interface PaperIdentity {
 }
 
 /** arXiv's DOI prefix names the preprint, never a published version. */
-export function isPreprintDoi(doi: string | undefined): boolean {
+function isPreprintDoi(doi: string | undefined): boolean {
   return doi !== undefined && /^10\.48550\//i.test(doi)
 }
 
@@ -131,7 +131,7 @@ export function identityKeysOf(paper: IdentityFields): string[] {
 
 export type IdentityRelation = 'same' | 'version' | 'distinct'
 
-export interface IdentityVerdict {
+interface IdentityVerdict {
   relation: IdentityRelation
   /** Some strong identifier kind exists on both sides with different values. */
   conflicting: boolean

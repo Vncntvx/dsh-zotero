@@ -82,7 +82,7 @@ export async function lookupParsedFulltext(
  * Parsed artifacts provide MinerU Markdown; indexed attachments provide
  * Zotero's text and coverage facts.
  */
-export interface FulltextDocument {
+interface FulltextDocument {
   readonly text: string
   readonly textFormat: 'markdown' | 'text'
   readonly sourceKind: 'attachment' | 'url'
@@ -101,7 +101,7 @@ export interface FulltextDocument {
  * an unindexed source names its absence. This is the single
  * "artifact first, index fallback" kernel every fulltext read shares.
  */
-export type OneFulltextOutcome =
+type OneFulltextOutcome =
   | {
       readonly status: 'indexed'
       readonly text: string
@@ -120,7 +120,7 @@ export type OneFulltextOutcome =
  * else would spend a lookup the caller knows is doomed. Artifact faults
  * propagate even when their code happens to name an index condition.
  */
-export async function readOneFulltext(
+async function readOneFulltext(
   deps: FulltextDeps,
   source: {
     key: string
@@ -309,7 +309,7 @@ export function fulltextWindowOf(
 export const FULLTEXT_CONTINUATION_REQUIRED_MESSAGE =
   'start > 0 requires the continuation token returned with the previous window; restart at start=0.'
 /** The message when the token cannot describe this read. */
-export const FULLTEXT_CONTINUATION_INVALID_MESSAGE =
+const FULLTEXT_CONTINUATION_INVALID_MESSAGE =
   'The continuation token is malformed; discard the earlier windows and restart at start=0.'
 /** The message when the document changed between two windows. */
 export const FULLTEXT_CONTINUATION_CHANGED_MESSAGE =
