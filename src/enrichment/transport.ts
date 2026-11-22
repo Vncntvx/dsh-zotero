@@ -38,6 +38,7 @@ import {
   type ResolvedAddress,
 } from '../transport/network.js'
 import { readBoundedBytes, readBoundedText, ResponseTooLargeError } from '../transport-bounds.js'
+import { errnoCodeOf } from '../errors.js'
 import { egressRouteFor } from '../transport/connections.js'
 import { isMineruApiHost, MINERU_API_ORIGIN } from './hosts.js'
 import { ConcurrencyGate } from '../concurrency.js'
@@ -47,7 +48,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 
 /** The host seams, injectable so unit tests never open a real socket. */
-export interface MineruTransportDeps {
+interface MineruTransportDeps {
   readonly resolver: AddressResolver
   readonly dispatcher: (addresses: readonly ResolvedAddress[]) => PinnedDispatcher
   readonly fetch: FetchFunction
@@ -70,7 +71,7 @@ export class MineruHttpError extends Error {
   }
 }
 
-export interface MineruRequestOptions {
+interface MineruRequestOptions {
   readonly method: 'GET' | 'HEAD' | 'POST' | 'PUT'
   readonly headers?: Record<string, string>
   readonly body?: string | Uint8Array
@@ -81,7 +82,7 @@ export interface MineruRequestOptions {
   readonly maxBytes?: number
 }
 
-export interface MineruResponse {
+interface MineruResponse {
   readonly status: number
   readonly bytes: Uint8Array
   readonly headers: Headers
@@ -97,6 +98,17 @@ const ERROR_DETAIL_MAX_BYTES = 4 * 1024
 const ERROR_DETAIL_MAX_CHARS = 256
 const REDIRECT_STATUSES: readonly number[] = [301, 302, 303, 307, 308]
 const MAX_REDIRECTS = 5
+/** Errnos that mark a transient network failure worth retrying; read through
+ * the cause chain, since undici keeps the errno off the top-level error. */
+const RETRYABLE_ERRNOS: readonly string[] = [
+  'EAI_AGAIN',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_SOCKET',
+]
 
 /** Reduce an error body to a bounded, URL-free one-liner. */
 export function sanitizedErrorDetail(text: string): string | undefined {
@@ -346,11 +358,9 @@ export class MineruClient {
         const transient =
           error instanceof MineruHttpError
             ? [408, 429, 500, 502, 503, 504].includes(error.status)
-            : error instanceof TypeError ||
-              (error instanceof Error &&
-                ['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT'].includes(
-                  String((error as NodeJS.ErrnoException).code),
-                ))
+            : error instanceof PublicAddressError
+              ? error.reason === 'resolution-failed'
+              : RETRYABLE_ERRNOS.includes(errnoCodeOf(error) ?? '')
         retryMs =
           error instanceof MineruHttpError && error.retryAfterMs !== undefined
             ? error.retryAfterMs

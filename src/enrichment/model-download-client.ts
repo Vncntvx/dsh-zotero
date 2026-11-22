@@ -373,7 +373,10 @@ export async function downloadPinnedFile(
         let progressedAt = Date.now()
         const watchProgress = (): void => {
           const remaining = stallMs - (Date.now() - progressedAt)
-          if (remaining <= 0) controller.abort(new Error('model download stalled'))
+          // The abort reason becomes the attempt's thrown error, so give the
+          // stall the same stable code every other terminal state carries;
+          // every mirror's lastError then reports it without re-wrapping.
+          if (remaining <= 0) controller.abort(downloadFailed('model download stalled'))
           else stall = setTimeout(watchProgress, remaining)
         }
         const counting = new Transform({

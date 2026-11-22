@@ -146,6 +146,8 @@ describe('downloadPinnedFile', () => {
       headers: { get: () => null },
       body: stallingBody(bytes, init?.signal),
     })
+    // The stall is a terminal state like any other: it carries the seam's
+    // stable code, so diagnostics and callers can route on it.
     await expect(
       downloadPinnedFile({
         model: specOf(),
@@ -155,7 +157,10 @@ describe('downloadPinnedFile', () => {
         stallMs: 20,
         deps: { fetch, ...gateDeps },
       }),
-    ).rejects.toThrow(/model download stalled/)
+    ).rejects.toMatchObject({
+      code: 'ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED',
+      message: expect.stringMatching(/model download stalled/),
+    })
     // The attempt's temp file is removed with it; nothing partial is left.
     await expect(readFile(join(dir, 'onnx/model_quantized.onnx'))).rejects.toMatchObject({
       code: 'ENOENT',

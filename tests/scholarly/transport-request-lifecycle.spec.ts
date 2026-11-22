@@ -68,6 +68,96 @@ describe('caller cancellation in the scholarly transport', () => {
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
 
+  it('surfaces the caller reason when caller abort and provider deadline race', async () => {
+    vi.useFakeTimers()
+    try {
+      // The fused signal adopts whichever reason aborted first. The deadline
+      // wins the race here, and the caller aborts before the catch runs — the
+      // rejection must still carry the caller's reason, not the timeout.
+      const controller = new AbortController()
+      const callerReason = new Error('caller stopped at the deadline edge')
+      const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+        await new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => {
+              controller.abort(callerReason)
+              reject((init!.signal as AbortSignal).reason)
+            },
+            { once: true },
+          )
+        })
+        return new Response('%PDF-1.4 body', { status: 200 })
+      })
+      const http = createScholarlyHttp({
+        publicAccess: stubPublicAccess,
+        pacer: new HostPacer({}),
+        fetchImpl,
+      })
+
+      const request = http.bytes('https://example.com/paper.pdf', {
+        allowPublicPdf: true,
+        timeoutMs: 10,
+        signal: controller.signal,
+      })
+      const settled = expect(request).rejects.toBe(callerReason)
+      await vi.advanceTimersByTimeAsync(10)
+      await settled
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses a redirect that echoes a query credential onto another origin', async () => {
+    // NCBI's only accepted credential form rides the query (?api_key=); a
+    // redirect that replays it cross-origin would leak it onward.
+    const fetchImpl = vi.fn(async () =>
+      Response.redirect('https://api.crossref.org/works/1?api_key=sekrit', 302),
+    )
+    const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
+      pacer: new HostPacer({ 'doi.org': 0, 'api.crossref.org': 0 }),
+      fetchImpl,
+    })
+
+    await expect(
+      http.text('https://doi.org/10.1000/start?api_key=sekrit', { retries: 0 }),
+    ).rejects.toThrow(/Query-credentialed redirects/)
+    // The leaking hop is never dispatched.
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a redirect that drops the query credential, or stays on origin', async () => {
+    // Cross-origin without the echoed credential proceeds; the second hop
+    // answers normally.
+    const fetchImpl = vi.fn(async (url: string) =>
+      String(url).includes('doi.org')
+        ? Response.redirect('https://api.crossref.org/works/1', 302)
+        : new Response('{}', { status: 200 }),
+    )
+    const http = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
+      pacer: new HostPacer({ 'doi.org': 0, 'api.crossref.org': 0 }),
+      fetchImpl,
+    })
+    await expect(http.text('https://doi.org/10.1000/start?api_key=sekrit')).resolves.toBe('{}')
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+
+    // Same-origin echo is not a leak: the credential never changes hands.
+    const sameOrigin = vi.fn(async (url: string) =>
+      String(url).includes('start')
+        ? Response.redirect('https://doi.org/10.1000/other?api_key=sekrit', 302)
+        : new Response('{}', { status: 200 }),
+    )
+    const http2 = createScholarlyHttp({
+      publicAccess: stubPublicAccess,
+      pacer: new HostPacer({ 'doi.org': 0 }),
+      fetchImpl: sameOrigin,
+    })
+    await expect(http2.text('https://doi.org/10.1000/start?api_key=sekrit')).resolves.toBe('{}')
+    expect(sameOrigin).toHaveBeenCalledTimes(2)
+  })
+
   it('leaves the in-flight gate without dispatching when the caller aborts', async () => {
     const firstStarted = deferred<void>()
     const releaseFirst = deferred<void>()

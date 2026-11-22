@@ -230,6 +230,21 @@ function callerAborted(signal: AbortSignal | undefined): boolean {
 }
 
 /**
+ * The query-parameter spellings of the scholarly credential. allowlist.ts
+ * records `?api_key=` as the only form NCBI accepts, so this is the one name
+ * a redirect could leak; matching is case-insensitive, and URLSearchParams
+ * already percent-decodes keys (`api%5Fkey` arrives as `api_key`).
+ */
+const CREDENTIAL_QUERY_PARAM = /^api[_-]?key$/i
+
+function carriesCredential(url: URL): boolean {
+  for (const key of url.searchParams.keys()) {
+    if (CREDENTIAL_QUERY_PARAM.test(key)) return true
+  }
+  return false
+}
+
+/**
  * Whether a signal fired because the provider's deadline elapsed.
  * @param signal - the fused signal.
  * @returns true when this component's own deadline message is present.
@@ -378,7 +393,10 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
         }
       } catch (error) {
         releaseProbe(hostname)
-        if (callerAborted(reqOptions.signal)) throw error
+        // Caller cancellation wins the identity even in the narrow window
+        // where the provider deadline fired first: the fused signal adopts
+        // whichever reason aborted first, so surface the caller's own.
+        if (callerAborted(reqOptions.signal)) throw reqOptions.signal!.reason ?? error
         if (isProviderTimeout(d.signal)) throw new ScholarlyHttpError(504, hostname)
         if (error instanceof PublicAddressError && error.reason === 'resolution-failed') {
           if (halfOpenProbe || retries >= maxRetries) {
@@ -451,6 +469,14 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
               'Credentialed redirects must remain on their original origin.',
               'policy',
             )
+          // A credential sent as a query parameter is just as real as one in
+          // a header: if the origin we sent it to echoes it into a redirect
+          // target on another origin, refuse rather than leak it onward.
+          if (next.origin !== target.origin && carriesCredential(target) && carriesCredential(next))
+            throw new ScholarlySecurityError(
+              'Query-credentialed redirects must remain on their original origin.',
+              'policy',
+            )
           if (next.hostname !== hostname) releaseProbe(hostname)
           currentUrl = next.href
           // The next hop re-runs the lexical gate and its own resolution at
@@ -485,10 +511,12 @@ export function createScholarlyHttp(options: CreateScholarlyHttpOptions): Schola
           }
         }
       } catch (error) {
-        // Caller cancellation is final: no retry, no translation.
+        // Caller cancellation is final: no retry, no translation. The fused
+        // signal adopts whichever reason aborted first, so in the narrow
+        // caller-abort-and-deadline window surface the caller's own reason.
         if (callerAborted(reqOptions.signal)) {
           releaseProbe(hostname)
-          throw error
+          throw reqOptions.signal!.reason ?? error
         }
         // undici reports a connector lookup rejection as `fetch failed` with
         // the real cause attached. Recover the owned deterministic refusal —

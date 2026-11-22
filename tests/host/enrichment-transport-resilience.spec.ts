@@ -44,6 +44,62 @@ describe('MineruClient resilience', () => {
     expect(calls.map(({ init }) => init.method)).toEqual(['HEAD'])
   })
 
+  it.each(['ECONNRESET', 'UND_ERR_CONNECT_TIMEOUT'])(
+    'retries a GET with cause %s',
+    async (code) => {
+      let attempts = 0
+      const { client, calls } = clientOf(async () => {
+        if (++attempts === 1) throw new TypeError('fetch failed', { cause: { code } })
+        return new Response('done')
+      })
+      await client.bytes('https://cdn.example/full.md', { method: 'GET' })
+      expect(calls).toHaveLength(2)
+    },
+  )
+
+  it.each(['ECONNREFUSED', 'UND_ERR_INVALID_ARG', undefined])(
+    'does not retry a GET with a TypeError and cause code %s',
+    async (code) => {
+      const failure = new TypeError('fetch failed', { cause: code && { code } })
+      const { client, calls } = clientOf(async () => {
+        throw failure
+      })
+      await expect(client.bytes('https://cdn.example/full.md', { method: 'GET' })).rejects.toBe(
+        failure,
+      )
+      expect(calls).toHaveLength(1)
+    },
+  )
+
+  it('retries a transient resolver failure and keeps a non-public answer final', async () => {
+    let lookups = 0
+    const transient = clientOf(
+      async () => new Response('done'),
+      async () => {
+        if (++lookups === 1) throw new PublicAddressError('dns answer lost', 'resolution-failed')
+        return [{ address: '93.184.216.34', family: 4 }]
+      },
+    )
+    await transient.client.bytes('https://cdn.example/full.md', { method: 'GET' })
+    expect(lookups).toBe(2)
+
+    // A private DNS answer is a deterministic verdict, not a transient miss:
+    // resolvePublicAddresses turns it into `non-public-address`, which the
+    // retry classifier never revisits.
+    let privateLookups = 0
+    const refusal = clientOf(
+      async () => new Response('done'),
+      async () => {
+        privateLookups += 1
+        return [{ address: '192.168.1.10', family: 4 }]
+      },
+    )
+    await expect(
+      refusal.client.bytes('https://cdn.example/full.md', { method: 'GET' }),
+    ).rejects.toBeInstanceOf(PublicAddressError)
+    expect(privateLookups).toBe(1)
+  })
+
   it.each(['get', 'head'] as const)(
     '%s retains caller cancellation until pinned connection cleanup finishes',
     async (method) => {
