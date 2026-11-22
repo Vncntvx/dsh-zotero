@@ -13,7 +13,7 @@ export const literatureIntake: ResearchSop = {
   name: 'zotero-literature-intake',
   component: 'scholarly',
   description:
-    'Deduplicate and import user-selected external publications into the personal library through reviewed writes. Not topic discovery or existing-library cleanup.',
+    'Import user-selected works into a specified Zotero destination. Batch verification and deduplication before the existing write approvals. Topic discovery is a separate task.',
   whenToUse:
     'Use after the user selects an explicit list of outside publications to save. Discovery alone does not authorize saving. Local core and writeEnabled are prerequisites for execution; otherwise return a proposal only.',
   triggerKeywords: [
@@ -32,7 +32,7 @@ export const literatureIntake: ResearchSop = {
     {
       name: 'Verify and deduplicate',
       instruction:
-        'Use scholarly_verify in batches of 40, then zotero_match_references in batches of 50 with unique inputId. Keep DOI/title/authors/year provenance. Skip matched works; ambiguous/conflict or incomplete local scans block import for that work. A NOT FOUND local result means not held, not externally false; external UNVERIFIED remains unresolved.',
+        'Use scholarly_verify in batches of 40, then zotero_match_references in batches of 50 with unique inputId. Independent verification batches may run concurrently within the tool budget when the host permits. Rejoin by inputId before building the import plan. Keep DOI/title/authors/year provenance. Skip matched works; ambiguous/conflict or incomplete local scans block import for that work. A NOT FOUND local result means not held, not externally false; external UNVERIFIED remains unresolved.',
     },
     {
       name: 'Prepare import',

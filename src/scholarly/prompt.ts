@@ -2,10 +2,8 @@
  * The model-facing policy section for the external scholarly component.
  *
  * The component owns the text that describes its tools, so the section is
- * registered only while the component is mounted. The text is a provider
- * evaluated at every assembly, and it states the live tool caps. It follows
- * the step's admitted set the same way the core policy does: only admitted
- * tools are named, and a step without a scholarly tool renders no section.
+ * registered while the component is mounted. Live tool routing and caps
+ * follow the step's admitted set in a separate prompt context.
  *
  * @module dsh-zotero/scholarly/prompt
  */
@@ -20,6 +18,7 @@ import { SCHOLARLY_TOOL_NAMES, type ScholarlyToolName } from './types.js'
 
 /** The section's name in the assembled prompt. */
 export const SCHOLARLY_PROMPT_SECTION_NAME = 'scholarly:policy'
+export const SCHOLARLY_PROMPT_CONTEXT_NAME = 'scholarly:runtime'
 
 /**
  * The placement offset below the shared band ceiling. The Zotero policy takes
@@ -188,8 +187,6 @@ function scholarlyPromptTextOf(
     scholarlyRoutingTextOf(availableTools, hasZoteroReads),
     routeSentenceOf(available),
     capSentenceOf(available, config),
-    SCHOLARLY_UNANSWERED_SENTENCE,
-    SCHOLARLY_UNTRUSTED_SENTENCE,
     hasSave ? SCHOLARLY_SAVE_SENTENCE : undefined,
   ]
     .filter((section): section is string => section !== undefined)
@@ -212,6 +209,12 @@ export function registerScholarlyPromptSection(
   ctx.systemPrompt.section({
     name: SCHOLARLY_PROMPT_SECTION_NAME,
     order: bandSectionOrder(ctx, SCHOLARLY_PROMPT_ORDER_OFFSET),
+    text: [SCHOLARLY_UNANSWERED_SENTENCE, SCHOLARLY_UNTRUSTED_SENTENCE].join('\n'),
+  })
+  ctx.systemPrompt.context({
+    name: SCHOLARLY_PROMPT_CONTEXT_NAME,
+    order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION') + 20,
+    required: true,
     text: (context: AssembleContext) => {
       const names = stepToolNamesOf(ctx, context)
       if (names === undefined) return scholarlyPromptTextOf(config())

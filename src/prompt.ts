@@ -3,16 +3,11 @@
  * tools compose into a retrieval workflow, the honesty rules (evidence match
  * fails closed, no invented page locators, absence is not evidence), and the
  * untrusted-data rule that keeps library content from acting as instructions.
- * Parameter-level detail lives in each tool's own description; this section
+ * Parameter-level detail lives in each tool's own description; this module
  * keeps only the cross-tool decisions, so the fixed per-turn cost stays small
- * and the two surfaces cannot drift.
- * The section text is a provider evaluated at every assembly, so the tool
- * cap values it states always track the live config, and the model never has
- * to guess a limit the plugin will reject. The same provider follows the
- * step's admitted surface: only admitted read and write tools are named, while
- * the consent, untrusted-data, and connectivity invariants survive every
- * Zotero surface.
- * Registered once, after the first-party per-tool sections.
+ * and the two surfaces cannot drift. The invariant rules register once as a
+ * fixed section; routing and caps render per assembly from the live config
+ * and the step's admitted tools.
  * @module dsh-zotero/prompt
  */
 
@@ -29,6 +24,7 @@ import { bandSectionOrder, PROMPT_BAND_CEILING, PROMPT_BAND_FLOOR } from './prom
 import { stepToolNamesOf } from './step-tools.js'
 
 const ZOTERO_PROMPT_SECTION_NAME = 'zotero:policy'
+const ZOTERO_CONTEXT_NAME = 'zotero:runtime'
 
 /**
  * The next first-party placement above the guidance band: the order ceiling
@@ -428,19 +424,10 @@ function readParagraphsOf(config: ReadCapsConfig, surface?: ZoteroSurface): read
     ...(caps === undefined ? [] : [caps]),
     READ_DELIVERY_SENTENCE,
     ...fulltext,
-    READ_EVIDENCE_SENTENCE,
   ]
 }
 
-/**
- * The policy body for one assembly. A step with any Zotero tool keeps the
- * consent, untrusted-data, and connectivity invariants; only the surface
- * description is trimmed to the tools the step admits.
- * @param config - the resolved config snapshot to state.
- * @param surface - the step's surface, or undefined outside a model step.
- * @returns the section text for one assembly.
- */
-function zoteroPromptTextOf(
+function runtimeGuidanceOf(
   config: Pick<
     ResolvedConfig,
     | 'maxSearchResults'
@@ -456,34 +443,29 @@ function zoteroPromptTextOf(
   if (surface !== undefined && surface.reads.size === 0 && surface.writes.length === 0)
     return writeGuidance
 
-  return [
-    ZOTERO_CONSENT_SENTENCE,
-    ...readParagraphsOf(config, surface),
-    ZOTERO_UNTRUSTED_SENTENCE,
-    CONNECTIVITY_POLICY_SENTENCE,
-    writeGuidance,
-  ].join('\n')
+  return [...readParagraphsOf(config, surface), writeGuidance].join('\n')
 }
 
-/**
- * Register the policy section; the registration unwinds with the plugin
- * fiber. The text provider re-reads the live config at each assembly, so
- * settings edits are reflected without re-registration.
- *
- * The step's admitted set decides the text. `scope` is the agent the set was
- * resolved for; `stepToolNamesOf` returns undefined when the assembly names no
- * resolvable step, so the provider keeps the full policy rather than silently
- * dropping a guard.
- * @param ctx - the plugin context.
- * @param config - the live resolved config getter.
- */
+/** Register fixed policy and live capability guidance for the plugin fiber. */
 export function registerPromptSection(ctx: Context, config: () => ResolvedConfig): void {
   ctx.systemPrompt.section({
     name: ZOTERO_PROMPT_SECTION_NAME,
     order: bandSectionOrder(ctx, ZOTERO_PROMPT_ORDER_OFFSET),
+    text: [
+      ZOTERO_CONSENT_SENTENCE,
+      ZOTERO_UNTRUSTED_SENTENCE,
+      CONNECTIVITY_POLICY_SENTENCE,
+      READ_EVIDENCE_SENTENCE,
+      'Use an available Zotero research skill when the user requests a multi-step research workflow. For a single lookup, read, or export, call the relevant tool directly. When a required source or corpus is unspecified, ask for it before beginning the workflow.',
+    ].join('\n'),
+  })
+  ctx.systemPrompt.context({
+    name: ZOTERO_CONTEXT_NAME,
+    order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION') + 10,
+    required: true,
     text: (context: AssembleContext) => {
       const names = stepToolNamesOf(ctx, context)
-      return zoteroPromptTextOf(config(), names === undefined ? undefined : zoteroSurfaceOf(names))
+      return runtimeGuidanceOf(config(), names === undefined ? undefined : zoteroSurfaceOf(names))
     },
   })
 }

@@ -17,6 +17,7 @@ import SystemPrompt, { renderPrompt, type PromptAssembly } from '@deepseek-ai/ds
 import ScholarlyService from '../../src/scholarly/index.js'
 import {
   SCHOLARLY_PROMPT_ORDER_OFFSET,
+  SCHOLARLY_PROMPT_CONTEXT_NAME,
   SCHOLARLY_PROMPT_SECTION_NAME,
   SCHOLARLY_ROUTE_SENTENCE,
   SCHOLARLY_ROUTE_TAIL,
@@ -42,7 +43,7 @@ function admitted(ctx: Context, agent: object, names: readonly string[]) {
 }
 
 function sectionOf(assembly: PromptAssembly): string {
-  return assembly.sections.find((entry) => entry.name === SCHOLARLY_PROMPT_SECTION_NAME)?.text ?? ''
+  return assembly.contexts.find((entry) => entry.name === SCHOLARLY_PROMPT_CONTEXT_NAME)?.text ?? ''
 }
 
 describe('the scholarly component prompt section', () => {
@@ -69,19 +70,19 @@ describe('the scholarly component prompt section', () => {
 
     // The routing sentence is one exported constant, so a wording change
     // shows up here.
-    expect(section!.text).toContain(SCHOLARLY_TOOL_ROUTING)
-    expect(section!.text).toContain(SCHOLARLY_ROUTE_SENTENCE)
-    expect(section!.text).toContain('Generic web access remains available')
+    expect(sectionOf(assembly)).toContain(SCHOLARLY_TOOL_ROUTING)
+    expect(sectionOf(assembly)).toContain(SCHOLARLY_ROUTE_SENTENCE)
+    expect(sectionOf(assembly)).toContain('Generic web access remains available')
     expect(section!.text).toContain(SCHOLARLY_UNANSWERED_SENTENCE)
     expect(section!.text).toContain(SCHOLARLY_UNTRUSTED_SENTENCE)
-    expect(section!.text).toContain(SCHOLARLY_SAVE_SENTENCE)
+    expect(sectionOf(assembly)).toContain(SCHOLARLY_SAVE_SENTENCE)
   })
 
   it('states the live tool caps the model must stay within', async () => {
     const ctx = await bootScholarlyContext()
     await ctx.plugin(ScholarlyService, {})
     const assembly = await ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === SCHOLARLY_PROMPT_SECTION_NAME)
+    const section = assembly.contexts.find((entry) => entry.name === SCHOLARLY_PROMPT_CONTEXT_NAME)
 
     expect(section!.text).toContain('at most 20 papers per search')
     expect(section!.text).toContain('at most 20 citation records')
@@ -93,7 +94,7 @@ describe('the scholarly component prompt section', () => {
     expect(section!.text).not.toContain('Exceeding a cap errors')
   })
 
-  it('omits the section when the step admits no scholarly tools', async () => {
+  it('keeps stable system text and omits routing when the step admits no scholarly tools', async () => {
     const ctx = await bootScholarlyContext()
     await ctx.plugin(ScholarlyService, {})
     const agent = {}
@@ -102,7 +103,7 @@ describe('the scholarly component prompt section', () => {
       scope: agent,
     })
 
-    expect(renderPrompt(assembly)).not.toContain('Scholarly tools:')
+    expect(renderPrompt(assembly)).toBe(renderPrompt(await ctx.systemPrompt.assemble()))
     expect(sectionOf(assembly)).toBe('')
   })
 
@@ -118,7 +119,7 @@ describe('the scholarly component prompt section', () => {
 
     expect(text).toContain('scholarly_search finds papers')
     expect(text).toContain('at most 20 papers per search')
-    expect(text).toContain(SCHOLARLY_UNANSWERED_SENTENCE)
+    expect(renderPrompt(assembly)).toContain(SCHOLARLY_UNANSWERED_SENTENCE)
     // The ban follows every external scholarly tool, not only get/cite/verify.
     expect(text).toContain(SCHOLARLY_ROUTE_TAIL)
     expect(text).not.toContain('scholarly_get')

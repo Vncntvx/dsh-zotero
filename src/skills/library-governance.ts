@@ -4,7 +4,7 @@ export const libraryGovernance: ResearchSop = {
   name: 'zotero-library-governance',
   component: 'core',
   description:
-    'Audit an existing personal library scope for metadata, tags, collections and changes; apply only explicitly requested reviewed fixes. Not discovery or external intake.',
+    'Audit Zotero holdings, duplicate identities, tags, or collections to identify reviewable library changes. A request to import a selected reference goes through literature intake.',
   whenToUse:
     'Use for existing-library organization and quality checks. Default to a read-only difference report. No automatic merge, purge or inferred duplicate deletion.',
   triggerKeywords: [

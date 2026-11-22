@@ -4,7 +4,7 @@ export const citationLineage: ResearchSop = {
   name: 'zotero-citation-lineage',
   component: 'scholarly',
   description:
-    'Trace backward and forward citation links around a known seed paper, with bounded graph expansion. Not topic discovery or evidence validation.',
+    'Trace references and citing works from an identified seed paper to explain intellectual lineage, follow-up work, or citation paths.',
   whenToUse:
     'Use when a known DOI, arXiv ID or PMID anchors a citation-network question. Related papers are similarity edges, never citation edges.',
   triggerKeywords: [
@@ -28,7 +28,7 @@ export const citationLineage: ResearchSop = {
     {
       name: 'Expand selected frontier',
       instruction:
-        'Maintain visited IDs. Depth cap two hops; expand at most three first-hop nodes total, one requested direction per node, limit 10. Overall cap five graph calls. Never expand every returned node.',
+        'Maintain visited IDs and expand a selected frontier only. Default to two hops, three first-hop nodes and five total graph calls. When the user explicitly requests a deeper path or broader coverage, set a finite depth and call budget from the request before expansion. Query one direction per selected node, limit 10. When the host permits, batch the independent incoming and outgoing queries and share the visited set across them.',
     },
     {
       name: 'Explain and stop',
@@ -57,7 +57,7 @@ export const citationLineage: ResearchSop = {
   failureModes: [
     'Unrecognized seed or absent OpenAlex links: stop that branch, report index coverage; do not repeatedly rename the seed.',
     'Cycle or duplicate: record the edge without revisiting the node.',
-    'Stop after two hops, five graph calls or an empty unseen frontier; ranked top results are not a complete citation graph.',
+    'Stop at the recorded depth or call budget, when the requested path is found, or when the unseen frontier is empty. Report which branches the ranked index served.',
   ],
   output:
     'Seed identity; directed edge list (citing → cited), separate similarity edges; expansion budget and missing branches; a bounded lineage narrative.',

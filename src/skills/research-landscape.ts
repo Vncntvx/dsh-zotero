@@ -4,7 +4,7 @@ export const researchLandscape: ResearchSop = {
   name: 'zotero-research-landscape',
   component: 'scholarly',
   description:
-    'Map a research topic for a proposal or scoping review: bounded discovery, topic clusters and documented gaps. Not seed-paper citation tracing.',
+    'Discover and synthesize the main approaches and representative papers for an open research topic. Start with a bounded topical search when the corpus has yet to be selected.',
   whenToUse:
     'Use for an open research question without a fixed paper corpus. Produce a scoped landscape, not an exhaustive systematic-review claim or a writing draft.',
   triggerKeywords: [
@@ -23,17 +23,17 @@ export const researchLandscape: ResearchSop = {
     {
       name: 'Discover',
       instruction:
-        'Use scholarly_search with snippets, limit 8, initially automatic source routing. Treat records as the same work only on a shared DOI/PMID/PMCID/arXiv identity, or a title that matches with the same first author and a year within one; conflicting identifiers mean two works. Preprint and published variants keep their own metadata in `versions`. Permit at most two query formulations and one targeted filter/source adjustment: three search calls total. Record failed sources and exclusions.',
+        'Split the question into distinct themes when the requested scope warrants it. Use scholarly_search with snippets, limit 8, initially automatic source routing. In each theme use up to two query formulations and one targeted filter or source adjustment. Start with one theme for a quick map. For a broader requested review, record the themes and the search and anchor budgets before discovery and batch independent searches when the host permits. Deduplicate on a shared DOI/PMID/PMCID/arXiv identity or a matching title and first author within one year. Keep conflicting identifiers and metadata for publication versions distinct. Record failed sources and exclusions.',
     },
     {
       name: 'Anchor',
       instruction:
-        'Choose at most five diverse anchors covering methods, baselines and disagreement; use scholarly_get once per anchor. Do not use citation count as a quality verdict. Reuse existing local metadata via the shared batch recipe.',
+        'Choose diverse anchors for the methods, baselines and disagreements in each theme. Use up to five per theme within the task budget. Resolve each unique anchor once with scholarly_get, and reuse local metadata through the shared batch recipe. Judge relevance and evidence directly.',
     },
     {
       name: 'Synthesize and stop',
       instruction:
-        'Return theme clusters, anchors, open questions and screening log. Stop at three searches, when required themes have anchors, or after two successive searches add no included work. Candidate gaps remain hypotheses. Hand selected papers to evidence synthesis; use citation lineage only for a seed-specific network question.',
+        'Return theme clusters, anchors, open questions and a screening log. Close a theme when it has adequate anchors, two successive searches add no included work, or its search budget is spent. Close discovery when all planned themes are closed. Candidate gaps remain hypotheses. Hand selected papers to evidence synthesis. Use citation lineage for a seed-specific network question.',
     },
   ],
   recipes: [
@@ -54,7 +54,7 @@ export const researchLandscape: ResearchSop = {
     },
   ],
   failureModes: [
-    'No hits: allow one alternate formulation within the three-call budget, then report no supported candidates.',
+    'No hits in a theme: try one alternate formulation within its budget, then report the searched scope and the lack of supported candidates.',
     'Partial index failure: retain answered sources and mark incomplete coverage; do not claim absence.',
     'Systematic review requested: provide this scoping log and state that ranked bounded search cannot certify exhaustive database coverage.',
   ],

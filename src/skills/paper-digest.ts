@@ -4,7 +4,7 @@ export const paperDigest: ResearchSop = {
   name: 'zotero-paper-digest',
   component: 'core',
   description:
-    'Produce a structured rapid-reading brief for a single paper with metadata, core evidence passages, and ready-to-copy BibTeX.',
+    'Summarize one specified paper as a structured brief covering its contribution, located findings, limitations, and citation. A single metadata, citation, or passage request can use its tool directly.',
   whenToUse:
     'Use when the user asks to quickly read, summarize, digest, or brief a specific paper in the library. Bounded to one paper at a time.',
   triggerKeywords: [

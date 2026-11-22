@@ -11,7 +11,7 @@ export const manuscriptReferenceAudit: ResearchSop = {
   name: 'zotero-manuscript-reference-audit',
   component: 'core',
   description:
-    'Audit user-supplied draft claims, BibTeX keys and reference lists against local records and passages. Not manuscript editing, topic discovery or cross-paper synthesis.',
+    'Audit a manuscript or specified claim-to-citation pairs. Reconcile the reference identities first, then examine whether the linked evidence supports each claim. Use publication integrity for a standalone registry or retraction check.',
   whenToUse:
     'Use for a provided draft/reference list. Audit claim → citation → record → supporting passage; request absent draft text or bibliographic fields rather than inventing them. Do not edit local manuscript files.',
   triggerKeywords: [
@@ -35,7 +35,7 @@ export const manuscriptReferenceAudit: ResearchSop = {
     {
       name: 'Audit support',
       instruction:
-        'Locate evidence as in the execution contract; use zotero_retrieve at most 4 passages for each unique claim/ref question, with one reformulation maximum. If Scholarly is available, use scholarly_read outline then query for an external copy. Evaluate claim strength, population, metric and caveats; classify supported, partially supported, contradicted or not assessable. A matching title or registry record is not semantic support.',
+        'Group claims sharing a reference and reuse located evidence. For a long draft, audit independent sections in batches keyed by claim ID. For each unique claim/ref question use zotero_retrieve for up to 4 passages with one reformulation. If Scholarly is available, use scholarly_read outline then query for an external copy. Evaluate claim strength, population, metric and caveats; classify supported, partially supported, contradicted or not assessable. Registry metadata establishes identity; evaluate support against the passage.',
     },
     {
       name: 'Report discrepancies',

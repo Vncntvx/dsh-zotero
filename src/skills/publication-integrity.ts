@@ -4,7 +4,7 @@ export const publicationIntegrity: ResearchSop = {
   name: 'zotero-publication-integrity',
   component: 'scholarly',
   description:
-    'Investigate a suspicious publication identity, DOI mismatch or reported retraction using registry and index records. Not draft semantic support auditing.',
+    'Check reported publication identity, bibliographic discrepancies, registry status, or retraction for specified works. Manuscript support questions use manuscript reference audit.',
   whenToUse:
     'Use for an explicit integrity concern about known publications. For a supplied manuscript reference list, use the manuscript audit SOP, which batches routine verification itself.',
   triggerKeywords: [

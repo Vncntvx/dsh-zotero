@@ -42,7 +42,7 @@ const WRITE_SEAM_RULE =
 export const WRITE_AVAILABILITY_RULE =
   'Write recipes require the local core, writeEnabled=true and the named tool in the current surface. If any prerequisite is absent, return the proposed changes for review and stop; never execute a write through shell or another interface.'
 const PARAMETER_CORRECTION_RULE =
-  'A parameter error permits one correction against the declared schema, never a sequence of guessed names. A source timeout, rate limit or unavailable result is unknown, not an empty search or evidence of fabrication. Do not launch autonomous background polling or unrequested subagents.'
+  'A parameter error permits one correction against the declared schema, never a sequence of guessed names. A source timeout, rate limit or unavailable result is unknown, not an empty search or evidence of fabrication. Keep work in the current agent unless the user explicitly requests delegation, an approved delegation tool is available and the task has independent read-only branches. Share one search and evidence budget, and return observed refs and locators to the parent. Keep background polling out of the workflow.'
 
 /** Every rendered contract rule, in order; a test loop over this cannot skip one. */
 export const SOP_CONTRACT_RULES = [

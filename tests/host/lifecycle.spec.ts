@@ -67,7 +67,6 @@ describe('prompt section', () => {
     const assembly = await lane.ctx.systemPrompt.assemble()
     const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
     expect(section).toBeDefined()
-    // Assemblies expose name/text only; order is observed through position:
     // the policy lands after the identity/persona sections that open the
     // prompt and after every first-party per-tool section it complements.
     const names = assembly.sections.map((entry) => entry.name)
@@ -87,6 +86,7 @@ describe('prompt section', () => {
       expect(positionOf('zotero:policy')).toBeGreaterThan(positionOf('test:band-floor'))
       expect(positionOf('zotero:policy')).toBeLessThan(positionOf('test:band-ceiling'))
     })
+    const runtime = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')?.text
     for (const tool of [
       'zotero_search',
       'zotero_match_references',
@@ -94,7 +94,7 @@ describe('prompt section', () => {
       'zotero_get',
       'zotero_export.items[].ref',
     ]) {
-      expect(section!.text).toContain(tool)
+      expect(runtime).toContain(tool)
     }
     expect(section!.text).toContain('never invent page numbers')
     expect(section!.text).toContain(ZOTERO_CONSENT_SENTENCE)
@@ -133,7 +133,7 @@ describe('prompt section', () => {
   it('states the live tool caps the model must stay within', async () => {
     lane = await setupHostLane()
     const assembly = await lane.ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const section = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     expect(section!.text).toContain('zotero_search limit up to 20')
     expect(section!.text).toContain('zotero_retrieve passages up to 4')
     expect(section!.text).toContain('zotero_export refs up to 50')
@@ -148,7 +148,7 @@ describe('prompt section', () => {
       maxExportRefs: 50,
     })
     const assembly = await lane.ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const section = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     expect(section!.text).toContain('zotero_search limit up to 30')
     expect(section!.text).toContain('zotero_retrieve passages up to 6')
     expect(section!.text).toContain('zotero_export refs up to 50')

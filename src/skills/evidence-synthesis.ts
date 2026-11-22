@@ -10,7 +10,7 @@ export const evidenceSynthesis: ResearchSop = {
   name: 'zotero-evidence-synthesis',
   component: 'core',
   description:
-    'Compare experiments, methods and findings across a fixed set of papers using located evidence. Not draft claim auditing or literature discovery.',
+    'Synthesize evidence across a specified set of papers against shared questions or comparison axes. Start from the known refs and keep observed results and missing evidence separate. Choose this for comparison of a fixed corpus.',
   whenToUse:
     'Use for a specified corpus of 2–12 papers and a comparison question. For more papers, agree a bounded subset before reading. Missing values remain unknown.',
   triggerKeywords: [
