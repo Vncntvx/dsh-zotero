@@ -1,0 +1,106 @@
+/**
+ * Approval gates for writes: the confirmation layer of the `ctx.zotero` seam.
+ *
+ * Two sequential gates, both owned here so no caller can skip either:
+ * 1. {@link requestWriteApproval}, the session approval policy
+ *    (`ctx.approval.request`). Honors `approval/policy: never` (auto-reject)
+ *    and writes the `approval/asked` + `approval/decided` audit pair. Its
+ *    prompt names the call's blast radius (plain mutation, recoverable Trash
+ *    deletion, or irreversible deletion), because that prompt is read before
+ *    the plan card exists.
+ * 2. {@link askPlanApproval}, the plan-review card (`userQuestions`).
+ *    The user approves the exact plan markdown the domain will apply.
+ *
+ * The gate lives here, not in a tool, because the service is the only door to
+ * the write domain: every in-process caller (the write tools, and any
+ * consumer that resolves `ctx.zotero`) passes through `ZoteroService`'s write
+ * methods. Argument validation still runs in the caller first, so a malformed
+ * call never bothers the user with an approval for a call that cannot run.
+ * The user's Zotero authorization dialog and its key remain the hard boundary.
+ *
+ * Approval-settlement map ({@link requestWriteApproval}):
+ * - `allowed-once` → proceed to plan-review.
+ * - `rejected` → `declined` (no plan card, no network).
+ * - `cancelled` → the harness abort (`TOOL_ABORTED`), never a decline: the
+ *   official vocabulary produces it only by aborting the request's signal
+ *   (`user-approval/src/index.ts:296,324`), so a withdrawal must not read as
+ *   a user decision.
+ * - `unavailable` / no agent / infrastructure failure →
+ *   `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` (fail closed).
+ * - no `ctx.approval` composed → `unavailable` as well: the decision cannot
+ *   be routed or audited, so the gate fails closed, and plan-review never
+ *   runs without it.
+ *
+ * A call that carries no agent while an approval service is composed is
+ * `unavailable`, never `allowed`: the request cannot be routed or audited,
+ * matching harness `serviceAsk` and sandbox escalation.
+ *
+ * Plan-settlement map ({@link askPlanApproval}):
+ * - `ASK_ABORTED` → harness `TOOL_ABORTED` (caller cancelled).
+ * - `ASK_CANCELLED` → `{approved:false}` (the user dismissed the plan review to talk;
+ *   the official plan card settles the non-approve path this way, never as a
+ *   `Cancel` option label). Callers return `kind: 'declined'`.
+ * - any other answer without `Apply` → `{approved:false}` (`declined`);
+ *   a custom answer retains its complete feedback and always declines.
+ * - no channel / ask infrastructure failure → `ZOTERO_WRITE_APPROVAL_UNAVAILABLE`
+ *   (fail closed; not a user decision, not Zotero write auth).
+ *
+ * Mid-body domain failures throw `ZoteroError`; the registry maps those to
+ * `{ name, code }` only.
+ * @module dsh-zotero/write-approval
+ */
+import type { Context } from '@deepseek-ai/cordis';
+import type { ZoteroWriteCall } from './write-call.js';
+/** The label the plan-review question is answered with to apply the write. */
+export declare const APPROVE_LABEL = "Apply";
+/** The question id every write plan carries, so UIs can route on it. */
+export declare const WRITE_PLAN_QUESTION_ID = "zotero-write-plan";
+/** Shared approval, declined and reconciliation contracts for every write tool. */
+export declare const WRITE_PLAN_OUTCOME_DESCRIPTION: string;
+/**
+ * The plan line every write tool prints naming the library it writes to.
+ *
+ * Composed from `PERSONAL_LIBRARY` rather than spelled so the plan cannot
+ * silently name a library the write boundary refuses: the seam only ever
+ * writes `zotero://user/0/`.
+ */
+export declare const WRITE_PLAN_LIBRARY_LINE: string;
+/**
+ * One write's outcome under the session approval policy, before any plan card.
+ *
+ * When `ctx.approval` is composed this is the deployment-level gate: `never`
+ * auto-rejects, `ask` routes to the composed answerers, and every request
+ * writes the `approval/asked` + `approval/decided` audit pair. When no
+ * approval service is composed the gate fails closed: the decision cannot be
+ * routed or audited, matching the user-approval package's stance for headless
+ * or incompletely composed deployments.
+ * @param ctx - the plugin context, whose approval service decides.
+ * @param call - the asking write call (agent, signal, tool name, call id).
+ * @returns `'allowed'` to continue to plan-review; `'declined'` when the
+ *   session policy or the user refused; `'unavailable'` when the approval
+ *   channel cannot decide at all (fail closed).
+ * @throws {HarnessError} the harness's own abort when the caller cancelled.
+ */
+export declare function requestWriteApproval(ctx: Context, call: ZoteroWriteCall): Promise<'allowed' | 'declined' | 'unavailable'>;
+/**
+ * Show one write's plan and wait for the user's answer. The plan text is the
+ * caller's deterministic markdown, so what the user approves is exactly what
+ * the service passes to the domain.
+ * @param ctx - the plugin context, whose user-questions service answers.
+ * @param call - the asking write call: its plan markdown, its agent (which
+ *   routes the question), and its signal (which cancels the question). The
+ *   plan-review intent carries no `callId`; see {@link ZoteroWriteCall}.
+ * @returns true only when the user answered with {@link APPROVE_LABEL};
+ *   `false` for every non-approve user settlement (including `ASK_CANCELLED`).
+ * @throws {ZoteroError} `ZOTERO_WRITE_APPROVAL_UNAVAILABLE` when no channel
+ *   can answer the question (fail closed).
+ * @throws {HarnessError} the harness's own abort when the caller cancelled.
+ */
+export type WritePlanDecision = {
+    readonly approved: true;
+} | {
+    readonly approved: false;
+    readonly feedback?: string;
+};
+export declare function askPlanApproval(ctx: Context, call: ZoteroWriteCall): Promise<WritePlanDecision>;
+//# sourceMappingURL=write-approval.d.ts.map
