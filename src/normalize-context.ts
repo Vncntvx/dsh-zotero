@@ -3,7 +3,7 @@
  * @module dsh-zotero/normalize-context
  */
 
-import { asString, isObjectKey } from './json.js'
+import { asString, detachUtf16, isObjectKey } from './json.js'
 import type { SupportedLocalLibrary } from './types.js'
 
 export interface NormalizeContext {
@@ -50,5 +50,7 @@ export function truncateText(text: string, max: number): { text: string; truncat
   if (text.length <= max) return { text, truncated: false }
   let end = max
   if (end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) && /[\uDC00-\uDFFF]/.test(text[end]!)) end--
-  return { text: text.slice(0, end), truncated: true }
+  // The cut detaches the excerpt so a previewed abstract or note in tool
+  // meta does not pin the full field it came from.
+  return { text: detachUtf16(text.slice(0, end)), truncated: true }
 }

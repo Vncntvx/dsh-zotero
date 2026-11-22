@@ -13,7 +13,7 @@
 
 import type { ZoteroExportItem } from './types.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { asJsonValue } from './json.js'
+import { asJsonValue, detachUtf16 } from './json.js'
 import { formatCreatorsList } from './creators.js'
 import { isEvidenceSource, type EvidenceItem } from './evidence-item.js'
 import type {
@@ -230,9 +230,11 @@ interface ZoteroExportPresentationMeta {
   readonly items?: readonly ZoteroExportPresentationItem[]
 }
 
-/** Cut text at a character cap for a card preview. */
+/** Cut text at a character cap for a card preview. The cut detaches the
+ * excerpt from its parent so a preview in `tool/result` meta does not pin the
+ * full field it came from. */
 function truncateChars(text: string, cap: number): string {
-  return text.length <= cap ? text : text.slice(0, cap)
+  return text.length <= cap ? text : detachUtf16(text.slice(0, cap))
 }
 
 /** Distinct sources in first-seen order. */

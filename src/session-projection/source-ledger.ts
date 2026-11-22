@@ -16,6 +16,7 @@ import { createSourceWireView } from '../sources/window.js'
  */
 
 import { z } from 'zod'
+import { chunkedListSchema } from '@deepseek-ai/dsh-chunked-list'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 // Type-only: installs the `zoteroSources` entry in the shared projection map.
 import type {} from './types.js'
@@ -71,10 +72,11 @@ const pendingCallSchema = z
  */
 export const ledgerStateSchema = z
   .object({
-    // The fold appends in bounded chunks; the schema enforces the same bound
-    // the writer respects, so a corrupt or foreign state cannot claim an
-    // unbounded append cost, and an empty chunk cannot exist at all.
-    blockChunks: z.array(z.array(blockFactSchema).min(1).max(256)),
+    // The fold appends through the harness chunked list: the recursive schema
+    // enforces the 64-value chunk bound and rejects empty chunks and unknown
+    // fields, so a corrupt or foreign state cannot claim an unbounded append
+    // cost. `undefined` is the empty list.
+    blockChunks: chunkedListSchema(blockFactSchema).optional(),
     pending: z.record(z.string(), pendingCallSchema),
     // The recorded callIds the fold dedupes against; see SourceLedgerState.
     recorded: z.record(z.string(), z.literal(true)),
@@ -169,8 +171,10 @@ export function createSourceLedgerProjection(): SourceLedgerProjection {
 
   const definition: SourceLedgerProjectionDefinition = {
     key: SOURCE_LEDGER_KEY,
-    // Version 3 removes unused fork metadata; older checkpoints replay the event log.
-    stateVersion: 3,
+    // Version 4 moves the settled facts onto the harness chunked list shape
+    // ({ values, previous } links instead of nested arrays); older checkpoints
+    // fail the state schema and replay the event log.
+    stateVersion: 4,
     stateSchema,
     init: () => ({
       ledger: emptyLedgerState() satisfies SourceLedgerState,

@@ -75,7 +75,7 @@ describe('the page-view cache', () => {
 describe('chunked block storage', () => {
   it('does not record a read tool the trail has no fold arm for', () => {
     let state = foldLedgerEvent(
-      { blockChunks: [], pending: {}, recorded: {} },
+      { pending: {}, recorded: {} },
       event('tool/call', { callId: 'b1', name: 'zotero_browse', arguments: '{}' }),
     )
     state = foldLedgerEvent(
@@ -85,25 +85,32 @@ describe('chunked block storage', () => {
       }),
     )
     expect(factsOf(state)).toEqual([])
+    expect(state.blockChunks).toBeUndefined()
   })
 
   it('appends facts in bounded chunks and replays them in order', () => {
     let state = foldLedgerEvent(
-      { blockChunks: [], pending: {}, recorded: {} },
+      { pending: {}, recorded: {} },
       event('turn/start', { turn: 1 }),
     )
     for (let i = 0; i < 600; i += 1) {
       for (const next of searchPair(`c${i}`)) state = foldLedgerEvent(state, next)
     }
     expect(factsOf(state)).toHaveLength(600)
-    expect(state.blockChunks.map((chunk) => chunk.length)).toEqual([256, 256, 88])
-    expect(state.blockChunks.every((chunk) => chunk.length <= 256)).toBe(true)
+    // The harness chunked list shares older chunks and copies at most one
+    // 64-value chunk per append; 600 facts land in 10 chunks of 64 minus 8.
+    const chunkSizes: number[] = []
+    for (let node = state.blockChunks; node !== undefined; node = node.previous) {
+      chunkSizes.unshift(node.values.length)
+    }
+    expect(chunkSizes).toEqual([64, 64, 64, 64, 64, 64, 64, 64, 64, 24])
+    expect(chunkSizes.every((size) => size <= 64)).toBe(true)
     // The writer's bound is the schema's bound: a replayed state cannot carry
     // a chunk the fold would never produce.
     expect(ledgerStateSchema.safeParse(state).success).toBe(true)
   })
 
-  it('refuses an empty chunk and a chunk beyond the append bound', () => {
+  it('refuses an oversized chunk and an unknown field in the stored shape', () => {
     const fact = {
       callId: 'c1',
       seq: 1,
@@ -114,18 +121,23 @@ describe('chunked block storage', () => {
       content: [],
       isError: false,
     }
+    // 65 values in one chunk exceeds the harness chunk capacity.
+    const oversized: unknown = { values: Array.from({ length: 65 }, () => fact) }
+    expect(ledgerStateSchema.safeParse({ blockChunks: oversized, pending: {}, recorded: {} }).success)
+      .toBe(false)
+    // An unknown field in a chunk node is rejected, not carried.
+    const unknownField: unknown = {
+      values: [fact],
+      previous: undefined,
+      extra: true,
+    }
+    expect(ledgerStateSchema.safeParse({ blockChunks: unknownField, pending: {}, recorded: {} }).success)
+      .toBe(false)
+    // The empty list is the absent key, and a well-formed single chunk parses.
+    expect(ledgerStateSchema.safeParse({ pending: {}, recorded: {} }).success).toBe(true)
     expect(
-      ledgerStateSchema.safeParse({ blockChunks: [[]], pending: {}, recorded: {} }).success,
-    ).toBe(false)
-    expect(
-      ledgerStateSchema.safeParse({
-        blockChunks: [Array.from({ length: 257 }, () => fact)],
-        pending: {},
-        recorded: {},
-      }).success,
-    ).toBe(false)
-    expect(
-      ledgerStateSchema.safeParse({ blockChunks: [[fact]], pending: {}, recorded: {} }).success,
+      ledgerStateSchema.safeParse({ blockChunks: { values: [fact] }, pending: {}, recorded: {} })
+        .success,
     ).toBe(true)
   })
 })

@@ -17,6 +17,7 @@
  * @module dsh-zotero/evidence
  */
 
+import { detachUtf16 } from './json.js'
 import { normalizeForSearch } from './search-text.js'
 
 const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu
@@ -382,7 +383,10 @@ export function chunkText(
       while (pos < span.end) {
         const stop = Math.min(pos + characterLimit, span.end)
         chunks.push({
-          text: text.slice(pos, stop),
+          // Each chunk detaches from the parent document: the passages are
+          // returned to the model and persisted in the ledger, and a live
+          // slice would pin the whole source text behind them.
+          text: detachUtf16(text.slice(pos, stop)),
           index: chunks.length,
           start: pos,
           end: stop,
@@ -394,7 +398,7 @@ export function chunkText(
       const first = spans[start]!
       const last = spans[end - 1]!
       chunks.push({
-        text: text.slice(first.start, last.end),
+        text: detachUtf16(text.slice(first.start, last.end)),
         index: chunks.length,
         start: first.start,
         end: last.end,

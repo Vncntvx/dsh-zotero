@@ -20,7 +20,7 @@ describe('the projection lifecycle', () => {
     const { definition } = createSourceLedgerProjection()
     const initial = definition.init({} as never, 0 as never)
     expect(initial).toEqual({
-      ledger: { blockChunks: [], pending: {}, recorded: {} },
+      ledger: { pending: {}, recorded: {} },
     })
 
     const called = definition.apply(

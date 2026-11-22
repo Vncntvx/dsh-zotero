@@ -19,7 +19,7 @@ import {
 import { chunkText, type EvidenceChunk } from '../evidence.js'
 import { formatRef, libraryPrefix, parseSupportedRef, refStringFor } from '../refs.js'
 import { truncateText } from '../normalize-context.js'
-import { asRecord } from '../json.js'
+import { asRecord, detachUtf16 } from '../json.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import type {
   SupportedLocalLibrary,
@@ -295,7 +295,9 @@ export function fulltextWindowOf(
     inputTruncated: bounded.truncated,
     start: offset,
     end,
-    text: bounded.text.slice(offset, end),
+    // The window detaches from the body it was cut from: it rides the tool
+    // result and the ledger, and a live slice would pin the whole document.
+    text: detachUtf16(bounded.text.slice(offset, end)),
     isTruncated,
     ...(isTruncated ? { nextStart: end } : {}),
     ...(document.attachmentRef === undefined ? {} : { attachmentRef: document.attachmentRef }),

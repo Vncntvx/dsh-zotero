@@ -13,6 +13,11 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import {
+  appendChunkedList,
+  iterateChunkedList,
+  type ChunkedList,
+} from '@deepseek-ai/dsh-chunked-list'
 import { asRecord, asString } from '../json.js'
 import { receiptOf } from './receipt.js'
 import type { SettledToolBlock, ToolBlockLike } from './block-types.js'
@@ -43,10 +48,11 @@ export interface LedgerPendingCall {
 /** The fold state: settled facts in transcript order plus unsettled calls. */
 export interface SourceLedgerState {
   /**
-   * Settled facts in transcript order, chunked so an append copies the outer
-   * list plus at most one short chunk instead of the whole block array.
+   * Settled facts in transcript order, as the harness chunked list: an append
+   * copies at most one 64-value chunk and shares every older one, and the
+   * recursive zod schema validates checkpointed shapes (absent = empty).
    */
-  readonly blockChunks: readonly (readonly LedgerBlockFact[])[]
+  readonly blockChunks?: ChunkedList<LedgerBlockFact> | undefined
   readonly pending: Readonly<Record<string, LedgerPendingCall>>
   /**
    * Call ids that need a durable dedupe: the ones a `tool/ptc-dispatch`
@@ -59,9 +65,6 @@ export interface SourceLedgerState {
   readonly recorded: Readonly<Record<string, true>>
 }
 
-/** One append copies at most this many facts. */
-const BLOCK_CHUNK_SIZE = 256
-
 /** The projection state: the complete durable fold. */
 export interface SourceLedgerProjectionState {
   readonly ledger: SourceLedgerState
@@ -69,23 +72,23 @@ export interface SourceLedgerProjectionState {
 
 /** The empty fold state. */
 export function emptyLedgerState(): SourceLedgerState {
-  return { blockChunks: [], pending: {}, recorded: {} }
+  return { pending: {}, recorded: {} }
 }
 
 /** How many settled facts the state holds. */
 export function blockCountOf(state: SourceLedgerState): number {
   let count = 0
-  for (const chunk of state.blockChunks) count += chunk.length
+  for (const _fact of iterateChunkedList(state.blockChunks)) count += 1
   return count
 }
 
 /** Every settled fact, flattened. Used by a rebuild, not by the per-event fold. */
 export function factsOf(state: SourceLedgerState): readonly LedgerBlockFact[] {
-  return state.blockChunks.flat()
+  return [...iterateChunkedList(state.blockChunks)]
 }
 
 /**
- * The settled facts at or after one transcript index, without flattening the
+ * The settled facts at or after one transcript index, without materializing the
  * prefix the caller already folded.
  * @param state - the fold state.
  * @param start - the first fact index to return.
@@ -93,12 +96,10 @@ export function factsOf(state: SourceLedgerState): readonly LedgerBlockFact[] {
  */
 export function factsFrom(state: SourceLedgerState, start: number): readonly LedgerBlockFact[] {
   const facts: LedgerBlockFact[] = []
-  let base = 0
-  for (const chunk of state.blockChunks) {
-    if (start < base + chunk.length) {
-      facts.push(...chunk.slice(Math.max(0, start - base)))
-    }
-    base += chunk.length
+  let index = 0
+  for (const fact of iterateChunkedList(state.blockChunks)) {
+    if (index >= start) facts.push(fact)
+    index += 1
   }
   return facts
 }
@@ -224,14 +225,9 @@ function record(
     ...(block.error === undefined ? {} : { error: block.error }),
     ...(block.meta === undefined ? {} : { meta: block.meta as JsonValue }),
   }
-  const last = state.blockChunks[state.blockChunks.length - 1]
-  const blockChunks =
-    last !== undefined && last.length < BLOCK_CHUNK_SIZE
-      ? [...state.blockChunks.slice(0, -1), [...last, fact]]
-      : [...state.blockChunks, [fact]]
   return {
     ...state,
-    blockChunks,
+    blockChunks: appendChunkedList(state.blockChunks, fact),
     ...(tracked ? { recorded: { ...state.recorded, [block.callId]: true } } : {}),
   }
 }
