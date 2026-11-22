@@ -355,7 +355,7 @@ instead of reporting a mocked pass as live verification.
 
 ## Guards
 
-`npm run lint:test` (also the first step of `npm test`) enforces nine
+`npm run lint:test` (also the first step of `npm test`) enforces ten
 mechanical rules; each one exists because this repository hit it:
 
 - no raw control bytes in source or prose. The SourcesTab spec (since split
@@ -389,7 +389,12 @@ mechanical rules; each one exists because this repository hit it:
 - no wholesale client-primitives mock. A spec imports the real
   `@deepseek-ai/dsh-client-ui-primitives` (or a narrow `importOriginal`
   partial); replacing the module hides primitive regressions the client lane
-  exists to catch.
+  exists to catch;
+- the fake-IP exception stays in its reviewed arms. An AST scan of the
+  egress sites pins exactly which HTTPS targets may pass `acceptFakeIp`
+  (scholarly open-access fulltext, the MinerU API host) and which keep the
+  strict public-address gate (panel URL-PDF reads, model downloads), so a
+  new egress arm cannot widen the exception without touching the guard.
 
 The helper import graph — specs → module support → shared helpers, with no
 cross-module support references, no support importing specs, and no shared
@@ -408,10 +413,22 @@ the already-normalized path, and neither path depends on macOS's `/var` alias.
 `vitest.config.ts` holds coverage ratchets per layer, each set just under
 what that layer measures today. They are not aspirations: a layer earns a
 higher floor by specifying more behaviour, never by touching branches to
-satisfy a number. `src/local` measured 94.82% branches while the global read
-96.43%: a layer under the 95% the global gate carries, hidden by layers far
-above it. It now carries its own floor of 93, named in the open rather than
-averaged away.
+satisfy a number. `src/local` once measured 94.82% branches while the global
+read 96.43% — under the 95% the global gate carried at the time, hidden by
+layers far above it — so it gained its own floor of 93, named in the open
+rather than averaged away. The global branches floor now sits at 93.6 after
+later recalibrations; `vitest.config.ts` is the single home for the current
+numbers.
+
+One deliberate deviation from the upstream harness contract, recorded here so
+nobody "completes" it by accident: upstream enforces per-file 100% coverage
+as the gate. This repository enforces the layered ratchets instead —
+`vitest.config.ts` calls per-file 100% the aspiration, not the enforced bar —
+because a per-file bar rewards branches touched only by the test that covers
+them, and types-only modules can never meet it. The layered floors defend the
+same dilution the upstream bar defends; the trade-off is recorded, and the
+floors spec (`tests/unit/tooling/test-lint-boundaries.spec.ts`) pins every
+value so a change is a reviewable diff.
 
 Both ratchets only move in one direction, and they move in the same commit that
 makes the new value true: lower the size limit when splitting reduces the

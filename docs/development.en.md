@@ -172,6 +172,8 @@ git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/to
 
 `isSettledTool` is publicly exported from `@deepseek-ai/dsh-client-ui-chat/client`; `resultText` has no public entry. Both mirrors are reused by the host half, so neither can become a value import. If an upstream implementation changes (especially the empty-content-with-error fallback and the `preparing` decision), update the degradation matrix in `tests/client/presenters.spec.ts` with it.
 
+At upgrade time also check two things: whether `dsh-credentials` now publishes `resolveCredentialRef`/`credentialRefConfigured` (and, if so, evaluate replacing the local per-call resolution wiring), and whether DN-10's client-bundle `meta.stylesheets` migration condition holds.
+
 ## Integration Tests
 
 ```sh
@@ -225,6 +227,8 @@ The encoder creates its output exclusively; choose a new path for each rerun. Me
 - **Style gate**: `scripts/shared/css-syntax.mjs` parses rules, declarations, selectors, and media conditions with CSSTree; font literals must come from the host ladder, colours include named colours, modern functions, and variable fallbacks, hover and touch type-size conditions must not match under the opposite capability, and reduced motion must actually set transition/animation to none. Verified by `style-syntax.spec.ts` and `npm run style:check`.
 - **Dependency and runtime identity**: ONNX 1.31.1's independent anchor is the tarball SHA-512 from official npm metadata; after the archive passes SRI, the three assets' SHA-256 values are extracted, and the license digest is fixed. Vendored harness versions come from the immutable pin tag and the lockfile resolution must equal the declared floor; every static import/export/import type in a packaged declaration needs a consumer dependency, optionalDependency, or peer. Verified by `vendor-onnxruntime` tampering cases, `harness-vendor-state`, `published-declarations`, and `verify:pack`.
 - **Scholarly fusion identity semantics**: `src/scholarly/fusion.ts` uses `identityRelationOf` to evaluate candidates, prefers exact published DOI matches, and keeps multiple candidates for conflicting keys; any change to the identity gate, the strong-identifier set, or the arbitration order must update `tests/scholarly/fusion-bridges.spec.ts` cases in the same change. Verified by `fusion-bridges.spec.ts`, `fusion.spec.ts`, and `fusion-identity.spec.ts`.
+- **Filtered-search first scan**: when `zotero_search` carries filters and the cache misses, the domain scans the whole library through paged listings (100 rows per page, `searchConcurrency` workers halved when attachments are involved, hard caps `MAX_LISTING_ROWS` of 1M rows / `MAX_LISTING_PAGES` of 10k pages), with a 30-second TTL and a version fence deduplicating repeats. On libraries of ten thousand items and up, the first scan is a perceptibly slow path by design; the Local API has no server-side filter index, and the hard caps above are the budget.
+- **Hot-path measurement archive** (2026-11-21, Node 24, production sources loaded directly, scripts in the review workspace): `normalizeForSearch` 0.61µs per call (30k mixed-corpus calls); semantic admission `admittedIndexes` 7.2µs at n=500, 45.8µs at n=4096 ordered / 88.3µs unordered; the inline result arm (`estimateContent` O(1) density heuristic plus `jsonBytes` single-pass encoding) stays under 0.5ms per tool call at the default 64KiB budget. None of these often-suspected hotspots is a bottleneck; re-measure before optimizing.
 
 ## Local Debugging
 
@@ -297,7 +301,7 @@ The following were not run this round and are marked "Not accepted". Before runn
 
 ### Gates actually run (real results)
 
-- `npm test`: 661 spec files / 7129 tests — 659 files passed, 2 files skipped (requiring live Zotero and the write probe, totaling 27 skipped tests), 0 failed; no test loads a model or uses the network.
+- `npm test`: 705 spec files / 7327 tests — 703 files passed, 2 files skipped (requiring live Zotero and the write probe, totaling 27 skipped tests), 0 failed; no test loads a model or uses the network. Re-run this section after the final batch of commits and write the counts back (release checklist step 9).
 - `npm run release:check`: exit 0 (format, strict harness, lint:test, lint:hooks, style:check, typecheck, coverage, build, verify:pack all pass; `verify:pack` checked the packed entries).
 - `npm run build:client` and `npx vitest run tests/host/doc-examples.spec.ts`: pass.
 
@@ -374,6 +378,7 @@ Run the following checks in order before a release, and stop at the first failur
 6. Pack review: step 5's `verify:pack` already validated the tarball's required files; to confirm by hand, run `npm pack --dry-run` and check that the artifact contains `lib/`, `cordis.patch.yml`, `locale/`, `README`, and `docs/plugin-detail.md`;
 7. Walk through acceptance workflows: G1 through G8 are mandatory; add P cases when the change touches the panel or the trail, and add W cases in a separate session with writes enabled when the change touches writing;
 8. Asset check: this version's docs embed no screenshots, and `docs/images/` retains the plugin icon `icon.png`, header collage, and Web UI reference screenshots; if release notes add images, take them from the current Web UI and keep the wording consistent with the interface.
+9. Count write-back: after the final batch of commits lands, re-run `npm test` and update the "recorded gates" section of `docs/development.en.md` with the real spec-file and test counts of that run.
 
 `npm test` and the release gate are not the same thing: `npm test` runs `node scripts/test-lint.mjs` plus `vitest run` without the coverage gate, which is the day-to-day regression command; the release path hands those two jobs to steps 3 and 5.
 

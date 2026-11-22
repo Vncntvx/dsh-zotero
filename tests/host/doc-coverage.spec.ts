@@ -200,6 +200,9 @@ describe('the documentation set stays complete', () => {
       (name) => name.endsWith('.md') && !name.endsWith('.en.md') && name !== 'AGENTS.md',
     )
     const count = (text: string): number => text.match(/^## /gm)?.length ?? 0
+    // Top-level list items pair too: an indentation slip demotes a fact into
+    // the previous item's continuation and the English reader loses it.
+    const bullets = (text: string): number => text.match(/^- /gm)?.length ?? 0
     const violations: string[] = []
     for (const name of names) {
       const english = `docs/${name.slice(0, -'.md'.length)}.en.md`
@@ -210,9 +213,13 @@ describe('the documentation set stays complete', () => {
         violations.push(`${english} is missing`)
         continue
       }
-      const zh = count(docOf(`docs/${name}`))
-      const en = count(paired)
-      if (zh !== en) violations.push(`${name}: ${zh} sections, ${english}: ${en}`)
+      const zh = docOf(`docs/${name}`)
+      if (count(zh) !== count(paired)) {
+        violations.push(`${name}: ${count(zh)} sections, ${english}: ${count(paired)}`)
+      }
+      if (bullets(zh) !== bullets(paired)) {
+        violations.push(`${name}: ${bullets(zh)} top-level items, ${english}: ${bullets(paired)}`)
+      }
     }
     expect(violations).toEqual([])
     // The status tables state the pair count; derive it instead of trusting it.
@@ -305,6 +312,20 @@ describe('the documentation set stays complete', () => {
     expect(docOf('docs/product-model.en.md')).toContain(
       `scholarly retrieval component owning ${words[SCHOLARLY_SOPS.length]}`,
     )
+  })
+
+  it('restates the tool totals in features.md in both languages', () => {
+    // features.md is the user page; it restates the counts the tool reference
+    // owns. The words are spelled out per language, so the assertions pin the
+    // spellings this page chose.
+    const zh = docOf('docs/features.md')
+    expect(zh).toContain(`${ZOTERO_READ_TOOL_NAMES.length} 个只读工具`)
+    expect(zh).toContain('15 个写工具')
+    expect(zh).toContain('7 个学术检索工具')
+    const en = docOf('docs/features.en.md')
+    expect(en).toContain('eight read-only tools')
+    expect(en).toContain('fifteen tools that write only to the personal library')
+    expect(en).toContain('seven external tools')
   })
 })
 

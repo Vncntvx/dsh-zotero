@@ -172,6 +172,8 @@ git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/to
 
 `isSettledTool` 由上游 `@deepseek-ai/dsh-client-ui-chat/client` 公开导出，`resultText` 没有公开入口，两个镜像都在 host 半被复用，因此不能改成值导入。上游实现若有变化（尤其是"空内容 + 错误"的回退、"preparing" 的判定），同步 `tests/client/presenters.spec.ts` 的退化矩阵。
 
+升级时另核两处：`dsh-credentials` 是否已公开 `resolveCredentialRef`/`credentialRefConfigured`（可用后评估替换本地的按调用解析装配），以及 DN-10 的 client bundle `meta.stylesheets` 迁移条件是否成立。
+
 ## 集成测试
 
 ```sh
@@ -225,6 +227,8 @@ node scripts/semantic-calibration/measure-admission.mjs --embeddings /tmp/<key>-
 - **样式门禁**：`scripts/shared/css-syntax.mjs` 用 CSSTree 解析规则、声明、选择器与媒体条件；字体字面量必须来自宿主阶梯，颜色包括命名色、现代函数与变量 fallback，hover 与触屏字号条件在相反能力下必须不匹配，减少动态效果须实际把 transition/animation 置 none。验证：`style-syntax.spec.ts`、`npm run style:check`。
 - **依赖与运行时身份**：ONNX 1.31.1 的独立锚点来自官方 npm 元数据的 tarball SHA-512，归档通过 SRI 后提取三个资产的 SHA-256；许可证固定摘要。vendored harness 包的版本从不可变 pin tag 读取，锁文件解析必须等于声明地板；每个打包声明中的静态 import/export/import type 必须有 consumer dependency、optionalDependency 或 peer。验证：`vendor-onnxruntime` 篡改反例、`harness-vendor-state`、`published-declarations`、`verify:pack`。
 - **scholarly 融合身份语义**：`src/scholarly/fusion.ts` 按 `identityRelationOf` 裁决候选，优先精确匹配正式 DOI，并保留冲突键的多个候选；身份门、强标识集合或仲裁顺序的任何改动必须同步更新 `tests/scholarly/fusion-bridges.spec.ts` 的正反例。验证：`fusion-bridges.spec.ts`、`fusion.spec.ts`、`fusion-identity.spec.ts`。
+- **过滤搜索首扫**：`zotero_search` 带过滤条件且缓存未命中时按 listing 分页全库扫描（页 100 行、并发 `searchConcurrency`（过滤时有附件则减半）、硬帽 `MAX_LISTING_ROWS` 100 万行 / `MAX_LISTING_PAGES` 1 万页），30 秒 TTL 与版本栅栏兜底重复查询。万条以上大库的首扫是用户可感知的慢路径，属设计取舍；Local API 无服务端过滤索引，预算上限即上述硬帽。
+- **热点测量存档**（2026-11-21，Node 24，生产源码直载，脚本在审阅工作区）：`normalizeForSearch` 0.61µs/次（3 万次混合语料）；语义准入 `admittedIndexes` 7.2µs@n=500、45.8µs@n=4096（有序）/88.3µs@n=4096（乱序）；inline 结果臂（`estimateContent` O(1) 密度启发式 + `jsonBytes` 单遍编码）整臂 <0.5ms/次工具调用（默认 64KiB 预算）。这三个常被怀疑的热点均非瓶颈，优化前先复测。
 
 ## 本地调试
 
@@ -297,7 +301,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 ### 已运行门禁（真实结果）
 
-- `npm test`：661 个 spec 文件、7129 个测试，659 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。
+- `npm test`：705 个 spec 文件、7327 个测试，703 个文件通过 / 2 个文件跳过（需实时 Zotero 与写入探针，共 27 个测试跳过）/ 0 失败；没有任何测试加载模型或访问网络。终批提交后复跑本节并回写计数（见发布检查清单第 9 步）。
 - `npm run release:check`：退出码 0（format、strict harness、lint:test、lint:hooks、style:check、typecheck、coverage、build、verify:pack 全通过；`verify:pack` 核对打包条目）。
 - `npm run build:client`、`npx vitest run tests/host/doc-examples.spec.ts`：通过。
 
@@ -374,6 +378,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
 8. 素材核对：本版本文档不内嵌截图，`docs/images/` 保留插件图标 `icon.png`、画幅组合图与 Web UI 参考截图；若发布说明另行配图，必须从当前 Web UI 截取，并与界面文案一致。
+9. 计数回写：终批提交落地后复跑 `npm test`，把 `docs/development.md` 的「已运行门禁」段更新为当次真实 spec 文件数与测试数。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。
 

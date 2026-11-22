@@ -253,14 +253,15 @@ When capacity is exhausted, the UI shows a retryable error. A complete document 
 ONNX embedding models require manual download before enabling; the WASM inference runtime ships inside the plugin (`assets/onnxruntime/<version>/`, with its source and SHA-256 recorded), so nothing is installed on demand and the release-checked runtime closure has no install scripts requiring approval. Direct runtime dependencies use exact versions. The host still checks newly resolved transitive dependencies under its installation policy; release-time evidence does not replace that later check. With the model missing, semantic search fails closed. Models are addressed through semantic tier keys, decoupled from physical model versions so configurations stay valid across upgrades:
 
 - **Model Tiers**:
-  - `balanced` (General & Balanced · currently backed by `Qwen3-Embedding-0.6B` · ~625 MB, 1024 dimensions, 32K max tokens, Apache 2.0): Open-source embedding model, C-MTEB Chinese overall 66.33 / retrieval 71.03, 100+ languages, 32K context. Default tier.
+  - `balanced` (General & Balanced · currently backed by `Qwen3-Embedding-0.6B` · ~625 MB, 1024 dimensions, 32K max tokens, Apache 2.0): Open-source embedding model, 100+ languages, 32K context. Default tier.
   - `lightweight` (Ultra-Lightweight · currently backed by `IBM Granite 97M ModernBERT` · ~123 MB, 384 dimensions, 32K max tokens, Apache 2.0): Memory footprint <250 MB, millisecond CPU latency, for resource-constrained or high-throughput batch environments.
   - `bilingual` (Bilingual Literature · currently backed by `KaLM-Embedding-multilingual-mini-instruct-v2.5` · ~574 MB, 896 dimensions, 32K max tokens, Apache 2.0): Instruction-tuned for English/Chinese mixed retrieval and literature search.
   - `english` (English Long-Context · currently backed by `nomic-embed-text-v1.5` · ~141 MB, 768 dimensions, 8192 max tokens, Apache 2.0): Open weights and data, 8K context with dynamic Matryoshka dimension truncation, for English and academic text.
   - `hybrid` (Multi-Vector Hybrid · currently backed by `BAAI BGE-M3` · ~585 MB, 1024 dimensions, 8192 max tokens, Apache 2.0): Academic benchmark for multi-lingual literature and review-paper recall.
   - `academic` (Classic Academic · currently backed by `gte-multilingual-base` · ~357 MB, 768 dimensions, 8192 max tokens, Apache 2.0): Multilingual academic baseline across 75+ languages.
 - **Hardware and architecture**:
-  - On 16GB RAM CPU-only machines, the OS and environment use 6~8GB, leaving 1.5GB~2.5GB for computation. Models are limited to 97M~600M parameters; **4B and 8B models are excluded** (they need 4.5~8.5GB even with INT8 quantization, giving multi-second query latency and risking swap thrashing or OOM termination).
+  - On 16GB RAM CPU-only machines, the OS and environment use 6~8GB, leaving 1.5GB~2.5GB for computation. Models are limited to 97M~600M parameters.
+  - **4B and 8B models are excluded**: a pure-CPU single inference run takes long, and the memory footprint risks swap thrashing or OOM termination.
   - Retrieval uses Reciprocal Rank Fusion (RRF, k=60) to combine BM25 lexical ranking and dense vector similarity, without a Cross-Encoder reranker.
 - **Multiple Download Channels**:
   - `hf-mirror` (`https://hf-mirror.com`): Mirror for direct downloads in mainland China;

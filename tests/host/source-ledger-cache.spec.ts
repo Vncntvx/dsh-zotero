@@ -89,10 +89,7 @@ describe('chunked block storage', () => {
   })
 
   it('appends facts in bounded chunks and replays them in order', () => {
-    let state = foldLedgerEvent(
-      { pending: {}, recorded: {} },
-      event('turn/start', { turn: 1 }),
-    )
+    let state = foldLedgerEvent({ pending: {}, recorded: {} }, event('turn/start', { turn: 1 }))
     for (let i = 0; i < 600; i += 1) {
       for (const next of searchPair(`c${i}`)) state = foldLedgerEvent(state, next)
     }
@@ -123,16 +120,18 @@ describe('chunked block storage', () => {
     }
     // 65 values in one chunk exceeds the harness chunk capacity.
     const oversized: unknown = { values: Array.from({ length: 65 }, () => fact) }
-    expect(ledgerStateSchema.safeParse({ blockChunks: oversized, pending: {}, recorded: {} }).success)
-      .toBe(false)
+    expect(
+      ledgerStateSchema.safeParse({ blockChunks: oversized, pending: {}, recorded: {} }).success,
+    ).toBe(false)
     // An unknown field in a chunk node is rejected, not carried.
     const unknownField: unknown = {
       values: [fact],
       previous: undefined,
       extra: true,
     }
-    expect(ledgerStateSchema.safeParse({ blockChunks: unknownField, pending: {}, recorded: {} }).success)
-      .toBe(false)
+    expect(
+      ledgerStateSchema.safeParse({ blockChunks: unknownField, pending: {}, recorded: {} }).success,
+    ).toBe(false)
     // The empty list is the absent key, and a well-formed single chunk parses.
     expect(ledgerStateSchema.safeParse({ pending: {}, recorded: {} }).success).toBe(true)
     expect(

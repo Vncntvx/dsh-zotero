@@ -13,6 +13,7 @@ import {
   focusViolationsOf,
   fetchOwnershipIssuesOf,
 } from '../../../scripts/test-lint.mjs'
+import { coverageThresholds } from '../../../vitest.config.ts'
 
 it('locks the reviewed ratchet ceilings and grandfathered paths', () => {
   expect({ MAX_SPEC_LINES, MAX_HELPER_LINES, HELPER_SIZE_BASELINE }).toEqual({
@@ -25,6 +26,48 @@ it('locks the reviewed ratchet ceilings and grandfathered paths', () => {
       'tests/host/support/enrichment-parse-endpoints.ts': 334,
       'tests/host/support/enrichment-parse-jobs.ts': 323,
     },
+  })
+})
+
+it('locks the coverage floors the gate enforces', () => {
+  // Same discipline as the size ratchet above: lowering a floor must touch
+  // this spec in the same commit, with the before/after evidence the config
+  // comments carry. Re-siting a floor updates both places at once.
+  expect(coverageThresholds).toEqual({
+    'src/*.ts': { statements: 98, branches: 95.8, functions: 98, lines: 98 },
+    'src/transport/**': { statements: 98.57, branches: 98.13, functions: 99.9, lines: 99.9 },
+    'src/library/**': { statements: 96.88, branches: 91.08, functions: 99.9, lines: 98.48 },
+    'src/skills/**': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    'src/session-projection/**': {
+      statements: 100,
+      branches: 91.57,
+      functions: 100,
+      lines: 100,
+    },
+    'src/local/**': { statements: 97.7, branches: 93, functions: 99, lines: 97.8 },
+    'src/tools/**': { statements: 98, branches: 95, functions: 99, lines: 99 },
+    'src/sources/**': { statements: 96, branches: 94, functions: 97, lines: 97 },
+    'src/client/components/**': { statements: 95, branches: 93.6, functions: 99, lines: 97 },
+    'src/client/**': { statements: 96.7, branches: 93.8, functions: 96.4, lines: 97 },
+    'src/scholarly/**': { statements: 95, branches: 88, functions: 91, lines: 95 },
+    'src/enrichment/**': { statements: 89.3, branches: 85.7, functions: 90.1, lines: 90.9 },
+    'src/enrichment/semantic/**': { statements: 79, branches: 78, functions: 65, lines: 79 },
+    'src/enrichment/model-downloader.ts': {
+      statements: 87,
+      branches: 74,
+      functions: 84,
+      lines: 86.5,
+    },
+    'src/enrichment/model-download-client.ts': {
+      statements: 87.2,
+      branches: 75.6,
+      functions: 59,
+      lines: 89.4,
+    },
+    statements: 96.2,
+    branches: 93.6,
+    functions: 96.8,
+    lines: 96.9,
   })
 })
 

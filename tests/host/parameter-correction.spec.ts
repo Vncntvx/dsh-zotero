@@ -90,7 +90,7 @@ it('does not attach a correction hint to a blank-value refusal', async () => {
   expect(result.isError).toBe(true)
   if (!result.isError) throw new Error('blank-value rejection unexpectedly succeeded')
   expect(result.error.info?.code).toBe('INVALID_ARGS')
-  expect(result.error.message).toContain("add must be a non-empty string")
+  expect(result.error.message).toContain('add must be a non-empty string')
   for (const block of result.content) {
     expect(block).not.toEqual({
       type: 'text',

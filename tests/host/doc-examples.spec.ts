@@ -59,6 +59,12 @@ import {
   COMPOSITION_DEPENDENT_PARAMETERS,
   isCompositionDependent,
 } from './support/composition-dependent-parameters.js'
+import {
+  asJsonLiteral,
+  docDefaultOf,
+  PROSE_DEFAULT,
+  UNRECOGNIZED_DEFAULT,
+} from './support/doc-literals.js'
 
 const REPO_ROOT = new URL('../../', import.meta.url)
 
@@ -92,16 +98,6 @@ interface DocExample {
 /**
  * Quote bare object keys so a JS-style literal parses as JSON, in both
  * spellings the docs print: `key: value` and `key=value`. The second spelling
- * only appears inside nested objects (`source={kind="ref", …}`), so a scan that
- * ignored it would skip the whole call as unparseable — the very example meant
- * to teach the nested shape.
- */
-function asJsonLiteral(source: string): string {
-  return source
-    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')
-    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*=\s*)/g, '$1"$2": ')
-}
-
 /**
  * The argument list of a call, split at its top-level commas. Nesting and
  * quoted strings are respected so an object argument's own commas stay in it,
@@ -248,25 +244,6 @@ function documentedRows(
     })
   }
   return found
-}
-
-/** A default cell that is prose rather than a value; not comparable. */
-const UNPARSED = Symbol('unparsed')
-
-/** One documented default cell as a JSON value, undefined for "none", or prose. */
-function docDefaultOf(cell: string | undefined): unknown {
-  if (cell === undefined) return UNPARSED
-  const value = cell.replace(/^`|`$/g, '').trim()
-  if (value === '' || value === '—' || value === '-' || value === 'none' || value === '无') {
-    return undefined
-  }
-  // Required markers and prose ("config cap") are not defaults.
-  if (/^(✓|required|必填|config cap|配置上限)$/.test(value)) return UNPARSED
-  try {
-    return JSON.parse(asJsonLiteral(value))
-  } catch {
-    return UNPARSED
-  }
 }
 
 describe('the doc-example literal reader', () => {
@@ -473,7 +450,15 @@ describe('documented tool calls match the tool schemas', () => {
           const property = properties[row.name]
           if (property === undefined) continue
           const documentedDefault = docDefaultOf(row.defaultCell)
-          if (documentedDefault === UNPARSED) continue
+          if (documentedDefault === UNRECOGNIZED_DEFAULT) {
+            violations.push(
+              `${file} ${name}.${row.name}: default cell ${JSON.stringify(row.defaultCell)} is not a supported literal`,
+            )
+            continue
+          }
+          // Recognized prose (required markers, config-derived defaults,
+          // enumeration restatements) has no schema counterpart to compare.
+          if (documentedDefault === PROSE_DEFAULT) continue
           if (JSON.stringify(documentedDefault) !== JSON.stringify(property.default)) {
             violations.push(
               `${file} ${name}.${row.name}: default is ${JSON.stringify(documentedDefault)}, schema says ${JSON.stringify(property.default)}`,

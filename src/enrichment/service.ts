@@ -212,7 +212,6 @@ interface EnrichmentServiceDeps {
   readonly loader?: () => SemanticEmbedderLoader
 }
 
-
 /**
  * Wrap a bare error from a read-only artifact lookup. The lookup never talks
  * to MinerU, so the message must not borrow the parse task's wording: the

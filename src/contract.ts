@@ -866,8 +866,7 @@ export interface ZoteroSemanticModelDownloadResultView {
 }
 
 const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_METHOD = 'downloadSemanticModel'
-const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID =
-  'dsh-zotero#zotero/downloadSemanticModel'
+const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_INVOCATION_ID = 'dsh-zotero#zotero/downloadSemanticModel'
 export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelDownloadRequestView'
 export const ZOTERO_SEMANTIC_MODEL_DOWNLOAD_RESULT_TYPE_SYMBOL =
@@ -899,8 +898,7 @@ export interface ZoteroSemanticModelCancelResultView {
 }
 
 const ZOTERO_SEMANTIC_MODEL_CANCEL_METHOD = 'cancelSemanticModelDownload'
-const ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID =
-  'dsh-zotero#zotero/cancelSemanticModelDownload'
+const ZOTERO_SEMANTIC_MODEL_CANCEL_INVOCATION_ID = 'dsh-zotero#zotero/cancelSemanticModelDownload'
 export const ZOTERO_SEMANTIC_MODEL_CANCEL_REQUEST_TYPE_SYMBOL =
   'dsh-zotero#ZoteroSemanticModelCancelRequestView'
 export const ZOTERO_SEMANTIC_MODEL_CANCEL_RESULT_TYPE_SYMBOL =

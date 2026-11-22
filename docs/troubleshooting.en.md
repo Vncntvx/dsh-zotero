@@ -177,7 +177,7 @@ Note: diagnostic records stay in the current process memory and are cleared when
   - `ZOTERO_ENRICHMENT_JOBS_UNAVAILABLE`: explicit parsing needs session-owned `ctx.jobs` and a live session controller, which are missing; submit from a usable session and host environment.
   - `ZOTERO_ENRICHMENT_OPERATION_CONFLICT`: an operation id was replayed with a different target or settings snapshot; resubmit with a fresh operation id.
   - `ZOTERO_ENRICHMENT_TASK_FAILED` / `ZOTERO_ENRICHMENT_ARCHIVE_INVALID` / `ZOTERO_ENRICHMENT_UNSUPPORTED_INPUT` / `ZOTERO_ENRICHMENT_OUTPUT_INVALID` / `ZOTERO_ENRICHMENT_MODEL_DOWNLOAD_FAILED`: respectively a MinerU task failure, an archive validation failure, input over the API limit or not a PDF, an output-directory validation failure, and a model download that failed on every mirror. A failed parse returns an error.
-    The full error-code list is in the [tool reference · error codes](tools.en.md#error-codes); upload network and authorization boundaries are in the [product model](product-model.en.md).
+- The full error-code list is in the [tool reference · error codes](tools.en.md#error-codes); upload network and authorization boundaries are in the [product model](product-model.en.md).
 
 ## 27. Installing from the main source branch fails with ERR_PNPM_IGNORED_BUILDS
 

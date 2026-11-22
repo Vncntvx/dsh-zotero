@@ -74,7 +74,8 @@ const progress = (): ParsedDocumentProgress => ({
 // Browser-local preparation failures (decode, address, capacity, page) carry
 // the plugin's own reason instead of `gateway/internal`, so a consumer tells
 // them apart from host-side gateway failures without parsing text.
-const failure = (message: string) => new RemoteError('zotero/parsed-preparation-failed', message, {})
+const failure = (message: string) =>
+  new RemoteError('zotero/parsed-preparation-failed', message, {})
 type MessageKey = Extract<ZoteroLocaleKey, `parsedError${string}`> | 'parsedReadDenied'
 
 /**
