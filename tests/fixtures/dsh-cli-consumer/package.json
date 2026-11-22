@@ -3,7 +3,7 @@
   "private": true,
   "description": "Isolated consumer for the release smoke: installs the published dsh CLI and pnpm at the versions the harness pin names.",
   "dependencies": {
-    "@deepseek-ai/dsh": "0.2.2-rc.4",
+    "@deepseek-ai/dsh": "0.2.2-rc.5",
     "pnpm": "11.28.5"
   }
 }

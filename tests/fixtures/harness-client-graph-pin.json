@@ -1,5 +1,5 @@
 {
-  "pin": "dsh-v0.2.2-rc.4",
+  "pin": "dsh-v0.2.2-rc.5",
   "source": "packages/client/tsdown.client.ts",
   "note": "Verbatim regular-expression patterns and flags from the immutable harness pin tag; re-extract after a pin bump.",
   "inlineSafe": {
