@@ -476,7 +476,11 @@ export class ZoteroJobRunner {
           cancel: (reason) => {
             abortController.abort(reason ?? 'Job cancelled by user')
           },
-          done: donePromise,
+          // The registry reads `JobOutcome` only: strip the plugin-private
+          // `error` arm before the object crosses the harness boundary, so a
+          // future harness-side freeze or projection of the outcome cannot
+          // silently drop the original error the plugin still holds.
+          done: donePromise.then(({ error: _error, ...outcome }) => outcome),
         }
       },
     })

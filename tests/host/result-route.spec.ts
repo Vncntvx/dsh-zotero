@@ -64,6 +64,7 @@ it('reads a replayed or forked event without requesting Zotero or a running job'
 it.each([
   'sessionId=s&seq=&index=0',
   'sessionId=s&seq=-1&index=0',
+  'sessionId=s&seq=0&index=0',
   'sessionId=s&seq=2&index=1.5',
   'sessionId=s&seq=2',
   'seq=2&index=0',

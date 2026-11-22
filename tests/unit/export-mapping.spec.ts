@@ -464,35 +464,6 @@ describe('locateExportItemsFromBatch', () => {
     ])
   })
 
-  it('matches CSL-JSON records by bare ID or URI', () => {
-    const cslText = JSON.stringify([
-      { id: 'AAAAAAA1', title: 'Paper 1' },
-      { id: 'http://zotero.org/users/0/items/BBBBBBBB', title: 'Paper 2' },
-    ])
-    const items = locateExportItemsFromBatch('csljson', cslText, [ref1, ref2])
-    expect(items).toEqual([
-      { ref: R1, title: 'Paper 1', exportKey: 'AAAAAAA1', entryIndex: 0 },
-      {
-        ref: R2,
-        title: 'Paper 2',
-        exportKey: 'http://zotero.org/users/0/items/BBBBBBBB',
-        entryIndex: 1,
-      },
-    ])
-
-    // Malformed JSON falls back gracefully
-    const broken = locateExportItemsFromBatch('csljson', 'not json', [ref1])
-    expect(broken).toEqual([{ ref: R1 }])
-
-    // Non-object or non-matching records in JSON array
-    const mixed = locateExportItemsFromBatch(
-      'csljson',
-      JSON.stringify([null, 42, 'string', [], { other: 1 }, { id: 'AAAAAAA1' }]),
-      [ref1],
-    )
-    expect(mixed).toEqual([{ ref: R1, exportKey: 'AAAAAAA1', entryIndex: 5 }])
-  })
-
   it('never equates a key with a longer token containing it and refuses positional guessing', () => {
     const text = '@article{customKey,\n  note = {XAAAAAAA1},\n}\n'
     const items = locateExportItemsFromBatch('bibtex', text, [ref1])
@@ -620,14 +591,6 @@ describe('locateExportItemsFromBatch', () => {
     // 3. RIS record without ID
     const risNoId = 'TY  - JOUR\nTI  - No ID\nER  -\n'
     expect(locateExportItemsFromBatch('ris', risNoId, [ref1])).toEqual([{ ref: R1 }])
-
-    // 4. CSL JSON duplicate keys
-    const cslDup = JSON.stringify([
-      { id: 'http://zotero.org/users/0/items/AAAAAAA1', title: 'First' },
-      { id: 'http://zotero.org/groups/1/items/AAAAAAA1', title: 'Duplicate' },
-    ])
-    const cslRes = locateExportItemsFromBatch('csljson', cslDup, [ref1])
-    expect(cslRes[0]?.exportKey).toBe('http://zotero.org/users/0/items/AAAAAAA1')
   })
 
   it('returns plain refs for non-per-document formats', () => {

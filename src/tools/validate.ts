@@ -8,8 +8,8 @@
 import {
   WRITE_LIST_SELECTION_MESSAGE,
   invalidArgs,
-  requireNonBlank,
   writeListTooLongMessage,
+  writeNonBlankMessage,
   writeNoteTooLongMessage,
 } from '../errors.js'
 import { parseRef, requireWritableRef } from '../refs.js'
@@ -53,11 +53,18 @@ export function intRangeArgumentMessage(
  * its trimmed form. Browse facet filters route through here; search and
  * export keep their own messages (blank query is omitted, blank tags/style
  * name their domain), so this stays scoped to genuinely blank-is-invalid
- * filters rather than pretending to cover every tool. The rule and its
- * message live in `errors.ts` (`requireNonBlank`), shared with the domain end
- * of every write; this is the tool layer's spelling of the same guard.
+ * filters. The rule and its wording live in `errors.ts`
+ * (`requireNonBlank`/`writeNonBlankMessage`), shared with the domain end of
+ * every write; at the tool boundary the same refusal is spelled
+ * `ToolArgsError`/`INVALID_ARGS` so the registry renders an argument refusal
+ * and the parameter-correction hint can engage, while the write domain keeps
+ * `ZOTERO_INVALID_ARGUMENT` for failures that cross the wire.
  */
-export const assertNonBlank = requireNonBlank
+export function assertNonBlank(name: string, value: string): string {
+  const trimmed = value.trim()
+  if (trimmed === '') invalidArgs(writeNonBlankMessage(name))
+  return trimmed
+}
 
 /** Validate the original Markdown before either note tool requests approval. */
 export function assertNoteMarkdown(markdown: string, maxChars: number): string {

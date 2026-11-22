@@ -2,13 +2,13 @@
 
 # 工具参考
 
-dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
+dsh-zotero 注册 23 个本地工具（8 个读工具 + 15 个写工具），通过本地 Zotero HTTP API 与文献库交互。其中 15 个写入工具默认关闭，需在设置中显式启用 `writeEnabled`，且只操作个人库（`zotero://user/0/`）。另有 7 个学术检索工具属于单独的 `dsh-zotero/scholarly` 组件，随包发布但默认关闭；启用该组件即启用这些工具。文档解析组件 `dsh-zotero/enrichment` 提供 `zotero_search_parsed`。所有文献引用（ref）均为 `zotero://user/0/item/<KEY>`（个人库）或 `zotero://group/<ID>/item/<KEY>`（群组库）格式的稳定标识符。
 
-八个本地读取工具共用交付结构：`{delivery:"inline", data:…}` 在两项预算内返回完整领域结果；`{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` 返回有界事实及标准 Harness FileBlock。不可变 JSON 文件保存 `{version:1, tool, request, data}`，其中 `data` 是完整领域结果。分页完整性（`page` 或 `complete`）与交付方式独立。长单行字段应由官方 `run_code` 的 Node 文件接口解析；逐行预览可能截断长行。
+读工具向 Native 和程序化调用提供声明的领域结果。Native 输出超过内联字节或 token 预算时，呈现有界回执和标准 Harness FileBlock。不可变附件保存 `{version:1, tool, request, data}`。后台受理返回独立的结果类型；完成后通过 `job_output` 获取附件。分页完整性由领域结果说明。
 
-参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具（8 个本地读工具、15 个写入工具与 scholarly 组件工具）都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示仅在存在唯一近似匹配时出现，标明拒绝与建议参数。
+参数校验失败（例如把 `refs` 写成 `ref`）时，所有 dsh-zotero 工具都会在管线的 `invalid arguments` 错误后附一条纠错提示，同时指明被拒绝的参数名与声明的参数名。匹配忽略大小写与 `_`/`-`，相邻字符换位计为一次编辑。提示仅在存在唯一近似匹配时出现，标明拒绝与建议参数。
 
-全部 30 个工具的参数根对象均关闭：任何未声明参数都会在执行、网络请求和审批之前以 `INVALID_ARGS` 拒绝。
+全部注册工具的参数根对象均关闭：任何未声明参数都会在执行、网络请求和审批之前以 `INVALID_ARGS` 拒绝。
 
 所有写工具的 `{kind:"declined"}` 均可携带 `feedback`：用户在计划卡输入的修改意见会完整返回模型，并显示为独立的用户反馈正文。自由文本始终拒绝当前计划；模型需要根据意见重新制定计划并再次请求批准。
 
@@ -193,6 +193,33 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ---
 
+## zotero_search_parsed
+
+启用可选的 `dsh-zotero/enrichment` 组件后，可从已提交的 MinerU Markdown 检索词法相关段落。
+
+### 参数
+
+| 参数            | 类型     | 必填 | 默认值 | 含义                                                                                                                |
+| --------------- | -------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `query`         | string   | 是   | —      | 证据问题，最多 2,000 字符                                                                                           |
+| `queryVariants` | string[] | 否   | —      | 同一问题的其他表述，最多三条                                                                                        |
+| `scope`         | object   | 是   | —      | `library` 指定个人或组库 `library`，`collection` 提供完整集合 `ref`，`artifacts` 提供 1–60 个不透明的 `artifactIds` |
+| `limit`         | integer  | 否   | `20`   | 总计 1–60 段，每个来源最多三段                                                                                      |
+
+### 输出
+
+输出字段（按结果臂）：`query`、`queryTerms`、`coverage`、`passages`。
+
+覆盖统计针对当前范围内已保存的解析产物。`status` 可为 `complete`、`partial` 或 `unavailable`。覆盖完整仍可能没有命中。段落包含原文、标题路径、UTF-16 半开区间、产物 ID、指纹和解析代次，并提供可用的 Zotero ref。可使用 `zotero_retrieve` 按产物 ID 阅读上下文。检索会检查本地附件状态。旧式引用未限定 Zotero 实例，绑定其产物前会流式校验本地 PDF 的 SHA-256。链接附件的检查只发出不含凭据的 HEAD 请求。检索不会下载 PDF 或提交 MinerU 任务。
+
+### 示例
+
+```text
+zotero_search_parsed(query="洪水风险", scope={kind: "library", library: {type: "user", id: 0}})
+```
+
+---
+
 ## zotero_export
 
 输出字段（按结果臂）： `citations`、`format`、`items`、`jobId`、`kind`、`locale`、`message`、`outputFile`、`resultSessionId`、`style`、`text`、`timeoutMs`。
@@ -204,15 +231,16 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ### 参数
 
-| 参数         | 类型     | 默认值                       | 说明                                                                                        |
-| ------------ | -------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | —                            | 条目 ref 列表（必填，单次受配置文件字段 `maxExportRefs` 限制，默认 50）                     |
-| `format`     | string   | —                            | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
-| `style`      | string   | 配置默认值                   | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
-| `locale`     | string   | 配置默认值（默认 `"en-US"`） | CSL 语言环境（仅用于 citation 和 bibliography；默认取配置 `defaultLocale`）                 |
-| `outputFile` | string   | —                            | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
+| 参数                | 类型     | 默认值                       | 说明                                                                                        |
+| ------------------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `refs`              | string[] | —                            | 条目 ref 列表（必填，单次受配置文件字段 `maxExportRefs` 限制，默认 50）                     |
+| `format`            | string   | —                            | 导出格式：`citation`、`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`（必填） |
+| `style`             | string   | 配置默认值                   | CSL 样式标识（仅用于 citation 和 bibliography）                                             |
+| `locale`            | string   | 配置默认值（默认 `"en-US"`） | CSL 语言环境（仅用于 citation 和 bibliography；默认取配置 `defaultLocale`）                 |
+| `outputFile`        | string   | —                            | 可选的会话工作区路径，把书目、translator 文本或 CSV 写入该文件（`citation` 不接受）         |
+| `run_in_background` | boolean  | `false`                      | 后台执行。需要开启后台任务且宿主已挂载 `jobs` 服务                                          |
 
-`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`）。
+传 `run_in_background: true` 时，部署开关关闭会返回 `INVALID_ARGS`，宿主缺少 `jobs` 服务会返回 `TOOL_CONTEXT_UNAVAILABLE`。
 
 ### 输出
 
@@ -232,7 +260,7 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 - refs 总数受配置文件字段 `maxExportRefs` 限制（默认 50）。除 `citation` 外的 6 种格式（`bibliography`、`bibtex`、`biblatex`、`ris`、`csljson`、`csv`）单次调用最多 50 条；超出时返回错误；
 - `citation` 是唯一会分批的格式：refs 数超过 50 时按 50 一组分批请求。配置文件字段 `maxExportRefs` 默认同为 50，因此需先在配置文件中将该字段调至 50 以上，分批才会实际发生；
-- `bibtex`、`biblatex`、`ris`、`csljson` 各使用 1 次 translator 请求和 1 次有界原始元数据批处理，用于 citekey 与字段对齐。返回内容在内存中解析，每条记录按 key 或元数据指纹与 ref 配对；无法定位的 ref 在结果中只保留自身。元数据请求失败（如 Zotero 返回 5xx）时导出照常完成：正文原样返回，未能配对的 ref 保持仅有 `ref` 的裸形状。调用方取消（abort）仍会抛出；
+- `bibtex`、`biblatex`、`ris` 各使用 1 次 translator 请求和 1 次有界元数据请求，按条目 key 或元数据指纹定位导出记录。`csljson` 用 1 次有界请求同时取回条目元数据与逐条译文，按 Zotero 响应顺序组装所请求条目的正文。条目存在但取不到译文时，结果保留仅有 `ref` 的条目。校验请求失败、请求条目缺失或调用方取消时，导出失败；
 - 单次导出仅允许同一 library 的 refs，不支持跨库混合导出。
 
 ### 示例
@@ -298,13 +326,14 @@ zotero_browse(kind="tags", q="review", match="contains")
 
 ### 参数
 
-| 参数      | 类型     | 默认值                  | 说明                                                                           |
-| --------- | -------- | ----------------------- | ------------------------------------------------------------------------------ |
-| `library` | object   | `{type: "user", id: 0}` | 目标库标识                                                                     |
-| `since`   | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
-| `include` | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
+| 参数                | 类型     | 默认值                  | 说明                                                                           |
+| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------ |
+| `library`           | object   | `{type: "user", id: 0}` | 目标库标识                                                                     |
+| `since`             | object   | —                       | 起始游标 `{serverId, library, version, include, unserved}`；省略则获取初始基线 |
+| `include`           | string[] | 除 fulltext 外全部      | 监测范围：`items`、`collections`、`savedSearches`、`fulltext`、`deleted`       |
+| `run_in_background` | boolean  | `false`                 | 后台执行。需要开启后台任务且宿主已挂载 `jobs` 服务                             |
 
-`run_in_background` 不是恒声明参数：仅当 `enableRunInBackground=true` 且宿主挂载了 `jobs` 服务时才出现在参数中；未声明时传 `true` 仍会得到结构化拒绝（`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`）。
+传 `run_in_background: true` 时，部署开关关闭会返回 `INVALID_ARGS`，宿主缺少 `jobs` 服务会返回 `TOOL_CONTEXT_UNAVAILABLE`。
 
 ### 输出
 

@@ -77,6 +77,29 @@ it('names the rejected argument and the declared parameter for a write tool', as
   expect(lane.mock.requests).toHaveLength(before)
 })
 
+it('does not attach a correction hint to a blank-value refusal', async () => {
+  lane = await setupHostLane({ writeEnabled: true })
+  const before = lane.mock.requests.length
+  // The parameter name is spelled correctly and the key is present — the
+  // value is what fails. A correction hint would suggest renaming an
+  // argument the model already spelled right.
+  const result = await lane.runTool('zotero_update_item_tags', {
+    ref: 'zotero://user/0/item/ABCD1234',
+    add: ['   '],
+  })
+  expect(result.isError).toBe(true)
+  if (!result.isError) throw new Error('blank-value rejection unexpectedly succeeded')
+  expect(result.error.info?.code).toBe('INVALID_ARGS')
+  expect(result.error.message).toContain("add must be a non-empty string")
+  for (const block of result.content) {
+    expect(block).not.toEqual({
+      type: 'text',
+      text: parameterCorrectionHint('zotero_update_item_tags', { input: 'add', expected: 'ref' }),
+    })
+  }
+  expect(lane.mock.requests).toHaveLength(before)
+})
+
 it('leaves a successful call unchanged', async () => {
   lane = await setupHostLane({})
   serveItemGraph(lane.mock, { parent: item() })

@@ -18,7 +18,7 @@ import type { ZoteroExportFormat, ZoteroObjectRef } from './types.js'
 
 /** One located entry of a translator export body. */
 interface BatchEntry {
-  /** The entry's key: BibTeX/BibLaTeX citation key, RIS record id, or CSL JSON id. */
+  /** The entry's key: BibTeX/BibLaTeX citation key or RIS record id. */
   readonly key?: string
   /** The entry's start offset within the body. */
   readonly start: number
@@ -408,48 +408,6 @@ function locateRisFromBatch(text: string, refs: readonly ZoteroObjectRef[]): Loc
   })
 }
 
-function locateCslFromBatch(text: string, refs: readonly ZoteroObjectRef[]): LocatedExportItem[] {
-  let records: unknown
-  try {
-    records = JSON.parse(text)
-  } catch {
-    records = null
-  }
-  const list = Array.isArray(records) ? records : []
-  const byId = new Map<string, { id: string; index: number; title?: string }>()
-  const byKey = new Map<string, { id: string; index: number; title?: string }>()
-
-  for (let i = 0; i < list.length; i++) {
-    const rec = asRecord(list[i])
-    if (rec === undefined) continue
-    const id = asString(rec['id'])
-    if (id !== undefined) {
-      const title = asString(rec['title'])
-      const entry = {
-        id,
-        index: i,
-        ...(title !== undefined ? { title } : {}),
-      }
-      byId.set(id, entry)
-      const slash = id.lastIndexOf('/')
-      const key = slash !== -1 ? id.slice(slash + 1) : id
-      if (!byKey.has(key)) {
-        byKey.set(key, entry)
-      }
-    }
-  }
-
-  return refs.map((ref) => {
-    const formattedRef = formatRef(ref)
-    const found = byId.get(ref.key) ?? byKey.get(ref.key)
-    return {
-      ref: formattedRef,
-      ...(found?.title !== undefined ? { title: found.title } : {}),
-      ...(found !== undefined ? { exportKey: found.id, entryIndex: found.index } : {}),
-    }
-  })
-}
-
 /**
  * Locate items directly from the batch export body in memory without
  * secondary per-document HTTP calls.
@@ -465,9 +423,7 @@ export function locateExportItemsFromBatch(
       ? alignBibtexEntries(text, refs, rawItems)
       : format === 'ris'
         ? locateRisFromBatch(text, refs)
-        : format === 'csljson'
-          ? locateCslFromBatch(text, refs)
-          : refs.map((ref) => ({ ref: formatRef(ref) }))
+        : refs.map((ref) => ({ ref: formatRef(ref) }))
   const rawByKey = new Map<string, Record<string, unknown>>()
   for (const raw of rawItems ?? []) {
     const item = asRecord(raw)

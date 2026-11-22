@@ -251,7 +251,7 @@ describe('collection lifecycle presentation', () => {
     const blank = await lane.runTool('zotero_create_collection', { name: '   ' })
     expect(blank.isError).toBe(true)
     if (!blank.isError) throw new Error('unreachable')
-    expect(blank.error.info?.code).toBe('ZOTERO_INVALID_ARGUMENT')
+    expect(blank.error.info?.code).toBe('INVALID_ARGS')
     await lane.teardown()
   })
 })
@@ -575,7 +575,7 @@ describe('library-wide tag deletion presentation', () => {
     const blank = await lane.runTool('zotero_delete_library_tags', { tags: ['   '] })
     expect(blank.isError).toBe(true)
     if (!blank.isError) throw new Error('unreachable')
-    expect(blank.error.info?.code).toBe('ZOTERO_INVALID_ARGUMENT')
+    expect(blank.error.info?.code).toBe('INVALID_ARGS')
     const tooMany = await lane.runTool('zotero_delete_library_tags', {
       tags: Array.from({ length: 51 }, (_, index) => `t${index}`),
     })

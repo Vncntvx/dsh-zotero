@@ -16,9 +16,12 @@ export async function readResult(
 ): Promise<Response> {
   const query = new URL(request.url).searchParams
   const rawId = query.get('sessionId')?.trim()
+  // Session events number from 1, so a zero `seq` is malformed rather than
+  // merely unfound — reject it here like the deliverables route does, where
+  // it would otherwise surface as an unclassified 500.
   const seq = parseNonNegativeSafeInteger(query.get('seq'))
   const index = parseNonNegativeSafeInteger(query.get('index'))
-  if (!rawId || seq === undefined || index === undefined)
+  if (!rawId || seq === undefined || seq < 1 || index === undefined)
     return new Response('Invalid result coordinates', { status: 400 })
   const sessionId = rawId as SessionId
   const sessionSeq = seq as SessionSeq

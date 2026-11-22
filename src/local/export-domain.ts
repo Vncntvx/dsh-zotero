@@ -20,6 +20,7 @@ import {
   ZoteroError,
 } from '../errors.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
+import { citationKeyInfoOf } from '../citation-key.js'
 import { ITEM_WITHOUT_KEY_MESSAGE } from '../normalize-context.js'
 import { locateExportItemsFromBatch } from '../export-mapping.js'
 import {
@@ -35,6 +36,7 @@ import { chunkItemKeyBatches, requireArrayBody } from './pagination.js'
 import type { LocalApiLimits } from './limits.js'
 import type {
   SupportedLocalLibrary,
+  ZoteroExportItem,
   ZoteroExportRequest,
   ZoteroExportResult,
   ZoteroExportTextResult,
@@ -49,6 +51,8 @@ interface ExportBody {
   readonly refs: readonly ZoteroObjectRef[]
   /** Raw item JSON used to attach Zotero citation-key facts to located entries. */
   readonly rawItems: readonly Record<string, unknown>[]
+  /** CSL entries are already matched by the enclosing API row's key. */
+  readonly cslItems?: ZoteroExportItem[]
 }
 
 /**
@@ -72,7 +76,8 @@ export async function exportText(
  * `include=citation` pairs each item with its HTML citation (batched to the
  * API's itemKey cap when the request is larger), `format=bib` yields a
  * joined CSL-sorted bibliography, and the remaining formats
- * (`bibtex`/`biblatex`/`ris`/`csljson`/`csv`) export the whole set at once.
+ * (`bibtex`/`biblatex`/`ris`/`csv`) export the whole set at once. CSL JSON
+ * is assembled from individual translator results keyed by their API rows.
  * The batch-breaking formats refuse to exceed `ZOTERO_ITEMKEY_BATCH`, because
  * their global ordering belongs to Zotero and splitting them would silently
  * reorder the output. Itemized formats also read one bounded raw-metadata
@@ -88,12 +93,12 @@ export async function exportItems(
   signal?: AbortSignal,
   onProgress?: (progress: ZoteroProgressEvent) => void,
 ): Promise<ZoteroExportResult> {
-  const { result, refs, rawItems } = await exportBody(deps, request, signal, onProgress)
+  const { result, refs, rawItems, cslItems } = await exportBody(deps, request, signal, onProgress)
   if (result.format === 'citation' || result.format === 'bibliography' || result.format === 'csv') {
     return result
   }
   // Entry spans address the verbatim translator body, including leading whitespace.
-  const items = locateExportItemsFromBatch(result.format, result.text, [...refs], rawItems)
+  const items = cslItems ?? locateExportItemsFromBatch(result.format, result.text, refs, rawItems)
   return {
     ...result,
     items,
@@ -167,8 +172,9 @@ async function exportBody(
     total: refs.length,
     message: `Fetching ${refs.length} items (${request.format})...`,
   })
-  const search = new URLSearchParams()
-  search.set('itemKey', itemKeyList(refs.map((ref) => ref.key)))
+  const verification = new URLSearchParams({ itemKey: itemKeyList(refs.map((ref) => ref.key)) })
+  if (request.format === 'csljson') verification.set('include', 'data,csljson')
+  const search = new URLSearchParams(verification)
   if (request.format === 'bibliography') {
     search.set('format', 'bib')
     search.set('style', style)
@@ -176,10 +182,30 @@ async function exportBody(
   } else {
     search.set('format', request.format)
   }
-  const [{ body }, rawItems] = await Promise.all([
-    deps.client.get(`${exportPrefix}/items`, search, { signal, serverId }),
-    fetchRawItemBatch(deps.client, exportPrefix, refs, signal, serverId),
-  ])
+  const translation =
+    request.format === 'csljson'
+      ? undefined
+      : deps.client.get(`${exportPrefix}/items`, search, { signal, serverId })
+  const verificationBatch = fetchRawItemBatch(
+    deps.client,
+    exportPrefix,
+    verification,
+    refs,
+    signal,
+    serverId,
+  )
+  let body: string
+  let rawItems: readonly Record<string, unknown>[] = []
+  let cslItems: ZoteroExportItem[] | undefined
+  if (translation === undefined) {
+    const csl = assembleCslJson(await verificationBatch, refs)
+    body = csl.text
+    cslItems = csl.items
+  } else {
+    const [translated, verified] = await Promise.all([translation, verificationBatch])
+    body = translated.body
+    rawItems = [...verified.values()]
+  }
   // Close the progress event the fetch opened: without this the receipt
   // would sit at "Fetching N items…" forever, since the batched read has no
   // per-item steps to report.
@@ -206,45 +232,89 @@ async function exportBody(
     result: { format: request.format, text: body },
     refs,
     rawItems,
+    cslItems,
   }
 }
 
-/** Verify the requested item set before delivering any non-citation export. */
+/**
+ * Verify the requested item set before delivering any non-citation export.
+ * Zotero's itemKey scope expands requested parents to include descendants.
+ * Keep each requested key exactly once, in the order the API returned it.
+ */
 async function fetchRawItemBatch(
   client: ZoteroHttpClient,
   prefix: string,
+  search: URLSearchParams,
   refs: readonly ZoteroObjectRef[],
   signal: AbortSignal | undefined,
   serverId: string | undefined,
-): Promise<readonly Record<string, unknown>[]> {
-  const search = new URLSearchParams()
-  search.set('itemKey', itemKeyList(refs.map((ref) => ref.key)))
+): Promise<Map<string, Record<string, unknown>>> {
   const { json } = await client.getJson<unknown>(`${prefix}/items`, search, { signal, serverId })
-  const rows = requireArrayBody(json, 'export item verification').map((row) => {
+  const expected = new Set(refs.map((ref) => ref.key))
+  const matched = new Map<string, Record<string, unknown>>()
+  for (const row of requireArrayBody(json, 'export item verification')) {
     const record = asRecord(row)
     const key = asString(record?.key)
     if (record === undefined || key === undefined || !isObjectKey(key))
       throw new ZoteroError(ITEM_WITHOUT_KEY_MESSAGE, ZOTERO_UNEXPECTED)
-    return record
-  })
-  const expected = new Set(refs.map((ref) => ref.key))
-  const seen = new Set<string>()
-  for (const row of rows) {
-    const key = row.key as string
-    if (!expected.has(key) || seen.has(key))
-      throw new ZoteroError(
-        'Zotero returned an unexpected or duplicate export item.',
-        ZOTERO_UNEXPECTED,
-      )
-    seen.add(key)
+    if (!expected.has(key)) continue
+    if (matched.has(key))
+      throw new ZoteroError('Zotero returned a duplicate export item.', ZOTERO_UNEXPECTED)
+    matched.set(key, record)
   }
-  const missing = refs.filter((ref) => !seen.has(ref.key))
+  const missing = refs.filter((ref) => !matched.has(ref.key))
   if (missing.length > 0)
     throw new ZoteroError(
       `Zotero did not return requested items: ${missing.map(formatRef).join(', ')}.`,
       ZOTERO_NOT_FOUND,
     )
-  return rows
+  return matched
+}
+
+/** The per-row include is a JSON string containing zero or one CSL record. */
+function cslEntryOf(row: Record<string, unknown>): Record<string, unknown> | undefined {
+  const message = 'Zotero returned an invalid per-item CSL JSON export.'
+  const body = asString(row.csljson)
+  if (body === undefined) throw new ZoteroError(message, ZOTERO_UNEXPECTED)
+  let decoded: unknown
+  try {
+    decoded = JSON.parse(body)
+  } catch (cause) {
+    throw new ZoteroError(message, ZOTERO_UNEXPECTED, { cause })
+  }
+  if (Array.isArray(decoded) && decoded.length === 0) return undefined
+  const entry = Array.isArray(decoded) && decoded.length === 1 ? asRecord(decoded[0]) : undefined
+  if (entry === undefined) throw new ZoteroError(message, ZOTERO_UNEXPECTED)
+  return entry
+}
+
+function assembleCslJson(
+  verified: ReadonlyMap<string, Record<string, unknown>>,
+  refs: readonly ZoteroObjectRef[],
+): { text: string; items: ZoteroExportItem[] } {
+  const entries: Record<string, unknown>[] = []
+  const details = new Map<string, Omit<ZoteroExportItem, 'ref' | 'start' | 'end'>>()
+  for (const [key, row] of verified) {
+    const entry = cslEntryOf(row)
+    const citation = citationKeyInfoOf(asRecord(row.data) ?? row)
+    if (entry === undefined) {
+      details.set(key, citation)
+      continue
+    }
+    const exportKey = asString(entry.id)
+    const title = asString(entry.title)
+    details.set(key, {
+      ...citation,
+      entryIndex: entries.length,
+      ...(exportKey === undefined ? {} : { exportKey }),
+      ...(title === undefined ? {} : { title }),
+    })
+    entries.push(entry)
+  }
+  return {
+    text: JSON.stringify(entries, null, '\t'),
+    items: refs.map((ref) => ({ ref: formatRef(ref), ...details.get(ref.key) })),
+  }
 }
 
 interface CitationExportOptions {

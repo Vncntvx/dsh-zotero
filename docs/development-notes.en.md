@@ -2,9 +2,9 @@
 
 # Development Notes
 
-<!-- harness-reviewed: 0.2.2-rc.4 -->
+<!-- harness-reviewed: 0.2.2-rc.5 -->
 
-Current host contract review: 2026-11-18, pin `0.2.2-rc.4`. This page keeps upstream patches only; every entry has been checked against the current implementation and tests.
+Current host contract review: 2026-11-21, pin `0.2.2-rc.5`. This page keeps upstream patches only; every entry has been checked against the current implementation and tests.
 
 ## Position
 
@@ -28,7 +28,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-1: Suppressing panel parse completion notices
 
-- **Upstream**: `@deepseek-ai/dsh-jobs` and `dsh-tool-jobs` (pin `0.2.2-rc.4`).
+- **Upstream**: `@deepseek-ai/dsh-jobs` and `dsh-tool-jobs` (pin `0.2.2-rc.5`).
 - **Upstream feature**: a panel parse job runs through `ctx.jobs`, and settlement posts a background-job status notice to the owning session.
 - **Upstream defect**: the notice only asks the model to read the job output; a parse job's output is a receipt (artifactId, character count, bounded preview) with no body or readable path. An idle session is woken by `followup`, the model searches the host filesystem, and it produces an unsolicited report.
 - **Local patch**: `EnrichmentParseJobs` in `src/enrichment/parse-jobs.ts` registers the job with `owner`, leaves `toolCall` empty, and holds overlapping `ctx.jobs.wait` successors (`holdNotice`, `PARSE_NOTICE_WAIT_MS`, `PARSE_NOTICE_REARM_MS`); settlement is marked `awaited`, so the tool-jobs delivery condition skips it. The waiters consume no output, cancel no job, and remove no settlement record.
@@ -56,7 +56,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Upstream feature**: local semantic ranking uses onnxruntime-web.
 - **Upstream defect**: an undecided dependency build script makes the whole pnpm install exit non-zero (`ERR_PNPM_IGNORED_BUILDS`), and desktop plugin installation rolls back.
 - **Local patch**: the runtime is not a dependency but a packaged asset: `scripts/vendor-onnxruntime.mjs` copies the Node entry, wasm glue, and binary into `assets/onnxruntime/<version>/`, writes `provenance.json` (source, bytes, SHA-256) and the MIT license; `semantic/runtime.ts` loads the entry by absolute URL and points `env.wasm.wasmPaths` at that directory; `verify:pack` checks hashes, the license, and that the three files are in the package.
-- **Why this is a compromise**: the assets are generated and must be rebuilt on upgrades; `onnxruntime-common` remains a normal dependency; the package grows by about 3.8 MB.
+- **Why this is a compromise**: the assets are generated and must be rebuilt on upgrades; `onnxruntime-common` remains a normal dependency; the package is 7.0 MB packed / 27.4 MB unpacked (`npm pack --dry-run`, 2026-11-21, including the vendored 14.8 MB wasm).
 - **Upstream expectation**: pnpm allows or exempts the build script, or `protobufjs` 8.x ships no `postinstall`.
 - **Review trigger**: onnxruntime-web upgrade (also update `SEMANTIC_RUNTIME_VERSION` and the exact devDependency), pnpm major, or a new runtime dependency.
 - **Verification**: `vendor-onnxruntime.spec.ts`, `enrichment-semantic-runtime.spec.ts`, `build-approvals.spec.ts`, `verify-pack.spec.ts`; install the packed artifact into a clean profile with pnpm 11 and expect zero approvals.
@@ -64,7 +64,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-9: The upstream "no session surface" refusal is prose only
 
-- **Upstream**: `@deepseek-ai/dsh-client-ui-sidebar-right` (pin `0.2.2-rc.4`).
+- **Upstream**: `@deepseek-ai/dsh-client-ui-sidebar-right` (pin `0.2.2-rc.5`).
 - **Upstream feature**: the panel opens a local PDF through `openResource`.
 - **Upstream defect**: when the session has no mounted surface, upstream throws `new Error('sidebarRight: no session surface is mounted')` with no error code or distinguishable type.
 - **Local patch**: a `NO_SESSION_SURFACE_REFUSAL` substring constant, matched with `includes` because upstream prefixes `sidebarRight: `; other failures keep their original message.
@@ -76,9 +76,9 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-10: Client loader API and `resultText` mirror the pin semantics
 
-- **Upstream**: the client module loader and `resultText` (pin `0.2.2-rc.4`).
+- **Upstream**: the client module loader and `resultText` (pin `0.2.2-rc.5`).
 - **Upstream feature**: plugin CSS injection and the `load({id,factory})` handoff; `resultTextOf` produces tool-card text.
-- **Upstream defect**: the rc.4 shell provides `load({id,factory})` and claims styles injected during factory execution. `@deepseek-ai/dsh-client-modules/client` exports `ClientBundleRegistration`, whose rc.4 shape has no `meta` field. `resultText` joins with newlines and has no public export.
+- **Upstream defect**: the rc.5 shell provides `load({id,factory})` and claims styles injected during factory execution. `@deepseek-ai/dsh-client-modules/client` exports `ClientBundleRegistration`, whose rc.5 shape has no `meta` field. `resultText` joins with newlines and has no public export.
 - **Local patch**: `CLIENT_LOADER_API` and `assertLoaderApi` in `scripts/build-client.mjs`; the `resultTextOf` mirror in `src/sources/presenters.ts`, with JSDoc recording the released contract.
 - **Why this is a compromise**: both mirrors must move with the pin; a build-time failure is better than silently losing styles or the handoff at runtime.
 - **Upstream expectation**: the pin provides `meta.stylesheets`; `resultText` is exported from `./client`.
@@ -124,7 +124,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-27: Tool parameter names are closed before execution
 
-- **Upstream**: the tool parameter DSL (rc.4).
+- **Upstream**: the tool parameter DSL (rc.5).
 - **Upstream feature**: tool registration and parameter validation.
 - **Upstream defect**: the DSL produces an open root object, so unknown root parameters are accepted.
 - **Local patch**: the shared constructor marks the public schema `additionalProperties: false` and, on an unknown root parameter, calls the host `validateJsonSchemaValue` and throws `ToolArgsError` before any tool executes; declared fields still go through `defineTool`; unique approximate matches cover missing required/optional names without guessing ambiguous ones.
@@ -136,7 +136,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-29: Public test support and registry entry differences
 
-- **Upstream**: test-support packages (rc.4).
+- **Upstream**: test-support packages (rc.5).
 - **Upstream feature**: host-lane `executeModelToolFixture`, `TestClient`/`SlotTestRuntime`, and published entries.
 - **Upstream defect**: the complete runtime root entry depends on loader-form `/client` artifacts; a package-internal Vitest 4 and the repository's Vitest 5 can split.
 - **Local patch**: an exact published-entry list in the test-support source gate; `client-test-platform.mjs` maps declared type paths to explicitly published production sources and fails on a missing contract or file; a single Vitest instance; real `TestClient`/`SlotTestRuntime`; the pin script fills harness overrides.
@@ -170,18 +170,6 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Verification**: the `control-style-ownership` gate (JSX imports to CSS; only `height:auto` and icon dimensions/radius are allowed); real browser acceptance.
 - **Follow-up**: replace the adapter with the host API and keep the ownership gate.
 
-## DN-43: Result projection and the host snapshot
-
-- **Upstream**: `createSuccessResult` in the tools pipeline.
-- **Upstream feature**: tool result projection and `presentationMeta`.
-- **Upstream defect**: the host copies and freezes the result before verification and projection, so a WeakMap on the original result cannot carry later facts.
-- **Local patch**: the inline arm computes once in the final `presentationMeta`; the file arm computes once after deciding a file is needed and keeps the facts with the receipt; event metadata expands one copy.
-- **Why this is a compromise**: facts must be computed before the snapshot; a second projection cannot recover them.
-- **Upstream expectation**: a call-level projection interface that survives the snapshot.
-- **Review trigger**: tools pipeline, result wrapper, or projection changes.
-- **Verification**: `tests/host/result-projection.spec.ts` (each arm's projector runs once; metadata has no nested facts or session copies).
-- **Follow-up**: revisit delivery when the upstream interface exists and keep the two-arm execution regression.
-
 ## DN-49: Interface-language injection for explain answers
 
 - **Upstream**: client `ctx.locale` and model requests at the pin.
@@ -193,3 +181,27 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Review trigger**: `ctx.locale` service, prompt shape, or a new locale.
 - **Verification**: `tests/client/answer-language.spec.ts`, `tests/client/library/parsed-document-*.spec.tsx`, `library-inspector.spec.tsx`.
 - **Follow-up**: delete the client injection when the host exposes the language; keep the explain/ask behavior constraints.
+
+## DN-50: Conversation locations for turn evidence and write plans
+
+- **Upstream**: rc.5 `conversation.view`, `conversation.chat.turnTail`, `ui-input-trigger`, and the approval command.
+- **Upstream feature**: plugins can register conversation views, turn-tail views, and input triggers.
+- **Upstream defect**: the published client has no persistent conversation aside. The host approval command owns the single `conversation.approval.detail` slot, and its response lacks a full plan-feedback field.
+- **Local patch**: the literature trail uses the conversation view and turn evidence uses the turn tail. The composer serves `@paper`. Session approval and Zotero plan review keep their respective responses.
+- **Why this is a compromise**: the cross-turn trail occupies a separate conversation view. Write tools receive session authorization before presenting the specific plan for review.
+- **Upstream expectation**: a persistent conversation aside, composable approval details, and structured approval feedback.
+- **Review trigger**: compare client slot declarations and approval response types on a host pin upgrade.
+- **Verification**: `tests/client/apply-gating.spec.ts`, `tests/client/apply.spec.ts`, and the plan-review and write specs.
+- **Follow-up**: adopt the published aside and composable approval detail while preserving paper refs and complete revision feedback.
+
+## DN-51: Scope Local API exports to requested items
+
+- **Upstream**: the Zotero desktop Local API (`127.0.0.1:23119/api`, observed on `11.0-beta.4`).
+- **Upstream feature**: `GET /users/0/items?itemKey=KEY` returns items by key and includes a parent's children in the response. `include=data,csljson` attaches each object's own CSL JSON export to its JSON row.
+- **Upstream defect**: the extra child rows make exact-set verification fail for bibliography, BibTeX, and similar formats; a direct `format=csljson` request also writes expanded attachments or notes into the export body.
+- **Local patch**: `fetchRawItemBatch` in `src/local/export-domain.ts` keeps only the requested keys and requires each one exactly once. The CSL JSON body is assembled from each verified row's `csljson` field in response order, with `entryIndex` marking each entry; citation keys come from the same rows.
+- **Why this is a compromise**: the Local API still generates CSL JSON for expanded children, and the plugin can only select the requested records from the response. Other batch formats keep Zotero's returned bodies.
+- **Upstream expectation**: a query option that disables child expansion for both the raw response and the export body.
+- **Review trigger**: after Zotero changes item scopes or CSL JSON serialization, recheck the raw response and the export body with a parent that has an attachment and a note.
+- **Verification**: `tests/local/export-item-scope.spec.ts` covers scope expansion, duplicate keys, explicitly requested children, and CSL JSON entry alignment.
+- **Follow-up**: remove the adaptation when Zotero offers exact batch reads and batch exports with entry identities.

@@ -47,12 +47,12 @@ describe('write tool argument validation', () => {
     const blankMd = await lane.runTool('zotero_create_note', { markdown: '   ' })
     expect(blankMd.isError).toBe(true)
     if (!blankMd.isError) throw new Error('unreachable')
-    expect(blankMd.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(blankMd.error.info?.code).toBe('INVALID_ARGS')
 
     const blankTag = await lane.runTool('zotero_create_note', { markdown: 'valid', tags: ['   '] })
     expect(blankTag.isError).toBe(true)
     if (!blankTag.isError) throw new Error('unreachable')
-    expect(blankTag.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(blankTag.error.info?.code).toBe('INVALID_ARGS')
 
     const blankColl = await lane.runTool('zotero_create_note', {
       markdown: 'valid',
@@ -60,7 +60,7 @@ describe('write tool argument validation', () => {
     })
     expect(blankColl.isError).toBe(true)
     if (!blankColl.isError) throw new Error('unreachable')
-    expect(blankColl.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(blankColl.error.info?.code).toBe('INVALID_ARGS')
 
     expect(scripted.asks).toHaveLength(0)
     expect(lane.mock.requests.some((request) => request.method === 'POST')).toBe(false)
@@ -76,7 +76,7 @@ describe('write tool argument validation', () => {
     })
     expect(blankTag.isError).toBe(true)
     if (!blankTag.isError) throw new Error('unreachable')
-    expect(blankTag.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(blankTag.error.info?.code).toBe('INVALID_ARGS')
 
     const blankColl = await lane.runTool('zotero_update_item_collections', {
       ref: `zotero://user/0/item/${ITEM_KEY}`,
@@ -84,7 +84,7 @@ describe('write tool argument validation', () => {
     })
     expect(blankColl.isError).toBe(true)
     if (!blankColl.isError) throw new Error('unreachable')
-    expect(blankColl.error.info?.code).toBe(ZOTERO_INVALID_ARGUMENT)
+    expect(blankColl.error.info?.code).toBe('INVALID_ARGS')
 
     expect(lane.mock.requests.some((request) => request.method === 'PATCH')).toBe(false)
   })

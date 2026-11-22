@@ -130,7 +130,7 @@ describe('export', () => {
       if (search.has('format')) helpers.text(`exported-as-${search.get('format')}`)
       else helpers.json((search.get('itemKey') ?? '').split(',').map((key) => item({ key })))
     })
-    for (const format of ['bibtex', 'biblatex', 'ris', 'csljson'] as const) {
+    for (const format of ['bibtex', 'biblatex', 'ris'] as const) {
       const before = mock.requests.length
       const result = await provider.export(exportRequest({ format }))
       if (result.format !== format) throw new Error('unreachable')
@@ -215,23 +215,6 @@ describe('export', () => {
     expect(risResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
     expect(risResult.items[1]!.exportKey).toBe('BBBB1234')
     expect(risResult.items[1]!.title).toBe('Second Paper')
-  })
-
-  it('pairs CSL-JSON translator documents with requested refs in memory', async () => {
-    const csljsonText = JSON.stringify([
-      { id: 'ABCD1234', title: 'Paper A' },
-      { id: 'http://zotero.org/users/0/items/BBBB1234', title: 'Paper B' },
-    ])
-    serveCheckedExport(csljsonText)
-    const cslResult = await provider.export(exportRequest({ format: 'csljson' }))
-    if (cslResult.format !== 'csljson') throw new Error('unreachable')
-    expect(cslResult.items).toHaveLength(2)
-    expect(cslResult.items[0]!.ref).toBe('zotero://user/0/item/ABCD1234')
-    expect(cslResult.items[0]!.exportKey).toBe('ABCD1234')
-    expect(cslResult.items[0]!.title).toBe('Paper A')
-    expect(cslResult.items[1]!.ref).toBe('zotero://user/0/item/BBBB1234')
-    expect(cslResult.items[1]!.exportKey).toBe('http://zotero.org/users/0/items/BBBB1234')
-    expect(cslResult.items[1]!.title).toBe('Paper B')
   })
 
   it('fails with OUTPUT_TOO_LARGE instead of truncating oversized exports', async () => {
@@ -507,7 +490,7 @@ describe('exportText', () => {
     expectRequestCount(mock, 2)
   })
 
-  it.each(['bibtex', 'biblatex'] as const)(
+  it.each(['bibtex', 'biblatex', 'ris'] as const)(
     'verifies %s text before returning the unitemized body',
     async (format) => {
       serveCheckedExport(`exported-as-${format}`)
@@ -517,14 +500,6 @@ describe('exportText', () => {
       expectRequestCount(mock, 2)
     },
   )
-
-  it.each(['ris', 'csljson'] as const)('verifies %s text without itemization', async (format) => {
-    serveCheckedExport(`exported-as-${format}`)
-    const text = await provider.exportText(exportRequest({ format }))
-    expect(text).toEqual({ format, text: `exported-as-${format}` })
-    expect('items' in text).toBe(false)
-    expectRequestCount(mock, 2)
-  })
 })
 
 describe('export tolerances', () => {
@@ -534,10 +509,7 @@ describe('export tolerances', () => {
   })
 
   it('propagates caller cancellation out of the metadata read', async () => {
-    // The metadata read is fail-open for transport failures, but a caller
-    // abort is not a metadata failure: swallowing it would settle a body the
-    // caller stopped. Hold the metadata response unanswered so the abort is
-    // the only thing that can settle that arm.
+    // Hold the metadata response open until the caller cancels the export.
     const batchText = '@article{customKeyA,\n  title = {Carbon price forecasting},\n}\n'
     const metaInFlight = deferred<void>()
     mock.route('GET', `${apiPath()}/items`, (req, res, helpers, search) => {

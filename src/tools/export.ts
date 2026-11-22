@@ -2,9 +2,10 @@
  * The `zotero_export` tool: turn item refs into citations or formatted
  * exports. Citation mode pairs every requested ref with Zotero's own HTML
  * citation, ordered as requested; bibliography mode yields the joined
- * CSL-sorted bibliography; bibtex/biblatex/ris/csljson/csv pass the translator
- * output through verbatim and itemize each exported document (its citation
- * key and title) paired with its ref. Export output is never mid-truncated:
+ * CSL-sorted bibliography. BibTeX, BibLaTeX, RIS and CSV pass Zotero's batch
+ * body through; CSL JSON combines the requested items' translator records.
+ * Per-item entries carry their refs and export keys where available.
+ * Export output is never mid-truncated:
  * it either fits the provider's character limit or fails with a typed error.
  * @module dsh-zotero/tools/export
  */
@@ -48,11 +49,10 @@ import {
   isJobArm,
   jobPolicyOf,
   presentJobArm,
-  registerBackgroundAware,
   renderJobArm,
 } from '../job-runner.js'
 
-const BASE_EXPORT_PARAMETERS = {
+const EXPORT_PARAMETERS = {
   refs: {
     type: 'array',
     items: { type: 'string' },
@@ -79,14 +79,10 @@ const BASE_EXPORT_PARAMETERS = {
     description:
       'Optional session-workspace path for the exported bibliography, translator, or CSV text.',
   },
-} as const
-
-const EXPORT_WITH_BACKGROUND_PARAMETERS = {
-  ...BASE_EXPORT_PARAMETERS,
   ...RUN_IN_BACKGROUND_PARAMETER,
 } as const
 
-type ExportArgs = InferArgs<typeof EXPORT_WITH_BACKGROUND_PARAMETERS>
+type ExportArgs = InferArgs<typeof EXPORT_PARAMETERS>
 
 const EXPORT_ITEM_PROPERTIES = {
   ref: { type: 'string', required: true },
@@ -234,10 +230,6 @@ function buildRequest(args: ExportArgs, config: ResolvedConfig): ZoteroExportReq
   }
 }
 
-// The render signature is the union of both parameter shapes: with the
-// background arm available the model may pass `run_in_background`, without
-// it that key is not part of the contract. `unknown` keeps the render honest
-// about both shapes instead of narrowing it to one of them.
 function renderExport(_args: unknown, value: ExportOutput): ContentBlock[] {
   if (isJobArm(value)) return renderJobArm(value)
   if (value.format === 'citation') {
@@ -312,12 +304,8 @@ function presentExportResult(_args: ExportArgs, result: ToolResult): ToolResultV
 }
 
 /**
- * Register the `zotero_export` tool. The `run_in_background` parameter exists
- * exactly while this composition can serve it (the deployment flag on and a
- * job registry mounted), so a host that cannot start a job never advertises
- * the key. Execute still refuses an undeclared background request, because the
- * registry admits argument keys the schema omits. The live config is read per
- * request, so a settings edit changes the refusal on the next call.
+ * Register `zotero_export` for the plugin lifetime. Each call checks the
+ * current background policy and job registry.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  * @param wrap - the delivery envelope.
@@ -327,96 +315,85 @@ export function registerExportTool(
   service: ZoteroService,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
-  const definition = (background: boolean) =>
-    wrap(
-      defineTool({
-        name: 'zotero_export',
-        description: [
-          'Export Zotero items as citations, a bibliography, or translator formats (bibtex, biblatex, ris, csljson, csv).',
-          `Citation mode pairs each ref with its HTML citation in the requested order and batches past Zotero's ${ZOTERO_ITEMKEY_BATCH}-key request cap;`,
-          `bibliography returns the joined CSL-sorted text; translator formats return Zotero's raw ordering itemized by ref, exportKey, citationKey, and title, never by position. Itemized formats use one export request and one bounded metadata batch, up to ${ZOTERO_ITEMKEY_BATCH} refs.`,
-          'Declare with present.',
-        ].join(' '),
-        parameters: background ? EXPORT_WITH_BACKGROUND_PARAMETERS : BASE_EXPORT_PARAMETERS,
-        output: {
-          schema: EXPORT_OUTPUT_SCHEMA,
-          render: renderExport,
-          // Drop optional document previews while retaining citation attribution.
-          presentationMeta: (args, value) => {
-            if (isJobArm(value)) return value
-            return boundedPresentationMeta(
-              projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
-              ['items'],
-            )
-          },
-        },
-        presentCall: (args) => ({
-          card: 'generic',
-          title: 'Export Zotero citations',
-          rawInput: `${args.refs.length} refs · ${args.format}`,
-        }),
-        presentResult: presentExportResult,
-        isConcurrencySafe: (args) => args.outputFile === undefined,
-        async execute(args, exec) {
-          // The parameters are two shapes (the background arm registers only
-          // while the jobs service is available), so defineTool infers a union;
-          // both arms carry the export fields, and the background key is read
-          // through the same alias below.
-          const exportArgs = args as ExportArgs
-          const request = buildRequest(exportArgs, service.config)
-          const session = exec.agent?.session
-          const fs = ctx.get('fs')
-          const workingDirectory = ctx.get('workingDirectory')
-          if (exportArgs.outputFile !== undefined && (!session || !fs || !workingDirectory)) {
-            throw new ToolContextUnavailableError(
-              'Export file delivery requires filesystem, working directory and session',
-            )
-          }
-          if (
-            exportArgs.outputFile !== undefined &&
-            fs!.sandboxMode !== undefined &&
-            !ctx.get('sandboxPolicy')
+  const definition = wrap(
+    defineTool({
+      name: 'zotero_export',
+      description: [
+        'Export citations in requested ref order, a CSL-sorted bibliography, or translator text in Zotero order with ref-to-entry mappings.',
+        'For exported files, declare the result using present.',
+      ].join(' '),
+      parameters: EXPORT_PARAMETERS,
+      output: {
+        schema: EXPORT_OUTPUT_SCHEMA,
+        render: renderExport,
+        // Drop optional document previews while retaining citation attribution.
+        presentationMeta: (args, value) => {
+          if (isJobArm(value)) return value
+          return boundedPresentationMeta(
+            projectExportMeta(value as Parameters<typeof projectExportMeta>[0], args.refs),
+            ['items'],
           )
-            throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
-          const cwd =
-            exportArgs.outputFile !== undefined
-              ? await workingDirectory!.ensure(exec.agent!, exec.signal)
-              : undefined
-          return executeWithJobs({
-            runner: service.jobRunner,
-            exec,
-            label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
-            run: async (signal, onProgress) => {
-              let result: Awaited<ReturnType<typeof service.export>> & {
-                outputFile?: string
-              } = await service.export(request, signal, onProgress)
-              if (result.format === 'citation') return result
-              signal.throwIfAborted()
-              if (exportArgs.outputFile !== undefined) {
-                const policyService = ctx.get('sandboxPolicy')
-                if (fs!.sandboxMode !== undefined && !policyService)
-                  throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
-                const target = await fs!.resolve(exportArgs.outputFile.trim(), { cwd, signal })
-                signal.throwIfAborted()
-                const policy = policyService?.resolve({ session: session! })
-                await fs!.writeText(target, result.text, undefined, signal, policy)
-                const path = fs!.processPath(target)
-                signal.throwIfAborted()
-                result = { ...result, outputFile: path }
-              }
-              signal.throwIfAborted()
-              return result
-            },
-            outputLimitBytes: service.config.maxInlineResultBytes,
-            runInBackground: exportArgs.run_in_background === true,
-            policy: jobPolicyOf(service.config),
-          })
         },
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        title: 'Export Zotero citations',
+        rawInput: `${args.refs.length} refs · ${args.format}`,
       }),
-    )
-  return registerBackgroundAware(
-    ctx,
-    () => service.config.enableRunInBackground,
-    (background) => ctx.tools.register(definition(background)),
+      presentResult: presentExportResult,
+      isConcurrencySafe: (args) => args.outputFile === undefined,
+      async execute(args, exec) {
+        const exportArgs = args
+        const request = buildRequest(exportArgs, service.config)
+        const session = exec.agent?.session
+        const fs = ctx.get('fs')
+        const workingDirectory = ctx.get('workingDirectory')
+        if (exportArgs.outputFile !== undefined && (!session || !fs || !workingDirectory)) {
+          throw new ToolContextUnavailableError(
+            'Export file delivery requires filesystem, working directory and session',
+          )
+        }
+        if (
+          exportArgs.outputFile !== undefined &&
+          fs!.sandboxMode !== undefined &&
+          !ctx.get('sandboxPolicy')
+        )
+          throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
+        const cwd =
+          exportArgs.outputFile !== undefined
+            ? await workingDirectory!.ensure(exec.agent!, exec.signal)
+            : undefined
+        return executeWithJobs({
+          runner: service.jobRunner,
+          exec,
+          label: `zotero_export (${exportArgs.refs.length} refs, ${exportArgs.format})`,
+          run: async (signal, onProgress) => {
+            let result: Awaited<ReturnType<typeof service.export>> & {
+              outputFile?: string
+            } = await service.export(request, signal, onProgress)
+            if (result.format === 'citation') return result
+            signal.throwIfAborted()
+            if (exportArgs.outputFile !== undefined) {
+              const policyService = ctx.get('sandboxPolicy')
+              if (fs!.sandboxMode !== undefined && !policyService)
+                throw new ToolContextUnavailableError('Sandbox filesystem requires sandboxPolicy')
+              const target = await fs!.resolve(exportArgs.outputFile.trim(), { cwd, signal })
+              signal.throwIfAborted()
+              const policy = policyService?.resolve({ session: session! })
+              await fs!.writeText(target, result.text, undefined, signal, policy)
+              const path = fs!.processPath(target)
+              signal.throwIfAborted()
+              result = { ...result, outputFile: path }
+            }
+            signal.throwIfAborted()
+            return result
+          },
+          outputLimitBytes: service.config.maxInlineResultBytes,
+          runInBackground: exportArgs.run_in_background === true,
+          policy: jobPolicyOf(service.config),
+        })
+      },
+    }),
   )
+  return ctx.tools.register(definition)
 }

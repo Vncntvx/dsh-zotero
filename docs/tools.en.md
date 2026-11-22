@@ -2,13 +2,13 @@
 
 # Tool Reference
 
-dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
+dsh-zotero registers 23 local tools (8 read tools and 15 write tools) that work with the Zotero library through the local Zotero HTTP API. The 15 write tools are off by default and need `writeEnabled` turned on in configuration, and they operate only on the personal library (`zotero://user/0/`). Another 7 scholarly retrieval tools belong to the separate `dsh-zotero/scholarly` component, which ships with the package and is off by default; enabling that component enables those tools. The document enrichment component, `dsh-zotero/enrichment`, provides `zotero_search_parsed`. Every item reference (ref) is a stable identifier in `zotero://user/0/item/<KEY>` (personal library) or `zotero://group/<ID>/item/<KEY>` (group library) form.
 
-All eight local read tools share a delivery envelope. `{delivery:"inline", data:…}` contains the complete domain result within both budgets. `{delivery:"file", version:1, tool, sessionId, callId, summary, file, facts}` contains bounded facts and a standard Harness FileBlock. Its immutable JSON file contains `{version:1, tool, request, data}` with the complete domain result. Page completeness (`page` or `complete`) is independent of delivery. Parse large single-line fields with the official `run_code` Node file interface; line-oriented previews can truncate long lines.
+Read tools expose their declared domain result to Native and programmatic calling. When Native output exceeds either inline budget, the model sees a bounded receipt and a standard Harness FileBlock. The immutable JSON attachment contains `{version:1, tool, request, data}`. A background acknowledgement is a separate result arm. Use `job_output` to get the completed attachment. The domain result describes page completeness.
 
 When argument validation fails (for example `refs` sent as `ref`), all dsh-zotero tools attach a parameter-correction hint after the `invalid arguments` error, indicating the rejected parameter and the intended name. Matching ignores case and `_`/`-`, and an adjacent character transposition counts as one edit. The hint appears only for a unique near-match.
 
-All 30 tools have closed root parameters: any undeclared name fails with `INVALID_ARGS` before execution, network access or approval.
+All registered tools have closed root parameters: any undeclared name fails with `INVALID_ARGS` before execution, network access or approval.
 
 Every write tool’s `{kind:"declined"}` can carry `feedback`: the complete custom plan-review response reaches the model and renders as separate user feedback. Free text always declines the current plan; the model must revise the plan and request approval again.
 
@@ -193,6 +193,33 @@ zotero_retrieve(mode="fulltext", source={kind: "ref", ref: "zotero://user/0/atta
 
 ---
 
+## zotero_search_parsed
+
+When the optional `dsh-zotero/enrichment` component is enabled, search committed MinerU Markdown for lexical evidence passages.
+
+### Parameters
+
+| Parameter       | Type     | Default | Description                                                                                                                                      |
+| --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `query`         | string   | none    | Evidence question, up to 2,000 characters (required)                                                                                             |
+| `queryVariants` | string[] | none    | Up to three alternate phrasings of the same question                                                                                             |
+| `scope`         | object   | none    | `library` takes a personal or group `library`, `collection` takes a collection `ref`, and `artifacts` takes 1–60 opaque `artifactIds` (required) |
+| `limit`         | integer  | `20`    | 1–60 total passages, up to three per source                                                                                                      |
+
+### Output
+
+Output fields by result arm: `query`, `queryTerms`, `coverage`, `passages`.
+
+Coverage describes the stored parsed artifacts in scope. Its `status` is `complete`, `partial`, or `unavailable`. Complete coverage can yield zero matches. Passages carry verbatim text, heading path, half-open UTF-16 offsets, artifact ID, fingerprint, parser generation and Zotero refs where available. Use `zotero_retrieve` with the artifact ID to read the surrounding text. Search verifies the local attachment state and streams a SHA-256 check of the local PDF when binding a legacy ref without an instance qualifier. A linked attachment is checked with a credential-free HEAD request. Search never downloads a PDF or submits MinerU tasks.
+
+### Example
+
+```text
+zotero_search_parsed(query="flood risk", scope={kind: "library", library: {type: "user", id: 0}})
+```
+
+---
+
 ## zotero_export
 
 Output fields by result arm: `citations`, `format`, `items`, `jobId`, `kind`, `locale`, `message`, `outputFile`, `resultSessionId`, `style`, `text`, `timeoutMs`.
@@ -204,15 +231,16 @@ Every export format requires unique item identities. The same library and key is
 
 ### Parameters
 
-| Parameter    | Type     | Default                          | Description                                                                                                     |
-| ------------ | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `refs`       | string[] | none                             | Item ref list (required; one call is bounded by the config-file field `maxExportRefs`, default 50)              |
-| `format`     | string   | none                             | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
-| `style`      | string   | config value                     | CSL style identifier (citation and bibliography only)                                                           |
-| `locale`     | string   | config value (default `"en-US"`) | CSL locale (citation and bibliography only; defaults to the configured `defaultLocale`)                         |
-| `outputFile` | string   | none                             | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
+| Parameter           | Type     | Default                          | Description                                                                                                     |
+| ------------------- | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `refs`              | string[] | none                             | Item ref list (required; one call is bounded by the config-file field `maxExportRefs`, default 50)              |
+| `format`            | string   | none                             | Export format: `citation`, `bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv` (required)             |
+| `style`             | string   | config value                     | CSL style identifier (citation and bibliography only)                                                           |
+| `locale`            | string   | config value (default `"en-US"`) | CSL locale (citation and bibliography only; defaults to the configured `defaultLocale`)                         |
+| `outputFile`        | string   | none                             | Optional session-workspace path that receives the bibliography, translator, or CSV text (`citation` rejects it) |
+| `run_in_background` | boolean  | `false`                          | Start a background job when enabled and a jobs service is mounted                                               |
 
-`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`).
+`run_in_background: true` returns `INVALID_ARGS` when the deployment setting disables background execution and `TOOL_CONTEXT_UNAVAILABLE` when the host lacks a jobs service.
 
 ### Output
 
@@ -232,7 +260,7 @@ Returns `{kind: "background", jobId}` or `{kind: "promoted", jobId, timeoutMs, m
 
 - Total refs are bounded by the config-file field `maxExportRefs` (default 50). The six formats other than `citation` (`bibliography`, `bibtex`, `biblatex`, `ris`, `csljson`, `csv`) take at most 50 items per call; exceeding this returns an error;
 - `citation` is the only format that batches: above 50 refs it sends requests in groups of 50. The config-file field `maxExportRefs` also defaults to 50, so batching only happens after that field is raised above 50 in the configuration file;
-- `bibtex`, `biblatex`, `ris`, and `csljson` use one translator request and one bounded raw-metadata batch for citekeys and alignment. The returned content is parsed in memory, and each record is paired with its ref by key or metadata fingerprint; a ref that cannot be located keeps only its own ref in the result. If the metadata request fails (for example Zotero returns 5xx), the export still completes: the raw body is retained and refs that could not be paired stay in their bare `ref`-only shape. A caller abort still throws;
+- `bibtex`, `biblatex`, and `ris` make one translator request and one bounded metadata request, locating entries by item key or metadata fingerprint. `csljson` fetches item metadata and per-item translations in one bounded request and assembles the requested records in Zotero response order. An item that exists but yields no translation keeps a `ref`-only entry. A failed verification request, a missing requested item, or cancellation fails the export;
 - A single export only accepts refs from the same library; mixed cross-library exports are not supported.
 
 ### Example
@@ -298,13 +326,14 @@ Read incremental update and deletion records of the library based on local trans
 
 ### Parameters
 
-| Parameter | Type     | Default                 | Description                                                                                            |
-| --------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `library` | object   | `{type: "user", id: 0}` | Target library identifier                                                                              |
-| `since`   | object   | none                    | Starting cursor `{serverId, library, version, include, unserved}`; omit it to get the initial baseline |
-| `include` | string[] | all except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                        |
+| Parameter           | Type     | Default                 | Description                                                                                            |
+| ------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `library`           | object   | `{type: "user", id: 0}` | Target library identifier                                                                              |
+| `since`             | object   | none                    | Starting cursor `{serverId, library, version, include, unserved}`; omit it to get the initial baseline |
+| `include`           | string[] | all except fulltext     | Monitored kinds: `items`, `collections`, `savedSearches`, `fulltext`, `deleted`                        |
+| `run_in_background` | boolean  | `false`                 | Start a background job when enabled and a jobs service is mounted                                      |
 
-`run_in_background` is not a fixed parameter: it appears only while `enableRunInBackground` is on and a `jobs` service is composed; an undeclared `true` still receives a structured refusal (`INVALID_ARGS` / `TOOL_CONTEXT_UNAVAILABLE`).
+`run_in_background: true` returns `INVALID_ARGS` when the deployment setting disables background execution and `TOOL_CONTEXT_UNAVAILABLE` when the host lacks a jobs service.
 
 ### Output
 

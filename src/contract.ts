@@ -96,6 +96,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'zotero/write': { readonly code: ZoteroErrorCode }
     'zotero/unexpected': { readonly code: ZoteroErrorCode }
     'zotero/protocol-failed': { readonly url: string; readonly reason: string }
+    /**
+     * A failure raised inside the browser while preparing a parsed-document
+     * read (figure decode, address parse, capacity, page fetch). It never
+     * crosses the wire from the host, so it carries no domain code — the
+     * message (a localized parsedError* string) is the actionable part, and
+     * the reason keeps it distinguishable from a genuine gateway failure.
+     */
+    'zotero/parsed-preparation-failed': {}
   }
 }
 
