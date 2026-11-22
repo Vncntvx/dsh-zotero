@@ -276,7 +276,7 @@ export class ZoteroService extends Service {
   private installedEvidenceRanker: EvidenceRanker | undefined
   /** Disposers of the conditionally registered write tools, tracked for the writeEnabled flip. */
   private writeToolDisposes: Array<() => void> = []
-  /** The read-tool registrations whose background schema follows the live switch. */
+  /** The lifecycle-owned registrations for export and changes. */
   private readTools: ReadToolRegistration | undefined
   /** The live write authorizer; absent while writes are disabled. */
   private authorizer: WriteAuthorizer | undefined

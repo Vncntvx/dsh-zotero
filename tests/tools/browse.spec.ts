@@ -52,11 +52,8 @@ describe('zotero_browse validation', () => {
     const result = await runTool('zotero_browse', { kind: 'collections', limit: 50 })
     expect(result.isError).toBe(false)
     expect(result.value).toMatchObject({
-      delivery: 'inline',
-      data: {
-        returned: 50,
-        items: rows.map((row) => expect.objectContaining({ name: row.data.name })),
-      },
+      returned: 50,
+      items: rows.map((row) => expect.objectContaining({ name: row.data.name })),
     })
     expect(result.meta).toMatchObject({ returned: 50, displayed: 20, omitted: 30 })
     expect(result.meta).not.toHaveProperty('detailOmitted')

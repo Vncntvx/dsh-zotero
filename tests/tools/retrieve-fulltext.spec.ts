@@ -99,10 +99,8 @@ describe('mode exclusivity', () => {
       sources: ['annotation'],
     })
     expect(result.isError).toBe(false)
-    const wrapped = result.value as { delivery: string; data: Record<string, unknown> }
-    expect(wrapped.delivery).toBe('inline')
-    expect(wrapped.data.mode).toBe('evidence')
-    expect('fulltext' in wrapped.data).toBe(false)
+    expect(result.value).toMatchObject({ mode: 'evidence' })
+    expect(result.value).not.toHaveProperty('fulltext')
   })
 
   it('requires exactly one fulltext source', async () => {
@@ -213,7 +211,7 @@ describe('mode exclusivity', () => {
       maxChars: 5,
     })
     expect(result.isError).toBe(false)
-    const data = (result.value as { data: { fulltext: { text: string; end: number } } }).data
+    const data = result.value as { fulltext: { text: string; end: number } }
     expect(data.fulltext.text).toBe(MARKDOWN.slice(0, 5))
     expect(data.fulltext.end).toBe(5)
   })
@@ -231,9 +229,9 @@ describe('fulltext delivery', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    const receipt = result.value as { delivery: string; file: { attachmentId: string } }
-    expect(receipt.delivery).toBe('file')
-    const bytes = stored.files.get(receipt.file.attachmentId)
+    const block = result.content.find((entry) => entry.type === 'file')
+    if (block?.type !== 'file') throw new Error('missing result file')
+    const bytes = stored.files.get(block.attachment.attachmentId)
     expect(bytes).toBeDefined()
     const saved = JSON.parse(new TextDecoder().decode(bytes)) as {
       data: {
@@ -269,9 +267,8 @@ describe('fulltext delivery', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    const wrapped = result.value as { delivery: string; data: Record<string, unknown> }
-    expect(wrapped.delivery).toBe('inline')
-    const data = wrapped.data as {
+    expect(result.content.some((block) => block.type === 'file')).toBe(false)
+    const data = result.value as {
       mode: string
       fulltext: { text: string; isTruncated: boolean; nextStart: number; textFormat: string }
     }
@@ -307,7 +304,7 @@ describe('fulltext delivery', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    expect((result.value as { delivery: string }).delivery).toBe('inline')
+    expect(result.content.some((block) => block.type === 'file')).toBe(false)
   })
 
   it('reports Zotero index text when no parsed artifact exists', async () => {
@@ -318,7 +315,7 @@ describe('fulltext delivery', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    const data = (result.value as { data: { fulltext: { textFormat: string } } }).data
+    const data = result.value as { fulltext: { textFormat: string } }
     expect(data.fulltext.textFormat).toBe('text')
   })
 })
@@ -403,7 +400,7 @@ describe('fulltext spill', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
+    const data = result.value as { fulltext: { spillRef?: unknown } }
     expect(data.fulltext.spillRef).toEqual({
       locator: 'spill://session/full.md',
       bytes: 20_000,
@@ -430,7 +427,7 @@ describe('fulltext spill', () => {
       start: 0,
     })
     expect(first.isError).toBe(false)
-    const firstData = (first.value as { data: { fulltext: { continuation: string } } }).data
+    const firstData = first.value as { fulltext: { continuation: string } }
     expect(firstData.fulltext.continuation).toEqual(expect.any(String))
     const result = await lane.runTool('zotero_retrieve', {
       mode: 'fulltext',
@@ -439,7 +436,7 @@ describe('fulltext spill', () => {
       continuation: firstData.fulltext.continuation,
     })
     expect(result.isError).toBe(false)
-    const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
+    const data = result.value as { fulltext: { spillRef?: unknown } }
     expect(data.fulltext.spillRef).toBeUndefined()
     expect(saveText).toHaveBeenCalledOnce()
   })
@@ -464,7 +461,7 @@ describe('fulltext spill', () => {
       start: 0,
     })
     expect(result.isError).toBe(false)
-    const data = (result.value as { data: { fulltext: { spillRef?: unknown } } }).data
+    const data = result.value as { fulltext: { spillRef?: unknown } }
     expect(data.fulltext.spillRef).toBeUndefined()
     expect(saveText).not.toHaveBeenCalled()
   })
@@ -479,11 +476,9 @@ describe('complete reads', () => {
       complete: true,
     })
     expect(result.isError).toBe(false)
-    const data = (
-      result.value as {
-        data: { fulltext: { text: string; isTruncated: boolean; spillAvailable: boolean } }
-      }
-    ).data
+    const data = result.value as {
+      fulltext: { text: string; isTruncated: boolean; spillAvailable: boolean }
+    }
     expect(data.fulltext).toMatchObject({
       text: MARKDOWN,
       isTruncated: false,
@@ -510,11 +505,9 @@ describe('complete reads', () => {
       complete: true,
     })
     expect(result.isError).toBe(false)
-    const data = (
-      result.value as {
-        data: { fulltext: { text: string; spillRef?: unknown; spillAvailable: boolean } }
-      }
-    ).data
+    const data = result.value as {
+      fulltext: { text: string; spillRef?: unknown; spillAvailable: boolean }
+    }
     expect(data.fulltext).toMatchObject({
       text: '',
       spillAvailable: true,

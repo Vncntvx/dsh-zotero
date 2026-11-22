@@ -10,15 +10,16 @@
 
 /** Tool name to the parameters that only some compositions declare. */
 export const COMPOSITION_DEPENDENT_PARAMETERS: Readonly<Record<string, readonly string[]>> = {
-  zotero_export: ['run_in_background'],
-  zotero_changes: ['run_in_background'],
   scholarly_search: ['run_in_background'],
   scholarly_read: ['run_in_background'],
   scholarly_verify: ['run_in_background'],
 }
 
 /** The sentence the tool reference uses instead of a table row. */
-export const COMPOSITION_DEPENDENT_MARKERS = ['不是恒声明参数', 'is not a fixed parameter'] as const
+export const COMPOSITION_DEPENDENT_MARKERS = [
+  '仅在 `enableRunInBackground=true` 且宿主挂载 `jobs` 服务时声明',
+  'declared only while `enableRunInBackground=true` and the host mounts `jobs`',
+] as const
 
 /** Whether one tool parameter is composition-dependent. */
 export function isCompositionDependent(tool: string, parameter: string): boolean {

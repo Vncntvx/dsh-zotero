@@ -1,54 +1,45 @@
 /**
- * `zotero_export` and `zotero_changes` advertise `run_in_background` exactly
- * while a job registry is mounted and the deployment switch is on. The same
- * `registerBackgroundAware` helper serves the scholarly component; its live
- * switch flip is covered in `tests/scholarly/service-background-parameter`.
+ * Zotero export and changes retain a single registration throughout job
+ * registry and settings changes. Background calls check live availability.
  * @module tests/host/background-parameter
  */
 
 import { afterEach, expect, it } from 'vitest'
-import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
+import { commitLive, setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
 import { composeRealJobs } from '../helpers/real-jobs.ts'
 
 let lane: HostLane | undefined
-let disposeJobs: (() => Promise<void>) | undefined
 
 afterEach(async () => {
-  await disposeJobs?.()
-  disposeJobs = undefined
   await lane?.teardown()
   lane = undefined
 })
 
 const TOOLS = ['zotero_export', 'zotero_changes'] as const
 
-function declared(lane: HostLane): boolean[] {
-  const schemas = lane.ctx.tools.schemas()
-  return TOOLS.map((name) =>
-    JSON.stringify(schemas.find((schema) => schema.name === name) ?? {}).includes(
-      'run_in_background',
-    ),
-  )
-}
-
-it('follows the mounted job registry and returns the foreground arm on unload', async () => {
+it('retains both definitions through jobs mount, setting edits, and jobs unmount', async () => {
   lane = await setupHostLane()
-  expect(declared(lane)).toEqual([false, false])
+  const definitions = () => TOOLS.map((name) => lane!.tool(name))
+  const initial = definitions()
+  const schemas = lane.ctx.tools
+    .schemas()
+    .filter((schema) => TOOLS.some((name) => name === schema.name))
+  expect(schemas).toHaveLength(2)
+  for (const schema of schemas)
+    expect(schema.parameters.properties).toHaveProperty('run_in_background')
+  const changed: ReturnType<typeof definitions>[] = []
+  const off = lane.ctx.on('tools/change', () => changed.push(definitions()))
 
-  const jobs = await composeRealJobs(lane.ctx)
-  expect(declared(lane)).toEqual([true, true])
-
-  // The registry unloading must degrade, not remove the tools.
-  await jobs.fiber?.dispose()
-  expect(declared(lane)).toEqual([false, false])
-  expect(lane.ctx.tools.schemas().map((schema) => schema.name)).toEqual(
-    expect.arrayContaining([...TOOLS]),
-  )
-})
-
-it('never declares the parameter while the deployment switch is off', async () => {
-  lane = await setupHostLane({ enableRunInBackground: false })
-  const jobs = await composeRealJobs(lane.ctx)
-  disposeJobs = jobs.dispose
-  expect(declared(lane)).toEqual([false, false])
+  try {
+    const jobs = await composeRealJobs(lane.ctx)
+    await commitLive(lane, { enableRunInBackground: false })
+    await commitLive(lane, { enableRunInBackground: true })
+    await jobs.dispose()
+    for (const snapshot of [...changed, definitions()]) {
+      expect(snapshot[0]).toBe(initial[0])
+      expect(snapshot[1]).toBe(initial[1])
+    }
+  } finally {
+    off()
+  }
 })

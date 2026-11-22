@@ -53,22 +53,14 @@ describe('zotero_export tool', () => {
       { ref: 'zotero://user/0/item/AAAA1111', end: 6 },
     ])
       expect(
-        validateJsonSchemaValue(
-          schema,
-          { delivery: 'inline', data: { format: 'bibtex', text: 'abcdef', items: [item] } },
-          '',
-        ),
+        validateJsonSchemaValue(schema, { format: 'bibtex', text: 'abcdef', items: [item] }, ''),
       ).not.toEqual([])
     for (const item of [
       { ref: 'zotero://user/0/item/AAAA1111', start: 0, end: 6 },
       { ref: 'zotero://user/0/item/AAAA1111', entryIndex: 0 },
     ])
       expect(
-        validateJsonSchemaValue(
-          schema,
-          { delivery: 'inline', data: { format: 'bibtex', text: 'abcdef', items: [item] } },
-          '',
-        ),
+        validateJsonSchemaValue(schema, { format: 'bibtex', text: 'abcdef', items: [item] }, ''),
       ).toEqual([])
   })
   it('registers and exposes its schema to the assembly', () => {

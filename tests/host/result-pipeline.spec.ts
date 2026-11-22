@@ -1,5 +1,5 @@
 import { serveExportText } from '../helpers/server/export.ts'
-/** Nested calls and result policy use the standard pipeline, with bounded values. */
+/** Nested calls and result policy use the standard pipeline, with bounded Native projection. */
 import { afterEach, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolExecutionInput } from '@deepseek-ai/dsh-tools'
@@ -45,7 +45,8 @@ it('forwards a standard file context on nested PTC dispatch without copying the 
   expect(result.isError).toBe(false)
   expect(result.additionalContexts?.[0]?.source).toEqual({ kind: 'ptc-mode' })
   expect(result.additionalContexts?.[0]?.content.some((block) => block.type === 'file')).toBe(true)
-  expect(JSON.stringify(result)).not.toContain('x'.repeat(100))
+  expect(result.value).toMatchObject({ text: 'x'.repeat(20000) })
+  expect(JSON.stringify(result.content)).not.toContain('x'.repeat(100))
 })
 it('rejects malformed producer values before any file is published', async () => {
   lane = await setupHostLane()
@@ -61,6 +62,51 @@ it('rejects malformed producer values before any file is published', async () =>
   const result = await lane.runTool('result_probe', {})
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('returned invalid output')
+})
+it('fails on lossy JSON with the original tool name and never calls its renderer', async () => {
+  lane = await setupHostLane()
+  const delivery = new ResultDelivery(lane.ctx, () => resolveConfig({}))
+  const render = () => {
+    throw new Error('an invalid result must not render')
+  }
+  lane.ctx.tools.register(
+    delivery.wrap(
+      defineTool({
+        name: 'result_snapshot',
+        description: 'Validate programmatic result',
+        parameters: {},
+        output: { schema: { type: 'number' }, render },
+        execute: async () => Number.NaN,
+      }),
+    ),
+  )
+  const result = await lane.runTool('result_snapshot', {})
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('Result must be lossless JSON data.')
+})
+
+it('retains the existing content projector and metadata for an inline result', async () => {
+  lane = await setupHostLane()
+  const delivery = new ResultDelivery(lane.ctx, () => resolveConfig({}))
+  const tool = delivery.wrap(
+    defineTool({
+      name: 'result_projection',
+      description: 'Render a projected inline result',
+      parameters: {},
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: 'render' }] },
+      execute: async () => 'value',
+      projectContent: () => [{ type: 'text', text: 'projection' }],
+    }),
+  )
+  lane.ctx.tools.register(tool)
+  const result = await lane.runTool(tool.name, {})
+  expect(result).toMatchObject({
+    isError: false,
+    value: 'value',
+    meta: { delivery: 'inline' },
+    content: [{ type: 'text', text: 'projection' }],
+  })
+  expect(tool.output.presentationMeta?.(null, 'value')).toEqual({})
 })
 it('does not publish a file handle that itself exceeds the configured budget', async () => {
   lane = await setupHostLane(

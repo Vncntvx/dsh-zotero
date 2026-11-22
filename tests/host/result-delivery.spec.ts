@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
+import { resolveConfig } from '../../src/config.ts'
+import { registerParsedSearchTool } from '../../src/enrichment/search-parsed-tool.ts'
+import { ResultDelivery } from '../../src/result-delivery.ts'
+import { parseReceiptLine } from '../../src/result-receipt.ts'
 import { setupHostLane, type HostLane } from '../helpers/lanes/host-lane.ts'
 import { resultStorage } from '../helpers/result-storage.ts'
 import { attachment, item, annotationRow } from '../helpers/server/objects.ts'
@@ -15,6 +19,72 @@ afterEach(async () => {
   await lane?.ctx.fiber.dispose()
   await lane?.teardown()
 })
+
+it.each([1200, 3200])(
+  'retains parsed evidence in the receipt and session metadata at %s bytes',
+  async (maxInlineResultBytes) => {
+    lane = await setupHostLane()
+    const storage = resultStorage(lane.ctx)
+    const delivery = new ResultDelivery(lane.ctx, () => resolveConfig({ maxInlineResultBytes }))
+    const ids = Array.from({ length: 12 }, (_, i) => i.toString(16).padStart(64, 'b'))
+    const text = 'evidence '.repeat(250)
+    const passages = ids.map((artifactId) => ({
+      artifactId,
+      sourceId: 'a'.repeat(64),
+      generation: '11111111-1111-4111-8111-111111111111',
+      mode: 'free' as const,
+      fingerprint: 'f'.repeat(64),
+      start: 0,
+      end: text.length,
+      text,
+      heading: 'Evidence',
+    }))
+    registerParsedSearchTool(
+      lane.ctx,
+      async () => ({
+        query: 'evidence',
+        queryTerms: ['evidence'],
+        passages,
+        coverage: {
+          status: 'complete',
+          discovered: ids.length,
+          searchable: ids.length,
+          stale: 0,
+          missing: 0,
+        },
+      }),
+      (definition) => delivery.wrap(definition),
+    )
+    const result = await lane.runTool('zotero_search_parsed', {
+      query: 'evidence',
+      scope: { kind: 'artifacts', artifactIds: ids },
+    })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({ passages })
+    expect(result.meta).toMatchObject({ evidenceRefs: ids, detailOmitted: true, delivery: 'file' })
+    expect(result.meta).not.toHaveProperty('items')
+    expect([...storage.receipts.values()]).toEqual([
+      expect.objectContaining({
+        facts: expect.objectContaining({ evidenceRefs: ids, detailOmitted: true }),
+      }),
+    ])
+    expect(Buffer.byteLength(JSON.stringify(result.content))).toBeLessThanOrEqual(
+      maxInlineResultBytes,
+    )
+    const [announcement, file] = result.content
+    if (announcement?.type !== 'text' || file?.type !== 'file')
+      throw new Error('missing file delivery')
+    const bytes = storage.files.get(file.attachment.attachmentId)
+    expect(JSON.parse(Buffer.from(bytes!).toString())).toMatchObject({ data: { passages } })
+    const projected = parseReceiptLine(announcement.text)
+    expect(projected).toMatchObject({
+      file: file.attachment,
+      facts: { detailOmitted: true, total: 12 },
+    })
+    if (maxInlineResultBytes === 3200) expect(projected).toHaveProperty('facts.evidenceRefs', ids)
+    else expect(projected).not.toHaveProperty('facts.evidenceRefs')
+  },
+)
 
 it('keeps a two-million-character annotation field complete in a single standard file', async () => {
   lane = await setupHostLane(
@@ -37,9 +107,9 @@ it('keeps a two-million-character annotation field complete in a single standard
   })
   expect(result.isError).toBe(false)
   if (result.isError) throw new Error('get failed')
-  expect(result.value).toMatchObject({ delivery: 'file' })
+  expect(result.value).toMatchObject({ annotations: { items: [{ text }] } })
   expect(estimateContent(result.content)).toBeLessThanOrEqual(4000)
-  expect(Buffer.byteLength(JSON.stringify(result.value))).toBeLessThanOrEqual(65536)
+  expect(Buffer.byteLength(JSON.stringify(result.content))).toBeLessThanOrEqual(65536)
   expect(JSON.stringify(result.meta).length).toBeLessThan(10_000)
   const block = result.content.find((block) => block.type === 'file')!
   if (block.type !== 'file') throw new Error('missing standard file')
@@ -106,7 +176,7 @@ it('also applies the token budget to canonical values hidden by a short renderer
   serveItemGraph(lane.mock, { parent: item({ data: { extra: 'x'.repeat(20_000) } }) })
   const result = await lane.runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' })
   expect(result.isError).toBe(false)
-  if (!result.isError) expect(result.value).toMatchObject({ delivery: 'file' })
+  expect(result.content.some((block) => block.type === 'file')).toBe(true)
 })
 
 it('reopens the receipts domain when the storage facility is replaced', async () => {

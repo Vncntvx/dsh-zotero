@@ -196,20 +196,7 @@ export async function setupHostLane(
  * @returns the same result, typed as its success arm.
  */
 export function expectValue(result: ToolExecutionResult, tool: string): ToolExecutionSuccess {
-  if (!result.isError) {
-    const value = result.value
-    // Tool behavior specs inspect domain data; delivery-contract specs inspect
-    // the raw pipeline value directly.
-    if (
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      value.delivery === 'inline' &&
-      'data' in value
-    )
-      return { ...result, value: value.data! }
-    return result
-  }
+  if (!result.isError) return result
   throw new Error(`${tool} failed${failureCode(result)}: ${failureText(result)}`)
 }
 

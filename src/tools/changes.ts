@@ -52,7 +52,6 @@ import {
   isJobArm,
   jobPolicyOf,
   presentJobArm,
-  registerBackgroundAware,
   renderJobArm,
 } from '../job-runner.js'
 import {
@@ -135,7 +134,7 @@ const CURSOR_INPUT_SCHEMA = {
   },
 } as const
 
-const BASE_CHANGES_PARAMETERS = {
+const CHANGES_PARAMETERS = {
   library: {
     ...LIBRARY_SCHEMA,
     default: { type: 'user', id: 0 },
@@ -155,14 +154,10 @@ const BASE_CHANGES_PARAMETERS = {
     description:
       'Kinds to diff (default all except fulltext). items includes top-level, child, and trashed items; deleted lists observed removals. fulltext uses a separate index version and must be requested explicitly.',
   },
-} as const
-
-const CHANGES_WITH_BACKGROUND_PARAMETERS = {
-  ...BASE_CHANGES_PARAMETERS,
   ...RUN_IN_BACKGROUND_PARAMETER,
 } as const
 
-type ChangesArgs = InferArgs<typeof CHANGES_WITH_BACKGROUND_PARAMETERS>
+type ChangesArgs = InferArgs<typeof CHANGES_PARAMETERS>
 
 const CHANGED_OBJECT = {
   type: 'object',
@@ -543,11 +538,8 @@ function countArrayEntries(section: Record<string, unknown> | undefined): number
 }
 
 /**
- * Register the `zotero_changes` tool. The `run_in_background` parameter exists
- * exactly while this composition can serve it (the deployment flag on and a
- * job registry mounted), so a host that cannot start a job never advertises
- * the key. Execute still refuses an undeclared background request, because the
- * registry admits argument keys the schema omits.
+ * Register `zotero_changes` for the plugin lifetime. Each call checks the
+ * current background policy and job registry.
  * @param ctx - the plugin context.
  * @param service - the zotero service owning the request path.
  * @param wrap - the delivery envelope.
@@ -557,70 +549,61 @@ export function registerChangesTool(
   service: ZoteroService,
   wrap: ToolWrapper = identityToolWrapper,
 ): () => void {
-  const definition = (background: boolean) =>
-    wrap(
-      defineTool({
-        name: 'zotero_changes',
-        description: [
-          'Read local Zotero changes since a version: items, child objects, collections, saved searches, fulltext, and deletions.',
-          'Omit since for a baseline; pass its cursor back for the next diff.',
-          'Totals are complete while listings are capped. Only a result with a cursor covers its full range; cursors are instance/library-bound.',
-          'Check unobservable before treating a missing list as unchanged. deleted lists observed removals; versionUnavailable means no library version.',
-        ].join(' '),
-        parameters: background ? CHANGES_WITH_BACKGROUND_PARAMETERS : BASE_CHANGES_PARAMETERS,
-        output: {
-          schema: CHANGES_OUTPUT_SCHEMA,
-          render: renderChanges,
-          presentationMeta: (_args, value) => {
-            if (isJobArm(value)) return value
-            return boundedPresentationMeta(value, ['changed', 'deleted'])
-          },
+  const definition = wrap(
+    defineTool({
+      name: 'zotero_changes',
+      description: [
+        'Read a Zotero change baseline or diff using the last returned cursor.',
+        'Totals include entries omitted by listing caps. Advance only with a returned cursor. Check unobservable and versionUnavailable for gaps.',
+      ].join(' '),
+      parameters: CHANGES_PARAMETERS,
+      output: {
+        schema: CHANGES_OUTPUT_SCHEMA,
+        render: renderChanges,
+        presentationMeta: (_args, value) => {
+          if (isJobArm(value)) return value
+          return boundedPresentationMeta(value, ['changed', 'deleted'])
         },
-        presentCall: (args) => ({
-          card: 'generic',
-          kind: 'read',
-          title: 'Read Zotero changes',
-          rawInput: args.since === undefined ? 'baseline' : String(args.since.version),
-        }),
-        presentResult: presentChangesResult,
-        isConcurrencySafe: () => true,
-        async execute(args, exec) {
-          // Two parameter shapes (the background arm registers only while the
-          // jobs service is available); both carry the cursor fields.
-          const changesArgs = args as ChangesArgs
-          const request = buildRequest(changesArgs)
-          const label =
-            changesArgs.since === undefined
-              ? 'zotero_changes (baseline)'
-              : `zotero_changes (since v${changesArgs.since.version})`
-          return await executeWithJobs({
-            runner: service.jobRunner,
-            exec,
-            label,
-            run: async (signal, onProgress) => {
-              const value = await service.changes(request, signal, onProgress)
-              // A kind that contributed nothing is a degradation the model sees
-              // inline, but the reason (a short history, a 404) is what a
-              // "changes look incomplete" question needs from the record.
-              for (const gap of value.unobservable ?? []) {
-                service.diagnostics.sink.warn(
-                  'degraded.unobservable',
-                  `${gap.kind} contributed nothing to the diff: ${gap.reason}`,
-                  { kind: gap.kind, reason: gap.reason },
-                )
-              }
-              return value
-            },
-            outputLimitBytes: service.config.maxInlineResultBytes,
-            runInBackground: changesArgs.run_in_background === true,
-            policy: jobPolicyOf(service.config),
-          })
-        },
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        kind: 'read',
+        title: 'Read Zotero changes',
+        rawInput: args.since === undefined ? 'baseline' : String(args.since.version),
       }),
-    )
-  return registerBackgroundAware(
-    ctx,
-    () => service.config.enableRunInBackground,
-    (background) => ctx.tools.register(definition(background)),
+      presentResult: presentChangesResult,
+      isConcurrencySafe: () => true,
+      async execute(args, exec) {
+        const changesArgs = args
+        const request = buildRequest(changesArgs)
+        const label =
+          changesArgs.since === undefined
+            ? 'zotero_changes (baseline)'
+            : `zotero_changes (since v${changesArgs.since.version})`
+        return await executeWithJobs({
+          runner: service.jobRunner,
+          exec,
+          label,
+          run: async (signal, onProgress) => {
+            const value = await service.changes(request, signal, onProgress)
+            // A kind that contributed nothing is a degradation the model sees
+            // inline, but the reason (a short history, a 404) is what a
+            // "changes look incomplete" question needs from the record.
+            for (const gap of value.unobservable ?? []) {
+              service.diagnostics.sink.warn(
+                'degraded.unobservable',
+                `${gap.kind} contributed nothing to the diff: ${gap.reason}`,
+                { kind: gap.kind, reason: gap.reason },
+              )
+            }
+            return value
+          },
+          outputLimitBytes: service.config.maxInlineResultBytes,
+          runInBackground: changesArgs.run_in_background === true,
+          policy: jobPolicyOf(service.config),
+        })
+      },
+    }),
   )
+  return ctx.tools.register(definition)
 }

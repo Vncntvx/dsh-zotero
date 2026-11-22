@@ -89,9 +89,7 @@ it.each([false, true])(
       expect(outcome.status).toBe('completed')
       expect(jobs.registry.read(JobId(jobId), caller).result).toContain('full result persisted')
     } else {
-      expect(result.value).toMatchObject({
-        delivery: 'file',
-      })
+      expect(result.content.some((block) => block.type === 'file')).toBe(true)
     }
     expect(await readFile(join(directory, 'references.ris'), 'utf8')).toContain('TY  - JOUR')
     expect(policy).toHaveBeenCalledWith({ session })

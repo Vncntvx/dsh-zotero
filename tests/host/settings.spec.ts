@@ -199,7 +199,8 @@ describe('live configuration', () => {
       await lane.runTool('zotero_get', { ref: 'zotero://user/0/item/ABCD1234' }),
       'zotero_get',
     )
-    expect(updated.value).toMatchObject({ delivery: 'file' })
+    expect(updated.value).toEqual(initial.value)
+    expect(updated.content.some((block) => block.type === 'file')).toBe(true)
   })
 
   it('live-applies the scope-listing TTL without rebuilding the transport', async () => {

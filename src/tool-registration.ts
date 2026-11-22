@@ -27,9 +27,9 @@ import { registerUpdateItemTagsTool } from './tools/update-item-tags.js'
 import { registerUpdateItemTool } from './tools/update-item.js'
 import { registerUpdateNoteTool } from './tools/update-note.js'
 
-/** The live registrations of the two background-capable read tools. */
+/** The lifecycle-owned registrations of the two background-capable read tools. */
 export interface ReadToolRegistration {
-  /** Dispose their background-aware registrations (the fiber also owns them). */
+  /** Dispose their registrations on service teardown. */
   dispose(): void
 }
 
@@ -49,7 +49,6 @@ export function registerReadTools(
   registerMatchReferencesTool(ctx, service, wrap)
   registerRetrieveTool(ctx, service, wrap)
   registerBrowseTool(ctx, service, wrap)
-  // Both follow `enableRunInBackground` and the jobs service by themselves.
   const exportDispose = registerExportTool(ctx, service, wrap)
   const changesDispose = registerChangesTool(ctx, service, wrap)
   return {

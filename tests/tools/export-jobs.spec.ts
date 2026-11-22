@@ -32,17 +32,6 @@ afterEach(async () => {
 
 describe('zotero_export jobs', () => {
   describe('background jobs and promotion', () => {
-    it('declares the run_in_background parameter only while a job registry is composed', async () => {
-      const propertiesOf = () =>
-        (lane.tool('zotero_export')!.parameters as { properties?: Record<string, unknown> })
-          .properties
-      // This lane composes no job registry, so the schema must not advertise a
-      // capability the host cannot honour.
-      expect(propertiesOf()?.run_in_background).toBeUndefined()
-      await composeRealJobs(lane.ctx)
-      expect(propertiesOf()?.run_in_background).toBeDefined()
-    })
-
     it('refuses run_in_background when enableRunInBackground is disabled in config', async () => {
       await lane.teardown()
       lane = await setupHostLane({ enableRunInBackground: false })
@@ -56,7 +45,7 @@ describe('zotero_export jobs', () => {
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toContain(
-        'run_in_background" is not a declared property',
+        'run_in_background is disabled in this deployment',
       )
       expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
@@ -70,9 +59,9 @@ describe('zotero_export jobs', () => {
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('unreachable')
       expect((result.content[0] as { text: string }).text).toContain(
-        'run_in_background" is not a declared property',
+        'Background execution is unavailable in this session',
       )
-      expect(result.error?.info).toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+      expect(result.error?.info).toMatchObject({ code: 'TOOL_CONTEXT_UNAVAILABLE' })
     })
 
     it('starts a background job and returns immediately when run_in_background is requested', async () => {

@@ -34,8 +34,7 @@ it('maps an artifactId and forwards a valid nonzero character window through the
     maxChars: 6,
   })
   expect(first.isError).toBe(false)
-  const continuation = (first.value as { data: { fulltext: { continuation: string } } }).data
-    .fulltext.continuation
+  const continuation = (first.value as { fulltext: { continuation: string } }).fulltext.continuation
   const result = await lane.runTool('zotero_retrieve', {
     mode: 'fulltext',
     source: { kind: 'artifactId', artifactId: 'a'.repeat(64) },
@@ -44,7 +43,7 @@ it('maps an artifactId and forwards a valid nonzero character window through the
     continuation,
   })
   expect(result.isError).toBe(false)
-  expect(asRecord(asRecord(result.value)?.data)?.fulltext).toMatchObject({
+  expect(asRecord(result.value)?.fulltext).toMatchObject({
     text: 'MNOPQR',
     start: 12,
     end: 18,
@@ -67,7 +66,7 @@ it('renders the input-truncation remedy for a document cut before windowing', as
     maxChars: 6,
   })
   expect(result.isError).toBe(false)
-  expect(asRecord(asRecord(result.value)?.data)?.fulltext).toMatchObject({
+  expect(asRecord(result.value)?.fulltext).toMatchObject({
     totalChars: 16,
     inputTruncated: true,
   })

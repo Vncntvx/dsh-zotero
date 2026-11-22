@@ -2,10 +2,9 @@ import { receiptSchema, type DeliveredResult } from './result-contract.js'
 export { fileSchema, receiptSchema, isFileAttachmentRef } from './result-contract.js'
 /**
  * Complete tool values backed by standard Harness attachments and durable receipts.
- * The spill-policy preview cannot replace this envelope: browsers download its
- * versioned JSON, nested calls forward its FileBlock, and job_output reattaches
- * it after restart. Both paths use the harness token estimator; optional
- * whole-document text spills remain owned by spill.ts.
+ * Native delivery uses the Harness token estimator and a standard FileBlock.
+ * Programs receive the declared result. The versioned attachment also serves
+ * downloads, nested context, and durable job receipts.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { isAttachmentError, type FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -13,28 +12,23 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { ToolContextUnavailableError, ToolOutputError } from '@deepseek-ai/dsh-tools'
-import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { ToolDefinition, ToolExecution, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type { ResolvedConfig } from './config.js'
 import { RESULT_RECEIPT_PREFIX } from './constants.js'
 import { ZOTERO_OUTPUT_TOO_LARGE, errorMessageOf, ZoteroError } from './errors.js'
 import { asRecord } from './json.js'
-import { RESULT_RECEIPT_REQUIRED_KEYS, RESULT_FILE_REQUIRED_KEYS } from './result-receipt.js'
+import { isJobArm } from './job-runner.js'
 import type { DiagnosticSink } from './diagnostics.js'
 
 /** A broken producer cannot hold plugin teardown forever. */
 export const RESULT_DELIVERY_DRAIN_MS = 5_000
 const MAX_SESSION_DELIVERIES = 128
 const MAX_TOTAL_DELIVERIES = 1024
-
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    'ptc-mode': { kind: 'ptc-mode' }
-  }
-}
 
 /** Opaque path-safe keys work with every official storageDomain backend. */
 export async function resultReceiptKey(...coordinates: string[]): Promise<string> {
@@ -51,6 +45,7 @@ const resultDomain = defineDomain({
   tables: { receipts: domainTable(receiptSchema) },
 })
 type Receipt = z.infer<typeof receiptSchema>
+type PreparedResult = { result: DeliveredResult; content?: ContentBlock[] }
 export type { DeliveredResult } from './result-contract.js'
 
 /** A registration transform applied to one tool definition before it is registered. */
@@ -130,10 +125,6 @@ export async function inlineJson(
   return { bytes, canonical }
 }
 
-function isDelivered(value: unknown): value is DeliveredResult {
-  const record = asRecord(value)
-  return record?.delivery === 'inline' || record?.delivery === 'file'
-}
 export function renderDelivered(
   value: DeliveredResult,
   render: (value: JsonValue) => ContentBlock[],
@@ -153,6 +144,23 @@ function receiptText(canonical: string): string {
   return `${RESULT_RECEIPT_PREFIX}${canonical}\nFull versioned JSON is in the attached file. Parse with run_code Node file APIs for long fields; line-based read previews may truncate individual lines.`
 }
 
+function receiptContentWithinBudget(
+  receipt: Receipt,
+  config: ResolvedConfig,
+): ContentBlock[] | undefined {
+  const content = renderDelivered(receipt, () => [])
+  return estimateContent(content) <= config.maxInlineResultTokens &&
+    new TextEncoder().encode(JSON.stringify(content)).byteLength <= config.maxInlineResultBytes
+    ? content
+    : undefined
+}
+
+function compactEvidenceReceipt(receipt: Receipt): Receipt {
+  if (receipt.facts?.evidenceRefs === undefined) return receipt
+  const { evidenceRefs: _evidenceRefs, ...facts } = receipt.facts
+  return { ...receipt, facts: { ...facts, detailOmitted: true } }
+}
+
 export class ResultDelivery {
   private facility?: unknown
   private domain?: Promise<Domain<typeof resultDomain>>
@@ -166,7 +174,7 @@ export class ResultDelivery {
    * both reach the same call after a timeout; deduplicating in flight keeps
    * them from streaming the same body twice.
    */
-  private readonly publishing = new Map<string, Promise<DeliveredResult>>()
+  private readonly publishing = new Map<string, Promise<PreparedResult>>()
   constructor(
     private readonly ctx: Context,
     private readonly config: () => ResolvedConfig,
@@ -244,8 +252,18 @@ export class ResultDelivery {
     render: (value: JsonValue) => ContentBlock[],
     signal: AbortSignal,
     jobId?: string,
-    facts?: JsonValue,
+    facts?: JsonValue | (() => JsonValue | undefined),
   ): Promise<DeliveredResult> {
+    return (await this.prepareResult(exec, data, render, signal, jobId, facts)).result
+  }
+  private async prepareResult(
+    exec: ToolExecution,
+    data: JsonValue,
+    render: (value: JsonValue) => ContentBlock[],
+    signal: AbortSignal,
+    jobId?: string,
+    facts?: JsonValue | (() => JsonValue | undefined),
+  ): Promise<PreparedResult> {
     this.assertActive()
     const dedupeKey = JSON.stringify([exec.agent?.session?.header.id, exec.callId])
     const running = this.publishing.get(dedupeKey)
@@ -267,15 +285,11 @@ export class ResultDelivery {
     render: (value: JsonValue) => ContentBlock[],
     signal: AbortSignal,
     jobId?: string,
-    facts?: JsonValue,
-  ): Promise<DeliveredResult> {
+    facts?: JsonValue | (() => JsonValue | undefined),
+  ): Promise<PreparedResult> {
     const config = this.config()
     if (jobId === undefined) {
-      const inline = await inlineJson(
-        { delivery: 'inline', data },
-        config.maxInlineResultBytes,
-        signal,
-      )
+      const inline = await inlineJson(data, config.maxInlineResultBytes, signal)
       if (inline !== undefined) {
         const content = render(data)
         if (
@@ -285,7 +299,7 @@ export class ResultDelivery {
           new TextEncoder().encode(JSON.stringify(content)).byteLength <=
             config.maxInlineResultBytes
         )
-          return { delivery: 'inline', data }
+          return { result: { delivery: 'inline', data } }
       }
     }
     const attachments = this.ctx.get('attachments')
@@ -297,9 +311,11 @@ export class ResultDelivery {
     const table = await this.receipts()
     const key = await resultReceiptKey(sessionId, exec.callId)
     const existing = table.get(key)
-    const projection = asRecord(
-      facts ?? this.outputs.get(exec.name)?.presentationMeta?.(exec.arguments, data),
-    )
+    const projected =
+      typeof facts === 'function'
+        ? facts()
+        : (facts ?? this.outputs.get(exec.name)?.presentationMeta?.(exec.arguments, data))
+    const projection = asRecord(projected) === undefined ? undefined : { ...asRecord(projected) }
     const record = asRecord(data)
     if (projection && typeof record?.outputFile === 'string')
       Object.assign(projection, {
@@ -342,30 +358,22 @@ export class ResultDelivery {
       file,
       ...(asRecord(projection) ? { facts: projection } : {}),
     })
-    const fits = (): boolean => {
-      const canonical = JSON.stringify(receipt)
-      const content: ContentBlock[] = [
-        { type: 'text', text: receiptText(canonical) },
-        { type: 'file', attachment: receipt.file as FileAttachmentRef },
-      ]
-      return (
-        estimateContent([{ type: 'text', text: canonical }]) <= config.maxInlineResultTokens &&
-        estimateContent(content) <= config.maxInlineResultTokens &&
-        new TextEncoder().encode(canonical).byteLength <= config.maxInlineResultBytes &&
-        new TextEncoder().encode(JSON.stringify(content)).byteLength <= config.maxInlineResultBytes
-      )
-    }
-    let fitsBudget = fits()
-    // Preview omission never removes ownership, file, provenance or completeness facts.
+    let content = receiptContentWithinBudget(receipt, config)
     for (const field of ['items', 'notesPreview', 'annotationsPreview']) {
-      if (fitsBudget) break
+      if (content !== undefined) break
       if (receipt.facts?.[field] !== undefined) {
         delete receipt.facts[field]
         receipt.facts.detailOmitted = true
-        fitsBudget = fits()
+        content = receiptContentWithinBudget(receipt, config)
       }
     }
-    if (!fitsBudget) {
+    // The durable receipt also supplies the chat's evidence links. A smaller
+    // model-facing announcement can omit those refs while keeping the file.
+    if (content === undefined && receipt.facts?.evidenceRefs !== undefined) {
+      receipt.facts.detailOmitted = true
+      content = receiptContentWithinBudget(compactEvidenceReceipt(receipt), config)
+    }
+    if (content === undefined) {
       throw new ZoteroError(
         'Result reference exceeds the configured inline budget.',
         ZOTERO_OUTPUT_TOO_LARGE,
@@ -378,100 +386,67 @@ export class ResultDelivery {
     })
     this.committing = commit.catch(() => {})
     await commit
-    return receipt
+    return { result: receipt, content }
   }
   wrap(definition: ToolDefinition): ToolDefinition {
     const output = definition.output
     this.outputs.set(definition.name, output)
-    const jobArms =
-      output.schema.oneOf?.filter((arm) =>
-        ['background', 'promoted'].includes(String(arm.properties?.kind?.const)),
-      ) ?? []
+    const contentByCall = new WeakMap<ToolExecutionToken, ContentBlock[]>()
+    const deliveryByArguments = new WeakMap<object, DeliveredResult>()
     return {
       ...definition,
       output: {
-        schema: {
-          oneOf: [
-            {
-              type: 'object',
-              additionalProperties: false,
-              required: ['delivery', 'data'],
-              properties: { delivery: { type: 'string', const: 'inline' }, data: output.schema },
-            },
-            {
-              type: 'object',
-              additionalProperties: false,
-              required: [...RESULT_RECEIPT_REQUIRED_KEYS],
-              properties: {
-                delivery: { type: 'string', const: 'file' },
-                version: { type: 'integer', const: 1 },
-                tool: { type: 'string' },
-                summary: { type: 'string' },
-                createdAt: { type: 'integer' },
-                file: {
-                  type: 'object',
-                  additionalProperties: false,
-                  required: [...RESULT_FILE_REQUIRED_KEYS],
-                  properties: {
-                    attachmentId: { type: 'string' },
-                    name: { type: 'string' },
-                    bytes: { type: 'integer' },
-                  },
-                },
-                sessionId: { type: 'string' },
-                callId: { type: 'string' },
-                jobId: { type: 'string' },
-                facts: { type: 'object' },
-              },
-            },
-            ...jobArms,
-          ],
-        },
-        render: (args, value) =>
-          isDelivered(value)
-            ? renderDelivered(value, (data) => output.render(args, data))
-            : output.render(args, value),
+        ...output,
         presentationMeta: (args, value) => {
-          if (!isDelivered(value)) return output.presentationMeta?.(args, value) ?? {}
-          if (value.delivery === 'file')
+          const key = asRecord(args)
+          const delivered = key === undefined ? undefined : deliveryByArguments.get(key)
+          if (key !== undefined) deliveryByArguments.delete(key)
+          if (delivered?.delivery === 'file')
             return {
-              ...(asRecord(value.facts) ?? {}),
+              ...(asRecord(delivered.facts) ?? {}),
               delivery: 'file',
-              file: value.file,
+              file: delivered.file,
             } as JsonValue
-          const meta = asRecord(output.presentationMeta?.(args, value.data)) ?? {}
-          // The host snapshots the delivered value before projection. Evaluate
-          // inline facts here; file publication computes its facts after the
-          // inline arm has been ruled out, so neither arm evaluates twice.
-          return { ...meta, delivery: 'inline' } as JsonValue
+          const meta = output.presentationMeta?.(args, value)
+          return delivered?.delivery === 'inline'
+            ? ({ ...(asRecord(meta) ?? {}), delivery: 'inline' } as JsonValue)
+            : (meta ?? {})
         },
+      },
+      projectContent: (exec, result) => {
+        const content = contentByCall.get(exec.token)
+        contentByCall.delete(exec.token)
+        return !result.isError && content !== undefined
+          ? content
+          : definition.projectContent?.(exec, result)
       },
       execute: (args, exec) => {
         this.assertActive()
         return this.track(
           (async () => {
-            const value = (await definition.execute(args, exec)) as JsonValue
-            if (
-              isDelivered(value) ||
-              ['background', 'promoted'].includes(String(asRecord(value)?.kind))
-            )
-              return value
+            const candidate = await definition.execute(args, exec)
+            const value = snapshotJsonValue(candidate) as JsonValue | undefined
+            if (value === undefined)
+              throw new ToolOutputError(definition.name, ['Result must be lossless JSON data.'])
+            if (isJobArm(value)) return value
             const violations = validateJsonSchemaValue(output.schema, value)
             if (violations.length) throw new ToolOutputError(definition.name, violations)
-            const delivered = await this.prepare(
+            const { result: delivered, content } = await this.prepareResult(
               exec,
               value,
               (data) => output.render(args, data),
               exec.signal,
+              undefined,
+              () => output.presentationMeta?.(args, value),
             )
-            if (exec.parent && delivered.delivery === 'file')
-              exec.deferContext(
-                createUserMessage({
-                  content: renderDelivered(delivered, () => []),
-                  source: { kind: 'ptc-mode' },
-                }),
-              )
-            return delivered
+            const key = asRecord(exec.arguments)
+            if (key !== undefined) deliveryByArguments.set(key, delivered)
+            if (content !== undefined) {
+              contentByCall.set(exec.token, content)
+              if (exec.parent)
+                exec.deferContext(createUserMessage({ content, source: { kind: 'ptc-mode' } }))
+            }
+            return value
           })(),
         )
       },
@@ -562,7 +537,7 @@ export class ResultDelivery {
       if (!receipt) return next()
       const decision = await next()
       if (decision.kind !== 'accept' || Object.hasOwn(decision, 'value')) return decision
-      const content = renderDelivered(receipt, () => [])
+      const content = renderDelivered(compactEvidenceReceipt(receipt), () => [])
       return {
         kind: 'accept',
         content: [...(decision.content ?? result.content), ...content],
