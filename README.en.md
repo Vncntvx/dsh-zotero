@@ -102,7 +102,7 @@ For details on interaction patterns, UI roles, and runtime boundaries, see the [
 In the DeepSeek Harness desktop app, open **Plugins** in the sidebar, click **Add Plugin**, and enter the package identifier:
 
 - Latest version (recommended): `dsh-zotero`
-- Specific version: `dsh-zotero@1.4.0`
+- Specific version: `dsh-zotero@1.5.0`
 - GitHub stable prebuilt branch (latest tagged release): `github:Vncntvx/dsh-zotero#stable`
 - GitHub rolling prebuilt branch (follows main): `github:Vncntvx/dsh-zotero#release`
 
