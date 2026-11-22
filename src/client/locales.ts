@@ -354,22 +354,22 @@ export const en = {
     'Model is downloading. Local semantic search will become active once complete.',
   semanticModelNotDownloadedWarningNotice:
     'Local semantic search is enabled; please download the model to activate.',
-  semanticModelBalanced: 'Balanced (balanced · Qwen3-0.6B · Default)',
+  semanticModelBalanced: 'Balanced',
   semanticModelBalancedDesc:
-    'General-purpose tier (currently backed by Qwen3-Embedding-0.6B). 1024 dim, 32K context. Chinese and cross-lingual semantic matching. Default tier.',
-  semanticModelLightweight: 'Lightweight (lightweight · Granite-97M)',
+    'General-purpose tier (currently backed by Qwen3-Embedding-0.6B). 1024 dim, 32K context. Chinese and cross-lingual semantic matching.',
+  semanticModelLightweight: 'Lightweight',
   semanticModelLightweightDesc:
     'Lightweight tier (currently backed by IBM Granite 97M ModernBERT). 384 dim, 32K context. Uses ~200MB RAM and ~15ms CPU latency. For low-resource hardware or batch indexing.',
-  semanticModelBilingual: 'Bilingual (bilingual · KaLM-0.5B)',
+  semanticModelBilingual: 'Bilingual',
   semanticModelBilingualDesc:
     'Bilingual literature tier (currently backed by KaLM-Embedding-V2.5 0.5B). 896 dim, 32K context. Tuned for Chinese/English scientific retrieval and instruction queries.',
-  semanticModelEnglish: 'English (english · Nomic-137M)',
+  semanticModelEnglish: 'English',
   semanticModelEnglishDesc:
     'English long-context and code tier (currently backed by Nomic Embed 137M v1.5). 768 dim, 8K context. Supports Matryoshka dimension truncation. For English literature; weaker on Chinese.',
-  semanticModelHybrid: 'Hybrid (hybrid · BGE-M3)',
+  semanticModelHybrid: 'Hybrid',
   semanticModelHybridDesc:
     'Dense/sparse multi-vector tier (currently backed by BAAI BGE-M3). 1024 dim, 8K context. For long body paragraphs and cross-lingual matching.',
-  semanticModelAcademic: 'Academic (academic · GTE-Base)',
+  semanticModelAcademic: 'Academic',
   semanticModelAcademicDesc:
     'Academic multilingual tier (currently backed by Alibaba GTE Multilingual Base). 768 dim, 8K context. Covers 75+ languages with balanced recall across languages.',
 
@@ -681,6 +681,10 @@ export const en = {
   copyZoteroLink: 'Copy link',
   copyZoteroLinkTooltip: 'Canonical Zotero deep link, for notes or the address bar',
   openInZotero: 'Open in Zotero',
+  paperLookupFailed: 'Zotero could not verify the paper reference.',
+  turnZoteroEvidence: 'Zotero evidence for this turn',
+  turnZoteroReferenced: 'Referenced in the answer',
+  turnZoteroRetrieved: 'Retrieved in this turn',
   locateItem: 'Locate item',
   openInZoteroTooltip: 'Open this item in the local Zotero desktop app',
   openInZoteroFailed: 'Could not open Zotero. Make sure the desktop app is installed.',
@@ -1249,22 +1253,22 @@ export const zh: Record<ZoteroLocaleKey, string> = {
     '语义检索已开启但模型缺失或损坏时，读取以 ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE 失败。请选择适合设备的模型并点击「下载模型」，或关闭语义检索改用 BM25',
   semanticModelDownloadingNotice: '模型正在下载中，下载完成后本地语义检索将自动生效',
   semanticModelNotDownloadedWarningNotice: '已开启本地语义检索，请下载模型以生效',
-  semanticModelBalanced: '通用平衡 (balanced · Qwen3-0.6B · 默认)',
+  semanticModelBalanced: '通用平衡',
   semanticModelBalancedDesc:
-    '通用档位（当前基于 Qwen3-Embedding-0.6B 开源模型）。1024 维，32K 上下文。中文语义匹配与长文本理解，资源消耗适中。中文为主文库的默认档位',
-  semanticModelLightweight: '极速轻量 (lightweight · Granite-97M)',
+    '通用档位（当前基于 Qwen3-Embedding-0.6B 开源模型）。1024 维，32K 上下文。中文语义匹配与长文本理解，资源消耗适中',
+  semanticModelLightweight: '极速轻量',
   semanticModelLightweightDesc:
     '轻量档位（当前基于 IBM Granite 97M ModernBERT）。384 维，32K 上下文。内存占用约 200MB，CPU 推理耗时约 15ms。面向低配设备或文献摘要批量编码',
-  semanticModelBilingual: '中英双语 (bilingual · KaLM-0.5B)',
+  semanticModelBilingual: '中英双语',
   semanticModelBilingualDesc:
     '中英双语档位（当前基于 KaLM-Embedding-V2.5 0.5B）。896 维，32K 上下文。面向中英双语与学术指令微调，用于中英文混杂的科研论文库',
-  semanticModelEnglish: '英文长文 (english · Nomic-137M)',
+  semanticModelEnglish: '英文长文',
   semanticModelEnglishDesc:
     '英文长文与代码档位（当前基于 Nomic Embed 137M v1.5）。768 维，8K 上下文。支持 Matryoshka 维度裁剪。用于英文文献、学术论文或代码片段检索，中文理解较弱',
-  semanticModelHybrid: '多路混合 (hybrid · BGE-M3)',
+  semanticModelHybrid: '多路混合',
   semanticModelHybridDesc:
     '多向量与混合检索档位（当前基于智源 BGE-M3）。1024 维，8K 上下文。用于论文正文段落与跨语言比对，含长篇综述与多语种文献',
-  semanticModelAcademic: '经典学术 (academic · GTE-Base)',
+  semanticModelAcademic: '经典学术',
   semanticModelAcademicDesc:
     '学术多语言档位（当前基于阿里通义 GTE-Base）。768 维，8K 上下文。覆盖 75 种以上语言，各语言检索表现平均，用于多国语言文献的混合文库',
 
@@ -1560,6 +1564,10 @@ export const zh: Record<ZoteroLocaleKey, string> = {
   copyZoteroLink: '复制链接',
   copyZoteroLinkTooltip: '规范 Zotero 深链，可粘贴到外部笔记或地址栏',
   openInZotero: '在 Zotero 中打开',
+  paperLookupFailed: 'Zotero 无法核实文献引用',
+  turnZoteroEvidence: '本轮 Zotero 证据',
+  turnZoteroReferenced: '回答中出现此文献引用',
+  turnZoteroRetrieved: '本轮已检索',
   locateItem: '定位条目',
   openInZoteroTooltip: '在本地 Zotero 桌面客户端中打开并定位此条目',
   openInZoteroFailed: '无法打开 Zotero，请确认已安装桌面客户端',

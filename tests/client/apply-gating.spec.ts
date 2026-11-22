@@ -87,6 +87,7 @@ describe('the browser-half entry behind the webEnabled gate', () => {
       'plugins.row.config',
       'plugins.row.config',
       'plugins.detail.section',
+      'conversation.user.text.node',
     ])
   })
 
@@ -106,11 +107,17 @@ describe('the browser-half entry behind the webEnabled gate', () => {
     expect(
       world.injected.find((entry) => entry.name === 'sidebar.right.pane.tab.title')?.active,
     ).toBe(true)
-    expect(world.injectDisposes).toBe(1)
+    expect(
+      world.injected.find((entry) => entry.name === 'conversation.chat.turnTail')?.active,
+    ).toBe(false)
+    expect(world.injectDisposes).toBe(2)
 
     // Toggle back on: the tab returns (a fresh live registration).
     await world.scope.set('webEnabled', true)
     expect(world.injected.filter((e) => e.name === 'conversation.view').some((e) => e.active)).toBe(
+      true,
+    )
+    expect(world.injected.some((e) => e.name === 'conversation.chat.turnTail' && e.active)).toBe(
       true,
     )
   })

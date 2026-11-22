@@ -18,6 +18,7 @@ export const tinyModel: SemanticModelEntry = {
   physicalKey: 'wp4-tiny',
   label: 'Synthetic installer fixture',
   physicalModel: 'Synthetic installer fixture',
+  shortModel: 'Synthetic',
   note: 'Synthetic bytes; no inference or external model download.',
   modelId: 'test/wp4-tiny',
   revision: 'b'.repeat(40),

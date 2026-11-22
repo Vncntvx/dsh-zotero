@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { refFieldsOf } from '../ref-grammar.js'
 import type { DisplayArtifactLookup } from './artifact-reads.js'
 import {
   discardParsedDocument,
@@ -108,6 +111,9 @@ import {
 import { resolveMineruToken } from './credentials.js'
 import { sourceKeyOf, stampMatches } from './source-stamp.js'
 import { canonicalSourceIdentityOf } from './identity.js'
+import { ParsedIndex } from './parsed-index.js'
+import { registerParsedSearchTool } from './search-parsed-tool.js'
+import { parseTargetOf } from './parse-target.js'
 import { limitsFor, type ParsedArtifactMeta } from './types.js'
 import {
   AttachmentResolutionCache,
@@ -206,6 +212,7 @@ interface EnrichmentServiceDeps {
   readonly store?: (config: EnrichmentPreferences, create: boolean) => Promise<ParsedArtifactStore>
   readonly flight?: ParseFlight
   readonly parsePersistence?: ParseJobPersistence
+  readonly parsedIndex?: ParsedIndex
   /** The model-asset manager; tests inject a scripted one. */
   readonly downloads?: ModelDownloadManager
   /** The semantic loader factory; tests inject one with a controlled `open`. */
@@ -307,6 +314,7 @@ export class EnrichmentService extends TypertRemoteService {
   private readonly resolveAttachment: EnrichmentCoreLink['resolveAttachment']
   private readonly parsing: EnrichmentParseJobs
   private readonly management: ArtifactManagementDeps
+  private readonly parsedIndex: ParsedIndex
 
   /** The enhancer installed into the core. Stable identity for cleanup. */
   public readonly enhancer: FulltextEnhancer
@@ -375,6 +383,7 @@ export class EnrichmentService extends TypertRemoteService {
     deps: EnrichmentServiceDeps = {},
   ) {
     super(ctx, ZOTERO_ENRICHMENT_SERVICE_KEY, { namespace: ZOTERO_SETTINGS_NAMESPACE })
+    this.parsedIndex = deps.parsedIndex ?? new ParsedIndex()
     this.downloads = deps.downloads ?? new ModelDownloadManager()
     this.loaderFactory = deps.loader ?? (() => new SemanticEmbedderLoader())
     this.client =
@@ -419,6 +428,19 @@ export class EnrichmentService extends TypertRemoteService {
             resolveAttachment: this.resolveAttachment,
             resolveToken: async (reference) => await resolveMineruToken(ctx, reference),
             onProgress,
+            ...(deps.store === undefined
+              ? {
+                  onCommitted: async (store, artifactId) => {
+                    try {
+                      await this.parsedIndex.publish(store, artifactId)
+                    } catch (error) {
+                      // The artifact and source publication have already succeeded.
+                      // The next search can reconcile the derived index from disk.
+                      ctx.logger?.warn?.(`parsed index publication: ${errorMessageOf(error)}`)
+                    }
+                  },
+                }
+              : {}),
           },
           signal,
         ),
@@ -453,6 +475,7 @@ export class EnrichmentService extends TypertRemoteService {
       config: () => resolveEnrichmentConfig(this.config),
       persistence,
       jobs: this.parsing,
+      removeSearchIndex: (root, artifactId) => this.parsedIndex.discard(root, artifactId),
     }
     // One admitted snapshot per foreground read. `admit()` runs before any
     // source I/O and fixes config, target, calibration and model generation;
@@ -558,7 +581,11 @@ export class EnrichmentService extends TypertRemoteService {
     // cannot skip the model and cache release: those hold real resources
     // (an ONNX session, vectors) and outlive any single job's cleanup.
     ctx.effect(() => async () => {
-      const settled = await Promise.allSettled([this.parsing.dispose(), this.downloads.dispose()])
+      const settled = await Promise.allSettled([
+        this.parsing.dispose(),
+        this.downloads.dispose(),
+        this.parsedIndex.close(),
+      ])
       for (const outcome of settled) {
         if (outcome.status === 'rejected')
           ctx.logger?.warn?.(`enrichment teardown: ${errorMessageOf(outcome.reason)}`)
@@ -577,6 +604,64 @@ export class EnrichmentService extends TypertRemoteService {
       const loader = this.loader
       this.loader = undefined
       if (loader !== undefined) await loader.dispose()
+    })
+
+    ctx.inject(['zotero', 'tools'], (scoped) => {
+      registerParsedSearchTool(
+        scoped,
+        async (request, signal) => {
+          const config = resolveEnrichmentConfig(this.config)
+          const store = await this.storeFactory(config, false)
+          return await this.parsedIndex.search(
+            {
+              store,
+              provider: () => {
+                const core = ctx.get('zotero')
+                if (core === undefined)
+                  throw new ZoteroError(
+                    'The Zotero service is unavailable.',
+                    ZOTERO_PROVIDER_UNAVAILABLE,
+                  )
+                return core.parsedSearchProvider()
+              },
+              probe: async (ref, record, meta, callSignal) => {
+                const target = parseTargetOf({ kind: 'attachment', ref })
+                const maxBytes = limitsFor(meta.mode).maxBytes
+                const resolved = await this.resolveAttachment(ref, callSignal)
+                const stamp = await probeSource(
+                  { ...target.input, resolvedAttachment: resolved },
+                  maxBytes,
+                  hostSourceBytesDeps(this.resolveAttachment, this.client),
+                  callSignal,
+                )
+                if (!stampMatches(record.stamp, stamp)) return false
+                if (refFieldsOf(meta.identity)?.serverId !== undefined) return true
+                // A legacy, unqualified ref is not proof of instance identity.
+                // Verify its local PDF before binding the artifact to this instance.
+                if (
+                  resolved.kind !== 'file' ||
+                  resolved.path === undefined ||
+                  stamp.kind !== 'file'
+                )
+                  return false
+                const hash = createHash('sha256')
+                let bytes = 0
+                for await (const chunk of createReadStream(resolved.path, {
+                  end: maxBytes,
+                  signal: callSignal,
+                })) {
+                  bytes += chunk.byteLength
+                  hash.update(chunk)
+                }
+                return bytes === stamp.size && hash.digest('hex') === meta.contentFingerprint
+              },
+            },
+            request,
+            signal,
+          )
+        },
+        scoped.zotero.wrapReadTool,
+      )
     })
 
     // Install the enhancer and the ranking strategy into the core, and

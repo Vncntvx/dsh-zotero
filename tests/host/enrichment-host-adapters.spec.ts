@@ -7,7 +7,7 @@
  */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { privateArtifactTestRoot } from '../helpers/temp-dir.js'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveOutputDir } from '../../src/enrichment/output-dir.ts'
@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe('enrichment host adapters', () => {
   it('creates the default-style output directory and returns its canonical path', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dsh-zotero-enrichment-host-'))
+    dir = await mkdtemp(join(privateArtifactTestRoot(), 'dsh-zotero-enrichment-host-'))
     const nested = join(dir, 'nested', 'artifacts')
     await expect(resolveOutputDir(nested, undefined)).rejects.toThrow()
     // A missing directory is refused; create it and the real adapter accepts.
@@ -35,7 +35,7 @@ describe('enrichment host adapters', () => {
   })
 
   it('creates the harness default directory when the value is empty', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dsh-zotero-enrichment-home-'))
+    dir = await mkdtemp(join(privateArtifactTestRoot(), 'dsh-zotero-enrichment-home-'))
     const previous = process.env.DSH_HOME
     process.env.DSH_HOME = dir
     try {
@@ -48,7 +48,7 @@ describe('enrichment host adapters', () => {
   })
 
   it('writes and reads an artifact on the real filesystem', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dsh-zotero-enrichment-store-'))
+    dir = await mkdtemp(join(privateArtifactTestRoot(), 'dsh-zotero-enrichment-store-'))
     const store = new ParsedArtifactStore(dir)
     const key = 'a'.repeat(64)
     await store.put(key, {
@@ -73,7 +73,7 @@ describe('enrichment host adapters', () => {
   })
 
   it('reads a real local file through the production source-byte deps', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'dsh-zotero-enrichment-bytes-'))
+    dir = await mkdtemp(join(privateArtifactTestRoot(), 'dsh-zotero-enrichment-bytes-'))
     const file = join(dir, 'a.pdf')
     await writeFile(file, '%PDF-1.7 real')
     const deps = hostSourceBytesDeps(async () => ({ kind: 'file', path: file }), {} as MineruClient)

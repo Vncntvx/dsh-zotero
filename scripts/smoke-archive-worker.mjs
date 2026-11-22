@@ -4,7 +4,56 @@ import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { Worker } from 'node:worker_threads'
 import { zipSync } from 'fflate'
+
+/**
+ * Exercise the packed parsed-index worker from compiled JS alone: one put,
+ * then one match against its SQLite FTS5 partition.
+ * @param {string} packedRoot - unpacked package root holding lib/.
+ * @param {string} staging - scratch directory for the synthetic index database.
+ */
+async function smokeParsedIndexWorker(packedRoot, staging) {
+  const worker = new Worker(join(packedRoot, 'lib/enrichment/parsed-index-worker.js'), {
+    execArgv: [],
+    workerData: join(staging, 'index.db'),
+  })
+  try {
+    const partition = '0'.repeat(128)
+    const document = { artifactId: 'synthetic', sourceId: 'paper', generation: '1', digest: 'test' }
+    /** @param {object} operation */
+    const send = (operation) =>
+      new Promise((resolve, reject) => {
+        const onError = (/** @type {Error} */ error) => {
+          worker.off('message', onMessage)
+          reject(error)
+        }
+        const onMessage = (
+          /** @type {{ok: boolean, message?: string, value?: unknown}} */ reply,
+        ) => {
+          worker.off('error', onError)
+          if (reply.ok) resolve(reply.value)
+          else reject(new Error(reply.message))
+        }
+        worker.once('error', onError).once('message', onMessage)
+        worker.postMessage({ id: 1, operation })
+      })
+    await send({ kind: 'put', partition, document, markdown: '# Evidence\n\nAquifer recharge.' })
+    const result = await send({
+      kind: 'match',
+      partition,
+      allowed: [document],
+      variants: [['aquifer']],
+      limit: 1,
+      isolate: true,
+    })
+    if (!Array.isArray(result) || result[0]?.artifactId !== document.artifactId)
+      throw new Error('Packed parsed index Worker could not find the indexed document')
+    console.log('parsed-index-worker pack smoke ok: emitted JS and FTS5 without a peer resolver')
+  } finally {
+    await worker.terminate()
+  }
+}
 
 /** @param {string} root - the package root to pack and smoke. */
 export async function smokeArchiveWorker(root) {
@@ -27,6 +76,7 @@ export async function smokeArchiveWorker(root) {
     // The actual tarball supplies every plugin file. Only installed dependencies
     // resolve through the checkout; no source file or TypeScript loader is used.
     const packedRoot = join(staging, 'package')
+    await smokeParsedIndexWorker(packedRoot, staging)
     await symlink(join(root, 'node_modules'), join(packedRoot, 'node_modules'), 'dir')
     const { ArchiveProcessor } = await import(
       pathToFileURL(join(packedRoot, 'lib/enrichment/archive-worker.js')).href

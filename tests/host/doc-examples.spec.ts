@@ -1,30 +1,4 @@
-/**
- * Every `zotero_*` call printed in the docs is checked against the tool's own
- * parameter schema, with the same validator the host runs before executing a
- * call. Documentation drift here is not cosmetic: a README example that names
- * `itemType` where the schema says `itemTypes`, or a lowercase `ref` where it
- * must be a ref string, teaches the model a call that the tool rejects.
- *
- * The scan is whole-document, not line-by-line: a printed call may wrap its
- * arguments over several lines (`zotero_batch_items` does), and a line-based
- * scan silently skipped exactly those. It also covers every document that
- * prints calls, discovered from the tree rather than listed by hand, so a new
- * doc cannot escape the check.
- *
- * Two more invariants ride here because they are the same class of drift: every
- * registered `zotero_*` tool prints at least one parseable example, and every
- * tool's parameter table names exactly the schema's parameters. A tool that
- * gains a parameter without a table row teaches a reader nothing about it; a
- * table row for a parameter the tool does not declare teaches a call that is
- * rejected.
- *
- * The check is schema-level on purpose. Whether an example's *values* would
- * succeed against a live library (a ref that exists, a style Zotero bundles)
- * is a different question the docs deliberately leave illustrative: the
- * schema is the part a reader cannot see and the part that silently rots.
- * @module tests/doc-examples
- */
-
+/** Validate documented model calls, parameter tables, and outputs against the composed tools. */
 import { readFileSync, readdirSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import { createVolatile } from '@deepseek-ai/cosmokit'
@@ -36,17 +10,23 @@ import ToolRuntime, {
 } from '@deepseek-ai/dsh-tools'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import ZoteroService from '../../src/index.js'
+import EnrichmentService from '../../src/enrichment/service.js'
 import { ScholarlyService } from '../../src/scholarly/service.js'
 import { SCHOLARLY_TOOL_NAMES } from '../../src/scholarly/types.js'
-import { SCHOLARLY_SAVE_TOOL_NAME, ZOTERO_TOOL_NAMES } from '../../src/constants.js'
+import {
+  PARSED_SEARCH_TOOL,
+  SCHOLARLY_SAVE_TOOL_NAME,
+  ZOTERO_TOOL_NAMES,
+} from '../../src/constants.js'
 import { isRefString } from '../../src/refs.js'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 
-/** Every model tool both components can register. */
+/** Every model tool the plugin components can register. */
 const ALL_TOOL_NAMES: readonly string[] = [
   ...ZOTERO_TOOL_NAMES,
   ...SCHOLARLY_TOOL_NAMES,
   SCHOLARLY_SAVE_TOOL_NAME,
+  PARSED_SEARCH_TOOL,
 ]
 
 /**
@@ -281,6 +261,7 @@ describe('documented tool calls match the tool schemas', () => {
     // The scholarly component documents seven more tools in the same chapter;
     // mounting it keeps their examples and tables under the same gate.
     new ScholarlyService(ctx, { email: createVolatile('doc-examples@example.edu') })
+    await ctx.plugin(EnrichmentService, {})
     for (const file of files) examples.push(...examplesIn(file))
   })
 

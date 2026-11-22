@@ -119,6 +119,7 @@ const TRAIL_TOOL_NAMES: ReadonlySet<string> = new Set([
   'zotero_get_batch',
   'zotero_match_references',
   'zotero_retrieve',
+  'zotero_search_parsed',
   'zotero_export',
 ])
 

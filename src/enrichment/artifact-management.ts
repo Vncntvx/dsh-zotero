@@ -39,6 +39,7 @@ export interface ArtifactManagementDeps {
   readonly config: () => EnrichmentPreferences
   readonly persistence: ParseJobPersistence
   readonly jobs: EnrichmentParseJobs
+  readonly removeSearchIndex?: (root: string, artifactId: string) => Promise<void>
 }
 
 const ARTIFACT_ID = ZOTERO_ARTIFACT_ID_PATTERN
@@ -174,7 +175,9 @@ export async function discardParsedDocument(
       const removedReceipts =
         generation === undefined ? 0 : await deps.persistence.deleteByGeneration(config, generation)
       signal?.throwIfAborted()
-      const removedAliases = await store.discardArtifact(artifactId, signal)
+      const removedAliases = await store.discardArtifact(artifactId, signal, async () => {
+        await deps.removeSearchIndex?.(store.root, artifactId)
+      })
       return { kind: 'discarded', removedAliases, removedReceipts }
     }
     return generation === undefined

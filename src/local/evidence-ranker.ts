@@ -25,6 +25,8 @@
  * @module dsh-zotero/local/evidence-ranker
  */
 
+import { createHash } from 'node:crypto'
+import { LRUCache } from 'lru-cache'
 import { ZOTERO_RRF_K } from '../constants.js'
 import { requireEvidenceQueryWithinLimit } from '../evidence-query.js'
 import { prepareCorpus, queryTermsOf, rankPrepared, type EvidenceChunk } from '../evidence.js'
@@ -183,6 +185,27 @@ export function queryTermsAcross(query: string, variants?: readonly string[]): s
 /** One route's per-chunk values, keyed by the caller's chunk index. */
 export type RouteScores = ReadonlyMap<number, number>
 
+const preparedCorpora = new LRUCache<string, ReturnType<typeof prepareCorpus>>({
+  max: 8,
+  maxSize: 1_000_000,
+})
+
+function corpusOf(chunks: readonly EvidenceChunk[]): ReturnType<typeof prepareCorpus> {
+  const size = chunks.reduce((total, chunk) => total + chunk.text.length + 32, 0)
+  if (size === 0 || size > 1_000_000) return prepareCorpus(chunks)
+  const hash = createHash('sha256')
+  for (const chunk of chunks) {
+    hash.update(`${chunk.index}:${chunk.text.length}:`)
+    hash.update(chunk.text, 'utf16le')
+  }
+  const key = hash.digest('hex')
+  const cached = preparedCorpora.get(key)
+  if (cached !== undefined) return cached
+  const corpus = prepareCorpus(chunks)
+  preparedCorpora.set(key, corpus, { size })
+  return corpus
+}
+
 /**
  * The lexical route's per-chunk BM25 scores, best score per chunk across the
  * query and every paraphrase, positives only. A score of zero shares no
@@ -198,7 +221,7 @@ export function lexicalRouteScores(
   chunks: readonly EvidenceChunk[],
 ): RouteScores {
   // One tokenization of the corpus, however many paraphrases score against it.
-  const corpus = prepareCorpus(chunks)
+  const corpus = corpusOf(chunks)
   const best = new Map<number, number>()
   for (const text of texts) {
     for (const entry of rankPrepared(text, corpus)) {

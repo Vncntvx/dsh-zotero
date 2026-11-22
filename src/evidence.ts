@@ -17,7 +17,7 @@
  * @module dsh-zotero/evidence
  */
 
-import { detachUtf16 } from './json.js'
+import { detachUtf16 } from './utf16.js'
 import { normalizeForSearch } from './search-text.js'
 
 const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu

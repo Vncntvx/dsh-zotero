@@ -14,7 +14,6 @@
  * (`options.registrant ?? ctx.fiber?.name`, ui-renderer's registry), which the
  * fake registry below reproduces: the crash world's registrations carry the
  * stamp, and the filter reads it instead of guessing from keys or names.
- * @module tests/client/slot-crash-intake
  */
 
 import { describe, expect, it } from 'vitest'
@@ -26,9 +25,6 @@ import { fakeScope } from './helpers/fake-scope.ts'
 import { createParseRuntimeStub } from './helpers/remote-stubs.ts'
 import { createFakeContextMenus, type FakeContextMenuSink } from './helpers/fake-context-menus.ts'
 import { fakeEntryErrorSeam } from './helpers/slot-crash-seam.ts'
-
-// The page imports primitive icons; stub them with the shared DOM face so this
-// wiring-level spec does not load the real bundle (katex css, shiki, …).
 
 /** The registrant this plugin stamps on its own slot entries. */
 const REGISTRANT = 'dsh-zotero'
@@ -153,7 +149,11 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
         register: (served: ReadonlySet<string>) => () => void,
       ) => register(new Set(namespaces)),
     },
-    uiConversation: { events: { register: () => () => {} } },
+    inputTriggers: { registerSource: () => () => {} },
+    uiConversation: {
+      events: { register: () => () => {} },
+      userText: { register: () => () => {} },
+    },
     contextMenus: createFakeContextMenus(contextMenuSink),
     slots: {
       inject: () => () => {},

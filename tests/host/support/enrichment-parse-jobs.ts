@@ -9,7 +9,7 @@ import RemoteAccessService, { type RemoteAccessBinding } from '@deepseek-ai/dsh-
 import { Peer } from '@deepseek-ai/dsh-client-connection'
 import { RemoteError, type RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { privateArtifactTestRoot } from '../../helpers/temp-dir.js'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { vi } from 'vitest'
@@ -152,7 +152,7 @@ export async function parseJobsFixture(
   } = {},
   options: { controller?: boolean } = {},
 ) {
-  const root = await mkdtemp(join(tmpdir(), 'zotero-parse-jobs-'))
+  const root = await mkdtemp(join(privateArtifactTestRoot(), 'zotero-parse-jobs-'))
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)

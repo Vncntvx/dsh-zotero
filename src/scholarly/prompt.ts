@@ -11,7 +11,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { ResolvedScholarlyConfig } from './config.js'
-import { SCHOLARLY_SAVE_TOOL_NAME, ZOTERO_READ_TOOL_NAMES } from '../constants.js'
+import {
+  PARSED_SEARCH_TOOL,
+  SCHOLARLY_SAVE_TOOL_NAME,
+  ZOTERO_READ_TOOL_NAMES,
+} from '../constants.js'
 import { bandSectionOrder } from '../prompt-band.js'
 import { stepToolNamesOf } from '../step-tools.js'
 import { SCHOLARLY_TOOL_NAMES, type ScholarlyToolName } from './types.js'
@@ -219,7 +223,8 @@ export function registerScholarlyPromptSection(
       const names = stepToolNamesOf(ctx, context)
       if (names === undefined) return scholarlyPromptTextOf(config())
       const available = SCHOLARLY_TOOL_NAMES.filter((name) => names.has(name))
-      const hasZoteroReads = ZOTERO_READ_TOOL_NAMES.some((name) => names.has(name))
+      const hasZoteroReads =
+        names.has(PARSED_SEARCH_TOOL) || ZOTERO_READ_TOOL_NAMES.some((name) => names.has(name))
       return scholarlyPromptTextOf(config(), available, hasZoteroReads)
     },
   })

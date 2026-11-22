@@ -182,7 +182,31 @@ npm run test:integration
 
 Integration tests need a local Zotero running at `127.0.0.1:23119` with local API communication enabled.
 
-## Semantic admission tiers (fixed in code)
+## Parsed Search Benchmark
+
+The 2026-11-21 run used an Apple M4 Pro with 24 GiB of RAM, macOS arm64, and Node 24.20.0. The corpus contains the English titles and abstracts of 5,183 public papers. The run kept the 300 queries with test judgments in dataset order and selected 120 at indices `floor(i * 300 / 120)`. All methods used the same document-level relevance judgments. The FTS5 index held 8,836 passages. A `deepseek-flash` request reordered each FTS5 top-20 list of distinct documents using their public titles and abstracts. [SciFact corpus](https://huggingface.co/datasets/BeIR/scifact) · [Test judgments](https://huggingface.co/datasets/BeIR/scifact-qrels)
+
+| Method                                         | Recall@20 | MRR@20 | nDCG@10 |                          p95 |
+| ---------------------------------------------- | --------: | -----: | ------: | ---------------------------: |
+| In-memory BM25 (prepared index)                |    0.8208 | 0.6328 |  0.6690 |                      5.36 ms |
+| SQLite FTS5 (full corpus)                      |    0.8208 | 0.6333 |  0.6692 |                     23.59 ms |
+| KaLM reranking of FTS5 candidates (native CPU) |    0.8208 | 0.7009 |  0.7249 |            22.69 ms (rerank) |
+| Remote model reranking of FTS5 candidates      |    0.8208 | 0.7410 |  0.7581 | 1,266.52 ms (rerank request) |
+| Granite-97M (production WASM)                  |    0.8167 | 0.6343 |  0.6572 |                     49.72 ms |
+| Granite-97M (native CPU)                       |    0.8625 | 0.6752 |  0.7026 |                      7.70 ms |
+| KaLM-0.5B (native CPU)                         |    0.8958 | 0.7166 |  0.7478 |                     30.38 ms |
+
+Rebuilding the in-memory BM25 index per query measured 363.46 ms at p95 across 12 queries. The SQLite build took 2.40 seconds and the main database occupied 26.1 MiB. The scale run used 5,000 expanded synthetic documents and 107,289 passages. It took 12.67 seconds to build, occupied 284.9 MiB, and reached 198.65 ms at p95 with `PRAGMA quick_check` returning `ok`. SQLite latency includes the worker round trip, writing the allowed-document list, and ranking. The library and collection entry points also verify Zotero sources and Markdown bytes. These are full-corpus timings. Restricted scopes compute their own term statistics and need separate timing.
+
+On the fixed set of FTS5 candidates, KaLM reranked using the cached document vectors and their cosine similarity to the query vector. It improved nDCG@10 by 0.0557, and the remote model improved it by 0.0889. Recall@20 was 0.8208 for both. The 120 remote rerank requests used 837,954 tokens. Reranking timings start after candidate retrieval.
+
+ONNX encodes one normalized vector per title and abstract. Query latency includes query encoding, cosine scoring, and sorting. The production Granite-97M WASM run took 70.64 minutes to encode the corpus and increased RSS by about 1.40 GiB from startup. The native experiment uses a separate ONNX Runtime Node 1.31.1 installation with six intra-op CPU threads and the same production tokenization, pooling, and normalization. Granite and KaLM took 4.55 and 31.07 minutes, respectively, to encode the corpus. Their peak process RSS was 5.41 and 7.44 GiB, and their raw vectors occupied 7.59 and 17.72 MiB.
+
+KaLM found evidence for 12 queries where FTS5 returned no judged relevant document, and FTS5 found evidence for three queries KaLM missed. The union of both top-20 lists reached 0.9250 recall with up to 40 candidates. Equal-weight reciprocal rank fusion (RRF, `k=60`) with a 20-document limit reached 0.9083 Recall@20 and 0.7415 nDCG@10 for FTS5 plus KaLM, and 0.8917 and 0.7231 for FTS5 plus Granite. The plugin persists FTS5 for cross-document search and uses prepared in-memory BM25 with optional local ONNX for single-paper evidence. The fusion, corpus-wide vector search, and reranking results come from the public abstract experiment.
+
+The `bilingual` tier uses pinned KaLM-0.5B INT8 weights. The model file is 562,341,284 bytes and produces 896-dimensional vectors. A spot check of the production worker used 24 SciFact abstracts in batches of eight and 12 queries. The worker encoded the abstracts in 240.88 seconds after model load, and query encoding reached 754.18 ms at p95. Across the 36 inputs, the lowest cosine between the native and WASM vectors for the same input was 0.91495. The spot check overlapped the native corpus build, so the timings include contention on a shared machine. [Pinned KaLM INT8 release](https://huggingface.co/thomasht86/KaLM-embedding-multilingual-mini-instruct-v2.5-ONNX/tree/1ef826ab24cfcf52243ea16fefaf239b8c7fa285/onnx)
+
+## Semantic admission tiers
 
 Each tier's `floor` (absolute cosine gate) and `margin` (tolerance below the best cosine) live in `src/enrichment/semantic/model-profiles.ts`. An installed bundle works immediately; unknown tiers fail explicitly with `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE`.
 
@@ -198,6 +222,8 @@ On 2026-11-17, all six pinned ONNX bundles were encoded through the production w
 | academic    |    0.584 |   0.12 |               20 |                 95% |           0.95 |                0/24 |
 
 BM25 answer recall@4 is 0% on those paraphrase questions. The full regression dataset includes lexical controls, so its BM25 recall@4 is 4/24 (2/12 for English); keep the two denominators separate. Margins are fixed policy limits; this run does not claim independently fitted optimal margins. Every current floor exceeds the strongest measured answer-removed cosine. Hybrid's 0.509118 floor is its measured maximum 0.508117562 plus a 0.001 safety distance, rounded upward to six decimals, replacing the old 0.461 that admitted two controls; paraphrase recall on this set is unchanged.
+
+On 2026-11-21, the run downloaded and verified all five pinned KaLM files. The production WASM worker encoded all 66 unique inputs and reproduced the archived admission results. KaLM retrieved the labeled passage in 18/20 paraphrase cases, with 10/10 in English and 8/10 in Chinese, and returned zero hits across 24 unrelated controls. The archived Granite results were 6/10 in English and 5/10 in Chinese. Each tier used its fixed `floor` and `margin` from the table.
 
 These are checks on the same regression set, not external annotation, real PDF extraction, heldout effectiveness or production false-positive guarantees. Tiers still miss answers. The report records model identity, input digests, vector-file SHA-256, per-case cosines and semantic/BM25 rankings. Automated tests only recompute archived vectors; they never load models or use the network.
 

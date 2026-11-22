@@ -56,10 +56,8 @@ export interface FakeApplyWorld {
   scholarlyScope: ReturnType<typeof fakeScope>
   /** The `enrichment` namespace's form. */
   enrichmentScope: ReturnType<typeof fakeScope>
-  /** Scripted namespace `status` result; defaults to ok. */
   status: () => Promise<unknown>
   resolveAttachment: (ref: string) => Promise<unknown>
-  /** The wire reads/writes the library panel face forwards. */
   libraryWire: FakeLibraryWire
   /** Dependency lists each `ctx.inject` call declared, in call order. */
   injectDeps: string[][]
@@ -257,7 +255,9 @@ export function fakeWorld(
         }
       },
     },
+    inputTriggers: { registerSource: () => () => {} },
     uiConversation: {
+      userText: { register: () => () => {} },
       events: {
         register: (definition: { kind: string }) => {
           world.eventDefinitions.push(definition)

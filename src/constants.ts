@@ -229,6 +229,13 @@ export const ZOTERO_WRITE_TOOL_NAMES = [
 ] as const
 
 /**
+ * The enrichment component's parsed-Markdown search tool. EnrichmentService
+ * registers it, and the model policy admits it alongside the core read tools,
+ * so it is deliberately kept out of `ZOTERO_READ_TOOL_NAMES`.
+ */
+export const PARSED_SEARCH_TOOL = 'zotero_search_parsed'
+
+/**
  * The eight read tools, in ZoteroService registration order (export and
  * zotero_changes register unconditionally; only their run_in_background
  * parameter waits on the jobs service).

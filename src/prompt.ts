@@ -16,6 +16,7 @@ import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { ResolvedConfig } from './config.js'
 import {
   LIBRARY_WRITE_TOOL_NAMES,
+  PARSED_SEARCH_TOOL,
   SCHOLARLY_SAVE_TOOL_NAME,
   ZOTERO_READ_TOOL_NAMES,
   ZOTERO_WRITE_TOOL_NAMES,
@@ -373,7 +374,9 @@ function zoteroSurfaceOf(names: ReadonlySet<string>): ZoteroSurface {
   const writes: ZoteroWriteToolName[] = ZOTERO_WRITE_TOOL_NAMES.filter((name) => names.has(name))
   if (names.has(SCHOLARLY_SAVE_TOOL_NAME)) writes.push(SCHOLARLY_SAVE_TOOL_NAME)
   return {
-    reads: new Set(ZOTERO_READ_TOOL_NAMES.filter((name) => names.has(name))),
+    reads: new Set(
+      [...ZOTERO_READ_TOOL_NAMES, PARSED_SEARCH_TOOL].filter((name) => names.has(name)),
+    ),
     writes,
   }
 }
@@ -422,6 +425,11 @@ function readParagraphsOf(config: ReadCapsConfig, surface?: ZoteroSurface): read
   return [
     ...(routing === undefined ? [] : [routing]),
     ...(caps === undefined ? [] : [caps]),
+    ...(surface?.reads.has(PARSED_SEARCH_TOOL)
+      ? [
+          'Use zotero_search_parsed for lexical recall across stored MinerU Markdown. Check coverage and retain artifactId, generation, and verbatim offsets when using its passages.',
+        ]
+      : []),
     READ_DELIVERY_SENTENCE,
     ...fulltext,
   ]

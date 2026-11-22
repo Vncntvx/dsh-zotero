@@ -1,4 +1,6 @@
 /** Synthetic committed v2 artifact and source record shared by store contract specs. */
+import { mkdir } from 'node:fs/promises'
+import { ParsedIndex } from '../../../src/enrichment/parsed-index.ts'
 import { artifactIdOf } from '../../../src/contract.ts'
 import { sourceKeyOf } from '../../../src/enrichment/source-stamp.ts'
 import type { ParsedArtifact } from '../../../src/enrichment/types.ts'
@@ -35,4 +37,13 @@ export const SOURCE_RECORD: SourceIndexRecord = {
   parser: 'mineru',
   format: 'markdown',
   stamp: FILE_STAMP,
+}
+
+export function parsedIndexOf(directory: string): ParsedIndex {
+  // The test runner can be on a shared or removable scratch volume. Exercise
+  // the real worker and private files below the runner-owned test directory.
+  return new ParsedIndex(directory, async () => {
+    await mkdir(directory, { recursive: true, mode: 0o700 })
+    return directory
+  })
 }

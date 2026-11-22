@@ -142,6 +142,8 @@ import { DeliverableZoteroAction } from './components/deliverables/DeliverableZo
 import { DocumentOpenLibraryAction } from './components/document/DocumentOpenLibraryAction.tsx'
 import { ZoteroSurfaceToast, ZoteroToast } from './components/ZoteroToast.tsx'
 import { selectUrlOf } from './actions/open-zotero.ts'
+import { registerPaperReferences } from './paper-reference.tsx'
+import { TurnZoteroEvidence } from './components/TurnZoteroEvidence.tsx'
 import { en, zh } from './locales.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -535,12 +537,33 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
  */
 function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
   const { form, probe } = surfaces
+  const tabT = ctx.locale.bind(NS)
+  const openRef = registerPaperReferences(ctx, surfaces.client.openProtocol, () =>
+    surfaces.client.notifySurface(tabT('paperLookupFailed')),
+  )
+  registerGatedSurfaces(
+    ctx,
+    'dsh-zotero: turn evidence',
+    (onChange) => watchWebEnabled(form, onChange),
+    () =>
+      ctx.slots.inject('conversation.chat.turnTail', () =>
+        ctx.slots.register(
+          {
+            name: 'conversation.chat.turnTail',
+            id: 'zotero.evidence',
+            locale: NS,
+            registrant: REGISTRANT,
+            inject: () => ({ openRef, openParsed: surfaces.parse.openParsed }),
+          },
+          TurnZoteroEvidence,
+        ),
+      ),
+  )
 
   // The dedicated Sources panel (a conversation tab) registers unless the
   // `webEnabled` namespace flag is explicitly off; before the first snapshot
   // the tab stays on, so a config hiccup never blocks it. The gate is live:
   // toggling the flag in the page hides or restores the tab without a reload.
-  const tabT = ctx.locale.bind(NS)
   registerGatedSurfaces(
     ctx,
     'dsh-zotero: conversation tab',

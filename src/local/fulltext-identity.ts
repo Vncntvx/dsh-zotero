@@ -3,22 +3,33 @@ import type { ZoteroHttpClient } from '../http-client.js'
 import { asRecord, asString, isObjectKey } from '../json.js'
 import { normalizeSearchItem } from '../normalize-search.js'
 import { formatRef, libraryPrefix, parseSupportedRef, refStringFor } from '../refs.js'
-import { ZoteroError, ZOTERO_UNEXPECTED } from '../errors.js'
+import { ZoteroError, ZOTERO_NOT_FOUND, ZOTERO_UNEXPECTED } from '../errors.js'
 import type { SupportedLocalLibrary, ZoteroFulltextItem } from '../types.js'
 import { assertAttachmentTarget } from './detail.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 
-interface FulltextIdentity {
+export interface FulltextIdentity {
   readonly serverId: string | undefined
   readonly attachmentRef: string
   readonly attachmentContentType?: string
   readonly item?: ZoteroFulltextItem
+  readonly collectionKeys?: readonly string[]
+}
+
+function activeCollections(data: Record<string, unknown> | undefined): string[] {
+  if (data?.deleted === true || data?.deleted === 1)
+    throw new ZoteroError('The parsed document belongs to a trashed item.', ZOTERO_NOT_FOUND)
+  if (data?.collections === undefined) return []
+  if (!Array.isArray(data.collections) || !data.collections.every(isObjectKey))
+    throw new ZoteroError('Zotero returned invalid collection membership.', ZOTERO_UNEXPECTED)
+  return data.collections
 }
 
 export async function fulltextIdentityOf(
   client: ZoteroHttpClient,
   attachment: string,
   signal?: AbortSignal,
+  activeOnly = false,
 ): Promise<FulltextIdentity> {
   const ref = parseSupportedRef(attachment, ['attachment'])
   const library = ref.library as SupportedLocalLibrary
@@ -29,7 +40,9 @@ export async function fulltextIdentityOf(
     serverId: expected,
     sendServerId: false,
   })
-  let serverId = serverIdFromHeaders(headers, expected)
+  let serverId = serverIdFromHeaders(headers, activeOnly ? undefined : expected)
+  if (activeOnly && serverId === undefined)
+    throw new ZoteroError('Zotero did not identify the serving database.', ZOTERO_UNEXPECTED)
   assertServerIdMatches(serverId, expected)
   const record = asRecord(json),
     data = asRecord(record?.data)
@@ -41,13 +54,14 @@ export async function fulltextIdentityOf(
   const itemType = asString(data?.itemType)
   assertAttachmentTarget(itemType ?? '', ref.key)
   const attachmentContentType = asString(data?.contentType)
+  const attachmentCollections = activeOnly ? activeCollections(data) : undefined
   const identity = () => ({
     serverId,
     attachmentRef: refStringFor(library, 'attachment', ref.key, serverId),
     ...(attachmentContentType === undefined ? {} : { attachmentContentType }),
   })
   if (data?.parentItem === undefined || data.parentItem === false || data.parentItem === '')
-    return identity()
+    return { ...identity(), ...(activeOnly ? { collectionKeys: attachmentCollections } : {}) }
   const parent = asString(data.parentItem)
   if (parent === undefined || !isObjectKey(parent))
     throw new ZoteroError(
@@ -59,7 +73,9 @@ export async function fulltextIdentityOf(
     undefined,
     { signal, serverId, sendServerId: false },
   )
-  const parentServerId = serverIdFromHeaders(parentHeaders, serverId)
+  const parentServerId = serverIdFromHeaders(parentHeaders, activeOnly ? undefined : serverId)
+  if (activeOnly && parentServerId === undefined)
+    throw new ZoteroError('Zotero did not identify the serving database.', ZOTERO_UNEXPECTED)
   assertServerIdMatches(parentServerId, serverId)
   serverId = parentServerId
   const parentRecord = asRecord(parentJson),
@@ -76,6 +92,7 @@ export async function fulltextIdentityOf(
   const normalized = normalizeSearchItem(parentJson, { library, serverId })
   return {
     ...identity(),
+    ...(activeOnly ? { collectionKeys: activeCollections(parentData) } : {}),
     item: {
       ref: normalized.ref,
       title: normalized.title,

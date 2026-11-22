@@ -11,7 +11,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { privateArtifactTestRoot } from '../../helpers/temp-dir.js'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { vi } from 'vitest'
@@ -24,6 +24,7 @@ import type {
 } from '../../../src/contract.js'
 import { EnrichmentService } from '../../../src/enrichment/index.js'
 import { DiskParseJobPersistence } from '../../../src/enrichment/parse-jobs.js'
+import { ParsedIndex } from '../../../src/enrichment/parsed-index.js'
 import type { EnrichmentConfig } from '../../../src/enrichment/config.js'
 import { MineruClient } from '../../../src/enrichment/transport.js'
 import { setupHostLane } from '../../helpers/lanes/host-lane.js'
@@ -150,13 +151,11 @@ export async function endpointFixture(
   options: {
     attachment?: 'child' | 'top'
     store?: ParsedArtifactStore
-    /** The service configuration; the fixture owns the output directory. */
     config?: Partial<EnrichmentConfig>
-    /** Hold every result download, so the archive slot stays busy. */
     holdResult?: boolean
   } = {},
 ) {
-  const root = await mkdtemp(join(tmpdir(), 'zotero-parse-endpoints-'))
+  const root = await mkdtemp(join(privateArtifactTestRoot(), 'zotero-parse-endpoints-'))
   const http = scriptedMineru({ holdResult: options.holdResult })
   let bindings: readonly RemoteAccessBinding[] = []
   const sessionCalls: SessionId[] = []
@@ -221,6 +220,7 @@ export async function endpointFixture(
     new EnrichmentService(enrichmentCtx, config, {
       client: http.client,
       parsePersistence: new DiskParseJobPersistence(async () => root),
+      parsedIndex: new ParsedIndex(join(root, 'zotero')),
       ...(options.store ? { store: async () => options.store! } : {}),
     })
   })

@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { admittedToolSet } from '../../helpers/tool-set.js'
 import { setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
 import {
+  PARSED_SEARCH_TOOL,
   SCHOLARLY_SAVE_TOOL_NAME,
   ZOTERO_READ_TOOL_NAMES,
   ZOTERO_WRITE_TOOL_NAMES,
 } from '../../../src/constants.js'
+import { registerParsedSearchTool } from '../../../src/enrichment/search-parsed-tool.ts'
+import { identityToolWrapper } from '../../../src/result-delivery.ts'
 import {
   CONNECTIVITY_POLICY_SENTENCE,
   WRITE_DISABLED_SENTENCE,
@@ -41,12 +44,38 @@ function admitted(host: HostLane, agent: object, names: readonly string[]) {
 }
 
 function policyOf(assembly: PromptAssembly): string {
-  return assembly.sections.find((entry) => entry.name === 'zotero:policy')?.text ?? ''
+  return assembly.contexts.find((entry) => entry.name === 'zotero:runtime')?.text ?? ''
 }
 
-function sectionOf(assembly: PromptAssembly, name: string): string {
-  return assembly.sections.find((entry) => entry.name === name)?.text ?? ''
-}
+it('admits parsed search context without changing the static section', async () => {
+  lane = await setupHostLane()
+  await lane.ctx.plugin({
+    inject: ['tools'],
+    apply: (ctx) =>
+      registerParsedSearchTool(
+        ctx,
+        async () => {
+          throw new Error('this test makes no tool calls')
+        },
+        identityToolWrapper,
+      ),
+  })
+  const agent = {}
+  const parsed = await lane.ctx.systemPrompt.assemble({
+    toolSet: admitted(lane, agent, [PARSED_SEARCH_TOOL]),
+    scope: agent,
+  })
+  const ordinary = await lane.ctx.systemPrompt.assemble({
+    toolSet: admitted(lane, agent, ['zotero_search']),
+    scope: agent,
+  })
+  expect(policyOf(parsed)).toContain('Use zotero_search_parsed for lexical recall')
+  expect(policyOf(parsed)).not.toContain('zotero_search limit')
+  expect(policyOf(ordinary)).not.toContain('zotero_search_parsed')
+  expect(parsed.sections.find(({ name }) => name === 'zotero:policy')).toEqual(
+    ordinary.sections.find(({ name }) => name === 'zotero:policy'),
+  )
+})
 
 const saveStub = defineTool({
   name: SCHOLARLY_SAVE_TOOL_NAME,
@@ -60,13 +89,13 @@ describe('the write policy prompt section', () => {
   it('states the write policy in the prompt only while writes are enabled', async () => {
     const on = await setupHostLane({ writeEnabled: true })
     const assembly = await on.ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const section = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     expect(section?.text).toContain(WRITE_POLICY_SENTENCE)
     expect(section?.text).not.toContain(WRITE_DISABLED_SENTENCE)
     await on.teardown()
     const off = await setupHostLane({})
     const offAssembly = await off.ctx.systemPrompt.assemble()
-    const offSection = offAssembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const offSection = offAssembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     expect(offSection?.text).not.toContain(WRITE_POLICY_SENTENCE)
     await off.teardown()
   })
@@ -74,7 +103,7 @@ describe('the write policy prompt section', () => {
   it('says writes are off, and forbids the out-of-band routes, while the capability is disabled', async () => {
     const off = await setupHostLane({})
     const assembly = await off.ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const section = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     const text = section?.text ?? ''
     // The disabled state is stated, with the way to turn it on and the routes
     // that stay out of bounds even when the user asks for the change directly.
@@ -88,7 +117,7 @@ describe('the write policy prompt section', () => {
   it('keeps the model on the sanctioned path and off the verification read while writes are enabled', async () => {
     const on = await setupHostLane({ writeEnabled: true })
     const assembly = await on.ctx.systemPrompt.assemble()
-    const section = assembly.sections.find((entry) => entry.name === 'zotero:policy')
+    const section = assembly.contexts.find((entry) => entry.name === 'zotero:runtime')
     const text = section?.text ?? ''
     expect(text).toContain('Write only through these tools')
     expect(text).toContain('never ask for or reuse a local-API authorization key')
@@ -114,7 +143,7 @@ describe('the write policy prompt section', () => {
       scope: agent,
     })
 
-    expect(renderPrompt(assembly)).not.toContain("Zotero (the user's local library)")
+    expect(renderPrompt(assembly)).toContain(ZOTERO_CONSENT_SENTENCE)
     expect(policyOf(assembly)).toBe(ZOTERO_UNAVAILABLE_SENTENCE)
     await on.teardown()
   })
@@ -131,6 +160,7 @@ describe('the write policy prompt section', () => {
     expect(policyOf(readOnly)).toBe(
       policyOf(full).replace(WRITE_POLICY_SENTENCE, WRITE_UNAVAILABLE_SENTENCE),
     )
+    expect(renderPrompt(readOnly)).toBe(renderPrompt(full))
     expect(policyOf(readOnly)).not.toContain(WRITE_POLICY_SENTENCE)
     expect(policyOf(readOnly)).not.toContain(WRITE_DISABLED_SENTENCE)
     await on.teardown()
@@ -178,9 +208,9 @@ describe('the write policy prompt section', () => {
     })
     const text = policyOf(assembly)
 
-    expect(text).toContain(ZOTERO_CONSENT_SENTENCE)
-    expect(text).toContain(ZOTERO_UNTRUSTED_SENTENCE)
-    expect(text).toContain(CONNECTIVITY_POLICY_SENTENCE)
+    expect(renderPrompt(assembly)).toContain(ZOTERO_CONSENT_SENTENCE)
+    expect(renderPrompt(assembly)).toContain(ZOTERO_UNTRUSTED_SENTENCE)
+    expect(renderPrompt(assembly)).toContain(CONNECTIVITY_POLICY_SENTENCE)
     expect(text).toContain('Writes (zotero_create_note):')
     expect(text).not.toContain('Read route:')
     expect(text).not.toContain('zotero_search limit')
@@ -275,9 +305,13 @@ describe('the write policy prompt section', () => {
 
       expect(policyOf(assembly)).toContain('Read route: zotero_search discovers stable refs.')
       expect(policyOf(assembly)).not.toContain('zotero_get')
-      expect(sectionOf(assembly, 'scholarly:policy')).toContain('scholarly_search finds papers')
-      expect(sectionOf(assembly, 'scholarly:policy')).not.toContain('scholarly_get')
-      expect(sectionOf(assembly, 'scholarly:policy')).toContain(
+      expect(assembly.contexts.find((entry) => entry.name === 'scholarly:runtime')?.text).toContain(
+        'scholarly_search finds papers',
+      )
+      expect(
+        assembly.contexts.find((entry) => entry.name === 'scholarly:runtime')?.text,
+      ).not.toContain('scholarly_get')
+      expect(assembly.contexts.find((entry) => entry.name === 'scholarly:runtime')?.text).toContain(
         'Do not route academic index requests through generic web_fetch',
       )
     } finally {

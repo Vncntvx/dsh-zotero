@@ -27,7 +27,9 @@ describe('locale bundles', () => {
   })
 
   it('never claims stages the calls cannot prove', () => {
-    const allZh = Object.values(zh).join(' ')
+    const { turnZoteroEvidence, ...otherLabels } = zh
+    expect(turnZoteroEvidence).toBe('本轮 Zotero 证据')
+    const allZh = Object.values(otherLabels).join(' ')
     expect(allZh).not.toContain('精读')
     expect(allZh).not.toContain('已引用')
     expect(allZh).not.toContain('整理我的库')

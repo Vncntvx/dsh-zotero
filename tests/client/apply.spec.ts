@@ -72,9 +72,6 @@ describe('the browser-half entry', () => {
   it('registers all plugin surfaces synchronously on apply', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    // All surfaces register synchronously: the bundle config page, the row
-    // configs, the plugin-manager cards, the conversation tab, and the
-    // right-sidebar library surfaces.
     expect(world.injected.map((entry) => entry.name)).toEqual([
       'shell.overlay',
       'shell.overlay',
@@ -87,6 +84,8 @@ describe('the browser-half entry', () => {
       'plugins.row.config',
       'plugins.row.config',
       'plugins.detail.section',
+      'conversation.user.text.node',
+      'conversation.chat.turnTail',
       'conversation.view',
       'sidebar.right.pane.tab',
       'sidebar.right.pane.tab.title',
@@ -341,8 +340,6 @@ describe('the browser-half entry', () => {
   it('reads the namespace through the official dotted form on the UI fiber', async () => {
     const world = fakeWorld()
     const dispose = await applyEntry(world)
-    // The UI fiber declared `remote.zotero`, so `ctx.remote.zotero` is a legal
-    // service read there: the same shape the harness's own client plugins use.
     expect(world.injectDeps).toEqual([
       [
         'remote.zotero',
@@ -356,6 +353,8 @@ describe('the browser-half entry', () => {
         'sidebarRight',
         'sidebarRightTabs',
       ],
+      ['inputTriggers'],
+      ['uiConversation'],
       ['contextMenus'],
     ])
     const tab = world.injected.find((entry) => entry.name === 'conversation.view')
@@ -479,7 +478,7 @@ describe('the browser-half entry', () => {
     // subscription that drives remote reads.
     await dispose()
     expect(world.eventDisposes).toBe(0)
-    expect(world.scope.unsubscribes).toBe(4)
+    expect(world.scope.unsubscribes).toBe(5)
     expect(world.libraryScope.unsubscribes).toBe(3)
     expect(world.scholarlyScope.unsubscribes).toBe(2)
     expect(world.uiDisposes).toBe(1)

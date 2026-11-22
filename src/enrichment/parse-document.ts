@@ -59,6 +59,7 @@ export interface ParseDocumentDeps {
   /** Production binds resolveMineruToken to the component context. */
   readonly resolveToken: (reference: string) => Promise<string>
   readonly onProgress?: (phase: ParsePhase) => void
+  readonly onCommitted?: (store: ParsedArtifactStore, artifactId: string) => Promise<void>
   /** External filesystem ports; omitted in production for real stat/readFile. */
   readonly sourceFiles?: Pick<SourceBytesDeps, 'stat' | 'readFile'>
 }
@@ -164,7 +165,11 @@ export async function parseDocument(
       const stamp = await wait(probeSource(input, maxBytes, byteDeps, signal))
       if (stampMatches(record.stamp, stamp)) {
         const artifact = await wait(store.artifactFor(record))
-        if (artifact !== undefined) return resultOf(artifact, record.cacheKey, true, stamp)
+        if (artifact !== undefined) {
+          publishing = true
+          await deps.onCommitted?.(store, record.cacheKey)
+          return resultOf(artifact, record.cacheKey, true, stamp)
+        }
       }
     }
 
@@ -237,6 +242,7 @@ export async function parseDocument(
       },
       signal,
     )
+    await deps.onCommitted?.(store, parsed.cacheKey)
     return result
   } catch (error) {
     if (signal?.aborted && error === signal.reason) throw error

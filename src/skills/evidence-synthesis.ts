@@ -29,7 +29,7 @@ export const evidenceSynthesis: ResearchSop = {
     {
       name: 'Locate',
       instruction:
-        'For external copies, if Scholarly is available inspect outline first, then choose an observed Methods/Results section. For local copies inspect metadata/annotations via a bounded child window; no local outline tool exists. Never read full papers sequentially.',
+        'For external copies, if Scholarly is available inspect outline first, then choose an observed Methods/Results section. For local copies inspect metadata and annotations via a bounded child window. If zotero_search_parsed is admitted and the fixed corpus has known artifact IDs, search those IDs together and use the returned headings and offsets to verify the surrounding text with zotero_retrieve. Never read full papers sequentially.',
     },
     {
       name: 'Extract',
@@ -43,6 +43,17 @@ export const evidenceSynthesis: ResearchSop = {
     },
   ],
   recipes: [
+    {
+      tool: 'zotero_search_parsed',
+      args: {
+        query: 'evaluation dataset baseline sample size',
+        scope: { kind: 'artifacts', artifactIds: ['a'.repeat(64)] },
+        limit: 12,
+      },
+      requires:
+        'Enrichment and tool available; use only observed artifact IDs from the fixed corpus',
+      purpose: 'Locate passages across the selected parsed papers before opening their context',
+    },
     {
       tool: 'zotero_get',
       args: {

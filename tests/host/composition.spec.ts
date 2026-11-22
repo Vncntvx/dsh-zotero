@@ -20,6 +20,7 @@ import ZoteroService from '../../src/index.js'
 import ScholarlyService from '../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../src/library/index.js'
 import EnrichmentService from '../../src/enrichment/index.js'
+import { PARSED_SEARCH_TOOL } from '../../src/constants.js'
 import {
   ENRICHMENT_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
@@ -179,15 +180,12 @@ describe('the shipped bundle patch through a real Loader composition', () => {
     expect(row!.disabled).toBe(true)
   })
 
-  it('mounts the enrichment component without adding tools or a prompt section', async () => {
+  it('adds the parsed search tool only while enrichment is mounted', async () => {
     lane = await setupCompositionLane([{ id: 'enrichment', disabled: false }])
 
     expect(lane.context.get('enrichment')).toBeInstanceOf(EnrichmentService)
-    // The component is an enhancer source, not a tool provider: the read-tool
-    // set and prompt sections stay exactly what the core (and an off scholarly
-    // row) declare.
     const names = lane.registeredToolNames()
-    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES].sort())
+    expect([...names].sort()).toEqual([...ZOTERO_READ_TOOL_NAMES, PARSED_SEARCH_TOOL].sort())
     const assembly = await lane.context.systemPrompt.assemble()
     expect(assembly.sections.some((entry) => entry.name === 'enrichment:policy')).toBe(false)
   })

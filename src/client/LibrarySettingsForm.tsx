@@ -182,15 +182,15 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
       <div className={css.fields}>{content}</div>
     </section>
   )
+  // Only rendered while a draft is invalid: an always-mounted slot here would
+  // reserve a row ahead of the first group and defeat its :first-child reset.
   return (
     <>
-      <div className={noticeCss.noticeSlot}>
-        {state.invalid && (
-          <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
-            {t('libraryInvalidDraft')}
-          </p>
-        )}
-      </div>
+      {state.invalid && (
+        <p role="alert" className={`${noticeCss.notice} ${noticeCss.noticeError}`}>
+          {t('libraryInvalidDraft')}
+        </p>
+      )}
       {group(
         'libraryDisplaySettings',
         <>

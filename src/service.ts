@@ -82,7 +82,11 @@ import {
   domainCall,
   errorMessageOf,
 } from './errors.js'
-import { ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS, ZOTERO_TOOL_NAMES } from './constants.js'
+import {
+  PARSED_SEARCH_TOOL,
+  ZOTERO_MAX_WRITE_INFLIGHT_REQUESTS,
+  ZOTERO_TOOL_NAMES,
+} from './constants.js'
 import { ConcurrencyGate } from './concurrency.js'
 import { raceWithSignal } from './race-signal.js'
 import { LocalApiProvider } from './local/provider.js'
@@ -97,7 +101,7 @@ import {
   registerWriteTools,
   type ReadToolRegistration,
 } from './tool-registration.js'
-import { ResultDelivery } from './result-delivery.js'
+import { ResultDelivery, type ToolWrapper } from './result-delivery.js'
 import { registerResultRoute } from './result-route.js'
 import { ZoteroJobRunner } from './job-runner.js'
 import { installToolDiagnostics } from './tool-diagnostics.js'
@@ -355,9 +359,7 @@ export class ZoteroService extends Service {
     )
     installShellWriteApproval(ctx, () => this.config, this.diagnostics)
     installToolDiagnostics(ctx, this.diagnostics)
-    installParameterCorrection(ctx, ZOTERO_TOOL_NAMES)
-    // Background-capable read tools register their schema for the current
-    // switch; the config lifecycle above reconciles them on a live change.
+    installParameterCorrection(ctx, [...ZOTERO_TOOL_NAMES, PARSED_SEARCH_TOOL])
     this.readTools = registerReadTools(ctx, this, this.resultDelivery)
     registerResultRoute(ctx, this.resultDelivery)
     ctx.effect(
@@ -752,6 +754,23 @@ export class ZoteroService extends Service {
     const getItem = this.requireMethod(provider, 'getItem')
     return await getItem(request, signal)
   }
+
+  /** Internal read authority for the enrichment-owned parsed Markdown index. */
+  parsedSearchProvider(): Pick<
+    LocalApiProvider,
+    'parsedSearchAuthority' | 'parsedSearchAttachment'
+  > {
+    const provider = this.resolveProvider()
+    if (!(provider instanceof LocalApiProvider))
+      throw new ZoteroError(
+        'Parsed library search requires the Zotero Local API provider.',
+        ZOTERO_CAPABILITY_UNAVAILABLE,
+      )
+    return provider
+  }
+
+  /** Apply the same complete-file projection to an enrichment-owned read tool. */
+  readonly wrapReadTool: ToolWrapper = (definition) => this.resultDelivery.wrap(definition)
 
   /** Read multiple item refs with bounded concurrency and per-ref outcomes. */
   async getBatch(

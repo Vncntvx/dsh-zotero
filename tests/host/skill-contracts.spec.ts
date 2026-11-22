@@ -9,6 +9,7 @@ import {
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { afterEach, describe, expect, it } from 'vitest'
 import ScholarlyService from '../../src/scholarly/service.js'
+import EnrichmentService from '../../src/enrichment/service.js'
 import { CORE_SOPS } from '../../src/skills/core.js'
 import {
   EXTERNAL_AUTHORIZATION_RULE,
@@ -192,6 +193,7 @@ describe('research SOP contracts', () => {
       {
         compose: async (ctx) => {
           await ctx.plugin(ScholarlyService, {})
+          await ctx.plugin(EnrichmentService, {})
         },
       },
     )
@@ -231,6 +233,7 @@ describe('research SOP contracts', () => {
       {
         compose: async (ctx) => {
           await ctx.plugin(ScholarlyService, {})
+          await ctx.plugin(EnrichmentService, {})
         },
       },
     )

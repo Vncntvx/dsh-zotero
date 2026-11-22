@@ -106,7 +106,7 @@ DSH 内建的「轨迹」标签记录工具调用的执行过程；「文献轨�
 - 解析后的 Markdown 存储在 `<outputDir>/<sha256>/`，Markdown 引用的插图按原文件名存放在同目录的 `images/` 下。本地附件按大小、修改时间与内容指纹缓存；URL 来源通过 HEAD 请求校验 ETag 或 Last-Modified。源索引命中时直接复用既有产物。
 - 解析成功且产物仍有效时，条目动作行中的「解析此 PDF」变为「阅读 Markdown」。点击后在右侧边栏打开以论文标题命名的解析结果标签页，显示准备进度；全文与全部产物插图准备完成后一次呈现，并提供完整 Markdown 的复制和下载。刷新失败时保留上一份完整结果。条目带多个 PDF 时，「阅读 PDF」和解析动作共用选择框，并为每个 PDF 标注状态：已有产物的 PDF 打开解析结果，其余提交对应附件的解析。在正文里选中一段，选段旁会浮出小菜单：「让模型解释」把选段、论文标题/作者/来源/DOI 和条目 ref 一并写进当前会话草稿，并要求模型一次完整读取解析文档（有 spill 句柄时直接读句柄），按界面语言、清晰的分块结构解释选段，引用与文献细节先核对；「复制选中内容」写入剪贴板。
 - 输出目录支持绝对路径或 `~/`；相对路径在保存时拒绝，目录不可用时解析返回 `ZOTERO_ENRICHMENT_OUTPUT_INVALID`。
-- 本地向量语义排序提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡默认推荐 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置与物理模型版本解耦。WASM 推理运行时随插件一起发布，模型需在设置中下载（支持 HF-Mirror 镜像与 Hugging Face 直连），在 16GB 内存 CPU 设备上运行。语义关闭时使用 BM25 词面排序；开启后若模型未就绪，检索返回 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 并引导下载。基于六档实际向量的 20 个手工改写回归例中，recall@4 为 55–95%（english 使用 10 个英文例）；这是同组回归测量，完整数据与范围见开发文档。开启语义检索但未下载模型，或选用精准模式未填 Token 时，界面会显示对应状态。
+- 本地向量语义排序提供语义化档位解耦的开源本地嵌入模型（`balanced` 通用平衡 · 基于 Qwen3-0.6B、`lightweight` 极速轻量 · 基于 Granite-97M、`bilingual` 中英双语 · 基于 KaLM-0.5B、`english` 英文长文 · 基于 Nomic-137M、`hybrid` 多路混合 · 基于 BGE-M3、`academic` 经典学术 · 基于 GTE-Base）。配置与物理模型版本解耦。WASM 推理运行时随插件一起发布，模型需在设置中下载（支持 HF-Mirror 镜像与 Hugging Face 直连），在 16GB 内存 CPU 设备上运行。语义关闭时使用 BM25 词面排序；开启后若模型未就绪，检索返回 `ZOTERO_ENRICHMENT_SEMANTIC_UNAVAILABLE` 并引导下载。基于六档实际向量的 20 个手工改写回归例中，recall@4 为 55–95%（english 使用 10 个英文例）；这是同组回归测量，完整数据与范围见开发文档。开启语义检索但未下载模型，或选用精准模式未填 Token 时，界面会显示对应状态。
 
 ## 能力与工具对照
 

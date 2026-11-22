@@ -30,10 +30,15 @@ import {
   ZOTERO_VERSION_HEADER,
 } from '../constants.js'
 import { serverIdFromHeaders } from './identity.js'
-import { PERSONAL_LIBRARY } from '../refs.js'
+import { libraryPrefix, PERSONAL_LIBRARY } from '../refs.js'
+import { fulltextIdentityOf } from './fulltext-identity.js'
 import { ZOTERO_DIAGNOSIS_OK } from '../contract.js'
 import { errorChain } from '@deepseek-ai/dsh-llm'
-import { ZoteroError, ZOTERO_CAPABILITY_UNAVAILABLE } from '../errors.js'
+import {
+  ZoteroError,
+  ZOTERO_CAPABILITY_UNAVAILABLE,
+  ZOTERO_PROVIDER_UNAVAILABLE,
+} from '../errors.js'
 import { resolveCollectionsMixed, ScopeDirectory } from './scope-directory.js'
 import type { DiagnosticSink } from '../diagnostics.js'
 import type { FulltextEnhancer } from './fulltext-enhancer.js'
@@ -73,6 +78,7 @@ import {
 import { batchItems as batchItemsDomain } from './write-batch.js'
 import { preflightWrite as preflightWriteDomain } from './write-preflight.js'
 import type { ZoteroWritePreflight } from '../types.js'
+import type { SupportedLocalLibrary } from '../types.js'
 import {
   createCollection as createCollectionDomain,
   deleteCollection as deleteCollectionDomain,
@@ -379,6 +385,33 @@ export class LocalApiProvider implements ZoteroProvider {
    */
   async getItem(request: ZoteroGetRequest, signal?: AbortSignal): Promise<ZoteroItemDetail> {
     return getItemDomain(this.deps(), this.directory, request, signal)
+  }
+
+  async parsedSearchAuthority(
+    library: SupportedLocalLibrary,
+    collectionKey: string | undefined,
+    expected: string | undefined,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const path =
+      libraryPrefix(library) +
+      (collectionKey === undefined ? '/collections' : `/collections/${collectionKey}`)
+    const { headers } = await this.client.get(
+      path,
+      collectionKey === undefined ? new URLSearchParams({ limit: '1' }) : undefined,
+      { signal, serverId: expected, sendServerId: false },
+    )
+    const serverId = serverIdFromHeaders(headers)
+    if (serverId === undefined || (expected !== undefined && serverId !== expected))
+      throw new ZoteroError(
+        'Parsed library search requires the same identified Zotero database throughout the read.',
+        ZOTERO_PROVIDER_UNAVAILABLE,
+      )
+    return serverId
+  }
+
+  async parsedSearchAttachment(ref: string, signal: AbortSignal) {
+    return await fulltextIdentityOf(this.client, ref, signal, true)
   }
 
   async getBatch(

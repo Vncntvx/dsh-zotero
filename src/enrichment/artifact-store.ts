@@ -666,24 +666,36 @@ export class ParsedArtifactStore {
    * has reserved and drained its generation; the lock serializes other index
    * edits. Remove aliases first, then the directory and task receipt.
    */
-  async discardArtifact(cacheKey: string, signal?: AbortSignal): Promise<number> {
+  async discardArtifact(
+    cacheKey: string,
+    signal?: AbortSignal,
+    afterDiscard?: () => Promise<void>,
+  ): Promise<number> {
     SHA256.parse(cacheKey)
     signal?.throwIfAborted()
     this.touch()
+    return await this.withSourcePublicationLock(async () => {
+      signal?.throwIfAborted()
+      const removedAliases = await this.deleteSourcesLocked([cacheKey], signal)
+      if (await this.hasArtifactDirectory(cacheKey)) await this.removeArtifactDir(cacheKey, signal)
+      await this.deleteTask(cacheKey)
+      await afterDiscard?.()
+      return removedAliases
+    }, signal)
+  }
+
+  /** Serialize a derived index update with source publication and artifact deletion. */
+  async withSourcePublicationLock<T>(
+    operation: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    signal?.throwIfAborted()
     await this.ensureRoot()
     await this.deps.mkdir(join(this.root, 'sources'))
-    return await (this.deps.withSourceLock ?? withFileLock)(
-      this.indexPath(),
-      async () => {
-        signal?.throwIfAborted()
-        const removedAliases = await this.deleteSourcesLocked([cacheKey], signal)
-        if (await this.hasArtifactDirectory(cacheKey))
-          await this.removeArtifactDir(cacheKey, signal)
-        await this.deleteTask(cacheKey)
-        return removedAliases
-      },
-      { waitMs: 60_000, ...(signal !== undefined ? { signal } : {}) },
-    )
+    return await (this.deps.withSourceLock ?? withFileLock)(this.indexPath(), operation, {
+      waitMs: 60_000,
+      ...(signal !== undefined ? { signal } : {}),
+    })
   }
 
   /** Remove every alias of one artifact; the caller holds the publication lock. */
@@ -737,23 +749,17 @@ export class ParsedArtifactStore {
     const value = sourceRecordSchema.parse(record)
     signal?.throwIfAborted()
     this.touch()
-    await this.ensureRoot()
-    await this.deps.mkdir(join(this.root, 'sources'))
-    await (this.deps.withSourceLock ?? withFileLock)(
-      this.indexPath(),
-      async () => {
-        signal?.throwIfAborted()
-        const current = await this.sourceSnapshot()
-        for (const key of keys) current.sources[key] = value
-        const snapshot = sourceIndexSchema.parse(current)
-        const bytes = encoder.encode(JSON.stringify(snapshot))
-        if (bytes.byteLength > SOURCE_INDEX_MAX_BYTES)
-          throw new Error('The parsed source index is too large')
-        signal?.throwIfAborted()
-        await this.atomicWrite(this.indexPath(), bytes, signal)
-      },
-      { waitMs: 60_000, ...(signal !== undefined ? { signal } : {}) },
-    )
+    await this.withSourcePublicationLock(async () => {
+      signal?.throwIfAborted()
+      const current = await this.sourceSnapshot()
+      for (const key of keys) current.sources[key] = value
+      const snapshot = sourceIndexSchema.parse(current)
+      const bytes = encoder.encode(JSON.stringify(snapshot))
+      if (bytes.byteLength > SOURCE_INDEX_MAX_BYTES)
+        throw new Error('The parsed source index is too large')
+      signal?.throwIfAborted()
+      await this.atomicWrite(this.indexPath(), bytes, signal)
+    }, signal)
   }
 
   async putSource(

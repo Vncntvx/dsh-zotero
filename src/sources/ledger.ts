@@ -1227,6 +1227,22 @@ export class SourceWorkspaceIndex {
         }
         break
       }
+      case 'zotero_search_parsed': {
+        if (state !== 'ok' || meta === null) break
+        const grouped = new Map<string, Record<string, unknown>[]>()
+        for (const entry of Array.isArray(meta.items) ? meta.items : []) {
+          if (!isRecord(entry) || typeof entry.sourceRef !== 'string') continue
+          const items = grouped.get(entry.sourceRef) ?? []
+          items.push(entry)
+          grouped.set(entry.sourceRef, items)
+        }
+        for (const [ref, items] of grouped) {
+          const draft = this.draftOf(ref, seq)
+          this.countOperation(draft, state)
+          this.pushEvidence(draft, { ...meta, items, mode: 'evidence' }, block.callId, seq)
+        }
+        break
+      }
       case 'zotero_retrieve': {
         const view = meta === null ? undefined : retrieveMetaOf(meta)
         const read = view?.kind === 'fulltext' ? view.fulltextRead : undefined

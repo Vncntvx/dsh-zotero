@@ -1,10 +1,6 @@
+/** Parse Gateway, jobs, and persistence with controlled session driving and HTTP. */
 import { createHash } from 'node:crypto'
-/**
- * Composition verification, not live Zotero/MinerU acceptance. Real Gateway,
- * RemoteAccess, jobs-local, core/provider, parseDocument/parseOnce and disk store;
- * Session-controller/Agent driving and external MinerU HTTP are controlled.
- * @module tests/host/enrichment-parse-endpoints
- */
+import { DatabaseSync } from 'node:sqlite'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
@@ -203,9 +199,14 @@ describe('explicit document parsing through the pinned Gateway', () => {
           ? { kind: 'url' as const, url: `${DOCUMENT_URL}#page=3` }
           : fixture.attachmentTarget
       expect(fixture.agent.status).toBe('idle')
-      expect(fixture.ctx.agents.get(OWNER)).toBe(fixture.agent)
       expect(fixture.ctx.agents.turnBoundaryOf(fixture.agent.session).openTurnStartSeq).toBeNull()
       const { started, receipt } = await complete(fixture, startRequest(target), fixture.guest)
+      using index = new DatabaseSync(join(fixture.root, 'zotero', 'index.db'), { readOnly: true })
+      const tables = index.prepare('SELECT name FROM sqlite_master WHERE name LIKE ?').all('%_doc')
+      expect(tables).toHaveLength(1)
+      expect(index.prepare(`SELECT artifactId FROM ${tables[0]!.name}`).get()?.artifactId).toBe(
+        receipt.artifactId,
+      )
       expect(started.status).toBe('started')
       expect(fixture.started).toHaveBeenCalledOnce()
       expect(fixture.started.mock.calls[0]![0]).toMatchObject({
@@ -234,7 +235,6 @@ describe('explicit document parsing through the pinned Gateway', () => {
         characterCount: MARKDOWN.length,
         preview: MARKDOWN,
       })
-      expect(receipt.preview).not.toContain(fixture.root)
       const store = new ParsedArtifactStore(fixture.outputDir)
       expect(await store.get(receipt.artifactId)).toMatchObject({
         markdown: MARKDOWN,

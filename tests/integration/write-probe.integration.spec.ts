@@ -189,7 +189,7 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
     })
 
     it('advances the library version the read client sees', async () => {
-      const { headers } = await client.get('', undefined, {})
+      const { headers } = await client.get('users/0/items', new URLSearchParams({ limit: '1' }), {})
       const version = Number(headers.get('last-modified-version'))
       expect(Number.isFinite(version)).toBe(true)
       expect(version).toBeGreaterThan(0)
