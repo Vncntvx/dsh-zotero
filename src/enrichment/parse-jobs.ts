@@ -1091,10 +1091,12 @@ export class EnrichmentParseJobs {
                 operation.record = { ...effective, state }
                 try {
                   await this.deps.persistence.put(config, operation.record)
-                } catch {
-                  /* The job still has a definite failure if storage failed. */
+                } catch (error) {
+                  const detail = sanitizedErrorDetail(errorMessageOf(error))
+                  this.ctx.logger?.warn?.(
+                    `parse job receipt persistence: ${detail ?? 'unknown failure'}`,
+                  )
                 }
-                await waiting
                 return { status: wasCancelled ? 'killed' : 'failed', detail: state.message }
               }
             })

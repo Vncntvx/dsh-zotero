@@ -695,7 +695,9 @@ export class EnrichmentService extends TypertRemoteService {
       const loader = this.loaderFactory()
       this.loader = loader
       if (previous !== undefined && previous !== loader) {
-        void previous.dispose().catch(() => undefined)
+        void previous.dispose().catch((error: unknown) => {
+          ctx.logger?.warn?.(`semantic loader replacement disposal: ${errorMessageOf(error)}`)
+        })
       }
       zotero.setFulltextEnhancer(this.enhancer)
       zotero.setEvidenceRanker(this.liveEvidenceRanker)
