@@ -108,11 +108,12 @@ describe('resultTextOf', () => {
         settled({
           content: [
             { type: 'text', text: 'a' },
-            { type: 'text', text: 'b' },
+            { type: 'text', text: 'b\n' },
+            { type: 'text', text: 'c' },
           ],
         }),
       ),
-    ).toBe('a\nb')
+    ).toBe('a\nb\nc')
     expect(
       resultTextOf(
         settled({ content: [{ type: 'json', data: { x: 1 } } as unknown as ContentBlock] }),

@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SystemPrompt, { renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+import { renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import ScholarlyService from '../../src/scholarly/index.js'
 import {
   SCHOLARLY_PROMPT_ORDER_OFFSET,
@@ -29,6 +29,7 @@ import {
 } from '../../src/scholarly/prompt.js'
 import { PROMPT_BAND_CEILING } from '../../src/prompt-band.js'
 import { bootScholarlyContext } from '../helpers/scholarly-runtime.js'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import { admittedToolSet } from '../helpers/tool-set.js'
 import { sectionPosition, withBandProbes } from '../helpers/prompt-band.js'
 
@@ -49,7 +50,7 @@ function sectionOf(assembly: PromptAssembly): string {
 describe('the scholarly component prompt section', () => {
   it('appears only while the component is mounted', async () => {
     const withoutComponent = new Context()
-    await withoutComponent.plugin(SystemPrompt, {})
+    await mountSystemPrompt(withoutComponent)
     const bare = await withoutComponent.systemPrompt.assemble()
     expect(bare.sections.some((entry) => entry.name === SCHOLARLY_PROMPT_SECTION_NAME)).toBe(false)
 

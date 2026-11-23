@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZOTERO_SOURCE_PROJECTION_FAILED } from '../../src/contract.js'
 import { Context } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { deferred } from '../helpers/sync.js'
@@ -20,7 +20,7 @@ import ZoteroService from '../../src/index.js'
 describe('the projection registration', () => {
   it('registers the trail unit when the registry is composed', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     const registered = stubProjections(ctx)
     const service = new ZoteroService(ctx, { writeEnabled: true })
@@ -34,7 +34,7 @@ describe('the projection registration', () => {
 
   it('waits for the registry to return its ready handle before reporting ready', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     const started = deferred<void>()
     const ready = deferred<unknown>()
@@ -58,7 +58,7 @@ describe('the projection registration', () => {
 
   it('keeps a registration failure explicit after the injection fiber unwinds', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     const started = deferred<void>()
     const failure = new Error('projection storage unavailable')
@@ -83,7 +83,7 @@ describe('the projection registration', () => {
 
   it('releases the projection registration with the service fiber', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     const projections = new SessionProjectionRegistry(ctx)
     const serviceFiber = ctx.plugin(ZoteroService, {})
@@ -107,7 +107,7 @@ describe('the projection registration', () => {
 
   it('disposes a registration handle that resolves after service teardown', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     const started = deferred<void>()
     const ready = deferred<unknown>()

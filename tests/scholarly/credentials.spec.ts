@@ -112,6 +112,19 @@ describe('resolveScholarlyKeys', () => {
     ).rejects.toMatchObject({ code: ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED })
   })
 
+  it.each(['abc def', 'abc\ndef', 'abcé'])(
+    'rejects a malformed resolved API key',
+    async (value) => {
+      const ctx = withCredentials(async () => ({ value, source: 'test' }))
+      const error = resolveScholarlyKeys(ctx, config({ s2ApiKeyEnv: 'S2_API_KEY' }))
+      await expect(error).rejects.toMatchObject({
+        code: ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
+        message: expect.stringContaining('invalid characters'),
+      })
+      await expect(error).rejects.not.toThrow(value)
+    },
+  )
+
   it('rejects a reference outside the environment-variable grammar', async () => {
     const ctx = withCredentials(async () => ({ value: 'key', source: 'test' }))
     await expect(

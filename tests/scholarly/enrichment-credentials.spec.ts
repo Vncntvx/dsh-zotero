@@ -53,6 +53,17 @@ describe('resolveMineruToken', () => {
     })
   })
 
+  it('rejects a malformed token without exposing it', async () => {
+    const value = 'token\u0000suffix'
+    const ctx = withCredentials(async () => ({ value, source: 'test' }))
+    const error = resolveMineruToken(ctx, 'MINERU_API_TOKEN')
+    await expect(error).rejects.toMatchObject({
+      code: ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
+      message: expect.stringContaining('invalid characters'),
+    })
+    await expect(error).rejects.not.toThrow(value)
+  })
+
   it('fails closed when the credentials seam is absent', async () => {
     const ctx = new Context()
     await expect(resolveMineruToken(ctx, 'MINERU_API_TOKEN')).rejects.toMatchObject({

@@ -139,7 +139,7 @@ it('mounts the exact route through the official owner-only Connection registry',
   const { registerResultRoute } = await import('../../src/result-route.ts')
   const { ctx, delivery, request, readEvent } = await setup()
   // Authentication itself belongs to Connection; this test starts with admitted peers.
-  const connection = new HostConnectionService(ctx, [], {} as never)
+  const connection = new HostConnectionService(ctx, [])
   const owner = ctx.plugin({
     name: 'result-endpoint-test',
     apply(child) {

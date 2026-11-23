@@ -2,9 +2,9 @@
 
 # 开发留意
 
-<!-- harness-reviewed: 0.2.2-rc.5 -->
+<!-- harness-reviewed: 0.2.3-alpha.2 -->
 
-当前宿主契约复核：2026-11-21，pin `0.2.2-rc.5`。本文只保留上游补丁；每条已对照当前实现与测试复核。
+当前宿主契约复核：2026-11-23，pin `0.2.3-alpha.2`。本文只保留上游补丁；每条已对照当前实现与测试复核。
 
 ## 定位
 
@@ -28,7 +28,7 @@
 
 ## DN-1：面板解析完成通知的抑制
 
-- **上游**：`@deepseek-ai/dsh-jobs` 与 `dsh-tool-jobs`（pin `0.2.2-rc.5`）。
+- **上游**：`@deepseek-ai/dsh-jobs` 与 `dsh-tool-jobs`（pin `0.2.3-alpha.2`）。
 - **上游特性**：面板解析 job 通过 `ctx.jobs` 承载，结算后宿主向所属会话投递“后台任务状态更新”。
 - **上游缺陷**：通知只要求模型读取 job 输出；解析 job 的输出是回执（artifactId、字符数、有界 preview），没有正文或可读路径。空闲会话被 `followup` 唤醒，模型翻找主机文件并输出没人要求的报告。
 - **本地补丁**：`src/enrichment/parse-jobs.ts` 的 `EnrichmentParseJobs` 以 `owner` 注册 job、`toolCall` 留空，并重叠续挂 `ctx.jobs.wait`（`holdNotice`、`PARSE_NOTICE_WAIT_MS`、`PARSE_NOTICE_REARM_MS`）；结算被记为 `awaited`，tool-jobs 的投递条件跳过它。waiter 不消费输出、不取消 job、不删除结算记录。
@@ -64,7 +64,7 @@
 
 ## DN-9：上游「无会话面板」拒绝只是一句散文
 
-- **上游**：`@deepseek-ai/dsh-client-ui-sidebar-right`（pin `0.2.2-rc.5`）。
+- **上游**：`@deepseek-ai/dsh-client-ui-sidebar-right`（pin `0.2.3-alpha.2`）。
 - **上游特性**：面板用 `openResource` 打开本地 PDF。
 - **上游缺陷**：本次会话没有挂载会话面时，上游直接 `throw new Error('sidebarRight: no session surface is mounted')`，没有错误码或可判别类型。
 - **本地补丁**：`NO_SESSION_SURFACE_REFUSAL` 子串常量，用 `includes` 匹配（上游带 `sidebarRight: ` 前缀）；其它失败保留原消息。
@@ -74,17 +74,17 @@
 - **验证**：`tests/client/library/library-panel.reader.spec.tsx`（拒绝翻译成面板提示，外来拒绝保留原消息）。
 - **后续处理**：按 code 判定，删除子串常量。
 
-## DN-10：客户端加载器 API 与 `resultText` 镜像停在 pin 语义
+## DN-10：工具结果文本镜像
 
-- **上游**：客户端模块加载器与 `resultText`（pin `0.2.2-rc.5`）。
-- **上游特性**：插件 CSS 注入与 `load({id,factory})` 交接；`resultTextOf` 生成工具卡文本。
-- **上游缺陷**：rc.5 的 `load({id,factory})` 由壳层提供，factory 执行时注入的样式由 loader 认领。`ClientBundleRegistration` 从 `@deepseek-ai/dsh-client-modules/client` 公开导出，rc.5 注册类型没有 `meta` 字段。`resultText` 使用换行拼接，也尚未公开导出。
-- **本地补丁**：`scripts/build-client.mjs` 的 `CLIENT_LOADER_API` 与 `assertLoaderApi`；`src/sources/presenters.ts` 的 `resultTextOf` 镜像，JSDoc 写明发布版契约。
-- **为什么是妥协**：两处镜像必须随 pin 移动；构建期失败比运行期静默丢样式或 handoff 好。
-- **上游期望**：pin 提供 `meta.stylesheets`；`resultText` 从 `./client` 导出。
-- **复核触发**：每次 pin；按 `development.md` 的命令从发布标签复核 loader、注册类型及结果文本。
-- **验证**：`build-client-bundle.spec.ts`（旧形式通过、两种漂移各自失败）、`presenters.spec.ts`、`build:client`、`harness:check`。
-- **后续处理**：翻转常量、迁移样式注入、抬高 `engines.dsh` 下界；删除 `data-plugin-css` 与常量；`resultText` 改值导入并删除镜像。
+- **上游**：当前 pin 的客户端工具卡。
+- **上游特性**：工具卡将文本与非文本结果块格式化。
+- **上游缺陷**：格式化函数是客户端包的内部实现，宿主侧也需要这些文本生成展示内容。
+- **本地补丁**：`resultTextOf` 镜像默认格式化行为：块之间以换行衔接，前一块已换行结尾时不重复换行；结果内容为空且有错误时使用错误名与错误码。
+- **为什么是妥协**：pin 中的格式化行为变动后须同步镜像。
+- **上游期望**：通过宿主可用的公开入口提供默认格式化函数。
+- **复核触发**：每次 pin 升级时检查发布标签中的格式化函数。
+- **验证**：`tests/client/presenters.spec.ts`。
+- **后续处理**：使用公开格式化函数并删除镜像。
 
 ## DN-13：代理路由与地址钉住互斥
 
@@ -124,7 +124,7 @@
 
 ## DN-27：工具参数名在执行前封闭
 
-- **上游**：工具参数 DSL（rc.5）。
+- **上游**：工具参数 DSL（pin `0.2.3-alpha.2`）。
 - **上游特性**：工具注册与参数验证。
 - **上游缺陷**：DSL 生成开放根对象，未知根参数会被接受。
 - **本地补丁**：统一构造器标 `additionalProperties: false`，发现未知根参数时调用宿主 `validateJsonSchemaValue` 并抛 `ToolArgsError`，在执行前拒绝；已声明字段仍由 `defineTool` 验证；唯一近似匹配覆盖缺失必填/可选参数，不猜歧义名称。
@@ -136,7 +136,7 @@
 
 ## DN-29：公开测试支持与注册表入口差异
 
-- **上游**：测试支持包（rc.5）。
+- **上游**：测试支持包（pin `0.2.3-alpha.2`）。
 - **上游特性**：host lane 的 `executeModelToolFixture`、`TestClient`/`SlotTestRuntime`、发布入口。
 - **上游缺陷**：完整 runtime 根入口依赖加载器形式的 `/client` 产物；包内 Vitest 4 与仓库 Vitest 5 会分裂。
 - **本地补丁**：测试支持源码门禁的精确发布清单；`client-test-platform.mjs` 把类型路径映射到显式发布的生产源码，缺契约或文件即失败；Vitest 单实例；真实 `TestClient`/`SlotTestRuntime`；pin 脚本补齐 harness overrides。
@@ -182,17 +182,17 @@
 - **验证**：`tests/client/answer-language.spec.ts`、`tests/client/library/parsed-document-*.spec.tsx`、`library-inspector.spec.tsx`。
 - **后续处理**：宿主暴露语言后删除客户端注入；保留解释与提问的行为约束。
 
-## DN-50：本轮证据与写入计划的会话位置
+## DN-50：会话批准与 Zotero 写入计划分开审阅
 
-- **上游**：rc.5 的 `conversation.view`、`conversation.chat.turnTail`、`ui-input-trigger` 与审批命令。
-- **上游特性**：插件能注册会话页、本轮尾部视图和输入触发器。
-- **上游缺陷**：发布版未提供常驻会话侧栏。宿主审批命令占用唯一的 `conversation.approval.detail` 插槽，审批响应缺少完整计划反馈字段。
-- **本地补丁**：文献轨迹使用会话页，本轮证据使用尾部视图。输入支持 `@paper`。会话批准与 Zotero 计划审阅保留各自的响应。
-- **为什么是妥协**：跨轮文献轨迹位于单独的会话页，写工具先取得会话授权，再审阅具体计划。
-- **上游期望**：提供常驻会话侧栏、可组合的审批详情及结构化审批反馈。
-- **复核触发**：升级宿主 pin 时对照客户端插槽声明及审批响应类型。
+- **上游**：`conversation.approval.detail` 与宿主审批命令（pin `0.2.3-alpha.2`）。
+- **上游特性**：宿主在对话中展示会话审批及调用详情。
+- **上游缺陷**：宿主审批命令占用唯一的 `conversation.approval.detail` 插槽，审批响应缺少承载完整计划反馈的字段。
+- **本地补丁**：通过会话审批后，用独立的 Zotero 计划卡收集确认或完整修改意见。
+- **为什么是妥协**：写工具先取得会话授权，随后审阅具体写入计划。
+- **上游期望**：审批详情支持组合，审批响应支持结构化计划反馈。
+- **复核触发**：升级宿主 pin 时检查审批详情插槽和审批响应类型。
 - **验证**：`tests/client/apply-gating.spec.ts`、`tests/client/apply.spec.ts` 与计划审阅和写入用例。
-- **后续处理**：接入已发布的侧栏和可组合审批详情，保留文献引用与完整修改意见。
+- **后续处理**：在可组合的宿主审批详情中呈现计划并保留完整修改意见。
 
 ## DN-51：按请求条目限定 Local API 导出结果
 

@@ -540,11 +540,11 @@ async function verifyBrowser(port, cookie) {
       const settings = document.querySelector('[data-zotero-config-page]')
       if (!settings) throw new Error('Zotero settings are missing')
       const css = getComputedStyle(settings)
-      const sheets = [...document.querySelectorAll('head style[data-plugin-css]')]
-      const stylesheet = id + '/src/client/ZoteroSettingsSection.module.css'
-      const owned = sheets.filter((sheet) => sheet.getAttribute('data-plugin-css') === stylesheet)
+      const owned = document.querySelectorAll(
+        `style[data-plugin="${id}"][data-path="src/client/ZoteroSettingsSection.module.css"]`,
+      )
       return {
-        owned: owned.length === 1 && owned[0].getAttribute('data-plugin') === id,
+        owned: owned.length === 1,
         display: css.display,
         direction: css.flexDirection,
       }

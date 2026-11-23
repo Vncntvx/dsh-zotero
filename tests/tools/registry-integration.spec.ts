@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -30,7 +30,7 @@ let counter = 0
 beforeEach(async () => {
   mock = await MockZotero.start()
   ctx = new Context()
-  await ctx.plugin(SystemPrompt, {})
+  await mountSystemPrompt(ctx)
   await ctx.plugin(ToolRuntime as never, {} as never)
   ctx.tools.setExecutor({
     describe(tools) {

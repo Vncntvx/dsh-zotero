@@ -4,7 +4,7 @@
  *
  * Emits `lib/client.js` in the harness's loader-handoff format: the bundle is
  * a CJS closure registered through `window.__ModuleLoader__.load({ id,
- * factory })`, with platform modules (react, the harness UI primitives)
+ * factory, meta })`, with platform modules (react, the harness UI primitives)
  * resolved at runtime by the loader's module-table require instead of being
  * inlined. This mirrors what the harness's tsdown preset produces for its own
  * client packages; esbuild keeps the third-party toolchain to one dependency.
@@ -35,7 +35,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -53,11 +53,11 @@ const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * The loader handoff a client bundle must register: the plugin id plus the
- * CJS factory the loader's module table calls with its platform require.
+ * The public loader handoff with its factory and deferred stylesheets.
  * @typedef {{
  *   id: string,
  *   factory: (require: (specifier: string) => unknown) => ClientExports,
+ *   meta?: () => { stylesheets?: Record<string, { text: (context: { asset: (reference: string) => string }) => string }> },
  * }} LoaderHandoff
  */
 
@@ -203,53 +203,21 @@ function platformModuleTable() {
 }
 
 /**
- * The client loader handoff at the pinned release tag. The shell claims
- * styles injected by the factory. Check the registration contract on every
- * pin (DN-10).
- */
-export const CLIENT_LOADER_API = 'legacy-stylesheet-tag'
-
-/** The marker the legacy handoff injects; the meta API replaces it. */
-export const LEGACY_STYLESHEET_MARKER = 'data-plugin-css'
-
-/**
- * Refuse a bundle built for the other loader API.
- *
- * A bundle still injecting the legacy tag against a loader that no longer
- * handles it leaves the styles unretained after a disable; the meta shape
- * against the pinned loader registers a handoff the shell ignores. Either mix
- * is silent at runtime, so it fails the build instead.
- * @param api {string} - the constant above.
- * @param source {string} - the produced bundle.
- * @returns {void} throws when the two disagree.
- */
-export function assertLoaderApi(api, source) {
-  const legacy = source.includes(LEGACY_STYLESHEET_MARKER)
-  if (api === 'meta-stylesheets' && legacy) {
-    throw new Error(
-      `client bundle still injects a ${LEGACY_STYLESHEET_MARKER} tag — ` +
-        'CLIENT_LOADER_API names the meta-stylesheets handoff, so the CSS injection must move into ' +
-        'load({ meta: () => ({ stylesheets }) }) in the same change (DN-10)',
-    )
-  }
-  if (api === 'legacy-stylesheet-tag' && !legacy) {
-    throw new Error(
-      `client bundle no longer injects a ${LEGACY_STYLESHEET_MARKER} tag but CLIENT_LOADER_API still ` +
-        'names the legacy handoff — flip the constant (and migrate the CSS injection) together',
-    )
-  }
-}
-
-/**
  * Artifact + handoff verification. Runs on every successful build (including
  * watch) through the verify plugin below.
  * @returns void; throws when the loader handoff fails.
  */
 export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
-  const source = readFileSync(bundlePath, 'utf8')
-  // The loader-API pairing comes before any evaluation: a handoff the shell
-  // cannot read is not worth executing.
-  assertLoaderApi(CLIENT_LOADER_API, source)
+  verifyBundleSource(readFileSync(bundlePath, 'utf8'), bundlePath)
+}
+
+/**
+ * Verify a bundle's source text, before or after the metadata handoff is
+ * spliced in.
+ * @param {string} source - the bundle source.
+ * @param {string} bundlePath - the path reported in failure messages.
+ */
+function verifyBundleSource(source, bundlePath) {
   // The byte ceiling comes first: an oversize bundle fails the build before
   // any evaluation, so a size regression is reported as a size regression.
   const bytes = Buffer.byteLength(source, 'utf8')
@@ -277,6 +245,16 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
     if (typeof handoff.factory !== 'function') {
       throw new Error('client bundle factory is not a function')
     }
+    const stylesheets = handoff.meta?.()?.stylesheets
+    if (stylesheets === undefined || Object.keys(stylesheets).length === 0) {
+      throw new Error('client bundle must register stylesheets in loader metadata')
+    }
+    for (const [path, style] of Object.entries(stylesheets)) {
+      const css = style.text({ asset: (reference) => reference })
+      if (typeof css !== 'string' || css.trim() === '') {
+        throw new Error(`client stylesheet ${path} must produce CSS text`)
+      }
+    }
     // Resolve externals through the loader's module table so this check covers
     // the same runtime dependency boundary as the host.
     const platform = platformModuleTable()
@@ -287,6 +265,9 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
     if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
       throw new Error('client bundle must export the apply/inject plugin face')
     }
+    if (window.document.querySelector('style') !== null) {
+      throw new Error('client bundle inserted a style element outside the host renderer')
+    }
   } finally {
     window.close()
   }
@@ -295,96 +276,83 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
   )
 }
 
-/** Inline `.module.css` files as scoped style injections (mirrors the harness
- *  tsdown preset's CSS handling; the loader executes the bundle as a classic
- *  script, so each module injects its own style tag with a per-module id).
- *  @type {import('esbuild').Plugin} */
-const cssModulesPlugin = {
-  name: 'css-modules',
-  setup(build) {
-    build.onLoad({ filter: /\.module\.css$/ }, (args) => {
-      const source = readFileSync(args.path, 'utf8')
-      const { code, exports: classMap } = transformCss({
-        filename: args.path,
-        code: Buffer.from(source),
-        cssModules: true,
-        minify: true,
-      })
-      const names = Object.fromEntries(
-        Object.entries(
-          /** @type {import('lightningcss').CSSModuleExports} */ (
-            /** @type {unknown} */ (classMap)
-          ),
-        )
-          .sort(([a], [b]) => a.localeCompare(b, 'en'))
-          .map(([original, info]) => [original, info.name]),
-      )
-      // Path-relative id: basename alone collides when two directories
-      // ship the same module filename (e.g. `fields.module.css`).
-      const id = `${PLUGIN_ID}/${relative(root, args.path).split('\\').join('/')}`
-      // The native binding answers a Buffer; the declaration only promises the
-      // Uint8Array face, so the utf8 decode asserts the Buffer face it carries.
-      const style = /** @type {Buffer} */ (code)
-        .toString('utf8')
-        .replaceAll('\\', '\\\\')
-        .replaceAll('`', '\\`')
-        .replaceAll('${', '\\${')
-      const contents = [
-        'const style = `' + style + '`;',
-        `if (typeof document !== 'undefined') {`,
-        //  Repaint an existing tag because the content-hashed class names may
-        //  have changed between bundle executions.
-        `  const tag = document.querySelector('style[data-plugin-css="${id}"]');`,
-        `  if (tag !== null) tag.textContent = style;`,
-        `  else {`,
-        `    const fresh = document.createElement('style');`,
-        `    fresh.setAttribute('data-plugin-css', ${JSON.stringify(id)});`,
-        `    fresh.textContent = style;`,
-        `    document.head.appendChild(fresh);`,
-        `  }`,
-        `}`,
-        `export default ${JSON.stringify(names)};`,
-      ].join('\n')
-      return { contents, loader: 'js' }
-    })
-  },
-}
+const STYLE_METADATA_MARKER = '/* dsh-zotero stylesheet metadata */'
 
-/** Runs handoff verification on every successful build, including watch.
- *  @type {import('esbuild').Plugin} */
-const artifactVerifyPlugin = {
-  name: 'client-artifact-verify',
-  setup(build) {
-    build.onEnd((result) => {
-      if (result.errors.length > 0) return
-      try {
-        verifyBundle()
-      } catch (error) {
-        return {
-          errors: [{ text: error instanceof Error ? error.message : String(error) }],
+/**
+ * Compile CSS class maps and attach their stylesheets to the loader registration.
+ * @param {boolean} verify - assemble, check and write the production artifact.
+ * @returns {import('esbuild').Plugin}
+ */
+function cssModulesPlugin(verify) {
+  return {
+    name: 'css-modules',
+    setup(build) {
+      /** @type {Map<string, string>} */
+      const styles = new Map()
+      build.onLoad({ filter: /\.module\.css$/ }, (args) => {
+        const source = readFileSync(args.path, 'utf8')
+        const { code, exports: classMap } = transformCss({
+          filename: args.path,
+          code: Buffer.from(source),
+          cssModules: true,
+          minify: true,
+        })
+        const names = Object.fromEntries(
+          Object.entries(
+            /** @type {import('lightningcss').CSSModuleExports} */ (
+              /** @type {unknown} */ (classMap)
+            ),
+          )
+            .sort(([a], [b]) => a.localeCompare(b, 'en'))
+            .map(([original, info]) => [original, info.name]),
+        )
+        const path = relative(root, args.path).split('\\').join('/')
+        styles.set(path, Buffer.from(code).toString('utf8'))
+        return { contents: 'export default ' + JSON.stringify(names), loader: 'js' }
+      })
+      if (!verify) return
+      build.onEnd((result) => {
+        if (result.errors.length > 0) return
+        const bundle = result.outputFiles?.find(
+          (file) => file.path === build.initialOptions.outfile,
+        )
+        const output =
+          bundle && result.metafile?.outputs[relative(root, bundle.path).split('\\').join('/')]
+        if (
+          bundle === undefined ||
+          output === undefined ||
+          !bundle.text.includes(STYLE_METADATA_MARKER)
+        ) {
+          throw new Error('client build did not produce the stylesheet metadata handoff')
         }
-      }
-      return undefined
-    })
-  },
+        // Select the styles in this output, including after imports change in watch mode.
+        const descriptors = Object.keys(output.inputs).flatMap((path) => {
+          const css = styles.get(path)
+          return css === undefined
+            ? []
+            : [JSON.stringify(path) + ':{text:()=>' + JSON.stringify(css) + '}']
+        })
+        const metadata = ',meta:()=>({stylesheets:{' + descriptors.join(',') + '}})'
+        // The marker is in the footer, after the mapped factory code.
+        const source = bundle.text.replace(STYLE_METADATA_MARKER, () => metadata)
+        verifyBundleSource(source, bundle.path)
+        mkdirSync(dirname(bundle.path), { recursive: true })
+        for (const file of result.outputFiles ?? []) {
+          if (file !== bundle) writeFileSync(file.path, file.contents)
+        }
+        writeFileSync(bundle.path, source)
+      })
+    },
+  }
 }
 
 /**
- * The esbuild plugin list the client graph always carries. Exported so tests
- * can drive the same authority rules against fixture graphs; `verify: false`
- * drops the artifact-verify plugin, whose default bundle path is the real
- * `lib/client.js` a fixture build must not be validated against.
- * @param options {{ verify?: boolean }} drop the artifact-verify plugin when `verify` is false.
- * @returns {import('esbuild').Plugin[]} harness purity + client authority + CSS modules (+ artifact verify
- * unless `verify: false`).
+ * The esbuild plugins that enforce client authority and compile CSS modules.
+ * @param options {{ verify?: boolean }} pass verify: false for fixture builds.
+ * @returns {import('esbuild').Plugin[]}
  */
 export function clientBuildPlugins({ verify = true } = {}) {
-  return [
-    harnessPurityPlugin,
-    createClientAuthorityPlugin(),
-    cssModulesPlugin,
-    ...(verify ? [artifactVerifyPlugin] : []),
-  ]
+  return [harnessPurityPlugin, createClientAuthorityPlugin(), cssModulesPlugin(verify)]
 }
 
 /**
@@ -396,6 +364,7 @@ const options = {
   entryPoints: [join(root, 'src/client/index.ts')],
   plugins: clientBuildPlugins(),
   outfile: join(root, 'lib/client.js'),
+  write: false,
   bundle: true,
   metafile: true,
   format: 'cjs',
@@ -430,7 +399,7 @@ const options = {
     js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => { var module = { exports: {} }; var exports = module.exports;`,
   },
   footer: {
-    js: 'return module.exports; } });',
+    js: 'return module.exports; }' + STYLE_METADATA_MARKER + ' });',
   },
 }
 
@@ -440,7 +409,7 @@ const options = {
  * Exported so `scripts/build-prepare.mjs` (the source-install build) can emit
  * the same artifact without duplicating this configuration; running this file
  * directly keeps the one-shot/watch CLI behaviour. Authority and handoff
- * gates run on every successful rebuild through `artifactVerifyPlugin`.
+ * gates run on every successful rebuild.
  * @param watch - `true` keeps the esbuild context alive.
  * @returns resolves after the one-shot build, or once the watch session starts.
  */
@@ -452,9 +421,6 @@ export async function buildClientBundle({ watch = false } = {}) {
     return
   }
   await esbuild.build(options)
-  // artifactVerifyPlugin already ran verifyBundle; a second call is intentional
-  // only if the plugin was bypassed: keep the one-shot path honest by not
-  // double-printing success. The plugin is the single verify path.
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

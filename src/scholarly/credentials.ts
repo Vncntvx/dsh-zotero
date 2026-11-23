@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { credentialRef, normalizeApiKey, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import {
   ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE,
   ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
@@ -27,7 +27,7 @@ import type { ScholarlyKeys } from './types.js'
  * @param config - the live resolved config section.
  * @returns the key values the source adapters send, or absent fields for unset references.
  * @throws {ZoteroError} when a configured reference is invalid, the credentials
- *   seam is absent, or the reference resolves to no value.
+ *   seam is absent, or the reference resolves to an empty or malformed key.
  */
 export async function resolveScholarlyKeys(
   ctx: Context,
@@ -58,14 +58,16 @@ export async function resolveScholarlyKeys(
           ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE,
         )
       }
-      const value = await credentials.resolve(ref)
-      if (value === undefined || value.value.trim() === '') {
+      const key = normalizeApiKey((await credentials.resolve(ref))?.value ?? '')
+      if (!key.ok) {
+        const problem =
+          key.reason === 'empty' ? 'has no value' : 'contains a key with invalid characters'
         throw new ZoteroError(
-          `Scholarly credential reference "${name}" is configured but has no value. Store the key under that reference or clear the reference to use anonymous access.`,
+          `Scholarly credential reference "${name}" ${problem}. Store a valid key under that reference or clear the reference to use anonymous access.`,
           ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED,
         )
       }
-      resolved[target] = value.value.trim()
+      resolved[target] = key.value
     }),
   )
 

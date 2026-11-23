@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from './lanes/tool-context.js'
 import type { ZoteroCreateItemOutcome } from '../../src/types.js'
 import { createScholarlySaveToZoteroTool } from '../../src/scholarly/tools/save-to-zotero.js'
 import { createScholarlyHttp } from '../../src/scholarly/transport/http.js'
@@ -13,7 +13,7 @@ import { bm25EvidenceRanker } from '../../src/local/evidence-ranker.js'
 
 export async function scholarlySaveReceipt(outcome: ZoteroCreateItemOutcome) {
   const ctx = new Context()
-  await ctx.plugin(SystemPrompt, {})
+  await mountSystemPrompt(ctx)
   const runtime = ctx.plugin(ToolRuntime, {})
   await runtime
   ctx.tools.setExecutor({

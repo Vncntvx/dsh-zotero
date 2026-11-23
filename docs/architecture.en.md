@@ -133,7 +133,7 @@ URL PDF reading is separately authorized by `library.allowUrlPdfRead`; downloads
 
 Model downloads allow only the fixed seed hosts, per-revision URLs, re-validated redirects, a byte cap, and SHA-256 verification; the host path has no proxy, and the CLI supports `--proxy`. Parsed-page remote images become plain links before display; only local images shipped with the artifact render through controlled Blob URLs; examples inside code blocks are untouched. The upstream renderer accepts remote images before calling pathImages, so the refusal policy runs at the local syntax-tree stage.
 
-Credentials: scholarly and MinerU tokens are `ctx.credentials` references resolved per call; an invalid reference, missing service, or absent value fails closed (`ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`, `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`, `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`) and never downgrades to anonymous or free. The Zotero write grant lives in `dsh-credentials`, never in plugin configuration.
+Credentials: scholarly and MinerU tokens are `ctx.credentials` references resolved per call; an invalid reference, missing service, or empty or malformed value fails closed (`ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`, `ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`, `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`) and never downgrades to anonymous or free. The upstream `resolveCredentialRef` falls back to the launch environment when no credentials service is mounted, so this repository keeps its local per-call resolution wiring and a missing service stays a failure. The Zotero write grant lives in `dsh-credentials`, never in plugin configuration.
 
 ## Client-Host Contracts and Surfaces
 

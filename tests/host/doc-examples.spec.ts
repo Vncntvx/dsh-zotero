@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import { createVolatile } from '@deepseek-ai/cosmokit'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import ToolRuntime, {
   validateJsonSchemaValue,
   type ObjectJsonSchema,
@@ -247,7 +247,7 @@ describe('documented tool calls match the tool schemas', () => {
 
   beforeAll(async () => {
     ctx = new Context()
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx)
     await ctx.plugin(ToolRuntime, {})
     // The real registry, with one controller so an owned job is admissible.
     await ctx.plugin(LocalJobRegistry, {})

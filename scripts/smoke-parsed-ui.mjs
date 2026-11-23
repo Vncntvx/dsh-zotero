@@ -53,7 +53,15 @@ const bundle = await build({
     contents: `
 import {createElement, useSyncExternalStore} from 'react';
 import {createRoot} from 'react-dom/client';
-import {ICON_SYMBOLS} from '@deepseek-ai/dsh-client-ui-primitives';
+import {ICON_SYMBOLS, __$dsh_client_module_manifest as primitivesModule} from '@deepseek-ai/dsh-client-ui-primitives';
+// The fixture imports the primitive library directly, outside the host renderer.
+for (const [path, stylesheet] of Object.entries(primitivesModule.meta().stylesheets)) {
+  const tag = document.createElement('style');
+  tag.dataset.plugin = primitivesModule.id;
+  tag.dataset.path = path;
+  tag.textContent = stylesheet.text({asset: (reference) => reference});
+  document.head.append(tag);
+}
 const sprite=document.createElementNS('http://www.w3.org/2000/svg','svg');sprite.style.cssText='position:absolute;width:0;height:0;overflow:hidden';for(const [id,svg] of Object.entries(ICON_SYMBOLS)){const root=new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;const symbol=document.createElementNS('http://www.w3.org/2000/svg','symbol');symbol.id=id;for(const {name,value} of root.attributes)if(!['width','height','xmlns','class','aria-hidden'].includes(name))symbol.setAttribute(name,value);symbol.append(...[...root.childNodes].map(n=>document.importNode(n,true)));sprite.append(symbol)}document.body.append(sprite);
 import {PdfPickerDialog} from './src/client/components/PdfPickerDialog.tsx';
 import {ParseDocumentDialog} from './src/client/enrichment/ParseDocumentDialog.tsx';

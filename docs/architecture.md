@@ -133,7 +133,7 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 模型下载只允许固定种子主机、按 revision 的 URL、逐跳重校验、字节上限与 SHA-256 校验；host 路径不支持代理，CLI 支持 `--proxy`。解析页远端图片在显示前转换为普通链接，只有产物携带的本地图片经受控 Blob URL 显示；代码块中的示例不改；上游 renderer 先接受远端图片再调用 pathImages，因此拒绝策略在本地语法树阶段完成。
 
-凭据：学术检索与 MinerU token 都是 `ctx.credentials` 的引用，每次调用解析；引用无效、服务缺失或无值时 fail closed（`ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`、`ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`、`ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`），不降级为匿名或免费。Zotero 写授权存于 `dsh-credentials`，不进入插件配置。
+凭据：学术检索与 MinerU token 都是 `ctx.credentials` 的引用，每次调用解析；引用无效、服务缺失、值为空或含非法字符时 fail closed（`ZOTERO_SCHOLARLY_CREDENTIAL_UNRESOLVED`、`ZOTERO_SCHOLARLY_CREDENTIALS_UNAVAILABLE`、`ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED`），不降级为匿名或免费。上游 `resolveCredentialRef` 在未挂载 credentials 服务时会回落到启动环境，本仓库因此保留本地按调用解析装配，服务缺失仍是失败。Zotero 写授权存于 `dsh-credentials`，不进入插件配置。
 
 ## 端侧契约与界面表面
 

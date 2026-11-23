@@ -100,7 +100,7 @@ import {
  * @typedef {{
  *   name?: string,
  *   version?: string,
- *   engines?: { dsh?: string },
+ *   engines?: { dsh?: string, node?: string },
  *   dependencies: DependencyMap,
  *   devDependencies: DependencyMap,
  *   overrides: DependencyMap,
@@ -1398,6 +1398,12 @@ function report() {
  */
 function runCheck(strict) {
   const manifest = readJson(pkgPath)
+  const nodeRange = manifest.engines?.node
+  if (!nodeRange || !satisfies(process.version, nodeRange)) {
+    problems.push(`Node.js ${process.version} is outside engines.node ${JSON.stringify(nodeRange)}`)
+    report()
+    return undefined
+  }
   const packages = existsSync(harnessRoot) ? collectHarnessPackages(harnessRoot) : new Map()
   const pin = checkPin(manifest, packages)
   for (const path of HARNESS_PIN_DOCS)

@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/v/dsh-zotero" alt="npm version" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/dm/dsh-zotero" alt="npm downloads" style="max-width:100%;"></a>
   <a href="https://www.npmjs.com/package/dsh-zotero"><img src="https://img.shields.io/npm/l/dsh-zotero" alt="license" style="max-width:100%;"></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.5"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.5-blue" alt="dsh version" style="max-width:100%;"></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.3-alpha.2"><img src="https://img.shields.io/badge/dsh-0.2.3--alpha.2-blue" alt="dsh version" style="max-width:100%;"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin"></a>
   <a href="https://github.com/hashgraph-online/hol-guard"><img src="https://img.shields.io/badge/HOL%20Guard-passing-00a67e" alt="HOL Guard Scanner"></a>
 </p>
@@ -130,9 +130,9 @@ Start a new session after installation. Open the **dsh-zotero** detail page in t
 
 1. Zotero 7 or newer desktop app installed (writes require Zotero 10).
 2. Enable the local API in Zotero: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
-3. Install and run a DeepSeek Harness desktop app that matches the plugin. This plugin requires dsh 0.2.2-rc.5. If the in-app updater has not offered that version, download the installer directly and replace the version in the link as needed:
-   - macOS (Apple Silicon): `https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.2-rc.5-mac-arm64.dmg`
-   - Windows (x64): `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.2-rc.5-win-x64.exe`
+3. Install and run a DeepSeek Harness desktop app that matches the plugin. This plugin requires dsh 0.2.3-alpha.2. If the in-app updater has not offered that version, download the installer directly and replace the version in the link as needed:
+   - macOS (Apple Silicon): `https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.3-alpha.2-mac-arm64.dmg`
+   - Windows (x64): `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.3-alpha.2-win-x64.exe`
 
 ## Tools
 

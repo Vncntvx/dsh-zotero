@@ -137,7 +137,7 @@ Released `@deepseek-ai/dsh-client-*` packages declare their third-party runtime 
 
 ### Upstream artifact freshness check
 
-`npm run harness:check` checks whether upstream build artifacts are stale. The two checks are independent.
+`npm run harness:check` first checks the running Node.js against `engines.node` in `package.json`, then checks upstream artifact freshness and the version pin independently.
 
 1. Declarations versus source: checks that `lib/types/*.d.ts` is newer than the corresponding upstream source, so type checking never reads an interface compiled from outdated source. The remedy is to rebuild the declarations and the Node-side artifacts.
 2. Browser runtime versus declarations: checks that a client package's `lib/client.js` is newer than its own client declarations, so the runtime the page loads never lags the declarations the compiler read. The remedy is to rebuild the browser artifacts only.
@@ -165,14 +165,15 @@ Also review the upstream semantics mirrored in this repository.
 
 ```sh
 pin=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-agent']")
-git -C ../deepseek-harness grep -n -E 'data-plugin-css|ClientBundleRegistration|claimStyles' "dsh-v$pin" -- packages/client/tsdown.client.ts packages/client/modules/src/client
+git -C ../deepseek-harness grep -n -E 'ClientBundleRegistration|ClientModuleMetaFactory' "dsh-v$pin" -- packages/client/modules/src/client
+git -C ../deepseek-harness grep -n 'stylesheets' "dsh-v$pin" -- packages/client/ui-renderer/src/client/styles
 git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-chat/src/client/contract/chat-nodes.ts" | rg -n 'export function isSettledTool' -A 3
 git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/tool/models/tool-call-model.ts" | rg -n 'export function resultText' -A 13
 ```
 
-`isSettledTool` is publicly exported from `@deepseek-ai/dsh-client-ui-chat/client`; `resultText` has no public entry. Both mirrors are reused by the host half, so neither can become a value import. If an upstream implementation changes (especially the empty-content-with-error fallback and the `preparing` decision), update the degradation matrix in `tests/client/presenters.spec.ts` with it.
+The client bundle hands its stylesheets over with the upstream `meta.stylesheets` shape; `build-client` fails when the stylesheets are missing or the shape changes. `isSettledTool` is publicly exported from `@deepseek-ai/dsh-client-ui-chat/client`; `resultText` has no public entry. Both mirrors are reused by the host half, so neither can become a value import. If an upstream implementation changes (especially the empty-content-with-error fallback and the `preparing` decision), update the degradation matrix in `tests/client/presenters.spec.ts` with it.
 
-At upgrade time also check two things: whether `dsh-credentials` now publishes `resolveCredentialRef`/`credentialRefConfigured` (and, if so, evaluate replacing the local per-call resolution wiring), and whether DN-10's client-bundle `meta.stylesheets` migration condition holds.
+On each pin bump, review the client registration and renderer's `meta.stylesheets` contract: the build verifies the bundle metadata, and the browser smoke checks that the host renderer applies the settings stylesheet. The mounted credentials service resolves the credentials and must hold a value for each configured reference.
 
 ## Integration Tests
 
@@ -386,7 +387,7 @@ Five workflows live under `.github/workflows/`:
 Supply-chain rules:
 
 - Every third-party GitHub Action is pinned to an immutable commit SHA, with the matching version kept in a trailing comment, so a mutable tag cannot silently change the executed code;
-- npm publication uses OIDC trusted publishing: `id-token: write` mints short-lived credentials (npm CLI ≥ 11.5.1 and Node ≥ 22.14; this repo's pinned Node 24.15.0 ships npm 11.12.1), and public repositories publishing public packages include provenance by default. Publication still relies on the trusted-publisher configuration on npmjs.com;
+- npm publication uses OIDC trusted publishing: `id-token: write` mints short-lived credentials (npm CLI ≥ 11.5.1 and Node ≥ 22.14; this repo's pinned Node 24.22.3 ships npm 11.19.1), and public repositories publishing public packages include provenance by default. Publication still relies on the trusted-publisher configuration on npmjs.com;
 - `npm run deps:check` queries the registry directly and compares against `package-lock.json` to list eligible direct dependency updates. Node types follow the minimum major in `engines.node`, and Undici follows the pinned Harness proxy. Constrained releases are reported separately. Exit code 1 signals eligible updates and 2 signals a failed check. Upgrades stay manual, and Dependabot opens no version-update pull requests;
 - Dependabot alerts serve as CVE reminders only, with security updates disabled;
 - The browser bundle mirrors the third-party runtime dependencies the sibling harness declares in its own `packages/client/*` manifests (lexical, katex, react, zod, …); those versions move with the harness, and the `deps:check` exclusion set keeps them out of the report;

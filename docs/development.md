@@ -137,7 +137,7 @@ npm run format:check         # 检查代码格式
 
 ### 上游产物一致性门禁
 
-`npm run harness:check` 检查上游构建产物是否过期。两项检查互相独立。
+`npm run harness:check` 先按 `package.json` 的 `engines.node` 检查当前 Node.js，再独立检查上游构建产物的新鲜度与版本钉。
 
 1. 声明与源码：检查 `lib/types/*.d.ts` 是否晚于对应的上游源码，防止类型检查对着不是当前源码编译出来的接口。补救命令是重建声明与 Node 端产物。
 2. 浏览器运行时与声明：检查客户端包的 `lib/client.js` 是否晚于其客户端声明，防止页面加载的运行时落后于编译器读到的声明。补救命令是只重建浏览器产物。
@@ -165,14 +165,15 @@ npm run harness:check
 
 ```sh
 pin=$(node -p "require('./package.json').devDependencies['@deepseek-ai/dsh-agent']")
-git -C ../deepseek-harness grep -n -E 'data-plugin-css|ClientBundleRegistration|claimStyles' "dsh-v$pin" -- packages/client/tsdown.client.ts packages/client/modules/src/client
+git -C ../deepseek-harness grep -n -E 'ClientBundleRegistration|ClientModuleMetaFactory' "dsh-v$pin" -- packages/client/modules/src/client
+git -C ../deepseek-harness grep -n 'stylesheets' "dsh-v$pin" -- packages/client/ui-renderer/src/client/styles
 git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-chat/src/client/contract/chat-nodes.ts" | rg -n 'export function isSettledTool' -A 3
 git -C ../deepseek-harness show "dsh-v$pin:packages/client/ui-tool/src/client/tool/models/tool-call-model.ts" | rg -n 'export function resultText' -A 13
 ```
 
-`isSettledTool` 由上游 `@deepseek-ai/dsh-client-ui-chat/client` 公开导出，`resultText` 没有公开入口，两个镜像都在 host 半被复用，因此不能改成值导入。上游实现若有变化（尤其是"空内容 + 错误"的回退、"preparing" 的判定），同步 `tests/client/presenters.spec.ts` 的退化矩阵。
+客户端 bundle 按上游 `meta.stylesheets` 交接样式，`build-client` 在样式表缺失或改形状时报错。`isSettledTool` 由上游 `@deepseek-ai/dsh-client-ui-chat/client` 公开导出，`resultText` 没有公开入口，两个镜像都在 host 半被复用，因此不能改成值导入。上游实现若有变化（尤其是"空内容 + 错误"的回退、"preparing" 的判定），同步 `tests/client/presenters.spec.ts` 的退化矩阵。
 
-升级时另核两处：`dsh-credentials` 是否已公开 `resolveCredentialRef`/`credentialRefConfigured`（可用后评估替换本地的按调用解析装配），以及 DN-10 的 client bundle `meta.stylesheets` 迁移条件是否成立。
+升级时复核客户端注册与渲染器的 `meta.stylesheets` 契约：构建检查 bundle 元数据，浏览器冒烟检查宿主渲染器是否应用设置页样式。凭据由已挂载的 credentials 服务解析，该服务要为已配置的引用提供值。
 
 ## 集成测试
 
@@ -386,7 +387,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 供应链约定：
 
 - 所有第三方 GitHub Action 固定到不可变 commit SHA，行尾注释标注对应版本号，避免可变 tag 静默改变执行内容；
-- npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.15.0 自带 npm 11.12.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束；
+- npm 发布走 OIDC 可信发布：由 `id-token: write` 获取短期凭据（npm CLI ≥ 11.5.1、Node ≥ 22.14；本仓库 pin 的 Node 24.22.3 自带 npm 11.19.1），公开仓库与公开包默认生成 provenance；发布仍受 npmjs.com 上可信发布配置的约束；
 - `npm run deps:check` 直接查询 registry，比对 `package-lock.json` 中的版本，列出可更新的直接依赖。Node 类型以 `engines.node` 的最低主版本为轨道，Undici 跟随固定版 Harness 代理。轨道外和宿主约束下的更新单列，退出码 1 表示有可更新项，2 表示检查失败；版本更新由人工执行，Dependabot 不开版本更新 PR；
 - Dependabot alerts 只用于 CVE 提醒，security updates 关闭；
 - 浏览器 bundle 镜像 sibling harness 在 `packages/client/*` 清单里声明的第三方运行时依赖（lexical、katex、react、zod 等），这些版本随 harness 一起升版，`deps:check` 的排除集合已把它们滤掉；

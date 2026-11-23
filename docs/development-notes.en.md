@@ -2,9 +2,9 @@
 
 # Development Notes
 
-<!-- harness-reviewed: 0.2.2-rc.5 -->
+<!-- harness-reviewed: 0.2.3-alpha.2 -->
 
-Current host contract review: 2026-11-21, pin `0.2.2-rc.5`. This page keeps upstream patches only; every entry has been checked against the current implementation and tests.
+Current host contract review: 2026-11-23, pin `0.2.3-alpha.2`. This page keeps upstream patches only; every entry has been checked against the current implementation and tests.
 
 ## Position
 
@@ -28,7 +28,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-1: Suppressing panel parse completion notices
 
-- **Upstream**: `@deepseek-ai/dsh-jobs` and `dsh-tool-jobs` (pin `0.2.2-rc.5`).
+- **Upstream**: `@deepseek-ai/dsh-jobs` and `dsh-tool-jobs` (pin `0.2.3-alpha.2`).
 - **Upstream feature**: a panel parse job runs through `ctx.jobs`, and settlement posts a background-job status notice to the owning session.
 - **Upstream defect**: the notice only asks the model to read the job output; a parse job's output is a receipt (artifactId, character count, bounded preview) with no body or readable path. An idle session is woken by `followup`, the model searches the host filesystem, and it produces an unsolicited report.
 - **Local patch**: `EnrichmentParseJobs` in `src/enrichment/parse-jobs.ts` registers the job with `owner`, leaves `toolCall` empty, and holds overlapping `ctx.jobs.wait` successors (`holdNotice`, `PARSE_NOTICE_WAIT_MS`, `PARSE_NOTICE_REARM_MS`); settlement is marked `awaited`, so the tool-jobs delivery condition skips it. The waiters consume no output, cancel no job, and remove no settlement record.
@@ -64,7 +64,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-9: The upstream "no session surface" refusal is prose only
 
-- **Upstream**: `@deepseek-ai/dsh-client-ui-sidebar-right` (pin `0.2.2-rc.5`).
+- **Upstream**: `@deepseek-ai/dsh-client-ui-sidebar-right` (pin `0.2.3-alpha.2`).
 - **Upstream feature**: the panel opens a local PDF through `openResource`.
 - **Upstream defect**: when the session has no mounted surface, upstream throws `new Error('sidebarRight: no session surface is mounted')` with no error code or distinguishable type.
 - **Local patch**: a `NO_SESSION_SURFACE_REFUSAL` substring constant, matched with `includes` because upstream prefixes `sidebarRight: `; other failures keep their original message.
@@ -74,17 +74,17 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Verification**: `tests/client/library/library-panel.reader.spec.tsx` (the refusal becomes a panel message; a foreign refusal keeps its message).
 - **Follow-up**: branch on the code and delete the substring constant.
 
-## DN-10: Client loader API and `resultText` mirror the pin semantics
+## DN-10: Tool result text mirror
 
-- **Upstream**: the client module loader and `resultText` (pin `0.2.2-rc.5`).
-- **Upstream feature**: plugin CSS injection and the `load({id,factory})` handoff; `resultTextOf` produces tool-card text.
-- **Upstream defect**: the rc.5 shell provides `load({id,factory})` and claims styles injected during factory execution. `@deepseek-ai/dsh-client-modules/client` exports `ClientBundleRegistration`, whose rc.5 shape has no `meta` field. `resultText` joins with newlines and has no public export.
-- **Local patch**: `CLIENT_LOADER_API` and `assertLoaderApi` in `scripts/build-client.mjs`; the `resultTextOf` mirror in `src/sources/presenters.ts`, with JSDoc recording the released contract.
-- **Why this is a compromise**: both mirrors must move with the pin; a build-time failure is better than silently losing styles or the handoff at runtime.
-- **Upstream expectation**: the pin provides `meta.stylesheets`; `resultText` is exported from `./client`.
-- **Review trigger**: every pin; use the commands in `development.en.md` to inspect the loader, registration type and result text at the release tag.
-- **Verification**: `build-client-bundle.spec.ts` (old form passes; each drift fails), `presenters.spec.ts`, `build:client`, `harness:check`.
-- **Follow-up**: flip the constant, migrate style injection, raise the `engines.dsh` floor; delete `data-plugin-css` and the constant; value-import `resultText` and delete the mirror.
+- **Upstream**: tool-card text in the pinned client UI.
+- **Upstream feature**: the tool card formats text and non-text result blocks.
+- **Upstream defect**: the result formatter is internal to the client package. The host also needs the text for presentation.
+- **Local patch**: `resultTextOf` mirrors the default formatter: blocks meet at newline boundaries, a block already ending in a newline does not gain a second one, and content-less results with an error use the error name and code.
+- **Why this is a compromise**: a change in the pinned formatter requires updating the local mirror.
+- **Upstream expectation**: expose the default formatter from a host-safe public entry.
+- **Review trigger**: compare the formatter at the release tag on every pin bump.
+- **Verification**: `tests/client/presenters.spec.ts`.
+- **Follow-up**: replace the mirror with the public formatter.
 
 ## DN-13: Proxy routing and address pinning are mutually exclusive
 
@@ -124,7 +124,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-27: Tool parameter names are closed before execution
 
-- **Upstream**: the tool parameter DSL (rc.5).
+- **Upstream**: the tool parameter DSL (pin `0.2.3-alpha.2`).
 - **Upstream feature**: tool registration and parameter validation.
 - **Upstream defect**: the DSL produces an open root object, so unknown root parameters are accepted.
 - **Local patch**: the shared constructor marks the public schema `additionalProperties: false` and, on an unknown root parameter, calls the host `validateJsonSchemaValue` and throws `ToolArgsError` before any tool executes; declared fields still go through `defineTool`; unique approximate matches cover missing required/optional names without guessing ambiguous ones.
@@ -136,7 +136,7 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 
 ## DN-29: Public test support and registry entry differences
 
-- **Upstream**: test-support packages (rc.5).
+- **Upstream**: test-support packages (pin `0.2.3-alpha.2`).
 - **Upstream feature**: host-lane `executeModelToolFixture`, `TestClient`/`SlotTestRuntime`, and published entries.
 - **Upstream defect**: the complete runtime root entry depends on loader-form `/client` artifacts; a package-internal Vitest 4 and the repository's Vitest 5 can split.
 - **Local patch**: an exact published-entry list in the test-support source gate; `client-test-platform.mjs` maps declared type paths to explicitly published production sources and fails on a missing contract or file; a single Vitest instance; real `TestClient`/`SlotTestRuntime`; the pin script fills harness overrides.
@@ -182,17 +182,17 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Verification**: `tests/client/answer-language.spec.ts`, `tests/client/library/parsed-document-*.spec.tsx`, `library-inspector.spec.tsx`.
 - **Follow-up**: delete the client injection when the host exposes the language; keep the explain/ask behavior constraints.
 
-## DN-50: Conversation locations for turn evidence and write plans
+## DN-50: Separate session approval and Zotero plan review
 
-- **Upstream**: rc.5 `conversation.view`, `conversation.chat.turnTail`, `ui-input-trigger`, and the approval command.
-- **Upstream feature**: plugins can register conversation views, turn-tail views, and input triggers.
-- **Upstream defect**: the published client has no persistent conversation aside. The host approval command owns the single `conversation.approval.detail` slot, and its response lacks a full plan-feedback field.
-- **Local patch**: the literature trail uses the conversation view and turn evidence uses the turn tail. The composer serves `@paper`. Session approval and Zotero plan review keep their respective responses.
-- **Why this is a compromise**: the cross-turn trail occupies a separate conversation view. Write tools receive session authorization before presenting the specific plan for review.
-- **Upstream expectation**: a persistent conversation aside, composable approval details, and structured approval feedback.
-- **Review trigger**: compare client slot declarations and approval response types on a host pin upgrade.
+- **Upstream**: `conversation.approval.detail` and the host approval command (pin `0.2.3-alpha.2`).
+- **Upstream feature**: the host shows session approval and invocation details in the conversation.
+- **Upstream defect**: the host approval command owns the single `conversation.approval.detail` slot, and its response lacks a field for full plan feedback.
+- **Local patch**: after session approval, a separate Zotero plan card collects confirmation or complete revision feedback.
+- **Why this is a compromise**: write tools receive session authorization before presenting the specific write plan for review.
+- **Upstream expectation**: composable approval details and structured plan feedback in the approval response.
+- **Review trigger**: check the approval detail slot and response types on each host pin upgrade.
 - **Verification**: `tests/client/apply-gating.spec.ts`, `tests/client/apply.spec.ts`, and the plan-review and write specs.
-- **Follow-up**: adopt the published aside and composable approval detail while preserving paper refs and complete revision feedback.
+- **Follow-up**: present the plan through composable host approval details and preserve complete revision feedback.
 
 ## DN-51: Scope Local API exports to requested items
 

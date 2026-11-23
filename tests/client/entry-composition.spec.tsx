@@ -18,6 +18,7 @@ it('boots the actual entry and withdraws its registered surfaces on unload', asy
   const mock = RemoteMock.create()
   mock.load(remoteDefaultResponses)
   const roster = ClientRoster.of([
+    { name: '@deepseek-ai/dsh-client-modules', inject: ['loader'], immediately: true },
     { name: '@deepseek-ai/dsh-client-connection', inject: [], immediately: true },
     { name: '@deepseek-ai/dsh-api-remote-access', inject: [], immediately: true },
     { name: '@deepseek-ai/dsh-typert-registry', inject: [], immediately: true },
@@ -33,6 +34,7 @@ it('boots the actual entry and withdraws its registered surfaces on unload', asy
       immediately: true,
     },
     { name: '@deepseek-ai/dsh-client-ui-renderer', inject: [], immediately: true },
+    { name: 'zotero-test-upload', inject: [], immediately: true },
     { name: 'zotero-test-ports', inject: ['slots'], immediately: true },
     {
       name: '@deepseek-ai/dsh-client-ui-context-menu',
@@ -46,6 +48,18 @@ it('boots the actual entry and withdraws its registered surfaces on unload', asy
       roster,
       provide: {
         'dsh-zotero': feature,
+        'zotero-test-upload': {
+          apply(ctx: Context) {
+            ctx.provide('fileUpload', {
+              upload: async () => {
+                throw new Error('Unexpected upload')
+              },
+              uploadImage: async () => {
+                throw new Error('Unexpected image upload')
+              },
+            } as never)
+          },
+        },
         'zotero-test-ports': {
           inject: ['slots'],
           apply: (ctx: Context) => {
@@ -73,14 +87,6 @@ it('boots the actual entry and withdraws its registered surfaces on unload', asy
             ] as const)
               ctx.provide(name, services[name] as never)
             ctx.provide('locale', services.locale)
-            ctx.provide('fileUpload', {
-              upload: async () => {
-                throw new Error('Unexpected upload')
-              },
-              uploadImage: async () => {
-                throw new Error('Unexpected image upload')
-              },
-            } as never)
             ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
             ctx.slots.installLocale({
               ...createSnapshotStore({ revision: 0 }),

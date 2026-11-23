@@ -27,7 +27,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createVolatile, updateVolatile, volatileEntries } from '@deepseek-ai/cosmokit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, {
   projectToolSchema,
   type ToolDefinition,
@@ -40,6 +39,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Options } from '../../../src/config.js'
 import ZoteroService from '../../../src/index.js'
 import { MockZotero } from '../mock-zotero.js'
+import { mountSystemPrompt } from './tool-context.js'
 
 /** The optional services a lane composes before the plugin mounts. */
 export interface HostLaneOptions {
@@ -130,7 +130,7 @@ export async function setupHostLane(
       }
     }
     await ctx.plugin(StubSettings, undefined)
-    await ctx.plugin(SystemPrompt, {})
+    await mountSystemPrompt(ctx.isolate('sessionProjections'))
     await ctx.plugin(ToolRuntime, {})
     ctx.tools.setExecutor({
       describe(tools) {

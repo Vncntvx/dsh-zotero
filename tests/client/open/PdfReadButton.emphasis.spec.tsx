@@ -18,7 +18,7 @@ describe('PdfReadButton emphasis', () => {
     const button = screen.getByRole('button', { name: mockT('readPdf') })
     // The variant is a CSS-module class on the real button; the module hash
     // moves with the build, the variant token does not.
-    expect(button.className).toMatch(/_outline_/)
+    expect(button.className).toMatch(/_outline\b/)
   })
 
   it('passes the caller emphasis through to the button', () => {
@@ -31,6 +31,6 @@ describe('PdfReadButton emphasis', () => {
       />,
     )
     const button = screen.getByRole('button', { name: mockT('readPdf') })
-    expect(button.className).toMatch(/_primary_/)
+    expect(button.className).toMatch(/_primary\b/)
   })
 })

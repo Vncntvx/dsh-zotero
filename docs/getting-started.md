@@ -8,8 +8,8 @@ dsh-zotero 将本地 Zotero 文献库接入 DeepSeek Harness：Agent 在对话�
 
 - Zotero ≥ 7 桌面版已安装（读取需 Zotero ≥ 7，写入需 Zotero 10）。
 - 本地 API 已启用：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**。
-- Node.js ≥ 24.15.0。
-- 宿主 dsh `>=0.2.2-rc.5 <0.3.0`；更早版本的对应关系见 GitHub Releases。
+- Node.js `^24.22.3 || >=26.13.1`。
+- 宿主 dsh `>=0.2.3-alpha.2 <0.3.0`；更早版本的对应关系见 GitHub Releases。
 
 ## 安装插件
 

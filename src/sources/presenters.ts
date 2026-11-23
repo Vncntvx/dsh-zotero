@@ -76,9 +76,9 @@ export function resultFirstTextOf(block: ToolBlockLike): string | null {
 
 /**
  * Mirror the pinned Harness `resultText` for tool cards and host consumers.
- * Join text and pretty-printed non-text blocks with newlines. Empty content
- * with a structured error yields its `name: code` line. Running blocks return
- * null. Check the release tag on every pin (DN-10).
+ * Joins text and pretty-printed non-text blocks at newline boundaries. Empty
+ * content with a structured error yields its `name: code` line. Running blocks
+ * return null. Check the release tag on every pin (DN-10).
  */
 export function resultTextOf(block: ToolBlockLike): string | null {
   if (!isSettledTool(block)) return null
@@ -90,8 +90,10 @@ export function resultTextOf(block: ToolBlockLike): string | null {
   if (parts.length === 0 && block.error !== undefined) {
     parts.push(`${block.error.name}: ${block.error.code}`)
   }
-  if (parts.length === 0) return ''
-  return parts.join('\n')
+  return parts.reduce(
+    (text, part, index) => text + (index === 0 || text.endsWith('\n') ? '' : '\n') + part,
+    '',
+  )
 }
 
 /** Single-line error summary derived from settled error content, or null when not errored. */

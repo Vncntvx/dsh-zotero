@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it } from 'vitest'
 import ZoteroService, { type ZoteroService as ZoteroServiceType } from '../../src/index.js'
@@ -32,7 +32,7 @@ function searchResult(): ZoteroSearchResult {
 async function boot(providerId: string): Promise<ZoteroServiceType> {
   mock = await MockZotero.start()
   ctx = new Context()
-  await ctx.plugin(SystemPrompt, {})
+  await mountSystemPrompt(ctx)
   await ctx.plugin(ToolRuntime, {})
   await ctx.plugin(ZoteroService, { baseUrl: mock.baseUrl, provider: providerId })
   return ctx.zotero

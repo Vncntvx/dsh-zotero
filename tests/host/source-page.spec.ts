@@ -9,7 +9,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 
 import { describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { mountSystemPrompt } from '../helpers/lanes/tool-context.js'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -102,7 +102,7 @@ function setup(options: LaneOptions): Context {
 /** Boot the plugin and stub the projection handle to serve the given ledger. */
 async function boot(ctx: Context, state: ReturnType<typeof emptyLedgerState>): Promise<void> {
   await ctx.plugin(TypertRegistry)
-  await ctx.plugin(SystemPrompt, {})
+  await mountSystemPrompt(ctx.isolate('sessionProjections'))
   await ctx.plugin(ToolRuntime, {})
   class StubProjections extends Service {
     constructor(host: Context) {

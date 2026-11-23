@@ -18,6 +18,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import ZoteroService from '../../../src/index.js'
@@ -53,7 +54,12 @@ export async function setupCompositionLane(
   const parsedPatch = load(bundlePatch) as PatchOptions[]
   await writeFile(
     configPath,
-    ["- name: '@deepseek-ai/dsh-system-prompt'", "- name: '@deepseek-ai/dsh-tools'", ''].join('\n'),
+    [
+      "- name: '@deepseek-ai/dsh-session-projection'",
+      "- name: '@deepseek-ai/dsh-system-prompt'",
+      "- name: '@deepseek-ai/dsh-tools'",
+      '',
+    ].join('\n'),
   )
 
   const context = new Context()
@@ -65,6 +71,7 @@ export async function setupCompositionLane(
   // itself would skip that step, so every composition spec would pass even if
   // the shipped entry shape stopped surviving it.
   const modules = new Map<string, { default: unknown }>([
+    ['@deepseek-ai/dsh-session-projection', { default: SessionProjectionRegistry }],
     ['@deepseek-ai/dsh-system-prompt', { default: SystemPrompt }],
     ['@deepseek-ai/dsh-tools', { default: ToolRuntime }],
     ['dsh-zotero', { default: ZoteroService }],

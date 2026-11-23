@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { credentialRef, normalizeApiKey } from '@deepseek-ai/dsh-credentials'
 import { ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED, ZoteroError } from '../errors.js'
 
 /**
@@ -19,7 +19,7 @@ import { ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED, ZoteroError } from '../errors.
  * @param reference - the configured credential-reference name (trimmed).
  * @returns the token value.
  * @throws {ZoteroError} `ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED` when the reference
- *   is invalid, the credentials seam is absent, or the value is empty.
+ *   is invalid, the credentials seam is absent, or the token is empty or malformed.
  */
 export async function resolveMineruToken(ctx: Context, reference: string): Promise<string> {
   let ref: ReturnType<typeof credentialRef>
@@ -39,12 +39,14 @@ export async function resolveMineruToken(ctx: Context, reference: string): Promi
       ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
     )
   }
-  const value = await credentials.resolve(ref)
-  if (value === undefined || value.value.trim() === '') {
+  const token = normalizeApiKey((await credentials.resolve(ref))?.value ?? '')
+  if (!token.ok) {
+    const problem =
+      token.reason === 'empty' ? 'has no value' : 'contains a token with invalid characters'
     throw new ZoteroError(
-      `MinerU credential reference "${reference}" is configured but has no value. Store the token under that reference, or switch the enrichment mode back to free.`,
+      `MinerU credential reference "${reference}" ${problem}. Store a valid token under that reference, or switch the enrichment mode back to free.`,
       ZOTERO_ENRICHMENT_CREDENTIAL_UNRESOLVED,
     )
   }
-  return value.value.trim()
+  return token.value
 }

@@ -230,18 +230,15 @@ describe('the Sources tab keeps its registration when its body throws', () => {
       useSessions: (sel: (snapshot: SessionsStub) => unknown) =>
         sel(sessionsOf('sess-1', '/ws/project')),
       useChat: (sel: (snap: ChatSnapshot) => unknown) =>
-        sel(chatOf([toolRow(attachmentResult('/ws/project/storage/paper.pdf'))])),
+        sel(chatOf([toolRow(attachmentResult('storage/paper.pdf'))])),
     } as unknown as SourcesTabProps
 
     const view = render(<SourcesTab {...props} />)
     const readButton = await screen.findByRole('button', { name: mockT('readPdf') })
     fireEvent.click(readButton)
-    // A path inside the session's workspace root is stripped of that root, so
-    // the address carries the workspace-relative spelling and stays in the
-    // session scope: the sidebar resolves it against the root it holds for this
-    // Session rather than the filesystem's.
+    // The host helper resolves a relative path to an absolute path in the session scope.
     expect(openResource).toHaveBeenCalledWith(
-      'dsh-resource://file/session/sess-1/storage/paper.pdf',
+      'dsh-resource://file/session/sess-1//ws/project/storage/paper.pdf',
     )
     view.unmount()
   })

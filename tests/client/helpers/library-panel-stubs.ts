@@ -46,7 +46,6 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
   // The pane-tab occurrence: its signal is what the view memory keys on.
   const occurrence = new AbortController()
   let lastSelection: unknown
-  let lastStatus: unknown
   const contextMenuTargets: Array<{ kind: string; value: unknown }> = []
   const props = {
     t: mockT,
@@ -82,17 +81,6 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
         running: sessions.byId[paneId]?.running === true,
         removed: sessions.byId[paneId]?.removed === true,
       })
-    },
-    useSessionStatus: (
-      select: (snapshot: Map<string, { running: boolean }>) => unknown,
-      eq?: (a: unknown, b: unknown) => boolean,
-    ) => {
-      const next = select(
-        new Map(sessions.ids.map((id) => [id, { running: sessions.byId[id]?.running === true }])),
-      )
-      if (lastStatus !== undefined && eq?.(lastStatus, next)) return lastStatus
-      lastStatus = next
-      return next
     },
     // Memoize through the eq contract the store's hook honors: an equal
     // selection keeps object identity across renders, a changed one replaces

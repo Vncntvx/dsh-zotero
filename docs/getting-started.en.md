@@ -8,8 +8,8 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness: the agent sea
 
 - Zotero ≥ 7 desktop installed (reads require Zotero ≥ 7; writes require Zotero 10).
 - Local API enabled: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
-- Node.js ≥ 24.15.0.
-- Host dsh `>=0.2.2-rc.5 <0.3.0`; for the mapping of earlier versions, see GitHub Releases.
+- Node.js `^24.22.3 || >=26.13.1`.
+- Host dsh `>=0.2.3-alpha.2 <0.3.0`; for the mapping of earlier versions, see GitHub Releases.
 
 ## Installing the Plugin
 
