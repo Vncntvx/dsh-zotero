@@ -19,6 +19,7 @@ import {
 } from '../errors.js'
 import { ZIP_MAX_ARCHIVE_BYTES, ZIP_MAX_FILE_BYTES } from './archive-limits.js'
 import type { ExtractedParsedFiles, NormalizedContentList } from './zip.js'
+import { workerEntryUrl } from './worker-bootstrap.js'
 
 const resultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(false), message: z.string().max(4096) }).strict(),
@@ -70,19 +71,7 @@ const spawnWorker: ArchiveWorkerFactory = (entry, bytes) => {
     maxYoungGenerationSizeMb: 32,
     stackSizeMb: 4,
   }
-  if (!import.meta.url.endsWith('.ts'))
-    return new Worker(entry, {
-      workerData: bytes,
-      transferList: [bytes.buffer as ArrayBuffer],
-      execArgv: [],
-      resourceLimits,
-    })
-  const source = new URL('./zip-worker.ts', import.meta.url)
-  const root = new URL('../', import.meta.url).href
-  const bootstrap = `import { registerHooks } from 'node:module';
-registerHooks({resolve(s,c,n){if(s.startsWith('.')&&s.endsWith('.js')&&c.parentURL?.startsWith(${JSON.stringify(root)}))return n(s.slice(0,-3)+'.ts',c);return n(s,c)}});
-await import(${JSON.stringify(source.href)});`
-  return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), {
+  return new Worker(workerEntryUrl(entry), {
     workerData: bytes,
     transferList: [bytes.buffer as ArrayBuffer],
     execArgv: [],

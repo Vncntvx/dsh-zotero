@@ -13,22 +13,15 @@
  * @module dsh-zotero/scholarly/transport/allowlist
  */
 
-import { isScholarlyHost } from './hosts.js'
-
-/**
- * A URL outside the public/allowlisted set.
- *
- * Defined here, beside the check that raises it, so the transport can treat it
- * as final without importing back into this module.
- */
-export {
-  PublicAddressError as ScholarlySecurityError,
-  isPublicUrl,
-} from '../../transport/public-url.js'
 import {
   PublicAddressError as ScholarlySecurityError,
   isPublicUrl,
 } from '../../transport/public-url.js'
+import { isScholarlyHost } from './hosts.js'
+
+// Re-exported so the transport can treat the refusal as final without
+// importing back into this module.
+export { ScholarlySecurityError, isPublicUrl }
 
 /**
  * Checks if a hostname belongs to the approved scholarly index endpoints.

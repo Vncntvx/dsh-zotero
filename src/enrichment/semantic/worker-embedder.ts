@@ -4,6 +4,7 @@ import { asRecord } from '../../json.js'
 import type { SemanticModelEntry } from '../../enrichment-model-catalog.js'
 import type { Embedder } from './session.js'
 import type { BundleSnapshot } from '../model-installation.js'
+import { workerEntryUrl } from '../worker-bootstrap.js'
 import { SemanticBundleFailure } from './bundle-failure.js'
 
 export const SEMANTIC_OPEN_DEADLINE_MS = 180_000
@@ -11,19 +12,12 @@ export const SEMANTIC_RUN_DEADLINE_MS = 120_000
 export type SemanticWorkerFactory = (spec: SemanticModelEntry, dir: string) => Worker
 
 const spawnSemanticWorker: SemanticWorkerFactory = (spec, dir) => {
-  const entry = new URL('./model-worker.js', import.meta.url)
-  const options = {
+  const entry = workerEntryUrl(new URL('./model-worker.js', import.meta.url))
+  return new Worker(entry, {
     workerData: { spec, dir },
     execArgv: [],
     resourceLimits: { maxOldGenerationSizeMb: 1024, maxYoungGenerationSizeMb: 64, stackSizeMb: 8 },
-  }
-  if (!import.meta.url.endsWith('.ts')) return new Worker(entry, options)
-  const source = new URL('./model-worker.ts', import.meta.url)
-  const root = new URL('../../', import.meta.url).href
-  const bootstrap = `import {registerHooks} from 'node:module';
-registerHooks({resolve(s,c,n){if(s.startsWith('.')&&s.endsWith('.js')&&c.parentURL?.startsWith(${JSON.stringify(root)}))return n(s.slice(0,-3)+'.ts',c);return n(s,c)}});
-await import(${JSON.stringify(source.href)});`
-  return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), options)
+  })
 }
 
 interface Pending {

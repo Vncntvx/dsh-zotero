@@ -26,6 +26,7 @@ import type {
 import type { IndexOperation, IndexedDocument, IndexedPassage } from './parsed-index-worker.js'
 import { resolveSafeDirectory } from './safe-directory.js'
 import { sourceKeyOf } from './source-stamp.js'
+import { workerEntryUrl } from './worker-bootstrap.js'
 import type { ZoteroParsedIndexStatusView } from '../contract.js'
 
 type ParsedArtifactMeta = StoredArtifactMeta['meta']
@@ -78,17 +79,7 @@ interface SearchDependencies {
 }
 
 function workerOf(path: string): Worker {
-  if (!import.meta.url.endsWith('.ts'))
-    return new Worker(new URL('./parsed-index-worker.js', import.meta.url), {
-      workerData: path,
-      execArgv: [],
-    })
-  const entry = new URL('./parsed-index-worker.ts', import.meta.url).href
-  const root = new URL('../', import.meta.url).href
-  const bootstrap = `import { registerHooks } from 'node:module';
-registerHooks({resolve(s,c,n){if(s.startsWith('.')&&s.endsWith('.js')&&c.parentURL?.startsWith(${JSON.stringify(root)}))return n(s.slice(0,-3)+'.ts',c);return n(s,c)}});
-await import(${JSON.stringify(entry)});`
-  return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), {
+  return new Worker(workerEntryUrl(new URL('./parsed-index-worker.js', import.meta.url)), {
     workerData: path,
     execArgv: [],
   })
