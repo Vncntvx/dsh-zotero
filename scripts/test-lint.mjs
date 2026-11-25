@@ -74,6 +74,7 @@ export const TEXT_EXTENSIONS = [
   '.js',
   '.mjs',
   '.cjs',
+  '.py',
   '.json',
   '.md',
   '.css',

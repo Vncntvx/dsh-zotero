@@ -43,8 +43,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const packed = (path) => path.replace(/^\.\//, '')
 
 /**
- * Expand declared files and the README screenshot directory. Other directory
- * inventories come from their builders or the locale and export contracts.
+ * Resolve declared files, expanding the README image directory. Other
+ * directory inventories come from their builders or the locale and export
+ * contracts.
  * @param path {string}
  * @param baseDir {string}
  * @returns {string[]}
@@ -55,7 +56,7 @@ function declaredPackFiles(path, baseDir) {
   if (statSync(full).isFile()) return [target]
   if (target !== 'docs/images/readme') return []
   return readdirSync(full, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.webp'))
+    .filter((entry) => entry.isFile() && /\.(webp|svg|md)$/.test(entry.name))
     .map((entry) => `${target}/${entry.name}`)
 }
 

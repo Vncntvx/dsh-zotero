@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500" xml:lang="en" role="img" aria-labelledby="title desc">
+  <title id="title">GPT-3 passage and origins in the literature trail</title>
+  <desc id="desc">The session-level trail shows the filtered papers, selected abstract evidence, BibTeX, and retrieval source states.</desc>
+  <style>
+    text { fill: #1e293b; font: 16px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+    .small { font-size: 14px; }
+    .muted { fill: #526378; }
+    .label { font-weight: 600; }
+    .heading { font-size: 22px; font-weight: 650; }
+    .lead { font-size: 18px; font-weight: 600; }
+    .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    .serif { font-family: Georgia, "Times New Roman", serif; }
+    .math { font: 26px Georgia, "Times New Roman", serif; }
+    .paper { fill: #fff; }
+    .pane { fill: #f8fafc; }
+    .chrome { fill: #f1f5f9; }
+    .code { fill: #edf2f7; }
+    .select { fill: #0d9488; fill-opacity: .11; }
+    .accent { fill: #0f766e; }
+    .warning { fill: #92400e; }
+    .warning-bg { fill: #fffbeb; }
+    .border { stroke: #94a3b8; stroke-opacity: .65; }
+    .rule { stroke: #94a3b8; stroke-opacity: .42; }
+    .edge { stroke: #0d9488; stroke-width: 2; }
+    .placeholder { stroke: #1e293b; stroke-opacity: .17; stroke-width: 3; stroke-linecap: round; }
+    .icon { fill: none; stroke: #64748b; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <clipPath id="application-clip"><rect x="0" y="0" width="800" height="500" rx="10"/></clipPath>
+  </defs>
+  <g id="application" clip-path="url(#application-clip)">
+  <rect x="0" y="0" width="800" height="500" rx="0" class="paper"/>
+  <rect x="0" y="0" width="34" height="500" rx="0" class="chrome"/>
+  <path d="M34 0L34 500" class="rule"/>
+  <rect x="35" y="0" width="765" height="61" rx="0" class="pane"/>
+  <path d="M34 61L800 61" class="rule"/>
+  <path d="M1.8 2.5h12.4v11H1.8Zm8.5 0v11" transform="translate(9 13)" class="icon"/>
+  <path d="M8 3v10M3 8h10" transform="translate(9 56)" class="icon"/>
+  <path d="M8 1.5 9.8 6.2 14.5 8l-4.7 1.8L8 14.5 6.2 9.8 1.5 8l4.7-1.8Z" transform="translate(9 89)" class="icon"/>
+  <path d="M1.5 4h5l1.7 2h6.3v6.5h-13ZM1.5 4V2.8h5L8 4h5v2" transform="translate(9 122)" class="icon"/>
+  <path d="M9.8 9.8l3.5 3.5M10.6 6.4a4.2 4.2 0 1 0-8.4 0 4.2 4.2 0 0 0 8.4 0Z" transform="translate(9 155)" class="icon"/>
+  <text x="48" y="22" class="small label" text-anchor="start">Papers on the origins of the Transformer</text>
+  <text x="50" y="51" class="small muted" text-anchor="start">Chat</text>
+  <text x="101" y="51" class="small muted" text-anchor="start">Trace</text>
+  <rect x="144" y="33" width="125" height="25" rx="4" class="select"/>
+  <path d="M151 59L262 59" class="edge"/>
+  <text x="152" y="51" class="small label accent" text-anchor="start">Literature trail</text>
+  <path d="M1.8 2.5h12.4v11H1.8Zm8.5 0v11" transform="translate(774 11)" class="icon"/>
+  <rect x="35" y="62" width="765" height="44" rx="0" class="pane"/>
+  <path d="M35 106L800 106" class="rule"/>
+  <circle cx="50" cy="83" r="3" class="accent"/>
+  <text x="59" y="88" class="small" text-anchor="start">Connected to Zotero</text>
+  <rect x="197" y="70" width="88" height="26" rx="4" class="select border"/>
+  <text x="241.0" y="88" class="small label accent" text-anchor="middle">Literature</text>
+  <rect x="289" y="70" width="89" height="26" rx="4" class="paper border"/>
+  <text x="333.5" y="88" class="small" text-anchor="middle">Exports 3</text>
+  <text x="391" y="88" class="small muted" text-anchor="start">12 items · 13 passages · 3 exports</text>
+  <text x="783" y="88" class="small muted" text-anchor="end">Refresh</text>
+  <g id="session-literature">
+  <rect x="35" y="107" width="160" height="337" rx="0" class="pane"/>
+  <path d="M195 106L195 447" class="rule"/>
+  <rect x="44" y="117" width="48" height="21" rx="4" class="chrome"/>
+  <text x="68.0" y="132" class="small muted" text-anchor="middle">All 12</text>
+  <rect x="98" y="117" width="89" height="21" rx="4" class="select"/>
+  <text x="142.5" y="132" class="small accent label" text-anchor="middle">Passages 4</text>
+  <text x="45" y="160" class="small accent" text-anchor="start">All passages 13</text>
+  <text x="49" y="186" class="small" text-anchor="start">BERT</text>
+  <text x="49" y="206" class="small muted" text-anchor="start">Devlin et al.</text>
+  <text x="49" y="234" class="small" text-anchor="start">Attention Is</text>
+  <text x="49" y="252" class="small" text-anchor="start">All You Need</text>
+  <text x="49" y="272" class="small muted" text-anchor="start">Vaswani et al.</text>
+  <rect x="41" y="283" width="149" height="75" rx="4" class="select"/>
+  <path d="M42 287L42 354" class="edge"/>
+  <text x="49" y="302" class="small label" text-anchor="start">Language Models</text>
+  <text x="49" y="317" class="small label" text-anchor="start">are Few-Shot</text>
+  <text x="49" y="332" class="small label" text-anchor="start">Learners</text>
+  <text x="49" y="349" class="small muted" text-anchor="start">Brown et al. · 2020</text>
+  <text x="49" y="372" class="small" text-anchor="start">Chain-of-Thought</text>
+  <text x="49" y="390" class="small" text-anchor="start">Prompting</text>
+  <text x="49" y="410" class="small muted" text-anchor="start">Wei et al.</text>
+  </g>
+  <g id="selected-item-passages">
+  <text x="208" y="132" class="label" text-anchor="start">Language Models are Few-Shot Learners</text>
+  <text x="208" y="153" class="small muted" text-anchor="start">Tom B. Brown et al. · NeurIPS 33 · 2020</text>
+  <rect x="208" y="163" width="115" height="26" rx="4" class="paper border"/>
+  <text x="265.5" y="181" class="small" text-anchor="middle">Ask about this</text>
+  <text x="208" y="209" class="label" text-anchor="start">Key passage 1</text>
+  <text x="208" y="229" class="small muted" text-anchor="start">1 retrieve · 1 kept · 1 reported</text>
+  <rect x="208" y="239" width="81" height="21" rx="4" class="select"/>
+  <text x="248.5" y="254" class="small accent label" text-anchor="middle">Abstract</text>
+  <rect x="208" y="266" width="358" height="84" rx="4" class="select"/>
+  <path d="M209 269L209 347" class="edge"/>
+  <text x="220" y="284" class="small" text-anchor="start">We train GPT-3, an autoregressive language</text>
+  <text x="220" y="302" class="small" text-anchor="start">model with 175 billion parameters, 10x larger</text>
+  <text x="220" y="320" class="small" text-anchor="start">than any previous non-sparse language model,</text>
+  <text x="220" y="338" class="small" text-anchor="start">and test its performance in the few-shot setting.</text>
+  <text x="208" y="374" class="small accent" text-anchor="start">Supports 1 claim in the conversation</text>
+  <text x="208" y="402" class="small label" text-anchor="start">BibTeX  1</text>
+  <text x="208" y="425" class="small mono" text-anchor="start">brown_language_2020</text>
+  </g>
+  <g id="citation-and-retrieval">
+  <rect x="577" y="107" width="223" height="337" rx="0" class="pane"/>
+  <path d="M577 106L577 447" class="rule"/>
+  <rect x="587" y="117" width="65" height="21" rx="4" class="select"/>
+  <text x="619.5" y="132" class="small accent label" text-anchor="middle">BibTeX</text>
+  <rect x="660" y="117" width="98" height="21" rx="4" class="chrome"/>
+  <text x="709.0" y="132" class="small muted" text-anchor="middle">GB/T 7714</text>
+  <rect x="587" y="148" width="201" height="76" rx="4" class="code"/>
+  <text x="594" y="166" class="mono small accent" text-anchor="start">@inproceedings{</text>
+  <text x="594" y="184" class="mono small accent" text-anchor="start">  brown_language_2020,</text>
+  <path d="M596 203L760 203" class="placeholder"/>
+  <text x="587" y="247" class="label" text-anchor="start">Search origins</text>
+  <text x="587" y="271" class="small" text-anchor="start">Library · Metadata</text>
+  <text x="587" y="290" class="small muted" text-anchor="start">11 papers matched</text>
+  <text x="587" y="312" class="small" text-anchor="start">Language models and attention</text>
+  <text x="587" y="331" class="small muted" text-anchor="start">Metadata · 4 papers matched</text>
+  <path d="M587 343L788 343" class="rule"/>
+  <text x="587" y="363" class="small label" text-anchor="start">Latest retrieval sources</text>
+  <text x="587" y="383" class="small muted" text-anchor="start">abstract · 1 match</text>
+  <text x="587" y="401" class="small muted" text-anchor="start">fulltext · Unavailable</text>
+  <text x="587" y="419" class="small muted" text-anchor="start">annotation / note · Unavailable</text>
+  </g>
+  <g id="composer">
+  <rect x="76" y="453" width="684" height="36" rx="7" class="pane border"/>
+  <path d="M8 3v10M3 8h10" transform="translate(85 463)" class="icon"/>
+  <text x="109" y="476" class="small muted" text-anchor="start">Send a message or create a task</text>
+  <path d="M8 13V3M4 7l4-4 4 4" transform="translate(735 463)" class="icon"/>
+  </g>
+  </g>
+  <rect x="0.5" y="0.5" width="799" height="499" rx="10" class="border" fill="none"/>
+</svg>

@@ -404,7 +404,7 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 5. `npm run release:check`：发布门禁，依次运行 `format:check`、`harness-state.mjs --strict`、`lint:test`、`lint:hooks`、`tokens:check`、`style:check`、`build`、`typecheck:after-build`、`test:coverage`、`test:calibration` 与 `verify:pack`；可直接从 `npm ci --ignore-scripts` 开始，无需预构建；
 6. 打包核对：`verify:pack` 已在第 5 步校验 tarball 的必需文件；如需人工确认可执行 `npm pack --dry-run`，核对产物包含 `lib/`、`cordis.patch.yml`、`locale/`、`README` 与 `docs/plugin-detail.md`；
 7. 走查核心流程：G1 至 G8 主流程必跑；改动涉及面板或轨迹时补 P 组用例，涉及写入时在启用写入的独立会话中补 W 组用例；
-8. 素材核对：两份 README 的「界面速览」引用 `docs/images/readme/` 下的 WebP 截图，取自运行预置演示库的当前 Web UI；`verify:pack` 校验发布包包含这些截图，保证相对路径可用；`screenshots.json` 声明插件市场展示的 8 张截图及其顺序（路径相对仓库根目录）。`docs/images/` 根目录只保留插件图标 `icon.png`。发布说明另行配图时，从当前 Web UI 截取并核对界面文案。
+8. 两份 README 的工作流概览与示例图使用 `docs/images/readme/` 下的双语 SVG。`verify:pack` 核对发布包中的插图。插件市场按仓库根目录的 `screenshots.json` 读取 `docs/images/market/` 下的 PNG。发布说明另行配图时，从当前 Web UI 截取并核对界面文案。
 9. 计数回写：终批提交落地后复跑 `npm test`，把 `docs/development.md` 的「已运行门禁」段更新为当次真实 spec 文件数与测试数。
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。

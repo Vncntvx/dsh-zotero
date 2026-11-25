@@ -3,8 +3,8 @@
 # dsh-zotero
 
 <img
-  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Search%2C+read%2C+and+trace+citations+from+local+Zotero.%3B%3E+Audit+every+source+and+passage+in+the+Literature+Trail.%3B%3E+Browse+collections+and+cite+instantly+in+the+Literature+Panel."
-  alt="dsh-zotero"
+  src="docs/images/readme/project-overview.zh.svg"
+  alt="dsh-zotero 科研工作流架构：Agent 按研究 SOP 调用 Zotero 工具，会话文献轨迹汇总证据，文献面板独立访问本地库"
 />
 <p align="center">
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&amp;logo=deepseek&amp;logoColor=white" alt="powered by dsh" style="max-width:100%;"></a>
@@ -21,57 +21,68 @@
   <a href="README.en.md"><b>English</b></a> · <b>中文</b>
 </p>
 
-dsh-zotero 将本地 Zotero 文献库接入 DeepSeek Harness。Agent 在对话中检索、阅读与引用文献；所查阅的条目、原文片段与导出结果汇总在文献轨迹中，便于核对。需要自行翻阅时，可在右侧文献面板中浏览整个库、复制引用。开启写入后，Agent 也可修改文献库，每次改动均需审批。
+<p align="center">
+  <a href="#科研工作流示例">科研工作流示例</a> ·
+  <a href="#主要功能">主要功能</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#工具一览">工具一览</a> ·
+  <a href="#说明文档">说明文档</a> ·
+  <a href="#许可证">许可证</a>
+</p>
 
-## 界面速览
+**dsh-zotero 是一款以本地 Zotero 文献库为基础的 AI 原生科研工作流插件，运行于 DeepSeek Harness。** 从研究问题出发，Agent 检索文献、提取有出处的证据、比较论文并生成引用。你可以在文献轨迹中核对检索范围、原文摘录与被跳过的来源，也可以在文献面板中浏览合集、阅读 PDF 和复制引用。
 
-**在对话中检索与研读**：Agent 在本地文献库中按标题、作者、年份、标签或全文检索，范围可限定到合集或保存搜索，并读取元数据、摘要、笔记和 PDF 全文；返回的片段标注来源：摘要、全文片段或笔记。
+Agent 可按需加载研究 SOP，完成单篇速读、证据比较、写作对账与文库治理。启用学术检索后，还可以在多个学术索引间梳理主题版图、追踪引文脉络和核验文献。
 
-| 提问与检索过程                                         | 依据与结论                                         |
-| ------------------------------------------------------ | -------------------------------------------------- |
-| ![提问与检索过程](docs/images/readme/chat-search.webp) | ![依据与结论](docs/images/readme/chat-answer.webp) |
+## 科研工作流示例
 
-**定位原文与公式**：Agent 从 PDF 全文、批注与笔记中提取相关段落和公式，注明出处；批注片段保留 Zotero 页码标签。
+**围绕研究问题发现文献**：以 Transformer 架构起源为例，Agent 在本地库检索相关论文，并结合检索到的证据梳理各篇贡献与时间线。来自摘要的片段标注为「摘要」。
 
-| 提问与出处                                                  | 原文定义与公式                                               |
-| ----------------------------------------------------------- | ------------------------------------------------------------ |
-| ![提问与出处](docs/images/readme/chat-formulas-prompt.webp) | ![原文定义与公式](docs/images/readme/chat-formulas-def.webp) |
+| 提问与检索过程                                                                       | 依据与结论                                                                  |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| ![Agent 在本地 Zotero 文献库检索并显示命中数](docs/images/readme/chat-search.zh.svg) | ![摘要证据与 Transformer 论文时间线](docs/images/readme/chat-answer.zh.svg) |
 
-**文献轨迹：核对出处与汇总导出**：会话顶部的文献轨迹按条目汇总当前会话读过的片段、批注与检索来源，并报告全文覆盖度与被跳过的来源。导出视图把会话生成的 BibTeX 与引用跨条目去重，可一键复制或下载。
+**定位原文与公式**：追问注意力机制时，Agent 从 PDF 全文定位定义与公式，注明章节号与全文分块位置。来自 Zotero 批注的片段保留页码标签。
 
-| 文献轨迹条目检查                                             | 导出汇总                                          |
-| ------------------------------------------------------------ | ------------------------------------------------- |
-| ![文献轨迹条目检查](docs/images/readme/trail-inspector.webp) | ![导出汇总](docs/images/readme/trail-export.webp) |
+| 提问与出处                                                                       | 原文定义与公式                                                                     |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| ![询问多头注意力并定位 PDF 出处](docs/images/readme/chat-formulas-prompt.zh.svg) | ![注意力定义摘录与缩放点积注意力公式](docs/images/readme/chat-formulas-def.zh.svg) |
 
-**文献面板：自主查阅与即时引用**：在右侧边栏直接浏览整个库。合集树、条目列表与详情三栏并列，动作行一键复制引用或 BibTeX。
+**核对证据并导出引用**：在会话顶部打开文献轨迹，可按条目检查 Agent 摘取的片段、批注和检索来源，以及全文覆盖度和被跳过的来源。切到导出视图，可复制或下载本会话去重后的 BibTeX 与引用。
 
-![文献面板](docs/images/readme/panel-full.webp)
+| 文献轨迹条目检查                                                                    | 导出汇总                                                                |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| ![会话文献轨迹中的 GPT-3 摘录与检索来源](docs/images/readme/trail-inspector.zh.svg) | ![文献轨迹中的三条 BibTeX 导出](docs/images/readme/trail-export.zh.svg) |
 
-**面板内检索与阅读**：搜索框按标题、作者、年份即时过滤；本地 PDF 在独立标签页打开。
+**通过文献面板接续研读**：在对话旁浏览 Zotero 合集、条目和详情，可自行阅读附件、复制引用或 BibTeX，也可把选中的条目带入对话草稿。
 
-| 面板内检索                                          | PDF 阅读                                       |
-| --------------------------------------------------- | ---------------------------------------------- |
-| ![面板内检索](docs/images/readme/panel-search.webp) | ![PDF 阅读](docs/images/readme/panel-pdf.webp) |
+![右侧文献面板的合集、条目列表和文献详情](docs/images/readme/panel-full.zh.svg)
 
-**学术检索**（可选组件）：在对话中检索 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP，同一论文按相关度融合；可读取开放获取全文、追踪引用网络、核验参考文献，并把选中的结果保存到本地库。未应答的索引会在结果中列出原因。
+**筛选本地文献并打开 PDF**：按标题、作者或年份筛选条目，在独立标签页打开本地 PDF。
 
-| 提问与工具调用                                              | 检索口径与结果                                               |
-| ----------------------------------------------------------- | ------------------------------------------------------------ |
-| ![提问与工具调用](docs/images/readme/scholarly-search.webp) | ![检索口径与结果](docs/images/readme/scholarly-results.webp) |
+| 面板内检索                                                                          | PDF 阅读                                                                                      |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| ![在文献面板中检索 diffusion，得到一条命中](docs/images/readme/panel-search.zh.svg) | ![在右侧独立标签页阅读 Attention Is All You Need 的 PDF](docs/images/readme/panel-pdf.zh.svg) |
 
-**文档解析与选段提问**（可选组件）：提交 PDF 前，确认卡说明文档将发送至 MinerU。解析完成后，可在以论文标题命名的标签页阅读 Markdown 全文。选中段落点击「让模型解释」，选段、论文信息与核对引文的要求一并写入会话草稿。「解析文档管理」汇总全部产物，支持筛选、重新解析与批量删除。
+**把检索扩展到外部学术索引**（可选组件）：Agent 跨 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP 查找相关论文，并按相关度融合同一论文的结果；可继续读取开放获取全文、追踪引用网络或核验参考文献。未应答的索引会在结果中列出原因。选中的结果经审批后可保存到个人库。
 
-| 提交解析前                                           | 阅读 Markdown                                             |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| ![提交解析前](docs/images/readme/parse-confirm.webp) | ![阅读 Markdown](docs/images/readme/parsed-markdown.webp) |
+| 提问与工具调用                                                                | 检索口径与结果                                                                         |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| ![Agent 的学术工具调用与索引限流](docs/images/readme/scholarly-search.zh.svg) | ![回答中的学术检索口径、来源与代表性结果](docs/images/readme/scholarly-results.zh.svg) |
 
-| 选中提问                                           | 解析文档管理                                            |
-| -------------------------------------------------- | ------------------------------------------------------- |
-| ![选中提问](docs/images/readme/parsed-select.webp) | ![解析文档管理](docs/images/readme/parsed-manager.webp) |
+**把解析后的原文带回研究对话**（可选组件）：提交 PDF 前，确认卡说明文档将发送至 MinerU。解析完成后，可在以论文标题命名的标签页阅读 Markdown 全文。选中段落后点击「让模型解释」，选段、论文信息与核对引文的要求一并写入会话草稿。「解析文档管理」汇总全部产物，支持筛选、重新解析与批量删除。
+
+| 提交解析前                                                                                | 阅读 Markdown                                                              |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| ![MinerU 提交卡中的外部服务、文件限制与解析提示](docs/images/readme/parse-confirm.zh.svg) | ![右侧标签页中的解析全文与摘要](docs/images/readme/parsed-markdown.zh.svg) |
+
+| 选中提问                                                                     | 解析文档管理                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| ![从摘要选段并打开让模型解释的菜单](docs/images/readme/parsed-select.zh.svg) | ![解析文档管理中的状态筛选、全文索引与条目](docs/images/readme/parsed-manager.zh.svg) |
 
 ## 主要功能
 
-- **对话交互**
+- **Agent 研究工具与 SOP**
   - **检索浏览**：按标题、作者、年份、标签或全文检索，范围可为全库、我的出版物、合集或保存搜索；合集树、标签与保存搜索可直接浏览，已知 ref 可批量读取。
   - **原文定位**：围绕问题从全文、笔记与批注中取回片段，也能通读整篇文献；片段标注来源，批注保留 Zotero 页码，并报告全文覆盖度与被跳过的来源。
   - **引用与导出**：按 CSL 样式生成行内引用或合并参考文献表，导出 BibTeX、BibLaTeX、RIS 与 CSL-JSON；样式与语言沿用配置默认值。
@@ -96,11 +107,19 @@ dsh-zotero 将本地 Zotero 文献库接入 DeepSeek Harness。Agent 在对话�
 
 交互方式、界面分工与运行边界详见[产品模型](docs/product-model.md)。
 
-## 安装
+## 快速开始
+
+### 前置条件
+
+1. 安装并运行 Zotero 7 及以上桌面版（写入功能需 Zotero 10）。
+2. 在 Zotero 中开启本地 API：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**。
+3. 安装并运行与插件匹配的 DeepSeek Harness 桌面端。当前插件要求 dsh 0.2.3-alpha.2；如果应用内更新尚未提供该版本，可直接下载安装包（将链接中的版本替换为所需版本）：
+   - macOS（Apple Silicon）：`https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.3-alpha.2-mac-arm64.dmg`
+   - Windows（x64）：`https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.3-alpha.2-win-x64.exe`
 
 ### 桌面端安装（插件管理器）
 
-在 DeepSeek Harness 桌面端打开侧栏的**插件**，点击**添加插件**，输入对应标识：
+在 DeepSeek Harness 桌面端打开侧栏的**插件**，点击**安装插件**，输入对应标识：
 
 - 最新版（推荐）：`dsh-zotero`
 - 指定版本：`dsh-zotero@1.5.0`
@@ -123,17 +142,15 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#stable
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
-安装完成后新建会话即可使用。在插件管理器中打开 **dsh-zotero** 详情页，其配置区提供完整配置表单。
+在插件管理器中打开 **dsh-zotero** 详情页可调整插件配置。
 
 > 提示：从 `main` 源码分支直接安装需要本地执行 `prepare` 构建，并在 profile 的 `pnpm-workspace.yaml` 中允许 `dsh-zotero` 的构建脚本；改用 `#stable` / `#release` 分支或 npm 包可免除这一步。本地语义检索的 WASM 运行时随插件发布，无需另行安装；模型在设置中下载，详见[快速入门](docs/getting-started.md)。
 
-## 前置条件
+### 第一次研读
 
-1. 安装并运行 Zotero 7 及以上桌面版（写入功能需 Zotero 10）。
-2. 在 Zotero 中开启本地 API：**设置 → 高级 → 勾选“允许此计算机上的其他应用程序与 Zotero 通信”**。
-3. 安装并运行与插件匹配的 DeepSeek Harness 桌面端。当前插件要求 dsh 0.2.3-alpha.2；如果应用内更新尚未提供该版本，可直接下载安装包（将链接中的版本替换为所需版本）：
-   - macOS（Apple Silicon）：`https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.3-alpha.2-mac-arm64.dmg`
-   - Windows（x64）：`https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.3-alpha.2-win-x64.exe`
+安装后新建会话。用 Zotero 库里已有的主题替换提示词里的「研究主题」。收到回答后，打开会话顶部的**文献轨迹**，核对检索范围、摘录来源与导出结果。
+
+> 在我的 Zotero 库里找关于〈研究主题〉的论文，摘录相关段落并标明出处，再导出 BibTeX。
 
 ## 工具一览
 

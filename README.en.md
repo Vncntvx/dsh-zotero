@@ -3,8 +3,8 @@
 # dsh-zotero
 
 <img
-  src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&pause=2000&color=CC2936&center=true&vCenter=true&width=760&lines=%3E+Search%2C+read%2C+and+trace+citations+from+local+Zotero.%3B%3E+Audit+every+source+and+passage+in+the+Literature+Trail.%3B%3E+Browse+collections+and+cite+instantly+in+the+Literature+Panel."
-  alt="dsh-zotero"
+  src="docs/images/readme/project-overview.en.svg"
+  alt="dsh-zotero research workflow architecture showing the agent's research SOPs, the session literature trail, and independent library browsing"
 />
 <p align="center">
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&amp;logo=deepseek&amp;logoColor=white" alt="powered by dsh" style="max-width:100%;"></a>
@@ -21,57 +21,68 @@
   <a href="README.md"><b>中文</b></a> · <b>English</b>
 </p>
 
-dsh-zotero connects your local Zotero library to DeepSeek Harness. In conversation, the agent searches, reads, and cites papers; the items it consults, the source passages, and the exports are collected in the literature trail for review. For independent browsing, use the literature panel in the right sidebar, which shows the whole library and lets you copy citations. With writes enabled, the agent can also modify the library, and every change requires approval.
+<p align="center">
+  <a href="#research-workflows-in-practice">Research workflows in practice</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#tools">Tools</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="#license">License</a>
+</p>
 
-## Interface tour
+**dsh-zotero is an AI-native research workflow plugin for DeepSeek Harness, built around your local Zotero library.** Start with a research question. The agent searches for papers, extracts passages with source locations, compares papers, and generates citations. Use the literature trail to check the search scope, passages, and skipped sources. In the literature panel, you can browse collections, read PDFs, and copy citations directly.
 
-**Search and study in conversation**: The agent searches the local library by title, author, year, tag, or full text, scoped to a collection or saved search, and reads metadata, abstracts, notes, and PDF full text. Returned passages carry their source label: abstract, full-text passage, or note.
+The agent can load research SOPs on demand for single-paper digests, evidence synthesis, manuscript reference audits, and library governance. With scholarly retrieval enabled, it can also survey a topic across indexes, trace citation networks, and verify references.
 
-| Question and search                                         | Evidence and conclusion                                         |
-| ----------------------------------------------------------- | --------------------------------------------------------------- |
-| ![Question and search](docs/images/readme/chat-search.webp) | ![Evidence and conclusion](docs/images/readme/chat-answer.webp) |
+## Research workflows in practice
 
-**Locate passages and formulas**: The agent finds relevant passages and formulas in PDF full text, annotations, and notes, and cites where they appear; annotations keep their Zotero page labels.
+**Find papers for a research question.** Asked about the origins of the Transformer, the agent searches the local library and traces each paper's contribution over time using the retrieved evidence. Passages taken from abstracts are labelled as such.
 
-| Question and provenance                                                  | Definitions and formulas                                               |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| ![Question and provenance](docs/images/readme/chat-formulas-prompt.webp) | ![Definitions and formulas](docs/images/readme/chat-formulas-def.webp) |
+| Question and search                                                                                    | Evidence and conclusion                                                                          |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| ![Agent searches the local Zotero library and shows hit counts](docs/images/readme/chat-search.en.svg) | ![Abstract evidence and a timeline of Transformer papers](docs/images/readme/chat-answer.en.svg) |
 
-**Literature trail: verify sources and aggregate exports**: The literature trail at the top of the session groups the passages, annotations, and search origins from the current session by item, and reports full-text coverage and the sources it skipped. The export view deduplicates the BibTeX entries and citations the session produced across items, ready to copy or download in one click.
+**Locate original passages and equations.** In a follow-up on attention, the agent retrieves definitions and equations from the PDF and cites the section and chunk where they appear. Passages from Zotero annotations keep their page labels.
 
-| Trail item inspector                                             | Export summary                                          |
-| ---------------------------------------------------------------- | ------------------------------------------------------- |
-| ![Trail item inspector](docs/images/readme/trail-inspector.webp) | ![Export summary](docs/images/readme/trail-export.webp) |
+| Question and provenance                                                                              | Definitions and formulas                                                                                                   |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| ![Multi-head attention question with PDF provenance](docs/images/readme/chat-formulas-prompt.en.svg) | ![Quoted attention definitions and the scaled dot-product attention equation](docs/images/readme/chat-formulas-def.en.svg) |
 
-**Literature panel: browse and cite on your own**: The right sidebar offers direct browsing of the whole library: collection tree, item list, and details sit side by side, and the action row copies a citation or BibTeX in one click.
+**Check the evidence and export citations.** Open the literature trail at the top of the session to review the passages, annotations, search origins, full-text coverage, and skipped sources. Switch to the export view to copy or download the session's deduplicated BibTeX and citations.
 
-![Literature panel](docs/images/readme/panel-full.webp)
+| Trail item inspector                                                                                            | Export summary                                                                          |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| ![GPT-3 evidence and search origins in the session literature trail](docs/images/readme/trail-inspector.en.svg) | ![Three BibTeX exports in the literature trail](docs/images/readme/trail-export.en.svg) |
 
-**Search and read in the panel**: The search box filters by title, author, and year as you type; a local PDF opens in its own tab.
+**Continue reading in the literature panel.** Browse Zotero collections, items, and details alongside the conversation. Open an attachment, copy a citation or BibTeX, or add a selected item to the chat draft.
 
-| Panel search                                          | PDF reading                                       |
-| ----------------------------------------------------- | ------------------------------------------------- |
-| ![Panel search](docs/images/readme/panel-search.webp) | ![PDF reading](docs/images/readme/panel-pdf.webp) |
+![Collections, items, and details in the right-hand literature panel](docs/images/readme/panel-full.en.svg)
 
-**Scholarly retrieval** (optional component): Search arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP in the conversation, with results for the same paper fused by relevance. Read open-access full text, follow citation networks, verify reference lists, and save selected results to the local library. Indexes that did not answer are listed with the reason.
+**Filter the library and open a local PDF.** Filter by title, author, or year, then open a local PDF in its own tab.
 
-| Question and tool calls                                              | Search parameters and results                                               |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| ![Question and tool calls](docs/images/readme/scholarly-search.webp) | ![Search parameters and results](docs/images/readme/scholarly-results.webp) |
+| Panel search                                                                                | PDF reading                                                                                  |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![One result for diffusion in the literature panel](docs/images/readme/panel-search.en.svg) | ![Attention Is All You Need open in a separate PDF tab](docs/images/readme/panel-pdf.en.svg) |
 
-**Document parsing and selection Q&A** (optional component): Before a PDF is submitted, a confirmation card explains that the document will be sent to MinerU. Once parsing finishes, the Markdown full text is available in a tab named after the paper. Select a passage and choose "Explain with the model" to put the passage, the paper details, and a request to check the quotation into the conversation draft. The Manage parsed docs page gathers every artifact and supports filtering, reparsing, and batch deletion.
+**Extend a search to scholarly indexes** (optional component). The agent searches arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, merging results for the same paper by relevance. It can read open-access full text, trace citation networks, or verify references. Results report why an index did not respond. Selected papers can be saved to the personal library with approval.
 
-| Before submitting                                           | Reading Markdown                                             |
-| ----------------------------------------------------------- | ------------------------------------------------------------ |
-| ![Before submitting](docs/images/readme/parse-confirm.webp) | ![Reading Markdown](docs/images/readme/parsed-markdown.webp) |
+| Question and tool calls                                                                         | Search parameters and results                                                                                           |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| ![Agent scholarly tool calls and index rate limits](docs/images/readme/scholarly-search.en.svg) | ![Reported scholarly search criteria, sources, and representative results](docs/images/readme/scholarly-results.en.svg) |
 
-| Selection Q&A                                           | Manage parsed docs                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------- |
-| ![Selection Q&A](docs/images/readme/parsed-select.webp) | ![Manage parsed docs](docs/images/readme/parsed-manager.webp) |
+**Bring a parsed passage into the conversation** (optional component). Before a PDF is submitted, a confirmation card explains that the document will be sent to MinerU. Once parsing finishes, the Markdown full text is available in a tab named after the paper. Select a passage and choose "Explain" to add the passage, paper details, and a request to check the quotation into the conversation draft. Manage parsed docs supports filtering, reparsing, and batch deletion.
+
+| Before submitting                                                                                                             | Reading Markdown                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| ![External service, file limits, and parsing notice in the MinerU submission dialog](docs/images/readme/parse-confirm.en.svg) | ![Parsed full text and abstract in the right-hand tab](docs/images/readme/parsed-markdown.en.svg) |
+
+| Selection Q&A                                                                               | Manage parsed docs                                                                                         |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| ![Selected abstract passage with the Explain menu](docs/images/readme/parsed-select.en.svg) | ![Status filters, full-text index, and item in parse management](docs/images/readme/parsed-manager.en.svg) |
 
 ## Features
 
-- **Conversation**
+- **Agent research tools and SOPs**
   - **Search and browsing**: Search by title, author, year, tag, or full text, scoped to the whole library, My Publications, a collection, or a saved search. Browse collection trees, tags, and saved searches, and batch-read known refs.
   - **Passage location**: Pull passages from full text, notes, and annotations for a question, or read a whole document; passages carry their source, annotations keep Zotero page numbers, and the result reports full-text coverage and skipped sources.
   - **Citations and export**: Generate in-text citations or a merged bibliography in CSL styles, and export BibTeX, BibLaTeX, RIS, or CSL-JSON; style and locale follow the configured defaults.
@@ -96,11 +107,19 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness. In conversati
 
 For details on interaction patterns, UI roles, and runtime boundaries, see the [product model](docs/product-model.en.md).
 
-## Install
+## Quick start
+
+### Prerequisites
+
+1. Zotero 7 or newer desktop app installed (writes require Zotero 10).
+2. Enable the local API in Zotero: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
+3. Install and run a DeepSeek Harness desktop app that matches the plugin. This plugin requires dsh 0.2.3-alpha.2. If the in-app updater has not offered that version, download the installer directly and replace the version in the link as needed:
+   - macOS (Apple Silicon): `https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.3-alpha.2-mac-arm64.dmg`
+   - Windows (x64): `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.3-alpha.2-win-x64.exe`
 
 ### Desktop app (Plugin Manager)
 
-In the DeepSeek Harness desktop app, open **Plugins** in the sidebar, click **Add Plugin**, and enter the package identifier:
+In the DeepSeek Harness desktop app, open **Plugins** in the sidebar, click **Install Plugin**, and enter the package identifier:
 
 - Latest version (recommended): `dsh-zotero`
 - Specific version: `dsh-zotero@1.5.0`
@@ -123,17 +142,15 @@ dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#stable
 dsh plugin --profile <name> add github:Vncntvx/dsh-zotero#release
 ```
 
-Start a new session after installation. Open the **dsh-zotero** detail page in the plugin manager; its configuration section carries the full configuration form.
+Open the **dsh-zotero** details page in the plugin manager to adjust its settings.
 
 > Note: installing directly from the `main` source branch needs a local `prepare` build plus an `allowBuilds` entry for `dsh-zotero` in the profile's `pnpm-workspace.yaml`; the `#stable` / `#release` branches or the npm package skip that step. The WASM runtime behind local semantic search ships inside the plugin, so nothing is installed on demand; download a model in settings — see [Getting Started](docs/getting-started.en.md).
 
-## Prerequisites
+### Your first research task
 
-1. Zotero 7 or newer desktop app installed (writes require Zotero 10).
-2. Enable the local API in Zotero: **Settings → Advanced → check "Allow other applications on this computer to communicate with Zotero"**.
-3. Install and run a DeepSeek Harness desktop app that matches the plugin. This plugin requires dsh 0.2.3-alpha.2. If the in-app updater has not offered that version, download the installer directly and replace the version in the link as needed:
-   - macOS (Apple Silicon): `https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.3-alpha.2-mac-arm64.dmg`
-   - Windows (x64): `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.3-alpha.2-win-x64.exe`
+After installation, open a new conversation and replace `[research topic]` in the prompt with a topic already in your Zotero library. After the agent replies, open the **Literature trail** at the top of the session to check the search scope, passage sources, and exports.
+
+> Find papers on [research topic] in my Zotero library, quote relevant passages with their sources, and export BibTeX.
 
 ## Tools
 
