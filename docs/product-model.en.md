@@ -22,12 +22,12 @@ The two paths serve separate responsibilities:
 
 ## Two Surfaces
 
-The local Zotero desktop app is the single source of truth. The interface offers two views: one for finding literature, and one for checking what the agent did:
+The local Zotero desktop app supplies the literature and item data; the Literature panel adds journal metrics from EasyScholar under a separate permission. The interface offers two views: one for finding literature, and one for checking what the agent did:
 
-| Surface              | Location        | Role                                                                                                                                                                   | Data source                                       |
-| :------------------- | :-------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ |
-| **Literature panel** | Right sidebar   | **Global library view**: for manual browsing and citing. Navigate collection trees, tags, saved searches, and the Trash; inspect details and read PDFs.                | Local API (via `zoteroLibrary` service endpoints) |
-| **Literature trail** | Session top tab | **Session audit view**: for verifying the agent's work. Lists queried papers, search parameters, extracted passages, and export records from the current conversation. | Tool-call snapshots from the current session      |
+| Surface              | Location        | Role                                                                                                                                                                   | Data source                                                                         |
+| :------------------- | :-------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- |
+| **Literature panel** | Right sidebar   | **Global library view**: for manual browsing and citing. Navigate collection trees, tags, saved searches, and the Trash; inspect details and read PDFs.                | Local API (`zoteroLibrary`) and EasyScholar (separately authorized journal metrics) |
+| **Literature trail** | Session top tab | **Session audit view**: for verifying the agent's work. Lists queried papers, search parameters, extracted passages, and export records from the current conversation. | Tool-call snapshots from the current session                                        |
 
 The literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry.
 

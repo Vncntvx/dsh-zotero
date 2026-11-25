@@ -5,26 +5,26 @@
 dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的 Schemastery schema 提供默认值，并在加载和保存时校验；无效值会阻止插件加载或该命名空间的配置写入。
 
 - 核心 `zotero` 命名空间：`src/config.ts`，39 个字段，由 `resolveConfig` 执行运行时校验；
-- 文献面板 `library` 命名空间：`src/library/config.ts`，11 个字段；
+- 文献面板 `library` 命名空间：`src/library/config.ts`，15 个字段；
 - 学术检索 `scholarly` 命名空间：`src/scholarly/config.ts`，9 个字段；
 - 文档解析 `enrichment` 命名空间：`src/enrichment/config.ts`，10 个字段。
 
-四组合计 69 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
+四组合计 73 个字段。所有字段都声明为 `volatile`，配置写入落在当前 profile 的 `cordis.patch.yml` 对应条目（`zotero` / `library` / `scholarly` / `enrichment`）的 `config` 下。
 
-设置页直接渲染 37 个 schema 字段和 4 个只写密钥控件，合计 41 个可见控件；其余 32 个字段不在表单中直接渲染，仅通过配置文件设置（见下文《设置页可见性》）。
+设置页直接渲染 40 个 schema 字段和 5 个只写密钥控件，合计 45 个可见控件；其余 33 个字段不在表单中直接渲染，仅通过配置文件设置（见下文《设置页可见性》）。
 
 ## 设置页标签与可见控件
 
-插件详情页的配置区是一个 4 标签页表单，按组件划分，同时编辑上述四个命名空间。标签与可见控件的对应关系如下；「可见控件」包含 schema 字段和 4 个只写密钥控件，仅配置文件字段见各字段表最后一列。
+插件详情页的配置区是一个 4 标签页表单，按组件划分，同时编辑上述四个命名空间。标签与可见控件的对应关系如下；「可见控件」包含 schema 字段和 5 个只写密钥控件，仅配置文件字段见各字段表最后一列。
 
 | 标签     | 设置命名空间        | 可见控件数 | 分组与字段                                                                                                                                                                                                                                                                                             |
 | -------- | ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 基础设置 | `zotero`            | 13         | 文献轨迹：`webEnabled`；写入：`writeEnabled`、`writePersistKey`；连接：`baseUrl`、`timeoutMs`；检索与浏览：`maxSearchResults`、`maxBrowseResults`；片段与全文读取：`maxEvidenceChars`、`maxEvidencePassages`、`maxFulltextChars`；后台任务：`enableRunInBackground`、`promoteOnTimeout`；诊断：`debug` |
-| 文献面板 | `library`、`zotero` | 13         | 显示与详情、浏览、PDF 阅读、引用与对话共 11 项面板设置；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                                                                    |
+| 文献面板 | `library`、`zotero` | 17         | 显示与详情、浏览、PDF 阅读、引用与对话及期刊指标共 14 项面板设置、1 个 EasyScholar 只写密钥控件；引文默认值：`defaultStyle`、`defaultLocale`                                                                                                                                                           |
 | 学术检索 | `scholarly`         | 8          | 数据源身份与密钥：`email` 与 3 个只写密钥控件；学术检索与全文配额：`maxResults`、`maxContentChars`；学术检索后台任务：`enableRunInBackground`、`promoteOnTimeout`                                                                                                                                      |
 | 文档解析 | `enrichment`        | 7          | 解析模式与输出：`mode`、`ocrLanguage`、MinerU Token 密钥控件、`outputDir`；语义模型与检索：`enableSemanticSearch`、`semanticModel`、`semanticDownloadSource`                                                                                                                                           |
 
-可见控件合计 41 个（37 个 schema 字段 + 4 个只写密钥控件）。设置页「文献面板」标签与侧边栏面板标题同名，引文默认值也在这个标签内。
+可见控件合计 45 个（40 个 schema 字段 + 5 个只写密钥控件）。设置页「文献面板」标签与侧边栏面板标题同名，引文默认值也在这个标签内。
 
 ### 设置页可见性
 
@@ -97,7 +97,7 @@ dsh-zotero 将配置分为四个设置命名空间。各命名空间由独立的
 - `writeEnabled`、`writePersistKey`、`webEnabled`、`enableRunInBackground`、`promoteOnTimeout` 与 `debug` 必须为布尔值；
 - `provider`、`defaultStyle` 与 `defaultLocale` 必须为非空字符串。
 
-文献面板的 11 项配置按下表中的布尔值、枚举与无重复分区列表在挂载及每次提交时校验；学术检索的 schema 由组件自身校验：`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；`foregroundWaitMs` 必须是 1–240,000 的整数；凭据引用名为字符串，空串表示禁用该 key，非空值在每次工具调用前由 `src/scholarly/credentials.ts` 解析为合法环境变量名。
+文献面板的 15 项配置按下表中的布尔值、枚举与无重复分区列表在挂载及每次提交时校验；学术检索的 schema 由组件自身校验：`maxResults` 必须是 1–100 的整数；`maxContentChars` 必须是 1,000–50,000 的整数；`enableRunInBackground` 与 `promoteOnTimeout` 必须为布尔值；`foregroundWaitMs` 必须是 1–240,000 的整数；凭据引用名为字符串，空串表示禁用该 key，非空值在每次工具调用前由 `src/scholarly/credentials.ts` 解析为合法环境变量名。
 
 ## 配置优先级
 
@@ -178,19 +178,23 @@ Schema 默认值 → Composition 入口配置 → 当前 profile 的 Cordis patc
 
 前两处是同一份表单状态的两个视图，双通道实时同步；第三处是配置覆盖层。设置页标签、侧边栏面板标题、会话旁的面板入口与 Composer 按钮都名为「文献面板」。
 
-| 字段                     | 默认值                    | 取值与行为                                                                                   | 设置页 |
-| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------- | ------ |
-| `rightSidebarEnabled`    | `true`                    | 显示文献面板与快捷入口，独立于文献轨迹开关                                                   | 可见   |
-| `listDensity`            | `comfortable`             | `comfortable` / `compact`，同时决定目录行距、列表行高与详情间距                              | 可见   |
-| `titleLines`             | `2`                       | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                              | 可见   |
-| `detailExpandedSections` | `[abstract, attachments]` | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠               | 可见   |
-| `localPdfOpenTarget`     | `sidebar`                 | `sidebar` / `float` / `zotero`                                                               | 可见   |
-| `urlPdfOpenTarget`       | `sidebar`                 | `sidebar` / `float`，通过宿主校验并下载后阅读                                                | 可见   |
-| `allowUrlPdfRead`        | `false`                   | 独立外网阅读授权，表单开启前需确认；不依赖 scholarly 组件                                    | 可见   |
-| `reopenBehavior`         | `restore`                 | `restore` 恢复上次位置；`allItems` 在新建标签页或刷新后从个人库全部条目开始                  | 可见   |
-| `scopeChangeBehavior`    | `preserve`                | `preserve` / `clear`；只影响同库合集与全部条目之间的关键词及附加筛选                         | 可见   |
-| `defaultCopyFormat`      | `citation`                | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo` | 可见   |
-| `chatInsertContent`      | `reference`               | `reference` 条目信息；`referenceAndAbstract` 另附摘要，缺失及截断均明确标注                  | 可见   |
+| 字段                        | 默认值                                                                                                                                        | 取值与行为                                                                                             | 设置页 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
+| `rightSidebarEnabled`       | `true`                                                                                                                                        | 显示文献面板与快捷入口，独立于文献轨迹开关                                                             | 可见   |
+| `listDensity`               | `comfortable`                                                                                                                                 | `comfortable` / `compact`，同时决定目录行距、列表行高与详情间距                                        | 可见   |
+| `titleLines`                | `2`                                                                                                                                           | `1` / `2`，限制列表标题行数，完整标题可悬停查看                                                        | 可见   |
+| `detailExpandedSections`    | `[abstract, attachments]`                                                                                                                     | `abstract`、`attachments`、`notes`、`annotations` 的无重复数组；空数组全部折叠                         | 可见   |
+| `localPdfOpenTarget`        | `sidebar`                                                                                                                                     | `sidebar` / `float` / `zotero`                                                                         | 可见   |
+| `urlPdfOpenTarget`          | `sidebar`                                                                                                                                     | `sidebar` / `float`，通过宿主校验并下载后阅读                                                          | 可见   |
+| `allowUrlPdfRead`           | `false`                                                                                                                                       | 独立外网阅读授权，表单开启前需确认；不依赖 scholarly 组件                                              | 可见   |
+| `journalMetricsEnabled`     | `false`                                                                                                                                       | 浏览文献面板时按期刊名向 EasyScholar 查询指标，开启前需确认                                            | 可见   |
+| `easyScholarSecretKeyRef`   | `"EASYSCHOLAR_SECRET_KEY"`                                                                                                                    | EasyScholar 密钥框使用的宿主凭据引用名                                                                 | 内部   |
+| `journalMetricListOrder`    | `{"international":["jcr","sciif","sciUp"],"chineseCore":["cssci","cscd","pku","zhongguokejihexin"],"dualPriority":"international","limit":3}` | 国际索引及中文核心的候选顺序、双收录优先组和展示上限                                                   | 可见   |
+| `journalMetricDetailFields` | `["sci", "sciif", "sciUp"]`                                                                                                                   | 详情「信息」区展示的指标。以设置页的固定顺序展示所选官方指标及 `custom` 自定义评级。空数组隐藏这组详情 | 可见   |
+| `reopenBehavior`            | `restore`                                                                                                                                     | `restore` 恢复上次位置；`allItems` 在新建标签页或刷新后从个人库全部条目开始                            | 可见   |
+| `scopeChangeBehavior`       | `preserve`                                                                                                                                    | `preserve` / `clear`；只影响同库合集与全部条目之间的关键词及附加筛选                                   | 可见   |
+| `defaultCopyFormat`         | `citation`                                                                                                                                    | `citation` / `bibliography` / `bibtex` / `biblatex` / `ris` / `csljson` / `csv` / `itemInfo`           | 可见   |
+| `chatInsertContent`         | `reference`                                                                                                                                   | 详情「提问」的内容。`reference` 为条目信息，`referenceAndAbstract` 另附摘要，标记缺失或截断            | 可见   |
 
 两个设置入口均使用暂存、保存、放弃、重置继承值的同一模型。实际面板只消费已保存的配置。修改显示、展开范围和默认动作会即时生效，不重挂载组件；当前条目手动调整过的展开状态优先。复制菜单选择只用于本次操作，不改变默认格式。CSL 样式和语言复用核心 `defaultStyle` / `defaultLocale`，完整编辑控件已移到「文献面板」标签页的「引文默认值」分组，直接在本页保存与重置；该组独立保存，不提交其他标签页未保存的修改。
 
@@ -203,6 +207,8 @@ URL PDF 只接受当前本机 Zotero 实例的已限定附件 ref；服务自行
 ---
 
 确认记录按浏览器保存：组件保持启用时，刷新页面或重启宿主都不会重新披露；客户端观察到组件关闭即撤销确认，之后再次启用会重新披露。客户端不在线期间发生的关闭再启用不会被观察到。只有明确点击「已知悉」才记录确认，Escape、遮罩点击均不确认；存储读写失败时由会话状态承载接受与撤销，刷新后重新披露。
+
+在「文献面板」设置中启用期刊指标，填写并保存 EasyScholar 密钥。登录后可在 [开放接口](https://www.easyscholar.cc/console/user/open) 开通或复制密钥。密钥存入宿主凭据服务，配置中只保留引用名。成功结果保存在 `$DSH_HOME/cache/zotero-journal-metrics/`，重启后可复用。关闭功能会隐藏指标并取消请求。列表优先顺序和详情指标分别配置，保存后立即生效并复用已有结果。 旧版数组仍可读取。指标按体系迁入，通用评级进入两组，空组采用默认候选。原数组长度保留为展示上限，旧默认数组使用新的双预设默认值。候选 `jcr` 依次读取 `sci` 和 `ssci`。
 
 ## 文档解析组件配置 (`dsh-zotero/enrichment`)
 

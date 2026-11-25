@@ -67,7 +67,6 @@ describe('normalizeItemDetail', () => {
       },
     },
   ]
-
   it("normalizes a full detail with every include and Zotero's best attachment", () => {
     const detail = normalizeItemDetail({
       parent: PARENT,
@@ -90,6 +89,7 @@ describe('normalizeItemDetail', () => {
       date: '2023-07-28',
       year: 2023,
       venue: 'ICML',
+      publicationTitle: 'ICML',
       doi: '10.1234/fa2',
       url: 'https://arxiv.org/abs/2307.08691',
       abstract: 'FlashAttention is an algorithm for fast attention.',

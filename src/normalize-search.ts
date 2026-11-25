@@ -3,6 +3,7 @@
  * @module dsh-zotero/normalize-search
  */
 
+import { journalNameOf } from './journal-metrics.js'
 import { extractAttachmentKey } from './attachments.js'
 import { DEFAULT_CREATOR_TYPE, formatCreatorDisplayName } from './creators.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
@@ -59,6 +60,9 @@ export function normalizeSearchItem(json: unknown, context?: NormalizeContext): 
   if (authors.length > 0) item.authors = authors
   const venue = normalizeVenue(data)
   if (venue !== undefined) item.venue = venue
+  const publicationTitle =
+    itemType === 'journalArticle' ? journalNameOf(data?.publicationTitle) : undefined
+  if (publicationTitle !== undefined) item.publicationTitle = publicationTitle
   const year = parsedYearOf(asString(meta?.parsedDate))
   if (year !== undefined) item.year = year
   const parentKey = parentKeyOf(data)

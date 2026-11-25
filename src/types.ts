@@ -185,6 +185,7 @@ export interface ZoteroSearchItem {
   creatorSummary: string
   authors?: string[]
   venue?: string
+  publicationTitle?: string
   year?: number
   itemType: string
   /** Parent item of a child note; provenance-qualified like the record's own ref. */
@@ -417,6 +418,7 @@ export interface ZoteroItemDetail {
   date?: string
   year?: number
   venue?: string
+  publicationTitle?: string
   doi?: string
   url?: string
   abstract?: string

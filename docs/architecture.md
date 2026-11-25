@@ -137,7 +137,13 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 ## 端侧契约与界面表面
 
-宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间注册端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`；`EnrichmentService` 负责主动解析、产物回执、已解析文档管理与语义模型管理。`domainCall` 保留领域错误码并区分取消与 Gateway 错误；只有确切的 `gateway/service-unavailable` 表示组件缺席。
+宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间注册端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`、`journalMetrics`；`EnrichmentService` 负责主动解析、产物回执、已解析文档管理与语义模型管理。`domainCall` 保留领域错误码并区分取消与 Gateway 错误；只有确切的 `gateway/service-unavailable` 表示组件缺席。
+
+期刊指标使用文献面板独立的远程读取。面板加载 Zotero 条目后，在有列表候选时按当前页条目的刊名去重并查询。配置了详情指标时，选中条目的查询独立发起，并具有更高优先级。宿主在独立授权开启时解析凭据，合并同一刊名的在途查询，请求启动间隔至少 500 毫秒，并遵守 EasyScholar 的 Retry-After 等待时间。成功结果以密钥与规范刊名的组合摘要为索引，原子写入宿主缓存，最多保留 512 条。记录保存规范刊名、指标和查询时间。六小时内复用结果。设置中的 `refreshJournalMetrics` 使用相同队列更新当前密钥保存的所有期刊，汇报成功数与失败原因。刷新失败时保留已有记录。最后一个调用方取消等待时中止查询；撤销授权或更换凭据会使内存代次失效。查询只向固定 HTTPS 端点发送期刊名与密钥，不跟随重定向。跨重启复用、密钥隔离和刷新失败的回退由 `tests/host/library/journal-metrics-cache.spec.ts` 验证。
+
+宿主以 `officialRank.all` 为准，并用 `officialRank.select` 补齐缺少的指标。`customRank` 为 `null` 时视为没有自定义评级。EasyScholar 的成功响应可能将 `officialRank.all` 和 `officialRank.select` 同时置为 `null`。两者为空且无自定义命中时，宿主缓存空的成功结果。实际错误只向客户端返回分类，避免透出可能包含密钥的原始响应或连接错误。
+
+EasyScholar 返回 `40006` 表示密钥的累计查询额度已耗尽。宿主结束该密钥当前待处理的查询，保留已有缓存，并在一分钟内直接返回额度状态。更换密钥后可立即恢复查询。
 
 浏览器只有一份 `lib/client.js`；所有表面在 `remote.zotero` 挂载后注册；文献面板及其配置行受 `whileServed('library')` 门控，未组合时不注册面板表面，也不发起面板请求。共享 DTO 不导入宿主执行上下文、不扩充宿主 `JobKindMap`、不经全文 spill 回调引入读取实现；写入审批上下文与 job kinds 只由宿主入口持有。浏览器单独编译且无 Node 全局，声明门禁读取 TypeScript 实际解析的文件清单，拒绝宿主 jobs/tools/agent 根入口。
 

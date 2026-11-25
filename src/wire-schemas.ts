@@ -1,3 +1,4 @@
+import { JOURNAL_METRIC_FAILURES, JOURNAL_NAME_MAX_LENGTH } from './journal-metrics.js'
 import type * as Contract from './contract.js'
 import { isLiteralSearchTag } from './search-tags.js'
 import type { ZoteroRemoteContract } from './contract.js'
@@ -21,6 +22,8 @@ import { ARTIFACT_IMAGE_NAME_PATTERN } from './artifact-images.js'
 import { ARCHIVE_MAX_IMAGES } from './artifact-images.js'
 import {
   zoteroReadUrlPdfInvocation,
+  zoteroJournalMetricsInvocation,
+  zoteroRefreshJournalMetricsInvocation,
   zoteroReleaseUrlPdfInvocation,
   type ZoteroUrlPdfView,
 } from './contract.js'
@@ -608,6 +611,7 @@ const zoteroSearchItemSchema = lazySchema(() =>
       creatorSummary: z.string(),
       authors: z.array(z.string()).readonly().optional(),
       venue: z.string().optional(),
+      publicationTitle: z.string().max(JOURNAL_NAME_MAX_LENGTH).optional(),
       year: z.number().optional(),
       itemType: z.string(),
       parentRef: z.string().optional(),
@@ -776,6 +780,7 @@ const zoteroItemDetailSchema = lazySchema(() =>
       date: z.string().optional(),
       year: z.number().optional(),
       venue: z.string().optional(),
+      publicationTitle: z.string().max(JOURNAL_NAME_MAX_LENGTH).optional(),
       doi: z.string().optional(),
       url: z.string().optional(),
       abstract: z.string().optional(),
@@ -1032,6 +1037,41 @@ const zoteroCollectionPathResultSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroCollectionPathResultView>
 
 export const ZOTERO_STATUS_RESULT_CODEC = strictCodec(ZOTERO_STATUS_TYPE_SYMBOL, zoteroStatusSchema)
+
+export const zoteroJournalMetricsRequestSchema = lazySchema(() =>
+  z
+    .object({
+      publicationName: z.string().trim().min(1).max(JOURNAL_NAME_MAX_LENGTH),
+      priority: z.enum(['list', 'detail']),
+    })
+    .strict(),
+) satisfies z.ZodType<Contract.ZoteroJournalMetricsRequestView>
+
+export const zoteroJournalMetricsReadySchema = lazySchema(() =>
+  z
+    .object({
+      status: z.literal('ready'),
+      fetchedAt: z.number().int().nonnegative(),
+      official: z.array(z.object({ field: z.string(), value: z.string() }).strict()).readonly(),
+      custom: z
+        .array(z.object({ id: z.string(), label: z.string(), value: z.string() }).strict())
+        .readonly(),
+    })
+    .strict(),
+)
+
+const zoteroJournalMetricsResultSchema = lazySchema(() =>
+  z.union([
+    zoteroJournalMetricsReadySchema.unwrap().extend({
+      refreshFailure: z.enum(JOURNAL_METRIC_FAILURES).optional(),
+    }),
+    z
+      .object({
+        status: z.enum(['disabled', ...JOURNAL_METRIC_FAILURES]),
+      })
+      .strict(),
+  ]),
+) satisfies z.ZodType<Contract.ZoteroJournalMetricsView>
 
 export const zoteroReadUrlPdfRequestSchema = lazySchema(() =>
   z
@@ -1788,6 +1828,32 @@ export const ZOTERO_INVOCATION_BY_METHOD = Object.freeze({
   readUrlPdf: zoteroReadUrlPdfInvocation(
     strictCodec(ZOTERO_READ_URL_PDF_REQUEST_TYPE_SYMBOL, zoteroReadUrlPdfRequestSchema),
     ZOTERO_URL_PDF_CODEC,
+  ),
+  journalMetrics: zoteroJournalMetricsInvocation(
+    strictCodec('dsh-zotero#ZoteroJournalMetricsRequestView', zoteroJournalMetricsRequestSchema),
+    strictCodec('dsh-zotero#ZoteroJournalMetricsView', zoteroJournalMetricsResultSchema),
+  ),
+  refreshJournalMetrics: zoteroRefreshJournalMetricsInvocation(
+    strictCodec(
+      'dsh-zotero#ZoteroRefreshJournalMetricsRequestView',
+      lazySchema(() => z.object({}).strict()),
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroJournalMetricsRefreshView',
+      lazySchema(() =>
+        z.union([
+          z.object({ status: z.enum(['disabled', 'credential', 'running']) }).strict(),
+          z
+            .object({
+              status: z.literal('finished'),
+              total: z.number().int().nonnegative(),
+              refreshed: z.number().int().nonnegative(),
+              failure: z.enum(JOURNAL_METRIC_FAILURES).optional(),
+            })
+            .strict(),
+        ]),
+      ),
+    ),
   ),
   status: zoteroStatusInvocation(ZOTERO_STATUS_RESULT_CODEC),
   resolveAttachment: zoteroResolveAttachmentInvocation(

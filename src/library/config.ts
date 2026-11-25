@@ -3,6 +3,15 @@ import type { Volatile } from '@deepseek-ai/cordis'
 import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
 import {
+  JOURNAL_METRIC_DETAIL_FIELDS,
+  JOURNAL_METRIC_FIELDS,
+  JOURNAL_METRIC_LIST_CANDIDATES,
+  JOURNAL_METRIC_LIST_LIMITS,
+  JOURNAL_METRIC_LIST_PROFILES,
+  type JournalMetricField,
+  type JournalMetricListRules,
+} from '../journal-metrics.js'
+import {
   LIBRARY_CHOICES,
   LIBRARY_DEFAULTS,
   LIBRARY_PREFERENCE_KEYS,
@@ -11,8 +20,12 @@ import {
   type LibraryPreferences,
 } from '../library-preferences.js'
 
+type StoredLibraryPreferences = Omit<LibraryPreferences, 'journalMetricListOrder'> & {
+  journalMetricListOrder: JournalMetricListRules | readonly JournalMetricField[]
+}
 export type LibraryConfig = {
-  [K in keyof LibraryPreferences]?: LibraryPreferences[K] | Volatile<LibraryPreferences[K]>
+  [K in keyof StoredLibraryPreferences]?:
+    StoredLibraryPreferences[K] | Volatile<StoredLibraryPreferences[K]>
 }
 const choices = (values: readonly (string | number)[]) =>
   Schema.union(values.map((value) => Schema.const(value)))
@@ -44,6 +57,35 @@ export const LibraryConfigSchema = Schema.object({
   allowUrlPdfRead: Schema.boolean()
     .default(LIBRARY_DEFAULTS.allowUrlPdfRead)
     .description('允许用户主动下载库内 URL PDF；会联系来源网站，当前 profile 的客户端共享此授权。')
+    .volatile(),
+  journalMetricsEnabled: Schema.boolean()
+    .default(LIBRARY_DEFAULTS.journalMetricsEnabled)
+    .description('浏览文献面板时按期刊名向 EasyScholar 查询指标。')
+    .volatile(),
+  easyScholarSecretKeyRef: Schema.string()
+    .role('credential-ref')
+    .default(LIBRARY_DEFAULTS.easyScholarSecretKeyRef)
+    .description('EasyScholar 的宿主凭据引用名。')
+    .volatile(),
+  journalMetricListOrder: Schema.union([
+    Schema.object({
+      international: Schema.array(choices(JOURNAL_METRIC_LIST_CANDIDATES)).required(),
+      chineseCore: Schema.array(choices(JOURNAL_METRIC_LIST_CANDIDATES)).required(),
+      dualPriority: choices(JOURNAL_METRIC_LIST_PROFILES).required(),
+      limit: choices(JOURNAL_METRIC_LIST_LIMITS).required(),
+    }),
+    Schema.array(choices(JOURNAL_METRIC_FIELDS)),
+  ])
+    .default({
+      ...LIBRARY_DEFAULTS.journalMetricListOrder,
+      international: [...LIBRARY_DEFAULTS.journalMetricListOrder.international],
+      chineseCore: [...LIBRARY_DEFAULTS.journalMetricListOrder.chineseCore],
+    })
+    .description('条目列表的国际索引与中文核心候选、双收录优先规则和展示上限。')
+    .volatile(),
+  journalMetricDetailFields: Schema.array(choices(JOURNAL_METRIC_DETAIL_FIELDS))
+    .default([...LIBRARY_DEFAULTS.journalMetricDetailFields])
+    .description('条目详情信息区展示的期刊指标。')
     .volatile(),
   reopenBehavior: choices(LIBRARY_CHOICES.reopenBehavior)
     .default(LIBRARY_DEFAULTS.reopenBehavior)

@@ -29,6 +29,8 @@ describe('the zotero typert manifest', () => {
       'sourcePage',
       'releaseUrlPdf',
       'readUrlPdf',
+      'journalMetrics',
+      'refreshJournalMetrics',
       'status',
       'resolveAttachment',
       'diagnostics',
@@ -49,6 +51,8 @@ describe('the zotero typert manifest', () => {
         [
           'releaseUrlPdf',
           'readUrlPdf',
+          'journalMetrics',
+          'refreshJournalMetrics',
           'collectionPath',
           'browse',
           'search',

@@ -149,6 +149,7 @@ export function registerGetBatchTool(
               if (entry.status === 'error') return entry
               const itemRecord: Record<string, JsonValue> = {}
               for (const [k, v] of Object.entries(entry.item)) {
+                if (k === 'publicationTitle') continue
                 const json = asJsonValue(v)
                 if (json !== undefined) itemRecord[k] = json
               }

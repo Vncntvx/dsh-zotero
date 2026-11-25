@@ -24,6 +24,7 @@ import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 
 import type { InvocationDescriptor, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroErrorCode } from './error-codes.js'
+import type { JournalMetricFailure } from './journal-metrics.js'
 import type {
   ZoteroBrowseKind,
   ZoteroSearchScope,
@@ -1187,6 +1188,7 @@ export interface ZoteroSearchItemView {
   readonly authors?: readonly string[]
   /** The venue Zotero reports (journal, proceedings, book, conference). */
   readonly venue?: string
+  readonly publicationTitle?: string
   readonly year?: number
   readonly itemType: string
   readonly parentRef?: string
@@ -1284,6 +1286,7 @@ export interface ZoteroItemDetailView {
   readonly date?: string
   readonly year?: number
   readonly venue?: string
+  readonly publicationTitle?: string
   readonly doi?: string
   readonly url?: string
   readonly abstract?: string
@@ -1662,6 +1665,52 @@ export interface ZoteroUrlPdfView {
 export interface ZoteroReadUrlPdfRequestView {
   readonly ref: string
 }
+export interface ZoteroJournalMetricsRequestView {
+  readonly publicationName: string
+  readonly priority: 'list' | 'detail'
+}
+export type ZoteroJournalMetricsFailure = 'disabled' | JournalMetricFailure
+export type ZoteroJournalMetricsRefreshView =
+  | { readonly status: 'disabled' | 'credential' | 'running' }
+  | {
+      readonly status: 'finished'
+      readonly total: number
+      readonly refreshed: number
+      readonly failure?: JournalMetricFailure
+    }
+export type ZoteroJournalMetricsView =
+  | {
+      readonly status: 'ready'
+      readonly fetchedAt: number
+      readonly refreshFailure?: JournalMetricFailure
+      readonly official: readonly { readonly field: string; readonly value: string }[]
+      readonly custom: readonly {
+        readonly id: string
+        readonly label: string
+        readonly value: string
+      }[]
+    }
+  | { readonly status: ZoteroJournalMetricsFailure }
+
+export function zoteroJournalMetricsInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation('dsh-zotero#zotero/journalMetrics', 'journalMetrics', param, result)
+}
+
+export function zoteroRefreshJournalMetricsInvocation(
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation(
+    'dsh-zotero#zotero/refreshJournalMetrics',
+    'refreshJournalMetrics',
+    param,
+    result,
+  )
+}
+
 export interface ZoteroReleaseUrlPdfRequestView {
   readonly lease: string
 }
@@ -1763,6 +1812,14 @@ export interface ZoteroRemoteContract extends ZoteroDocumentMaintenanceRemote {
     request: ZoteroReadUrlPdfRequestView,
     signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroUrlPdfView>>
+  journalMetrics: (
+    request: ZoteroJournalMetricsRequestView,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroJournalMetricsView>>
+  refreshJournalMetrics: (
+    request: Record<string, never>,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroJournalMetricsRefreshView>>
   write: (
     request: ZoteroLibraryWriteRequestView,
   ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>

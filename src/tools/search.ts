@@ -204,7 +204,11 @@ const SEARCH_ITEM_SCHEMA = {
 type AssertNever<T extends never> = T
 type InferredSearchItem = InferValue<typeof SEARCH_ITEM_SCHEMA>
 
-type MissingInSearchItemSchema = Exclude<keyof ZoteroSearchItem, keyof InferredSearchItem>
+// The panel needs the full journal title for lookups. Search, get, and get-batch omit it from model output.
+type MissingInSearchItemSchema = Exclude<
+  keyof ZoteroSearchItem,
+  keyof InferredSearchItem | 'publicationTitle'
+>
 type ExtraInSearchItemSchema = Exclude<keyof InferredSearchItem, keyof ZoteroSearchItem>
 
 // Compile-time pins: fails build if ZoteroSearchItem and SEARCH_ITEM_SCHEMA drift
@@ -507,6 +511,15 @@ export function registerSearchTool(
           )
           return {
             ...result,
+            items: result.items.map(({ publicationTitle: _publicationTitle, ...item }) => item),
+            ...(result.supplemental && {
+              supplemental: {
+                ...result.supplemental,
+                items: result.supplemental.items.map(
+                  ({ publicationTitle: _publicationTitle, ...item }) => item,
+                ),
+              },
+            }),
             maximum: service.config.maxSearchResults,
             scope: toolScopeOf(result.scope),
           }

@@ -3,6 +3,7 @@
  * @module dsh-zotero/normalize-item-detail
  */
 
+import { journalNameOf } from './journal-metrics.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { bestAttachmentFromLinks } from './attachments.js'
 import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
@@ -216,6 +217,8 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     typeof version === 'number' && Number.isInteger(version) ? version : undefined
   const tags = normalizeTags(data)
   const itemType = asString(data?.itemType) ?? asString(record.itemType) ?? ''
+  const publicationTitle =
+    itemType === 'journalArticle' ? journalNameOf(data?.publicationTitle) : undefined
   const noteBody =
     itemType === 'note'
       ? truncateText(plainNoteText(data?.note), input.maxNoteBodyChars)
@@ -324,6 +327,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
     ...(date !== undefined ? { date } : {}),
     ...(year !== undefined ? { year } : {}),
     ...(venue !== undefined ? { venue } : {}),
+    ...(publicationTitle !== undefined ? { publicationTitle } : {}),
     ...(doi !== undefined ? { doi } : {}),
     ...(url !== undefined ? { url } : {}),
     ...childCollections,

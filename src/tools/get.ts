@@ -368,7 +368,11 @@ export function registerGetTool(
         presentResult: presentGetResult,
         isConcurrencySafe: () => true,
         async execute(args, exec) {
-          return await service.get(buildRequest(args), exec.signal)
+          const { publicationTitle: _publicationTitle, ...item } = await service.get(
+            buildRequest(args),
+            exec.signal,
+          )
+          return item
         },
       }),
     ),

@@ -1,4 +1,15 @@
 /** Shared, host-free contract for accepted library preferences. */
+import {
+  DEFAULT_JOURNAL_METRIC_DETAIL_FIELDS,
+  DEFAULT_JOURNAL_METRIC_LIST,
+  EASYSCHOLAR_SECRET_KEY_REF,
+  isJournalMetricDetailFields,
+  journalMetricDetailFieldsOf,
+  journalMetricListRulesOf,
+  type JournalMetricDetailField,
+  type JournalMetricListRules,
+} from './journal-metrics.js'
+
 export const LIBRARY_SECTIONS = ['abstract', 'attachments', 'notes', 'annotations'] as const
 export type LibrarySection = (typeof LIBRARY_SECTIONS)[number]
 export const LIBRARY_CHOICES = {
@@ -26,6 +37,10 @@ export type LibraryPreferences = {
 } & {
   readonly rightSidebarEnabled: boolean
   readonly allowUrlPdfRead: boolean
+  readonly journalMetricsEnabled: boolean
+  readonly easyScholarSecretKeyRef: string
+  readonly journalMetricListOrder: JournalMetricListRules
+  readonly journalMetricDetailFields: readonly JournalMetricDetailField[]
   readonly detailExpandedSections: readonly LibrarySection[]
 }
 export type LibraryPreferenceKey = keyof LibraryPreferences
@@ -37,6 +52,10 @@ export const LIBRARY_DEFAULTS: LibraryPreferences = Object.freeze({
   localPdfOpenTarget: 'sidebar',
   urlPdfOpenTarget: 'sidebar',
   allowUrlPdfRead: false,
+  journalMetricsEnabled: false,
+  easyScholarSecretKeyRef: EASYSCHOLAR_SECRET_KEY_REF,
+  journalMetricListOrder: DEFAULT_JOURNAL_METRIC_LIST,
+  journalMetricDetailFields: DEFAULT_JOURNAL_METRIC_DETAIL_FIELDS,
   reopenBehavior: 'restore',
   scopeChangeBehavior: 'preserve',
   defaultCopyFormat: 'citation',
@@ -52,8 +71,21 @@ export function libraryPreferencesOf(raw: Readonly<Record<string, unknown>>): Li
       Object.hasOwn(raw, key) ? raw[key] : LIBRARY_DEFAULTS[key],
     ]),
   )
-  for (const key of ['rightSidebarEnabled', 'allowUrlPdfRead'] as const) {
+  for (const key of ['rightSidebarEnabled', 'allowUrlPdfRead', 'journalMetricsEnabled'] as const) {
     if (typeof result[key] !== 'boolean') throw new Error(`Invalid library preference: ${key}`)
+  }
+  if (
+    typeof result.easyScholarSecretKeyRef !== 'string' ||
+    !/^[A-Za-z_][A-Za-z0-9_]*$/.test(result.easyScholarSecretKeyRef)
+  ) {
+    throw new Error('Invalid library preference: easyScholarSecretKeyRef')
+  }
+  const list = journalMetricListRulesOf(result.journalMetricListOrder)
+  if (!list) {
+    throw new Error('Invalid library preference: journalMetricListOrder')
+  }
+  if (!isJournalMetricDetailFields(result.journalMetricDetailFields)) {
+    throw new Error('Invalid library preference: journalMetricDetailFields')
   }
   for (const key of Object.keys(LIBRARY_CHOICES) as (keyof Choices)[]) {
     if (!(LIBRARY_CHOICES[key] as readonly unknown[]).includes(result[key])) {
@@ -71,5 +103,13 @@ export function libraryPreferencesOf(raw: Readonly<Record<string, unknown>>): Li
   return Object.freeze({
     ...result,
     detailExpandedSections: Object.freeze([...sections]),
+    journalMetricListOrder: Object.freeze({
+      ...list,
+      international: Object.freeze([...list.international]),
+      chineseCore: Object.freeze([...list.chineseCore]),
+    }),
+    journalMetricDetailFields: Object.freeze(
+      journalMetricDetailFieldsOf(result.journalMetricDetailFields),
+    ),
   }) as LibraryPreferences
 }

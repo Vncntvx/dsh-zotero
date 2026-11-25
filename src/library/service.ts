@@ -1,13 +1,22 @@
 import type {} from '@deepseek-ai/dsh-fs'
+import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { pathToFileURL } from 'node:url'
 import { PdfReadingFiles } from './pdf-files.js'
 import { UrlPdfReader } from './url-pdf.js'
+import { JournalMetrics } from './journal-metrics.js'
+import { closePinnedQuietly } from '../transport/network.js'
 import {
   dnsAddressResolver,
   createPinnedDispatcher,
+  createPublicDispatcher,
+  egressRouteFor,
   publicFetch,
 } from '../transport/connections.js'
-import { zoteroReadUrlPdfRequestSchema, zoteroReleaseUrlPdfSchema } from '../wire-schemas.js'
+import {
+  zoteroJournalMetricsRequestSchema,
+  zoteroReadUrlPdfRequestSchema,
+  zoteroReleaseUrlPdfSchema,
+} from '../wire-schemas.js'
 import type { ZoteroUrlPdfView } from '../contract.js'
 import type { ZoteroAttachmentLocationView } from '../contract.js'
 /**
@@ -55,6 +64,9 @@ import {
   ZOTERO_SETTINGS_NAMESPACE,
   type ZoteroChildPageView,
   type ZoteroItemDetailView,
+  type ZoteroJournalMetricsRefreshView,
+  type ZoteroJournalMetricsRequestView,
+  type ZoteroJournalMetricsView,
   type ZoteroLibraryBrowseRequestView,
   type ZoteroLibraryBrowseResultView,
   type ZoteroLibraryChildPageRequestView,
@@ -74,9 +86,10 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** The library panel's host service: browse, search, item detail, child page, export, and approved writes. */
+/** The library panel's host service: browse, search, item detail, child page, export, journal metrics, and approved writes. */
 export class ZoteroLibraryService extends TypertRemoteService {
   private readonly urlPdf: UrlPdfReader
+  private readonly metrics: JournalMetrics
   private readonly pdfFiles = new PdfReadingFiles()
   private readonly reading = new Set<Promise<unknown>>()
   static readonly Config = LibraryConfigSchema
@@ -95,13 +108,41 @@ export class ZoteroLibraryService extends TypertRemoteService {
       dispatcher: createPinnedDispatcher,
       fetch: publicFetch,
     })
-    ctx.on('loader/volatile-update', () => this.urlPdf.revoke())
+    const direct = createPublicDispatcher()
+    this.metrics = new JournalMetrics({
+      cacheDirectory: dshCachePath('zotero-journal-metrics', 'v1'),
+      onCacheWriteError: () =>
+        ctx.logger.warn('Could not save EasyScholar metrics to the host cache.'),
+      reference: () => {
+        const config = resolveLibraryConfig(this.config)
+        return config.journalMetricsEnabled ? config.easyScholarSecretKeyRef : undefined
+      },
+      credential: async (ref) => (await ctx.get('credentials')?.resolve(ref))?.value,
+      fetch: (url, signal) => {
+        const route = egressRouteFor(url)
+        return publicFetch(url, {
+          redirect: 'manual',
+          signal,
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer',
+          headers: { accept: 'application/json' },
+          dispatcher: route.proxied ? route.dispatcher : direct.dispatcher,
+        } as RequestInit)
+      },
+    })
+    ctx.on('loader/volatile-update', () => {
+      this.urlPdf.revoke()
+      this.metrics.sync()
+    })
+    ctx.on('credentials/reference-updated', (ref) => this.metrics.credentialChanged(ref))
     ctx.effect(() => async () => {
       // Unmounting the row removes the capability the download was granted
       // under: an in-flight URL PDF read is aborted now and settles as the
       // caller's cancellation, not left to its 60-second deadline.
       this.urlPdf.dispose()
+      const metricsClosed = this.metrics.dispose().finally(() => closePinnedQuietly(direct))
       await Promise.allSettled([...this.reading])
+      await metricsClosed
       await this.pdfFiles.dispose()
     })
     ctx.on('internal/config', (fiber, next) => {
@@ -115,6 +156,22 @@ export class ZoteroLibraryService extends TypertRemoteService {
     ctx.inject(['settings'], (settingsCtx) => {
       settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
     })
+  }
+
+  async journalMetrics(
+    request: ZoteroJournalMetricsRequestView,
+    signal: AbortSignal,
+  ): Promise<ZoteroJournalMetricsView> {
+    return await domainCall(() =>
+      this.metrics.lookup(zoteroJournalMetricsRequestSchema.parse(request), signal),
+    )
+  }
+
+  async refreshJournalMetrics(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<ZoteroJournalMetricsRefreshView> {
+    return await domainCall(() => this.metrics.refresh(signal))
   }
 
   /** Read one existing URL attachment after independent user-reading authorization. */

@@ -100,6 +100,11 @@ export function createValidatingDispatcher(
   return { dispatcher: agent, close: async () => await agent.close() }
 }
 
+/** Connection pool pinned to validated public addresses. */
+export function createPublicDispatcher(): PinnedDispatcher {
+  return createValidatingDispatcher(dnsAddressResolver)
+}
+
 /**
  * The host seams both scholarly arms need, as one composition-ready object
  * for `createScholarlyHttp`'s `publicAccess` option: the DNS resolver, the
