@@ -1,8 +1,9 @@
 /** Complete, staged settings shared by the bundle and component pages. */
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   Button,
   Checkbox,
+  IconInfoOutlineRegular,
   Tag,
   type SettingsFormActions,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -14,15 +15,22 @@ import {
   type LibraryPreferences,
 } from '../library-preferences.ts'
 import type { ZoteroLocaleKey } from './locales.ts'
-import { BooleanField, ChoiceField as ChoiceFieldBase } from './fields.tsx'
-import type { LibraryCardState } from './library-form-controller.ts'
+import type { ZoteroJournalMetricsRefreshView } from '../contract.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { BooleanField, ChoiceField as ChoiceFieldBase, SecretField } from './fields.tsx'
+import { JOURNAL_METRIC_DETAIL_FIELDS, journalMetricDetailFieldsOf } from '../journal-metrics.ts'
+import { JournalMetricListSettings } from './JournalMetricListSettings.tsx'
+import { journalMetricFailureLabels, journalMetricLabel } from './journal-metric-labels.ts'
+import type { LibraryCardFace, LibraryCardState } from './library-form-controller.ts'
+import linkCss from './components/link.module.css'
 import noticeCss from './components/notice.module.css'
 import css from './ZoteroSettingsForm.module.css'
 import fieldCss from './fields.module.css'
 import libraryCss from './library-settings.module.css'
 
-type LibraryFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'>
-type T = (key: ZoteroLocaleKey) => string
+type LibraryFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'> &
+  Pick<LibraryCardFace, 'refreshJournalMetrics'>
+type T = TranslateNS<'zotero'>
 const LIBRARY_CHOICE_LABELS: Record<string, ZoteroLocaleKey> = {
   comfortable: 'libraryComfortable',
   compact: 'libraryCompact',
@@ -128,6 +136,7 @@ const GROUP_DESCRIPTIONS = {
   libraryBrowseSettings: 'libraryBrowseSettingsHint',
   libraryPdfSettings: 'libraryPdfSettingsHint',
   libraryActionSettings: 'libraryActionSettingsHint',
+  journalMetrics: 'journalMetricsHint',
 } as const
 
 interface LibrarySettingsFormProps {
@@ -137,6 +146,37 @@ interface LibrarySettingsFormProps {
 }
 export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormProps): ReactNode {
   const disabled = !state.writable || state.saving
+  const [refreshStatus, setRefreshStatus] = useState<
+    ZoteroJournalMetricsRefreshView | 'pending' | 'failed'
+  >()
+  const refreshing = refreshStatus === 'pending'
+  const refresh = async () => {
+    if (!actions.refreshJournalMetrics) return
+    setRefreshStatus('pending')
+    try {
+      setRefreshStatus(await actions.refreshJournalMetrics())
+    } catch {
+      setRefreshStatus('failed')
+    }
+  }
+  const summary = refreshStatus && typeof refreshStatus === 'object' ? refreshStatus : undefined
+  const refreshMessage =
+    summary?.status === 'finished'
+      ? summary.total === 0
+        ? t('journalMetricsRefreshEmpty')
+        : t('journalMetricsRefreshDone', { refreshed: summary.refreshed, total: summary.total })
+      : refreshStatus === 'pending'
+        ? t('journalMetricsRefreshing')
+        : refreshStatus === 'failed'
+          ? t('journalMetricsRefreshFailed')
+          : summary?.status === 'disabled'
+            ? t('journalMetricsRefreshDisabled')
+            : summary?.status === 'credential'
+              ? t('journalMetricsCredential')
+              : summary?.status === 'running'
+                ? t('journalMetricsRefreshRunning')
+                : t('journalMetricsRefreshHint')
+  const refreshIssue = summary?.status === 'finished' ? summary.failure : undefined
   const choice = (field: keyof typeof LIBRARY_CHOICES) => (
     <ChoiceField
       key={field}
@@ -148,6 +188,10 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
     />
   )
   const sections = draftValue(state, 'detailExpandedSections')
+  const metricRules =
+    draftValue(state, 'journalMetricListOrder') ?? LIBRARY_DEFAULTS.journalMetricListOrder
+  const detailFields =
+    draftValue(state, 'journalMetricDetailFields') ?? LIBRARY_DEFAULTS.journalMetricDetailFields
   const boolean = (field: 'rightSidebarEnabled' | 'allowUrlPdfRead') => (
     <BooleanField
       label={t(field === 'rightSidebarEnabled' ? 'rightSidebarEnabled' : 'libraryAllowUrlPdf')}
@@ -259,6 +303,149 @@ export function LibrarySettingsForm({ t, state, actions }: LibrarySettingsFormPr
         <>
           {choice('defaultCopyFormat')}
           {choice('chatInsertContent')}
+        </>,
+      )}
+      {group(
+        'journalMetrics',
+        <>
+          <BooleanField
+            label={t('journalMetricsEnable')}
+            hint={t('journalMetricsEnableHint')}
+            text={state.journalMetricsEnabled.text || 'false'}
+            overridden={state.journalMetricsEnabled.overridden}
+            overriddenLabel={t('overridden')}
+            resetLabel={t('reset')}
+            disabled={disabled}
+            onEdit={(text) => actions.edit('journalMetricsEnabled', text)}
+            onReset={() => actions.resetField('journalMetricsEnabled')}
+            risk={{
+              title: t('journalMetricsRiskTitle'),
+              description: t('journalMetricsDisclosure'),
+              acknowledgeLabel: t('journalMetricsAcknowledge'),
+              confirmLabel: t('journalMetricsAllow'),
+              cancelLabel: t('writeRiskCancel'),
+              closeLabel: t('writeRiskClose'),
+            }}
+          />
+          <SecretField
+            id="library-easyscholar-secret"
+            label={t('journalMetricsSecret')}
+            hint={t('journalMetricsSecretHint')}
+            text={state.easyScholarSecret.text}
+            configured={state.easyScholarSecret.configured}
+            stateLabel={t(
+              state.easyScholarSecret.configured ? 'secretConfigured' : 'secretNotConfigured',
+            )}
+            disabled={disabled || !state.easyScholarSecret.writable}
+            onEdit={(text) => actions.edit('easyScholarSecret', text)}
+            help={
+              <p className={fieldCss.tokenHelp}>
+                <span className={fieldCss.tokenHelpIcon} aria-hidden="true">
+                  <IconInfoOutlineRegular size={12} />
+                </span>
+                <span>{t('journalMetricsSecretWhereToGet')}</span>
+                <a
+                  className={linkCss.link}
+                  href="https://www.easyscholar.cc/console/user/open"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t('journalMetricsSecretOpenSite')}
+                </a>
+              </p>
+            }
+          />
+          <div className={fieldCss.field} role="group" aria-label={t('journalMetricsListFields')}>
+            <div className={fieldCss.fieldHead}>
+              <span className={fieldCss.fieldLabel}>{t('journalMetricsListFields')}</span>
+              {state.journalMetricListOrder.overridden && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  aria-label={`${t('reset')}: ${t('journalMetricsListFields')}`}
+                  onClick={() => actions.resetField('journalMetricListOrder')}
+                >
+                  {t('reset')}
+                </Button>
+              )}
+            </div>
+            <JournalMetricListSettings
+              t={t}
+              rules={metricRules}
+              disabled={disabled}
+              onChange={(rules) => actions.edit('journalMetricListOrder', JSON.stringify(rules))}
+            />
+          </div>
+          <div className={fieldCss.field}>
+            <div className={fieldCss.fieldHead}>
+              <span className={fieldCss.fieldLabel}>{t('journalMetricsDetailFields')}</span>
+              {state.journalMetricDetailFields.overridden && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  aria-label={`${t('reset')}: ${t('journalMetricsDetailFields')}`}
+                  onClick={() => actions.resetField('journalMetricDetailFields')}
+                >
+                  {t('reset')}
+                </Button>
+              )}
+            </div>
+            <div
+              role="group"
+              aria-label={t('journalMetricsDetailFields')}
+              className={libraryCss.metricChoices}
+            >
+              {JOURNAL_METRIC_DETAIL_FIELDS.map((field) => (
+                <Checkbox
+                  key={field}
+                  checked={detailFields.includes(field)}
+                  label={
+                    field === 'custom' ? t('journalMetricsCustom') : journalMetricLabel(field, t)
+                  }
+                  disabled={disabled}
+                  onChange={(checked) =>
+                    actions.edit(
+                      'journalMetricDetailFields',
+                      JSON.stringify(
+                        journalMetricDetailFieldsOf(
+                          checked
+                            ? [...detailFields, field]
+                            : detailFields.filter((item) => item !== field),
+                        ),
+                      ),
+                    )
+                  }
+                />
+              ))}
+            </div>
+            <p className={fieldCss.hint}>{t('journalMetricsDetailFieldsHint')}</p>
+          </div>
+          {actions.refreshJournalMetrics && (
+            <div className={fieldCss.field}>
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled || refreshing}
+                  onClick={refresh}
+                >
+                  {t('journalMetricsRefresh')}
+                </Button>
+              </div>
+              <p className={fieldCss.hint} role={refreshStatus ? 'status' : undefined}>
+                {refreshMessage}
+                {refreshIssue && (
+                  <>
+                    {' '}
+                    {t(journalMetricFailureLabels[refreshIssue])}{' '}
+                    {t('journalMetricsRefreshIncomplete')}
+                  </>
+                )}
+              </p>
+            </div>
+          )}
         </>,
       )}
     </>

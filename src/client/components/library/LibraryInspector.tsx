@@ -1,13 +1,12 @@
 import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
 import type { LibrarySection } from '../../../library-preferences.ts'
 /**
- * The library panel's inspector: the selected row's detail, restyled after
- * the reference reader's hierarchy — an eyebrow + title + creators + origin
- * head with the action row (read, copy, ask, add-to-chat), then abstract,
- * note, the info table, collection/tag chips, and the three child listings
- * (attachments, notes, annotations). The chat actions ride the session-scope
- * input face, so they render only where a composer is reachable (the right
- * sidebar tab); the main panel stays read-only.
+ * The library panel's inspector for the selected row: an eyebrow, title,
+ * creators, and origin head with the action row (read, copy, ask,
+ * add-to-chat), followed by the abstract, attachments, the info table with
+ * journal metrics, collection/tag chips, notes, and annotations. The chat
+ * actions ride the session-scope input face, so they render only where a
+ * composer is reachable (the right sidebar tab); the main panel stays read-only.
  * @module dsh-zotero/client/components/library/LibraryInspector
  */
 
@@ -62,6 +61,8 @@ import noticeCss from '../notice.module.css'
 import tipCss from '../tip.module.css'
 import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
+import { journalMetricDetailRows } from './JournalMetrics.tsx'
+import type { useJournalMetrics } from './useJournalMetrics.ts'
 
 /** The browser face the parsed-artifact actions need: the session, its read, and the tab opener. */
 interface ParsedArtifactFace {
@@ -100,14 +101,32 @@ interface LibraryInspectorProps {
   readonly exportItem?: LibraryExportItem
   /** Zotero's own localized item-type names, for types the plugin table lacks. */
   readonly localizedItemTypes?: ItemTypeLocalizedNames
+  readonly journalMetrics?: ReturnType<typeof useJournalMetrics>
 }
 
 /** One label/value row of the metadata table. */
-function MetaRow({ label, value }: { label: string; value: string }) {
+function MetaRow({
+  label,
+  value,
+  actions,
+}: {
+  label: string
+  value: ReactNode
+  actions?: ReactNode
+}) {
   return (
     <div className={css.metaRow}>
       <dt className={clsx(css.caption, css.metaLabel)}>{label}</dt>
-      <dd className={css.metaValue}>{value}</dd>
+      <dd className={css.metaValue}>
+        {actions === undefined ? (
+          value
+        ) : (
+          <div className={css.metaActionRow}>
+            <span className={css.metaText}>{value}</span>
+            <div className={css.metaActions}>{actions}</div>
+          </div>
+        )}
+      </dd>
     </div>
   )
 }
@@ -129,53 +148,51 @@ function CopyableMetaRow({
   const webUrl = webUrlOf(openUrl)
 
   return (
-    <div className={css.metaRow}>
-      <dt className={clsx(css.caption, css.metaLabel)}>{label}</dt>
-      <dd className={css.metaValue}>
-        <div className={css.metaCopyRow}>
-          <span className={css.metaText}>{value}</span>
-          <div className={css.metaCopyActions}>
-            <Tooltip
-              label={copied ? t('copied') : `${value} (${t('copy')})`}
-              side="bottom"
-              delayMs={500}
-              portal
-            >
+    <MetaRow
+      label={label}
+      value={value}
+      actions={
+        <>
+          <Tooltip
+            label={copied ? t('copied') : `${value} (${t('copy')})`}
+            side="bottom"
+            delayMs={500}
+            portal
+          >
+            <IconButton
+              size="sm"
+              shape="square"
+              icon={
+                copied ? (
+                  <IconCheckOutlineRegular size={12} />
+                ) : (
+                  <IconCopyOutlineRegular size={12} />
+                )
+              }
+              aria-label={`${copied ? t('copied') : t('copy')} ${label}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                copyText(value)
+              }}
+            />
+          </Tooltip>
+          {webUrl !== undefined && (
+            <Tooltip label={openUrl ?? t('openInZotero')} side="bottom" delayMs={500} portal>
               <IconButton
                 size="sm"
                 shape="square"
-                icon={
-                  copied ? (
-                    <IconCheckOutlineRegular size={12} />
-                  ) : (
-                    <IconCopyOutlineRegular size={12} />
-                  )
-                }
-                aria-label={`${copied ? t('copied') : t('copy')} ${label}`}
+                icon={<IconLinkOutlineRegular size={12} />}
+                aria-label={`${openUrl} (${t('openInZotero')})`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyText(value)
+                  window.open(webUrl, '_blank', 'noopener,noreferrer')
                 }}
               />
             </Tooltip>
-            {webUrl !== undefined && (
-              <Tooltip label={openUrl ?? t('openInZotero')} side="bottom" delayMs={500} portal>
-                <IconButton
-                  size="sm"
-                  shape="square"
-                  icon={<IconLinkOutlineRegular size={12} />}
-                  aria-label={`${openUrl} (${t('openInZotero')})`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    window.open(webUrl, '_blank', 'noopener,noreferrer')
-                  }}
-                />
-              </Tooltip>
-            )}
-          </div>
-        </div>
-      </dd>
-    </div>
+          )}
+        </>
+      }
+    />
   )
 }
 
@@ -533,6 +550,7 @@ function LibraryInspectorBody({
   parsePdf,
   parsedArtifact,
   localizedItemTypes,
+  journalMetrics,
 }: LibraryInspectorProps) {
   // The abstract's expand state resets with the selection: the section
   // remounts through the inspector's key when another row is picked.
@@ -593,6 +611,21 @@ function LibraryInspectorBody({
     )
   }
   const detail = inspector.detail
+  const metricFields = preferences.preferences?.journalMetricDetailFields
+  const journalRows =
+    journalMetrics &&
+    detail.itemType === 'journalArticle' &&
+    detail.publicationTitle &&
+    metricFields?.length
+      ? journalMetricDetailRows({
+          t,
+          result: journalMetrics.forJournal(detail.publicationTitle),
+          fields: metricFields,
+          retry: journalMetrics.retry,
+          retrying: journalMetrics.retrying,
+          Row: MetaRow,
+        })
+      : null
   const creators = formatCreatorsList(detail.creators)
   const origin = [detail.venue, detail.date].filter(Boolean).join(' · ')
   const pdfs = pdfAttachmentsOf(detail)
@@ -794,14 +827,40 @@ function LibraryInspectorBody({
         </DetailDisclosure>
       )}
 
+      {detail.attachments !== undefined && detail.attachments.total > 0 && (
+        <ChildSection
+          t={t}
+          title={t('libraryAttachmentsTitle', { count: detail.attachments.total })}
+          section="attachments"
+          itemRef={detail.ref}
+          page={detail.attachments}
+          state={childStates.attachments}
+          retry={() => retryChild('attachments')}
+          pageTo={(offset) => pageChild('attachments', offset)}
+        >
+          {detail.attachments.items.map((attachment) => (
+            <AttachmentItem
+              key={attachment.ref}
+              t={t}
+              attachment={attachment}
+              readPdf={readPdf}
+              openFile={openFile}
+              resolveAttachment={resolveAttachment}
+              openProtocol={openProtocol}
+            />
+          ))}
+        </ChildSection>
+      )}
+
       {(detail.venue !== undefined ||
         detail.date !== undefined ||
         detail.doi !== undefined ||
         detail.url !== undefined ||
-        detail.extra !== undefined) && (
-        <section className={css.section}>
+        detail.extra !== undefined ||
+        journalRows) && (
+        <section className={css.section} aria-label={t('libraryInfoTitle')}>
           <h4 className={css.sectionTitle}>{t('libraryInfoTitle')}</h4>
-          <dl className={css.metaTable}>
+          <dl className={clsx(css.metaTable, journalRows && css.metaTableWithMetrics)}>
             {detail.venue !== undefined && (
               <MetaRow label={t('libraryMetaVenue')} value={detail.venue} />
             )}
@@ -831,6 +890,7 @@ function LibraryInspectorBody({
             {detail.extra !== undefined && (
               <MetaRow label={t('libraryMetaExtra')} value={detail.extra} />
             )}
+            {journalRows}
           </dl>
         </section>
       )}
@@ -860,31 +920,6 @@ function LibraryInspectorBody({
             ))}
           </div>
         </section>
-      )}
-
-      {detail.attachments !== undefined && detail.attachments.total > 0 && (
-        <ChildSection
-          t={t}
-          title={t('libraryAttachmentsTitle', { count: detail.attachments.total })}
-          section="attachments"
-          itemRef={detail.ref}
-          page={detail.attachments}
-          state={childStates.attachments}
-          retry={() => retryChild('attachments')}
-          pageTo={(offset) => pageChild('attachments', offset)}
-        >
-          {detail.attachments.items.map((attachment) => (
-            <AttachmentItem
-              key={attachment.ref}
-              t={t}
-              attachment={attachment}
-              readPdf={readPdf}
-              openFile={openFile}
-              resolveAttachment={resolveAttachment}
-              openProtocol={openProtocol}
-            />
-          ))}
-        </ChildSection>
       )}
 
       {detail.notes !== undefined && detail.notes.total > 0 && (

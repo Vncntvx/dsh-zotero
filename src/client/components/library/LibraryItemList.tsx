@@ -12,6 +12,7 @@ import preferenceCss from '../../library-settings.module.css'
 import clsx from 'clsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   Button,
   IconWorkspaceTreeOutlineMedium,
@@ -21,6 +22,7 @@ import { IconButton } from '../IconButton.tsx'
 import { formatCreatorsList } from '../../../creators.ts'
 import { isPdfContentType } from '../../../media-types.ts'
 import type { ZoteroSearchItemView } from '../../../contract.ts'
+import { joinNonEmpty } from '../../../sources/presenters.ts'
 import type { ParsedArtifactReader } from '../../enrichment/ParsePdfAction.tsx'
 import type { ParsedDocuments } from '../../parsed-documents.ts'
 import { pageRangeOf, type LibraryListState, type LibrarySelection } from './library-model.ts'
@@ -28,6 +30,8 @@ import { itemTypeLabelOf, type ItemTypeLocalizedNames } from './item-type-labels
 import { LibraryPager } from './LibraryPager.tsx'
 import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
+import { JournalMetricsSummary } from './JournalMetrics.tsx'
+import type { useJournalMetrics } from './useJournalMetrics.ts'
 
 interface ParsedArtifactProbeFace {
   readonly sessionId: string
@@ -35,6 +39,11 @@ interface ParsedArtifactProbeFace {
   readonly revision?: number
   /** Commit/discard invalidation from the parsed-document provider. */
   readonly documents?: ParsedDocuments
+}
+
+interface LibraryItemChat {
+  readonly inputActions: InputActions
+  readonly signal: AbortSignal
 }
 
 interface LibraryItemListProps {
@@ -53,9 +62,11 @@ interface LibraryItemListProps {
   readonly selectItem: (ref: string | undefined) => void
   readonly retry: () => void
   readonly useContextMenu?: UseContextMenu
+  readonly chat?: LibraryItemChat
   readonly parsedArtifact?: ParsedArtifactProbeFace
   /** Zotero's own localized item-type names, for types the plugin table lacks. */
   readonly localizedItemTypes?: ItemTypeLocalizedNames
+  readonly journalMetrics?: ReturnType<typeof useJournalMetrics>
 }
 
 /**
@@ -69,6 +80,32 @@ function creatorsOf(item: ZoteroSearchItemView): string {
     return formatCreatorsList(item.authors.map((name) => ({ name })))
   }
   return item.creatorSummary
+}
+
+function insertItemQuote(
+  chat: LibraryItemChat,
+  item: ZoteroSearchItemView,
+  creators: string,
+  venue: string | undefined,
+): boolean {
+  if (chat.signal.aborted) return false
+  const title = item.title.trim()
+  const origin = joinNonEmpty(item.year, venue)
+  const text = [title, creators, origin, item.doi && `DOI: ${item.doi}`, item.ref]
+    .filter(Boolean)
+    .join('\n')
+  const label = title || item.ref
+  if (
+    !chat.inputActions.insertQuote(text, {
+      label,
+      title: label,
+      detail: origin || undefined,
+      body: creators,
+    })
+  )
+    return false
+  chat.inputActions.persistDraft()
+  return true
 }
 
 /**
@@ -215,8 +252,10 @@ function LibraryItemListBody({
   selectItem,
   retry,
   contextMenu,
+  chat,
   parsedArtifact,
   localizedItemTypes,
+  journalMetrics,
 }: Omit<LibraryItemListProps, 'useContextMenu'> & {
   readonly contextMenu?: ReturnType<NonNullable<LibraryItemListProps['useContextMenu']>>
 }) {
@@ -296,16 +335,19 @@ function LibraryItemListBody({
                 hasPdf &&
                 item.bestAttachmentRef !== undefined &&
                 parsedRefs.has(item.bestAttachmentRef)
+              const creators = creatorsOf(item)
+              const venue = item.venue || item.publicationTitle || undefined
               const triggerProps = contextMenu?.getTriggerProps({
                 kind: 'zoteroItem',
                 value: {
                   ref: item.ref,
                   title: item.title,
                   itemType: item.itemType,
+                  ...(chat && {
+                    addToChat: () => insertItemQuote(chat, item, creators, venue),
+                  }),
                 },
               })
-              const creators = creatorsOf(item)
-              const venue = item.venue !== undefined && item.venue !== '' ? item.venue : undefined
               return (
                 <li
                   key={item.ref}
@@ -344,17 +386,29 @@ function LibraryItemListBody({
                         <span className={css.itemType}>
                           {itemTypeLabelOf(item.itemType, localizedItemTypes, t)}
                         </span>
-                        {venue !== undefined && (
-                          <span className={css.itemVenue} title={venue}>
-                            {venue}
-                          </span>
-                        )}
-                        {creators !== '' && (
-                          <span className={css.itemCreator} title={creators}>
-                            {creators}
+                        {(venue !== undefined || creators !== '') && (
+                          <span className={css.itemByline}>
+                            {venue !== undefined && (
+                              <span className={css.itemVenue} title={venue}>
+                                {venue}
+                              </span>
+                            )}
+                            {creators !== '' && (
+                              <span className={css.itemCreator} title={creators}>
+                                {creators}
+                              </span>
+                            )}
                           </span>
                         )}
                       </span>
+                      {journalMetrics && item.publicationTitle && preferences && (
+                        <JournalMetricsSummary
+                          t={t}
+                          order={preferences.journalMetricListOrder}
+                          compact={compact}
+                          result={journalMetrics.forJournal(item.publicationTitle)}
+                        />
+                      )}
                     </span>
                     {/* A detection badge, not an absence claim: the search
                      * index's best-attachment pick names a PDF when one is

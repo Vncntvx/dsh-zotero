@@ -51,6 +51,8 @@ declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
       readonly ref: string
       readonly title: string
       readonly itemType: string
+      /** Uses the composer supplied to the tab that captured this target. */
+      readonly addToChat?: () => boolean
     }
   }
 }

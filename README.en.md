@@ -83,7 +83,8 @@ dsh-zotero connects your local Zotero library to DeepSeek Harness. In conversati
   - **Export summary**: Citations and BibTeX from the session are collected across items, split by format, and deduplicated, ready to copy or download for writing; failed exports are listed separately.
 - **Literature panel (right sidebar)**
   - **Browsing and filtering**: Switch libraries, expand the collection tree on demand, and open saved searches, My Publications, and the Trash. The item list searches metadata or full text, sorts by several fields, and filters by type, tag, year, and attachment presence.
-  - **Details and reading**: Metadata, collections and tags, and notes/attachments/annotations page independently. Local PDFs open in the reading pane; with `allowUrlPdfRead`, URL attachments already in the library also open.
+  - **Details and reading**: View metadata, collections, and tags. Attachments, notes, and annotations page independently. Local PDFs open in the reading pane; with `allowUrlPdfRead`, URL attachments already in the library also open.
+  - **Journal metrics**: Enable lookups in panel settings and save an EasyScholar key to see metrics such as JCR quartiles, impact factors, CAS quartiles, and Chinese core indexes. Choose list candidates and detail fields separately.
   - **Citations and handoff**: Copy a citation, bibliography, or BibTeX from the action row, and send selected items into the chat draft. The composer's Zotero button and bibliography deliverables open the panel directly.
   - **State restoration**: Per Zotero instance, the panel remembers the selected item, active section, expanded collection branches, scroll position, and child pagination.
   - **Parsed reading**: With the document parsing component enabled, the action row opens a tab named after the paper (full text, figures, selection actions); Manage parsed docs lists every artifact with filters, per-row open or reparse, and batch discard.

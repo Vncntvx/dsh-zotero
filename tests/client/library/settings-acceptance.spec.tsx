@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 /** Staged edits remain local; accepted updates drive runtime preferences. */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { LibraryFormController } from '../../../src/client/library-form-controller.ts'
+import {
+  LibraryFormController,
+  type LibraryCardFace,
+} from '../../../src/client/library-form-controller.ts'
 import { LibrarySettingsForm } from '../../../src/client/LibrarySettingsForm.tsx'
 import { createLibraryPreferenceSource } from '../../../src/client/library-preferences.tsx'
 import { LibraryCitationActions } from '../../../src/client/components/library/LibraryCitationActions.tsx'
@@ -11,15 +14,19 @@ import { LibraryPreferencesContext } from '../../../src/client/library-preferenc
 import { LIBRARY_DEFAULTS } from '../../../src/library-preferences.ts'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { fakeScope } from '../helpers/fake-scope.ts'
+import type { ScholarlyCredentialPort } from '../../../src/client/scholarly-form-controller.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 
 afterEach(cleanup)
-function settingsHarness() {
+function settingsHarness(
+  refresh?: LibraryCardFace['refreshJournalMetrics'],
+  credentials?: ScholarlyCredentialPort,
+) {
   const form = fakeScope({ value: { ...LIBRARY_DEFAULTS } })
   const core = fakeScope({ value: { defaultStyle: 'apa', defaultLocale: 'zh-CN' } })
   const source = createLibraryPreferenceSource(form, core)
-  const controller = new LibraryFormController(form)
+  const controller = new LibraryFormController(form, credentials, refresh)
   const face = controller.inject()
   function Settings() {
     const state = useSyncExternalStore(
@@ -73,6 +80,182 @@ it('requires acknowledgement before enabling external PDF requests and stages ca
     harness.dispose()
   }
 })
+
+it('waits for EasyScholar consent and a settings save before enabling lookups', async () => {
+  const harness = settingsHarness()
+  try {
+    render(<harness.Settings />)
+    fireEvent.click(screen.getByLabelText(zh.journalMetricsEnable))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText(zh.journalMetricsAcknowledge))
+    fireEvent.click(screen.getByRole('button', { name: zh.journalMetricsAllow }))
+    expect(harness.source.getSnapshot().preferences?.journalMetricsEnabled).toBe(false)
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricsEnabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: `${zh.reset}: ${zh.journalMetricsEnable}` }))
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricsEnabled).toBe(false)
+  } finally {
+    harness.dispose()
+  }
+})
+
+it('links to EasyScholar’s Open API page and masks a saved key', async () => {
+  const harness = settingsHarness(undefined, {
+    describe: async () => ({
+      ok: true,
+      value: { EASYSCHOLAR_SECRET_KEY: { configured: true, writable: true } },
+    }),
+    set: vi.fn(),
+  })
+  try {
+    render(<harness.Settings />)
+    const keyField = screen.getByLabelText<HTMLInputElement>(zh.journalMetricsSecret)
+    await vi.waitFor(() => expect(keyField.placeholder).toBe('************'))
+    expect(keyField.value).toBe('')
+    const link = screen.getByRole('link', { name: zh.journalMetricsSecretOpenSite })
+    expect(link.getAttribute('href')).toBe('https://www.easyscholar.cc/console/user/open')
+    expect(link.getAttribute('target')).toBe('_blank')
+  } finally {
+    harness.dispose()
+  }
+})
+
+it('orders candidates and saves separate presets and the dual-index preference', async () => {
+  const harness = settingsHarness()
+  try {
+    render(<harness.Settings />)
+    const choose = (label: string, option: string) => {
+      fireEvent.click(screen.getByRole('button', { name: label }))
+      fireEvent.click(screen.getByRole('menuitem', { name: option }))
+    }
+    const international = within(
+      screen.getByRole('region', { name: zh.journalMetricsInternational }),
+    )
+    const chinese = within(screen.getByRole('region', { name: zh.journalMetricsChineseCore }))
+    const add = international.getByRole('button', { name: zh.journalMetricsAddCandidate })
+    fireEvent.click(add)
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(international.getByRole('button', { name: zh.journalMetricsAddCandidate }))
+    fireEvent.click(screen.getByRole('menuitem', { name: zh['journalMetric.ccf'] }))
+    fireEvent.click(international.getByRole('button', { name: '将CCF上移' }))
+    fireEvent.click(international.getByRole('button', { name: '将CCF下移' }))
+    fireEvent.click(international.getByRole('button', { name: '将CCF上移' }))
+    fireEvent.click(chinese.getByRole('button', { name: '移除北大核心' }))
+    choose(zh.journalMetricsDualPriority, zh.journalMetricsChineseCore)
+    choose(zh.journalMetricsListLimit, '2 项')
+    expect(harness.source.getSnapshot().preferences?.journalMetricListOrder).toEqual(
+      LIBRARY_DEFAULTS.journalMetricListOrder,
+    )
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricListOrder).toEqual({
+      international: ['jcr', 'sciif', 'ccf', 'sciUp'],
+      chineseCore: ['cssci', 'cscd', 'zhongguokejihexin'],
+      dualPriority: 'chineseCore',
+      limit: 2,
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: `${zh.reset}: ${zh.journalMetricsListFields}` }),
+    )
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricListOrder).toEqual(
+      LIBRARY_DEFAULTS.journalMetricListOrder,
+    )
+  } finally {
+    harness.dispose()
+  }
+})
+
+it('saves independently selected detail metrics and restores their defaults', async () => {
+  const harness = settingsHarness()
+  try {
+    render(<harness.Settings />)
+    expect(
+      screen.getByRole('checkbox', { name: zh['journalMetric.sci'], checked: true }),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByLabelText(zh['journalMetric.sci']))
+    fireEvent.click(screen.getByLabelText(zh['journalMetric.ccf']))
+    fireEvent.click(screen.getByLabelText(zh.journalMetricsCustom))
+    expect(harness.source.getSnapshot().preferences?.journalMetricDetailFields).toEqual([
+      'sci',
+      'sciif',
+      'sciUp',
+    ])
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricDetailFields).toEqual([
+      'sciif',
+      'sciUp',
+      'ccf',
+      'custom',
+    ])
+    expect(harness.source.getSnapshot().preferences?.journalMetricListOrder).toEqual(
+      LIBRARY_DEFAULTS.journalMetricListOrder,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: `${zh.reset}: ${zh.journalMetricsDetailFields}` }),
+    )
+    await act(async () => harness.face.save())
+    expect(harness.source.getSnapshot().preferences?.journalMetricDetailFields).toEqual([
+      'sci',
+      'sciif',
+      'sciUp',
+    ])
+  } finally {
+    harness.dispose()
+  }
+})
+
+it('requests a metrics refresh without saving other settings drafts', async () => {
+  const refresh = vi
+    .fn<NonNullable<LibraryCardFace['refreshJournalMetrics']>>()
+    .mockResolvedValueOnce({ status: 'finished', refreshed: 2, total: 3, failure: 'unavailable' })
+    .mockRejectedValueOnce(new Error('host unavailable'))
+  const harness = settingsHarness(refresh)
+  try {
+    render(<harness.Settings />)
+    act(() => harness.face.edit('titleLines', '1'))
+    fireEvent.click(screen.getByRole('button', { name: zh.journalMetricsRefresh }))
+    expect((await screen.findByText(/已更新 2\/3 个期刊/)).textContent).toContain(
+      zh.journalMetricsRefreshIncomplete,
+    )
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(harness.form.writes).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: zh.journalMetricsRefresh }))
+    expect(await screen.findByText(zh.journalMetricsRefreshFailed)).toBeTruthy()
+  } finally {
+    harness.dispose()
+  }
+})
+
+it.each([
+  [{ status: 'finished', total: 0, refreshed: 0 }, zh.journalMetricsRefreshEmpty],
+  [{ status: 'disabled' }, zh.journalMetricsRefreshDisabled],
+  [{ status: 'credential' }, zh.journalMetricsCredential],
+  [{ status: 'running' }, zh.journalMetricsRefreshRunning],
+] as const)('shows the manual refresh outcome for %j', async (outcome, message) => {
+  const harness = settingsHarness(async () => outcome)
+  try {
+    render(<harness.Settings />)
+    fireEvent.click(screen.getByRole('button', { name: zh.journalMetricsRefresh }))
+    expect(await screen.findByText(message)).toBeTruthy()
+  } finally {
+    harness.dispose()
+  }
+})
+
+it('previews an empty preset when the user removes every candidate', () => {
+  const harness = settingsHarness()
+  try {
+    render(<harness.Settings />)
+    const preset = within(screen.getByRole('region', { name: zh.journalMetricsInternational }))
+    for (const button of preset.getAllByRole('button', { name: /^移除/ })) fireEvent.click(button)
+    expect(preset.getByText(new RegExp(zh.journalMetricsPreviewEmpty))).toBeTruthy()
+  } finally {
+    harness.dispose()
+  }
+})
+
 it('rejects invalid draft values and keeps the accepted runtime snapshot', async () => {
   const harness = settingsHarness()
   try {

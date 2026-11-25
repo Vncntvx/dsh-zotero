@@ -472,14 +472,14 @@ describe('the browser-half entry', () => {
 
     // The disposer unwinds the UI fiber: the card forms' subscriptions, the
     // gated surfaces subscriptions, and the mount.
-    // Per-namespace counts: the zotero form carries the webEnabled watch and
-    // the card model; the library form carries its own sync and card model;
-    // the scholarly form its card model plus the credential-reference
+    // Per-namespace subscriptions: the zotero form watches webEnabled and its
+    // card model; the library form watches sync, its card model, and credentials;
+    // the scholarly form watches its card model and the credential-reference
     // subscription that drives remote reads.
     await dispose()
     expect(world.eventDisposes).toBe(0)
     expect(world.scope.unsubscribes).toBe(5)
-    expect(world.libraryScope.unsubscribes).toBe(3)
+    expect(world.libraryScope.unsubscribes).toBe(4)
     expect(world.scholarlyScope.unsubscribes).toBe(2)
     expect(world.uiDisposes).toBe(1)
     expect(world.injected.find((entry) => entry.name === 'conversation.view')?.active).toBe(false)

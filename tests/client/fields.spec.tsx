@@ -8,7 +8,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BooleanField, SecretField } from '../../src/client/fields.tsx'
+import { BooleanField, ChoiceField, SecretField } from '../../src/client/fields.tsx'
 
 // The real primitives bundle pulls heavy dependencies (katex, shiki); the
 // fields only need the shared tag capsule, so stub it with its DOM face.
@@ -100,6 +100,22 @@ describe('BooleanField', () => {
   })
 })
 
+it('renders a choice without a reset action', () => {
+  render(
+    <ChoiceField
+      id="choice"
+      label="List limit"
+      value="2"
+      options={[]}
+      disabled={false}
+      onSelect={vi.fn()}
+    />,
+  )
+  expect(screen.getAllByRole('button')).toEqual([
+    screen.getByRole('button', { name: 'List limit' }),
+  ])
+})
+
 describe('SecretField', () => {
   const secret = {
     id: 'mineru-token',
@@ -107,7 +123,6 @@ describe('SecretField', () => {
     hint: 'Resolved through the credentials seam.',
     configured: true,
     stateLabel: 'Configured',
-    placeholder: '••••••••',
     disabled: false,
   }
 
@@ -118,7 +133,7 @@ describe('SecretField', () => {
     // draft whose placeholder is the mask.
     expect(input.type).toBe('password')
     expect(input.value).toBe('')
-    expect(input.placeholder).toBe('••••••••')
+    expect(input.placeholder).toBe('************')
     expect(screen.getByText('Configured')).toBeDefined()
   })
 

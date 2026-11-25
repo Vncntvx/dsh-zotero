@@ -130,8 +130,6 @@ interface SecretFieldProps {
   configured: boolean
   /** Copy describing the configured state. */
   stateLabel: string
-  /** Masked placeholder shown while a credential is configured and the draft is empty. */
-  placeholder: string
   /** Disables the control (read-only document, or an unavailable namespace). */
   disabled: boolean
   /** Stage draft text. */
@@ -169,7 +167,7 @@ export function SecretField(props: SecretFieldProps): ReactNode {
         type="password"
         autoComplete="new-password"
         value={props.text}
-        placeholder={props.configured ? props.placeholder : ''}
+        placeholder={props.configured ? '************' : ''}
         disabled={props.disabled}
         onChange={(event) => {
           props.onEdit(event.target.value)
@@ -200,19 +198,19 @@ interface ChoiceFieldProps {
   /** The closed option set, in display order. */
   options: readonly ChoiceOption[]
   /** True when saving would leave a user-layer entry for this field. */
-  overridden: boolean
+  overridden?: boolean
   /** True when the staged value is outside the option set. */
   invalid?: boolean
   /** Disables the control. */
   disabled: boolean
   /** Copy for the overridden badge. */
-  overriddenLabel: string
+  overriddenLabel?: string
   /** Copy for the reset control. */
-  resetLabel: string
+  resetLabel?: string
   /** Stage the chosen value. */
   onSelect: (value: string) => void
   /** Stage a clear so the field re-inherits the composition layer. */
-  onReset: () => void
+  onReset?: () => void
 }
 
 /**
@@ -226,22 +224,25 @@ interface ChoiceFieldProps {
 export function ChoiceField(props: ChoiceFieldProps): ReactNode {
   const [open, setOpen] = useState(false)
   const currentOption = props.options.find((option) => option.value === props.value)
+  const showReset = props.overridden && props.resetLabel && props.onReset
   return (
     <div className={css.field}>
       <div className={css.fieldHead}>
         <span className={css.fieldLabel}>{props.label}</span>
-        {props.overridden && (
+        {props.overridden && (props.overriddenLabel || showReset) && (
           <span className={css.badges}>
-            <Tag tone="neutral">{props.overriddenLabel}</Tag>
-            <button
-              type="button"
-              className={css.reset}
-              disabled={props.disabled}
-              aria-label={`${props.resetLabel}: ${props.label}`}
-              onClick={props.onReset}
-            >
-              {props.resetLabel}
-            </button>
+            {props.overriddenLabel && <Tag tone="neutral">{props.overriddenLabel}</Tag>}
+            {showReset && (
+              <button
+                type="button"
+                className={css.reset}
+                disabled={props.disabled}
+                aria-label={`${props.resetLabel}: ${props.label}`}
+                onClick={props.onReset}
+              >
+                {props.resetLabel}
+              </button>
+            )}
           </span>
         )}
       </div>

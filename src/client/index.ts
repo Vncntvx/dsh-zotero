@@ -60,6 +60,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   IconSparkleRegular,
   IconCopyOutlineRegular,
+  IconPlusOutlineRegular,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ZoteroSettingsSection } from './ZoteroSettingsSection.tsx'
@@ -707,6 +708,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         params: {},
       }),
     preferenceSource,
+    journalMetrics: (request, signal) => ctx.remote.zotero.journalMetrics(request, signal),
     readUrlPdf: (request, signal) => ctx.remote.zotero.readUrlPdf(request, signal),
     releaseUrlPdf: (lease) =>
       ctx.remote.zotero.releaseUrlPdf({ lease }).then((result) => {
@@ -1049,7 +1051,8 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         ),
     )
 
-    const disposeSelectionIcons = ctx.slots.inject('contextMenu.icon', () => {
+    const addToChatIcon = 'zotero.item.addToChat'
+    const disposeMenuIcons = ctx.slots.inject('contextMenu.icon', () => {
       const disposers = [
         ctx.slots.register(
           { name: 'contextMenu.icon', key: 'zotero.selection.copy', registrant: REGISTRANT },
@@ -1058,6 +1061,10 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         ctx.slots.register(
           { name: 'contextMenu.icon', key: 'zotero.selection.explain', registrant: REGISTRANT },
           () => createElement(IconSparkleRegular, { size: 14 }),
+        ),
+        ctx.slots.register(
+          { name: 'contextMenu.icon', key: addToChatIcon, registrant: REGISTRANT },
+          () => createElement(IconPlusOutlineRegular, { size: 14 }),
         ),
       ]
       return () => disposers.forEach((dispose) => dispose())
@@ -1088,6 +1095,26 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               icon: { key: LIBRARY_ICON_KEY },
               run: () => {
                 ctx.sidebarRight.openTabIn(target.sessionId, LIBRARY_TAB_KIND)
+              },
+            },
+          ]
+        },
+      })
+
+      const disposeAddToChatMenu = menuCtx.contextMenus.register({
+        id: `${REGISTRANT}.item.addToChat`,
+        target: 'zoteroItem',
+        order: 90,
+        resolve: ({ addToChat }) => {
+          if (!addToChat) return []
+          return [
+            {
+              id: 'addToChat',
+              label: panelT('libraryAddToChat'),
+              icon: { key: addToChatIcon },
+              failureLabel: panelT('libraryInsertFailed'),
+              run: () => {
+                if (!addToChat()) menuCtx.contextMenus.notify(panelT('libraryInsertFailed'))
               },
             },
           ]
@@ -1151,6 +1178,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeMenus = () => {
         disposeCopyLinkMenu()
         disposeOpenInDesktop()
+        disposeAddToChatMenu()
         disposeFileMenu()
       }
     })
@@ -1159,7 +1187,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
       disposeMenus()
       void menuFiber.dispose()
       disposeContextIcon()
-      disposeSelectionIcons()
+      disposeMenuIcons()
       disposeDocumentUnpreviewable()
       disposeDocumentActions()
       disposeDeliverableAction()
@@ -1255,7 +1283,6 @@ function registerUi(ctx: ClientContext): void {
   }
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
   const enrichmentCard = new EnrichmentFormController(enrichmentForm, credentialPort, modelPort)
-  const libraryCard = new LibraryFormController(libraryForm)
   const citationCard = new CitationFormController(form)
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
@@ -1286,6 +1313,12 @@ function registerUi(ctx: ClientContext): void {
   // so a plain getter is enough: a reader that opens a URL PDF asks for the
   // current permission at the moment of the click.
   const preferenceSource = createLibraryPreferenceSource(libraryForm, form)
+  const libraryCard = new LibraryFormController(libraryForm, credentialPort, async () => {
+    const result = await ctx.remote.zotero.refreshJournalMetrics({})
+    if (!result.ok) throw result.error
+    if (result.value.status === 'finished') preferenceSource.journalRefreshFinished()
+    return result.value
+  })
   ctx.effect(() => () => preferenceSource.dispose(), 'dsh-zotero: library preferences')
   const libraryPreferences = (): LibraryPreferences | undefined =>
     preferenceSource.getSnapshot().preferences
@@ -1477,8 +1510,10 @@ function registerUi(ctx: ClientContext): void {
       ctx.remote.$on('credentials/reference-updated', (ref) => {
         scholarlyCard.refreshCredential(ref)
         enrichmentCard.refreshCredential(ref)
+        void libraryCard.refreshCredential(ref)
+        preferenceSource.journalCredentialChanged(ref)
       }),
-    'dsh-zotero: scholarly & enrichment credential invalidations',
+    'dsh-zotero: credential invalidations',
   )
   registerPluginManagerSurfaces(ctx, surfaces)
   registerConversationSurfaces(ctx, surfaces)

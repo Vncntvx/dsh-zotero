@@ -55,7 +55,7 @@ describe('unified context menus', () => {
     ).toBeDefined()
   })
 
-  it('withdraws both contributions when the library component is not composed', async () => {
+  it('withdraws the contributions when the library component is not composed', async () => {
     const world = fakeWorld()
     world.servedNamespaces = new Set(['zotero', 'scholarly'])
     await applyEntry(world)
@@ -63,14 +63,41 @@ describe('unified context menus', () => {
     expect(world.contextMenuRegistrations).toEqual([])
   })
 
-  it('withdraws both contributions when the right sidebar is disabled', async () => {
+  it('withdraws the contributions when the right sidebar is disabled', async () => {
     const world = fakeWorld()
     await applyEntry(world)
-    expect(world.contextMenuRegistrations).toHaveLength(3)
+    expect(world.contextMenuRegistrations).toHaveLength(4)
 
     await world.libraryScope.set('rightSidebarEnabled', false)
     expect(world.contextMenuRegistrations).toEqual([])
-    expect(world.contextMenuDisposes).toBe(3)
+    expect(world.contextMenuDisposes).toBe(4)
+  })
+
+  it('runs Add to chat against the captured composer and reports a refused insertion', async () => {
+    const world = fakeWorld()
+    await applyEntry(world)
+    const registration = world.contextMenuRegistrations.find(
+      (reg) => reg.id === 'dsh-zotero.item.addToChat',
+    )!
+    const signal = new AbortController().signal
+    const item = {
+      ref: 'zotero://user/0/item/ABC12345',
+      title: 'Sample',
+      itemType: 'journalArticle',
+    }
+    const addToChat = vi.fn(() => true).mockReturnValueOnce(false)
+    expect(registration.resolve(item, signal)).toEqual([])
+    const [action] = registration.resolve({ ...item, addToChat }, signal)
+    expect(action).toMatchObject({
+      id: 'addToChat',
+      label: 'libraryAddToChat',
+      icon: { key: 'zotero.item.addToChat' },
+    })
+    action.run()
+    expect(world.notifications).toEqual([{ text: 'libraryInsertFailed', success: false }])
+    action.run()
+    expect(addToChat).toHaveBeenCalledTimes(2)
+    expect(world.notifications).toHaveLength(1)
   })
 
   it('offers openInLibrary for bibliography files and declines others', async () => {

@@ -41,9 +41,6 @@ import linkCss from './components/link.module.css'
 
 type T = (key: ZoteroLocaleKey, params?: Record<string, unknown>) => string
 
-/** Fixed mask for a configured token; the stored value never reaches the browser. */
-const MASKED_TOKEN = '************'
-
 export type EnrichmentFormActions = Pick<SettingsFormActions, 'edit' | 'resetField'> & {
   downloadModel?: (force?: boolean) => Promise<void>
   cancelModelDownload?: () => Promise<void>
@@ -388,7 +385,6 @@ export function EnrichmentSettingsForm({
             stateLabel={
               state.mineruToken.configured ? t('secretConfigured') : t('secretNotConfigured')
             }
-            placeholder={MASKED_TOKEN}
             disabled={state.mineruToken.disabled}
             onEdit={(text) => actions.edit('mineruToken', text)}
             help={

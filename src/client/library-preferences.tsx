@@ -14,6 +14,8 @@ interface LibraryPreferenceSnapshot {
   readonly citation?: { readonly style: string; readonly locale: string }
   readonly citationPending?: boolean
   readonly error?: string
+  readonly journalCredentialRevision?: number
+  readonly journalRefreshRevision?: number
 }
 export interface LibraryPreferenceSource {
   readonly getSnapshot: () => LibraryPreferenceSnapshot
@@ -22,9 +24,15 @@ export interface LibraryPreferenceSource {
 export function createLibraryPreferenceSource(
   form: ConfigForm<Record<string, unknown>>,
   core: ConfigForm<Record<string, unknown>>,
-): LibraryPreferenceSource & { dispose: () => void } {
+): LibraryPreferenceSource & {
+  dispose: () => void
+  journalCredentialChanged: (ref: string) => void
+  journalRefreshFinished: () => void
+} {
   const listeners = new Set<() => void>()
   let snapshot: LibraryPreferenceSnapshot = {}
+  let journalCredentialRevision = 0
+  let journalRefreshRevision = 0
   const update = () => {
     try {
       const library = form.getSnapshot()
@@ -43,6 +51,8 @@ export function createLibraryPreferenceSource(
                 library.status === 'ready' ? libraryPreferencesOf(library.value ?? {}) : undefined,
               citation,
               citationPending: citation === undefined,
+              journalCredentialRevision,
+              journalRefreshRevision,
             }
     } catch (error) {
       snapshot = { error: error instanceof Error ? error.message : String(error) }
@@ -53,6 +63,15 @@ export function createLibraryPreferenceSource(
   update()
   return {
     getSnapshot: () => snapshot,
+    journalCredentialChanged: (ref) => {
+      if (snapshot.preferences?.easyScholarSecretKeyRef !== ref) return
+      journalCredentialRevision += 1
+      update()
+    },
+    journalRefreshFinished: () => {
+      journalRefreshRevision += 1
+      update()
+    },
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {

@@ -49,6 +49,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {
   SupportedLocalLibrary,
   ZoteroAttachmentLocationView,
+  ZoteroRemoteContract,
   ZoteroStatusView,
   ZoteroUrlPdfView,
 } from '../../../contract.ts'
@@ -57,6 +58,7 @@ import { ZoteroSurfaceBoundary } from '../ZoteroSurfaceBoundary.tsx'
 import { useZoteroProbe } from '../useZoteroProbe.ts'
 import { writeStatusLabel } from '../write-label.ts'
 import { useLibraryFeed } from './useLibraryFeed.ts'
+import { useJournalMetrics, type JournalMetricsNotice } from './useJournalMetrics.ts'
 import { useItemTypeVocabulary } from './use-item-type-labels.ts'
 import type { LibraryFeedFace, LibraryPanelWireFace } from './library-feed-types.ts'
 import { clearLibraryConversationState } from './library-storage.ts'
@@ -105,6 +107,7 @@ export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
   readonly forgetPdf?: (address: string) => void
   readonly trackPdf?: (address: string, lease: string, ref: string) => void
   readonly preferenceSource?: LibraryPreferenceSource
+  readonly journalMetrics?: ZoteroRemoteContract['journalMetrics']
   readonly bindRefresh?: (
     sessionId: string,
     tabId: string,
@@ -356,6 +359,40 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   const canResolveAttachment = props.useRemoteAccess('zotero/resolveAttachment')
   const canReadUrlPdf = props.useRemoteAccess('zotero/readUrlPdf')
   const canOpenProtocol = props.useRemoteAccess('zotero/openProtocol')
+  const canQueryMetrics = props.useRemoteAccess('zotero/journalMetrics')
+  const metricsEnabled = canQueryMetrics && accepted.preferences?.journalMetricsEnabled === true
+  const inspected =
+    feed.inspector?.phase === 'ready' && feed.inspector.detail.ref === feed.selectedRef
+      ? feed.inspector.detail
+      : undefined
+  const pageItems = feed.list.phase === 'ready' ? feed.list.items : undefined
+  const listOrder = accepted.preferences?.journalMetricListOrder
+  const selectedJournal = accepted.preferences?.journalMetricDetailFields.length
+    ? inspected
+      ? inspected.publicationTitle
+      : pageItems?.find((item) => item.ref === feed.selectedRef)?.publicationTitle
+    : undefined
+  const notifyJournalMetrics = useCallback(
+    (notice: JournalMetricsNotice) => client.notifySurface(t(notice)),
+    [client, t],
+  )
+  const metrics = useJournalMetrics(
+    metricsEnabled && confirmed && !sessionRemoved && tabInfo?.tab.visible !== false
+      ? props.journalMetrics
+      : undefined,
+    `${accepted.preferences?.easyScholarSecretKeyRef ?? ''}:${accepted.journalCredentialRevision ?? 0}`,
+    accepted.journalRefreshRevision ?? 0,
+    [
+      ...(accepted.preferences?.journalMetricDetailFields ?? []).map((field) => `detail:${field}`),
+      ...(listOrder?.international ?? []).map((field) => `international:${field}`),
+      ...(listOrder?.chineseCore ?? []).map((field) => `chineseCore:${field}`),
+    ].join(','),
+    listOrder && (listOrder.international.length || listOrder.chineseCore.length)
+      ? pageItems
+      : undefined,
+    selectedJournal,
+    notifyJournalMetrics,
+  )
   const canStartParse = props.useAccess('zotero/startDocumentParse')
   const canReadArtifact = props.useAccess('zotero/documentArtifact')
   const canReadParseReceipt = props.useAccess('zotero/documentParseReceipt')
@@ -735,8 +772,14 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   selectItem={feed.selectItem}
                   retry={feed.retryList}
                   useContextMenu={props.useContextMenu}
+                  chat={
+                    inputActions && !sessionRemoved
+                      ? { inputActions, signal: occurrenceSignal }
+                      : undefined
+                  }
                   localizedItemTypes={itemTypes.localized}
                   parsedArtifact={parsedArtifact}
+                  journalMetrics={metricsEnabled ? metrics : undefined}
                 />
               </div>
               <div
@@ -784,6 +827,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   exportItem={canExport ? props.export : undefined}
                   localizedItemTypes={itemTypes.localized}
                   parsedArtifact={inspectorArtifact}
+                  journalMetrics={metricsEnabled ? metrics : undefined}
                 />
               </div>
             </div>

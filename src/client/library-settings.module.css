@@ -26,3 +26,49 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.metricChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: 8px 12px;
+}
+
+.metricPresets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  column-gap: 24px;
+  row-gap: 12px;
+}
+
+.metricPreset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-block-start: 8px;
+}
+
+.metricPreset h4 {
+  margin: 0;
+}
+
+.metricCandidates {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metricCandidate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  font: var(--dsw-font-xxs-12);
+}
+
+.metricCandidateActions {
+  display: flex;
+  align-items: center;
+}

@@ -779,6 +779,29 @@
   padding: 0 12px 6px;
 }
 
+.journalSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 16px;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.journalSummaryValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journalSummaryValue + .journalSummaryValue::before {
+  content: '·';
+  margin-inline-end: 6px;
+}
+
 .listScrollArea {
   flex: 1 1 0;
   min-height: 0;
@@ -922,9 +945,8 @@
   white-space: nowrap;
 }
 
-/* The year and the type badge keep their width; the venue and the creator line
- * are the two shrinkable slots, so a long journal truncates instead of pushing
- * the authors out of the row. */
+/* The year and type badge keep their width. The venue takes the remaining
+ * byline space first, and the authors fit in what is left. */
 .itemYear {
   flex: none;
 }
@@ -943,9 +965,17 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.itemVenue {
-  flex: 0 1 auto;
+.itemByline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  overflow: hidden;
+}
+
+.itemVenue {
+  flex: none;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1199,6 +1229,10 @@
   min-width: 0;
 }
 
+.metaTableWithMetrics {
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+}
+
 .metaRow {
   display: contents;
 }
@@ -1206,6 +1240,10 @@
 .metaLabel {
   text-align: left;
   user-select: none;
+}
+
+.metaTableWithMetrics .metaLabel {
+  overflow-wrap: anywhere;
 }
 
 .metaValue {
@@ -1241,7 +1279,7 @@
   overflow-wrap: anywhere;
 }
 
-.metaCopyRow {
+.metaActionRow {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1260,7 +1298,7 @@
   overflow-wrap: anywhere;
 }
 
-.metaCopyActions {
+.metaActions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -1733,6 +1771,10 @@
 }
 
 @container (max-width: 460px) {
+  .journalSummaryValue:nth-child(n + 3) {
+    display: none;
+  }
+
   .toolbar {
     padding: 4px 6px;
     gap: 4px;

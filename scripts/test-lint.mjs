@@ -206,7 +206,7 @@ export const MAX_HELPER_LINES = 300
 export const HELPER_SIZE_BASELINE = Object.freeze({
   'tests/client/helpers/source-fixtures.ts': 128,
   'tests/client/helpers/apply-world.ts': 350,
-  'tests/client/helpers/library-panel-harness.tsx': 156,
+  'tests/client/helpers/library-panel-harness.tsx': 150,
   'tests/host/support/enrichment-parse-endpoints.ts': 332,
   'tests/host/support/enrichment-parse-jobs.ts': 323,
 })

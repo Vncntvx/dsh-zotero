@@ -7,7 +7,7 @@
 import { render } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
 import { inputActionsStub } from './zotero-client.ts'
-import { panelStubProps, type SessionStub } from './library-panel-stubs.ts'
+import { panelStubProps, type PanelStubs, type SessionStub } from './library-panel-stubs.ts'
 export type { SessionStub } from './library-panel-stubs.ts'
 import type { ZoteroLibraryBrowseRequestView } from '../../../src/client/remote.ts'
 import {
@@ -61,15 +61,9 @@ export interface MountedPanel {
   /** The panel's in-memory view cache; pass one in `surface` to seed it first. */
   viewStore: LibraryViewStore
   /** The composer stub the panel receives; the chat-action specs assert on it. */
-  inputActions: {
-    setDraft: Mock
-    captureInsertion: Mock
-    insertText: Mock
-    insertQuote: Mock
-    submit: Mock
-  }
+  inputActions: ReturnType<typeof inputActionsStub>
   /** Every `zoteroItem` target the list rows handed to `getTriggerProps`. */
-  contextMenuTargets: Array<{ kind: string; value: unknown }>
+  contextMenuTargets: PanelStubs['contextMenuTargets']
 }
 
 /**

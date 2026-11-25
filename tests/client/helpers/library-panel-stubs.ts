@@ -9,6 +9,7 @@
 
 import type { ZoteroLibraryPanelProps } from '../../../src/client/components/library/ZoteroLibraryPanel.tsx'
 import type { LibraryViewStore } from '../../../src/client/components/library/library-view-store.ts'
+import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { mockT } from './mock-translate.ts'
 import { zoteroClientStub } from './zotero-client.ts'
 
@@ -33,7 +34,7 @@ export interface PanelStubInput {
 export interface PanelStubs {
   readonly props: ZoteroLibraryPanelProps
   /** Every `zoteroItem` target the list rows handed to `getTriggerProps`. */
-  readonly contextMenuTargets: Array<{ kind: string; value: unknown }>
+  readonly contextMenuTargets: ContextMenuTarget[]
 }
 
 /**
@@ -46,7 +47,7 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
   // The pane-tab occurrence: its signal is what the view memory keys on.
   const occurrence = new AbortController()
   let lastSelection: unknown
-  const contextMenuTargets: Array<{ kind: string; value: unknown }> = []
+  const contextMenuTargets: ContextMenuTarget[] = []
   const props = {
     t: mockT,
     useZoteroClient: zoteroClientStub,
@@ -61,7 +62,7 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
     ...face,
     locale: { getSnapshot: () => ({ active: 'en' }) },
     useContextMenu: () => ({
-      getTriggerProps: (target: { kind: string; value: unknown }) => {
+      getTriggerProps: (target: ContextMenuTarget) => {
         contextMenuTargets.push(target)
         return {}
       },

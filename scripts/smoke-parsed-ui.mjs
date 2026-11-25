@@ -73,6 +73,7 @@ import * as menu from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import * as uiSession from '@deepseek-ai/dsh-client-ui-session/client';
 import {createSnapshotStore} from '@deepseek-ai/dsh-client-store';
 import {LibraryItemList} from './src/client/components/library/LibraryItemList.tsx';
+import libraryCss from './src/client/components/library/library.module.css';
 import {LibraryPreferencesContext} from './src/client/library-preferences.tsx';
 import {LIBRARY_DEFAULTS} from './src/library-preferences.ts';
 import {ARTIFACT_READER_DEFAULTS} from './src/artifact-reader-preferences.ts';
@@ -106,11 +107,12 @@ const documents=new ParsedDocuments(read,()=>access,console.error); const stop=n
 (async()=>{for await(const frame of documents.open(address,{signal:stop.signal})){snapshot.publish(frame.ok?{status:'live',value:frame.value}:{status:'failed',failure:frame.error,value:snapshot.getSnapshot().value})}})();
 let root=createRoot(document.getElementById('app'));
 const tFor=locale=>(key,args={})=>(locale==='zh'?{...zh,...parseZh}:{...en,...parseEn})[key]?.replace(/\\{(\\w+)\\}/g,(_,key)=>String(args[key]??''))??key;
+const listMetrics={forJournal:name=>name==='Nature'?{status:'ready',fetchedAt:1,official:[{field:'sci',value:'Q1'},{field:'sciif',value:'4.0'},{field:'sciUp',value:'1'}],custom:[]}:undefined,retry:()=>{},retrying:false};
 window.showFixture=(mode,locale='en')=>{const t=tFor(locale);let component;
 if(mode.startsWith('list')){
 const density=mode.includes('Compact')?'compact':'comfortable',titleLines=mode.endsWith('1')?1:2;
-const items=[0,1,2].map((i)=>({ref:'zotero://user/0/item/PAPER00'+i,title:i===2?'':('A long literature title with detailed research findings and methodological evidence '.repeat(3)),itemType:'journalArticle',creatorSummary:'Researcher A; Researcher B',year:2026,venue:'Journal of detailed experimental evidence',bestAttachmentType:'application/pdf',bestAttachmentRef:ref}));
-component=<LibraryPreferencesContext.Provider value={{preferences:{...LIBRARY_DEFAULTS,listDensity:density,titleLines}}}><LibraryItemList t={t} list={{phase:'ready',items,total:3,offset:0,limit:20}} selection={{kind:'library'}} offset={0} gotoOffset={()=>{throw Error('Unexpected page')}} selectedRef={items[0].ref} selectItem={value=>window.selected=value} retry={()=>{throw Error('Unexpected retry')}} parsedArtifact={{sessionId,read:async()=>({ok:true,value:{kind:'probed',results:[{ref,state:'ready'}]}})}}/></LibraryPreferencesContext.Provider>;
+const items=['Nature','Journal of detailed experimental evidence in interdisciplinary research',undefined].map((venue,i)=>({ref:'zotero://user/0/item/PAPER00'+i,title:i===2?'':('A long literature title with detailed research findings and methodological evidence '.repeat(3)),itemType:'journalArticle',creatorSummary:'Researcher A; Researcher B; Researcher C; Researcher D; Researcher E',year:2026,venue,publicationTitle:i===0?venue:undefined,bestAttachmentType:'application/pdf',bestAttachmentRef:ref}));
+component=<div className={libraryCss.panel}><LibraryPreferencesContext.Provider value={{preferences:{...LIBRARY_DEFAULTS,listDensity:density,titleLines}}}><LibraryItemList t={t} journalMetrics={listMetrics} list={{phase:'ready',items,total:3,offset:0,limit:20}} selection={{kind:'library'}} offset={0} gotoOffset={()=>{throw Error('Unexpected page')}} selectedRef={items[0].ref} selectItem={value=>window.selected=value} retry={()=>{throw Error('Unexpected retry')}} parsedArtifact={{sessionId,read:async()=>({ok:true,value:{kind:'probed',results:[{ref,state:'ready'}]}})}}/></LibraryPreferencesContext.Provider></div>;
 }
 else if(mode==='picker')component=<PdfPickerDialog open onClose={()=>{}} title="Choose a PDF with a long paper title" t={t} options={Array.from({length:40},(_,i)=>({key:String(i),title:'Attachment '+i+' with a long title that should truncate.pdf',action:'Read PDF',onSelect:()=>{window.chosen=i}}))}/>;
 else if(mode==='parse')component=<ParseDocumentDialog open selection={{sessionId,target:{kind:'attachment',ref},label:'A long selected attachment.pdf'}} remote={{documentArtifact:async()=>({ok:true,value:{kind:'missing'}}),startDocumentParse:async()=>{throw Error('No upload from UI fixture')},documentParseReceipt:async()=>({ok:true,value:{kind:'missing'}})}} capabilities={source({mounted:true,connected:true,mode:'free',revision:'1',maxFileBytes:10485760,maxPages:20,startAllowed:true,readAllowed:true,cancelAllowed:true,sessionAllowed:true})} onClose={()=>{}} t={t}/>;
@@ -245,6 +247,44 @@ try {
           )
           if (rows.length !== 3 || rows.some((row) => row.clipped || row.height < 28 || !row.label))
             throw new Error(`Library content was clipped or unlabeled: ${JSON.stringify(rows)}`)
+          const nature = page.locator('span[title="Nature"]')
+          const venueFits = await nature.evaluate(
+            (venue) => venue.scrollWidth === venue.clientWidth,
+          )
+          if (!venueFits) throw new Error('Short journal name clipped in library row')
+          const metricRow = page.locator('li > button').first()
+          for (const title of ['JCR Q1', 'IF 4.0']) {
+            const metric = page.locator(`span[title="${title}"]`)
+            if ((await metric.count()) !== 1 || !(await metricRow.locator(metric).isVisible()))
+              throw new Error(`Expected one visible ${title} in the first library row`)
+          }
+          const cas = metricRow.locator('span[title="中科院 1"]')
+          const compact = mode.includes('Compact')
+          if ((await cas.count()) !== (compact ? 0 : 1))
+            throw new Error('CAS quartile rendered in the wrong density')
+          if ((await cas.isVisible()) !== (!compact && size.width > 460))
+            throw new Error('CAS quartile visibility did not follow the library container width')
+          if (size.width === 360) {
+            const authorClipped = await nature.evaluate((venue) => {
+              const authors = venue.nextElementSibling
+              return authors && authors.scrollWidth > authors.clientWidth
+            })
+            if (!authorClipped) throw new Error('Authors did not yield space to the journal name')
+            const longVenue = await page
+              .locator('span[title^="Journal of detailed"]')
+              .evaluate((venue) => {
+                return {
+                  layoutWidth: venue.clientWidth,
+                  availableWidth: venue.parentElement?.clientWidth,
+                  fullWidth: venue.scrollWidth,
+                }
+              })
+            if (
+              longVenue.layoutWidth !== longVenue.availableWidth ||
+              longVenue.fullWidth <= longVenue.layoutWidth
+            )
+              throw new Error('Long journal name did not use the available byline width')
+          }
           const last = page.locator('li > button').last()
           await last.scrollIntoViewIfNeeded()
           await last.click()

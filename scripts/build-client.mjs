@@ -370,6 +370,9 @@ const options = {
   format: 'cjs',
   platform: 'browser',
   target: 'es2022',
+  // The harness serves these scripts as UTF-8. Keep localized text in that
+  // encoding to avoid expanding it into Unicode escapes in the bundle.
+  charset: 'utf8',
   // The loader's module table answers react/jsx-runtime, so the automatic
   // runtime keeps JSX out of the bundle and avoids a classic-runtime React
   // global (dsh-at-file's build uses the same mode).

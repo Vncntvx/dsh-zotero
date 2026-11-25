@@ -22,7 +22,7 @@ it('locks the reviewed ratchet ceilings and grandfathered paths', () => {
     HELPER_SIZE_BASELINE: {
       'tests/client/helpers/source-fixtures.ts': 128,
       'tests/client/helpers/apply-world.ts': 350,
-      'tests/client/helpers/library-panel-harness.tsx': 156,
+      'tests/client/helpers/library-panel-harness.tsx': 150,
       'tests/host/support/enrichment-parse-endpoints.ts': 332,
       'tests/host/support/enrichment-parse-jobs.ts': 323,
     },
