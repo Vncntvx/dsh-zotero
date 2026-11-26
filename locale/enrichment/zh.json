@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-zotero/enrichment",
+    "description": "DeepSeek Harness 的可选文档解析组件：启用即允许把主动提交的具体 PDF 发送至 MinerU（mineru.net）解析为 Markdown，产物保存在本地；同时提供本地语义检索与嵌入模型管理。默认关闭。"
+  }
+}

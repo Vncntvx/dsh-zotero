@@ -1,0 +1,1 @@
+{"version":3,"file":"job-kinds.js","sourceRoot":"","sources":["../src/job-kinds.ts"],"names":[],"mappings":"","sourcesContent":["/** Host-only registration of the plugin's owned job kinds. */\nimport type {} from '@deepseek-ai/dsh-jobs'\n\ndeclare module '@deepseek-ai/dsh-jobs' {\n  interface JobKindMap {\n    zotero: 'zotero'\n    scholarly: 'scholarly'\n  }\n}\n\nexport {}\n"]}

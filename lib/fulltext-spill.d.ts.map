@@ -1,0 +1,1 @@
+{"version":3,"file":"fulltext-spill.d.ts","sourceRoot":"","sources":["../src/fulltext-spill.ts"],"names":[],"mappings":"AAAA,gFAAgF;AAChF;;;;;;;;GAQG;AACH,MAAM,MAAM,iBAAiB,GAAG,CAC9B,IAAI,EAAE,MAAM,KACT,OAAO,CACV;IAAE,QAAQ,CAAC,OAAO,EAAE,MAAM,CAAC;IAAC,QAAQ,CAAC,KAAK,EAAE,MAAM,CAAC;IAAC,QAAQ,CAAC,aAAa,EAAE,MAAM,CAAA;CAAE,GAAG,SAAS,CACjG,CAAA"}
