@@ -1,8 +1,7 @@
 /**
- * The library filter rail: item types (one static listing), the server-side
- * tag picker, attachment presence, and the year range. The year inputs commit
- * through a short debounce so typing `2020` is one search, not four, and a
- * crossed range never reaches the host.
+ * The library filter rail: item types, attachment presence, and the year
+ * range. Year inputs commit after a short debounce and reject invalid ranges
+ * locally.
  * @module dsh-zotero/client/components/library/LibraryFilters
  */
 
@@ -18,11 +17,8 @@ import {
   Tag,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SupportedLocalLibrary } from '../../../contract.ts'
 import { ZOTERO_YEAR_MAX, ZOTERO_YEAR_MIN } from '../../../constants.ts'
-import type { LibraryFeedFace } from './library-feed-types.ts'
 import type { LibraryFilters as Filters } from './library-model.ts'
-import { LibraryTagPicker } from './LibraryTagPicker.tsx'
 import { itemTypeLabelOf } from './item-type-labels.ts'
 import type { ItemTypeVocabulary } from './use-item-type-labels.ts'
 import { IconButton } from '../IconButton.tsx'
@@ -32,26 +28,16 @@ const YEAR_COMMIT_DEBOUNCE_MS = 300
 
 export function LibraryFilters({
   t,
-  face,
-  library,
   value,
   change,
   itemTypes,
-  enabled = true,
 }: {
   readonly t: TranslateNS<'zotero'>
-  readonly face: LibraryFeedFace
-  readonly library: SupportedLocalLibrary
   readonly value: Filters
   readonly change: (filters: Filters) => void
   /** The panel-level item-type read: its rows feed the menu, its errors the retry line. */
   readonly itemTypes: ItemTypeVocabulary
-  readonly enabled?: boolean
 }): ReactNode {
-  // Only the tag picker's own failure lives here; the item-type listing's
-  // failure belongs to the vocabulary that every pane reads.
-  const [pickerError, setPickerError] = useState<string>()
-
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
   const [attachmentOpen, setAttachmentOpen] = useState(false)
 
@@ -61,6 +47,11 @@ export function LibraryFilters({
   const [yearDraft, setYearDraft] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [yearInvalid, setYearInvalid] = useState<'number' | 'range'>()
   const yearTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // The debounced commit merges into the latest filters so changes made while
+  // typing survive.
+  const latestFilters = useRef(value)
+  latestFilters.current = value
 
   // Item types are a static schema listing the panel reads once for every
   // surface that names one; this rail only renders it.
@@ -81,7 +72,6 @@ export function LibraryFilters({
   )
 
   const selectedTypes = useMemo(() => new Set(value.itemTypes ?? []), [value.itemTypes])
-  const selectedTags = useMemo(() => new Set(value.tags ?? []), [value.tags])
 
   const typeMenuItems: MenuEntry[] = useMemo(() => {
     return types.map((item) => ({
@@ -98,11 +88,7 @@ export function LibraryFilters({
     value.yearTo !== undefined,
   )
 
-  const toggleTagMatch = () => {
-    change({ ...value, tagMatch: value.tagMatch === 'any' ? 'all' : 'any' })
-  }
-
-  /** Commit the draft: refuse a crossed range locally, never send it. */
+  /** Commit the draft and reject invalid or crossed ranges locally. */
   const commitYear = (from: string, to: string): void => {
     if (yearTimer.current !== undefined) clearTimeout(yearTimer.current)
     const fromValue = from === '' ? undefined : /^\d+$/u.test(from) ? Number(from) : NaN
@@ -122,8 +108,9 @@ export function LibraryFilters({
       return
     }
     setYearInvalid(undefined)
-    if (value.yearFrom === fromValue && value.yearTo === toValue) return
-    change({ ...value, yearFrom: fromValue, yearTo: toValue })
+    const current = latestFilters.current
+    if (current.yearFrom === fromValue && current.yearTo === toValue) return
+    change({ ...current, yearFrom: fromValue, yearTo: toValue })
   }
 
   const editYear = (side: 'from' | 'to', text: string): void => {
@@ -207,42 +194,6 @@ export function LibraryFilters({
           </Tag>
         )
       })}
-
-      {/* Tag Filter: a server-side searched panel */}
-      <LibraryTagPicker
-        t={t}
-        face={face}
-        library={library}
-        value={value}
-        change={change}
-        enabled={enabled}
-        onError={setPickerError}
-      />
-
-      {/* Selected Tag Chips */}
-      {Array.from(selectedTags).map((tag) => (
-        <Tag key={tag} tone="neutral" className={css.filterTagWrap}>
-          <span>{tag}</span>
-          <IconButton
-            size="sm"
-            shape="square"
-            aria-label={t('libraryTagRemove', { tag })}
-            icon={<IconCloseOutlineRegular size={11} />}
-            onClick={() => {
-              const next = new Set(selectedTags)
-              next.delete(tag)
-              change({ ...value, tags: Array.from(next) })
-            }}
-          />
-        </Tag>
-      ))}
-
-      {/* Tag Match mode switcher (if >= 2 tags) */}
-      {selectedTags.size > 1 && (
-        <Pill onClick={toggleTagMatch}>
-          {value.tagMatch === 'any' ? t('libraryTagAny') : t('libraryTagAll')}
-        </Pill>
-      )}
 
       {/* Attachment Filter: the three options use the same menu pattern as the
        * other pickers. */}
@@ -345,19 +296,11 @@ export function LibraryFilters({
         </Button>
       )}
 
-      {/* One recovery line: the item-type walk retries itself; the tag picker
-       * re-queries whenever it is opened again, so its message is only dismissed. */}
-      {(itemTypes.error ?? pickerError) !== undefined && (
+      {itemTypes.error !== undefined && (
         <div className={css.filterError} role="alert">
-          <span>{itemTypes.error ?? pickerError}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={
-              itemTypes.error !== undefined ? itemTypes.retry : () => setPickerError(undefined)
-            }
-          >
-            {itemTypes.error !== undefined ? t('libraryRetry') : t('libraryDismissError')}
+          <span>{itemTypes.error}</span>
+          <Button variant="outline" size="sm" onClick={itemTypes.retry}>
+            {t('libraryRetry')}
           </Button>
         </div>
       )}

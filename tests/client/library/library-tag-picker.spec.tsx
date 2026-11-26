@@ -12,10 +12,6 @@ import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { deferred } from '../../helpers/sync.ts'
 
-// The visual primitives are stubbed; the CSS-anchor styling and dismiss hook
-// stay real, because this spec is what proves the popover's placement and
-// closing.
-
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -41,7 +37,6 @@ function mountPicker(
   initial: LibraryFilters = {},
   enabled = true,
 ) {
-  const onError = vi.fn()
   const change = vi.fn()
   const face: LibraryFeedFace = {
     collectionPath: vi.fn(),
@@ -63,42 +58,57 @@ function mountPicker(
           setValue(next)
         }}
         enabled={enabled}
-        onError={onError}
+        tagsRefresh={0}
       />
     )
   }
   const view = render(<Picker library={{ type: 'user', id: 0 }} />)
   return {
     ...view,
-    onError,
     change,
     selectLibrary: (library: SupportedLocalLibrary) => view.rerender(<Picker library={library} />),
-    toggle: () => fireEvent.click(screen.getByRole('button', { name: zh.libraryFilterTags })),
   }
 }
 
 describe('tag picker request lifetime', () => {
-  it.each(['close', 'switch', 'unmount'] as const)(
-    'aborts an unneeded tag page on %s',
-    async (action) => {
-      const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
-      const browse = vi.fn<LibraryFeedFace['browse']>().mockReturnValue(pending.promise)
-      const picker = mountPicker(browse)
-      picker.toggle()
-      const signal = browse.mock.calls[0]?.[1]
-      expect(signal?.aborted).toBe(false)
-      if (action === 'close') picker.toggle()
-      else if (action === 'switch') picker.selectLibrary({ type: 'group', id: 123 })
-      else picker.unmount()
-      expect(signal?.aborted).toBe(true)
-      await act(async () => pending.resolve(tagPage('abandoned')))
-      expect(picker.onError).not.toHaveBeenCalled()
-      expect(screen.queryByRole('option', { name: 'abandoned' })).toBeNull()
-    },
-  )
+  it.each(['switch', 'unmount'] as const)('aborts an unneeded tag page on %s', async (action) => {
+    const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
+    const browse = vi
+      .fn<LibraryFeedFace['browse']>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(tagPage('current'))
+    const picker = mountPicker(browse)
+    const signal = browse.mock.calls[0]?.[1]
+    expect(signal?.aborted).toBe(false)
+    if (action === 'switch') picker.selectLibrary({ type: 'group', id: 123 })
+    else picker.unmount()
+    expect(signal?.aborted).toBe(true)
+    await act(async () => pending.resolve(tagPage('abandoned')))
+    expect(screen.queryByRole('option', { name: 'abandoned' })).toBeNull()
+  })
+
+  it('aborts the in-flight page when a new search supersedes it', async () => {
+    const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
+    const browse = vi
+      .fn<LibraryFeedFace['browse']>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(tagPage('fresh'))
+    mountPicker(browse)
+    const signal = browse.mock.calls[0]?.[1]
+    expect(signal?.aborted).toBe(false)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'fresh' } })
+    expect(signal?.aborted).toBe(true)
+    expect(await screen.findByRole('option', { name: 'fresh' })).toBeTruthy()
+    await act(async () => pending.resolve(tagPage('stale')))
+    expect(screen.queryByRole('option', { name: 'stale' })).toBeNull()
+    expect(browse).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'fresh', match: 'contains' }),
+      expect.any(AbortSignal),
+    )
+  })
+
   it('toggles a selected tag without losing the other filters', async () => {
     const picker = mountPicker(vi.fn().mockResolvedValue(tagPage('alpha')), { yearFrom: 2020 })
-    picker.toggle()
     const tag = await screen.findByRole('option', { name: 'alpha' })
     fireEvent.click(tag)
     expect(picker.change).toHaveBeenLastCalledWith({ yearFrom: 2020, tags: ['alpha'] })
@@ -117,8 +127,9 @@ describe('tag picker request lifetime', () => {
       .mockResolvedValueOnce({ ok: true, value: { ...first.value, total: 2, nextOffset: 1 } })
       .mockResolvedValueOnce(tagPage('beta'))
       .mockResolvedValue(tagPage('filtered'))
-    const picker = mountPicker(browse)
-    await act(async () => picker.toggle())
+    await act(async () => {
+      mountPicker(browse)
+    })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: zh.libraryLoadMore })))
     expect(screen.getByRole('option', { name: 'alpha' })).toBeTruthy()
     expect(screen.getByRole('option', { name: 'beta' })).toBeTruthy()
@@ -146,38 +157,30 @@ describe('tag picker request lifetime', () => {
         error: new RemoteError('zotero/unexpected', 'tag failure', { code: 'ZOTERO_UNEXPECTED' }),
       })
       .mockRejectedValueOnce(new Error('disconnected'))
-    const picker = mountPicker(browse)
-    await act(async () => picker.toggle())
-    expect(picker.onError).toHaveBeenLastCalledWith('tag failure')
-    picker.toggle()
-    await act(async () => picker.toggle())
-    expect(picker.onError).toHaveBeenLastCalledWith('disconnected')
+    mountPicker(browse)
+    expect((await screen.findByRole('alert')).textContent).toBe('tag failure')
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryRetry }))
+    await screen.findByText('disconnected')
     expect(screen.queryByText(zh.libraryLoading)).toBeNull()
   })
 
   it('does not request tags or schedule searches while disabled', async () => {
     vi.useFakeTimers()
     const browse = vi.fn()
-    const picker = mountPicker(browse, {}, false)
-    picker.toggle()
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'disabled' } })
+    mountPicker(browse, {}, false)
+    expect(screen.getByRole<HTMLInputElement>('searchbox').disabled).toBe(true)
     await act(async () => vi.runAllTimersAsync())
     expect(browse).not.toHaveBeenCalled()
   })
 
-  it('ignores the first library response after switching and queries the new library on reopen', async () => {
+  it('ignores the first library response after switching and loads the new library immediately', async () => {
     const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
     const browse = vi.fn<LibraryFeedFace['browse']>().mockReturnValueOnce(pending.promise)
     browse.mockResolvedValue(tagPage('group-tag'))
     const picker = mountPicker(browse)
-    picker.toggle()
     picker.selectLibrary({ type: 'group', id: 123 })
     await act(async () => pending.resolve(tagPage('old-tag')))
     expect(screen.queryByRole('option', { name: 'old-tag' })).toBeNull()
-    expect(screen.queryByText(zh.libraryLoading)).toBeNull()
-
-    picker.toggle()
-    picker.toggle()
     expect(await screen.findByRole('option', { name: 'group-tag' })).toBeTruthy()
     expect(browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ library: { type: 'group', id: 123 } }),
@@ -188,12 +191,9 @@ describe('tag picker request lifetime', () => {
   it('keeps loaded tags when an equivalent library object is recreated', async () => {
     const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('user-tag'))
     const picker = mountPicker(browse)
-    picker.toggle()
     await screen.findByRole('option', { name: 'user-tag' })
     picker.selectLibrary({ type: 'user', id: 0 })
     expect(screen.getByRole('option', { name: 'user-tag' })).toBeTruthy()
-    picker.toggle()
-    picker.toggle()
     expect(browse).toHaveBeenCalledTimes(1)
   })
 
@@ -201,62 +201,62 @@ describe('tag picker request lifetime', () => {
     vi.useFakeTimers()
     const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('user-tag'))
     const picker = mountPicker(browse)
-    await act(async () => picker.toggle())
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'queued' } })
     picker.selectLibrary({ type: 'group', id: 123 })
     await act(async () => vi.runAllTimersAsync())
-    expect(browse).toHaveBeenCalledTimes(1)
+    expect(browse).toHaveBeenCalledTimes(2)
+    expect(browse.mock.calls.every(([request]) => !('q' in request))).toBe(true)
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('')
   })
 
   it('ignores a late rejection after unmount', async () => {
     const pending = deferred<RemoteResult<ZoteroLibraryBrowseResultView>>()
     const picker = mountPicker(() => pending.promise)
-    picker.toggle()
     picker.unmount()
     await act(async () => pending.reject(new Error('old request')))
-    expect(picker.onError).not.toHaveBeenCalled()
   })
 })
 
-describe('tag picker popover', () => {
-  it('anchors the portaled panel to its trigger with CSS anchor positioning', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    picker.toggle()
-    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags }).parentElement
-    const panel = await screen.findByRole('group', { name: zh.libraryFilterTags })
-    const anchorName = (trigger?.style as unknown as { anchorName?: string }).anchorName
-    const positionAnchor = (panel.style as unknown as { positionAnchor?: string }).positionAnchor
-    expect(anchorName).not.toBe('')
-    expect(positionAnchor).toBe(anchorName)
+describe('inline tags pane', () => {
+  it('resizes the pane with pointer capture and keyboard bounds', async () => {
+    const view = mountPicker(vi.fn().mockResolvedValue(tagPage('alpha')))
+    await screen.findByRole('option', { name: 'alpha' })
+    const handle = screen.getByRole('separator', { name: zh.libraryTagResize })
+    const pane = screen.getByRole('region', { name: zh.libraryFilterTags })
+    expect(view.container.contains(pane)).toBe(true)
+    expect(pane.style.height).toBe('200px')
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() })
+    const pointer = (type: string, clientY: number) => {
+      const event = new MouseEvent(type, { bubbles: true, clientY })
+      Object.defineProperty(event, 'pointerId', { value: 1 })
+      fireEvent(handle, event)
+    }
+    pointer('pointerdown', 350)
+    pointer('pointermove', 300)
+    expect(pane.style.height).toBe('250px')
+    pointer('lostpointercapture', 300)
+    pointer('pointermove', 280)
+    expect(pane.style.height).toBe('250px')
+    fireEvent.keyDown(handle, { key: 'Home' })
+    expect(pane.style.height).toBe('112px')
+    fireEvent.keyDown(handle, { key: 'ArrowUp' })
+    expect(pane.style.height).toBe('128px')
   })
 
-  it('dismisses on outside pointerdown and keeps open on inside pointerdown', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    picker.toggle()
-    const input = await screen.findByRole('searchbox')
-    fireEvent.pointerDown(input)
-    expect(screen.getByRole('searchbox')).toBeTruthy()
-
-    fireEvent.pointerDown(document.body)
-    expect(screen.queryByRole('searchbox')).toBeNull()
-  })
-
-  it('dismisses on Escape key, ignores other keys, and returns focus to the trigger', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    picker.toggle()
-    const input = await screen.findByRole('searchbox')
-    input.focus()
-
-    fireEvent.keyDown(document, { key: 'Enter' })
-    expect(screen.getByRole('searchbox')).toBeTruthy()
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: zh.libraryFilterTags }))
+  it('keeps selected tags available even when they are outside the loaded page', async () => {
+    const { change } = mountPicker(vi.fn().mockResolvedValue(tagPage('other')), {
+      tags: ['alpha', 'beta'],
+    })
+    await screen.findByRole('option', { name: 'other' })
+    expect(screen.getAllByRole('option').map((option) => option.textContent?.trim())).toEqual([
+      'alpha',
+      'beta',
+      'other',
+    ])
+    fireEvent.click(screen.getByRole('button', { name: zh.libraryTagAll }))
+    expect(change).toHaveBeenLastCalledWith({ tags: ['alpha', 'beta'], tagMatch: 'any' })
+    fireEvent.click(screen.getByRole('option', { name: 'alpha', selected: true }))
+    expect(change).toHaveBeenLastCalledWith({ tags: ['beta'], tagMatch: 'any' })
   })
 
   it('renders the empty note when no tags match and loading is false', async () => {
@@ -272,9 +272,8 @@ describe('tag picker popover', () => {
       },
     }
     const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(emptyResult)
-    const picker = mountPicker(browse)
-    picker.toggle()
-    expect(await screen.findByText(zh.libraryEmptyList)).toBeTruthy()
+    mountPicker(browse)
+    expect(await screen.findByText(zh.libraryNoTags)).toBeTruthy()
   })
 
   it('ignores rows that are not tags', async () => {
@@ -289,50 +288,12 @@ describe('tag picker popover', () => {
         limit: 50,
       },
     })
-    const picker = mountPicker(browse)
-    picker.toggle()
-    expect(await screen.findByText(zh.libraryEmptyList)).toBeTruthy()
-  })
-
-  it('closes on Escape without stealing focus from outside the panel', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    picker.toggle()
-    await screen.findByRole('searchbox')
-    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
-    ;(document.activeElement as HTMLElement | null)?.blur()
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    expect(document.activeElement).not.toBe(trigger)
-  })
-
-  it('returns focus to the trigger when Escape is pressed from the trigger', async () => {
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('alpha'))
-    const picker = mountPicker(browse)
-    picker.toggle()
-    await screen.findByRole('searchbox')
-    const trigger = screen.getByRole('button', { name: zh.libraryFilterTags })
-    trigger.focus()
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    expect(document.activeElement).toBe(trigger)
-  })
-
-  it('cancels a queued search when the panel closes before the debounce fires', async () => {
-    vi.useFakeTimers()
-    const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue(tagPage('user-tag'))
-    const picker = mountPicker(browse)
-    await act(async () => picker.toggle())
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'queued' } })
-    picker.toggle()
-    await act(async () => vi.runAllTimersAsync())
-    expect(browse).toHaveBeenCalledTimes(1)
+    mountPicker(browse)
+    expect(await screen.findByText(zh.libraryNoTags)).toBeTruthy()
   })
 })
 
-it('supports roving focus, navigation, typeahead, selection and Escape restoration', async () => {
+it('supports roving focus, navigation, typeahead and selection', async () => {
   const page = tagPage('alpha')
   if (!page.ok) throw new Error('fixture')
   const browse = vi.fn<LibraryFeedFace['browse']>().mockResolvedValue({
@@ -342,8 +303,7 @@ it('supports roving focus, navigation, typeahead, selection and Escape restorati
       items: ['alpha', 'beta', 'bravo', 'gamma'].map((tag) => ({ kind: 'tag' as const, tag })),
     },
   })
-  const picker = mountPicker(browse)
-  picker.toggle()
+  mountPicker(browse)
   const alpha = await screen.findByRole('option', { name: 'alpha' })
   const beta = screen.getByRole('option', { name: 'beta' })
   const gamma = screen.getByRole('option', { name: 'gamma' })
@@ -365,9 +325,6 @@ it('supports roving focus, navigation, typeahead, selection and Escape restorati
   expect(document.activeElement).toBe(screen.getByRole('option', { name: 'bravo' }))
   fireEvent.keyDown(document.activeElement!, { key: 'Enter' })
   expect(screen.getByRole('option', { name: 'bravo' }).getAttribute('aria-selected')).toBe('true')
-  fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
-  expect(screen.queryByRole('listbox')).toBeNull()
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: zh.libraryFilterTags }))
 })
 
 it('supports upward entry and wrapping while ignoring unrelated and modified keys', async () => {
@@ -380,7 +337,7 @@ it('supports upward entry and wrapping while ignoring unrelated and modified key
       items: ['alpha', 'beta', 'bravo'].map((tag) => ({ kind: 'tag' as const, tag })),
     },
   })
-  mountPicker(browse).toggle()
+  mountPicker(browse)
   const alpha = await screen.findByRole('option', { name: 'alpha' })
   const beta = screen.getByRole('option', { name: 'beta' }),
     bravo = screen.getByRole('option', { name: 'bravo' })
@@ -410,9 +367,10 @@ it('leaves focus in an empty search instead of targeting a missing option', asyn
     vi
       .fn<LibraryFeedFace['browse']>()
       .mockResolvedValue({ ok: true, value: { ...page.value, items: [] } }),
-  ).toggle()
-  await screen.findByText(zh.libraryEmptyList)
+  )
+  await screen.findByText(zh.libraryNoTags)
   const search = screen.getByRole('searchbox')
+  search.focus()
   fireEvent.keyDown(search, { key: 'ArrowDown' })
   expect(document.activeElement).toBe(search)
 })

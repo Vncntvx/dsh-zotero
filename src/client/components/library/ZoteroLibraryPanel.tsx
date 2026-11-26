@@ -72,6 +72,7 @@ import {
 } from '../../enrichment/parse-surface.tsx'
 import { LibraryInspector } from './LibraryInspector.tsx'
 import { LibraryFilters } from './LibraryFilters.tsx'
+import { LibraryTagPicker } from './LibraryTagPicker.tsx'
 import { LibraryWrite } from './LibraryWrite.tsx'
 import type {
   ZoteroAttachmentRowView,
@@ -724,6 +725,15 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   loadMoreTree={feed.loadMoreTree}
                   retryTree={feed.retryTree}
                 />
+                <LibraryTagPicker
+                  t={t}
+                  face={face}
+                  library={feed.currentLibrary}
+                  value={feed.filters}
+                  change={feed.setFilters}
+                  enabled={confirmed}
+                  tagsRefresh={feed.tagsRefresh}
+                />
               </div>
               <div
                 className={clsx(
@@ -736,12 +746,9 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                 <LibraryFilters
                   key={feed.scopeKey}
                   t={t}
-                  face={face}
-                  library={feed.currentLibrary}
                   value={feed.filters}
                   change={feed.setFilters}
                   itemTypes={itemTypes}
-                  enabled={connected}
                 />
 
                 <LibraryItemList

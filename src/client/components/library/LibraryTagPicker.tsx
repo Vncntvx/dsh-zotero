@@ -1,13 +1,4 @@
-/**
- * The tag filter: an anchored portal panel that searches tags server-side
- * (`browse({ kind: 'tags', q })`) instead of enumerating the library, so a
- * large tag vocabulary costs one request per search rather than one request
- * per page of a full walk. It renders via portal into document.body to avoid
- * being clipped by the filter rail's horizontal overflow, and dismisses on
- * outside pointerdown or Escape.
- * @module dsh-zotero/client/components/library/LibraryTagPicker
- */
-
+/** Resizable, server-paged tag filter below the collection tree. */
 import {
   useCallback,
   useEffect,
@@ -18,172 +9,186 @@ import {
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   Button,
   IconCheckOutlineRegular,
-  IconChevronDownOutlineMedium,
   IconSearchOutlineMedium,
   Input,
-  MenuSurface,
   Pill,
-  useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SupportedLocalLibrary } from '../../../contract.ts'
 import type { LibraryFeedFace } from './library-feed-types.ts'
-import { LIBRARY_PAGE_SIZE, sameLibrary, type LibraryFilters as Filters } from './library-model.ts'
+import { LIBRARY_PAGE_SIZE, type LibraryFilters as Filters } from './library-model.ts'
 import { messageOf } from '../../error-text.ts'
 import css from './library.module.css'
 
 const TAG_SEARCH_DEBOUNCE_MS = 200
+const DEFAULT_HEIGHT = 200
+const MIN_HEIGHT = 112
+const RESIZE_STEP = 16
 
-export function LibraryTagPicker({
-  t,
-  face,
-  library,
-  value,
-  change,
-  enabled,
-  onError,
-}: {
+interface TagPickerProps {
   readonly t: TranslateNS<'zotero'>
   readonly face: LibraryFeedFace
   readonly library: SupportedLocalLibrary
   readonly value: Filters
   readonly change: (filters: Filters) => void
   readonly enabled: boolean
-  readonly onError: (message: string) => void
-}): ReactNode {
-  const [open, setOpen] = useState(false)
+  /** Changes when tags may have changed; the pane reloads its vocabulary. */
+  readonly tagsRefresh: number
+}
+
+export function LibraryTagPicker(props: TagPickerProps): ReactNode {
+  const { t, library } = props
+  const id = useId()
+  const divider = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ pointerId: number; y: number; height: number }>()
+  const [preferredHeight, setPreferredHeight] = useState(DEFAULT_HEIGHT)
+  const [maxHeight, setMaxHeight] = useState<number>()
+  const minHeight = Math.min(MIN_HEIGHT, maxHeight ?? MIN_HEIGHT)
+  const clamp = (height: number) => Math.min(maxHeight ?? Infinity, Math.max(minHeight, height))
+  const height = clamp(preferredHeight)
+
+  useEffect(() => {
+    const pane = divider.current?.parentElement
+    if (pane == null) return
+    const measure = () => {
+      if (pane.clientHeight > 0) setMaxHeight(Math.floor(pane.clientHeight * 0.6))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(pane)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <>
+      <div
+        ref={divider}
+        className={css.tagDivider}
+        role="separator"
+        aria-label={t('libraryTagResize')}
+        aria-orientation="horizontal"
+        aria-controls={id}
+        aria-valuemin={minHeight}
+        aria-valuemax={maxHeight}
+        aria-valuenow={height}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          if (event.button !== 0 || drag.current !== undefined) return
+          event.preventDefault()
+          event.currentTarget.focus()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          drag.current = { pointerId: event.pointerId, y: event.clientY, height }
+        }}
+        onPointerMove={(event) => {
+          const origin = drag.current
+          if (origin?.pointerId !== event.pointerId) return
+          setPreferredHeight(clamp(origin.height + origin.y - event.clientY))
+        }}
+        onLostPointerCapture={() => {
+          drag.current = undefined
+        }}
+        onKeyDown={(event) => {
+          let next: number | undefined
+          if (event.key === 'ArrowUp') next = height + RESIZE_STEP
+          else if (event.key === 'ArrowDown') next = height - RESIZE_STEP
+          else if (event.key === 'Home') next = minHeight
+          else if (event.key === 'End') next = maxHeight
+          if (next === undefined) return
+          event.preventDefault()
+          setPreferredHeight(clamp(next))
+        }}
+      />
+      <section
+        id={id}
+        className={css.collectionTags}
+        style={{ height }}
+        aria-label={t('libraryFilterTags')}
+      >
+        <TagOptions key={`${library.type}:${library.id}`} {...props} />
+      </section>
+    </>
+  )
+}
+
+function TagOptions({ t, face, library, value, change, enabled, tagsRefresh }: TagPickerProps) {
+  const { type, id } = library
   const [query, setQuery] = useState('')
+  const [rows, setRows] = useState<readonly string[]>([])
+  const [nextOffset, setNextOffset] = useState<number>()
+  const [loading, setLoading] = useState(enabled)
+  const [error, setError] = useState<string>()
+  const [retry, setRetry] = useState(0)
+  const requestAbort = useRef<AbortController>()
+  const optionsRef = useRef<HTMLUListElement>(null)
   const [activeTag, setActiveTag] = useState<string>()
   const typeAhead = useRef({ text: '', at: 0 })
-  const [rows, setRows] = useState<readonly string[]>([])
-  const [nextOffset, setNextOffset] = useState<number | undefined>(undefined)
-  const [loading, setLoading] = useState(false)
   const selected = useMemo(() => new Set(value.tags ?? []), [value.tags])
-  const seq = useRef(0)
-  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const requestAbort = useRef<AbortController>()
-  /** The library the current rows were loaded for; a switch invalidates them. */
-  const rowsLibrary = useRef<SupportedLocalLibrary>()
-  const triggerRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  // The CSS anchor name is unique per picker: multiple library panels can be
-  // mounted in different sidebar tabs, and duplicate anchor names would make
-  // each panel follow the wrong trigger.
-  const anchorName = `--zotero-tags-${useId().replaceAll(':', '')}`
+  // Selected tags outside the current page stay visible for removal. Tags on
+  // the page keep server order so selection does not move keyboard options.
+  const optionsRows = useMemo(
+    () => [...[...selected].filter((tag) => !rows.includes(tag)), ...rows],
+    [rows, selected],
+  )
+  const search = query.trim()
 
-  const requestPage = (search: string, offset: number, append: boolean): void => {
-    requestAbort.current?.abort()
-    const controller = new AbortController()
-    requestAbort.current = controller
-    const ticket = seq.current + 1
-    seq.current = ticket
-    setLoading(true)
-    void face
-      .browse(
-        {
-          kind: 'tags',
-          library,
-          offset,
-          limit: LIBRARY_PAGE_SIZE,
-          ...(search !== '' ? { q: search, match: 'contains' } : {}),
-        },
-        controller.signal,
-      )
-      .then((result) => {
-        if (seq.current !== ticket) return
-        setLoading(false)
+  const requestPage = useCallback(
+    async (text: string, offset: number): Promise<void> => {
+      const controller = new AbortController()
+      requestAbort.current?.abort()
+      requestAbort.current = controller
+      setLoading(true)
+      setError(undefined)
+      try {
+        const result = await face.browse(
+          {
+            kind: 'tags',
+            // `type` and `id` are separate dependencies; rebuilding the library
+            // here avoids re-querying when an equivalent object arrives.
+            library: type === 'user' ? { type, id: 0 } : { type, id },
+            offset,
+            limit: LIBRARY_PAGE_SIZE,
+            ...(text !== '' ? { q: text, match: 'contains' } : {}),
+          },
+          controller.signal,
+        )
+        if (controller.signal.aborted) return
         if (!result.ok) {
-          onError(result.error.message)
+          setError(result.error.message)
           return
         }
-        rowsLibrary.current = library
         const tags = result.value.items.flatMap((row) => (row.kind === 'tag' ? [row.tag] : []))
-        setRows((previous) => (append ? [...previous, ...tags] : tags))
+        setRows((previous) => (offset > 0 ? [...previous, ...tags] : tags))
         setNextOffset(result.value.nextOffset)
-      })
-      .catch((error: unknown) => {
-        if (seq.current !== ticket) return
-        setLoading(false)
-        onError(messageOf(error))
-      })
-  }
+      } catch (error) {
+        if (!controller.signal.aborted) setError(messageOf(error))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    },
+    [face, type, id],
+  )
 
-  // A library switch invalidates the loaded page: the next open re-queries.
   useEffect(() => {
-    rowsLibrary.current = undefined
+    if (!enabled) return
     setRows([])
     setNextOffset(undefined)
-    setQuery('')
-    setLoading(false)
+    setError(undefined)
+    setLoading(true)
+    const timer =
+      search === ''
+        ? undefined
+        : setTimeout(() => void requestPage(search, 0), TAG_SEARCH_DEBOUNCE_MS)
+    if (timer === undefined) void requestPage('', 0)
     return () => {
-      seq.current += 1
+      if (timer !== undefined) clearTimeout(timer)
       requestAbort.current?.abort()
-      if (debounce.current !== undefined) clearTimeout(debounce.current)
     }
-  }, [library.type, library.id])
+  }, [enabled, search, requestPage, tagsRefresh, retry])
 
-  useEffect(() => {
-    if (open && enabled) return
-    seq.current += 1
-    requestAbort.current?.abort()
-    if (debounce.current !== undefined) clearTimeout(debounce.current)
-    debounce.current = undefined
-    setLoading(false)
-  }, [open, enabled])
-
-  // The panel is portaled, so it must be named as an inside target explicitly.
-  useDismissOnOutsidePointer(triggerRef, open, setOpen, panelRef)
-
-  // Escape is ours: the shared dismiss hook only watches pointerdown.
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      const active = document.activeElement
-      const inside =
-        active instanceof Node &&
-        (panelRef.current?.contains(active) === true ||
-          triggerRef.current?.contains(active) === true)
-      setOpen(false)
-      if (inside) triggerRef.current?.querySelector('button')?.focus()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open])
-
-  const toggleOpen = (): void => {
-    const next = !open
-    if (!next && debounce.current !== undefined) {
-      // A search typed a moment before closing must not fire after it.
-      clearTimeout(debounce.current)
-      debounce.current = undefined
-    }
-    setOpen(next)
-    if (
-      next &&
-      enabled &&
-      (rows.length === 0 ||
-        rowsLibrary.current === undefined ||
-        !sameLibrary(rowsLibrary.current, library))
-    ) {
-      requestPage('', 0, false)
-    }
-  }
-
-  const search = (text: string): void => {
-    setQuery(text)
-    if (debounce.current !== undefined) clearTimeout(debounce.current)
-    if (!enabled) return
-    debounce.current = setTimeout(() => requestPage(text.trim(), 0, false), TAG_SEARCH_DEBOUNCE_MS)
-  }
-
-  // The panel re-renders whenever the anchored hook re-measures; the rows are
-  // memoized against a stable toggle so a scroll never rebuilds every option.
   const latest = useRef({ selected, value, change })
   latest.current = { selected, value, change }
   const toggleTag = useCallback((tag: string): void => {
@@ -194,24 +199,24 @@ export function LibraryTagPicker({
     current.change({ ...current.value, tags: Array.from(next) })
   }, [])
 
-  const activeOption = rows.includes(activeTag ?? '')
+  const activeOption = optionsRows.includes(activeTag ?? '')
     ? activeTag
-    : (rows.find((tag) => selected.has(tag)) ?? rows[0])
+    : (optionsRows.find((tag) => selected.has(tag)) ?? optionsRows[0])
   const focusOption = (index: number): void => {
-    if (rows.length === 0) return
-    const bounded = (index + rows.length) % rows.length
-    setActiveTag(rows[bounded])
-    panelRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]')[bounded]?.focus()
+    if (optionsRows.length === 0) return
+    const bounded = (index + optionsRows.length) % optionsRows.length
+    setActiveTag(optionsRows[bounded])
+    optionsRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]')[bounded]?.focus()
   }
   const onOptionsKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>): void => {
-    const index = rows.indexOf(activeOption ?? '')
+    const index = optionsRows.indexOf(activeOption ?? '')
     const target = event.target instanceof Element ? event.target.closest('[role="option"]') : null
     if (!target) return
     let next: number | undefined
-    if (event.key === 'ArrowDown') next = index + 1
-    else if (event.key === 'ArrowUp') next = index - 1
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = index + 1
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = index - 1
     else if (event.key === 'Home') next = 0
-    else if (event.key === 'End') next = rows.length - 1
+    else if (event.key === 'End') next = optionsRows.length - 1
     else if (event.key === ' ' || event.key === 'Enter') {
       event.preventDefault()
       if (activeOption !== undefined) toggleTag(activeOption)
@@ -225,9 +230,9 @@ export function LibraryTagPicker({
           ? character
           : previous.text + character
       typeAhead.current = { text, at: now }
-      for (let step = 1; step <= rows.length; step++) {
-        const candidate = (index + step) % rows.length
-        if (rows[candidate]?.toLocaleLowerCase().startsWith(text)) {
+      for (let step = 1; step <= optionsRows.length; step++) {
+        const candidate = (index + step) % optionsRows.length
+        if (optionsRows[candidate]?.toLocaleLowerCase().startsWith(text)) {
           next = candidate
           break
         }
@@ -241,7 +246,7 @@ export function LibraryTagPicker({
 
   const options = useMemo(
     () =>
-      rows.map((tag) => (
+      optionsRows.map((tag) => (
         <li key={tag} role="presentation">
           <Button
             size="sm"
@@ -250,87 +255,85 @@ export function LibraryTagPicker({
             aria-selected={selected.has(tag)}
             tabIndex={tag === activeOption ? 0 : -1}
             onFocus={() => setActiveTag(tag)}
-            className={css.tagOption}
+            className={css.collectionTagOption}
             onClick={() => toggleTag(tag)}
           >
-            <span className={css.tagOptionLabel}>{tag}</span>
+            <span className={css.collectionTagLabel} title={tag}>
+              {tag}
+            </span>
             {selected.has(tag) && (
               <IconCheckOutlineRegular size={14} className={css.tagCheckIcon} />
             )}
           </Button>
         </li>
       )),
-    [rows, selected, toggleTag, activeOption],
+    [optionsRows, selected, toggleTag, activeOption],
   )
 
   return (
-    <div className={css.tagPickerWrap} ref={triggerRef} style={{ anchorName }}>
-      <Pill
-        active={selected.size > 0}
-        onClick={toggleOpen}
-        aria-label={t('libraryFilterTags')}
-        aria-expanded={open}
-      >
-        <span>{t('libraryFilterTags')}</span>
-        {selected.size > 0 && <span>({selected.size})</span>}
-        <IconChevronDownOutlineMedium className={css.chevronIcon} />
-      </Pill>
-
-      {open &&
-        createPortal(
-          <MenuSurface
-            ref={panelRef}
-            compact
-            className={css.tagPanel}
-            role="group"
-            aria-label={t('libraryFilterTags')}
-            style={{ positionAnchor: anchorName }}
+    <>
+      <div className={css.tagHeader}>
+        <span className={css.caption}>{t('libraryFilterTags')}</span>
+        {selected.size > 1 && (
+          <Pill
+            onClick={() => change({ ...value, tagMatch: value.tagMatch === 'any' ? 'all' : 'any' })}
           >
-            <Input
-              type="search"
-              className={css.tagSearchInput}
-              icon={<IconSearchOutlineMedium size={14} className={css.searchIcon} />}
-              placeholder={t('librarySearchTags')}
-              aria-label={t('librarySearchTags')}
-              value={query}
-              onChange={(event) => search(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                  event.preventDefault()
-                  focusOption(event.key === 'ArrowDown' ? 0 : rows.length - 1)
-                }
-              }}
-              autoFocus
-            />
-            <ul
-              className={css.tagOptions}
-              role="listbox"
-              aria-multiselectable="true"
-              onKeyDown={onOptionsKeyDown}
-              aria-label={t('libraryFilterTags')}
-            >
-              {options}
-              {rows.length === 0 && !loading && (
-                <li className={css.tagPanelNote} role="presentation">
-                  {t('libraryEmptyList')}
-                </li>
-              )}
-            </ul>
-            <div className={css.tagPanelFoot}>
-              {loading && <span className={css.tagPanelNote}>{t('libraryLoading')}</span>}
-              {!loading && nextOffset !== undefined && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => requestPage(query.trim(), nextOffset, true)}
-                >
-                  {t('libraryLoadMore')}
-                </Button>
-              )}
-            </div>
-          </MenuSurface>,
-          document.body,
+            {value.tagMatch === 'any' ? t('libraryTagAny') : t('libraryTagAll')}
+          </Pill>
         )}
-    </div>
+      </div>
+      <div className={css.tagScroll}>
+        <ul
+          ref={optionsRef}
+          className={css.collectionTagList}
+          role="listbox"
+          aria-multiselectable="true"
+          onKeyDown={onOptionsKeyDown}
+          aria-label={t('libraryFilterTags')}
+        >
+          {options}
+        </ul>
+        {enabled && (loading || (optionsRows.length === 0 && error === undefined)) && (
+          <div className={css.collectionTagStatus} role="status">
+            {t(loading ? 'libraryLoading' : 'libraryNoTags')}
+          </div>
+        )}
+        {enabled && !loading && (error !== undefined || nextOffset !== undefined) && (
+          <div className={css.tagPageControls}>
+            {error !== undefined && (
+              <span className={css.collectionTagStatus} role="alert">
+                {error}
+              </span>
+            )}gi
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (nextOffset === undefined) setRetry((count) => count + 1)
+                else void requestPage(search, nextOffset)
+              }}
+            >
+              {t(error === undefined ? 'libraryLoadMore' : 'libraryRetry')}
+            </Button>
+          </div>
+        )}
+      </div>
+      <Input
+        type="search"
+        className={css.tagSearchInput}
+        icon={<IconSearchOutlineMedium size={14} className={css.searchIcon} />}
+        placeholder={t('librarySearchTags')}
+        aria-label={t('librarySearchTags')}
+        disabled={!enabled}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            focusOption(event.key === 'ArrowDown' ? 0 : optionsRows.length - 1)
+          }
+        }}
+      />
+    </>
   )
 }

@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZoteroLibraryBrowseResultView } from '../../../src/contract.ts'
 import { LibraryFilters } from '../../../src/client/components/library/LibraryFilters.tsx'
 import type { LibraryFilters as Filters } from '../../../src/client/components/library/library-model.ts'
-import type { LibraryFeedFace } from '../../../src/client/components/library/library-feed-types.ts'
 import type { ItemTypeVocabulary } from '../../../src/client/components/library/use-item-type-labels.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { mockT } from '../helpers/mock-translate.ts'
@@ -48,25 +47,14 @@ function vocabularyOf(overrides: Partial<ItemTypeVocabulary> = {}): ItemTypeVoca
   return { rows, localized, retry: vi.fn(), ...overrides }
 }
 
-function mountFilters(initial: Filters = {}, vocabulary = vocabularyOf(), enabled = true) {
+function mountFilters(initial: Filters = {}, vocabulary = vocabularyOf()) {
   const change = vi.fn()
-  const browse = vi.fn<LibraryFeedFace['browse']>()
-  const face: LibraryFeedFace = {
-    collectionPath: vi.fn(),
-    browse,
-    search: vi.fn(),
-    item: vi.fn(),
-    childPage: vi.fn(),
-  }
   function Controlled() {
     const [value, setValue] = useState(initial)
     return (
       <LibraryFilters
         t={mockT}
-        face={face}
-        library={{ type: 'user', id: 0 }}
         value={value}
-        enabled={enabled}
         itemTypes={vocabulary}
         change={(next) => {
           change(next)
@@ -75,7 +63,7 @@ function mountFilters(initial: Filters = {}, vocabulary = vocabularyOf(), enable
       />
     )
   }
-  return { ...render(<Controlled />), browse, change }
+  return { ...render(<Controlled />), change }
 }
 
 function click(name: string) {
@@ -123,7 +111,7 @@ describe('library filter controls', () => {
     expect(screen.queryByText(zh.libraryItemTypeBook)).toBeNull()
   })
 
-  it('removes selected type and tag chips and switches tag matching', () => {
+  it('removes a selected type while preserving tags', () => {
     const { change } = mountFilters({
       itemTypes: ['book', 'unknownType'],
       tags: ['alpha', 'beta'],
@@ -134,12 +122,6 @@ describe('library filter controls', () => {
       }),
     )
     expect(change).toHaveBeenLastCalledWith({ itemTypes: ['unknownType'], tags: ['alpha', 'beta'] })
-    click(zh.libraryTagAll)
-    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ tagMatch: 'any' }))
-    click(zh.libraryTagAny)
-    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ tagMatch: 'all' }))
-    click(mockT('libraryTagRemove', { tag: 'alpha' }))
-    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ tags: ['beta'] }))
   })
 
   it('picks attachment presence from a three-option menu and clears every filter', () => {
@@ -180,6 +162,19 @@ describe('library filter controls', () => {
     expect(change).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps a filter changed inside the year debounce window', async () => {
+    vi.useFakeTimers()
+    const { change } = mountFilters()
+    click(zh.libraryYearLabel)
+    editYear('from', '2020')
+    // The type change must survive the queued year commit.
+    click(zh.libraryFilterTypes)
+    fireEvent.click(within(screen.getByRole('menu')).getByText(zh.libraryItemTypeBook))
+    expect(change).toHaveBeenLastCalledWith({ itemTypes: ['book'] })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(change).toHaveBeenLastCalledWith({ itemTypes: ['book'], yearFrom: 2020 })
+  })
+
   it('rejects fractional and out-of-range years on debounce, blur, and Enter', async () => {
     vi.useFakeTimers()
     const { change } = mountFilters()
@@ -218,9 +213,8 @@ describe('library filter controls', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  it('renders no type menu while the vocabulary is empty and never reads the wire itself', () => {
-    const { browse } = mountFilters({}, vocabularyOf({ rows: [], localized: {} }))
+  it('renders no type menu while the vocabulary is empty', () => {
+    mountFilters({}, vocabularyOf({ rows: [], localized: {} }))
     expect(screen.queryByRole('button', { name: zh.libraryFilterTypes })).toBeNull()
-    expect(browse).not.toHaveBeenCalled()
   })
 })

@@ -258,80 +258,52 @@
   gap: 4px;
 }
 
-/* ── Tag filter popover ───────────────────────────────────────────────── */
+/* Tags below the collection tree. Keep the pane and its options on distinct
+ * class names from the former popup so retained popup styles cannot float it. */
 
-.tagPickerWrap {
-  flex: none;
-  display: inline-flex;
+.tagDivider {
+  position: relative;
+  flex: 0 0 8px;
+  cursor: row-resize;
+  touch-action: none;
 }
 
-.tagPanel {
-  position: fixed;
-  position-area: none;
-  position-try-fallbacks:
-    --zotero-tags-above, --zotero-tags-end, --zotero-tags-above-end, --zotero-tags-window,
-    --zotero-tags-viewport;
-  top: max(12px, calc(anchor(bottom) + 4px));
-  bottom: 12px;
-  left: max(12px, anchor(left));
-  right: 12px;
-  margin: 0;
-  width: 240px;
-  height: fit-content;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100dvh - 24px);
-  align-self: start;
-  justify-self: start;
-  z-index: 1100;
-  box-sizing: border-box;
-  padding: 6px;
+.tagDivider::before {
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  content: '';
+}
+
+.tagDivider:focus-visible::before {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+@media (hover: hover) {
+  .tagDivider:hover::before {
+    border-color: var(--dsw-alias-state-business-primary);
+  }
+}
+
+.collectionTags {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--dsw-radius-md);
-  box-shadow: var(--dsw-elevation-prominent);
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  gap: 4px;
+  /* First-frame guard; keep in step with the component's 60% clamp. */
+  max-height: 60%;
+  padding: 2px 8px 8px;
+  box-sizing: border-box;
+  overflow: auto;
 }
 
-/* Flip above the trigger while preserving the 12px window margin. */
-@position-try --zotero-tags-above {
-  top: 12px;
-  bottom: max(12px, calc(anchor(top) + 4px));
-  align-self: end;
-}
-
-/* Open toward the start edge when the trigger is near the right edge. */
-@position-try --zotero-tags-end {
-  left: 12px;
-  right: max(12px, anchor(right));
-  justify-self: end;
-}
-
-@position-try --zotero-tags-above-end {
-  top: 12px;
-  bottom: max(12px, calc(anchor(top) + 4px));
-  left: 12px;
-  right: max(12px, anchor(right));
-  align-self: end;
-  justify-self: end;
-}
-
-@position-try --zotero-tags-window {
-  top: 12px;
-  bottom: 12px;
-  margin: 0;
-  align-self: safe end;
-}
-
-@position-try --zotero-tags-viewport {
-  position-area: none;
-  inset: 12px;
-  margin: 0;
-  align-self: safe end;
-  justify-self: safe end;
+.tagHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  gap: 4px;
+  flex: none;
 }
 
 .tagSearchInput {
@@ -343,38 +315,33 @@
   font: var(--dsw-font-xxs-12);
 }
 
-.tagOptions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
+.tagScroll {
   flex: 1 1 auto;
-  min-height: 0;
-  flex-direction: column;
-  gap: 1px;
-  max-height: 220px;
+  min-height: 24px;
   overflow-y: auto;
-  overflow-x: hidden;
-  box-sizing: border-box;
 }
 
-.tagOptions li {
+.collectionTagList {
+  list-style: none;
   margin: 0;
   padding: 0;
-  list-style: none;
-}
-
-.tagOption {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px;
 }
 
-.tagOptionLabel {
-  flex: 1 1 auto;
+.collectionTagList li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.collectionTagOption {
+  gap: 4px;
+  max-width: 100%;
+}
+
+.collectionTagLabel {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -386,22 +353,20 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
-.tagPanelNote {
-  list-style: none;
+.collectionTagStatus {
   margin: 0;
-  padding: 12px 8px;
+  padding: 4px;
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-tertiary);
-  text-align: center;
+  overflow-wrap: anywhere;
 }
 
-.tagPanelFoot {
-  flex: none;
+.tagPageControls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  padding-top: 4px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  gap: 4px;
+  padding: 4px 0;
 }
 
 .chevronIcon {
@@ -496,9 +461,7 @@
  * (esbuild's CSS-module build drops `composes`, so composition must not be
  * load-bearing here). */
 .treePane {
-  padding: 8px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   border-right: none;
 }
 
@@ -556,8 +519,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
   /* Row metrics mirrored by the virtualizer's `estimateSize`:
    * 30+4 comfortable, 24+1 compact. */
   --tree-row-h: 30px;
@@ -579,7 +544,7 @@
 }
 
 .virtualViewport {
-  min-height: 0;
+  min-height: 30px;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1855,7 +1820,7 @@
   .treeRowWrap,
   .treeExpander,
   .itemRow,
-  .tagOption,
+  .collectionTagOption,
   .toggleChevron,
   .noteCard,
   .annotationCard {

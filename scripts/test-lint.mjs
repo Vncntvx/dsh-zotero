@@ -117,7 +117,6 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/library/library-inspector.spec.tsx': 712,
   'tests/client/library/library-panel.interaction.spec.tsx': 508,
   'tests/client/library/library-panel.states.spec.tsx': 486,
-  'tests/client/library/library-tag-picker.spec.tsx': 418,
   'tests/client/library/library-tree.spec.tsx': 461,
   'tests/client/library/library-write.spec.tsx': 591,
   'tests/client/library/remote-contract-library.spec.ts': 503,

@@ -378,4 +378,16 @@ describe('targeted recovery and write refresh', () => {
     await waitFor(() => expect(face.item).toHaveBeenCalledTimes(1))
     expect(result.current.selectedRef).toBe(ITEM_DETAIL.ref)
   })
+
+  it('bumps the tag token on a refresh or an item write, not on a collection write', async () => {
+    const { result } = setup()
+    await waitFor(() => expect(result.current.list.phase).toBe('ready'))
+    const initial = result.current.tagsRefresh
+    await act(async () => result.current.refreshAffected('collections'))
+    expect(result.current.tagsRefresh).toBe(initial)
+    await act(async () => result.current.refreshAffected('items'))
+    expect(result.current.tagsRefresh).toBe(initial + 1)
+    await act(async () => result.current.refresh())
+    expect(result.current.tagsRefresh).toBe(initial + 2)
+  })
 })

@@ -109,6 +109,8 @@ interface LibraryFeed {
   readonly inspector: LibraryItemState | undefined
   /** Bumped by {@link LibraryFeed.refresh}; effects that re-read on refresh key on it. */
   readonly refreshToken: number
+  /** Changes when tags may differ: a refresh, an item write, or a new instance. */
+  readonly tagsRefresh: number
   readonly refresh: () => void
   readonly refreshAffected: (kind: 'items' | 'collections' | 'savedSearches') => void
   readonly retryLibraries: () => void
@@ -178,6 +180,9 @@ export function useLibraryFeed(
     setNarrowPaneState(pane)
   }, [])
   const [refreshToken, setRefreshToken] = useState(0)
+  // The tag pane uses its own token because it reads a library-wide vocabulary
+  // outside the list lanes.
+  const [tagsRefresh, setTagsRefresh] = useState(0)
   const [libraryRetry, setLibraryRetry] = useState(0)
   const [listRetry, setListRetry] = useState(0)
   const [inspectorRetry, setInspectorRetry] = useState(0)
@@ -356,7 +361,10 @@ export function useLibraryFeed(
     else if (changedInstance) face.invalidate?.()
     resetLibraryState(saved?.library ?? { type: 'user', id: 0 }, saved)
     setHydratedView(viewIdentity)
-    if (changedInstance) setRefreshToken((value) => value + 1)
+    if (changedInstance) {
+      setRefreshToken((value) => value + 1)
+      setTagsRefresh((value) => value + 1)
+    }
   }, [
     serverId,
     resetLibraryState,
@@ -782,6 +790,7 @@ export function useLibraryFeed(
   const refresh = useCallback((): void => {
     face.invalidate?.()
     setRefreshToken((token) => token + 1)
+    setTagsRefresh((token) => token + 1)
     reloadCachedTree()
   }, [face, reloadCachedTree])
 
@@ -790,13 +799,15 @@ export function useLibraryFeed(
    * its own unmount. Reads the live refs: the refreshed scope is the one the
    * user sees now, not the one captured when the write was submitted. A
    * collection write can move any ancestor, so it rebuilds the tree and
-   * re-proves the located path; a saved-search write owns one lane.
+   * re-proves the located path; a saved-search write owns one lane. An item
+   * write can add or drop tags, so the tag pane re-reads its vocabulary.
    */
   const refreshAffected = useCallback(
     (kind: 'items' | 'collections' | 'savedSearches'): void => {
       face.invalidate?.()
       if (kind === 'collections') reloadCachedTree()
       if (kind === 'savedSearches') refreshSavedLane()
+      if (kind === 'items') setTagsRefresh((token) => token + 1)
       setListRetry((value) => value + 1)
       if (selectedRefRef.current !== undefined) setInspectorRetry((value) => value + 1)
     },
@@ -930,6 +941,7 @@ export function useLibraryFeed(
     selectItem,
     inspector,
     refreshToken,
+    tagsRefresh,
     refresh,
     refreshAffected,
     retryLibraries: () => setLibraryRetry((value) => value + 1),
