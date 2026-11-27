@@ -171,3 +171,23 @@ it('discards clipboard feedback after the Reader tab is aborted', async () => {
   await act(async () => pending.resolve(true))
   expect(screen.queryByText(readerEn.copied)).toBeNull()
 })
+
+it('reports a refused clipboard write and ignores blank or aborted selections', async () => {
+  writeClipboard.mockResolvedValueOnce(false)
+  const { owner } = open('Selection')
+  select(screen.getByText('Selection'), 0, 9)
+  fireEvent.click(screen.getByRole('button', { name: readerEn.copy }))
+  expect(await screen.findByText(readerEn.copyFailed)).toBeTruthy()
+
+  const blank = screen.getByText('Selection').parentElement!
+  const range = document.createRange()
+  range.selectNodeContents(blank)
+  document.getSelection()!.removeAllRanges()
+  document.getSelection()!.addRange(range)
+  fireEvent(document, new Event('selectionchange'))
+  expect(screen.queryByRole('group', { name: readerEn.documentSelection })).toBeNull()
+
+  owner.abort()
+  select(screen.getByText('Selection'), 0, 9)
+  expect(screen.queryByRole('group', { name: readerEn.documentSelection })).toBeNull()
+})

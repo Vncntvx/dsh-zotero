@@ -57,7 +57,8 @@ npm run release:check        # full gate: format, strict harness, lint, build, p
 ## Development rules
 
 - Follow [tests/README.md](tests/README.md): one behavior per spec, no `.only`/`.skip`/`.todo`, synchronize on owned promises, and use the shared fixtures.
-- Commits: `<type>(<scope>): <emoji> <subject>`; lowercase type, imperative subject, blank line, then bullets explaining what and why.
+- Commits: `<type>(<scope>): <emoji> <subject>`; lowercase type, imperative subject, one line.
+- Commit bodies: blank line after the subject, then a bullet list only. No introductory paragraph, prose block, heading, or restated subject; every body entry is a `- ` bullet stating what changed and why.
 - Never commit `dev.cordis.yml` or `dev-lib.cordis.yml`; edit the `.example` templates.
 
 ## Safety

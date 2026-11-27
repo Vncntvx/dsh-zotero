@@ -218,3 +218,12 @@ describe('library filter controls', () => {
     expect(screen.queryByRole('button', { name: zh.libraryFilterTypes })).toBeNull()
   })
 })
+
+it('closes the attachment menu through its own close handler without changing the filter', () => {
+  const { change } = mountFilters()
+  click(zh.libraryAttachmentFilter)
+  expect(screen.getByRole('menu')).toBeTruthy()
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(change).not.toHaveBeenCalled()
+})

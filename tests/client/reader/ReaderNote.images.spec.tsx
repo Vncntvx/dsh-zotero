@@ -128,12 +128,12 @@ it('closes an edit or delete mutation and restores focus to the initiating butto
   )
   fireEvent.click(await screen.findByRole('button', { name: readerEn.noteEdit }))
   fireEvent.click(screen.getByRole('button', { name: readerEn.cancel }))
-  await act(async () => new Promise((resolve) => requestAnimationFrame(resolve)))
+  await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   expect(document.activeElement).toBe(screen.getByRole('button', { name: readerEn.noteEdit }))
 
   fireEvent.click(screen.getByRole('button', { name: readerEn.annotationDeleteConfirm }))
   fireEvent.click(screen.getByRole('button', { name: readerEn.cancel }))
-  await act(async () => new Promise((resolve) => requestAnimationFrame(resolve)))
+  await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   expect(document.activeElement).toBe(
     screen.getByRole('button', { name: readerEn.annotationDeleteConfirm }),
   )

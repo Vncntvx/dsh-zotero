@@ -59,14 +59,7 @@ describe('ReaderTab optional actions', () => {
       ...base,
       useRemoteAccess: () => false,
       useAccess: () => false,
-      useSession: (select: Parameters<typeof base.useSession>[0]) =>
-        select({
-          removed: true,
-          running: false,
-          subagent: null,
-          openState: 'closed',
-          blank: false,
-        }),
+      useSession: (() => 'closed') as unknown as typeof base.useSession,
     } as typeof base
     render(<ReaderTab {...props} />)
     await act(async () => {})

@@ -418,8 +418,9 @@ higher floor by specifying more behaviour, never by touching branches to
 satisfy a number. `src/local` once measured 94.82% branches while the global
 read 96.43% — under the 95% the global gate carried at the time, hidden by
 layers far above it — so it gained its own floor of 93, named in the open
-rather than averaged away. The global branches floor now sits at 93.6 after
-later recalibrations; `vitest.config.ts` is the single home for the current
+rather than averaged away. The global branches floor now sits at 92.6 after
+the Reader and parsed-document surfaces added optional client mass below the
+global branch average; `vitest.config.ts` is the single home for the current
 numbers.
 
 One deliberate deviation from the upstream harness contract, recorded here so

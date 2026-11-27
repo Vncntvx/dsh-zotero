@@ -47,3 +47,12 @@ describe('MoreActionsMenu', () => {
     expect(screen.getByRole('button', { name: 'Child action' })).toBeDefined()
   })
 })
+
+it('closes the open menu through its close handler', () => {
+  render(<MoreActionsMenu label="More actions" items={[{ id: 'copy', label: 'Copy' }]} />)
+  const trigger = screen.getByRole('button', { name: 'More actions' })
+  fireEvent.click(trigger)
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+})
