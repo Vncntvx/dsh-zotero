@@ -62,6 +62,19 @@ async function catalog(
   return world
 }
 
+it('offers personal and group libraries from the Local API to the batch picker', async () => {
+  const { mock, provider } = (harness = await setupProvider())
+  mock.route('GET', '/api/users/0/groups', (_req, _res, helpers) =>
+    helpers.json([{ id: 42, data: { name: 'Research group' } }], {
+      'Zotero-Server-ID': 'batch-db',
+    }),
+  )
+  await expect(provider.parsePdfLibraries(signal)).resolves.toEqual([
+    { library, name: 'My Library' },
+    { library: { type: 'group', id: 42 }, name: 'Research group' },
+  ])
+})
+
 it('joins parent metadata while keeping every PDF bound to its own attachment', async () => {
   const { mock, provider } = await catalog(() => 42)
   expect(await provider.parsePdfCatalog(library, signal)).toEqual([

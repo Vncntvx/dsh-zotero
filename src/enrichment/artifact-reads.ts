@@ -7,7 +7,10 @@ import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import type { ArtifactReaderPreferences } from '../artifact-reader-preferences.js'
 import {
   ZOTERO_ARTIFACT_PAGE_CHARS,
+  type ZoteroArtifactLocationView,
   type ZoteroArtifactMetadataView,
+  type ZoteroArtifactRegionTextView,
+  type ZoteroArtifactTextRegion,
   type ZoteroDocumentArtifactRequestView,
   type ZoteroDocumentArtifactResultView,
 } from '../contract.js'
@@ -19,11 +22,16 @@ import {
   ZOTERO_ENRICHMENT_TASK_FAILED,
 } from '../errors.js'
 import type { MetadataResult } from './artifact-metadata.js'
+import { ARTIFACT_LOCATION_READ_BYTES } from './artifact-locations.js'
 
 export interface DisplayArtifactCandidate {
   readonly metadata: ZoteroArtifactMetadataView
   readonly markdownBytes: number
   readonly read: () => Promise<string>
+  readonly locations?: () => Promise<readonly ZoteroArtifactLocationView[] | undefined>
+  readonly regionText?: (
+    regions: readonly ZoteroArtifactTextRegion[],
+  ) => Promise<ZoteroArtifactRegionTextView | undefined>
   readonly image: (name: string) => Promise<
     | {
         readonly data: Uint8Array
@@ -205,12 +213,44 @@ export class ArtifactReads {
     if (this.closed)
       throw new ZoteroError('Document reading is closed.', ZOTERO_PROVIDER_UNAVAILABLE)
     if (request.op === 'inspect') {
+      if (request.regionText && request.target.kind !== 'attachment')
+        throw new ZoteroError('Region text requires a Zotero attachment.', ZOTERO_INVALID_ARGUMENT)
       const combined = AbortSignal.any([signal, peer.signal])
       const candidate = await this.deps.candidate(request, combined)
+      combined.throwIfAborted()
+      if (this.closed)
+        throw new ZoteroError('Document reading is closed.', ZOTERO_PROVIDER_UNAVAILABLE)
+      let regionText: ZoteroArtifactRegionTextView | undefined
+      if (
+        !('kind' in candidate) &&
+        request.target.kind === 'attachment' &&
+        candidate.metadata.sourceRef === request.target.ref &&
+        request.regionText?.fingerprint === candidate.metadata.fingerprint &&
+        candidate.regionText
+      ) {
+        const reserve = ARTIFACT_LOCATION_READ_BYTES
+        if (this.bytes + reserve > this.deps.policy().maxBytes)
+          throw new ZoteroError(
+            'Document preparation memory is full. Close another preparation and retry.',
+            ZOTERO_PROVIDER_UNAVAILABLE,
+          )
+        this.bytes += reserve
+        try {
+          regionText = await candidate.regionText(request.regionText.regions)
+          combined.throwIfAborted()
+        } finally {
+          this.bytes -= reserve
+        }
+      }
       const checked = await this.deps.owner(request.sessionId, combined, ctx)
+      combined.throwIfAborted()
+      if (this.closed)
+        throw new ZoteroError('Document reading is closed.', ZOTERO_PROVIDER_UNAVAILABLE)
       if (checked.agent !== owner.agent)
         throw new ZoteroError('The document owner changed.', ZOTERO_NOT_FOUND)
-      return 'kind' in candidate ? candidate : { kind: 'ready', ...candidate.metadata }
+      return 'kind' in candidate
+        ? candidate
+        : { kind: 'ready', ...candidate.metadata, ...(regionText && { regionText }) }
     }
     if (request.op === 'meta') {
       const combined = AbortSignal.any([signal, peer.signal])
@@ -418,6 +458,24 @@ export class ArtifactReads {
         entry.text = text
         this.bytes -= candidate.markdownBytes
         entry.bytes -= candidate.markdownBytes
+        let locations: readonly ZoteroArtifactLocationView[] | undefined
+        if (candidate.locations && this.bytes + ARTIFACT_LOCATION_READ_BYTES <= policy.maxBytes) {
+          this.bytes += ARTIFACT_LOCATION_READ_BYTES
+          entry.bytes += ARTIFACT_LOCATION_READ_BYTES
+          try {
+            locations = await candidate.locations()
+            combined.throwIfAborted()
+            this.current(entry, await this.deps.owner(request.sessionId, combined, ctx))
+          } finally {
+            this.bytes -= ARTIFACT_LOCATION_READ_BYTES
+            entry.bytes -= ARTIFACT_LOCATION_READ_BYTES
+          }
+          if (locations) {
+            const retained = JSON.stringify(locations).length * 8
+            this.bytes += retained
+            entry.bytes += retained
+          }
+        }
         return {
           kind: 'opened',
           ...candidate.metadata,
@@ -428,6 +486,7 @@ export class ArtifactReads {
           ),
           policy,
           page: this.page(entry, 0),
+          ...(locations && { locations }),
         }
       } catch (error) {
         this.retire(entry)

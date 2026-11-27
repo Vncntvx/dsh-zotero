@@ -27,7 +27,12 @@ import {
 } from './artifact-schema.js'
 import { stampMatches } from './source-stamp.js'
 import { extractMarkdownTitleOf } from '../parsed-title.js'
-import type { ZoteroArtifactImageMediaType } from '../contract.js'
+import {
+  ARTIFACT_LOCATION_FILE_BYTES,
+  artifactLocationsOf,
+  artifactRegionTextOf,
+} from './artifact-locations.js'
+import type { ZoteroArtifactImageMediaType, ZoteroArtifactTextRegion } from '../contract.js'
 import type { FulltextSourceStamp, ParsedArtifact } from './types.js'
 
 function digestOf(bytes: Uint8Array): string {
@@ -193,9 +198,7 @@ const encoder = new TextEncoder()
 /** meta.json read ceiling; the schema's 64 MiB fields far exceed a real meta. */
 const META_JSON_MAX_BYTES = 256 * 1024
 /**
- * content_list.json read ceiling. The read path validates the JSON array but
- * no reader consumes the list today, so the ceiling stays a corruption bound
- * rather than a payload budget.
+ * Full content-list integrity ceiling. Reader navigation uses a smaller bound.
  */
 const CONTENT_LIST_MAX_BYTES = 64 * 1024 * 1024
 
@@ -461,6 +464,33 @@ export class ParsedArtifactStore {
     if (bytes.byteLength > maxBytes)
       throw new Error('The parsed artifact file exceeds its size ceiling')
     return bytes
+  }
+
+  async readLocations(cacheKey: string, digest: string, pageCount?: number) {
+    return artifactLocationsOf(await this.readContentList(cacheKey, digest), pageCount)
+  }
+
+  async readRegionText(
+    cacheKey: string,
+    digest: string,
+    regions: readonly ZoteroArtifactTextRegion[],
+    pageCount?: number,
+  ) {
+    return artifactRegionTextOf(await this.readContentList(cacheKey, digest), regions, pageCount)
+  }
+
+  private async readContentList(cacheKey: string, digest: string): Promise<unknown> {
+    try {
+      const bytes = await this.readBounded(
+        join(this.dir(cacheKey), 'content_list.json'),
+        ARTIFACT_LOCATION_FILE_BYTES,
+      )
+      verifyDigest(bytes, digest)
+      return JSON.parse(decoder.decode(bytes))
+    } catch {
+      // An unavailable coordinate index still allows reading the verified Markdown.
+      return undefined
+    }
   }
 
   /** Read exactly `byteCount` bytes: a shorter answer is a truncated artifact. */

@@ -1,7 +1,12 @@
 /** A read lease fixes one source generation and one immutable store candidate. */
 import { randomUUID } from 'node:crypto'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ZOTERO_ARTIFACT_PAGE_CHARS } from '../../src/contract.ts'
+import { attachmentRef } from '../helpers/server/keys.ts'
+import {
+  zoteroDocumentArtifactRequestSchema,
+  zoteroDocumentArtifactResultSchema,
+} from '../../src/wire-schemas.ts'
 import {
   artifactReadsFixture,
   requirePage,
@@ -20,6 +25,55 @@ async function fixture(text?: string, images?: number) {
 }
 
 describe('source-bound document snapshots', () => {
+  it('reads region text only from the matching attachment generation', async () => {
+    const host = await fixture()
+    const ref = attachmentRef()
+    const regionText = vi.fn(async () => ({ text: 'Cached excerpt', incomplete: false }))
+    host.lookup.mockResolvedValue({
+      ...host.candidate,
+      metadata: { ...host.candidate.metadata, sourceRef: ref },
+      regionText,
+    })
+    const current = {
+      sessionId: 'parse-owner',
+      op: 'inspect',
+      target: { kind: 'attachment', ref },
+      regionText: {
+        fingerprint: host.candidate.metadata.fingerprint,
+        regions: [{ pageIndex: 1, box: [0, 0, 500, 500] }],
+      },
+    } as const
+    const inspect = async (request: unknown) =>
+      zoteroDocumentArtifactResultSchema.parse(
+        await host.call(zoteroDocumentArtifactRequestSchema.parse(request)),
+      )
+    expect(
+      zoteroDocumentArtifactRequestSchema.safeParse({
+        ...current,
+        regionText: {
+          ...current.regionText,
+          regions: [...current.regionText.regions, ...current.regionText.regions],
+        },
+      }).success,
+    ).toBe(false)
+    await expect(inspect({ ...current, target: parseRequest().target })).rejects.toMatchObject({
+      code: 'ZOTERO_INVALID_ARGUMENT',
+    })
+    expect(host.lookup).not.toHaveBeenCalled()
+    expect(
+      await inspect({
+        ...current,
+        regionText: { ...current.regionText, fingerprint: 'd'.repeat(64) },
+      }),
+    ).not.toHaveProperty('regionText')
+    await expect(inspect(current)).resolves.toMatchObject({
+      kind: 'ready',
+      regionText: { text: 'Cached excerpt', incomplete: false },
+    })
+    expect(regionText).toHaveBeenCalledExactlyOnceWith(current.regionText.regions)
+    expect(host.reads).not.toHaveBeenCalled()
+  })
+
   it('keeps the lease after request validation but retires it when a declared figure is missing', async () => {
     const host = await fixture('body', 1)
     const opened = await host.open()

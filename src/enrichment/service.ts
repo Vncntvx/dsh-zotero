@@ -1117,9 +1117,11 @@ export class EnrichmentService extends TypertRemoteService {
     )
     signal.throwIfAborted()
     if (!stampMatches(record.stamp, stamp)) return { kind: 'expired' }
+    const contentListDigest = meta.contentListSha256
     return {
       metadata: {
         sourceId: meta.sourceId,
+        ...(input.source.kind === 'local' ? { sourceRef: input.source.attachmentRef } : {}),
         targetLabel,
         mode: meta.mode,
         artifactId: record.cacheKey,
@@ -1137,6 +1139,12 @@ export class EnrichmentService extends TypertRemoteService {
           meta.markdownSha256,
         ),
       image: (name) => store.readImage(record.cacheKey, name, meta),
+      ...(input.source.kind === 'local' &&
+        contentListDigest !== undefined && {
+          locations: () => store.readLocations(record.cacheKey, contentListDigest, meta.pageCount),
+          regionText: (regions) =>
+            store.readRegionText(record.cacheKey, contentListDigest, regions, meta.pageCount),
+        }),
     }
   }
 
