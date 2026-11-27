@@ -16,7 +16,7 @@ Read these in order to move from installation to daily use:
 
 - [Architecture](architecture.en.md): data flow, layer responsibilities, component boundaries, and design boundaries
 - [Tool reference](tools.en.md): parameters, return values, and error codes for the 23 local tools and 7 scholarly retrieval tools
-- [Configuration reference](configuration.en.md): the four settings namespaces, field defaults, and hot-reload behavior
+- [Configuration reference](configuration.en.md): the five settings namespaces, field defaults, and hot-reload behavior
 - [Development guide](development.en.md): build, test, debug, and release workflow
 
 ## Internal
@@ -27,3 +27,4 @@ The following documents are for repository maintainers:
 - [Documentation writing and routing](AGENTS.md): ownership, writing rules, and gates
 - [Test suite rules](../tests/README.md): test lanes and fixture rules
 - [Development notes](development-notes.en.md): upstream patches and replacement opportunities
+- [Research Reader runtime](reader.en.md)

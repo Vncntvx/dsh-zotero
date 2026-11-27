@@ -2,3 +2,4 @@
 - **文献面板**（`dsh-zotero/library`）：右侧边栏标签页，覆盖全库导航（合集树、保存的搜索、我的出版物、回收站）、条目列表筛选、条目检视、复制引用（CSL 引文、BibTeX、参考文献表、BibLaTeX、RIS、CSL-JSON 与条目信息）以及经审批的受控写入。
 - **学术检索**（`dsh-zotero/scholarly`）：外部文献检索组件，默认关闭。启用后注册 7 个学术检索工具，支持检索 arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed、Europe PMC 与 DBLP，提供全文读取、引文网络分析、参考文献核验与保存到本地 Zotero 库。客户端在组件启用期间展示请求范围提示；客户端观察到组件关闭后再次启用时重新披露。
 - **文档解析**（`dsh-zotero/enrichment`）：可选组件，默认关闭。支持主动提交 PDF 进行 MinerU 解析、复用已有 Markdown 产物，以及基于开源模型的本地语义检索与嵌入模型管理。客户端在组件启用期间展示文档外发提醒；客户端观察到组件关闭后再次启用时重新披露。提供免 Token 的 `free` 模式与需 Token 的 `pro` 模式，解析产物保存至指定目录。
+- **科研阅读器**（`dsh-zotero/reader`）：可选组件，默认关闭。在右侧标签页打开本地 PDF、网页快照、Markdown、纯文本和 Zotero 笔记，显示原生标注，并通过既有审批流程支持版本化的标注与笔记编辑；文献轨迹与已完成引用可跳转到 Reader 中的对应位置。

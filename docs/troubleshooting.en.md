@@ -46,6 +46,7 @@ This document lists common issues, possible causes, and the matching fixes when 
 - URL attachments: when the attachment itself is an external URL rather than a local PDF file, "Read PDF" opens that address in a new browser tab.
 - Open refused: when the host refuses to open the reader bar or a new tab, the action row shows an inline hint in place.
 - Quick locating: to view the item in the local Zotero client, click "Copy title" and paste it into Zotero quick search (`Cmd+F` or `Ctrl+F`); or click "Copy Zotero link" and paste the canonical deep link (personal and group libraries supported) into an external note or the address bar.
+- Reader write approval requires an active conversation turn on Harness `0.2.3-alpha.2`. When a save is refused between turns, the local draft stays available. Zotero can apply the change directly from its own editor.
 
 ## 8. Installation says nothing installable
 

@@ -43,3 +43,6 @@
     - id: enrichment
       name: dsh-zotero/enrichment
       disabled: true
+    - id: reader
+      name: dsh-zotero/reader
+      disabled: true

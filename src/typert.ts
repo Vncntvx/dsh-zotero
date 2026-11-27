@@ -40,6 +40,7 @@ import {
   ZOTERO_STATUS_SERVICE_KEY,
   ZOTERO_LIBRARY_SERVICE_KEY,
   ZOTERO_ENRICHMENT_SERVICE_KEY,
+  ZOTERO_READER_SERVICE_KEY,
 } from './contract.js'
 import { ZOTERO_COMMON_INVOCATIONS } from './wire-schemas.js'
 
@@ -117,6 +118,14 @@ export const TYPERT_MANIFEST: TypertContribution = {
         description: 'Serves library panel listings, user PDF reads, and approved mutations.',
         tags: [],
         members: membersOf(ZOTERO_LIBRARY_SERVICE_KEY),
+        types: [],
+      },
+      {
+        key: ZOTERO_READER_SERVICE_KEY,
+        exportName: 'ReaderService',
+        description: 'Serves the optional Zotero Reader for session reading.',
+        tags: [],
+        members: membersOf(ZOTERO_READER_SERVICE_KEY),
         types: [],
       },
     ],

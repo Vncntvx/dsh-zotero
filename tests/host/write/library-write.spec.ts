@@ -25,6 +25,8 @@ import {
 import { nonTextContent, textContent, toolBatchResult } from '../support/tool-batch.js'
 import { grantAuthorize, SERVER_ID } from '../../helpers/write-domain-fixtures.js'
 import { deferred } from '../../helpers/sync.js'
+import ReaderService from '../../../src/reader/service.js'
+import { ITEM_KEY, serveItemRead } from '../../helpers/write-domain-fixtures.js'
 
 let lane: HostLane | undefined
 const agent = { status: 'running' }
@@ -54,7 +56,6 @@ const TOOL = 'zotero_create_note'
 
 beforeEach(() => {
   resetApprovalStub()
-  agent.status = 'running'
 })
 afterEach(async () => {
   await lane?.teardown()
@@ -77,6 +78,37 @@ async function boot(enabled = true) {
 }
 
 describe('panel write gateway', () => {
+  it('runs a Reader annotation edit through approval and plan review without the Library component', async () => {
+    const host = await boot()
+    await host.ctx.plugin(ReaderService, {})
+    grantAuthorize(host.mock)
+    host.mock.route('GET', '/api/', (_req, _res, helpers) =>
+      helpers.json({}, { 'Zotero-Server-ID': SERVER_ID }),
+    )
+    serveItemRead(host.mock, {
+      version: 10,
+      data: { itemType: 'annotation', annotationType: 'highlight', annotationComment: 'old' },
+    })
+    host.mock.route('PATCH', `/api/users/0/items/${ITEM_KEY}`, (_req, _res, helpers) =>
+      helpers.raw(204, { 'Zotero-Server-ID': SERVER_ID, 'Last-Modified-Version': '11' }, ''),
+    )
+
+    const result = await host.ctx.reader.readerUpdateAnnotation(
+      {
+        sessionId: request.sessionId,
+        ref: `zotero://user/0/annotation/${ITEM_KEY}`,
+        expectedVersion: 10,
+        set: { annotationComment: 'new' },
+      },
+      signal(),
+    )
+
+    expect(result, result.message).toMatchObject({ kind: 'applied' })
+    expect(approvalAsks).toHaveLength(1)
+    expect(host.mock.requests.filter((entry) => entry.method === 'PATCH')).toHaveLength(1)
+    expect(host.ctx.get('zoteroLibrary')).toBeUndefined()
+  })
+
   it('preserves the acknowledged write facts after the registered saved-search tool is cancelled', async () => {
     const host = await boot()
     grantAuthorize(host.mock)
@@ -153,18 +185,32 @@ describe('panel write gateway', () => {
     expect(approvalAsks).toHaveLength(0)
   })
 
-  it('requires an authorized running session with an audit channel', async () => {
+  it('checks session access again after resolving the agent for approval', async () => {
     const host = await boot()
-    agent.status = 'idle'
-    await expect(executeLibraryWrite(host.ctx, request, signal())).rejects.toMatchObject({
-      code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
-    })
-    agent.status = 'running'
-    vi.spyOn(host.ctx.get('remoteAccess')!, 'allows').mockReturnValue(false)
+    vi.spyOn(host.ctx.get('remoteAccess')!, 'allows')
+      .mockReturnValueOnce(true)
+      .mockReturnValue(false)
     await expect(executeLibraryWrite(host.ctx, request, signal())).rejects.toMatchObject({
       code: 'remote-access/denied',
     })
     expect(host.mock.requests).toHaveLength(0)
+  })
+
+  it('refuses to route a write outside the turn that records its approval', async () => {
+    const host = await boot()
+    const execute = vi.spyOn(host.ctx.tools, 'execute')
+    agent.status = 'idle'
+    try {
+      await expect(executeLibraryWrite(host.ctx, request, signal())).rejects.toMatchObject({
+        code: ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
+        message: expect.stringContaining('active conversation turn'),
+      })
+      expect(execute).not.toHaveBeenCalled()
+      expect(approvalAsks).toHaveLength(0)
+      expect(host.mock.requests).toHaveLength(0)
+    } finally {
+      agent.status = 'running'
+    }
   })
 
   it('refuses an unavailable session or tool instead of dispatching outside its scope', async () => {

@@ -6,6 +6,7 @@ import type { RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, vi } from 'vitest'
 import { executeLibraryWrite } from '../../../src/library-write.js'
 import ZoteroLibraryService from '../../../src/library/index.js'
+import ReaderService from '../../../src/reader/service.js'
 import type { ZoteroLibraryWriteRequestView } from '../../../src/contract.js'
 import { setupHostLane, type HostLane } from '../../helpers/lanes/host-lane.js'
 
@@ -38,6 +39,7 @@ async function boot() {
     },
   )
   await lane.ctx.plugin(ZoteroLibraryService, {})
+  await lane.ctx.plugin(ReaderService, {})
   const peer = new Peer(lane.ctx, { principal: { kind: 'zotero-audit-guest', id: 'guest' } })
   return { lane, peer }
 }
@@ -58,6 +60,31 @@ it('rejects an unbound guest at the real Gateway without dispatching a model too
   })
   expect(execute).not.toHaveBeenCalled()
   expect(lane.mock.requests).toEqual([])
+})
+
+it('refuses a Reader annotation write from a guest without session access', async () => {
+  const { lane, peer } = await boot()
+  const execute = vi.spyOn(lane.ctx.tools, 'execute')
+  await expect(
+    lane.ctx.typertGateway.invoke({
+      peer,
+      namespace: 'zotero',
+      method: 'readerUpdateAnnotation',
+      args: {
+        request: {
+          sessionId: request.sessionId,
+          ref: 'zotero://user/0/annotation/ANNO0001',
+          expectedVersion: 10,
+          set: { annotationComment: 'unapproved' },
+        },
+      },
+    }),
+  ).rejects.toMatchObject({
+    code: 'remote-access/denied',
+    details: { action: 'zotero/readerUpdateAnnotation', reason: 'no-allow' },
+  })
+  expect(execute).not.toHaveBeenCalled()
+  expect(lane.mock.requests).toHaveLength(0)
 })
 
 it('retains the guest identity when a call reaches the in-method defense', async () => {

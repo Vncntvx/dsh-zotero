@@ -32,6 +32,7 @@ describe('the Loader export path every host entry goes through', () => {
       ['dsh-zotero/library', await import('../../src/library/index.js')],
       ['dsh-zotero/scholarly', await import('../../src/scholarly/index.js')],
       ['dsh-zotero/enrichment', await import('../../src/enrichment/index.js')],
+      ['dsh-zotero/reader', await import('../../src/reader/index.js')],
     ] as const
     for (const [name, namespace] of entries) {
       const plugin = loader.unwrapExports(namespace)

@@ -42,12 +42,35 @@ describe('the zotero typert manifest', () => {
       'search',
       'item',
       'childPage',
+      'readerAnnotations',
+      'readerDetails',
+      'readerNote',
+      'readerTranslate',
+      'readerSuggestAnnotation',
+      'readerWriteNote',
+      'readerUpdateAnnotation',
+      'readerCreateAnnotations',
+      'readerDeleteAnnotation',
       'export',
       'write',
     ])
     for (const invocation of TYPERT_MANIFEST.invocations) {
       expect(invocation.namespace).toBe('zotero')
       if (
+        [
+          'readerAnnotations',
+          'readerDetails',
+          'readerNote',
+          'readerTranslate',
+          'readerSuggestAnnotation',
+          'readerWriteNote',
+          'readerUpdateAnnotation',
+          'readerCreateAnnotations',
+          'readerDeleteAnnotation',
+        ].includes(invocation.method)
+      ) {
+        expect(invocation.service).toBe('reader')
+      } else if (
         [
           'releaseUrlPdf',
           'readUrlPdf',
@@ -193,12 +216,17 @@ describe('the zotero typert manifest', () => {
     const resSchema = resultResult.create()
     const valid = resSchema.parse({
       ref: 'zotero://user/0/items/ABCD1234',
+      parentRef: 'zotero://user/0/item/EFGH5678',
       kind: 'file',
       title: 'test.pdf',
       contentType: 'application/pdf',
       path: '/path/to/test.pdf',
     })
-    expect(valid).toMatchObject({ kind: 'file', path: '/path/to/test.pdf' })
+    expect(valid).toMatchObject({
+      kind: 'file',
+      path: '/path/to/test.pdf',
+      parentRef: 'zotero://user/0/item/EFGH5678',
+    })
     expect(() => resSchema.parse({ ref: 'a', kind: 'other' })).toThrow()
   })
 

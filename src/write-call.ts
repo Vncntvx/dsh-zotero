@@ -23,7 +23,8 @@ import type { ZoteroWriteRisk } from './types.js'
  */
 export interface ZoteroWriteCall {
   /** The asking tool run: agent routes the asks, signal cancels them, name/callId audit the approval. */
-  readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name' | 'callId'>
+  readonly exec: Pick<ToolRunContext, 'agent' | 'signal' | 'name'> &
+    Partial<Pick<ToolRunContext, 'callId'>>
   /** The plan markdown the user reviews; it must describe exactly this request. */
   readonly plan: string
   /**

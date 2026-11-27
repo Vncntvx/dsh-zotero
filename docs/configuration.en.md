@@ -2,29 +2,31 @@
 
 # Configuration Reference
 
-dsh-zotero organizes configuration into four settings namespaces. Each namespace gets its defaults from an independent Schemastery schema and is validated when loaded and saved; an invalid value blocks plugin loading or that namespace's configuration write.
+dsh-zotero organizes configuration into five settings namespaces. Each namespace gets its defaults from an independent Schemastery schema and is validated when loaded and saved; an invalid value blocks plugin loading or that namespace's configuration write.
 
 - Core `zotero` namespace: `src/config.ts`, 39 fields, runtime validation by `resolveConfig`;
 - Literature panel `library` namespace: `src/library/config.ts`, 15 fields;
 - Scholarly search `scholarly` namespace: `src/scholarly/config.ts`, 9 fields;
 - Document parsing `enrichment` namespace: `src/enrichment/config.ts`, 10 fields.
+- Research Reader `reader` namespace: `src/reader/config.ts`, 4 fields.
 
-The four groups total 73 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment`) in the current profile's `cordis.patch.yml`.
+The five groups total 77 fields. Every field is declared `volatile`, and a configuration write lands under `config` on the matching entry (`zotero` / `library` / `scholarly` / `enrichment` / `reader`) in the current profile's `cordis.patch.yml`.
 
-The settings page directly renders 40 schema fields and 5 write-only secret controls, 45 visible controls in total; the other 33 fields are not rendered in the form and are configured through the configuration file only (see "Settings-page visibility" below).
+The settings page directly renders 44 schema fields and 5 write-only secret controls, 49 visible controls in total; the other 33 fields are not rendered in the form and are configured through the configuration file only (see "Settings-page visibility" below).
 
 ## Settings tabs and visible controls
 
-The configuration area of the plugin detail page is a 4-tab form, split by component, that edits all four namespaces at once. Tabs and visible controls line up as follows; visible controls include schema fields and the 5 write-only secret controls, while config-file-only fields are marked in the last column of each field table.
+The configuration area of the plugin detail page is a 5-tab form, split by component, that edits all five namespaces at once. Tabs and visible controls line up as follows; visible controls include schema fields and the 5 write-only secret controls, while config-file-only fields are marked in the last column of each field table.
 
-| Tab        | Settings namespace  | Visible controls | Groups and fields                                                                                                                                                                                                                                                                                                                                           |
-| ---------- | ------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| General    | `zotero`            | 13               | Literature trail: `webEnabled`; Writing: `writeEnabled`, `writePersistKey`; Connection: `baseUrl`, `timeoutMs`; Search & browsing: `maxSearchResults`, `maxBrowseResults`; Passages & full-text reading: `maxEvidenceChars`, `maxEvidencePassages`, `maxFulltextChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`; Diagnostics: `debug` |
-| Library    | `library`, `zotero` | 17               | 14 panel preferences for display, details, browsing, PDF reading, citations and conversation, and journal metrics; one EasyScholar secret control; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                       |
-| Scholarly  | `scholarly`         | 8                | Identity and keys: `email` and 3 write-only secret controls; Search & full-text quotas: `maxResults`, `maxContentChars`; Scholarly background tasks: `enableRunInBackground`, `promoteOnTimeout`                                                                                                                                                            |
-| Enrichment | `enrichment`        | 7                | Mode and output: `mode`, `ocrLanguage`, MinerU Token secret control, `outputDir`; Semantic ranking: `enableSemanticSearch`, `semanticModel`, `semanticDownloadSource`                                                                                                                                                                                       |
+| Tab              | Settings namespace  | Visible controls | Groups and fields                                                                                                                                                                                                                                                                                                                                           |
+| ---------------- | ------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| General          | `zotero`            | 13               | Literature trail: `webEnabled`; Writing: `writeEnabled`, `writePersistKey`; Connection: `baseUrl`, `timeoutMs`; Search & browsing: `maxSearchResults`, `maxBrowseResults`; Passages & full-text reading: `maxEvidenceChars`, `maxEvidencePassages`, `maxFulltextChars`; Background tasks: `enableRunInBackground`, `promoteOnTimeout`; Diagnostics: `debug` |
+| Library          | `library`, `zotero` | 17               | 14 panel preferences for display, details, browsing, PDF reading, citations and conversation, and journal metrics; one EasyScholar secret control; citation defaults: `defaultStyle`, `defaultLocale`                                                                                                                                                       |
+| Scholarly        | `scholarly`         | 8                | Identity and keys: `email` and 3 write-only secret controls; Search & full-text quotas: `maxResults`, `maxContentChars`; Scholarly background tasks: `enableRunInBackground`, `promoteOnTimeout`                                                                                                                                                            |
+| Enrichment       | `enrichment`        | 7                | Mode and output: `mode`, `ocrLanguage`, MinerU Token secret control, `outputDir`; Semantic ranking: `enableSemanticSearch`, `semanticModel`, `semanticDownloadSource`                                                                                                                                                                                       |
+| Document reading | `reader`            | 4                | Reading history limit: `historyLimit`; persist reading position: `persistReadingState`; default translation target: `defaultTranslationTarget`; capture source label by default: `captureWatermark`                                                                                                                                                         |
 
-The visible controls total 45 (40 schema fields + 5 write-only secret controls). The fourth tab is named "Library"; the sidebar panel title and the Composer button keep the name "Literature panel", and citation defaults live in this tab.
+The visible controls total 49 (44 schema fields + 5 write-only secret controls). The Document reading tab stays visible. Its history, position, default translation target and capture source-label controls are available when the Reader namespace is served, and the tab reports when the component is unavailable. The Library tab keeps the sidebar panel title and Composer button name "Literature panel", and citation defaults live in that tab.
 
 ### Settings-page visibility
 
@@ -105,11 +107,11 @@ The 15 literature panel fields are validated at mount and on every commit agains
 Schema defaults → Composition entry config → the current profile's Cordis patch layer
 ```
 
-All four namespaces follow the same order. The override layer (`config` on the matching entry in the current profile's `cordis.patch.yml`) outranks schema defaults and entry config; a home patch or command-line overlay outranks it, and a form write that they would override is refused.
+All five namespaces follow the same order. The override layer (`config` on the matching entry in the current profile's `cordis.patch.yml`) outranks schema defaults and entry config; a home patch or command-line overlay outranks it, and a form write that they would override is refused.
 
 ## Plugin configuration page
 
-Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 4-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`; each tab has one save control, and the Literature panel tab composes panel preferences and the CSL defaults into that single save) and edits the `zotero`, `library`, `scholarly`, and `enrichment` namespaces in one place:
+Open the **dsh-zotero** detail page in the plugin manager; its configuration area carries the full 5-tab form (through the harness's official `SettingsForm` and `SettingsFormModel`; each tab has one save control, and the Literature panel tab composes panel preferences and the CSL defaults into that single save) and edits the `zotero`, `library`, `scholarly`, `enrichment`, and `reader` namespaces in one place:
 
 - Edits are written to the `config` override on the matching entry in the current profile's `cordis.patch.yml`;
 - Saves take effect at once: transport configuration and write-gate changes rebuild the matching components inside the service instance, and pure limit fields are read live by the provider;
@@ -119,7 +121,7 @@ Open the **dsh-zotero** detail page in the plugin manager; its configuration are
 
 The same form state has two more entry points, and the three relate as follows:
 
-1. Unified settings page tabs: the 4-tab form in the plugin detail page's configuration area;
+1. Unified settings page tabs: the 5-tab form in the plugin detail page's configuration area;
 2. Component row configuration: the "Configure" button on the `dsh-zotero#library`, `dsh-zotero#scholarly`, and `dsh-zotero#enrichment` rows under "Included components", each editing its own namespace;
 3. Configuration file: edit `config` on the matching entry in the current profile's `cordis.patch.yml` directly.
 
@@ -172,7 +174,7 @@ The literature panel is an independent DSH bundle subcomponent. It ships with th
 
 Component fields have three entry points:
 
-1. Unified settings page, "Library" tab: switch to "Library" in the 4-tab form of the plugin detail page;
+1. Unified settings page, "Library" tab: switch to "Library" in the 5-tab form of the plugin detail page;
 2. Included components row configuration: click the "Configure" button on the `dsh-zotero#library` row under "Included components";
 3. Configuration file: declare it under `config` on the matching entry in the current profile's `cordis.patch.yml`.
 
@@ -218,7 +220,7 @@ Parsing tasks start when the user explicitly submits a specific PDF; ordinary re
 
 The component's fields have three entry points:
 
-1. **Unified settings page "Enrichment" tab**: switch to it in the plugin detail page's 4-tab form;
+1. **Unified settings page "Enrichment" tab**: switch to it in the plugin detail page's 5-tab form;
 2. **Included-components row configuration**: the "Configure" button on the `dsh-zotero#enrichment` row;
 3. **Configuration file**: declare them under `config` on that entry in the current profile's `cordis.patch.yml`.
 

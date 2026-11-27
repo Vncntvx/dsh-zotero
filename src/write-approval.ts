@@ -177,7 +177,7 @@ export async function requestWriteApproval(
     outcome = await approval.request({
       agent: exec.agent,
       toolName: exec.name,
-      callId: exec.callId,
+      ...(exec.callId === undefined ? {} : { callId: exec.callId }),
       reason: writeApprovalReason(call),
       displayReason: writeApprovalDisplayReason(call),
       signal: exec.signal,

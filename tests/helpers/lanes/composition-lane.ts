@@ -25,6 +25,7 @@ import ZoteroService from '../../../src/index.js'
 import ScholarlyService from '../../../src/scholarly/index.js'
 import ZoteroLibraryService from '../../../src/library/index.js'
 import EnrichmentService from '../../../src/enrichment/index.js'
+import ReaderService from '../../../src/reader/index.js'
 import { MockZotero } from '../mock-zotero.js'
 
 /** One booted real-Loader composition, disposed as a unit by {@link dispose}. */
@@ -78,6 +79,7 @@ export async function setupCompositionLane(
     ['dsh-zotero/scholarly', { default: ScholarlyService }],
     ['dsh-zotero/library', { default: ZoteroLibraryService }],
     ['dsh-zotero/enrichment', { default: EnrichmentService }],
+    ['dsh-zotero/reader', { default: ReaderService }],
   ])
   context.loader.internal = {
     version: 'v2',

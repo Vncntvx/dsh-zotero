@@ -2,7 +2,7 @@
 
 # Product Model
 
-dsh-zotero runs around the local Zotero library. The model works through tools and the user works through the interface; two entry points and two views divide the responsibilities, backed by four decoupled components.
+dsh-zotero works with the local Zotero library. Models use tools and readers use the interface. The five decoupled components support the Literature panel, Literature Trail, and the optional Research Reader.
 
 ## Two Entry Points
 
@@ -31,11 +31,13 @@ The local Zotero desktop app supplies the literature and item data; the Literatu
 
 The literature panel serves global library browsing and citation, while the literature trail audits tool calls and source passages within the current session. The literature panel also owns two derived tabs: a parsed-result page for one document and a parsed-document manager. The manager lists each artifact under its paper title, narrows the list by state and keyword, opens or reparses rows, discards rows in bulk, and houses the PDF URL parse entry.
 
+In Literature Trail, a **claim** is a research statement entered by the reader. An **evidence link** connects it to a projected source passage. The link can describe support, refutation, a limitation, uncertainty, or an experimental result. The reader can mark the link unreviewed, verified, or disputed.
+
 DSH's built-in "Trail" tab records tool-call execution times and raw parameters; the "Literature trail" focuses purely on literature, showing search conditions, source passages, and export records.
 
-## Four Components
+## Five Components
 
-The plugin is split into four components with distinct roles:
+The plugin is split into five components with distinct roles:
 
 | Component name              | Role                                                                      | Default state | Partition rationale                                                                                                                                         |
 | :-------------------------- | :------------------------------------------------------------------------ | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,6 +45,7 @@ The plugin is split into four components with distinct roles:
 | **`dsh-zotero/library`**    | Literature panel service (`zoteroLibrary`) and sidebar interface          | Enabled       | Decouples the library browsing UI so it can be disabled as a whole, with an independent settings namespace.                                                 |
 | **`dsh-zotero/scholarly`**  | External scholarly retrieval, open-access full text, citation check       | Disabled      | Agent scholarly retrieval authorization boundary; requests to allowlisted indexes and the open-access PDF arm require this component.                       |
 | **`dsh-zotero/enrichment`** | User-submitted MinerU parsing, artifact reuse, and local semantic ranking | Disabled      | Enabling accepts MinerU document egress and provides parsing and model management; each upload is explicitly submitted by the user for a specific document. |
+| **`dsh-zotero/reader`**     | Attachment reading, Zotero annotations and notes, and evidence navigation | Disabled      | Loads PDF.js independently and owns reading state and Reader endpoints.                                                                                     |
 
 ### Component Roles
 
@@ -50,6 +53,7 @@ The plugin is split into four components with distinct roles:
 - **Literature panel component**: Exposes read and write endpoints (`browse`, `search`, `item`, etc.) to the frontend; local-library operations forward to the core service. Explicit user reading of URL PDFs has its own `allowUrlPdfRead` permission and public download boundary. It can be unmounted entirely if the sidebar is not needed.
 - **Scholarly retrieval component**: Provides external academic retrieval for the agent. When disabled, no scholarly tools are registered; when enabled, it registers seven tools querying allowlisted academic platforms (HTTPS) and open-access PDF hosts (with public address validation; HTTPS PDF targets support fake-IP placeholders). The client displays an outbound disclosure while the component is enabled, outlining destination hosts; it discloses again after observing the component off and back on.
 - **Document parsing component**: Provides explicit document parsing, artifact lookup, and local semantic model management. Enabling the component grants MinerU parsing access; an egress notice is shown while the component is enabled, and it discloses again after observing the component off and back on. Ordinary `zotero_retrieve` and `scholarly_read` calls query valid Markdown via the read-only `FulltextEnhancer.lookup` and `lookupArtifact` and prioritize it, falling back to Zotero fulltext or local PDF extraction on a miss. Local semantic ranking runs independently using local embedding models.
+- **Research Reader** opens local PDFs, HTML snapshots, Markdown, plain text, and Zotero notes. Attachment identity and verification belong to the owning session and Zotero instance. Native annotation and note changes use core write approvals.
 
 `src/skills/` registers phased instructions through the Harness's optional `ctx.skills`, with the core component owning four and the scholarly retrieval component owning four. The model selects from a catalog of names and short descriptions, then loads the full Markdown body with the `skill` tool; bodies stay out of the standing system prompt. See the [research SOP skill reference](skills.en.md).
 

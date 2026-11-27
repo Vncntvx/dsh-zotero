@@ -12,10 +12,11 @@
 | ----------------------- | ----------------------------------------- | ------------ | ---- | ------------------------------------ |
 | `dsh-zotero`            | `zotero`（wire 命名空间 `zotero`）        | `zotero`     | 启用 | 连接、模型工具、文献轨迹、设置页     |
 | `dsh-zotero/library`    | `zoteroLibrary`（wire 命名空间 `zotero`） | `library`    | 启用 | 文献面板的宿主端点与右侧边栏界面     |
+| `dsh-zotero/reader`     | `reader`（wire 命名空间 `zotero`）        | `reader`     | 关闭 | 科研阅读器标签页与阅读端点           |
 | `dsh-zotero/scholarly`  | `scholarly`                               | `scholarly`  | 关闭 | 外部学术索引检索与全文读取           |
 | `dsh-zotero/enrichment` | `enrichment`                              | `enrichment` | 关闭 | 主动解析、产物查询与本地语义模型管理 |
 
-核心持有数据面与 Agent 能力；library 把本地库端点转交核心；scholarly 是外部检索授权边界；enrichment 提供只读产物查询与主动解析。依赖方向固定为 library/scholarly/enrichment → core；core 只通过 `FulltextEnhancer` 与 `EvidenceRanker` 两个纯接口槽调用增强能力，不反向依赖 enrichment。`FulltextEnhancer` 只暴露只读的 `lookup` 与 `lookupArtifact`：前者按来源查有效 Markdown，后者按不透明 artifactId 解析本地产物；接口不表达 `enhance`、原始文档字节或上传操作。
+核心持有数据面与 Agent 能力。Library、Reader、scholarly 和 enrichment 均依赖核心。Library 转交浏览请求，Reader 复用核心读取与写入，scholarly 授权外部检索，enrichment 提供只读产物查询与主动解析。核心通过 `FulltextEnhancer` 和 `EvidenceRanker` 两个接口槽调用增强能力。`FulltextEnhancer` 提供两个只读方法，`lookup` 按来源查找 Markdown，`lookupArtifact` 按不透明产物 ID 解析本地产物。
 
 ### 挂载、配置与卸载
 
@@ -33,6 +34,30 @@
 
 面板经 `ctx.zoteroLibrary` 调用 browse/collectionPath/search/item/childPage/export；`useLibraryFeed` 合并同请求并做短 TTL 缓存，按 `serverId` 重新键入，只缓存成功读取。模型工具经 Provider 读取搜索、条目、附件、批注、笔记与上下文；scope 名称与 item type 词汇由本地缓存目录解析；`trash` 只属于面板，模型工具 schema 不提供。
 
+Reader 从 Zotero 返回的附件确定父条目，并将已核验的文库及服务器身份带入父条目读取。Reader 通过核心读取父条目和限量子条目，即使 Library 已关闭。附件和笔记分别翻页。已加载的笔记可跨页批量选择，笔记写入后刷新列表。切换到同一条目的 PDF 时先重新解析本地文件，各附件保留各自的阅读状态和几何位置。`tests/host/reader-details.spec.ts` 验证群组文库读取、子条目分页和会话授权。`tests/client/reader/ReaderDetails.spec.tsx` 验证跨页批量引用笔记。
+
+Reader 在读取 Zotero 附件的一页原生标注前核查会话访问权限。响应保留附件的文库和实例、标注版本，以及已验证的 PDF 坐标。核心启用写入时，该端点仅对个人文库报告可写。`tests/host/reader-annotations.spec.ts` 使用模拟 Local API 验证分页、坐标、身份和权限拒绝。
+
+Reader 在浏览器发布限量阅读历史。读取前拒绝超过 1,000,000 个 UTF-16 代码单元的序列化记录，再解析其条目。只有带服务器限定符的附件 ref 才能进入历史快照，避免旧式 ref 在实例身份缺失时跨库恢复。若存在父条目 ref，快照只接受同一服务器和文库中的条目，以免文献列表把阅读时间归给错误来源。最近阅读只显示当前带服务器限定符的文库，打开前重新解析附件，恢复位置还需核对文件指纹。文献列表使用同一快照，按已核验的父条目 ref 显示上次阅读时间。Harness 阅读标签页和浏览器页面均可见时才累计阅读时间。关闭阅读状态持久化会隐藏快照并停止保存。`tests/client/reader/reading-history.spec.ts`、`tests/client/reader/ReaderTab.history.spec.tsx` 和 `tests/client/library/reading-visits.spec.tsx` 分别验证存储、计时和列表更新。
+
+历史 PDF 引用从已完成轮次中已接收的用户及引导消息的 Composer 引用块读取。Reader 按当前会话权限再次解析完整限定的附件 ref，即使同一附件已打开也重新读取当前文件。仅在整份 PDF 的 SHA-256 一致时复用页码和坐标，摘要在字节转交 PDF.js Worker 前开始计算。旧指纹或缺少 Web Crypto 时仍可打开附件，并显示版本无法核验提示。Reader 导航和引用测试覆盖权限收回、版本不符和引用页缺失。
+
+文献轨迹用全文检索结果自带的限定附件 ref 和片段预览定位原文。Reader 在会话文件权限下读取当前 PDF。若片段来自 MinerU 产物，先核对产物记录的 SHA-256 与当前 PDF 一致。Reader 最多扫描 256 个物理页，每页上限为 16,000 个 UTF-16 代码单元，扫描时限为五秒。匹配区分大小写，归一化空白和常见连字。只有完整扫描才能确认唯一命中。唯一命中会打开对应页，文本层可用时绘制临时证据区域。跨页命中从第一个已核验页打开，重复命中显示候选页，未完成或未找到时显示相应状态。跳转、取消和卸载均会停止扫描。客户端证据测试覆盖附件路由、匹配、产物版本、取消和迟到的响应，Chromium PDF smoke 核对叠加层与已渲染文字的位置。
+
+用户明确提交选区后，Reader 通过当前会话选择的 Harness 模型翻译最多 8,000 个 UTF-16 代码单元。宿主准备适配器调用后再次核对会话及访问权限。单次请求携带选中文字及翻译指令，时限 30 秒，最多输出 4,096 个 token，只返回完整译文。浏览器本地翻译结果缓存在 Reader 标签页中。模型翻译每次使用当前会话的模型路由。宿主和客户端的 Reader 翻译测试验证请求内容、远程权限、显式提交和截断结果处理。
+
+在标注草稿中主动请求模型评论时，Reader 复用相同的选区预算和会话权限检查。宿主限制模型输出为 512 个 token，返回至多 1,000 个 UTF-16 代码单元。建议单独显示，接受后才进入可编辑评论。保存仍使用原始选区坐标，并经过原生标注审批。
+
+Reader 通过受会话权限约束的 Remote 读取选中的笔记，并向核心显式请求原始 HTML。独立笔记标签页由 Zotero 条目规范 ref 和会话标识，单独检查笔记权限并按需加载 Reader UI。宿主验证条目类型后才返回内容。响应同时提供笔记版本和限长纯文本。浏览器在惰性模板中解析 HTML，用固定的元素和属性重建富文本；链接和外部图片保持惰性。用户明确请求图片时，Reader 检查笔记、附件定位和 Workspace Files 权限，再读取由 Zotero 确认为同实例、同库且属于该笔记的本地位图附件。单张限 2 MiB，关闭笔记时释放本地图片 URL。普通条目读取和模型工具仍按纯文本输出笔记。`tests/host/reader-note.spec.ts` 和 `tests/client/reader/ReaderDetails.spec.tsx` 分别覆盖读取和显示边界。
+
+Reader 的文本附件标签页重新解析带实例限定符的 Zotero 附件，确认本地附件类型后才通过 Workspace Files 限量读取。支持 HTML、XHTML、Markdown 和纯文本。HTML 以无活动内容的元素重建。Markdown 渲染不继承上级的文件或图片解析器，并事先替换所有 Markdown 图片。前缀读取可带提示显示和引用正文范围，完整读取才记录内容指纹。
+
+PDF 与解析标签页只有在带实例限定符的附件 ref 和完整 SHA-256 相符时才传递选中文字。PDF 端按会话权限检查指定附件的缓存并打开不透明产物 ID。解析端再次校验缓存元数据后搜索渲染后的文本块。逆向操作在会话文件权限下解析同一附件，并复用 PDF 证据定位。只有唯一匹配才绘制区域或高亮文本块。缓存坐标通过同一个文档租约读取。主机校验内容列表摘要，只读取最多 240 条、256 KiB 的平铺列表，并验证物理页索引与 0–1000 的整数坐标。坐标不可用或来源页面方向未经验证时，可回退到记录的物理页。PDF 选区按页码与重叠面积匹配唯一缓存条目，然后才回退到 Markdown 文本。产物测试及浏览器验收覆盖无效或缺失坐标、多个重叠条目和正向页面插图的双向跳转。
+
+解析条目引用复用 Composer 引用卡片，保留产物 ID、条目类型、附件 ref、PDF SHA-256、物理页及可选的归一化坐标。历史引用核验身份、指纹及坐标后，复用 PDF 证据定位器。每次定位区域都重新读取当前 PDF，即使该标签页已经打开。坐标无法核验时使用已记录的物理页。引用 Markdown 选段时还会在 UTF-16 范围之外记录限长文本前缀。如果记录了前缀，只有渲染范围的文字与其相符时才会高亮。
+
+关闭 PDF 截图预览会取消待完成的解析区域跳转。失去缓存读取权限时，截图预览和 PDF 选区都会取消待完成的跳转。从解析文档跳转回 PDF 时，发起新跳转、切换解析产物、关闭解析标签页或撤销附件定位与文件读取权限中的任一项，都会取消待完成的跳转。切换选区也会取消当前选区的查找。相同文字、物理页和偏移量构成同一个选区，重复上报时继续查找。截图预览可以在用户明确请求后读取同一附件指纹下的 MinerU 缓存文字。主机只接受每页一个、限制在 0–1000 坐标内的区域，且仅引用完整落入截图的文字或标题块，跨边界或缺失页会标记为不完整。请求复用解析缓存摘要校验和现有会话读取权限，不上传截图或重新提交解析。截图、选区和解析文档测试覆盖迟到的响应、撤权及重试。
+
 读并发由 `searchConcurrency` 与 `graphConcurrency` 约束；候选与附件扫描共享检索预算，预算为 1 时串行；批量 get 在传输容量允许时为交互读取保留一个槽位；笔记正文只在第一页扫描。导出的非 `citation` 格式单次取回全部条目（上限 50），`bibtex`/`biblatex` 另发一次元数据批请求，`citation` 按 50 分批；面板只取渲染文本/引文。
 
 工具 schema 的 `default` 只是不参与验证的 JSON 注解，默认值由工具代码应用；互斥组合按参数是否存在校验（省略 retrieve mode 的契约是 evidence）。
@@ -46,6 +71,16 @@
 ### 本地写入
 
 所有写入经 `ctx.zotero` 的统一接缝：能力门 → 只读预检 → `ctx.approval.request` → 计划审查卡 → Local API。Zotero 在鉴权时消耗一次性密钥，授权到发送完成期间独占；整次读改写周期含 15 分钟总时限，覆盖排队与授权。批量写最多 50 项，按依赖层先子后父；每项回执必须证明索引、身份、版本和全部提交字段，缺失或矛盾返回 `committed-unverified` 且不重试。
+
+Reader 编辑标注时携带表单所显示的版本。审批后，领域层从锁定的实例读出当前对象，核对标注类型和版本，并将该版本与既有请求头一并随 PATCH 提交到 Zotero。冲突时 Reader 刷新标注列表，由用户决定是否重新提交。`tests/local/write/annotations.spec.ts` 验证 Local API 请求及过期版本拒绝。
+
+Reader 通过 PDF.js viewport 转换文本节点的矩形坐标，每个物理页提交一条原生标注。选区缺少页面几何或文本被截断时禁用创建。计划审查展示各页原文、颜色与评论，领域层在锁定的 Zotero 实例中校验附件，再提交一个批次。回执逐页报告结果。PDF 浏览器 smoke 验证旋转后的逆向跨行、跨页选区，宿主与 Local API 标注测试验证两级审批、原生请求及部分失败或提交情况不明的回执。
+
+Reader 在标量编辑使用的同一版本下合并标注的标签变更，保留未移除标签的类型。删除先在标签页确认具体标注，再经宿主两级审批调用 Zotero 的单条目版本化 DELETE。审批需要活跃轮次时，Reader 保留待提交的编辑或删除确认。版本过期时刷新列表。提交情况不明时返回标注 ref，供用户在 Zotero 核对。Local API 标注测试校验版本头、标签保留和删除结果不明的处理。
+
+取消编辑或删除标注时，若原 Reader 标签页仍可见，焦点回到该标签页内触发操作的按钮。`tests/client/reader/ReaderTab.annotations.spec.tsx` 覆盖同时打开同一附件的两个视图，以及焦点回调前隐藏或关闭原标签页的情况。
+
+Reader 通过核心的 Markdown 笔记流程新建关联笔记。审批后，编辑流程在锁定的 Zotero 实例中核对界面所见版本，只在解析确认的普通文本片段位置写入转义后的文本及可选的粗体、斜体或代码格式，保留周围的 Zotero HTML、引文属性、标注反链及图片。片段内的格式选区使用提交文字的半开 UTF-16 偏移；写入前会校验两个边界，再转义并包裹选中文字。领域层重读保存的笔记以核验版本与内容。永久删除使用同样的版本校验及单条目 DELETE。草稿按 DSH 会话及带服务器限定符的条目存入浏览器会话存储。存储拒绝写入时，当前浏览器标签页在内存保留最多 16 条记录，包括用来覆盖旧存档的清除标记。版本不一致或提交结果未核验时，用户可以打开只读草稿并复制原文。经核验的保存会清除草稿。`tests/local/write/reader-notes.spec.ts` 验证标记保留与回读。宿主和客户端笔记测试覆盖审批、冲突和草稿恢复。
 
 笔记比较 HTML 结构，只接受已核实的 Zotero 外层包装、控制字符清理与 HTML 解析等价形式；标签与集合按集合比较；个人库关系 URI 统一为本地身份。集合、笔记与合集归属在审批前用 `preflightWrite` 排除已知无效目标，审批后重新读取再写。计划卡的自由文本意见一律拒绝当前写入，即使同一答复选择 Apply。保存的检索在 PATCH 后重读并验证名称、全部条件与版本。
 
@@ -139,7 +174,7 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间注册端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`、`journalMetrics`；`EnrichmentService` 负责主动解析、产物回执、已解析文档管理与语义模型管理。`domainCall` 保留领域错误码并区分取消与 Gateway 错误；只有确切的 `gateway/service-unavailable` 表示组件缺席。
 
-期刊指标使用文献面板独立的远程读取。面板加载 Zotero 条目后，在有列表候选时按当前页条目的刊名去重并查询。配置了详情指标时，选中条目的查询独立发起，并具有更高优先级。宿主在独立授权开启时解析凭据，合并同一刊名的在途查询，请求启动间隔至少 500 毫秒，并遵守 EasyScholar 的 Retry-After 等待时间。成功结果以密钥与规范刊名的组合摘要为索引，原子写入宿主缓存，最多保留 512 条。记录保存规范刊名、指标和查询时间。六小时内复用结果。设置中的 `refreshJournalMetrics` 使用相同队列更新当前密钥保存的所有期刊，汇报成功数与失败原因。刷新失败时保留已有记录。最后一个调用方取消等待时中止查询；撤销授权或更换凭据会使内存代次失效。查询只向固定 HTTPS 端点发送期刊名与密钥，不跟随重定向。跨重启复用、密钥隔离和刷新失败的回退由 `tests/host/library/journal-metrics-cache.spec.ts` 验证。
+文献面板与 Reader 共用文献面板组件的期刊指标 Remote 和已生效设置。面板加载 Zotero 条目后，在有列表候选时按当前页条目的刊名去重并查询。配置了详情指标时，选中条目的查询独立发起，并具有更高优先级。Reader 仅在用户点击期刊文章详情内的查询按钮后发起该查询，关闭详情或撤权时取消。`tests/client/reader/ReaderDetails.spec.tsx` 验证请求与撤权。宿主在独立授权开启时解析凭据，合并同一刊名的在途查询，请求启动间隔至少 500 毫秒，并遵守 EasyScholar 的 Retry-After 等待时间。成功结果以密钥与规范刊名的组合摘要为索引，原子写入宿主缓存，最多保留 512 条。记录保存规范刊名、指标和查询时间。六小时内复用结果。设置中的 `refreshJournalMetrics` 使用相同队列更新当前密钥保存的所有期刊，汇报成功数与失败原因。刷新失败时保留已有记录。最后一个调用方取消等待时中止查询；撤销授权或更换凭据会使内存代次失效。查询只向固定 HTTPS 端点发送期刊名与密钥，不跟随重定向。跨重启复用、密钥隔离和刷新失败的回退由 `tests/host/library/journal-metrics-cache.spec.ts` 验证。
 
 宿主以 `officialRank.all` 为准，并用 `officialRank.select` 补齐缺少的指标。`customRank` 为 `null` 时视为没有自定义评级。EasyScholar 的成功响应可能将 `officialRank.all` 和 `officialRank.select` 同时置为 `null`。两者为空且无自定义命中时，宿主缓存空的成功结果。实际错误只向客户端返回分类，避免透出可能包含密钥的原始响应或连接错误。
 
@@ -168,13 +203,3 @@ FTS5 覆盖率按已提交产物的 artifactId、sourceId、generation 与 Markd
 文献库默认只读；开启 `writeEnabled` 后仅允许写入个人库（`zotero://user/0/`）。本地请求严格限制在环回地址，拒绝重定向；外部学术检索由 scholarly 授权，用户主动的 URL PDF 阅读由文献面板独立授权；MinerU 请求只由用户针对具体目标主动提交的 enrichment 解析任务发起；本地语义不联系 MinerU，模型下载独立发起。
 
 无常驻轮询守护进程与遥测收集；核心、scholarly 与 enrichment 的长任务都由 `ctx.jobs` 承载。后台解析与下载在卸载时中止并等待清理，已接纳的前台读取作用域排空后释放。文献轨迹只展示本会话读类工具与导出产生的事实，不记录写入，也不含库外文献；回收站是文献面板专有范围，模型工具 schema 不提供。
-Reader 编辑标注时携带表单所显示的版本。审批后，领域层从锁定的实例读出当前对象，核对标注类型和版本，并将该版本与既有请求头一并随 PATCH 提交到 Zotero。冲突时 Reader 刷新标注列表，由用户决定是否重新提交。`tests/local/write/annotations.spec.ts` 验证 Local API 请求及过期版本拒绝。
-
-Reader 通过 PDF.js viewport 转换文本节点的矩形坐标，每个物理页提交一条原生标注。选区缺少页面几何或文本被截断时禁用创建。计划审查展示各页原文、颜色与评论，领域层在锁定的 Zotero 实例中校验附件，再提交一个批次。回执逐页报告结果。PDF 浏览器 smoke 验证旋转后的逆向跨行、跨页选区，宿主与 Local API 标注测试验证两级审批、原生请求及部分失败或提交情况不明的回执。
-
-Reader 在标量编辑使用的同一版本下合并标注的标签变更，保留未移除标签的类型。删除先在标签页确认具体标注，再经宿主两级审批调用 Zotero 的单条目版本化 DELETE。审批需要活跃轮次时，Reader 保留待提交的编辑或删除确认。版本过期时刷新列表。提交情况不明时返回标注 ref，供用户在 Zotero 核对。Local API 标注测试校验版本头、标签保留和删除结果不明的处理。
-
-取消编辑或删除标注时，若原 Reader 标签页仍可见，焦点回到该标签页内触发操作的按钮。`tests/client/reader/ReaderTab.annotations.spec.tsx` 覆盖同时打开同一附件的两个视图，以及焦点回调前隐藏或关闭原标签页的情况。
-
-Reader 通过核心的 Markdown 笔记流程新建关联笔记。审批后，编辑流程在锁定的 Zotero 实例中核对界面所见版本，只在解析确认的普通文本片段位置写入转义后的文本及可选的粗体、斜体或代码格式，保留周围的 Zotero HTML、引文属性、标注反链及图片。片段内的格式选区使用提交文字的半开 UTF-16 偏移；写入前会校验两个边界，再转义并包裹选中文字。领域层重读保存的笔记以核验版本与内容。永久删除使用同样的版本校验及单条目 DELETE。草稿按 DSH 会话及带服务器限定符的条目存入浏览器会话存储。存储拒绝写入时，当前浏览器标签页在内存保留最多 16 条记录，包括用来覆盖旧存档的清除标记。版本不一致或提交结果未核验时，用户可以打开只读草稿并复制原文。经核验的保存会清除草稿。`tests/local/write/reader-notes.spec.ts` 验证标记保留与回读。宿主和客户端笔记测试覆盖审批、冲突和草稿恢复。
-

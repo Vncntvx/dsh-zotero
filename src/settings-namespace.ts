@@ -21,6 +21,9 @@ export const SCHOLARLY_SETTINGS_NAMESPACE = 'scholarly'
 /** Settings namespace of the document-enrichment component's configuration section. */
 export const ENRICHMENT_SETTINGS_NAMESPACE = 'enrichment'
 
+/** Settings namespace of the optional Reader component. */
+export const READER_SETTINGS_NAMESPACE = 'reader'
+
 /**
  * The wire service key the enrichment component's remote endpoints answer on.
  * Declared in the core's Typert manifest like the library service's, but the

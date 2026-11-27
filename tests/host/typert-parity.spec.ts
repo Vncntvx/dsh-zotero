@@ -15,7 +15,12 @@ import { ZOTERO_INVOCATION_BY_METHOD } from '../../src/wire-schemas.js'
 import { ZoteroRuntime } from '../../src/remote.js'
 import { ZoteroLibraryService } from '../../src/library/service.js'
 import { EnrichmentService } from '../../src/enrichment/service.js'
-import { ZOTERO_LIBRARY_SERVICE_KEY, ZOTERO_STATUS_SERVICE_KEY } from '../../src/contract.js'
+import { ReaderService } from '../../src/reader/service.js'
+import {
+  ZOTERO_LIBRARY_SERVICE_KEY,
+  ZOTERO_READER_SERVICE_KEY,
+  ZOTERO_STATUS_SERVICE_KEY,
+} from '../../src/contract.js'
 import { ZOTERO_ENRICHMENT_SERVICE_KEY } from '../../src/settings-namespace.js'
 
 /** The class behind each manifest service key. */
@@ -23,6 +28,7 @@ const SERVICE_CLASSES = new Map<unknown, { new (...args: never[]): object; name:
   [ZOTERO_STATUS_SERVICE_KEY, ZoteroRuntime],
   [ZOTERO_LIBRARY_SERVICE_KEY, ZoteroLibraryService],
   [ZOTERO_ENRICHMENT_SERVICE_KEY, EnrichmentService],
+  [ZOTERO_READER_SERVICE_KEY, ReaderService],
 ])
 
 /**
@@ -31,6 +37,7 @@ const SERVICE_CLASSES = new Map<unknown, { new (...args: never[]): object; name:
  */
 const NON_WIRE_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   [ZOTERO_STATUS_SERVICE_KEY]: ['debugEnabled'],
+  [ZOTERO_READER_SERVICE_KEY]: ['currentConfig'],
   [ZOTERO_LIBRARY_SERVICE_KEY]: ['readResolvedUrlPdf'],
   // `lookup` is the core's FulltextEnhancer seam, `parseWire`/`storeFor` are
   // component internals, `hitResultOf`/`lookupArtifactFrom` are the read-only
