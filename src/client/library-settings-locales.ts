@@ -9,7 +9,7 @@ export const libraryEn = {
   journalMetricsEnableHint:
     'Enable this option and save your EasyScholar key to look up metrics as you browse.',
   journalMetricsDisclosure:
-    'As you browse the Literature panel, the host sends journal names to EasyScholar. This permission applies to clients using this profile.',
+    'The host sends journal names to EasyScholar while you browse the Literature panel or request metrics in Zotero Reader. This permission applies to clients using this profile.',
   journalMetricsRiskTitle: 'Allow EasyScholar lookups?',
   journalMetricsAcknowledge: 'I understand that EasyScholar will receive journal names.',
   journalMetricsAllow: 'Allow journal queries',
@@ -140,7 +140,7 @@ export const libraryZh: Record<keyof typeof libraryEn, string> = {
   journalMetricsEnable: '启用期刊指标',
   journalMetricsEnableHint: '启用后请填写 EasyScholar 密钥并保存，浏览文献时会查询指标',
   journalMetricsDisclosure:
-    '浏览文献面板时，宿主会向 EasyScholar 发送期刊名。使用同一配置的客户端共享此授权',
+    '浏览文献面板或在 Zotero 阅读器中查询指标时，宿主会向 EasyScholar 发送期刊名。使用同一配置的客户端共享此授权',
   journalMetricsRiskTitle: '允许向 EasyScholar 查询指标？',
   journalMetricsAcknowledge: '我了解 EasyScholar 会收到期刊名',
   journalMetricsAllow: '允许查询期刊',

@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, vi } from 'vitest'
 import { artifactIdOf, type ZoteroParseTargetView } from '../../../src/contract.ts'
-import { ParsedDocumentTab } from '../../../src/client/components/library/ParsedDocumentTab.tsx'
+import { ParsedDocumentLoader } from '../../../src/client/components/library/ParsedDocumentLoader.tsx'
 import {
   PARSED_TAB_KIND,
   parsedArtifactTabAddress,
@@ -70,7 +70,7 @@ async function setup(
   owned.push(dispose)
   for (const entry of world.injected.filter(({ name }) => name === 'sidebar.right.pane.tab'))
     entry.register()
-  const registered = world.registered.find(({ component }) => component === ParsedDocumentTab)!
+  const registered = world.registered.find(({ component }) => component === ParsedDocumentLoader)!
   const { parse } = (registered.options.inject as () => { parse: DocumentParseSurfacePort })()
   async function complete(
     target: ZoteroParseTargetView,

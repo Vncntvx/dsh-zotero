@@ -6,13 +6,13 @@ import { RemoteError, remoteErrorOf, type RemoteResult } from '@deepseek-ai/dsh-
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type {
   ZoteroArtifactMetadataView,
+  ZoteroArtifactLocationView,
   ZoteroDocumentArtifactRequestView,
   ZoteroDocumentArtifactResultView,
   ZoteroParseTargetView,
   ZoteroParseReceiptView,
 } from '../contract.ts'
 import { artifactIdOf, ZOTERO_ARTIFACT_PAGE_CHARS } from '../contract.ts'
-import { parsedDisplayMarkdown } from './parsed-markdown.ts'
 import { parseParsedTabAddress, type ParsedTabTarget } from './parsed-tab.ts'
 import { isGenericParsedTitle } from '../parsed-title.ts'
 import { en, type ZoteroLocaleKey } from './locales.ts'
@@ -26,8 +26,8 @@ export type ParsedArtifactRead = (
 export interface PreparedParsedDocument {
   readonly metadata: ZoteroArtifactMetadataView
   readonly text: string
-  readonly display: string
   readonly images: Readonly<Record<string, string>>
+  readonly locations?: readonly ZoteroArtifactLocationView[]
   readonly bytes: number
 }
 interface ParsedDocumentProgress {
@@ -537,7 +537,9 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
       const opened = await this.call({ sessionId, op: 'open', requestId, target }, combined)
       if (opened.kind !== 'opened') throw this.failure('parsedErrorMissing')
       reserved =
-        opened.characterCount * 6 + opened.images.reduce((total, image) => total + image.bytes, 0)
+        opened.characterCount * 6 +
+        opened.images.reduce((total, image) => total + image.bytes, 0) +
+        (opened.locations ? JSON.stringify(opened.locations).length * 8 : 0)
       if (this.bytes + reserved > opened.policy.preparedMaxBytes) {
         reserved = 0
         throw this.failure('parsedErrorCapacity')
@@ -633,9 +635,14 @@ export class ParsedDocuments implements ResourceProvider<'zotero-parsed'> {
         .map(([, value]) => value)
         .join('')
       if (text.length !== opened.characterCount) throw this.failure('parsedErrorIncomplete')
-      const display = parsedDisplayMarkdown(text)
       published = true
-      return { metadata: opened, text, display, images: Object.freeze(images), bytes: reserved }
+      return {
+        metadata: opened,
+        text,
+        images: Object.freeze(images),
+        ...(opened.locations && { locations: opened.locations }),
+        bytes: reserved,
+      }
     } finally {
       if (!published) {
         for (const url of Object.values(images)) URL.revokeObjectURL(url)

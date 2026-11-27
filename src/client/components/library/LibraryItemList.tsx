@@ -1,5 +1,5 @@
 import { ContentButton } from '../ContentButton.tsx'
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useLibraryPreferences, useLibraryScroll } from '../../library-preferences.tsx'
 import preferenceCss from '../../library-settings.module.css'
 /**
@@ -16,6 +16,7 @@ import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/clien
 import {
   Button,
   IconWorkspaceTreeOutlineMedium,
+  relativeTime,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from '../IconButton.tsx'
@@ -32,6 +33,11 @@ import css from './library.module.css'
 import { laneTextOf } from './library-errors.ts'
 import { JournalMetricsSummary } from './JournalMetrics.tsx'
 import type { useJournalMetrics } from './useJournalMetrics.ts'
+import {
+  emptyVisits,
+  sameReadingLibrary,
+  type ReadingVisits,
+} from '../../reader/reading-history.ts'
 
 interface ParsedArtifactProbeFace {
   readonly sessionId: string
@@ -44,6 +50,19 @@ interface ParsedArtifactProbeFace {
 interface LibraryItemChat {
   readonly inputActions: InputActions
   readonly signal: AbortSignal
+}
+
+const AGO_KEYS = {
+  minutes: 'parsedManagerAgoMinutes',
+  hours: 'parsedManagerAgoHours',
+  days: 'parsedManagerAgoDays',
+  months: 'parsedManagerAgoMonths',
+  years: 'parsedManagerAgoYears',
+} as const
+
+function agoLabel(t: TranslateNS<'zotero'>, at: number): string {
+  const age = relativeTime(at, Date.now())
+  return t(age.unit === 'now' ? 'parsedManagerAgoNow' : AGO_KEYS[age.unit], { count: age.n })
 }
 
 interface LibraryItemListProps {
@@ -67,6 +86,7 @@ interface LibraryItemListProps {
   /** Zotero's own localized item-type names, for types the plugin table lacks. */
   readonly localizedItemTypes?: ItemTypeLocalizedNames
   readonly journalMetrics?: ReturnType<typeof useJournalMetrics>
+  readonly readingVisits?: ReadingVisits
 }
 
 /**
@@ -256,6 +276,7 @@ function LibraryItemListBody({
   parsedArtifact,
   localizedItemTypes,
   journalMetrics,
+  readingVisits = emptyVisits,
 }: Omit<LibraryItemListProps, 'useContextMenu'> & {
   readonly contextMenu?: ReturnType<NonNullable<LibraryItemListProps['useContextMenu']>>
 }) {
@@ -263,6 +284,16 @@ function LibraryItemListBody({
   const { preferences } = useLibraryPreferences()
   const compact = preferences?.listDensity === 'compact'
   const range = list.phase === 'ready' ? pageRangeOf(list, list.items.length) : undefined
+  const visits = useSyncExternalStore(readingVisits.subscribe, readingVisits.getSnapshot)
+  const lastRead = useMemo(() => {
+    const byRef = new Map<string, number>()
+    for (const { attachmentRef, itemRef, lastVisitedAt } of visits) {
+      if (!itemRef) byRef.set(attachmentRef, lastVisitedAt)
+      else if (sameReadingLibrary(attachmentRef, itemRef) && !byRef.has(itemRef))
+        byRef.set(itemRef, lastVisitedAt)
+    }
+    return byRef
+  }, [visits])
   const parsedRefs = useParsedArtifacts(
     list.phase === 'ready' ? list.items : undefined,
     parsedArtifact,
@@ -331,6 +362,11 @@ function LibraryItemListBody({
             {list.items.map((item) => {
               const isSelected = selectedRef === item.ref
               const hasPdf = isPdfContentType(item.bestAttachmentType)
+              const best = item.bestAttachmentRef
+              const legacyVisit =
+                best && sameReadingLibrary(item.ref, best) ? lastRead.get(best) : undefined
+              const visitedAt = Math.max(lastRead.get(item.ref) ?? -1, legacyVisit ?? -1)
+              const lastVisit = visitedAt >= 0 ? new Date(visitedAt) : undefined
               const isParsed =
                 hasPdf &&
                 item.bestAttachmentRef !== undefined &&
@@ -386,6 +422,15 @@ function LibraryItemListBody({
                         <span className={css.itemType}>
                           {itemTypeLabelOf(item.itemType, localizedItemTypes, t)}
                         </span>
+                        {lastVisit && (
+                          <time
+                            className={css.itemMetaTime}
+                            dateTime={lastVisit.toISOString()}
+                            title={lastVisit.toLocaleString()}
+                          >
+                            {t('libraryLastRead', { date: agoLabel(t, lastVisit.getTime()) })}
+                          </time>
+                        )}
                         {(venue !== undefined || creators !== '') && (
                           <span className={css.itemByline}>
                             {venue !== undefined && (

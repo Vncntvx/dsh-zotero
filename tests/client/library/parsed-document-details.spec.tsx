@@ -3,10 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import {
-  ParsedDocumentTab,
-  ParsedDocumentTitle,
-} from '../../../src/client/components/library/ParsedDocumentTab.tsx'
+import { ParsedDocumentTab } from '../../../src/client/components/library/ParsedDocumentTab.tsx'
+import { ParsedDocumentTitle } from '../../../src/client/components/library/ParsedDocumentTitle.tsx'
 import { documentRead, parsedRuntime, composer, METADATA } from './support/parsed-document.tsx'
 import { ITEM_DETAIL } from '../helpers/library-panel-harness.tsx'
 import { mockT } from '../helpers/mock-translate.ts'

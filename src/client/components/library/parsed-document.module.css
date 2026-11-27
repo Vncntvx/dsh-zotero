@@ -36,6 +36,8 @@
 
 /* The title takes the room it needs and yields it first: at narrow widths the
  * chip already carries the name, so the row never grows taller. */
+/* The toolbar row is UI chrome: take the static 14/22 UI role whole instead of
+ * pairing the user's content font size with a fixed line height. */
 .title {
   flex: 1 1 auto;
   min-width: 0;
@@ -43,10 +45,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--dsw-font-s-14-font-family);
-  font-size: var(--dsh-content-font-size);
-  line-height: var(--dsw-font-s-14-line-height);
-  font-weight: var(--dsw-font-s-strong-14-font-weight);
+  font: var(--dsw-font-s-strong-14);
+  color: var(--dsw-alias-label-primary);
 }
 
 .meta {
@@ -101,6 +101,17 @@
   overflow-wrap: anywhere;
 }
 
+/* A located passage is document selection, not another layer: layer aliases
+ * collapse to the same white as the page in the light theme. */
+.body [data-parsed-passage] {
+  background: var(--dsw-alias-bg-document-selection);
+  outline: 1px solid var(--dsw-alias-border-selected);
+}
+
+.body::highlight(zotero-parsed-cited-text) {
+  background: var(--dsw-alias-bg-document-selection);
+}
+
 .status {
   margin: 0;
 }
@@ -147,4 +158,32 @@
   line-height: var(--dsw-font-xxs-12-line-height);
   white-space: nowrap;
   margin-left: auto;
+}
+
+/* Native disclosures take the theme's 13/500 summary, not the browser's
+ * bold default with its extra indent. */
+.disclosure {
+  margin: 0;
+}
+
+.disclosure summary {
+  padding: 4px 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+/* Page-level loading for a document panel: one 28px spinner and a line of
+ * secondary text, centred in the pane the document will fill. */
+.loadingState {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-s-14);
 }

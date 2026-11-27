@@ -81,6 +81,7 @@ import type {
 } from '../../../contract.ts'
 import css from './library.module.css'
 import noticeCss from '../notice.module.css'
+import type { ReaderNoteOpener, ReaderOpener } from '../../reader/register.ts'
 
 /**
  * The injected face: the panel's wire calls plus the right-sidebar opener. The
@@ -89,6 +90,9 @@ import noticeCss from '../notice.module.css'
  * composer for the chat actions — are always reachable.
  */
 export interface ZoteroLibraryPanelFace extends LibraryPanelWireFace {
+  readonly openReader?: ReaderOpener
+  readonly openReaderNote?: ReaderNoteOpener
+  readonly readingVisits?: import('../../reader/reading-history.ts').ReadingVisits
   /**
    * The panel's in-memory view cache. The client registration owns it and
    * disposes it with the registration, so a panel never outlives its cache and
@@ -319,9 +323,12 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // The pane-tab slot is session-scoped: `props.sessionId` names the
   // conversation this tab belongs to, so file reads and write approvals anchor
   // to it — never to whatever session happens to sit first in the host list.
-  const sessionRunning = props.useSession((snapshot) => snapshot.running && !snapshot.removed)
+  const sessionRunning = props.useSession(
+    ({ running, removed, subagent }) => running && !removed && subagent === null,
+  )
   const {
     resolveAttachment,
+    openReader,
     readUrlPdf: readUrlPdfRequest,
     trackPdf,
     forgetPdf,
@@ -358,6 +365,8 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
   // the export control.
   const canExport = props.useRemoteAccess('zotero/export')
   const canResolveAttachment = props.useRemoteAccess('zotero/resolveAttachment')
+  const canReadNote = props.useRemoteAccess('zotero/readerNote')
+  const openReaderNote = canReadNote ? props.openReaderNote : undefined
   const canReadUrlPdf = props.useRemoteAccess('zotero/readUrlPdf')
   const canOpenProtocol = props.useRemoteAccess('zotero/openProtocol')
   const canQueryMetrics = props.useRemoteAccess('zotero/journalMetrics')
@@ -412,7 +421,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     t,
   )
   const enrichmentMounted = parseSurface.mounted
-  // Local-file reading rides the right reader this session hosts. A missing
+  // Local-Document reading rides the right reader this session hosts. A missing
   // workspace root is fine: `fileAddressFor` resolves absolute paths as-is.
   const openFile = useCallback(
     (path: string): void => {
@@ -432,6 +441,14 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
     [tabInfo?.tab.actions, t, props.sessionId, cwd, accepted.preferences?.localPdfOpenTarget],
   )
 
+  const openAttachment = async (location: ZoteroAttachmentLocationView): Promise<void> => {
+    if (!location.path || !tab || sessionRemoved) throw new Error(t('libraryNoSessionForOpen'))
+    const destination = accepted.preferences?.localPdfOpenTarget === 'float' ? 'float' : 'sidebar'
+    const opened = await openReader?.(props.sessionId, location, destination, tab.signal)
+    tab.signal.throwIfAborted()
+    if (!opened) openFile(location.path)
+  }
+
   const readPdf = useCallback(
     async (ref: string): Promise<void> => {
       if (!tab || sessionRemoved) throw new Error(t('libraryNoSessionForOpen'))
@@ -443,8 +460,18 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
           const url = pdfUrlOf(ref)
           if (!url || !canOpenProtocol || !(await client.openProtocol(url)))
             throw new Error(t('libraryPdfReaderUnavailable'))
-        } else if (location.value.path) openFile(location.value.path)
-        else throw new Error(t('pdfFileNotFound'))
+        } else if (location.value.path) {
+          const destination =
+            accepted.preferences?.localPdfOpenTarget === 'float' ? 'float' : 'sidebar'
+          const opened = await openReader?.(
+            props.sessionId,
+            location.value,
+            destination,
+            tab.signal,
+          )
+          tab.signal.throwIfAborted()
+          if (!opened) openFile(location.value.path)
+        } else throw new Error(t('pdfFileNotFound'))
         return
       }
       if (!accepted.preferences?.allowUrlPdfRead) throw new Error(t('libraryUrlPdfDisabled'))
@@ -476,6 +503,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
       canReadUrlPdf,
       readUrlPdfRequest,
       props.sessionId,
+      openReader,
       cwd,
       trackPdf,
       forgetPdf,
@@ -787,6 +815,7 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   localizedItemTypes={itemTypes.localized}
                   parsedArtifact={parsedArtifact}
                   journalMetrics={metricsEnabled ? metrics : undefined}
+                  readingVisits={props.readingVisits}
                 />
               </div>
               <div
@@ -827,8 +856,14 @@ function ZoteroLibraryPanelBody(props: ZoteroLibraryPanelProps) {
                   childStates={feed.childStates}
                   retryChild={feed.retryChild}
                   readPdf={canResolveAttachment ? readPdf : undefined}
+                  openNote={
+                    openReaderNote
+                      ? (ref, title, signal) => openReaderNote(props.sessionId, ref, title, signal)
+                      : undefined
+                  }
                   parsePdf={parseSurface.openAttachment}
                   openFile={openFile}
+                  openAttachment={openAttachment}
                   resolveAttachment={canResolveAttachment ? props.resolveAttachment : undefined}
                   openProtocol={canOpenProtocol ? client.openProtocol : undefined}
                   exportItem={canExport ? props.export : undefined}

@@ -76,6 +76,8 @@ interface ParsedArtifactFace {
   readonly open: (attachment: ZoteroAttachmentRowView, title: string, itemRef: string) => void
 }
 
+type OpenNote = (ref: string, title: string, signal: AbortSignal) => Promise<boolean>
+
 interface LibraryInspectorProps {
   readonly t: TranslateNS<'zotero'>
   readonly inspector: LibraryItemState | undefined
@@ -89,12 +91,14 @@ interface LibraryInspectorProps {
   readonly locale: AnswerLanguageSource
   /** Opens a local file in the right sidebar reader; undefined when no session can anchor it. */
   readonly openFile: ((path: string) => void) | undefined
+  readonly openAttachment?: (location: ZoteroAttachmentLocationView) => Promise<void>
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
   /** Host-backed protocol launcher from the shared client face. */
   readonly openProtocol?: (url: string) => Promise<boolean>
   /** The panel's export face; the citation-copy controls stay wire-disabled without it. */
   readonly readPdf?: (ref: string) => Promise<void>
+  readonly openNote?: OpenNote
   readonly parsePdf?: (attachment: ZoteroAttachmentRowView) => void
   /** Read-only access to a PDF's parsed result; absent when enrichment is off. */
   readonly parsedArtifact?: ParsedArtifactFace
@@ -248,6 +252,7 @@ function AttachmentItem({
   t,
   attachment,
   openFile,
+  openAttachment,
   resolveAttachment,
   openProtocol,
   readPdf,
@@ -255,6 +260,7 @@ function AttachmentItem({
   readonly t: TranslateNS<'zotero'>
   readonly attachment: ZoteroAttachmentRowView
   readonly openFile: ((path: string) => void) | undefined
+  readonly openAttachment?: (location: ZoteroAttachmentLocationView) => Promise<void>
   readonly resolveAttachment:
     ((ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>) | undefined
   readonly openProtocol?: (url: string) => Promise<boolean>
@@ -279,7 +285,8 @@ function AttachmentItem({
       const res = await resolver(attachment.ref)
       if (res.ok) {
         if (res.value.kind === 'file' && res.value.path) {
-          if (openFile) openFile(res.value.path)
+          if (openAttachment) await openAttachment(res.value)
+          else if (openFile) openFile(res.value.path)
         } else if (res.value.kind === 'url' && res.value.url) {
           const webUrl = webUrlOf(res.value.url)
           if (webUrl === undefined) throw new Error(t('readErrorUrlBlocked'))
@@ -346,13 +353,61 @@ function AttachmentItem({
   )
 }
 
+function OpenNoteButton({
+  t,
+  noteRef,
+  title,
+  open,
+}: {
+  readonly t: TranslateNS<'zotero'>
+  readonly noteRef: string
+  readonly title: string
+  readonly open: OpenNote
+}) {
+  const request = useRef<AbortController>()
+  const [pending, setPending] = useState(false)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => () => request.current?.abort(), [noteRef])
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={css.actionSeat}
+        disabled={pending}
+        onClick={async () => {
+          if (request.current) return
+          const controller = new AbortController()
+          request.current = controller
+          setPending(true)
+          setFailed(false)
+          try {
+            const opened = await open(noteRef, title, controller.signal)
+            if (!controller.signal.aborted) setFailed(!opened)
+          } catch {
+            if (!controller.signal.aborted) setFailed(true)
+          } finally {
+            if (request.current === controller) request.current = undefined
+            if (!controller.signal.aborted) setPending(false)
+          }
+        }}
+      >
+        {t('libraryOpenNoteReader')}
+      </Button>
+      {failed && <span role="alert">{t('libraryOpenNoteReaderFailed')}</span>}
+    </>
+  )
+}
+
 function NoteItem({
   t,
   note,
+  openNote,
   inputActions,
 }: {
   readonly t: TranslateNS<'zotero'>
   readonly note: ZoteroNoteRowView
+  readonly openNote?: OpenNote
   readonly inputActions: InputActions | undefined
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -388,6 +443,9 @@ function NoteItem({
           <span />
         )}
         <div className={css.cardActions}>
+          {openNote && (
+            <OpenNoteButton t={t} noteRef={note.ref} title={t('libraryMetaNote')} open={openNote} />
+          )}
           <CopyButton
             value={note.text}
             label={t('copy')}
@@ -539,6 +597,7 @@ function LibraryInspectorBody({
   inputActions,
   locale,
   openFile,
+  openAttachment,
   resolveAttachment,
   openProtocol,
   retry,
@@ -547,6 +606,7 @@ function LibraryInspectorBody({
   retryChild,
   exportItem,
   readPdf,
+  openNote,
   parsePdf,
   parsedArtifact,
   localizedItemTypes,
@@ -762,6 +822,9 @@ function LibraryInspectorBody({
         {creators !== '' && <p className={css.inspectorCreators}>{creators}</p>}
         {origin !== '' && <p className={css.inspectorOrigin}>{origin}</p>}
         <div className={css.inspectorActions}>
+          {detail.itemType === 'note' && openNote && (
+            <OpenNoteButton t={t} noteRef={detail.ref} title={detail.title} open={openNote} />
+          )}
           {pdfs.length > 0 && (
             <PdfActions
               t={t}
@@ -845,6 +908,7 @@ function LibraryInspectorBody({
               attachment={attachment}
               readPdf={readPdf}
               openFile={openFile}
+              openAttachment={openAttachment}
               resolveAttachment={resolveAttachment}
               openProtocol={openProtocol}
             />
@@ -934,7 +998,13 @@ function LibraryInspectorBody({
           pageTo={(offset) => pageChild('notes', offset)}
         >
           {detail.notes.items.map((note) => (
-            <NoteItem key={note.ref} t={t} note={note} inputActions={inputActions} />
+            <NoteItem
+              key={note.ref}
+              t={t}
+              note={note}
+              inputActions={inputActions}
+              openNote={openNote}
+            />
           ))}
         </ChildSection>
       )}

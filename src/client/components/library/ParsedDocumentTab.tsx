@@ -1,6 +1,14 @@
 import type { ContextMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** One complete parsed-document resource, with host-owned controls and selection menus. */
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import {
   Button,
   IconCheckOutlineRegular,
@@ -14,19 +22,32 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
-import type { ZoteroItemDetailView, ZoteroLibraryItemRequestView } from '../../../contract.ts'
+import type {
+  ZoteroArtifactLocationView,
+  ZoteroItemDetailView,
+  ZoteroLibraryItemRequestView,
+} from '../../../contract.ts'
 import { downloadBlob } from '../../download.ts'
 import { answerLanguageOf, type AnswerLanguageSource } from '../../answer-language.ts'
 import { artifactImageName } from '../../../artifact-images.ts'
 import { extractMarkdownTitleOf, isGenericParsedTitle } from '../../../parsed-title.ts'
 import { parseParsedTabAddress, type ParsedTabTarget } from '../../parsed-tab.ts'
-import {
-  ParsedDocuments,
-  useParsedTitleMeta,
-  type PreparedParsedDocument,
-} from '../../parsed-documents.ts'
+import { findParsedPassage, findParsedRegion } from '../../reader/parsed-passage.ts'
+import type { PdfEvidenceTarget } from '../../../reader/evidence.ts'
+import { refFieldsOf } from '../../../ref-grammar.ts'
+import { ZOTERO_READER_TRANSLATION_SOURCE_CHARS } from '../../../constants.ts'
+import type { PreparedParsedDocument } from '../../parsed-documents.ts'
+import { parsedDisplayMarkdown } from '../../parsed-markdown.ts'
+import { canUseSessionActions } from '../../session-actions.ts'
+import { browserTranslationProvider } from '../../reader/browser-translation.ts'
+import { excerptRegion } from '../../reader/excerpt-region.ts'
+import { excerptPrefix } from '../../reader/pdf-excerpt.ts'
+import { renderedRange } from '../../reader/rendered-range.ts'
+import { ParsedDocumentExcerpt, type ParsedExcerpt } from './ParsedDocumentExcerpt.tsx'
 import {
   useDocumentParseSurface,
   type DocumentParseSurfacePort,
@@ -36,6 +57,15 @@ import { IconButton } from '../IconButton.tsx'
 import { useCopyFeedback } from '../useCopyFeedback.ts'
 import css from './parsed-document.module.css'
 import tipCss from '../tip.module.css'
+
+const LOCATION_LABEL = {
+  text: 'parsedLocation_text',
+  heading: 'parsedLocation_heading',
+  image: 'parsedLocation_image',
+  chart: 'parsedLocation_chart',
+  table: 'parsedLocation_table',
+  equation: 'parsedLocation_equation',
+} as const
 
 export type { ParsedArtifactRead } from '../../parsed-documents.ts'
 export interface ParsedDocumentTabFace {
@@ -51,6 +81,14 @@ export interface ParsedDocumentTabFace {
     signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroItemDetailView>>
   readonly parse?: DocumentParseSurfacePort
+  readonly readerConfig?: Pick<ConfigForm<unknown>, 'getSnapshot' | 'subscribe'>
+  readonly translate?: Parameters<typeof ParsedDocumentExcerpt>[0]['translate']
+  readonly locatePdf?: (
+    sessionId: SessionId,
+    ref: string,
+    evidence: PdfEvidenceTarget,
+    signal: AbortSignal,
+  ) => Promise<boolean>
   /**
    * Raise one transient notice in the shell overlay. It lives there, not in
    * this tab, so closing the tab does not take the report with it.
@@ -63,26 +101,6 @@ export type ParsedDocumentTabProps = PropsRuntime<'sidebar.right.pane.tab'> &
 
 export function extractMarkdownTitle(markdown: string): string | undefined {
   return extractMarkdownTitleOf(markdown)
-}
-
-interface ParsedDocumentTitleFace {
-  /** The lease-free title source; the chip never opens the full document. */
-  readonly documents: ParsedDocuments
-}
-
-export function ParsedDocumentTitle(
-  props: PropsRuntime<'sidebar.right.pane.tab.title'> &
-    InjectFace<ParsedDocumentTitleFace> &
-    PropsLocale<'zotero'>,
-) {
-  const tab = props.useTabInfo().tab
-  const target = useMemo(
-    () => parseParsedTabAddress(tab.navigation.address, tab.navigation.params),
-    [tab.navigation.address, tab.navigation.params],
-  )
-  const meta = useParsedTitleMeta(props.documents, tab.navigation.address, target)
-  if (target === undefined) return props.t('tabParsedFallback')
-  return meta.title || target.title || props.t('tabParsedFallback')
 }
 
 export function ParsedDocumentTab(props: ParsedDocumentTabProps) {
@@ -244,14 +262,24 @@ export function extractSelectionMarkdown(range: Range, figures?: FigureNames): s
 function ParsedDocumentView(
   props: ParsedDocumentTabProps & { readonly target: ParsedTabTarget; readonly address: string },
 ) {
-  const { t, item, parse, target, address, refresh, inputActions } = props
+  const { t, item, parse, target, address, refresh, inputActions, readerConfig } = props
   const artifactAllowed = props.useAccess('zotero/documentArtifact')
+  const resolveAllowed = props.useAccess('zotero/resolveAttachment')
+  const bytesAllowed = props.useAccess('workspaceFiles/readBytes')
   const receiptAllowed = props.useAccess('zotero/documentParseReceipt')
   const listAllowed = props.useAccess('job/list')
   const followAllowed = props.useAccess('job/follow')
   const startAllowed = props.useAccess('zotero/startDocumentParse')
   const cancelAllowed = props.useAccess('job/kill')
   const sessionAllowed = !props.useSession((snapshot) => snapshot.removed)
+  const modelSessionAllowed = props.useSession(canUseSessionActions)
+  const modelAccess = props.useRemoteAccess?.('zotero/readerTranslate')
+  const readerStatus = useSyncExternalStore(
+    useCallback((notify) => readerConfig?.subscribe(notify) ?? (() => {}), [readerConfig]),
+    () => readerConfig?.getSnapshot().status,
+  )
+  const translate =
+    readerStatus === 'ready' && modelSessionAllowed && modelAccess ? props.translate : undefined
   const resource = props.useResource<'zotero-parsed'>(address)
   const document =
     artifactAllowed && sessionAllowed && resource.value?.phase !== 'denied'
@@ -275,8 +303,14 @@ function ParsedDocumentView(
   const selectionOwner = useId()
   const { contextMenus } = props
   const [insertError, setInsertError] = useState<string>()
+  const [locateError, setLocateError] = useState(false)
+  const [excerpt, setExcerpt] = useState<ParsedExcerpt>()
+  const selections = useRef(new WeakMap<object, Range>())
   const documentRef = useRef<HTMLDivElement>(null)
+  const markdownRef = useRef<HTMLDivElement>(null)
   const escape = useRef(new AbortController())
+  const pdfJump = useRef<AbortController>()
+  const pdfAccessAllowed = resolveAllowed && bytesAllowed
   const titleId = useId()
   const copy = useCopyFeedback(address)
   const copyDocument = useCopyFeedback(document?.metadata.artifactId, document?.text)
@@ -312,11 +346,18 @@ function ParsedDocumentView(
     escape.current = abort
     return () => abort.abort()
   }, [address, document?.metadata.artifactId])
+  useEffect(() => {
+    setLocateError(false)
+    return () => pdfJump.current?.abort()
+  }, [pdfAccessAllowed, document?.metadata.artifactId])
   // Registration effects run after render has installed the current actions below.
   const selectionActions = useRef<{
     explain(text: string): void
     copy(text: string): void
     enabled: boolean
+    locate?: (quote: string) => void
+    excerpt?: (selection: object, kind: ParsedExcerpt['kind']) => void
+    canTranslate?: boolean
   }>()
   useEffect(
     () =>
@@ -341,6 +382,34 @@ function ParsedDocumentView(
                   icon: { key: 'zotero.selection.copy' },
                   run: () => selectionActions.current!.copy(selection.text),
                 },
+                ...(selection.quote && selectionActions.current!.locate
+                  ? [
+                      {
+                        id: 'locate-pdf',
+                        label: t('parsedLocatePdf'),
+                        run: () => selectionActions.current?.locate?.(selection.quote!),
+                      },
+                    ]
+                  : []),
+                ...(selections.current.has(selection) && selectionActions.current?.excerpt
+                  ? [
+                      {
+                        id: 'capture-excerpt',
+                        label: t('parsedCaptureExcerpt'),
+                        run: () => selectionActions.current?.excerpt?.(selection, 'capture'),
+                      },
+                      ...(selectionActions.current.canTranslate
+                        ? [
+                            {
+                              id: 'translate-excerpt',
+                              label: t('parsedTranslateExcerpt'),
+                              run: () =>
+                                selectionActions.current?.excerpt?.(selection, 'translate'),
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
               ],
       }),
     [contextMenus, selectionOwner, t, inputActions],
@@ -359,7 +428,10 @@ function ParsedDocumentView(
     const update = (point?: { x: number; y: number }) => {
       if (pointerSelecting || keyboardSelecting) return
       const selection = window.getSelection()
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+        previous = undefined
+        return
+      }
       const range = selection.getRangeAt(0)
       if (!documentRef.current?.contains(range.commonAncestorContainer)) return
       const text = extractSelectionMarkdown(range, figures)
@@ -390,8 +462,12 @@ function ParsedDocumentView(
       const backwards =
         selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset
       const rect = (backwards ? rects[0] : rects.at(-1)) ?? range.getBoundingClientRect()
+      const raw = range.toString().trim()
+      const value = { owner: selectionOwner, text, ...(raw.length <= 2_000 ? { quote: raw } : {}) }
+      if (raw && markdownRef.current?.contains(range.commonAncestorContainer))
+        selections.current.set(value, range.cloneRange())
       contextMenus.open(
-        { kind: 'zoteroSelection', value: { owner: selectionOwner, text } },
+        { kind: 'zoteroSelection', value },
         point ?? { x: backwards ? rect.left : rect.right, y: rect.bottom },
       )
     }
@@ -457,6 +533,80 @@ function ParsedDocumentView(
       closeOwned()
     }
   }, [contextMenus, selectionOwner, figures, notify, t])
+
+  const navigation = tabInfo.tab.navigation.params
+  const passage = navigation && 'parsedPassage' in navigation ? navigation.parsedPassage : undefined
+  const locationList = useRef<HTMLDetailsElement>(null)
+  const locationMatch =
+    passage?.region &&
+    document?.locations &&
+    passage.attachmentRef === document.metadata.sourceRef &&
+    passage.fingerprint === document.metadata.fingerprint
+      ? findParsedRegion(document.locations, passage.region)
+      : undefined
+  const [passageStatus, setPassageStatus] = useState<
+    ReturnType<typeof findParsedPassage>['status'] | 'parsedRegionFound' | 'parsedRegionMissing'
+  >()
+  useEffect(() => {
+    const body = markdownRef.current
+    if (!passage || !document || !body) {
+      setPassageStatus(undefined)
+      return
+    }
+    if (passage.textRange) {
+      if (
+        passage.fingerprint !== document.metadata.fingerprint ||
+        passage.attachmentRef !== document.metadata.sourceRef
+      ) {
+        setPassageStatus('parsedPassageChanged')
+        return
+      }
+      const range = renderedRange(body, passage.textRange)
+      if (!range || (passage.textPrefix && !range.toString().startsWith(passage.textPrefix))) {
+        setPassageStatus('parsedPassageMissing')
+        return
+      }
+      setPassageStatus('parsedPassageFound')
+      range.startContainer.parentElement?.scrollIntoView?.({ block: 'center' })
+      if (!globalThis.CSS?.highlights || typeof Highlight !== 'function') return
+      const name = 'zotero-parsed-cited-text'
+      const marks = CSS.highlights.get(name) ?? new Highlight()
+      marks.add(range)
+      CSS.highlights.set(name, marks)
+      return () => {
+        marks.delete(range)
+        if (!marks.size && CSS.highlights.get(name) === marks) CSS.highlights.delete(name)
+      }
+    }
+    if (locationMatch !== undefined && locationList.current) {
+      setPassageStatus('parsedRegionFound')
+      locationList.current.open = true
+      const label = document.locations?.[locationMatch]?.label
+      const match =
+        label && findParsedPassage(body, document.metadata, { ...passage, quote: label })
+      const block = match ? match.block : undefined
+      if (!block) {
+        locationList.current
+          .querySelector('[data-parsed-passage]')
+          ?.scrollIntoView?.({ block: 'center' })
+        return
+      }
+      block.setAttribute('data-parsed-passage', '')
+      block.scrollIntoView?.({ block: 'center' })
+      return () => block.removeAttribute('data-parsed-passage')
+    }
+    const match = findParsedPassage(body, document.metadata, passage)
+    setPassageStatus(
+      passage.region && !passage.quote && match.status === 'parsedPassageMissing'
+        ? 'parsedRegionMissing'
+        : match.status,
+    )
+    const { block } = match
+    if (!block) return
+    block.setAttribute('data-parsed-passage', '')
+    block.scrollIntoView?.({ block: 'center' })
+    return () => block.removeAttribute('data-parsed-passage')
+  }, [document, locationMatch, passage, tabInfo.tab.navigation.revision])
 
   const extractedTitle = useMemo(
     () =>
@@ -530,10 +680,109 @@ function ParsedDocumentView(
     resource.status === 'loading' ||
     (resource.value?.phase === 'preparing' && resource.status !== 'failed')
   const progress = resource.value?.progress
+  const fingerprint = document?.metadata.fingerprint
+  const sourceRef = document?.metadata.sourceRef ?? target.ref
+  const identity = document?.metadata.sourceRef
+    ? refFieldsOf(document.metadata.sourceRef)
+    : undefined
+  const quoteLocation =
+    inputActions &&
+    document &&
+    identity?.kind === 'attachment' &&
+    identity.serverId &&
+    fingerprint &&
+    /^[a-f0-9]{64}$/u.test(fingerprint)
+      ? ({ pageIndex, box, label, kind }: ZoteroArtifactLocationView, title: string) => {
+          const source = {
+            attachmentRef: sourceRef,
+            itemRef: target.item,
+            instanceId: identity.serverId,
+            libraryRef: `zotero://${identity.libraryType}/${identity.libraryId}/`,
+            title: `${displayTitle.slice(0, 250)} · ${(label || title).slice(0, 220)}`,
+            fingerprint: `sha256:${fingerprint}`,
+            sourceType: 'mineru',
+            artifactId: document.metadata.artifactId,
+            entryKind: kind,
+            pages: [{ pageIndex, artifactBox: box }],
+          }
+          const body = label ? `${title}\n${label}` : title
+          const inserted = inputActions.insertQuote(`${body}\n\n${JSON.stringify(source)}`, {
+            label: t('parsedQuoteLocation'),
+            title: displayTitle,
+            detail: title,
+            body,
+          })
+          if (inserted) inputActions.persistDraft()
+          setInsertError(inserted ? undefined : t('libraryInsertFailed'))
+        }
+      : undefined
+  const locateInPdf =
+    props.locatePdf &&
+    pdfAccessAllowed &&
+    refFieldsOf(sourceRef)?.kind === 'attachment' &&
+    fingerprint !== undefined &&
+    /^[a-f0-9]{64}$/u.test(fingerprint)
+      ? props.locatePdf
+      : undefined
+  const openSourcePdf = (evidence: PdfEvidenceTarget) => {
+    if (!locateInPdf) return
+    pdfJump.current?.abort()
+    const jump = new AbortController()
+    pdfJump.current = jump
+    const { signal } = jump
+    setLocateError(false)
+    void locateInPdf(props.sessionId, sourceRef, evidence, signal).then(
+      (opened) => {
+        if (!opened && !signal.aborted) setLocateError(true)
+      },
+      () => {
+        if (!signal.aborted) setLocateError(true)
+      },
+    )
+  }
   selectionActions.current = {
     explain: (text) => void explain({ text }),
     copy: (text) => copy.copyText(text),
     enabled: inputActions !== undefined,
+    canTranslate: Boolean(translate || browserTranslationProvider()),
+    excerpt:
+      document && (!excerpt || excerpt.signal.aborted)
+        ? (selection, kind) => {
+            const body = markdownRef.current
+            const range = selections.current.get(selection)
+            if (!body || !range || !body.contains(range.commonAncestorContainer)) return
+            const raw = range.toString()
+            const text = excerptPrefix(raw, ZOTERO_READER_TRANSLATION_SOURCE_CHARS)
+            if (!text.trim()) return
+            const prefix = range.cloneRange()
+            prefix.selectNodeContents(body)
+            prefix.setEnd(range.startContainer, range.startOffset)
+            const start = prefix.toString().length
+            setExcerpt({
+              kind,
+              signal: escape.current.signal,
+              text,
+              textRange: { start, end: start + text.length },
+              artifactId: document.metadata.artifactId,
+              truncated: text.length < raw.length,
+              region:
+                kind === 'capture' && text.length === raw.length
+                  ? excerptRegion(body, range)
+                  : undefined,
+            })
+          }
+        : undefined,
+    ...(locateInPdf && fingerprint
+      ? {
+          locate: (quote: string) => {
+            openSourcePdf({
+              quote,
+              sourceType: 'mineru',
+              contentFingerprint: `sha256:${fingerprint}`,
+            })
+          },
+        }
+      : {}),
   }
   return (
     <section className={css.surface} aria-labelledby={titleId}>
@@ -624,6 +873,33 @@ function ParsedDocumentView(
           {insertError}
         </p>
       )}
+      {locateError && (
+        <p role="alert" className={css.banner}>
+          {t('parsedLocatePdfFailed')}
+        </p>
+      )}
+      {passageStatus && (
+        <p role="status" className={css.progress}>
+          {t(passageStatus)}
+        </p>
+      )}
+      {document &&
+        excerpt &&
+        !excerpt.signal.aborted &&
+        excerpt.artifactId === document.metadata.artifactId && (
+          <ParsedDocumentExcerpt
+            key={excerpt.kind === 'translate' && translate ? 'session-model' : excerpt.kind}
+            excerpt={excerpt}
+            title={displayTitle}
+            sessionId={props.sessionId}
+            fingerprint={document.metadata.fingerprint}
+            attachmentRef={document.metadata.sourceRef}
+            language={props.locale.getSnapshot().active}
+            inputActions={inputActions}
+            translate={translate}
+            onClose={() => setExcerpt(undefined)}
+          />
+        )}
       {preparing && (
         <p role="status" className={css.progress}>
           <TextShimmer active>
@@ -639,7 +915,51 @@ function ParsedDocumentView(
         </p>
       )}
       <div className={css.body} ref={documentRef}>
-        {document && <ParsedMarkdown document={document} labels={labels} />}
+        {document?.locations &&
+          fingerprint &&
+          (locateInPdf || quoteLocation || locationMatch !== undefined) && (
+            <details ref={locationList} className={css.disclosure}>
+              <summary>{t('parsedLocations')}</summary>
+              <ol>
+                {document.locations.map((entry, index) => {
+                  const { kind, pageIndex, box, label } = entry
+                  const title = t('parsedLocationPage', {
+                    page: pageIndex + 1,
+                    type: t(LOCATION_LABEL[kind]),
+                  })
+                  return (
+                    <li key={index} data-parsed-passage={locationMatch === index ? '' : undefined}>
+                      <p>
+                        {title}
+                        {label ? ` · ${label}` : ''}
+                      </p>
+                      {locateInPdf && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            openSourcePdf({
+                              artifactRegion: { pageIndex, box },
+                              contentFingerprint: `sha256:${fingerprint}`,
+                            })
+                          }
+                        >
+                          {t('parsedLocatePdf')}
+                        </Button>
+                      )}
+                      {quoteLocation && (
+                        <Button size="sm" onClick={() => quoteLocation(entry, title)}>
+                          {t('parsedQuoteLocation')}
+                        </Button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ol>
+            </details>
+          )}
+        <div ref={markdownRef}>
+          {document && <ParsedMarkdown document={document} labels={labels} />}
+        </div>
         {!document && resource.status === 'none' && (
           <p className={css.status}>{t('parsedUnavailable')}</p>
         )}
@@ -667,6 +987,7 @@ function ParsedMarkdown({
   document: PreparedParsedDocument
   labels: import('@deepseek-ai/dsh-client-ui-primitives').MarkdownLabels
 }) {
+  const display = useMemo(() => parsedDisplayMarkdown(document.text), [document.text])
   const pathImages = useMemo(
     () => ({
       resolve: (value: string) => {
@@ -676,5 +997,5 @@ function ParsedMarkdown({
     }),
     [document],
   )
-  return <MarkdownText text={document.display} labels={labels} pathImages={pathImages} />
+  return <MarkdownText text={display} labels={labels} pathImages={pathImages} />
 }

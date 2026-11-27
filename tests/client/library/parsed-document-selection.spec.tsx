@@ -32,7 +32,7 @@ afterEach(async () => {
 })
 async function select() {
   const range = document.createRange()
-  range.selectNodeContents(screen.getByText('Selected passage'))
+  range.selectNodeContents(await screen.findByText('Selected passage'))
   window.getSelection()!.removeAllRanges()
   window.getSelection()!.addRange(range)
   await act(async () => {
@@ -331,7 +331,10 @@ it.each([false, true])(
     await act(async () => document.dispatchEvent(new Event('selectionchange')))
     await screen.findByRole('menu')
     expect(open).toHaveBeenCalledWith(
-      { kind: 'zoteroSelection', value: { owner: expect.any(String), text: 'Selected passage' } },
+      {
+        kind: 'zoteroSelection',
+        value: { owner: expect.any(String), text: 'Selected passage', quote: 'Selected passage' },
+      },
       backwards ? { x: 40, y: 30 } : { x: 200, y: 60 },
     )
   },

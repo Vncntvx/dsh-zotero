@@ -8,6 +8,7 @@
  * an explicit navigation parameter wins over the query after a restore.
  * @module dsh-zotero/client/parsed-tab
  */
+import type { PdfArtifactRegion, TextRange } from '../reader/evidence.ts'
 
 /** The tab kind the parsed-document page registers under. */
 export const PARSED_TAB_KIND = 'zotero-parsed'
@@ -15,7 +16,28 @@ export const PARSED_TAB_KIND = 'zotero-parsed'
 /** The address glob every parsed-document tab matches. */
 export const PARSED_TAB_PATTERN = 'dsh-resource://zotero-parsed/**'
 
+export const MAX_PARSED_CITATION_PREFIX = 96
+
 const PREFIX = 'dsh-resource://zotero-parsed/'
+
+export interface ParsedPassage {
+  readonly quote?: string
+  readonly region?: PdfArtifactRegion
+  readonly fingerprint: string
+  readonly attachmentRef?: string
+  readonly textRange?: TextRange
+  readonly textPrefix?: string
+}
+
+declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
+  interface SidebarRightResourceParamsMap {
+    'zotero-parsed': {
+      readonly title?: string
+      readonly item?: string
+      readonly parsedPassage?: ParsedPassage
+    }
+  }
+}
 
 /** What one parsed-document tab shows. */
 export interface ParsedTabTarget {

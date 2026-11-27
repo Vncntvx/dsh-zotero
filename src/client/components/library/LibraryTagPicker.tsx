@@ -304,7 +304,7 @@ function TagOptions({ t, face, library, value, change, enabled, tagsRefresh }: T
               <span className={css.collectionTagStatus} role="alert">
                 {error}
               </span>
-            )}gi
+            )}
             <Button
               variant="outline"
               size="sm"

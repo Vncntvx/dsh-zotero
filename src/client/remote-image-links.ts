@@ -7,7 +7,7 @@ import { math } from 'micromark-extension-math'
 import type { Nodes } from 'mdast'
 import { webUrlOf } from './actions/web-url.ts'
 
-export function remoteImageLinks(markdown: string): string {
+export function remoteImageLinks(markdown: string, imagePlaceholder?: string): string {
   const root = fromMarkdown(markdown, {
     extensions: [gfm({ singleTilde: false }), math()],
     mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
@@ -23,20 +23,18 @@ export function remoteImageLinks(markdown: string): string {
   })
   const edits: { start: number; end: number; text: string }[] = []
   walk(root, (node) => {
+    if (node.type !== 'image' && node.type !== 'imageReference') return
     const destination =
-      node.type === 'image'
-        ? node.url
-        : node.type === 'imageReference'
-          ? definitions.get(node.identifier.toUpperCase())
-          : undefined
-    if (destination === undefined || !/^https?:/i.test(destination)) return
+      node.type === 'image' ? node.url : definitions.get(node.identifier.toUpperCase())
+    if (imagePlaceholder === undefined && (!destination || !/^https?:/i.test(destination))) return
     // fromMarkdown always attaches source offsets; the tree is never transformed.
     const start = node.position!.start.offset!
     const end = node.position!.end.offset!
-    const label = (
-      (node.type === 'image' || node.type === 'imageReference' ? node.alt : '') || destination
-    ).replace(/[\\\[\]]/g, '\\$&')
-    const url = webUrlOf(destination)
+    const label = (node.alt || imagePlaceholder || destination || '').replace(
+      imagePlaceholder === undefined ? /[\\\[\]]/g : /[!-\/:-@\[-`{-~]/g,
+      '\\$&',
+    )
+    const url = imagePlaceholder === undefined ? webUrlOf(destination!) : undefined
     edits.push({
       start,
       end,

@@ -3,11 +3,18 @@ import { parseReceipt } from '../enrichment/support/parse-ports.ts'
 /** Resource revocation, bounded preparation and explicit failure recovery. */
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { documentRead, parsedRuntime, type ArtifactAnswer } from './support/parsed-document.tsx'
+import {
+  documentRead,
+  METADATA,
+  parsedRuntime,
+  SESSION,
+  type ArtifactAnswer,
+} from './support/parsed-document.tsx'
 import { deferred } from '../../helpers/sync.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { zh } from '../../../src/client/locales.ts'
 import { parsedArtifactTabAddress, parsedTabAddress } from '../../../src/client/parsed-tab.ts'
+import { artifactIdOf } from '../../../src/contract.ts'
 
 const owned: Awaited<ReturnType<typeof parsedRuntime>>[] = []
 afterEach(async () => {
@@ -281,6 +288,82 @@ it('reparses an artifact-addressed document through its own opaque target', asyn
   await tick()
   fireEvent.click(screen.getByRole('button', { name: mockT('libraryParsedReparse') }))
   expect(screen.getByRole('dialog')).toBeDefined()
+})
+
+it('matches a restored parsed tab to the current generation using host metadata', async () => {
+  const read = documentRead('# Before reparse')
+  const runtime = await parsedRuntime(read)
+  owned.push(runtime)
+  const previous = parsedArtifactTabAddress({ sessionId: SESSION, artifactId: METADATA.artifactId })
+  const artifactId = artifactIdOf('d'.repeat(64))!
+  const receipt = parseReceipt({ artifactId, sourceId: METADATA.sourceId })
+  const signal = new AbortController().signal
+  await expect(
+    runtime.documents.belongsTo(
+      previous,
+      SESSION,
+      { kind: 'artifact', artifactId },
+      receipt,
+      artifactId,
+      signal,
+    ),
+  ).resolves.toBe(true)
+  expect(read).toHaveBeenCalledWith(
+    {
+      sessionId: SESSION,
+      op: 'meta',
+      target: { kind: 'artifact', artifactId: METADATA.artifactId },
+    },
+    expect.any(AbortSignal),
+  )
+})
+
+it('keeps a restored parsed tab when metadata belongs to a different source', async () => {
+  const runtime = await parsedRuntime(documentRead('# Other article'))
+  owned.push(runtime)
+  const previous = parsedArtifactTabAddress({ sessionId: SESSION, artifactId: METADATA.artifactId })
+  const artifactId = artifactIdOf('d'.repeat(64))!
+  await expect(
+    runtime.documents.belongsTo(
+      previous,
+      SESSION,
+      { kind: 'artifact', artifactId },
+      parseReceipt({ artifactId }),
+      artifactId,
+      new AbortController().signal,
+    ),
+  ).resolves.toBe(false)
+})
+
+it('aborts a restored parsed tab metadata read when session access is revoked', async () => {
+  const base = documentRead('# Before reparse')
+  const read = documentRead('# Before reparse')
+  const pending = deferred<void>()
+  const entered = deferred<AbortSignal | undefined>()
+  read.mockImplementation(async (request, signal) => {
+    if (request.op === 'meta') {
+      entered.resolve(signal)
+      await pending.promise
+    }
+    return await base(request, signal)
+  })
+  const runtime = await parsedRuntime(read)
+  owned.push(runtime)
+  const previous = parsedArtifactTabAddress({ sessionId: SESSION, artifactId: METADATA.artifactId })
+  const artifactId = artifactIdOf('d'.repeat(64))!
+  const match = runtime.documents.belongsTo(
+    previous,
+    SESSION,
+    { kind: 'artifact', artifactId },
+    parseReceipt({ artifactId, sourceId: METADATA.sourceId }),
+    artifactId,
+    new AbortController().signal,
+  )
+  const signal = await entered.promise
+  runtime.access.publish(false)
+  expect(signal?.aborted).toBe(true)
+  pending.resolve()
+  await expect(match).rejects.toMatchObject({ name: 'AbortError' })
 })
 
 it('reports a thrown non-error as the failure text', async () => {

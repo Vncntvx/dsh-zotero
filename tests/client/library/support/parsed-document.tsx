@@ -13,9 +13,9 @@ import {
 } from '../../../../src/client/parsed-documents.ts'
 import {
   ParsedDocumentTab,
-  ParsedDocumentTitle,
   type ParsedDocumentTabProps,
 } from '../../../../src/client/components/library/ParsedDocumentTab.tsx'
+import { ParsedDocumentTitle } from '../../../../src/client/components/library/ParsedDocumentTitle.tsx'
 import { parsedTabAddress } from '../../../../src/client/parsed-tab.ts'
 import { ARTIFACT_READER_DEFAULTS } from '../../../../src/artifact-reader-preferences.ts'
 import {
@@ -46,6 +46,8 @@ export function documentRead(
   options: {
     artifactId?: string
     title?: string
+    sourceRef?: string
+    locations?: readonly import('../../../../src/contract.ts').ZoteroArtifactLocationView[]
     images?: { name: string; mediaType: 'image/png'; bytes: number; base64: string }[]
   } = {},
 ) {
@@ -53,6 +55,7 @@ export function documentRead(
     ...METADATA,
     characterCount: text.length,
     artifactId: options.artifactId ?? METADATA.artifactId,
+    ...(options.sourceRef ? { sourceRef: options.sourceRef } : {}),
     images: (options.images ?? []).map(({ base64: _base64, ...image }) => image),
   }
   return vi.fn<ParsedArtifactRead>(async (request) => {
@@ -94,6 +97,7 @@ export function documentRead(
           policy: ARTIFACT_READER_DEFAULTS,
           expiresAt: Date.now() + 120_000,
           page,
+          ...(options.locations && { locations: options.locations }),
         },
       }
     if (request.op === 'page')
@@ -181,6 +185,8 @@ export async function parsedRuntime(
       parse?: boolean
       item?: ParsedDocumentTabProps['item']
       title?: string
+      passage?: import('../../../../src/client/parsed-tab.ts').ParsedPassage
+      locatePdf?: ParsedDocumentTabProps['locatePdf']
       itemRef?: string
       address?: string
     } = {},
@@ -193,6 +199,7 @@ export async function parsedRuntime(
       documents,
       locale: { getSnapshot: () => ({ active: 'en' }) },
       item: options.item,
+      locatePdf: options.locatePdf,
       inputActions: options.actions,
       notify,
       useResource: () => useSyncExternalStore(source.subscribe, source.getSnapshot),
@@ -208,6 +215,7 @@ export async function parsedRuntime(
             address: options.address ?? ADDRESS,
             params: {
               title: options.title ?? 'Paper',
+              ...(options.passage ? { parsedPassage: options.passage } : {}),
               ...(options.itemRef ? { item: options.itemRef } : {}),
             },
           },

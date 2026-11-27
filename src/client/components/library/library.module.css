@@ -916,6 +916,15 @@
   flex: none;
 }
 
+.itemMetaTime {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-secondary);
+}
+
 .itemType {
   flex: none;
   display: inline-flex;
