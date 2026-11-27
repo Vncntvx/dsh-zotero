@@ -31,9 +31,11 @@ import type {
   ZoteroInclude,
   ZoteroExportFormat,
   ZoteroSortField,
+  ZoteroNoteTextEdit,
 } from './types.js'
 import type { SourceWorkspace } from './sources/model.js'
 import type { SourceFilter } from './sources/filters.js'
+import type { PdfAnnotationSelectionPage, PdfPageRegion } from './reader/evidence.js'
 import { ZOTERO_SETTINGS_NAMESPACE, ZOTERO_ENRICHMENT_SERVICE_KEY } from './settings-namespace.js'
 
 /** Shared parse and URL-PDF boundary identities. */
@@ -171,6 +173,7 @@ export interface ZoteroStatusView {
 /** The attachment location view returned by the resolveAttachment Remote invocation. */
 export interface ZoteroAttachmentLocationView {
   readonly ref: string
+  readonly parentRef?: string
   readonly kind: 'file' | 'url'
   readonly title: string
   readonly contentType: string
@@ -621,7 +624,15 @@ export type ZoteroArtifactImageMediaType =
   'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp'
 
 export type ZoteroDocumentArtifactRequestView =
-  | { readonly sessionId: string; readonly op: 'inspect'; readonly target: ZoteroParseTargetView }
+  | {
+      readonly sessionId: string
+      readonly op: 'inspect'
+      readonly target: ZoteroParseTargetView
+      readonly regionText?: {
+        readonly fingerprint: string
+        readonly regions: readonly ZoteroArtifactTextRegion[]
+      }
+    }
   | {
       readonly sessionId: string
       readonly op: 'open'
@@ -657,6 +668,7 @@ export interface ZoteroArtifactImageView {
 
 export interface ZoteroArtifactMetadataView {
   readonly sourceId: string
+  readonly sourceRef?: string
   readonly targetLabel: string
   readonly mode: 'free' | 'pro'
   readonly artifactId: string
@@ -679,10 +691,34 @@ export interface ZoteroArtifactPageView {
   readonly totalChars: number
 }
 
+export const ZOTERO_ARTIFACT_LOCATION_LIMIT = 240
+export const ZOTERO_ARTIFACT_LOCATION_LABEL_CHARS = 160
+export const ZOTERO_ARTIFACT_REGION_TEXT_CHARS = 8_000
+
+export interface ZoteroArtifactLocationView {
+  readonly kind: 'text' | 'heading' | 'image' | 'chart' | 'table' | 'equation'
+  readonly pageIndex: number
+  /** MinerU's visual page coordinates, top-left origin and 0–1000 scale. */
+  readonly box?: readonly [number, number, number, number]
+  readonly label?: string
+}
+
+export interface ZoteroArtifactRegionTextView {
+  readonly text: string
+  readonly incomplete: boolean
+}
+
+export type ZoteroArtifactTextRegion = Required<
+  Pick<ZoteroArtifactLocationView, 'pageIndex' | 'box'>
+>
+
 export type ZoteroDocumentArtifactResultView =
   | { readonly kind: 'missing' | 'expired' }
   | { readonly kind: 'released' }
-  | ({ readonly kind: 'ready' } & ZoteroArtifactMetadataView)
+  | ({
+      readonly kind: 'ready'
+      readonly regionText?: ZoteroArtifactRegionTextView
+    } & ZoteroArtifactMetadataView)
   | ({ readonly kind: 'meta'; readonly currentArtifactId?: string } & ZoteroArtifactMetadataView)
   | { readonly kind: 'probed'; readonly results: readonly ZoteroArtifactProbeResultView[] }
   | ({
@@ -691,6 +727,7 @@ export type ZoteroDocumentArtifactResultView =
       readonly expiresAt: number
       readonly policy: ArtifactReaderPreferences
       readonly page: ZoteroArtifactPageView
+      readonly locations?: readonly ZoteroArtifactLocationView[]
     } & ZoteroArtifactMetadataView)
   | {
       readonly kind: 'page'
@@ -1255,8 +1292,104 @@ export interface ZoteroAnnotationRowView {
   readonly comment?: string
   readonly color?: string
   readonly pageLabel?: string
+  readonly version?: number
+  readonly tags?: readonly string[]
+  readonly position?: PdfPageRegion
   readonly parentRef?: string
 }
+
+export type ZoteroReaderAnnotationsRequest = Pick<
+  ZoteroLibraryChildPageRequestView,
+  'ref' | 'offset' | 'limit'
+> & { readonly sessionId: string }
+
+export interface ZoteroReaderAnnotationsView extends ZoteroChildRowsView<ZoteroAnnotationRowView> {
+  readonly writeEnabled: boolean
+}
+
+export type ZoteroReaderDetailsRequest = Pick<
+  ZoteroReaderAnnotationsRequest,
+  'ref' | 'sessionId'
+> & {
+  readonly offset: number
+  readonly notesOffset?: number
+}
+
+export type ZoteroReaderNoteRequest = Pick<ZoteroReaderDetailsRequest, 'ref' | 'sessionId'>
+
+export interface ZoteroReaderTranslateRequest {
+  readonly sessionId: string
+  readonly text: string
+  readonly target: (typeof import('./constants.js').ZOTERO_READER_TRANSLATION_LANGUAGES)[number]
+}
+
+export type ZoteroReaderSuggestAnnotationRequest = Pick<
+  ZoteroReaderTranslateRequest,
+  'sessionId' | 'text'
+>
+
+export interface ZoteroReaderNoteView {
+  readonly ref: string
+  readonly title: string
+  readonly html?: string
+  readonly text: string
+  readonly truncated: boolean
+  readonly version?: number
+  readonly editableRuns?: readonly Pick<ZoteroNoteTextEdit, 'offset' | 'text'>[]
+}
+
+export type ZoteroReaderWriteNoteRequest = ZoteroReaderNoteRequest &
+  (
+    | { readonly operation: 'create'; readonly markdown: string }
+    | {
+        readonly operation: 'edit'
+        readonly expectedVersion: number
+        readonly edits: readonly ZoteroNoteTextEdit[]
+      }
+    | { readonly operation: 'delete'; readonly expectedVersion: number }
+  )
+
+export interface ZoteroReaderUpdateAnnotationRequest {
+  readonly sessionId: string
+  readonly ref: string
+  readonly expectedVersion: number
+  readonly tagChanges?: { readonly add?: readonly string[]; readonly remove?: readonly string[] }
+  readonly set: {
+    readonly annotationComment?: string
+    readonly annotationColor?: string
+    readonly annotationPageLabel?: string
+    readonly annotationType?: 'highlight' | 'underline'
+  }
+}
+
+export interface ZoteroReaderCreateAnnotationsRequest {
+  readonly sessionId: string
+  readonly ref: string
+  readonly type: 'highlight' | 'underline'
+  readonly color: string
+  readonly comment?: string
+  readonly pages: readonly PdfAnnotationSelectionPage[]
+}
+
+export type ZoteroReaderDeleteAnnotationRequest = Pick<
+  ZoteroReaderUpdateAnnotationRequest,
+  'sessionId' | 'ref' | 'expectedVersion'
+>
+
+export type ZoteroReaderCreateAnnotationsView =
+  | { readonly kind: 'declined' }
+  | {
+      readonly kind: 'settled'
+      readonly pages: readonly (
+        | { readonly pageIndex: number; readonly status: 'applied'; readonly ref: string }
+        | {
+            readonly pageIndex: number
+            readonly status: 'committed-unverified'
+            readonly ref?: string
+          }
+        | { readonly pageIndex: number; readonly status: 'failed'; readonly message: string }
+      )[]
+    }
 
 /** One attachment row of an item's attachment listing. */
 export interface ZoteroAttachmentRowView {
@@ -1292,6 +1425,7 @@ export interface ZoteroItemDetailView {
   readonly abstract?: string
   readonly abstractTruncated: boolean
   readonly noteBody?: { readonly text: string; readonly truncated: boolean }
+  readonly noteWriteEnabled?: boolean
   readonly tags: readonly string[]
   readonly collections: readonly { ref: string; name?: string }[]
   readonly children: { readonly total: number }
@@ -1425,6 +1559,7 @@ export const ZOTERO_LIBRARY_SETTINGS_NAMESPACE = 'library'
 
 /** Cordis service key for the library panel remote service. */
 export const ZOTERO_LIBRARY_SERVICE_KEY = 'zoteroLibrary'
+export const ZOTERO_READER_SERVICE_KEY = 'reader'
 export { ZOTERO_ENRICHMENT_SERVICE_KEY }
 
 /**
@@ -1547,10 +1682,11 @@ function libraryInvocation(
   method: string,
   param: InvocationDescriptor['parameters'][number]['codec'],
   result: InvocationDescriptor['result'],
+  service = ZOTERO_LIBRARY_SERVICE_KEY,
 ): InvocationDescriptor {
   return {
     id,
-    service: ZOTERO_LIBRARY_SERVICE_KEY,
+    service,
     namespace: ZOTERO_SETTINGS_NAMESPACE,
     method,
     invocation: { kind: ZOTERO_STATUS_INVOCATION_KIND },
@@ -1558,6 +1694,20 @@ function libraryInvocation(
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: param }],
     result,
   }
+}
+
+export function zoteroReaderInvocation(
+  method: Extract<keyof ZoteroRemoteContract, `reader${string}`>,
+  param: InvocationDescriptor['parameters'][number]['codec'],
+  result: InvocationDescriptor['result'],
+): InvocationDescriptor {
+  return libraryInvocation(
+    `dsh-zotero#zotero/${method}`,
+    method,
+    param,
+    result,
+    ZOTERO_READER_SERVICE_KEY,
+  )
 }
 
 /** The panel write invocation (the plan-review card's own endpoint). */
@@ -1851,6 +2001,42 @@ export interface ZoteroRemoteContract extends ZoteroDocumentMaintenanceRemote {
     request: ZoteroLibraryChildPageRequestView,
     signal?: AbortSignal,
   ) => Promise<RemoteResult<ZoteroChildPageView>>
+  readerDetails: (
+    request: ZoteroReaderDetailsRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroItemDetailView>>
+  readerNote: (
+    request: ZoteroReaderNoteRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroReaderNoteView>>
+  readerTranslate: (
+    request: ZoteroReaderTranslateRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<string>>
+  readerSuggestAnnotation: (
+    request: ZoteroReaderSuggestAnnotationRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<string>>
+  readerWriteNote: (
+    request: ZoteroReaderWriteNoteRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
+  readerAnnotations: (
+    request: ZoteroReaderAnnotationsRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroReaderAnnotationsView>>
+  readerUpdateAnnotation: (
+    request: ZoteroReaderUpdateAnnotationRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
+  readerCreateAnnotations: (
+    request: ZoteroReaderCreateAnnotationsRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroReaderCreateAnnotationsView>>
+  readerDeleteAnnotation: (
+    request: ZoteroReaderDeleteAnnotationRequest,
+    signal?: AbortSignal,
+  ) => Promise<RemoteResult<ZoteroLibraryWriteResultView>>
   export: (
     request: ZoteroLibraryExportRequestView,
     signal?: AbortSignal,

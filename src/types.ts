@@ -13,6 +13,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ChangeSectionKey, ChangeTotalKey, DeletionSectionKey } from './changes-contract.js'
 import type { ArtifactId } from './contract.js'
 import type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
+import type { TextRange } from './reader/evidence.js'
 
 export type { EvidenceField, EvidenceMatchKind, EvidenceSource } from './evidence-item.js'
 import type {
@@ -25,7 +26,11 @@ import type {
 } from './contract.js'
 export type { PersonalLibrary, GroupLibrary, SupportedLocalLibrary, ZoteroResolvedScope }
 export { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
-import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import {
+  ZOTERO_CREATABLE_ITEM_TYPES,
+  ZOTERO_UPDATABLE_ANNOTATION_FIELDS,
+  ZOTERO_UPDATABLE_ITEM_FIELDS,
+} from './constants.js'
 import type { ZoteroErrorCode } from './error-codes.js'
 import type { CitationKeyConflict, CitationKeySource } from './citation-key.js'
 
@@ -245,6 +250,10 @@ export interface ZoteroSearchResult {
 export type ZoteroInclude = 'notes' | 'annotations' | 'attachments'
 
 export interface ZoteroGetRequest {
+  /** Carry the attachment's bibliographic parent for Reader metadata resolution. */
+  includeParentRef?: boolean
+  /** Include bounded source HTML on an explicit Reader note read. */
+  includeNoteHtml?: boolean
   ref: ZoteroObjectRef
   include: ReadonlySet<ZoteroInclude>
   locations?: 'none' | 'best' | 'included'
@@ -345,6 +354,10 @@ export interface ZoteroAnnotationRecord {
   color?: string
   /** Zotero-owned page label; never a plugin-invented locator. */
   pageLabel?: string
+  /** Zotero's local annotation object version, when the local API reports one. */
+  version?: number
+  tags?: readonly string[]
+  position?: import('./reader/evidence.js').PdfPageRegion
   /** The annotation's parent attachment, when Zotero reports one; provenance-qualified like `ref`. */
   parentRef?: string
 }
@@ -397,6 +410,7 @@ export interface ZoteroChildPageRequest {
   kind: 'notes' | 'attachments' | 'annotations'
   offset: number
   limit: number
+  includeAnnotationPosition?: boolean
 }
 
 /** One child page, discriminated by the kind it carries. */
@@ -408,6 +422,8 @@ export type ZoteroChildPage =
 export interface ZoteroItemDetail {
   location?: ZoteroResolvedLocation
   ref: string
+  /** Parent bibliographic item of an attachment, qualified like its own ref. */
+  parentRef?: string
   itemType: string
   title: string
   creators: ZoteroCreator[]
@@ -425,6 +441,8 @@ export interface ZoteroItemDetail {
   abstractTruncated: boolean
   /** The item's own note body, when the item is a note; bounded, `truncated` signals the cut. */
   noteBody?: { text: string; truncated: boolean }
+  /** The original serialized note, supplied only to dedicated Reader callers. */
+  noteHtml?: string
   tags: string[]
   collections: ZoteroCollectionRecord[]
   children: { total: number }
@@ -612,6 +630,7 @@ export interface ZoteroEvidence {
   chunkCount?: number
   comment?: string
   pageLabel?: string
+  position?: import('./evidence-item.js').EvidencePageRegion
   /** The annotation passage's parent attachment ref; absent for other sources. */
   attachmentRef?: string
   /**
@@ -732,21 +751,12 @@ export interface ZoteroFulltextRetrieveResult {
 /** One retrieval outcome, discriminated by the mode that produced it. */
 export type ZoteroRetrieveResult = ZoteroEvidenceRetrieveResult | ZoteroFulltextRetrieveResult
 
-export type ZoteroAttachmentLocation =
-  | {
-      ref: string
-      title: string
-      contentType: string
-      kind: 'file'
-      path: string
-    }
-  | {
-      ref: string
-      title: string
-      contentType: string
-      kind: 'url'
-      url: string
-    }
+export type ZoteroAttachmentLocation = {
+  ref: string
+  parentRef?: string
+  title: string
+  contentType: string
+} & ({ kind: 'file'; path: string } | { kind: 'url'; url: string })
 
 /** Export/citation output formats. `citation`/`bibliography` use Zotero's CSL engine. */
 export type ZoteroExportFormat =
@@ -1177,6 +1187,30 @@ export interface ZoteroUpdateNoteRequest {
   markdown: string
 }
 
+export interface ZoteroNoteTextFormatting {
+  readonly format: (typeof import('./constants.js').ZOTERO_READER_NOTE_FORMATS)[number]
+  /** Half-open UTF-16 range within text. Omit to format the whole run. */
+  readonly range?: TextRange
+}
+
+export interface ZoteroNoteTextEdit {
+  readonly offset: number
+  readonly text: string
+  readonly format?: (typeof import('./constants.js').ZOTERO_READER_NOTE_FORMATS)[number]
+  /** Half-open UTF-16 range within text. Omit to format the whole run. */
+  readonly formatRange?: TextRange
+  /** Multiple whole-run or selected-span formats. Mutually exclusive with legacy fields. */
+  readonly formatting?: readonly ZoteroNoteTextFormatting[]
+}
+
+export type ZoteroModifyNoteRequest = {
+  readonly item: ZoteroObjectRef
+  readonly expectedVersion: number
+} & (
+  | { readonly operation: 'edit'; readonly edits: readonly ZoteroNoteTextEdit[] }
+  | { readonly operation: 'delete' }
+)
+
 export interface ZoteroUpdateNoteResult {
   kind: 'applied'
   ref: string
@@ -1372,6 +1406,23 @@ export interface ZoteroCreateItemRequest {
   collections?: (string | ZoteroObjectRef)[]
 }
 
+export interface ZoteroCreateAnnotationsRequest {
+  readonly attachment: ZoteroObjectRef
+  readonly type: 'highlight' | 'underline'
+  readonly color: string
+  readonly comment?: string
+  readonly pages: readonly import('./reader/evidence.js').PdfAnnotationSelectionPage[]
+}
+
+export interface ZoteroDeleteAnnotationRequest {
+  readonly annotation: ZoteroObjectRef
+  readonly expectedVersion: number
+}
+
+export type ZoteroDeleteAnnotationResult =
+  | { readonly kind: 'deleted'; readonly ref: string; readonly libraryVersion: number }
+  | ZoteroWriteCommittedUnverified
+
 export interface ZoteroCreateItemResult {
   kind: 'applied'
   ref: string
@@ -1392,8 +1443,14 @@ export type ZoteroUpdatableItemField = (typeof ZOTERO_UPDATABLE_ITEM_FIELDS)[num
 export interface ZoteroUpdateItemRequest {
   /** The item whose scalar fields change. */
   item: ZoteroObjectRef
-  /** Field updates; at least one closed-set field, values are non-blank strings. */
-  set: Partial<Record<ZoteroUpdatableItemField, string>>
+  /** The version observed by the caller. Required for annotations. */
+  expectedVersion?: number
+  /** Field updates for the target kind. An empty annotation comment or page label clears it. */
+  set: Partial<
+    Record<ZoteroUpdatableItemField | (typeof ZOTERO_UPDATABLE_ANNOTATION_FIELDS)[number], string>
+  >
+  /** Add or remove native annotation tags under the same expected version. */
+  tagChanges?: { readonly add?: readonly string[]; readonly remove?: readonly string[] }
 }
 
 export interface ZoteroUpdateItemResult {
@@ -1593,6 +1650,10 @@ export type ZoteroDeleteSavedSearchOutcome =
 export type ZoteroDeleteLibraryTagsOutcome =
   ZoteroDeleteLibraryTagsResult | ZoteroWriteCommittedUnverified | ZoteroWriteDeclined
 export type ZoteroBatchItemsOutcome = ZoteroBatchItemsResult | ZoteroWriteDeclined
+export type ZoteroCreateAnnotationsResult = Pick<
+  ZoteroBatchItemsResult,
+  'created' | 'unverified' | 'failed'
+>
 
 /** Read-only checks required before asking the user to approve these writes. */
 export type ZoteroWritePreflight =
@@ -1744,6 +1805,10 @@ export interface ZoteroProvider {
     request: ZoteroUpdateNoteRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroUpdateNoteOutcome>
+  modifyNote?(
+    request: ZoteroModifyNoteRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroUpdateNoteResult | ZoteroWriteCommittedUnverified>
   /**
    * Update one item's tags (read-merge-write; add and remove settle in one write).
    * @param request - the item ref and the tags to add/remove.
@@ -1798,6 +1863,14 @@ export interface ZoteroProvider {
     request: ZoteroCreateItemRequest,
     signal?: AbortSignal,
   ): Promise<ZoteroCreateItemCommittedOutcome>
+  createAnnotations?(
+    request: ZoteroCreateAnnotationsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCreateAnnotationsResult>
+  deleteAnnotation?(
+    request: ZoteroDeleteAnnotationRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteAnnotationResult>
   /**
    * Update one item's scalar metadata fields (read-merge-write).
    * @param request - the item ref and the closed-set field updates.

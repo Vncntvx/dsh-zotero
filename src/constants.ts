@@ -304,6 +304,13 @@ export const ZOTERO_UPDATABLE_ITEM_FIELDS = [
   'extra',
 ] as const
 
+export const ZOTERO_UPDATABLE_ANNOTATION_FIELDS = [
+  'annotationComment',
+  'annotationColor',
+  'annotationPageLabel',
+  'annotationType',
+] as const
+
 /**
  * Default byte ceiling for one response body, shared by both transports.
  *
@@ -316,3 +323,33 @@ export const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 
 /** Identifies a bounded durable receipt in standard tool-result text. */
 export const RESULT_RECEIPT_PREFIX = 'Zotero persisted result: '
+/** Bound the source HTML carried to the Reader from a single note. */
+export const ZOTERO_READER_NOTE_HTML_CHARS = 256_000
+export const ZOTERO_READER_NOTE_TEXT_CHARS = 16_000
+export const ZOTERO_READER_NOTE_EDIT_RUNS = 64
+export const ZOTERO_READER_NOTE_FORMATS = [
+  'strong',
+  'em',
+  'u',
+  's',
+  'mark',
+  'sub',
+  'sup',
+  'code',
+] as const
+export const ZOTERO_READER_TRANSLATION_LANGUAGES = [
+  'en',
+  'zh',
+  'zh-Hant',
+  'de',
+  'es',
+  'fr',
+  'it',
+  'ja',
+  'ko',
+  'pt',
+  'ru',
+] as const
+export const ZOTERO_READER_TRANSLATION_SOURCE_CHARS = 8_000
+export const ZOTERO_READER_TRANSLATION_RESULT_CHARS = 32_000
+export const ZOTERO_READER_ANNOTATION_SUGGESTION_CHARS = 1_000

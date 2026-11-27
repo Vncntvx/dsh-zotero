@@ -11,7 +11,7 @@ import { isVolatile } from '@deepseek-ai/cosmokit'
 import Schema from '@deepseek-ai/schemastery'
 
 /** A closed schema over the given values, in order. */
-export const schemaChoices = (values: readonly (string | number)[]) =>
+export const schemaChoices = <T extends string | number>(values: readonly T[]) =>
   Schema.union(values.map((value) => Schema.const(value)))
 
 /** Read one config field's current value, unwrapping a volatile reference. */
