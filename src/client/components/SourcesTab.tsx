@@ -35,7 +35,9 @@ import type {
   ZoteroUrlPdfView,
 } from '../../contract.ts'
 import type { LibraryPreferences } from '../../library-preferences.js'
+import type { PdfEvidenceTarget } from '../../reader/evidence.ts'
 import type { ZoteroStatusView } from '../remote.ts'
+import type { ReaderOpener } from '../reader/register.ts'
 import { callNameOf, formatTime, isSettledTool } from '../../sources/presenters.js'
 import { buildSourceWorkspace } from '../../sources/ledger.js'
 import { withEvidenceMatch } from '../../sources/evidence-match.js'
@@ -139,6 +141,7 @@ export interface SourcesTabFace {
    * key is the host `SessionStore`, not the client `ISessions` catalog.
    */
   openResource?: (url: string) => void
+  openReader?: ReaderOpener
 }
 
 /** Props the conversation view ring binds for this tab. */
@@ -285,6 +288,7 @@ function SourcesTabBody({
   forgetPdf,
   libraryPreferences,
   openResource,
+  openReader,
   t,
   sessionId,
   useChat,
@@ -397,11 +401,22 @@ function SourcesTabBody({
   const readPdf =
     openResource === undefined || !canResolve || resolveAttachment === undefined
       ? undefined
-      : async (ref: string): Promise<void> => {
+      : async (ref: string, evidence?: PdfEvidenceTarget): Promise<void> => {
           const location = await resolveAttachment(ref)
           if (!location.ok) throw location.error
           if (location.value.kind === 'file') {
             if (!location.value.path) throw new Error(t('pdfFileNotFound'))
+            if (
+              openReader &&
+              (await openReader(
+                sessionId,
+                location.value,
+                'sidebar',
+                new AbortController().signal,
+                evidence,
+              ))
+            )
+              return
             openResource(fileAddressFor(sessionId, cwd, location.value.path))
             return
           }

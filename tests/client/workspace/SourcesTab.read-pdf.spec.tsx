@@ -16,6 +16,7 @@ import { LIBRARY_DEFAULTS } from '../../../src/library-preferences.ts'
 import { zoteroClientStub } from '../helpers/zotero-client.ts'
 import { mockT } from '../helpers/mock-translate.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { EvidencePassage } from '../../../src/sources/model.js'
 
 const t = mockT
 
@@ -24,11 +25,21 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function mountAndSettle(props: Partial<SourcesTabProps> = {}) {
+async function mountAndSettle(
+  props: Partial<SourcesTabProps> = {},
+  position?: EvidencePassage['position'],
+  passage?: EvidencePassage,
+) {
   const item = sourceOf({
     key: 'item-1',
     ref: 'zotero://user/0/item/ITEM1',
-    evidence: [passageOf({ attachmentRef: 'zotero://user/0/item/ATT1' })],
+    evidence: [
+      passage ??
+        passageOf({
+          attachmentRef: 'zotero://user/0/item/ATT1',
+          ...(position ? { position } : {}),
+        }),
+    ],
     retrievalFacts: {
       truncated: false,
       sourceAvailability: {},
@@ -81,6 +92,81 @@ describe('SourcesTab readPdf flow', () => {
     expect(openResource).toHaveBeenCalledWith(expect.stringContaining('papers/attention.pdf'))
     expect(screen.queryByRole('alert')).toBeNull()
   })
+
+  it('opens positioned evidence in Reader with its physical page index', async () => {
+    const openResource = vi.fn()
+    const openReader = vi.fn().mockResolvedValue(true)
+    const resolveAttachment = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        kind: 'file',
+        path: 'papers/attention.pdf',
+        contentType: 'application/pdf',
+        title: 'Attention',
+        ref: 'zotero://user/0/item/ATT1',
+      },
+    })
+    const position = { pageIndex: 5, rects: [{ x: 12, y: 18, width: 50, height: 8 }] }
+    await mountAndSettle(
+      {
+        openResource,
+        openReader,
+        resolveAttachment,
+      },
+      position,
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: t('jumpToPageInSidebar') }))
+    })
+    expect(openReader).toHaveBeenCalledWith(
+      's1',
+      expect.objectContaining({ ref: 'zotero://user/0/item/ATT1' }),
+      'sidebar',
+      expect.any(AbortSignal),
+      position,
+    )
+    expect(openResource).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['lexical', 'bm25'],
+    ['semantic', 'semantic'],
+  ] as const)(
+    'opens %s evidence in its own attachment with the passage text',
+    async (matchKind, sourceType) => {
+      const ref = 'zotero://group/42/attachment/ATTACH01?server=lab'
+      const location = {
+        kind: 'file',
+        path: 'papers/study.pdf',
+        contentType: 'application/pdf',
+        ref,
+      }
+      const resolveAttachment = vi.fn().mockResolvedValue({ ok: true, value: location })
+      const openReader = vi.fn().mockResolvedValue(true)
+      const openResource = vi.fn()
+      const quote = 'Observed outcomes after twelve weeks.'
+      await mountAndSettle(
+        { openReader, openResource, resolveAttachment },
+        undefined,
+        passageOf({ source: 'fulltext', sourceRef: ref, text: quote, matchKind }),
+      )
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: t('jumpToPageInSidebar') })),
+      )
+      expect(resolveAttachment).toHaveBeenCalledExactlyOnceWith(ref)
+      expect(openReader).toHaveBeenCalledExactlyOnceWith(
+        's1',
+        location,
+        'sidebar',
+        expect.any(AbortSignal),
+        {
+          quote,
+          sourceType,
+        },
+      )
+      expect(openResource).not.toHaveBeenCalled()
+    },
+  )
 
   it('alerts when local file path is missing from resolved attachment', async () => {
     const openResource = vi.fn()

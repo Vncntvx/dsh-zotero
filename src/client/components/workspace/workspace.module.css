@@ -386,6 +386,98 @@
   max-width: 900px;
 }
 
+/* Native disclosures in the evidence panel take the theme's 13/500 summary
+ * instead of the browser's bold default and its indent. */
+.disclosure {
+  margin: 0;
+}
+
+.disclosure summary {
+  padding: 4px 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+/* The claim composer is a section, not another panel row: a separator and a
+ * 12/10 rhythm separate it from the list, and every field stacks its label
+ * over a 32px control on the host's field language. */
+.claimComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.claimHeading {
+  margin: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.claimForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.claimField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.claimField > span {
+  min-width: 0;
+}
+
+.claimControl {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-14);
+  box-sizing: border-box;
+}
+
+.claimControl[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+  border-width: 1px;
+}
+
+textarea.claimControl {
+  height: auto;
+  min-height: 56px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.claimError {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.claimActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (pointer: coarse) {
+  .claimControl {
+    font-size: 16px;
+  }
+}
+
 .fileBacked {
   display: flex;
   flex-direction: column;

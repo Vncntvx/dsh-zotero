@@ -11,6 +11,8 @@ import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
+import type { PdfEvidenceTarget } from '../../../reader/evidence.ts'
+import { refFieldsOf } from '../../../ref-grammar.ts'
 import type { EvidencePassage, SourceItem } from '../../../sources/model.js'
 import { fulltextKeyOf } from '../../../sources/ledger.js'
 import {
@@ -39,7 +41,7 @@ interface SourceEvidenceProps {
   readonly item: SourceItem
   readonly t: TranslateNS<'zotero'>
   readonly openFile?: (path: string) => void
-  readonly openPdf?: (ref: string) => Promise<void>
+  readonly openPdf?: (ref: string, evidence?: PdfEvidenceTarget) => Promise<void>
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   /** The pager that appends the passages behind the feed's head. */
   readonly pager?: SourcePager
@@ -51,17 +53,42 @@ interface PassageCardProps {
   readonly passage: EvidencePassage
   readonly item: SourceItem
   readonly openFile?: (path: string) => void
-  readonly openPdf?: (ref: string) => Promise<void>
+  readonly openPdf?: (ref: string, evidence?: PdfEvidenceTarget) => Promise<void>
   readonly resolveAttachment?: (ref: string) => Promise<RemoteResult<ZoteroAttachmentLocationView>>
   readonly t: TranslateNS<'zotero'>
+}
+
+export function passagePdfTarget(passage: EvidencePassage, item: SourceItem) {
+  const fulltextRef =
+    passage.source === 'fulltext' && refFieldsOf(passage.sourceRef)?.kind === 'attachment'
+      ? passage.sourceRef
+      : undefined
+  const ref =
+    fulltextRef ??
+    passage.attachmentRef ??
+    item.retrievalFacts?.attachmentRef ??
+    item.attachment?.ref
+  const evidence: PdfEvidenceTarget | undefined =
+    passage.position ??
+    (fulltextRef && passage.text.trim()
+      ? {
+          quote: passage.text,
+          ...(passage.artifact && { contentFingerprint: `sha256:${passage.artifact.fingerprint}` }),
+          sourceType: passage.artifact
+            ? 'mineru'
+            : passage.matchKind === 'lexical'
+              ? 'bm25'
+              : (passage.matchKind ?? 'search'),
+        }
+      : undefined)
+  return { ref, evidence }
 }
 
 /** One rich passage card with its source tag, page label, jump action, and grounding context. */
 function PassageCard({ passage, item, openFile, openPdf, resolveAttachment, t }: PassageCardProps) {
   const [error, setError] = useState<string>()
   const [opening, setOpening] = useState(false)
-  const targetPdfRef =
-    passage.attachmentRef ?? item.retrievalFacts?.attachmentRef ?? item.attachment?.ref
+  const { ref: targetPdfRef, evidence } = passagePdfTarget(passage, item)
   const filePath = item.attachment?.location
 
   const handleJump = async () => {
@@ -70,7 +97,8 @@ function PassageCard({ passage, item, openFile, openPdf, resolveAttachment, t }:
     setOpening(true)
     try {
       if (openPdf && targetPdfRef) {
-        await openPdf(targetPdfRef)
+        if (evidence) await openPdf(targetPdfRef, evidence)
+        else await openPdf(targetPdfRef)
       } else if (targetPdfRef && resolveAttachment) {
         const res = await resolveAttachment(targetPdfRef)
         if (!res.ok) throw res.error

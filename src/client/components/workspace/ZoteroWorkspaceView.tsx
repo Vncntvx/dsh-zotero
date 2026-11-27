@@ -22,12 +22,14 @@ import type {
   ZoteroSourcePageResultView,
 } from '../../../contract.ts'
 import type { SourceItem, SourceWorkspace } from '../../../sources/model.js'
+import type { PdfEvidenceTarget } from '../../../reader/evidence.ts'
 import { mapTuple } from '../../segmented-tabs.ts'
 import { filterSources, type SourceFilter } from '../../sources/selectors.ts'
 import { WorkspaceToolbar } from './WorkspaceToolbar.tsx'
 import type { ConnectionView } from './connection.ts'
 import { SourceSidebar } from './SourceSidebar.tsx'
 import { SourceInspector } from './SourceInspector.tsx'
+import { ClaimEvidence } from './ClaimEvidence.tsx'
 import { WorkspaceEmptyState } from './WorkspaceEmptyState.tsx'
 import { ExportsPage } from './ExportsPage.tsx'
 import { EvidenceOverview } from './EvidenceOverview.tsx'
@@ -62,7 +64,7 @@ interface ZoteroWorkspaceViewProps {
   /** The bounded-list pager; absent leaves every list at the view's head. */
   readonly sourcePage?: SourcePageCall
   /** Open one URL attachment's PDF into the right reader; absent keeps the resolved-path fallback. */
-  readonly openPdf?: (ref: string) => Promise<void>
+  readonly openPdf?: (ref: string, evidence?: PdfEvidenceTarget) => Promise<void>
   /** Composer prefill; absent on surfaces without an input. */
   readonly setDraft?: (text: string) => void
   readonly onRefresh: () => void
@@ -415,6 +417,24 @@ export function ZoteroWorkspaceView({
             evidencePager={evidencePager}
             exportsPager={sourceExportsPager}
             fulltextPager={fulltextPager}
+            claimsPanel={
+              sessionId &&
+              pagedItem &&
+              (pagedItem.evidence.length > 0 || pagedItem.evidenceTotal > 0) && (
+                <ClaimEvidence
+                  key={sessionId}
+                  sessionId={sessionId}
+                  source={pagedItem}
+                  openPdf={openPdf}
+                  t={t}
+                  canSelectSource={(key) => workspace.sources.some((item) => item.key === key)}
+                  selectSource={(key) => {
+                    setSelection({ key, focusIndex: 0 })
+                    setMobilePane('detail')
+                  }}
+                />
+              )
+            }
             t={t}
           />
           <aside className={css.auditSidebar}>

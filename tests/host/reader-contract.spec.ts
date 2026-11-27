@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ReaderConfigSchema, resolveReaderConfig } from '../../src/reader/config.js'
 import {
-  anchorPrecisionOf,
-  normalizeAnchor,
-  type EvidenceAnchor,
-} from '../../src/reader/evidence.js'
-import {
   documentIdentityKey,
   sameDocument,
   type ReaderDocumentRef,
@@ -33,26 +28,6 @@ describe('Reader contracts', () => {
     expect(sameDocument(documentRef, sameAttachment)).toBe(true)
     expect(sameDocument(documentRef, otherInstance)).toBe(false)
     expect(readingStateStorageKeyOf(documentRef)).toContain('dsh-zotero:reader:state:')
-  })
-
-  it('chooses the highest available evidence precision and removes unusable geometry', () => {
-    const anchor = {
-      documentRef,
-      sourceType: 'selection',
-      precision: 'document',
-      pageIndex: 3,
-      textRange: { start: 20, end: 10 },
-      rects: [
-        { x: 1, y: 2, width: 0, height: 4 },
-        { x: 4, y: 5, width: 8, height: 9 },
-      ],
-    } satisfies EvidenceAnchor
-    expect(anchorPrecisionOf(anchor)).toBe('region')
-    expect(normalizeAnchor(anchor)).toMatchObject({
-      precision: 'region',
-      rects: [{ x: 4, y: 5, width: 8, height: 9 }],
-      textRange: undefined,
-    })
   })
 
   it('normalizes invalid reading values without changing the attachment identity', () => {

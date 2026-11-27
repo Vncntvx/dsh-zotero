@@ -18,9 +18,11 @@ import {
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ReactNode } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ZoteroAttachmentLocationView } from '../../../contract.ts'
 import type { SourceWorkspace } from '../../../sources/model.js'
+import type { PdfEvidenceTarget } from '../../../reader/evidence.ts'
 import { askDraftOf, exportDraftOf } from '../../actions/source-actions.ts'
 import { pdfCapabilityOf } from '../../sources/source-capabilities.ts'
 import { BlockedReadAction } from '../open/BlockedReadAction.tsx'
@@ -50,7 +52,8 @@ interface SourceInspectorProps {
   /** The pager that appends the export records behind the list's head. */
   readonly exportsPager?: SourcePager
   /** Open one URL attachment's PDF into the right reader; absent keeps the fallback. */
-  readonly openPdf?: (ref: string) => Promise<void>
+  readonly openPdf?: (ref: string, evidence?: PdfEvidenceTarget) => Promise<void>
+  readonly claimsPanel?: ReactNode
 }
 
 /** The inspector: unified grounding feed for the selected source item. */
@@ -68,6 +71,7 @@ export function SourceInspector({
   fulltextPager,
   exportsPager,
   openPdf,
+  claimsPanel,
 }: SourceInspectorProps) {
   const selected = useMemo(
     () => workspace.sources.find((item) => item.key === selectedKey),
@@ -293,6 +297,7 @@ export function SourceInspector({
             pager={evidencePager}
             fulltextPager={fulltextPager}
           />
+          {claimsPanel}
         </div>
 
         {/* 3. Export Artifacts */}
