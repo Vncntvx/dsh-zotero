@@ -229,3 +229,15 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Review trigger**: after a `pdfjs-dist` upgrade, drag-select text on a shadow page and check that the highlight appears, while reading the `enableSelectionRendering` default and the selection API it uses.
 - **Verification**: `tests/client/reader/pdf-runtime.spec.ts` asserts the viewer option; `scripts/smoke-reader-pdf.mjs` checks rendering and selection in a browser.
 - **Follow-up**: once upstream handles shadow selections, drop the option and let the shadow theme go back to colours only.
+
+## DN-54: The Harness profile resolver does not reach the semantic Worker
+
+- **Upstream**: the profile ESM resolver in Harness `0.2.3-alpha.2`.
+- **Upstream feature**: installed plugins resolve declared Harness peers through the active runtime profile.
+- **Upstream defect**: the resolver runs in the host realm. The semantic Worker starts with its own ESM resolver and fails to load shared imports in the packed plugin before it can verify the model bundle.
+- **Local patch**: `src/enrichment/worker-bootstrap.ts` passes host-resolved entry URLs for the semantic Worker's three Harness imports. The Worker hook handles those exact names for imports originating in the plugin directory.
+- **Why this is a compromise**: new Harness imports in that Worker's plugin graph may need an additional entry in the explicit list.
+- **Upstream expectation**: a documented plugin Worker entry or bootstrap can use the active profile's peer resolution.
+- **Review trigger**: after a Harness pin upgrade that changes plugin resolution or adds Worker support, run the installed discovery checks.
+- **Verification**: `scripts/discovery-smoke.mjs` requires an installed Worker to return the typed missing-bundle error. Its optional local ONNX browser run verifies that a ranked excerpt jumps to the matching PDF text.
+- **Follow-up**: adopt upstream Worker resolution once both installed checks pass with it.

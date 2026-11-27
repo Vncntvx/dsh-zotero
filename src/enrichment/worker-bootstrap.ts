@@ -1,15 +1,22 @@
-/** The worker entry URL: the emitted artifact, or its TypeScript source during development. */
-export function workerEntryUrl(entry: URL): URL {
-  if (!import.meta.url.endsWith('.ts')) return entry
+/** Workers start in a separate realm without the Harness profile resolver. */
+export function workerEntryUrl(entry: URL, hostPackages: readonly string[] = []): URL {
+  const development = import.meta.url.endsWith('.ts')
+  if (!development && hostPackages.length === 0) return entry
 
-  const source = entry.href.slice(0, -3) + '.ts'
+  const source = development ? entry.href.slice(0, -3) + '.ts' : entry.href
   const root = new URL('../', import.meta.url).href
+  const dependencies = Object.fromEntries(
+    hostPackages.map((name) => [name, import.meta.resolve(name)]),
+  )
   const bootstrap = `import { registerHooks } from 'node:module';
+const dependencies = JSON.parse(${JSON.stringify(JSON.stringify(dependencies))});
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith('.') && specifier.endsWith('.js') &&
-        context.parentURL?.startsWith(${JSON.stringify(root)})) {
-      return nextResolve(specifier.slice(0, -3) + '.ts', context);
+    if (context.parentURL?.startsWith(${JSON.stringify(root)})) {
+      if (Object.hasOwn(dependencies, specifier)) return nextResolve(dependencies[specifier], context);
+      if (${development} && specifier.startsWith('.') && specifier.endsWith('.js')) {
+        return nextResolve(specifier.slice(0, -3) + '.ts', context);
+      }
     }
     return nextResolve(specifier, context);
   },

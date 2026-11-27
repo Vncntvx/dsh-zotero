@@ -229,3 +229,15 @@
 - **复核触发**：升级 `pdfjs-dist` 后，在 Shadow DOM 页面上拖动选中文字，检查高亮是否出现；同时看 `enableSelectionRendering` 的默认值与读取选区的 API。
 - **验证**：`tests/client/reader/pdf-runtime.spec.ts` 断言传入的 viewer 选项；`scripts/smoke-reader-pdf.mjs` 在浏览器里核对渲染与选区。
 - **后续处理**：上游修好 Shadow DOM 选区后，删掉该选项并让影子主题恢复只改取色。
+
+## DN-54：Harness 配置档的解析器在语义 Worker 内不可用
+
+- **上游**：Harness `0.2.3-alpha.2` 的配置档 ESM 解析器。
+- **上游特性**：已安装插件通过当前运行配置档解析声明的 Harness peer 依赖。
+- **上游缺陷**：该解析器运行在宿主内，语义 Worker 有独立的 ESM 解析器。打包后，Worker 在校验模型之前就因无法加载共享依赖而失败。
+- **本地补丁**：`src/enrichment/worker-bootstrap.ts` 将语义 Worker 的三个 Harness 依赖入口由宿主解析并传入。Worker 钩子只匹配插件目录内导入的这三个名称。
+- **为什么是妥协**：Worker 的插件模块新增 Harness 导入时，可能需要补充显式依赖列表。
+- **上游期望**：公开的插件 Worker 入口或启动器支持当前配置档的 peer 依赖解析。
+- **复核触发**：Harness 升级涉及插件解析或新增 Worker 支持时，运行安装包发现检查。
+- **验证**：`scripts/discovery-smoke.mjs` 要求已安装的 Worker 在模型缺失时返回对应的类型化错误。可选的本地 ONNX 浏览器检查验证排序摘录能跳转到对应 PDF 原文。
+- **后续处理**：两项安装包检查均可通过上游实现后，改用上游解析器。

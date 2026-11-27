@@ -12,7 +12,11 @@ export const SEMANTIC_RUN_DEADLINE_MS = 120_000
 export type SemanticWorkerFactory = (spec: SemanticModelEntry, dir: string) => Worker
 
 const spawnSemanticWorker: SemanticWorkerFactory = (spec, dir) => {
-  const entry = workerEntryUrl(new URL('./model-worker.js', import.meta.url))
+  const entry = workerEntryUrl(new URL('./model-worker.js', import.meta.url), [
+    '@deepseek-ai/dsh-error',
+    '@deepseek-ai/dsh-tools',
+    '@deepseek-ai/dsh-typert-protocol',
+  ])
   return new Worker(entry, {
     workerData: { spec, dir },
     execArgv: [],
