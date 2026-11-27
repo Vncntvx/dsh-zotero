@@ -27,6 +27,7 @@ import { ScholarlyConfig } from '../../src/scholarly/config.js'
 import { CORE_SOPS } from '../../src/skills/core.js'
 import { SCHOLARLY_SOPS } from '../../src/skills/scholarly.js'
 import { EnrichmentConfigSchema } from '../../src/enrichment/config.js'
+import { ReaderConfigSchema } from '../../src/reader/config.js'
 
 const REPO_ROOT = new URL('../../', import.meta.url)
 
@@ -83,33 +84,30 @@ const coreFields = fieldsOf(CoreConfig)
 const libraryFields = fieldsOf(LibraryConfigSchema)
 const scholarlyFields = fieldsOf(ScholarlyConfig)
 const enrichmentFields = fieldsOf(EnrichmentConfigSchema)
-const totalFields =
-  coreFields.length + libraryFields.length + scholarlyFields.length + enrichmentFields.length
+const allFields = coreFields
+  .concat(libraryFields, scholarlyFields)
+  .concat(enrichmentFields, fieldsOf(ReaderConfigSchema))
+const totalFields = allFields.length
 
 describe('configuration docs agree with the schemas', () => {
   it('lists every field, the scholarly/enrichment counts, and the total in both languages', () => {
     const cases = [
       [
         'docs/configuration.md',
-        `四组合计 ${totalFields} 个字段`,
+        `五组合计 ${totalFields} 个字段`,
         `${scholarlyFields.length} 个字段`,
         `${enrichmentFields.length} 个字段`,
       ],
       [
         'docs/configuration.en.md',
-        `The four groups total ${totalFields} fields`,
+        `The five groups total ${totalFields} fields`,
         `${scholarlyFields.length} fields`,
         `${enrichmentFields.length} fields`,
       ],
     ] as const
     for (const [path, totalText, scholarlyText, enrichmentText] of cases) {
       const text = docOf(path)
-      for (const field of [
-        ...coreFields,
-        ...libraryFields,
-        ...scholarlyFields,
-        ...enrichmentFields,
-      ]) {
+      for (const field of allFields) {
         expect(text, `${path} is missing the ${field} field`).toContain(field)
       }
       expect(text, `${path} is missing the field total`).toContain(totalText)
@@ -330,32 +328,32 @@ describe('the documentation set stays complete', () => {
 })
 
 describe('component and settings docs stay in lockstep', () => {
-  it('describes four namespaces and four component tabs everywhere, never the stale seven', () => {
+  it('describes five namespaces and five component tabs', () => {
     const zhConfig = docOf('docs/configuration.md')
-    expect(zhConfig).toContain('4 标签页')
-    expect(zhConfig).toContain('四个命名空间')
+    expect(zhConfig).toContain('5 标签页')
+    expect(zhConfig).toContain('五个命名空间')
     expect(zhConfig).not.toContain('7 标签页')
     expect(zhConfig).not.toContain('6 标签页')
     expect(zhConfig).not.toContain('三个命名空间')
 
     const enConfig = docOf('docs/configuration.en.md')
-    expect(enConfig).toContain('4-tab')
-    expect(enConfig).toContain('four namespaces')
+    expect(enConfig).toContain('5-tab')
+    expect(enConfig).toContain('five namespaces')
     expect(enConfig).not.toContain('7-tab')
     expect(enConfig).not.toContain('6-tab')
     expect(enConfig).not.toContain('three namespaces')
 
-    expect(docOf('docs/index.md')).toContain('四个设置命名空间')
-    expect(docOf('docs/index.en.md')).toContain('four settings namespaces')
+    expect(docOf('docs/index.md')).toContain('五个设置命名空间')
+    expect(docOf('docs/index.en.md')).toContain('five settings namespaces')
     // The totals are computed from the live schemas, so a field count can
     // never silently make these sentences false.
     const total = totalFields
-    expect(docOf('docs/development.md')).toContain(`四个设置命名空间、${total} 个字段`)
-    expect(docOf('docs/development.en.md')).toContain(`Four settings namespaces, ${total} fields`)
-    expect(docOf('docs/configuration.md')).toContain(`四组合计 ${total} 个字段`)
-    expect(docOf('docs/configuration.en.md')).toContain(`The four groups total ${total} fields`)
-    expect(docOf('docs/product-model.en.md')).toContain('four decoupled components')
-    expect(docOf('docs/product-model.en.md')).not.toContain('three decoupled components')
+    expect(docOf('docs/development.md')).toContain(`五个设置命名空间、${total} 个字段`)
+    expect(docOf('docs/development.en.md')).toContain(`Five settings namespaces, ${total} fields`)
+    expect(docOf('docs/configuration.md')).toContain(`五组合计 ${total} 个字段`)
+    expect(docOf('docs/configuration.en.md')).toContain(`The five groups total ${total} fields`)
+    expect(docOf('docs/product-model.en.md')).toContain('five decoupled components')
+    expect(docOf('docs/product-model.en.md')).not.toContain('four decoupled components')
   })
 
   it('names enrichment as an external-request boundary and keeps AGENTS current', () => {
@@ -388,14 +386,14 @@ describe('component and settings docs stay in lockstep', () => {
     }
   })
 
-  it('keeps the client comments on the four-tab surface', () => {
+  it('keeps the client comments on the five-tab surface', () => {
     for (const path of [
       'src/client/ZoteroSettingsSection.tsx',
       'src/client/index.ts',
       'src/client/ScholarlySettingsForm.tsx',
     ]) {
       const text = docOf(path)
-      expect(text, `${path} does not say 4-tab`).toContain('4-tab')
+      expect(text, `${path} does not say 5-tab`).toContain('5-tab')
       expect(text, `${path} still says 7-tab`).not.toContain('7-tab')
       expect(text, `${path} still says 7 标签`).not.toContain('7 标签')
       expect(text, `${path} still says 6-tab`).not.toContain('6-tab')

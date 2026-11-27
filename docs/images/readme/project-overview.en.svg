@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 386" width="800" height="386" xml:lang="en" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 386" width="840" height="386" xml:lang="en" role="img" aria-labelledby="title desc">
   <title id="title">dsh-zotero research workflow architecture</title>
-  <desc id="desc">A research question enters a DeepSeek Harness session. The agent loads a research SOP and uses Zotero tools and opt-in scholarly search. The session literature trail collects Zotero tool results for passage, source, and coverage review, and for export. The literature panel browses Zotero independently and can add selected papers to the chat draft. Library writes require approval, and MinerU parsing requires user submission.</desc>
+  <desc id="desc">A research question enters a DeepSeek Harness session. The agent dynamically loads a research SOP and follows its stage budgets and exit criteria when using Zotero tools and opt-in scholarly search. The session literature trail collects tool results for passage, source, and coverage review, and offers deduplicated BibTeX and citation exports. The literature panel lets users browse the library independently and insert references to selected items into the chat draft. Library writes require approval. Users can submit PDFs to MinerU for parsing, and later reads can reuse the resulting Markdown.</desc>
   <style>
     text { fill: #1e293b; font: 16px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
     .small { font-size: 14px; }
@@ -26,79 +26,79 @@
     .icon { fill: none; stroke: #64748b; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
   <defs>
-    <clipPath id="project-overview-clip"><rect x="0" y="0" width="800" height="386" rx="10"/></clipPath>
+    <clipPath id="project-overview-clip"><rect x="0" y="0" width="840" height="386" rx="10"/></clipPath>
   </defs>
   <g id="project-overview" clip-path="url(#project-overview-clip)">
-  <rect x="0" y="0" width="800" height="386" rx="0" class="paper"/>
+  <rect x="0" y="0" width="840" height="386" rx="0" class="paper"/>
   <g id="scholarly-indexes">
-  <rect x="18" y="48" width="156" height="70" rx="6" class="pane border"/>
+  <rect x="18" y="48" width="164" height="70" rx="6" class="pane border"/>
   <text x="30" y="76" class="label" text-anchor="start">Scholarly indexes</text>
   <text x="30" y="100" class="small muted" text-anchor="start">Opt-in search</text>
   </g>
   <g id="local-zotero">
-  <rect x="18" y="144" width="156" height="117" rx="6" class="pane border"/>
+  <rect x="18" y="144" width="164" height="117" rx="6" class="pane border"/>
   <text x="30" y="173" class="lead" text-anchor="start">Local Zotero</text>
   <text x="30" y="194" class="small mono accent" text-anchor="start">Local API</text>
-  <path d="M30 205L161 205" class="rule"/>
+  <path d="M30 205L169 205" class="rule"/>
   <text x="30" y="226" class="small muted" text-anchor="start">Items · Collections</text>
   <text x="30" y="246" class="small muted" text-anchor="start">PDFs · Annotations</text>
   </g>
-  <text x="18" y="291" class="small muted" text-anchor="start">Writes require approval</text>
+  <text x="30" y="291" class="small muted" text-anchor="start">Writes require approval</text>
   <g id="harness-workspace">
-  <rect x="212" y="16" width="570" height="308" rx="8" class="pane border"/>
+  <rect x="212" y="16" width="610" height="308" rx="8" class="pane border"/>
   <text x="230" y="43" class="lead" text-anchor="start">DeepSeek Harness</text>
   <g id="research-question">
-  <rect x="230" y="55" width="534" height="35" rx="5" class="chrome"/>
+  <rect x="230" y="55" width="574" height="35" rx="5" class="chrome"/>
   <text x="244" y="77" class="small label" text-anchor="start">Research question</text>
   <text x="390" y="77" class="small muted" text-anchor="start">“Which papers support this claim?”</text>
   </g>
   <g id="agent-research">
-  <rect x="230" y="112" width="229" height="132" rx="6" class="paper border"/>
+  <rect x="230" y="112" width="234" height="132" rx="6" class="paper border"/>
   <path d="M8 1.5 9.8 6.2 14.5 8l-4.7 1.8L8 14.5 6.2 9.8 1.5 8l4.7-1.8Z" transform="translate(244 123)" class="icon"/>
   <text x="269" y="137" class="lead" text-anchor="start">Research agent</text>
-  <text x="244" y="162" class="small label" text-anchor="start">Research SOP on demand</text>
-  <text x="244" y="182" class="small muted" text-anchor="start">Budgets · Stop conditions</text>
-  <path d="M244 194L445 194" class="rule"/>
+  <text x="244" y="162" class="small label" text-anchor="start">Dynamic SOP loading</text>
+  <text x="244" y="182" class="small muted" text-anchor="start">Stage budgets · Exit criteria</text>
+  <path d="M244 194L450 194" class="rule"/>
   <text x="244" y="214" class="small label" text-anchor="start">Zotero tools</text>
   <text x="244" y="233" class="small muted" text-anchor="start">Search · Retrieve · Cite</text>
   </g>
   <g id="session-literature-trail">
-  <rect x="535" y="112" width="229" height="132" rx="6" class="select border"/>
-  <path d="m6 10 4-4m-5 2-2 2a2.1 2.1 0 0 0 3 3l2-2m0-6 2-2a2.1 2.1 0 0 1 3 3l-2 2" transform="translate(549 123)" class="icon"/>
-  <text x="574" y="137" class="lead accent" text-anchor="start">Literature trail</text>
-  <text x="549" y="162" class="small accent" text-anchor="start">Session · Read-only</text>
-  <path d="M552 180L552 225" class="rule"/>
-  <circle cx="552" cy="182" r="3" class="accent"/>
-  <text x="565" y="187" class="small" text-anchor="start">Queries · Scope</text>
-  <circle cx="552" cy="203" r="3" class="accent"/>
-  <text x="565" y="208" class="small" text-anchor="start">Passages · Source · Coverage</text>
-  <circle cx="552" cy="224" r="3" class="accent"/>
-  <text x="565" y="229" class="small" text-anchor="start">BibTeX · Citations</text>
+  <rect x="530" y="112" width="274" height="132" rx="6" class="select border"/>
+  <path d="m6 10 4-4m-5 2-2 2a2.1 2.1 0 0 0 3 3l2-2m0-6 2-2a2.1 2.1 0 0 1 3 3l-2 2" transform="translate(544 123)" class="icon"/>
+  <text x="569" y="137" class="lead accent" text-anchor="start">Literature trail</text>
+  <text x="544" y="162" class="small accent" text-anchor="start">Session · Read-only</text>
+  <path d="M547 180L547 225" class="rule"/>
+  <circle cx="547" cy="182" r="3" class="accent"/>
+  <text x="560" y="187" class="small" text-anchor="start">Queries · Scope</text>
+  <circle cx="547" cy="203" r="3" class="accent"/>
+  <text x="560" y="208" class="small" text-anchor="start">Passages · Sources · Coverage</text>
+  <circle cx="547" cy="224" r="3" class="accent"/>
+  <text x="560" y="229" class="small" text-anchor="start">Deduplicated BibTeX &amp; citations</text>
   </g>
   <g id="independent-library-panel">
-  <rect x="230" y="275" width="534" height="33" rx="5" class="paper border"/>
+  <rect x="230" y="275" width="574" height="33" rx="5" class="paper border"/>
   <path d="M1.5 4h5l1.7 2h6.3v6.5h-13ZM1.5 4V2.8h5L8 4h5v2" transform="translate(244 283)" class="icon"/>
   <text x="268" y="297" class="lead" text-anchor="start">Literature panel</text>
-  <text x="428" y="297" class="small muted" text-anchor="start">Browse the library · Read PDFs · Copy citations</text>
+  <text x="428" y="297" class="small muted" text-anchor="start">Browse independently · Read PDFs · Copy citations</text>
   </g>
   <text x="497" y="136" class="small muted" text-anchor="middle">Zotero</text>
   <text x="497" y="154" class="small muted" text-anchor="middle">results</text>
-  <text x="365" y="266" class="small muted" text-anchor="start">Add to chat draft</text>
+  <text x="365" y="266" class="small muted" text-anchor="start">Insert references into chat draft</text>
   </g>
   <g id="research-connections">
-  <path d="M174 83H187V133H224" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/>
-  <path d="M225 129l4 4-4 4M174 178H229m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M194 178V291H229m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M346 91v20m-4-4 4 4 4-4M459 168H534m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M182 83H195V133H224" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/>
+  <path d="M225 129l4 4-4 4M182 178H229m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M202 178V291H229m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M346 91v20m-4-4 4 4 4-4M464 168H529m-4-4 4 4-4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M346 274V250" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/>
   <path d="M342 249l4-4 4 4" class="edge" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="194" cy="178" r="3" class="accent"/>
+  <circle cx="202" cy="178" r="3" class="accent"/>
   </g>
   <g id="optional-document-parsing">
-  <rect x="18" y="339" width="764" height="31" rx="5" class="pane border"/>
+  <rect x="18" y="339" width="804" height="31" rx="5" class="pane border"/>
   <text x="31" y="359" class="small label accent" text-anchor="start">Opt-in parsing</text>
-  <text x="149" y="359" class="small muted" text-anchor="start">Users submit PDFs to MinerU. Later reads can reuse the parsed Markdown.</text>
+  <text x="149" y="359" class="small muted" text-anchor="start">Users submit PDFs to MinerU for parsing. Later reads can reuse the resulting Markdown.</text>
   </g>
   </g>
-  <rect x="0.5" y="0.5" width="799" height="385" rx="10" class="border" fill="none"/>
+  <rect x="0.5" y="0.5" width="839" height="385" rx="10" class="border" fill="none"/>
 </svg>

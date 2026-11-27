@@ -208,9 +208,21 @@ it('keys the install matrix npm cache on both dependency locks', () => {
   })
 })
 
-it('installs repository development dependencies only for the Linux browser smoke', () => {
-  const install = installMatrixSteps().find((step) => step.run === 'npm ci --ignore-scripts')
-  expect(install?.if).toBe("runner.os == 'Linux'")
+it('tests the installed Reader PDF runtime on all desktop platforms', () => {
+  const steps = installMatrixSteps()
+  const install = steps.find((step) => step.run === 'npm ci --ignore-scripts')
+  const browsers = steps.find((step) => step.run?.includes('npx playwright install'))
+  const smoke = steps.find((step) => step.run?.includes('lib/client.reader-pdf.js'))
+  expect(install).toEqual(expect.objectContaining({ run: 'npm ci --ignore-scripts' }))
+  expect(install?.if).toBeUndefined()
+  expect(browsers?.run).toContain('npx playwright install --with-deps chromium firefox webkit')
+  expect(browsers?.run).toContain('npx playwright install chromium')
+  expect(smoke?.if).toBeUndefined()
+  expect(smoke?.run).toContain('profiles/web/node_modules/dsh-zotero/lib/client.reader-pdf.js')
+  for (const browser of ['chromium', 'firefox', 'webkit'])
+    expect(smoke?.run).toContain(
+      `READER_PDF_BROWSER=${browser} npm run smoke:reader-pdf -- "$reader_chunk"`,
+    )
 })
 
 it.each([

@@ -74,7 +74,7 @@ tests/                  # 单元测试与端到端测试用例
 
 ## 文档资产
 
-`docs/` 下的中文文档与 `.en.md` 英文文档成对维护，修改一侧必须同步另一侧；术语与边界以 [产品模型](product-model.md) 为准。
+`docs/` 下有 13 对 zh/en 文档，修改一侧须同步另一侧。术语与边界以产品模型为准。[产品模型](product-model.md)
 
 | 文档                             | 内容                                                         |
 | -------------------------------- | ------------------------------------------------------------ |
@@ -83,8 +83,9 @@ tests/                  # 单元测试与端到端测试用例
 | [功能概览](features.md)          | 对话能力、文献轨迹、文献面板、写入与学术检索                 |
 | [研究 SOP 技能](skills.md)       | 八个按需研究流程、批处理预算与证据边界                       |
 | [工具参考](tools.md)             | 23 个本地工具（8 读 + 15 写）与 7 个学术检索工具             |
-| [配置参考](configuration.md)     | 四个设置命名空间、73 个字段与热更新机制                      |
+| [配置参考](configuration.md)     | 五个设置命名空间、77 个字段与热更新机制                      |
 | [故障排查](troubleshooting.md)   | 常见问题、原因与排查步骤                                     |
+| [科研阅读器运行时](reader.md)    | 阅读器组件、文档格式、阅读状态、预算与兼容基线               |
 | [系统架构](architecture.md)      | 数据流、分层职责与设计边界                                   |
 | [开发指南](development.md)       | 构建、测试、调试与发布流程                                   |
 | [开发留意](development-notes.md) | 未来开发需要复核的约束、行为边界与迁移事项                   |
@@ -372,13 +373,13 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 工具测试通过公开的 `@deepseek-ai/dsh-tool-testkit` 执行真实单调用管线，locale fixture 使用同 pin 的 `@deepseek-ai/dsh-client-test-runtime/src/translate.ts`：这个子路径由包的 `./src/*` 显式导出，且注册表包实际发布 `src`。该纯函数入口移除了本地翻译算法副本。工具包和客户端测试支持均只进入 devDependencies，并由精确 overrides 绑定 harness pin。
 
-完整 Slot runtime 已通过包显式发布的生产源码契约装配，并实际用于 slot 创建/销毁与资源组合测试。测试仅对加载器形式的 `/client` 入口使用该映射，普通 ESM 入口仍读取编译产物；原始资源编译包另有真实执行用例。Vitest 依赖按同一运行实例解析。入口组合测试另以公开 `TestClient` 运行生产 `bootClient`，渲染四个设置页签并验证保存、重载和完整卸载；本地记录替身仅用于故障注入，不能替代装配验收。升级 runtime、浏览器导出或测试运行器时，重跑发布源码映射的正反例、slot 生命周期与编译包执行用例。
+完整 Slot runtime 已通过包显式发布的生产源码契约装配，并实际用于 slot 创建/销毁与资源组合测试。测试仅对加载器形式的 `/client` 入口使用该映射，普通 ESM 入口仍读取编译产物；原始资源编译包另有真实执行用例。Vitest 依赖按同一运行实例解析。入口组合测试另以公开 `TestClient` 运行生产 `bootClient`，渲染五个设置页签并验证保存、重载和完整卸载；本地记录替身仅用于故障注入，不能替代装配验收。升级 runtime、浏览器导出或测试运行器时，重跑发布源码映射的正反例、slot 生命周期与编译包执行用例。
 
 ## CI 工作流
 
 `.github/workflows/` 下有五个工作流：
 
-- `release-branch.yml`：推送 `v*` 标签后，由只读质量作业生成单一产物，在 Linux、macOS、Windows 的干净 profile 中用 pnpm 11 安装并加载四个宿主入口；Linux 另跑浏览器 Web smoke，失败保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新 tag 发布通道 `stable` 分支；
+- 推送 `v*` 标签后，`release-branch.yml` 的只读质量作业生成单一产物。Linux、macOS、Windows 均在干净 profile 中用 pnpm 11 安装，加载五个宿主入口，并验证安装后的 Reader PDF 运行时和 Worker。Linux 还运行 Web 组合 smoke。失败时保留 profile 与安装日志。三个平台全部通过后，`npm-release` 通过 OIDC 向 npm 提交 tarball，`publish` 校验产物并更新 tag 发布通道 `stable` 分支。
 - `prebuilt.yml`：`main` 推送或手动触发时，构建并校验预编译产物、更新滚动通道 `release` 分支；`v*` 标签推送不触发。它与 `release-branch.yml` 共用 `release-branch` 并发组，两者不会同时移动各自的分支；
 - `verify-npm-release.yml`：发布工作流成功完成后启动，由 `npm-publication` 环境延迟运行。它复用原运行的产物，核验公开 tarball 后创建 GitHub Release；
 - `upstream-health.yml`：每周一 02:00 UTC 定时跑 `npm run release:check`，并比对已钉版本与上游 harness 主线；
@@ -409,13 +410,13 @@ dsh web --patch ./dev-lib.cordis.yml --port 3307
 
 `npm test` 与发布门禁不等价：它执行 `node scripts/test-lint.mjs` 加 `vitest run`（不跑覆盖率门禁），是日常回归命令；发布路径把这两件事分别交给第 3 步与第 5 步。
 
-三平台安装 smoke 将 `tests/fixtures/dsh-cli-consumer/` 的清单和 lockfile 复制到 runner 临时目录，再用 `npm ci` 安装固定版本的 dsh CLI 与 pnpm。矩阵中只有 Linux 浏览器检查需要安装仓库开发依赖。npm 缓存键包含两份 lockfile。CLI 安装步骤输出 npm 分阶段耗时，作业失败时保留计时文件。
+三平台安装 smoke 将 `tests/fixtures/dsh-cli-consumer/` 的清单和 lockfile 复制到 runner 临时目录，再用 `npm ci` 安装固定版本的 dsh CLI 与 pnpm。各平台的浏览器作业还按照 lockfile 安装仓库开发依赖。npm 缓存键包含两份 lockfile。CLI 安装步骤输出 npm 分阶段耗时，作业失败时保留计时文件。
 
 ### 版本、发行说明与发布动作
 
 版本号以 `package.json` 为准，发布前同步更新 `package-lock.json` 根清单，并准备该版本的变更、验证结果与迁移要求。版本 tag 使用 `v<version>`，指向通过全部门禁的 main 提交；tag、清单版本与发行说明版本必须一致。预发布版本使用 SemVer 写法（如 `1.3.0-alpha.1`），npm 发布时显式选择首个预发布标识作为 dist-tag（此例为 `alpha`；纯数字或 `latest` 标识使用 `next`），GitHub Release 同步标记为 prerelease 且不设为 Latest。正式版本发布到 `latest`。
 
-CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 四个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 tag 发布通道 `stable` 分支；`prebuilt.yml` 则更新跟随 main 的滚动通道 `release`。两个通道各自记录来源：main 被 amend 或 force push 重写后，滚动通道在下一次运行中自动以当前 main 重新初始化，`stable` 仍只允许沿 main 历史前进。发布作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
+CI 的 quality gate 生成 `release-artifact-<source SHA>`；安装矩阵的三个平台都消费其中的确切 tarball，由 consumer lockfile 安装发布版精确 pin 的 dsh CLI，保持宿主默认的 pnpm 构建批准策略，并从安装后的 profile 实际 import 五个宿主入口。Linux 继续验证浏览器组合、设置保存与重载。publish 作业下载该产物，验证来源及每个文件后，以 CAS lease 更新项目的 tag 发布通道 `stable` 分支；`prebuilt.yml` 则更新跟随 main 的滚动通道 `release`。两个通道各自记录来源：main 被 amend 或 force push 重写后，滚动通道在下一次运行中自动以当前 main 重新初始化，`stable` 仍只允许沿 main 历史前进。发布作业只下载、验证并发布既有产物。旧 tag 的来源早于已发布来源时，推送被拒绝。
 
 npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-release` 作业下载同一份已验证产物，重新校验来源与每个文件，并核对 tag、manifest 与产物内的版本一致。发布前查询 `registry.npmjs.org`。已有版本的名称、版本和 SHA-512 integrity 必须与产物一致。首次查询返回 404 时，作业通过 OIDC 将 `artifact.json` 指定的原 tarball 提交给 npm，符合条件的公开包自动附带 provenance。
 
@@ -428,3 +429,27 @@ npm 发布与 GitHub Release 已自动化：推送 `v<version>` tag 时，`npm-r
 本地 `npm run release:branch -- --dry-run --source-sha <HEAD SHA>` 可审阅产物；工作树须干净。真实推送要求显式 `--push --artifact <checked artifact directory>`，目标固定为项目 origin 的滚动 `release` 分支；加 `--branch stable` 审阅或发布 tag 通道。
 
 发布与 harness 升级的浏览器验收：在完整 `release:check` 之后运行 `npm run smoke:web-composition`，保留临时 profile、浏览器报告和错误日志；保证范围按实际测试的精确 pin 计。
+
+`build:client` 按 UTF-8 字节检查前端包是否超过 800 KiB 上限。CSS Modules 使用相对包根目录的路径生成类名，因此在源码和构建元数据一致时，临时目录与工作区构建的类名和字节数相同。
+
+要同时验收从文献面板打开阅读器，在隔离的 Zotero profile 中为一个具名条目导入至少两页的可搜索 PDF。运行 `npm run smoke:web-composition -- --reader-zotero-base-url http://127.0.0.1:24193/api --reader-fixture-title 'Synthetic Reader verification paper'`，填写隔离实例的端口和父条目完整标题。脚本在一次性的 Harness profile 中启用阅读器，经文献面板打开条目，将 PDF 选区及页段加入草稿，并验证关闭阅读器后恢复第 2 页。环回测试模型完成合成对话轮次。脚本重新加载会话后从历史引用打开第 2 页，再关闭阅读器并验证原生预览。浏览器验收会输出该样本从点击到画布可见的耗时。
+
+传入 `--reader-note-fixture-title` 和独立笔记在文献列表中的完整标题，可同时验证打开笔记。若父条目恰有一个名为 `Synthetic saved snapshot` 的本地 HTML 附件，且正文含 `Captured methods` 标题，可将父条目完整标题传给 `--reader-snapshot-fixture-title`，验证快照标题可见且图片未激活。
+
+若快照所在条目还包含类型为 `text/markdown` 的 `Synthetic attachment Markdown` 和类型为 `text/plain` 的 `Synthetic attachment plain text`，加上 `--reader-text-attachments`。Markdown 样本包含 `# Structured methods`、`**bounded result**` 与 `![Source chart](https://example.invalid/chart.png)`。UTF-8 文本样本在两行分别包含 `Synthetic sample: 𝒳 and β` 和 `Second line, literally **written**.`。使用带图笔记样本及 `--reader-result-note-preview` 时，测试还验证空闲会话拒绝写入后保留选区格式，以及模拟存储配额错误后仍可恢复草稿。
+
+传入 `--reader-parsed-fixture-dir` 指向隔离产物目录，其中应有已提交的 PDF 样本 Markdown 产物，带实例限定符的附件 ref 和完整 PDF SHA-256 必须一致。将样本第 2 页片段置于单独的 Markdown 段落。浏览器确认解析启用说明后，验证跳到缓存文本块以及返回 PDF 高亮。同一套样本还检查摘录 PNG、主动提交的会话模型翻译和发送后按引用高亮准确选区。加上 `--reader-parsed-geometry` 可验证坐标定位和截图。平铺内容列表需有第 2 页插图条目，图注为「Synthetic figure region」，坐标位于页面可见范围内。加上 `--reader-result-note-preview` 可在隔离组合中启用写入界面，核验回答和附件出处已预填到可编辑笔记。预览测试在笔记表单取消。它还用合成模型保持会话轮次，接受标注会话审批、拒绝 Zotero 计划审查，并检查标注列表仍为空。若笔记样本带有替代文本为「Synthetic note figure」的 32 × 12 PNG 及外部图片，可同时传入 `--reader-note-fixture-title` 和 `--reader-note-embedded-image`，验证本地图片按需加载且外部图片保持惰性。
+
+传入 `--reader-cached-region-text` 与 `--reader-parsed-geometry` 可验证截图按需读取同指纹的 MinerU 缓存文字。`content_list.json` 需在文字层空白区域放置一个合成 `text` 块，浏览器会将其与来源记录引用到草稿。
+
+用 `--reader-non-pdf-history` 同时指定 `--reader-note-fixture-title` 和 `--reader-snapshot-fixture-title`。隔离的笔记和 HTML 快照需包含脚本预期的样本文字。重载已完成轮次后，浏览器重新打开笔记并核对快照中的确切高亮范围。
+
+双附件样本可传入 `--reader-sibling-pdf-title` 指定另一份 PDF 的标题。该附件第 2 个物理页需有正文为「Methods and findings」的原生标注。脚本从文献面板选择原件，跳到另一份附件的标注，再经详情面板切回。结果笔记样本还通过回环会话模型翻译选区并显示译文。
+
+加上 `--reader-capture-image`，验证从输入区粘贴的已确认 PNG 和来源记录到达回环测试模型。用 `--reader-evidence-ref` 指定样本条目的限定 ref，验证检索证据和保存的论点链接可在 Reader 中打开。加上 `--reader-semantic-model-dir` 指向已安装锁定 `lightweight` 模型的目录，要求检索实际发生 ONNX 匹配。已安装包检查还会向语义 Worker 提供一个缺失的模型目录，以核验错误回执。
+
+使用 `--reader-result-note-preview` 时，可用 `--reader-write-probe-attachment` 传入隔离配置中尚无标注的 `[dsh-zotero-reader-probe]` PDF 的实例限定 ref。浏览器在同意每个 Harness 计划前核对渲染出的目标。测试人员需在 Zotero 桌面端处理原生 Local API 授权提示。脚本会在创建和编辑后回读标注，再核验是否删除。加上 `--reader-result-note-write` 可审批将回答保存为样本 PDF 父条目的关联笔记。脚本从同一实例回读笔记，核验父条目、回答和附件完整 ref。样本数据会保留此笔记，因此请在一次性配置中运行。若写入中途停止，应先在 Zotero 检查样本，再开始新一轮。
+
+完成构建后，运行 `npm run smoke:reader-pdf` 默认测试 Chromium。设置 `READER_PDF_BROWSER=firefox` 或 `READER_PDF_BROWSER=webkit` 可改用另一种已安装的 Playwright 浏览器。Firefox 使用配置的临时目录下独立的应用数据和本地应用数据目录，使打包浏览器在 macOS 27 上无需访问用户的 Firefox 数据即可启动。退出时脚本会删除这些目录。发布流程在 Linux 上用三种引擎验证已安装包的 PDF 运行时，在 macOS 和 Windows 上用 Chromium 验证。样本包括带有表格的富文本摘录，以及包含公式、表格和图表的双栏论文。[Playwright 浏览器安装](https://playwright.dev/docs/browsers)
+
+设置 `READER_PDF_BENCHMARK=1` 并运行 `npm run smoke:reader-pdf`，测量同时打开文本 PDF 和 320 页合成扫描 PDF 的表现。脚本包含损坏文档，并输出首尾页画布耗时、保留的画布数、主线程最长任务和 Worker 释放结果。

@@ -78,6 +78,22 @@ Wide screens show two columns (navigation, list) until an item is selected, whic
 
 The panel is dedicated to browsing and searching the local library. External literature is queried by the agent via scholarly retrieval and appears in the panel and trail once saved to the library.
 
+## Reading attachments in the Research Reader
+
+Enable `dsh-zotero/reader` under **Plugins**, then open an attachment from the Literature panel, Literature Trail, or a conversation citation. Reader can open local PDFs, HTML snapshots, Markdown, plain text, and Zotero notes. PDF tabs restore the last verified reading position and provide search, outline navigation, and zoom. With Reader disabled, PDFs open in the Harness preview.
+
+- Select PDF text to copy it, prepare a question or quotation in Composer, translate it, or draft a Zotero highlight or underline. Browser translation requires language support, and Reader shows download progress when the browser needs a language model. The session model receives the selected text when you submit it for translation or a suggested annotation comment.
+- Open **Capture region**, optionally choose to print the title and page labels below the image, and drag over one or more pages. Review the PNG, then download or copy it. Paste the PNG into Composer and use **Quote source and text in chat** to include the attachment, coordinates, and available text in the draft. Choose an image-capable model before sending the draft.
+- For a PDF with no or incomplete text layer, choose **Read cached region text** in the capture preview. Reader reads only the local MinerU cache for the same PDF version, shows blocks wholly inside the selected area, marks cross-boundary or missing pages incomplete, and can include the result with the source in a draft.
+- In an HTML snapshot, Markdown or plain-text attachment, or Zotero note, select text and choose **Create excerpt image**. The preview preserves the nearby text layout when the selected region fits the capture limits. Embedded images appear as their text alternatives. For larger excerpts or unavailable rendering, Reader offers a standard text layout and labels it in the preview.
+- Use **Cite PDF** to preview pages, bookmark sections, character ranges, or annotations. **Add this scope to review** keeps one excerpt or reference per attachment. Open another PDF and add it to prepare a single comparison draft. Sent citations reopen the attachment against its current version.
+- Open **Document details** to switch attachments by their Zotero titles, jump to an annotation in another PDF, page through associated notes and quote them as a batch, or copy an abstract into a draft. A personal-library write requires writes to be enabled, an active conversation turn, and both the session approval and the plan review. A completed answer can open a new note draft from its PDF citations.
+- In a note, choose **Show note image** to display a locally stored Zotero image up to 2 MiB. In **Edit text**, apply multiple formats to distinct or overlapping ranges in the same text run, including bold, italic, underline, strikethrough, highlight, superscript, subscript, and code. Editing the text clears range formatting while whole-run formatting stays in place. Draft edits are kept in the current browser session and can be reopened after closing Reader. If browser storage is unavailable, the draft shows when closing or reloading the browser tab will clear it.
+- Open a source in Literature Trail to verify a retrieved passage in Reader or connect it to a claim. With a cached MinerU result, use **Locate in parsed document** from a PDF selection or capture, or **Locate in PDF** from the parsed result.
+- Select text in a cached parsed document to translate the excerpt or create a PNG. Use the preview to quote the passage in Composer. **Reader citations** in the completed turn reopens the cached artifact and highlights the selected text.
+
+Runtime budgets, read paths, and compatibility baselines are in [Research Reader runtime](reader.en.md).
+
 ## Writing to the Library (Optional)
 
 Write tools are off by default. Turning on `writeEnabled` in settings registers fifteen tools that write only to the personal library (`zotero://user/0/`):

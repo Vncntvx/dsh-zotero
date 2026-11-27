@@ -164,25 +164,26 @@ export const NUMERIC_FIELD_KEYS: ReadonlySet<FieldKey> = new Set<FieldKey>(
   FIELD_SPECS.filter((spec) => spec.kind === 'number').map((spec) => spec.key),
 )
 
-/** The component-level tab identifiers for the 4-tab settings view. */
-export type SettingsTabId = 'general' | 'library' | 'scholarly' | 'enrichment'
+/** The component-level tab identifiers for the 5-tab settings view. */
+export type SettingsTabId = 'general' | 'library' | 'scholarly' | 'enrichment' | 'reader'
 
 /** Description of one tab partition. */
 interface SettingsTabDescriptor {
   readonly id: SettingsTabId
-  readonly labelKey: 'tabGeneral' | 'tabSettingsLibrary' | 'tabScholarly' | 'tabEnrichment'
+  readonly labelKey:
+    'tabGeneral' | 'tabSettingsLibrary' | 'tabScholarly' | 'tabEnrichment' | 'tabReader'
 }
 
 /**
- * The four tab partitions, in display order: one per component. The general tab
- * carries every core configuration group; the other three are managed by their
- * own form controllers.
+ * The five tab partitions, in display order. The general tab carries every core
+ * configuration group; each optional component has its own staged form.
  */
 export const SETTINGS_TABS: readonly SettingsTabDescriptor[] = [
   { id: 'general', labelKey: 'tabGeneral' },
   { id: 'library', labelKey: 'tabSettingsLibrary' },
   { id: 'scholarly', labelKey: 'tabScholarly' },
   { id: 'enrichment', labelKey: 'tabEnrichment' },
+  { id: 'reader', labelKey: 'tabReader' },
 ] as const
 
 /** The boolean fields, rendered as toggles. */

@@ -68,9 +68,9 @@ PDF 与解析标签页只有在带实例限定符的附件 ref 和完整 SHA-256
 
 文献轨迹从会话事件增量折叠，按窗口交付列表头并携带截断前的精确聚合（过滤计数、段落总数、导出去重数、每个列表的精确 total）；窗口后的列表由核心 `sourcePage` 按页补齐，续页必须携带上次的 `revision`，轨迹变动以 `ZOTERO_SOURCE_PAGE_STALE` 拒绝。证据事实保留附件、匹配方式与匹配字段；只有成功且结构合法的调用产生事实。
 
-### 本地写入
+论点关联由读者编辑。浏览器会话存储最多保留 32 个论点，每个论点最多 24 条关联，总长度最多 256 Ki 个 UTF-16 代码单元。每条关联保留片段、来源及附件 ref，以及可用的检索和位置标识。只有当前投影中可唯一匹配的片段才可从论点打开 Reader，定位仍经过来源详情中的相同核验流程。
 
-所有写入经 `ctx.zotero` 的统一接缝：能力门 → 只读预检 → `ctx.approval.request` → 计划审查卡 → Local API。Zotero 在鉴权时消耗一次性密钥，授权到发送完成期间独占；整次读改写周期含 15 分钟总时限，覆盖排队与授权。批量写最多 50 项，按依赖层先子后父；每项回执必须证明索引、身份、版本和全部提交字段，缺失或矛盾返回 `committed-unverified` 且不重试。
+### 本地写入
 
 Reader 编辑标注时携带表单所显示的版本。审批后，领域层从锁定的实例读出当前对象，核对标注类型和版本，并将该版本与既有请求头一并随 PATCH 提交到 Zotero。冲突时 Reader 刷新标注列表，由用户决定是否重新提交。`tests/local/write/annotations.spec.ts` 验证 Local API 请求及过期版本拒绝。
 
@@ -81,6 +81,8 @@ Reader 在标量编辑使用的同一版本下合并标注的标签变更，保�
 取消编辑或删除标注时，若原 Reader 标签页仍可见，焦点回到该标签页内触发操作的按钮。`tests/client/reader/ReaderTab.annotations.spec.tsx` 覆盖同时打开同一附件的两个视图，以及焦点回调前隐藏或关闭原标签页的情况。
 
 Reader 通过核心的 Markdown 笔记流程新建关联笔记。审批后，编辑流程在锁定的 Zotero 实例中核对界面所见版本，只在解析确认的普通文本片段位置写入转义后的文本及可选的粗体、斜体或代码格式，保留周围的 Zotero HTML、引文属性、标注反链及图片。片段内的格式选区使用提交文字的半开 UTF-16 偏移；写入前会校验两个边界，再转义并包裹选中文字。领域层重读保存的笔记以核验版本与内容。永久删除使用同样的版本校验及单条目 DELETE。草稿按 DSH 会话及带服务器限定符的条目存入浏览器会话存储。存储拒绝写入时，当前浏览器标签页在内存保留最多 16 条记录，包括用来覆盖旧存档的清除标记。版本不一致或提交结果未核验时，用户可以打开只读草稿并复制原文。经核验的保存会清除草稿。`tests/local/write/reader-notes.spec.ts` 验证标记保留与回读。宿主和客户端笔记测试覆盖审批、冲突和草稿恢复。
+
+所有写入经 `ctx.zotero` 的统一接缝：能力门 → 只读预检 → `ctx.approval.request` → 计划审查卡 → Local API。Zotero 在鉴权时消耗一次性密钥，授权到发送完成期间独占；整次读改写周期含 15 分钟总时限，覆盖排队与授权。批量写最多 50 项，按依赖层先子后父；每项回执必须证明索引、身份、版本和全部提交字段，缺失或矛盾返回 `committed-unverified` 且不重试。
 
 笔记比较 HTML 结构，只接受已核实的 Zotero 外层包装、控制字符清理与 HTML 解析等价形式；标签与集合按集合比较；个人库关系 URI 统一为本地身份。集合、笔记与合集归属在审批前用 `preflightWrite` 排除已知无效目标，审批后重新读取再写。计划卡的自由文本意见一律拒绝当前写入，即使同一答复选择 Apply。保存的检索在 PATCH 后重读并验证名称、全部条件与版本。
 
@@ -172,7 +174,7 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 ## 端侧契约与界面表面
 
-宿主半侧通过三个 Typert 服务在 `zotero` wire 命名空间注册端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`；`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`、`journalMetrics`；`EnrichmentService` 负责主动解析、产物回执、已解析文档管理与语义模型管理。`domainCall` 保留领域错误码并区分取消与 Gateway 错误；只有确切的 `gateway/service-unavailable` 表示组件缺席。
+宿主通过四个 Typert 服务在 `zotero` wire 命名空间注册端点。`ZoteroRuntime` 负责 `status`、`resolveAttachment`、`diagnostics`、`reportClientError`、`openProtocol`、`revokeWriteGrant`、`sourcePage`。`ZoteroLibraryService` 负责 `browse`、`collectionPath`、`search`、`item`、`childPage`、`export`、`write`、`readUrlPdf`、`releaseUrlPdf`、`journalMetrics`、`refreshJournalMetrics`。`ReaderService` 负责 `readerTranslate`、`readerSuggestAnnotation`、`readerDetails`、`readerNote`、`readerWriteNote`、`readerAnnotations`、`readerCreateAnnotations`、`readerUpdateAnnotation`、`readerDeleteAnnotation`。`EnrichmentService` 负责主动解析、产物回执、已解析文档管理与语义模型管理。`domainCall` 保留领域错误码并区分取消与 Gateway 错误。只有确切的 `gateway/service-unavailable` 表示组件缺席。
 
 文献面板与 Reader 共用文献面板组件的期刊指标 Remote 和已生效设置。面板加载 Zotero 条目后，在有列表候选时按当前页条目的刊名去重并查询。配置了详情指标时，选中条目的查询独立发起，并具有更高优先级。Reader 仅在用户点击期刊文章详情内的查询按钮后发起该查询，关闭详情或撤权时取消。`tests/client/reader/ReaderDetails.spec.tsx` 验证请求与撤权。宿主在独立授权开启时解析凭据，合并同一刊名的在途查询，请求启动间隔至少 500 毫秒，并遵守 EasyScholar 的 Retry-After 等待时间。成功结果以密钥与规范刊名的组合摘要为索引，原子写入宿主缓存，最多保留 512 条。记录保存规范刊名、指标和查询时间。六小时内复用结果。设置中的 `refreshJournalMetrics` 使用相同队列更新当前密钥保存的所有期刊，汇报成功数与失败原因。刷新失败时保留已有记录。最后一个调用方取消等待时中止查询；撤销授权或更换凭据会使内存代次失效。查询只向固定 HTTPS 端点发送期刊名与密钥，不跟随重定向。跨重启复用、密钥隔离和刷新失败的回退由 `tests/host/library/journal-metrics-cache.spec.ts` 验证。
 
@@ -180,7 +182,11 @@ URL PDF 阅读由 `library.allowUrlPdfRead` 独立授权；下载检查逐跳重
 
 EasyScholar 返回 `40006` 表示密钥的累计查询额度已耗尽。宿主结束该密钥当前待处理的查询，保留已有缓存，并在一分钟内直接返回额度状态。更换密钥后可立即恢复查询。
 
-浏览器只有一份 `lib/client.js`；所有表面在 `remote.zotero` 挂载后注册；文献面板及其配置行受 `whileServed('library')` 门控，未组合时不注册面板表面，也不发起面板请求。共享 DTO 不导入宿主执行上下文、不扩充宿主 `JobKindMap`、不经全文 spill 回调引入读取实现；写入审批上下文与 job kinds 只由宿主入口持有。浏览器单独编译且无 Node 全局，声明门禁读取 TypeScript 实际解析的文件清单，拒绝宿主 jobs/tools/agent 根入口。
+浏览器先加载 `lib/client.js`。打开 Reader 标签页或展示带阅读引用的已完成轮次时加载 Reader UI，打开 PDF 时加载 PDF 运行时和 Worker。所有表面在 `remote.zotero` 挂载后注册。`whileServed('library')` 控制文献面板、配置行和请求。共享 DTO 不导入宿主执行上下文或全文 spill 实现。写入审批上下文和 job kinds 由宿主入口持有。浏览器单独编译且无 Node 全局。声明门禁检查 TypeScript 实际解析的文件清单，拒绝宿主 jobs、tools 和 agent 根入口。
+
+Reader 文本附件页和解析结果页在按需加载的界面代码中应用 Markdown 图片策略，再把文本交给宿主渲染器。启动包负责准备资源和检查权限。解析页加载与图片测试覆盖界面代码加载失败，并验证远程图片仅呈现为链接，不发起图片请求。
+
+普通会话打开后，可在两个轮次之间编辑 Reader 本地草稿或向模型提交选段。宿主为所属会话解析 Agent，随后复查权限。Zotero 原生写入需要在 Harness 轮次内记录审批决定，并经过会话审批和计划审查。Reader 直接写入时，若没有对应的工具调用，则省略调用 ID，使网关能序列化审批请求。Harness 计划预览获得焦点时，Reader 标签页保持挂载，关闭标签页时取消工作。宿主测试验证请求结构和撤权，打包 Web 验收通过单次许可后拒绝计划，并核验 Zotero 未发生写入。
 
 表面包括文献轨迹（`conversation.view`，id `zotero`，order 30）、文献面板（`sidebarRightTabs` + `sidebar.right.pane.tab`）、工具卡片（`tool.call.toolview`）、设置与插件管理（`plugins.bundle.config` 等）、右键菜单（`contextMenus`）、文档预览动作（`sidebar.right.tab.document.actions` / `.unpreviewable`）。面板的数据面、访问门禁、会话绑定、导航状态与写入口以 `src/client/**` 的实现为准；布局档位在 `library.module.css`，用户可见行为在 `features.md`。
 

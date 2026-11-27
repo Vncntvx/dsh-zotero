@@ -2,6 +2,8 @@ import { lockedPathOf } from './shared/lockfile.mjs'
 import { declarationDependencyProblems } from './published-declarations.mjs'
 import { smokeArchiveWorker } from './smoke-archive-worker.mjs'
 import { assertBuildFresh } from './build-state.mjs'
+import { readerPdfPackPaths } from './build-reader-pdf.mjs'
+import { parsedDocumentPackPaths, readerUiPackPaths } from './build-client.mjs'
 /**
  * Prove the artifact a user installs actually carries what the plugin
  * declares.
@@ -295,6 +297,9 @@ export function allowedPackPaths(manifest, base = root) {
     'lib/.build-state.json',
     'lib/client.js',
     'lib/client.js.map',
+    ...readerPdfPackPaths,
+    ...readerUiPackPaths,
+    ...parsedDocumentPackPaths,
   ])
   /** @param directory {string} @param prefix {string} */
   const walk = (directory, prefix = '') => {
@@ -316,7 +321,7 @@ export function allowedPackPaths(manifest, base = root) {
     if (existsSync(resolve(base, path)))
       for (const file of declaredPackFiles(path, base)) paths.add(file)
   }
-  for (const component of ['', 'library/', 'scholarly/', 'enrichment/'])
+  for (const component of ['', 'library/', 'scholarly/', 'enrichment/', 'reader/'])
     for (const language of ['en', 'zh']) paths.add(`locale/${component}${language}.json`)
   for (const path of packedRuntimePaths()) paths.add(path)
   return [...paths].sort()
@@ -397,7 +402,13 @@ function verifyPack() {
     return
   }
   const { paths, problems } = expectedPaths(manifest)
-  const expected = [...paths, ...packedRuntimePaths()].sort()
+  const expected = [
+    ...paths,
+    ...packedRuntimePaths(),
+    ...readerPdfPackPaths,
+    ...readerUiPackPaths,
+    ...parsedDocumentPackPaths,
+  ].sort()
   if (problems.length > 0) {
     for (const problem of problems) console.error(`verify-pack: ${problem}`)
     process.exitCode = 1

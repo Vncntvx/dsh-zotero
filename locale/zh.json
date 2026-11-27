@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "dsh-zotero",
-    "description": "DeepSeek Harness 的本地 Zotero 插件：在对话中检索文献并核对文献轨迹，在文献面板里浏览全库、复制引用并受审批写入。",
+    "description": "dsh-zotero 是一款以本地 Zotero 文献库为基础的 AI 原生科研工作流插件，运行于 DeepSeek Harness。从研究问题出发，Agent 检索文献、提取有出处的证据、比较论文并生成引用。你可以在文献轨迹中核对检索范围、原文摘录与被跳过的来源，也可以在文献面板中浏览合集、阅读 PDF 和复制引用。",
     "detail": "docs/plugin-detail.md"
   }
 }

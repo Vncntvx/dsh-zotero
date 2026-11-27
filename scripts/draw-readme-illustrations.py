@@ -825,85 +825,85 @@ def project_overview(s):
     s.rect(0, 0, s.width, s.height)
 
     s.group("scholarly-indexes")
-    s.rect(18, 48, 156, 70, "pane border", 6)
+    s.rect(18, 48, 164, 70, "pane border", 6)
     s.text(30, 76, ("外部学术索引", "Scholarly indexes"), "label")
-    s.text(30, 100, ("学术检索 · 可选", "Opt-in search"), "small muted")
+    s.text(30, 100, ("可选检索", "Opt-in search"), "small muted")
     s.end()
 
     s.group("local-zotero")
-    s.rect(18, 144, 156, 117, "pane border", 6)
+    s.rect(18, 144, 164, 117, "pane border", 6)
     s.text(30, 173, ("本地 Zotero", "Local Zotero"), "lead")
     s.text(30, 194, "Local API", "small mono accent")
-    s.line(30, 205, 161, 205)
+    s.line(30, 205, 169, 205)
     s.lines(30, 226, (
         ["条目 · 合集", "PDF · 批注"], ["Items · Collections", "PDFs · Annotations"],
     ), "small muted", 20)
     s.end()
-    s.text(18, 291, ("写入需审批", "Writes require approval"), "small muted")
+    s.text(30, 291, ("写入需审批", "Writes require approval"), "small muted")
 
     s.group("harness-workspace")
-    s.rect(212, 16, 570, 308, "pane border", 8)
+    s.rect(212, 16, 610, 308, "pane border", 8)
     s.text(230, 43, "DeepSeek Harness", "lead")
     s.group("research-question")
-    s.rect(230, 55, 534, 35, "chrome", 5)
+    s.rect(230, 55, 574, 35, "chrome", 5)
     s.text(244, 77, ("研究问题", "Research question"), "small label")
     s.text(390, 77, ("“哪些论文支持这个结论？”", "“Which papers support this claim?”"), "small muted")
     s.end()
 
     s.group("agent-research")
-    s.rect(230, 112, 229, 132, "paper border", 6)
+    s.rect(230, 112, 234, 132, "paper border", 6)
     s.icon("spark", 244, 123)
     s.text(269, 137, ("Agent 研读", "Research agent"), "lead")
-    s.text(244, 162, ("按需加载研究 SOP", "Research SOP on demand"), "small label")
-    s.text(244, 182, ("阶段预算 · 停止条件", "Budgets · Stop conditions"), "small muted")
-    s.line(244, 194, 445, 194)
+    s.text(244, 162, ("动态加载研究 SOP", "Dynamic SOP loading"), "small label")
+    s.text(244, 182, ("阶段预算与终止条件", "Stage budgets · Exit criteria"), "small muted")
+    s.line(244, 194, 450, 194)
     s.text(244, 214, ("Zotero 工具", "Zotero tools"), "small label")
     s.text(244, 233, ("检索 · 摘录 · 生成引用", "Search · Retrieve · Cite"), "small muted")
     s.end()
 
     s.group("session-literature-trail")
-    s.rect(535, 112, 229, 132, "select border", 6)
-    s.icon("link", 549, 123)
-    s.text(574, 137, TRAIL, "lead accent")
-    s.text(549, 162, ("本会话 · 只读", "Session · Read-only"), "small accent")
-    s.line(552, 180, 552, 225)
+    s.rect(530, 112, 274, 132, "select border", 6)
+    s.icon("link", 544, 123)
+    s.text(569, 137, TRAIL, "lead accent")
+    s.text(544, 162, ("本会话 · 只读", "Session · Read-only"), "small accent")
+    s.line(547, 180, 547, 225)
     for y, value in [
         (187, ("检索条件 · 范围", "Queries · Scope")),
-        (208, ("摘录 · 出处 · 覆盖度", "Passages · Source · Coverage")),
-        (229, ("去重后的 BibTeX 与引用", "BibTeX · Citations")),
+        (208, ("摘录 · 出处 · 覆盖度", "Passages · Sources · Coverage")),
+        (229, ("BibTeX 与引用去重汇总", "Deduplicated BibTeX & citations")),
     ]:
-        s.dot(552, y - 5)
-        s.text(565, y, value, "small")
+        s.dot(547, y - 5)
+        s.text(560, y, value, "small")
     s.end()
 
     s.group("independent-library-panel")
-    s.rect(230, 275, 534, 33, "paper border", 5)
+    s.rect(230, 275, 574, 33, "paper border", 5)
     s.icon("folder", 244, 283)
     s.text(268, 297, PANEL, "lead")
-    s.text(428, 297, ("独立浏览文库 · 阅读 PDF · 复制引用",
-                     "Browse the library · Read PDFs · Copy citations"), "small muted")
+    s.text(428, 297, ("独立浏览文献库 · 阅读 PDF · 复制引用",
+                     "Browse independently · Read PDFs · Copy citations"), "small muted")
     s.end()
     s.text(497, 136, "Zotero", "small muted", "middle")
     s.text(497, 154, ("工具结果", "results"), "small muted", "middle")
-    s.text(365, 266, ("加入对话草稿", "Add to chat draft"), "small muted")
+    s.text(365, 266, ("文献引用填入会话草稿", "Insert references into chat draft"), "small muted")
     s.end()
 
     s.group("research-connections")
-    connect("M174 83H187V133H224", dashed=True)
-    connect("M225 129l4 4-4 4M174 178H229m-4-4 4 4-4 4")
-    connect("M194 178V291H229m-4-4 4 4-4 4")
-    connect("M346 91v20m-4-4 4 4 4-4M459 168H534m-4-4 4 4-4 4")
+    connect("M182 83H195V133H224", dashed=True)
+    connect("M225 129l4 4-4 4M182 178H229m-4-4 4 4-4 4")
+    connect("M202 178V291H229m-4-4 4 4-4 4")
+    connect("M346 91v20m-4-4 4 4 4-4M464 168H529m-4-4 4 4-4 4")
     connect("M346 274V250", dashed=True)
     connect("M342 249l4-4 4 4")
-    s.dot(194, 178)
+    s.dot(202, 178)
     s.end()
 
     s.group("optional-document-parsing")
-    s.rect(18, 339, 764, 31, "pane border", 5)
+    s.rect(18, 339, 804, 31, "pane border", 5)
     s.text(31, 359, ("可选解析", "Opt-in parsing"), "small label accent")
     s.text(149, 359, (
-        "用户主动提交 PDF 给 MinerU，解析后的 Markdown 可供后续研读复用。",
-        "Users submit PDFs to MinerU. Later reads can reuse the parsed Markdown.",
+        "用户主动提交 PDF 至 MinerU 解析，生成的 Markdown 可供后续研读复用。",
+        "Users submit PDFs to MinerU for parsing. Later reads can reuse the resulting Markdown.",
     ), "small muted")
     s.end()
 
@@ -928,8 +928,8 @@ def main():
 
     scenes = (
         (project_overview, ("dsh-zotero 科研工作流架构", "dsh-zotero research workflow architecture"),
-         ("研究问题进入 DeepSeek Harness 会话。Agent 按需加载研究 SOP，调用 Zotero 工具和可选的外部学术检索。Zotero 工具结果进入会话文献轨迹，可核对摘录、出处与覆盖度并导出。文献面板提供独立的本地库浏览，并可将选中的文献带入对话草稿。写入需审批，MinerU 解析需用户提交文档。",
-          "A research question enters a DeepSeek Harness session. The agent loads a research SOP and uses Zotero tools and opt-in scholarly search. The session literature trail collects Zotero tool results for passage, source, and coverage review, and for export. The literature panel browses Zotero independently and can add selected papers to the chat draft. Library writes require approval, and MinerU parsing requires user submission.")),
+         ("研究问题进入 DeepSeek Harness 会话。Agent 动态加载研究 SOP，按阶段预算和终止条件调用 Zotero 工具及可选的外部学术检索。文献轨迹汇总本会话的工具结果，供核对摘录、出处和覆盖度，并提供 BibTeX 与引用的去重导出。文献面板支持独立浏览文献库，并将选中条目的引用填入会话草稿。写入需审批。用户可主动提交 PDF 至 MinerU 解析，生成的 Markdown 可供后续研读复用。",
+          "A research question enters a DeepSeek Harness session. The agent dynamically loads a research SOP and follows its stage budgets and exit criteria when using Zotero tools and opt-in scholarly search. The session literature trail collects tool results for passage, source, and coverage review, and offers deduplicated BibTeX and citation exports. The literature panel lets users browse the library independently and insert references to selected items into the chat draft. Library writes require approval. Users can submit PDFs to MinerU for parsing, and later reads can reuse the resulting Markdown.")),
         (chat_search, ("Agent 对话中的 Zotero 检索", "Zotero search in chat"),
          ("本地库检索问题、工具调用，以及五个查询的文献与笔记命中数。", "A local library question, tool calls, and paper and note counts for five queries.")),
         (chat_answer, ("摘要证据与论文时间线", "Abstract evidence and paper timeline"),
@@ -967,7 +967,7 @@ def main():
     for draw, title, desc in scenes:
         for lang, suffix in enumerate(("zh", "en")):
             if draw == project_overview:
-                scene = Scene(lang, height=386)
+                scene = Scene(lang, width=840, height=386)
             else:
                 scene = Scene(lang, width=1000 if draw == panel_full else 800)
             draw(scene)

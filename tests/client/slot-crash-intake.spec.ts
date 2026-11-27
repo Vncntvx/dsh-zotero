@@ -91,7 +91,7 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
     sidebarRight: { openTabs: { getSnapshot: () => [], subscribe: () => () => {} } },
     // A required injected service: the entry registers the library tab on it.
     sidebarRightTabs: { register: () => () => {} },
-    locale: { register: () => {}, bind: () => (key: string) => key },
+    locale: { register: () => () => {}, bind: () => (key: string) => key },
     remote: {
       $mount: async () => async () => {},
       $on: () => () => undefined,
@@ -131,15 +131,17 @@ function intakeWorld(journal: ZoteroClientErrorReport[]): IntakeWorld {
     },
     inject: (_deps: readonly string[], callback: (ctx: unknown) => void) => {
       const owned: Array<() => void> = []
+      const previousCollector = collector
       collector = owned
       try {
         callback(ctx)
       } finally {
-        collector = undefined
+        collector = previousCollector
       }
       const dispose = async () => {
         for (const disposer of owned.reverse()) disposer()
       }
+      previousCollector?.push(() => void dispose())
       return Object.assign(Promise.resolve({ dispose }), { dispose })
     },
     configForms: {
@@ -402,8 +404,7 @@ describe('the slot crash intake', () => {
     await dispose()
 
     expect(world.disposals()).toBeGreaterThan(before)
-    // The effect's disposer released the listener, so a crash arriving after
-    // teardown files nothing at all: the seam has no listener left to fire.
+    // A crash after teardown has no listener and files nothing.
     world.crash(
       'tool.call.toolview',
       storedEntry({ name: 'tool.call.toolview', key: 'zotero_search', locale: 'zotero' }),
@@ -436,9 +437,7 @@ describe('the slot crash intake', () => {
     )
     await Promise.resolve()
 
-    // Each mounted half reports into its own namespace: two plugin instances on
-    // one page cannot cross their crash streams the way a singleton would, and
-    // an unmounting half cannot clear the other's intake.
+    // Each plugin instance keeps its own crash stream, including across unmount.
     expect(first.reports.map((report) => report.message)).toEqual(['one'])
     expect(second.reports.map((report) => report.message)).toEqual(['two'])
   })

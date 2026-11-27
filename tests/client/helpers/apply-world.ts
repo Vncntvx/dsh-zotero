@@ -203,8 +203,7 @@ export function fakeWorld(
     },
     /**
      * Start a fiber for `deps`, run its callback, and hand back the disposer
-     * that unwinds the effects it registered: the shape
-     * `vendor/cordis/src/registry.ts` gives `ctx.inject`.
+     * that unwinds registered effects, matching `vendor/cordis/src/registry.ts`.
      */
     inject: (deps: readonly string[], callback: (ctx: unknown) => void) => {
       world.injectDeps.push([...deps])
@@ -230,6 +229,7 @@ export function fakeWorld(
       } finally {
         collector = previousCollector
       }
+      previousCollector?.push(() => void dispose())
       return Object.assign(Promise.resolve({ dispose }), { dispose })
     },
     configForms: {

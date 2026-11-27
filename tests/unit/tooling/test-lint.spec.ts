@@ -180,7 +180,7 @@ describe('extension coverage guard', () => {
 
   it('scans the locale catalogs as text roots', () => {
     expect(TEXT_ROOTS).toContain('locale')
-    expect(BINARY_EXTENSIONS).toEqual(['.png', '.webp'])
+    expect(BINARY_EXTENSIONS).toEqual(['.pdf', '.png', '.webp'])
   })
 })
 

@@ -26,3 +26,5 @@ export declare function clientBuildPlugins(options?: {
 
 /** Build the browser client bundle once, or keep a watch context alive. */
 export declare function buildClientBundle(options?: { watch?: boolean }): Promise<void>
+export const readerUiPackPaths: readonly string[]
+export const parsedDocumentPackPaths: readonly string[]

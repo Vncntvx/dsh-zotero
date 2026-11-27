@@ -91,7 +91,7 @@ export const TEXT_EXTENSIONS = [
  * the guard, so the next binary asset has to be declared rather than silently
  * skipped.
  */
-export const BINARY_EXTENSIONS = ['.png', '.webp']
+export const BINARY_EXTENSIONS = ['.pdf', '.png', '.webp']
 
 /**
  * The control bytes a text file may contain: tab, newline, carriage return.
@@ -109,7 +109,7 @@ export const MAX_SPEC_LINES = 726
 export const STANDARD_SPEC_LINES = 400
 
 export const SPEC_SIZE_BASELINE = Object.freeze({
-  'tests/client/apply.spec.ts': 680,
+  'tests/client/apply.spec.ts': 679,
   'tests/client/enrichment/enrichment-model-controller.spec.ts': 451,
   'tests/client/enrichment/enrichment-model-form.spec.tsx': 486,
   'tests/client/enrichment/parse-dialog.spec.tsx': 403,
@@ -121,9 +121,9 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/library/library-write.spec.tsx': 591,
   'tests/client/library/remote-contract-library.spec.ts': 503,
   'tests/client/open/PdfReadButton.spec.tsx': 463,
-  'tests/client/settings/ZoteroSettingsSection.spec.tsx': 516,
   'tests/client/settings/scholarly-form.spec.tsx': 435,
-  'tests/client/slot-crash-intake.spec.ts': 445,
+  'tests/client/settings/ZoteroSettingsSection.spec.tsx': 516,
+  'tests/client/slot-crash-intake.spec.ts': 444,
   'tests/client/sources/decoders.spec.ts': 490,
   'tests/client/sources/reducer-evidence.spec.ts': 483,
   'tests/client/sources/reducer-outputs.spec.ts': 653,
@@ -136,7 +136,7 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/client/workspace/ExportsLens.spec.tsx': 506,
   'tests/client/workspace/SourceAuditPanel.spec.tsx': 408,
   'tests/client/workspace/SourceEvidence.spec.tsx': 590,
-  'tests/host/doc-coverage.spec.ts': 440,
+  'tests/host/doc-coverage.spec.ts': 438,
   'tests/host/doc-examples.spec.ts': 515,
   'tests/host/enrichment-api-contract.spec.ts': 465,
   'tests/host/enrichment-artifact-store.spec.ts': 410,
@@ -149,11 +149,11 @@ export const SPEC_SIZE_BASELINE = Object.freeze({
   'tests/host/source-ledger.spec.ts': 546,
   'tests/host/write/write-http.spec.ts': 614,
   'tests/integration/zotero.integration.spec.ts': 706,
-  'tests/local/browse.spec.ts': 430,
+  'tests/local/browse.spec.ts': 415,
   'tests/local/export.spec.ts': 565,
   'tests/local/get.spec.ts': 418,
   'tests/local/path-resolution.spec.ts': 468,
-  'tests/local/retrieve/retrieve-sources.spec.ts': 538,
+  'tests/local/retrieve/retrieve-sources.spec.ts': 508,
   'tests/local/scope-directory.spec.ts': 418,
   'tests/local/search/search-filters.spec.ts': 589,
   'tests/local/search/search-scan.spec.ts': 698,

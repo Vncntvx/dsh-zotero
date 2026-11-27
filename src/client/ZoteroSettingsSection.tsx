@@ -1,8 +1,8 @@
 /**
  * The Zotero settings page: rendered in the Plugins manager detail page
  * (`plugins.bundle.config` slot, keyed by package name). It renders the visible
- * settings of the `zotero`, `library`, `scholarly`, and `enrichment` namespaces
- * across a unified 4-tab interface, one tab per component.
+ * settings of the `zotero`, `library`, `scholarly`, `enrichment`, and `reader`
+ * namespaces across a unified 5-tab interface, one tab per component.
  *
  * Tab 1: General (conversation tab, personal library write gate, Local API
  * connection, search and reading budgets, background jobs, diagnostics)
@@ -10,8 +10,9 @@
  * Tab 3: Scholarly Search (API keys, Polite Pool email, scholarly quotas)
  * Tab 4: Document Enrichment (MinerU mode, token, output directory, and
  * semantic model controls)
+ * Tab 5: Document reading (reading history and position persistence)
  *
- * All four tab panels remain mounted in the DOM to prevent unmount-triggered
+ * All five tab panels remain mounted in the DOM to prevent unmount-triggered
  * discard of uncommitted drafts when navigating between tabs. Visibility is
  * toggled via CSS hidden attributes. Each tab renders one harness `SettingsForm`
  * and therefore one save; the Literature panel tab composes the `library` and
@@ -43,8 +44,10 @@ import { SETTINGS_TABS, type SettingsTabId, type ZoteroCardFace } from './zotero
 import type { ScholarlyCardFace, ScholarlyCardState } from './scholarly-form-controller.ts'
 import type { EnrichmentCardFace, EnrichmentCardState } from './enrichment-form-controller.ts'
 import type { LibraryCardFace, LibraryCardState } from './library-form-controller.ts'
+import type { ReaderCardFace, ReaderCardState } from './reader-settings-controller.ts'
 import { LibrarySettingsForm } from './LibrarySettingsForm.tsx'
 import { EnrichmentSettingsForm } from './EnrichmentSettingsForm.tsx'
+import { ReaderSettingsForm } from './ReaderSettingsForm.tsx'
 import { CitationDefaultsForm } from './CitationDefaultsForm.tsx'
 import type { CitationCardFace, CitationCardState } from './citation-form-controller.ts'
 import { composeSettingsForm, type ComposedSettingsPart } from './composed-settings.ts'
@@ -59,9 +62,11 @@ export type ZoteroSettingsSectionProps = PropsRuntime<'plugins.bundle.config'> &
     readonly useEnrichmentCard?: SnapshotSelectorHook<EnrichmentCardState>
     readonly enrichment?: EnrichmentCardFace
     readonly useLibraryCard?: SnapshotSelectorHook<LibraryCardState>
+    readonly useReaderCard?: SnapshotSelectorHook<ReaderCardState>
     readonly useCitationCard: SnapshotSelectorHook<CitationCardState>
     readonly citation: CitationCardFace
     readonly library?: LibraryCardFace
+    readonly reader?: ReaderCardFace
     readonly probe?: () => Promise<RemoteResult<ZoteroStatusView>>
     readonly revokeWriteGrant?: () => Promise<RemoteResult<ZoteroWriteGrantRevokeView>>
   }
@@ -78,7 +83,7 @@ export function formLabels(t: TranslateNS<'zotero'>): SettingsFormLabels {
 }
 
 /**
- * Render the unified 4-tab Zotero settings page.
+ * Render the unified 5-tab Zotero settings page.
  * @param props - locale copy, the page snapshot, and its form actions.
  * @returns the page, with the official chrome around its grouped form.
  */
@@ -96,6 +101,7 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
   const libraryState = props.useLibraryCard
     ? props.useLibraryCard((snapshot) => snapshot)
     : undefined
+  const readerState = props.useReaderCard ? props.useReaderCard((snapshot) => snapshot) : undefined
   const labels = useMemo(() => formLabels(t), [t])
   const library = props.library
   const libraryAvailable =
@@ -231,6 +237,29 @@ export function ZoteroSettingsSection(props: ZoteroSettingsSectionProps): ReactN
         ) : (
           <p className={css.note} role="status">
             {t('enrichmentDisabled')}
+          </p>
+        )}
+      </div>
+
+      <div
+        className={css.tabPanel}
+        role="tabpanel"
+        id="zotero-panel-reader"
+        aria-labelledby="zotero-tab-reader"
+        hidden={activeTab !== 'reader'}
+      >
+        {props.reader && readerState?.available ? (
+          <SettingsForm
+            labels={labels}
+            state={readerState}
+            onSave={props.reader.save}
+            onDiscard={props.reader.discard}
+          >
+            <ReaderSettingsForm t={t} state={readerState} actions={props.reader} />
+          </SettingsForm>
+        ) : (
+          <p className={css.note} role="status">
+            {t('readerDisabled')}
           </p>
         )}
       </div>

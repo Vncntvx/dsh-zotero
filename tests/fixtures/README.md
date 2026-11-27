@@ -22,3 +22,7 @@ spec with `DSH_CAPTURE_SCHOLARLY_RECEIPTS=1`.
 Semantic measurement provenance is recorded beside its datasets and archived
 vectors in `semantic-admission/model-profiles-report.json`; synthetic calibration
 self-checks are labeled separately from real-model measurements.
+
+`reader-locked.pdf` is the two-page synthetic PDF from `scripts/smoke-reader-pdf.mjs`
+encrypted by qpdf with the fixture password `reader-fixture`. The browser smoke
+checks a wrong password, a retry, and successful unlock against the real PDF.js worker.

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "dsh-zotero",
-    "description": "Zotero plugin for DeepSeek Harness: search and read papers in conversation, audit the literature trail, and browse the literature panel for citations and approved writes.",
+    "description": "dsh-zotero is an AI-native research workflow plugin for DeepSeek Harness, built around your local Zotero library. Start with a research question. The agent searches for papers, extracts passages with source locations, compares papers, and generates citations. Use the literature trail to check the search scope, passages, and skipped sources. In the literature panel, you can browse collections, read PDFs, and copy citations directly.",
     "detail": "docs/plugin-detail.en.md"
   }
 }

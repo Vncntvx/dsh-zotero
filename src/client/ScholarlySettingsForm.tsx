@@ -11,7 +11,7 @@
  * first key save. The scholarly `foregroundWaitMs` field is likewise
  * config-only, so the scholarly job group does not repeat it.
  *
- * Shared by the unified 4-tab settings view (Tab 3) and the dedicated
+ * Shared by the unified 5-tab settings view (Tab 3) and the dedicated
  * `dsh-zotero#scholarly` row configuration page.
  * @module dsh-zotero/client/ScholarlySettingsForm
  */

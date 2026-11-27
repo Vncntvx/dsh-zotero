@@ -217,3 +217,15 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Review trigger**: after a Zotero upgrade, query whole-library `/tags` for a subset of tags and check the results and total.
 - **Verification**: `tests/local/browse.spec.ts` simulates the endpoint ignoring the query and checks matches on later pages, prefix matching, and empty results.
 - **Follow-up**: once upstream supports whole-library search, check case and paging semantics before removing local filtering.
+
+## DN-53: PDF.js canvas selection rendering fails inside a shadow root
+
+- **Upstream**: `PDFViewer` in `pdfjs-dist` 6.3.289.
+- **Upstream feature**: `enableSelectionRendering` paints the selection onto the page canvas, on by default when the browser supports `backdrop-filter`, and marks the text layer `selectionRendering` to make the native `::selection` transparent.
+- **Upstream defect**: the canvas renderer reads `document.getSelection()`, whose range retargets to the shadow host in the main document, so `intersectsNode` never matches the text layer and nothing is painted; the native highlight is already off, so the reader shows no selection at all and only the toolbar actions reveal that anything was selected.
+- **Local patch**: `mountPdf` passes `enableSelectionRendering: false` to the viewer, so the selection returns to native `::selection`, coloured by `--dsw-alias-bg-document-selection` in the shadow theme.
+- **Why this is a compromise**: the sharper high-DPI outline of the canvas renderer and its speed are lost; native selection still works on scaled pages.
+- **Upstream expectation**: selection reads go through `getComposedRanges` and match text layers inside the shadow root, or the canvas renderer stays off for shadow containers.
+- **Review trigger**: after a `pdfjs-dist` upgrade, drag-select text on a shadow page and check that the highlight appears, while reading the `enableSelectionRendering` default and the selection API it uses.
+- **Verification**: `tests/client/reader/pdf-runtime.spec.ts` asserts the viewer option; `scripts/smoke-reader-pdf.mjs` checks rendering and selection in a browser.
+- **Follow-up**: once upstream handles shadow selections, drop the option and let the shadow theme go back to colours only.

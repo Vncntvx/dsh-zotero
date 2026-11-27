@@ -29,7 +29,8 @@ import { assertBuildFresh, writeBuildState } from './build-state.mjs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
-import { buildClientBundle } from './build-client.mjs'
+import { buildClientBundle, parsedDocumentPackPaths, readerUiPackPaths } from './build-client.mjs'
+import { readerPdfPackPaths } from './build-reader-pdf.mjs'
 import { vendorRuntime } from './vendor-onnxruntime.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -38,6 +39,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE_DIR = join(root, 'src')
 /** The browser half's source root, excluded from the Node transpile. */
 const CLIENT_DIR = join(SOURCE_DIR, 'client')
+const clientChunkPaths = [...readerPdfPackPaths, ...readerUiPackPaths, ...parsedDocumentPackPaths]
 
 /**
  * Every Node-half TypeScript source file, in stable order.
@@ -70,6 +72,7 @@ function fullBuildOutputs() {
       return [join(root, 'lib', `${stem}.js`), join(root, 'lib', `${stem}.d.ts`)]
     }),
     join(root, 'lib', 'client.js'),
+    ...clientChunkPaths.map((path) => join(root, path)),
   ]
 }
 
@@ -120,6 +123,7 @@ function requiredOutputsFrom(exportsMap) {
   }
   visit(exportsMap)
   outputs.add('lib/client.js')
+  for (const path of clientChunkPaths) outputs.add(path)
   return [...outputs].sort()
 }
 

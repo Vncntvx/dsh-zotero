@@ -5,9 +5,9 @@
  * @module dsh-zotero/client/download
  */
 
-/** Download one text payload as a file with the given name and MIME type. */
-export function downloadBlob(text: string, fileName: string, mime: string): void {
-  const blob = new Blob([text], { type: mime })
+/** Download one payload as a file with the given name and MIME type. */
+export function downloadBlob(payload: string | Blob, fileName: string, mime: string): void {
+  const blob = typeof payload === 'string' ? new Blob([payload], { type: mime }) : payload
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

@@ -1,6 +1,7 @@
 import { createStatusProbe } from './status-probe.ts'
 import { ParsedDocuments } from './parsed-documents.ts'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
+import { registerReader, type ReaderNoteOpener, type ReaderOpener } from './reader/register.ts'
 import { ZoteroPdfRecoveryMenu } from './components/library/ZoteroPdfRecoveryMenu.tsx'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { createPdfReaderRegistry, type PdfReaderRegistry } from './url-pdf-readers.ts'
@@ -86,6 +87,7 @@ import { EnrichmentFormController } from './enrichment-form-controller.ts'
 import type { EnrichmentCredentialPort, EnrichmentModelPort } from './enrichment-form-controller.ts'
 import { LibraryFormController } from './library-form-controller.ts'
 import { CitationFormController } from './citation-form-controller.ts'
+import { ReaderSettingsController } from './reader-settings-controller.ts'
 import type { ZoteroDetailFace, ZoteroProbeFace } from './components/plugin/faces.ts'
 import {
   artifactIdOf,
@@ -96,6 +98,7 @@ import {
 } from '../contract.ts'
 import {
   ENRICHMENT_SETTINGS_NAMESPACE,
+  READER_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../settings-namespace.ts'
@@ -118,11 +121,9 @@ import {
   parseParsedTabAddress,
   parsedTabAddress,
 } from './parsed-tab.ts'
-import {
-  ParsedDocumentTab,
-  ParsedDocumentTitle,
-  type ParsedDocumentTabFace,
-} from './components/library/ParsedDocumentTab.tsx'
+import type { ParsedDocumentTabFace } from './components/library/ParsedDocumentTab.tsx'
+import { ParsedDocumentTitle } from './components/library/ParsedDocumentTitle.tsx'
+import { ParsedDocumentLoader } from './components/library/ParsedDocumentLoader.tsx'
 import {
   PARSED_MANAGER_TAB_KIND,
   PARSED_MANAGER_TAB_PATTERN,
@@ -219,6 +220,7 @@ interface UiSurfaces {
   readonly libraryForm: ConfigForm<Record<string, unknown>>
   readonly libraryCard: LibraryFormController
   readonly citationCard: CitationFormController
+  readonly readerCard: ReaderSettingsController
   readonly probe: () => Promise<RemoteResult<ZoteroStatusView>>
   /** The one client face; root props and out-of-tree consumers read it here. */
   readonly client: ZoteroClientFace
@@ -227,6 +229,9 @@ interface UiSurfaces {
    * registry owns the lease until the reader tab that holds the file closes.
    */
   readonly pdfReaders: PdfReaderRegistry
+  readonly openReader: ReaderOpener
+  readonly openReaderNote: ReaderNoteOpener
+  readonly readingVisits: ReturnType<typeof registerReader>['visits']
   /** The committed library preferences; the surfaces read them when they act. */
   readonly libraryPreferences: () => LibraryPreferences | undefined
   /** The one preference source; the panel publishes it through its context. */
@@ -322,7 +327,8 @@ function registerSharedSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void 
  * (`ui-renderer/src/client/scoped-slots.tsx`).
  */
 function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces): void {
-  const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, probe } = surfaces
+  const { card, scholarlyCard, enrichmentCard, libraryCard, citationCard, readerCard, probe } =
+    surfaces
   // Enabling dsh-zotero/enrichment accepts MinerU document egress, and
   // enabling dsh-zotero/scholarly authorizes external scholarly retrieval, so
   // the client owes the user a disclosure whenever a component is served and
@@ -400,8 +406,8 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
   )
 
   // Bundle configuration on the plugin manager detail page (plugins.bundle.config).
-  // The page renders the unified 4-tab form through ZoteroSettingsSection and stages edits
-  // over zotero, scholarly, library, and enrichment namespaces.
+  // The page renders the unified 5-tab form through ZoteroSettingsSection and stages edits
+  // over zotero, library, scholarly, enrichment, and reader namespaces.
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
       {
@@ -415,6 +421,7 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
           const enrichmentFace = enrichmentCard.inject()
           const libraryFace = libraryCard.inject()
           const citationFace = citationCard.inject()
+          const readerFace = readerCard.inject()
           return {
             ...zoteroFace,
             probe,
@@ -425,11 +432,13 @@ function registerPluginManagerSurfaces(ctx: ClientContext, surfaces: UiSurfaces)
               enrichmentCard: enrichmentFace.hooks.enrichmentCard,
               libraryCard: libraryFace.hooks.libraryCard,
               citationCard: citationFace.hooks.citationCard,
+              readerCard: readerFace.hooks.readerCard,
             },
             scholarly: scholarlyFace,
             enrichment: enrichmentFace,
             library: libraryFace,
             citation: citationFace,
+            reader: readerFace,
           }
         },
       },
@@ -600,6 +609,7 @@ function registerConversationSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
               // it: on the browser side the `ctx.sessions` Context key carries
               // the host `SessionStore`, not the client `ISessions` catalog.
               openResource: (url: string) => ctx.sidebarRight.openResource(url),
+              openReader: surfaces.openReader,
             }),
           },
           SourcesTab,
@@ -631,7 +641,7 @@ function sidebarEnabledOf(
  *
  * The panel is session-scoped (the pane tab binds to one conversation), so the
  * injected face carries everything it reads: the wire calls, the shared
- * connectivity probe, and the right-sidebar opener for local-file reading.
+ * connectivity probe, and the right-sidebar opener for local-Document reading.
  * @param ctx - the browser plugin context.
  * @param surfaces - the shared facts every registration group reads.
  */
@@ -684,6 +694,9 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
   }
   const panelFace = (sessionId: SessionId): ZoteroLibraryPanelFace => ({
     viewStore,
+    openReader: surfaces.openReader,
+    openReaderNote: surfaces.openReaderNote,
+    readingVisits: surfaces.readingVisits,
     parse: surfaces.parse,
     parsedDocuments: surfaces.parsedDocuments,
     // The browser resolves the answer language from this service at draft time.
@@ -788,9 +801,22 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
         refresh: (address) => surfaces.parsedDocuments.refresh(address),
         // The browser resolves the answer language from this service at draft time.
         locale: ctx.locale,
+        readerConfig: ctx.configForms.get(READER_SETTINGS_NAMESPACE),
+        async translate(request, signal) {
+          const result = await ctx.remote.zotero.readerTranslate(request, signal)
+          if (!result.ok) throw result.error
+          return result.value
+        },
         // The explain request cites the item, so the model can read the rest
         // of the paper through the read tools.
         item: (request, signal) => ctx.remote.zotero.item(request, signal),
+        async locatePdf(sessionId, ref, evidence, signal) {
+          signal.throwIfAborted()
+          const location = await ctx.remote.zotero.resolveAttachment(ref)
+          signal.throwIfAborted()
+          if (!location.ok || location.value.ref !== ref) return false
+          return await surfaces.openReader(sessionId, location.value, 'sidebar', signal, evidence)
+        },
         parse: surfaces.parse,
         notify: (text, tone) => client.notifySurface(text, tone),
       })
@@ -811,7 +837,7 @@ function registerLibraryPanelSurfaces(ctx: ClientContext, surfaces: UiSurfaces):
             registrant: REGISTRANT,
             inject: parsedFace,
           },
-          ParsedDocumentTab,
+          ParsedDocumentLoader,
         ),
       )
       const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () =>
@@ -1251,7 +1277,7 @@ function registerUi(ctx: ClientContext): void {
   // no registration function owns a second copy or returns it as a value.
   const client = createZoteroClientFace(ctx)
   // One form controller per settings namespace. The bundle configuration page
-  // edits all three at once; the dedicated rows edit their specific subsystem.
+  // edits the served namespaces through component tabs.
   // All live as long as the client fiber.
   const form = ctx.configForms.get<Record<string, unknown>>(ZOTERO_SETTINGS_NAMESPACE)
   const scholarlyForm = ctx.configForms.get<Record<string, unknown>>(SCHOLARLY_SETTINGS_NAMESPACE)
@@ -1259,6 +1285,7 @@ function registerUi(ctx: ClientContext): void {
   const libraryForm = ctx.configForms.get<Record<string, unknown>>(
     ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
   )
+  const readerForm = ctx.configForms.get<Record<string, unknown>>(READER_SETTINGS_NAMESPACE)
   const card = new ZoteroCardController(form)
   const credentialPort: ScholarlyCredentialPort & EnrichmentCredentialPort = {
     describe: (refs) => ctx.remote.credentials.describe([...refs]),
@@ -1284,6 +1311,7 @@ function registerUi(ctx: ClientContext): void {
   const scholarlyCard = new ScholarlyFormController(scholarlyForm, credentialPort)
   const enrichmentCard = new EnrichmentFormController(enrichmentForm, credentialPort, modelPort)
   const citationCard = new CitationFormController(form)
+  const readerCard = new ReaderSettingsController(readerForm)
   // Live connectivity for the conversation tab's status strip. This fiber is
   // only created once `$mount` published the namespace, so the call site reads
   // it directly. Concurrent probes share one in-flight call: multiple consumers
@@ -1475,6 +1503,7 @@ function registerUi(ctx: ClientContext): void {
     },
     'dsh-zotero: document parsing surface',
   )
+  const reader = registerReader(ctx, preferenceSource)
   const surfaces: UiSurfaces = {
     parse,
     parsedDocuments,
@@ -1485,9 +1514,13 @@ function registerUi(ctx: ClientContext): void {
     libraryForm,
     libraryCard,
     citationCard,
+    readerCard,
     probe,
     client,
     pdfReaders,
+    openReader: reader.open,
+    openReaderNote: reader.openNote,
+    readingVisits: reader.visits,
     libraryPreferences,
     preferenceSource,
   }
@@ -1502,6 +1535,7 @@ function registerUi(ctx: ClientContext): void {
       enrichmentCard.dispose()
       libraryCard.dispose()
       citationCard.dispose()
+      readerCard.dispose()
     },
     'dsh-zotero: card forms',
   )

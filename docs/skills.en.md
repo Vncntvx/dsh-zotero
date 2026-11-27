@@ -21,11 +21,11 @@ Catalog names, descriptions and trigger keywords are English-only. The model mat
 
 Scholarly means the `dsh-zotero/scholarly` component. Its four skills are absent while it is disabled. Core skills may use conditional external verification/fulltext recipes only when their tools are available; otherwise they return local results and evidence gaps without bypassing authorization through shell or other network routes.
 
-## Phases, batching and termination
+## Phases, batching, and exit criteria
 
-Every SOP has four ordered phases, structured recipes, failure/termination rules and an output contract. Phase state lives in the model's compact task ledger. Reuse identity and evidence already obtained; handoffs carry input IDs, queries, refs, locators, exclusions and unresolved issues.
+Every SOP defines four ordered phases, stage budgets, structured recipes, failure handling, exit criteria, and an output contract. Phase state lives in the model's compact task ledger. Reuse identity and evidence already obtained. Handoffs carry input IDs, queries, refs, locators, exclusions, and unresolved issues.
 
-| Workflow         | Order                                                            | Default budget and termination                                                                                                                                                                                                                                                        |
+| Workflow         | Order                                                            | Default budgets and exit criteria                                                                                                                                                                                                                                                     |
 | ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landscape        | Frame → search → anchors → themes/gaps                           | Up to 3 searches, 8 results per search and 5 detailed anchors per theme. Use one theme for a quick map. For a broader review, set theme and anchor budgets before discovery. Close a theme at adequate coverage, after two searches with no new work, or when the budget is spent.    |
 | Lineage          | Seed → first hop → selected frontier → directed relations        | Default to two hops, 5 graph calls, 3 expanded first-hop nodes and 10 results per call. An explicit broader request sets a finite depth and call budget. Stop when the path is found or the frontier is empty.                                                                        |

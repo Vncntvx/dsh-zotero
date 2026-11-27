@@ -336,7 +336,7 @@ describe('ZoteroSettingsSection', () => {
     expect(saveButton().disabled).toBe(true)
   })
 
-  it('renders four equal-width component tabs with General selected', () => {
+  it('renders five equal-width component tabs with General selected', () => {
     scope = fakeScope({ value: {} })
     mount()
 
@@ -344,17 +344,15 @@ describe('ZoteroSettingsSection', () => {
     expect(tabList).toBeDefined()
 
     const tabs = screen.getAllByRole('tab')
+    // The Reader settings entry stays in the component list when unavailable.
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       zh.tabGeneral,
       zh.tabSettingsLibrary,
       zh.tabScholarly,
       zh.tabEnrichment,
+      zh.tabReader,
     ])
-    // The strip divides its width equally. Four-character Chinese labels stay
-    // on one line at every supported width, so every tab renders at one height.
-    for (const label of [zh.tabGeneral, zh.tabSettingsLibrary, zh.tabScholarly, zh.tabEnrichment]) {
-      expect(label).toHaveLength(4)
-    }
+    expect(tabs.every((tab) => tab.textContent?.length === 4)).toBe(true)
 
     const generalTab = screen.getByRole('tab', { name: zh.tabGeneral })
     expect(generalTab.getAttribute('aria-selected')).toBe('true')
@@ -364,6 +362,7 @@ describe('ZoteroSettingsSection', () => {
     expect(document.getElementById('zotero-panel-library')?.getAttribute('hidden')).toBe('')
     expect(document.getElementById('zotero-panel-scholarly')?.getAttribute('hidden')).toBe('')
     expect(document.getElementById('zotero-panel-enrichment')?.getAttribute('hidden')).toBe('')
+    expect(document.getElementById('zotero-panel-reader')?.getAttribute('hidden')).toBe('')
   })
 
   it('renders the enrichment tab form when the enrichment namespace is served', () => {
@@ -391,13 +390,14 @@ describe('ZoteroSettingsSection', () => {
       [zh.tabSettingsLibrary, 'library'],
       [zh.tabScholarly, 'scholarly'],
       [zh.tabEnrichment, 'enrichment'],
+      [zh.tabReader, 'reader'],
       [zh.tabGeneral, 'general'],
     ] as const) {
       const tab = screen.getByRole('tab', { name: label })
       fireEvent.click(tab)
       expect(tab.getAttribute('aria-selected')).toBe('true')
       expect(document.getElementById(`zotero-panel-${id}`)?.getAttribute('hidden')).toBeNull()
-      for (const other of ['general', 'library', 'scholarly', 'enrichment']) {
+      for (const other of ['general', 'library', 'scholarly', 'enrichment', 'reader']) {
         if (other !== id) {
           expect(document.getElementById(`zotero-panel-${other}`)?.getAttribute('hidden')).toBe('')
         }

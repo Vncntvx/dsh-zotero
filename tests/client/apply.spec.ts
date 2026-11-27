@@ -13,6 +13,7 @@ import { inject } from '../../src/client/index.ts'
 import { en, zh } from '../../src/client/locales.ts'
 import {
   ENRICHMENT_SETTINGS_NAMESPACE,
+  READER_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
@@ -58,6 +59,7 @@ describe('the browser-half entry', () => {
       SCHOLARLY_SETTINGS_NAMESPACE,
       ENRICHMENT_SETTINGS_NAMESPACE,
       ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
+      READER_SETTINGS_NAMESPACE,
     ])
   })
 
@@ -353,6 +355,7 @@ describe('the browser-half entry', () => {
         'sidebarRight',
         'sidebarRightTabs',
       ],
+      ['remote.workspaceFiles'],
       ['inputTriggers'],
       ['uiConversation'],
       ['contextMenus'],
@@ -392,8 +395,6 @@ describe('the browser-half entry', () => {
   it('subscribes to the slot crash intake on the fiber and withdraws it', async () => {
     const world = fakeWorld()
     const dispose = await applyEntry(world)
-    // One listener, registered through the registry's own supervision seam
-    // rather than from a render boundary: the entry is what wires the intake.
     expect(world.entryErrorListeners).toHaveLength(1)
     await dispose()
     expect(world.entryErrorListeners).toHaveLength(0)

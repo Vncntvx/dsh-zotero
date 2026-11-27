@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { clientTestAliasesOf } from './scripts/client-test-platform.mjs'
+import { fileURLToPath } from 'node:url'
 
 /** The coverage floors the gate enforces; tests/unit/tooling/test-lint-boundaries.spec.ts
  * re-asserts them, so re-siting a floor updates both places in one commit. */
@@ -106,7 +107,15 @@ export default defineConfig({
     jsx: { runtime: 'automatic' },
   },
   resolve: {
-    alias: clientTestAliasesOf(),
+    alias: [
+      ...clientTestAliasesOf(),
+      {
+        find: /^reader-pdf-assets$/,
+        replacement: fileURLToPath(
+          new URL('./tests/client/helpers/reader-pdf-assets.ts', import.meta.url),
+        ),
+      },
+    ],
     dedupe: ['react', 'react-dom', 'vitest'],
   },
   test: {

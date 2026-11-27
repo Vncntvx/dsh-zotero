@@ -27,8 +27,23 @@ describe('locale bundles', () => {
   })
 
   it('never claims stages the calls cannot prove', () => {
-    const { turnZoteroEvidence, ...otherLabels } = zh
+    const {
+      turnZoteroEvidence,
+      claimEvidence,
+      claimPassage,
+      claimAddEvidence,
+      claimSaved,
+      claimLimit,
+      ...otherLabels
+    } = zh
     expect(turnZoteroEvidence).toBe('本轮 Zotero 证据')
+    expect([claimEvidence, claimPassage, claimAddEvidence]).toEqual([
+      '论点与证据',
+      '证据片段',
+      '保存证据关联',
+    ])
+    expect(claimSaved).toBe('证据关联已保存在此会话中')
+    expect(claimLimit).toBe('请输入论点，或选择仍可添加证据的论点')
     const allZh = Object.values(otherLabels).join(' ')
     expect(allZh).not.toContain('精读')
     expect(allZh).not.toContain('已引用')

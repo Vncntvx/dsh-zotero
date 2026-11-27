@@ -217,3 +217,15 @@
 - **复核触发**：升级 Zotero 后向全库 `/tags` 发送只匹配部分标签的查询，核对结果及总数。
 - **验证**：`tests/local/browse.spec.ts` 模拟忽略查询词的接口，检验跨页匹配、前缀匹配和空结果。
 - **后续处理**：上游支持全库搜索后，复核大小写和分页语义，再移除本地过滤。
+
+## DN-53：PDF.js 的画布选区渲染在 Shadow DOM 里失效
+
+- **上游**：`pdfjs-dist` 6.3.289 的 `PDFViewer`。
+- **上游特性**：`enableSelectionRendering` 把选区画到页面画布上，默认开启（浏览器支持 `backdrop-filter` 时），同时给文字层加 `selectionRendering` 类把原生 `::selection` 置为透明。
+- **上游缺陷**：画布选区读取 `document.getSelection()`，其范围在主文档里被重定向到 Shadow 宿主，`intersectsNode` 匹配不到文字层，于是什么都不画；原生高亮又已被关掉，阅读器里选区完全不可见，只能靠顶栏出现的选区动作才知道选中了内容。
+- **本地补丁**：`mountPdf` 给 viewer 传 `enableSelectionRendering: false`，选区回到原生 `::selection`，颜色由影子主题里的 `--dsw-alias-bg-document-selection` 提供。
+- **为什么是妥协**：失去画布选区在高 DPI 下的锐利描边，速度优势也用不上；原生选区在缩放页面上照常可用。
+- **上游期望**：选区读取改用 `getComposedRanges` 并在 Shadow 根内匹配文字层，或对 Shadow DOM 容器默认关闭画布选区。
+- **复核触发**：升级 `pdfjs-dist` 后，在 Shadow DOM 页面上拖动选中文字，检查高亮是否出现；同时看 `enableSelectionRendering` 的默认值与读取选区的 API。
+- **验证**：`tests/client/reader/pdf-runtime.spec.ts` 断言传入的 viewer 选项；`scripts/smoke-reader-pdf.mjs` 在浏览器里核对渲染与选区。
+- **后续处理**：上游修好 Shadow DOM 选区后，删掉该选项并让影子主题恢复只改取色。

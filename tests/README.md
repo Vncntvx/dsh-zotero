@@ -18,9 +18,11 @@ a rule does not become optional because lint cannot check it yet.
 | `tests/host/`        | the composition seams | lifecycle, composition, settings, remote, entry, provider gate, concurrency, doc examples, the HTTP client, and the write seams (auth, gate, HTTP, shell-write approval, prompt policy)                                                                                                     |
 | `tests/client/`      | `src/client/`         | the browser half, including one file per render surface                                                                                                                                                                                                                                     |
 | `tests/scholarly/`   | `src/scholarly/`      | the external scholarly literature search, fusion ranking, fulltext retrieval, and citation verification subsystem                                                                                                                                                                           |
-| `tests/integration/` | live Zotero           | opt-in: `npm run test:integration` sets `ZOTERO_INTEGRATION=1` and runs the read spec only. The write probe needs `ZOTERO_WRITE_PROBE=1` as well and is not part of that script. The only place a real library answers                                                                      |
+| `tests/integration/` | live Zotero           | `npm run test:integration` runs the opt-in read spec. The write spec additionally requires `ZOTERO_WRITE_PROBE=1`. The Reader probe also requires a pinned fixture attachment ref.                                                                                                          |
 
 Scripted scholarly hosts used across lanes live in `tests/helpers/scholarly-runtime.ts`; retrieve payloads and fulltext hits live in `tests/helpers/retrieve-fixtures.ts`. Specs must not import another lane's runtime fixtures.
+
+`npm run smoke:reader-pdf` loads the built Reader runtime and Worker in a real browser rather than through Vitest. It reads `tests/fixtures/reader-locked.pdf`, and runs on Chromium by default; `READER_PDF_BROWSER` selects Firefox or WebKit.
 
 Cross-cutting behaviour goes in the lane of the module it belongs to, as a
 file named for the behaviour (`presentation.spec.ts`, `validation.spec.ts`),

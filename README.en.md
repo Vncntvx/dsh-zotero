@@ -4,7 +4,7 @@
 
 <img
   src="docs/images/readme/project-overview.en.svg"
-  alt="dsh-zotero research workflow architecture showing the agent's research SOPs, the session literature trail, and independent library browsing"
+  alt="dsh-zotero research workflow architecture showing dynamic research SOP loading, Zotero tool calls, the session literature trail, and independent library browsing"
 />
 <p align="center">
   <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&amp;logo=deepseek&amp;logoColor=white" alt="powered by dsh" style="max-width:100%;"></a>
@@ -32,7 +32,7 @@
 
 **dsh-zotero is an AI-native research workflow plugin for DeepSeek Harness, built around your local Zotero library.** Start with a research question. The agent searches for papers, extracts passages with source locations, compares papers, and generates citations. Use the literature trail to check the search scope, passages, and skipped sources. In the literature panel, you can browse collections, read PDFs, and copy citations directly.
 
-The agent can load research SOPs on demand for single-paper digests, evidence synthesis, manuscript reference audits, and library governance. With scholarly retrieval enabled, it can also survey a topic across indexes, trace citation networks, and verify references.
+The agent selects and loads research SOPs during the session for single-paper digests, evidence synthesis, manuscript reference audits, and library governance. With scholarly retrieval enabled, it can also survey a topic across indexes, trace citation networks, and verify references.
 
 ## Research workflows in practice
 
@@ -48,13 +48,13 @@ The agent can load research SOPs on demand for single-paper digests, evidence sy
 | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | ![Multi-head attention question with PDF provenance](docs/images/readme/chat-formulas-prompt.en.svg) | ![Quoted attention definitions and the scaled dot-product attention equation](docs/images/readme/chat-formulas-def.en.svg) |
 
-**Check the evidence and export citations.** Open the literature trail at the top of the session to review the passages, annotations, search origins, full-text coverage, and skipped sources. Switch to the export view to copy or download the session's deduplicated BibTeX and citations.
+**Check the evidence and export citations.** Open the literature trail at the top of the session to review the passages, annotations, search origins, full-text coverage, and skipped sources. The export view groups and deduplicates the session's BibTeX and citations by format for copying or downloading.
 
 | Trail item inspector                                                                                            | Export summary                                                                          |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | ![GPT-3 evidence and search origins in the session literature trail](docs/images/readme/trail-inspector.en.svg) | ![Three BibTeX exports in the literature trail](docs/images/readme/trail-export.en.svg) |
 
-**Continue reading in the literature panel.** Browse Zotero collections, items, and details alongside the conversation. Open an attachment, copy a citation or BibTeX, or add a selected item to the chat draft.
+**Continue reading in the literature panel.** Browse Zotero collections, items, and details alongside the conversation. Open an attachment, copy a citation or BibTeX, or insert a reference to a selected item into the chat draft.
 
 ![Collections, items, and details in the right-hand literature panel](docs/images/readme/panel-full.en.svg)
 
@@ -87,16 +87,16 @@ The agent can load research SOPs on demand for single-paper digests, evidence sy
   - **Passage location**: Pull passages from full text, notes, and annotations for a question, or read a whole document; passages carry their source, annotations keep Zotero page numbers, and the result reports full-text coverage and skipped sources.
   - **Citations and export**: Generate in-text citations or a merged bibliography in CSL styles, and export BibTeX, BibLaTeX, RIS, or CSL-JSON; style and locale follow the configured defaults.
   - **Reconciliation and changes**: Reconcile DOIs, BibTeX keys, or bibliographic fields against the library and get refs, citation keys, confidence, and a field diff; report additions, modifications, and deletions from the library version, with the Trash counted separately.
-  - **Research SOPs**: Eight phased workflows loaded on demand, each with stage budgets and stop conditions, leaving only names and short descriptions in the prompt. The core component ships four (paper digest, evidence synthesis, manuscript audit, library governance); the scholarly component adds four (research landscape, citation lineage, publication integrity, literature intake).
+  - **Research SOPs**: Eight phased workflows that the agent loads according to the task. Each defines stage budgets and exit criteria. The persistent prompt lists only their names and short descriptions. The core component ships four (paper digest, evidence synthesis, manuscript audit, library governance); the scholarly component adds four (research landscape, citation lineage, publication integrity, literature intake).
 - **Literature trail (session header)**
   - **Search conditions**: Every call lists its query, scope, mode (metadata or full text), filters, and hit count, with the total and note hits counted separately, so you can check the agent's scope and filters against your intent.
   - **Passage review**: Passages and annotations are grouped by item with source, page number, and coverage, so quotations in the answer can be checked against the original; refused or cancelled calls are recorded too.
   - **Export summary**: Citations and BibTeX from the session are collected across items, split by format, and deduplicated, ready to copy or download for writing; failed exports are listed separately.
 - **Literature panel (right sidebar)**
   - **Browsing and filtering**: Switch libraries, expand the collection tree on demand, and open saved searches, My Publications, and the Trash. The item list searches metadata or full text, sorts by several fields, and filters by type, tag, year, and attachment presence.
-  - **Details and reading**: View metadata, collections, and tags. Attachments, notes, and annotations page independently. Local PDFs open in the reading pane; with `allowUrlPdfRead`, URL attachments already in the library also open.
+  - **Details and reading**: View metadata, collections, and tags. Attachments, notes, and annotations page independently. With the Research Reader enabled, local PDFs open in its tab; otherwise they use the native preview. With `allowUrlPdfRead`, URL attachments already in the library also open.
   - **Journal metrics**: Enable lookups in panel settings and save an EasyScholar key to see metrics such as JCR quartiles, impact factors, CAS quartiles, and Chinese core indexes. Choose list candidates and detail fields separately.
-  - **Citations and handoff**: Copy a citation, bibliography, or BibTeX from the action row, and send selected items into the chat draft. The composer's Zotero button and bibliography deliverables open the panel directly.
+  - **Citations and handoff**: Copy a citation, bibliography, or BibTeX from the action row. You can insert references to selected items into the chat draft. The composer's Zotero button and bibliography deliverables open the panel directly.
   - **State restoration**: Per Zotero instance, the panel remembers the selected item, active section, expanded collection branches, scroll position, and child pagination.
   - **Parsed reading**: With the document parsing component enabled, the action row opens a tab named after the paper (full text, figures, selection actions); Manage parsed docs lists every artifact with filters, per-row open or reparse, and batch discard.
 - **Optional capabilities (off by default)**
@@ -104,6 +104,7 @@ The agent can load research SOPs on demand for single-paper digests, evidence sy
   - **Scholarly retrieval** (`dsh-zotero/scholarly`): Seven tools cover arXiv, OpenAlex, Crossref, Semantic Scholar, PubMed, Europe PMC, and DBLP, fusing and deduplicating results and marking what the library already holds. They read open-access full text, follow citation networks, fetch authoritative citations from the DOI registry, verify references and retraction status, and save results into the personal library when you ask.
   - **Document parsing** (`dsh-zotero/enrichment`): Enabling the component accepts MinerU document egress for documents you explicitly submit; a parse needs one specific Zotero PDF attachment or public PDF URL, and afterwards ordinary and scholarly full-text reads reuse the Markdown artifact with its figures.
   - **Semantic ranking** (`dsh-zotero/enrichment`): Local semantic ranking runs six CPU-only embedding tiers, fused with BM25 through RRF, and labels each passage lexical, semantic, or hybrid; the tiers can be downloaded, verified, and deleted in settings.
+  - **Research Reader** (`dsh-zotero/reader`): Opens local PDFs, HTML snapshots, Markdown, plain text, and Zotero notes in a right-sidebar tab, displays and edits native annotations and notes, and supports selection translation, region capture, citations, and evidence navigation. Native writes still pass session approval and plan review.
 
 For details on interaction patterns, UI roles, and runtime boundaries, see the [product model](docs/product-model.en.md).
 

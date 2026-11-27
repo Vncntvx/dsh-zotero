@@ -43,6 +43,7 @@ import vm from 'node:vm'
 import { JSDOM } from 'jsdom'
 import * as esbuild from 'esbuild'
 import { transform as transformCss } from 'lightningcss'
+import { buildReaderPdf } from './build-reader-pdf.mjs'
 import {
   createClientAuthorityPlugin,
   isInlineSafeHarness,
@@ -56,6 +57,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
  * The public loader handoff with its factory and deferred stylesheets.
  * @typedef {{
  *   id: string,
+ *   chunk?: string,
  *   factory: (require: (specifier: string) => unknown) => ClientExports,
  *   meta?: () => { stylesheets?: Record<string, { text: (context: { asset: (reference: string) => string }) => string }> },
  * }} LoaderHandoff
@@ -63,7 +65,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * The plugin face the bundle's CJS exports must present to the shell.
- * @typedef {{ apply?: unknown, inject?: unknown }} ClientExports
+ * @typedef {{ apply?: unknown, inject?: unknown, ReaderTab?: unknown, ParsedDocumentTab?: unknown }} ClientExports
  */
 
 // The package manifest is read once; the handoff id and the stamped version
@@ -84,6 +86,13 @@ const PLUGIN_MANIFEST = (() => {
  * rename in `package.json` are one edit, not two.
  */
 const PLUGIN_ID = PLUGIN_MANIFEST.name
+const READER_UI_CHUNK = 'client.reader-ui.js'
+export const readerUiPackPaths = [`lib/${READER_UI_CHUNK}`, `lib/${READER_UI_CHUNK}.map`]
+const PARSED_DOCUMENT_CHUNK = 'client.parsed-document.js'
+export const parsedDocumentPackPaths = [
+  `lib/${PARSED_DOCUMENT_CHUNK}`,
+  `lib/${PARSED_DOCUMENT_CHUNK}.map`,
+]
 
 /**
  * The client bundle's byte ceiling: the whole browser half ships as one file
@@ -216,8 +225,9 @@ export function verifyBundle(bundlePath = join(root, 'lib/client.js')) {
  * spliced in.
  * @param {string} source - the bundle source.
  * @param {string} bundlePath - the path reported in failure messages.
+ * @param {string} [chunk] - expected chunk for a deferred surface.
  */
-function verifyBundleSource(source, bundlePath) {
+function verifyBundleSource(source, bundlePath, chunk) {
   // The byte ceiling comes first: an oversize bundle fails the build before
   // any evaluation, so a size regression is reported as a size regression.
   const bytes = Buffer.byteLength(source, 'utf8')
@@ -239,7 +249,7 @@ function verifyBundleSource(source, bundlePath) {
   }
   try {
     vm.runInNewContext(source, { window, document: window.document })
-    if (handoff === undefined || handoff.id !== PLUGIN_ID) {
+    if (handoff === undefined || handoff.id !== PLUGIN_ID || handoff.chunk !== chunk) {
       throw new Error(`client bundle did not register the ${PLUGIN_ID} factory`)
     }
     if (typeof handoff.factory !== 'function') {
@@ -262,7 +272,16 @@ function verifyBundleSource(source, bundlePath) {
       if (EXTERNALS.includes(specifier)) return platform[specifier] ?? {}
       throw new Error(`bundle required non-external ${specifier} at load time`)
     })
-    if (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject)) {
+    if (chunk === READER_UI_CHUNK && typeof exported?.ReaderTab !== 'function') {
+      throw new Error('Reader UI chunk must export the ReaderTab surface')
+    }
+    if (chunk === PARSED_DOCUMENT_CHUNK && typeof exported?.ParsedDocumentTab !== 'function') {
+      throw new Error('Parsed document chunk must export the ParsedDocumentTab surface')
+    }
+    if (
+      chunk === undefined &&
+      (typeof exported?.apply !== 'function' || !Array.isArray(exported?.inject))
+    ) {
       throw new Error('client bundle must export the apply/inject plugin face')
     }
     if (window.document.querySelector('style') !== null) {
@@ -271,9 +290,7 @@ function verifyBundleSource(source, bundlePath) {
   } finally {
     window.close()
   }
-  console.log(
-    `client bundle ok: ${bundlePath} (${source.length} bytes, ${EXTERNALS.join(', ')} external)`,
-  )
+  console.log(`client bundle ok: ${bundlePath} (${bytes} bytes, ${EXTERNALS.join(', ')} external)`)
 }
 
 const STYLE_METADATA_MARKER = '/* dsh-zotero stylesheet metadata */'
@@ -281,9 +298,10 @@ const STYLE_METADATA_MARKER = '/* dsh-zotero stylesheet metadata */'
 /**
  * Compile CSS class maps and attach their stylesheets to the loader registration.
  * @param {boolean} verify - assemble, check and write the production artifact.
+ * @param {string} [chunk] - expected chunk in the loader handoff.
  * @returns {import('esbuild').Plugin}
  */
-function cssModulesPlugin(verify) {
+function cssModulesPlugin(verify, chunk) {
   return {
     name: 'css-modules',
     setup(build) {
@@ -293,6 +311,7 @@ function cssModulesPlugin(verify) {
         const source = readFileSync(args.path, 'utf8')
         const { code, exports: classMap } = transformCss({
           filename: args.path,
+          projectRoot: root,
           code: Buffer.from(source),
           cssModules: true,
           minify: true,
@@ -335,7 +354,7 @@ function cssModulesPlugin(verify) {
         const metadata = ',meta:()=>({stylesheets:{' + descriptors.join(',') + '}})'
         // The marker is in the footer, after the mapped factory code.
         const source = bundle.text.replace(STYLE_METADATA_MARKER, () => metadata)
-        verifyBundleSource(source, bundle.path)
+        verifyBundleSource(source, bundle.path, chunk)
         mkdirSync(dirname(bundle.path), { recursive: true })
         for (const file of result.outputFiles ?? []) {
           if (file !== bundle) writeFileSync(file.path, file.contents)
@@ -348,11 +367,11 @@ function cssModulesPlugin(verify) {
 
 /**
  * The esbuild plugins that enforce client authority and compile CSS modules.
- * @param options {{ verify?: boolean }} pass verify: false for fixture builds.
+ * @param options {{ verify?: boolean, chunk?: string }} pass verify: false for fixture builds.
  * @returns {import('esbuild').Plugin[]}
  */
-export function clientBuildPlugins({ verify = true } = {}) {
-  return [harnessPurityPlugin, createClientAuthorityPlugin(), cssModulesPlugin(verify)]
+export function clientBuildPlugins({ verify = true, chunk } = {}) {
+  return [harnessPurityPlugin, createClientAuthorityPlugin(), cssModulesPlugin(verify, chunk)]
 }
 
 /**
@@ -406,6 +425,25 @@ const options = {
   },
 }
 
+/** @param {string} chunk @param {string} entry @returns {import('esbuild').BuildOptions} */
+function chunkOptions(chunk, entry) {
+  return {
+    ...options,
+    entryPoints: [join(root, entry)],
+    outfile: join(root, 'lib', chunk),
+    plugins: clientBuildPlugins({ chunk }),
+    banner: {
+      js: options.banner?.js.replace('factory:', `chunk: ${JSON.stringify(chunk)}, factory:`) ?? '',
+    },
+  }
+}
+
+const bundles = [
+  options,
+  chunkOptions(READER_UI_CHUNK, 'src/client/reader/ReaderTab.tsx'),
+  chunkOptions(PARSED_DOCUMENT_CHUNK, 'src/client/components/library/ParsedDocumentTab.tsx'),
+]
+
 /**
  * Build the browser client bundle, once or in watch mode.
  *
@@ -417,13 +455,14 @@ const options = {
  * @returns resolves after the one-shot build, or once the watch session starts.
  */
 export async function buildClientBundle({ watch = false } = {}) {
+  await buildReaderPdf(root, PLUGIN_ID)
   if (watch) {
-    const context = await esbuild.context(options)
-    await context.watch()
+    const contexts = await Promise.all(bundles.map((config) => esbuild.context(config)))
+    await Promise.all(contexts.map((context) => context.watch()))
     console.log('watching src/client for client-graph authority + handoff gates…')
     return
   }
-  await esbuild.build(options)
+  await Promise.all(bundles.map((config) => esbuild.build(config)))
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -81,6 +81,9 @@ export function panelStubProps(input: PanelStubInput): PanelStubs {
         sessionId: paneId,
         running: sessions.byId[paneId]?.running === true,
         removed: sessions.byId[paneId]?.removed === true,
+        subagent: null,
+        openState: 'open',
+        blank: sessions.byId[paneId]?.running !== true,
       })
     },
     // Memoize through the eq contract the store's hook honors: an equal
