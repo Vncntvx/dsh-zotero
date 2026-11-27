@@ -100,6 +100,7 @@ export async function buildReaderPdf(root, pluginId) {
       input !== 'src/client/reader/pdf-capture.ts' &&
       input !== 'src/client/reader/pdf-excerpt.ts' &&
       input !== 'src/client/reader/pdf-evidence.ts' &&
+      input !== 'src/client/reader/text-boundary.ts' &&
       input !== 'src/race-signal.ts' &&
       input !== 'reader-pdf:reader-pdf-assets' &&
       !input.startsWith('node_modules/pdfjs-dist/')

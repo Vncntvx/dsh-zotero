@@ -1,6 +1,7 @@
 import type { ChatSnapshot, TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { ZOTERO_READER_NOTE_TEXT_CHARS } from '../../constants.ts'
 import type { HistoricalPdfCitation } from './historical-citations.ts'
+import { textPrefix } from './text-boundary.ts'
 
 export function turnAnswer(snapshot: ChatSnapshot, turn: number, seq: number) {
   for (const key of snapshot.locations.getTurn(turn)) {
@@ -31,7 +32,6 @@ export function resultNoteMarkdown(answer: string, citation: HistoricalPdfCitati
     '\n```\n\n'
   const cap = ZOTERO_READER_NOTE_TEXT_CHARS - source.length
   if (answer.length <= cap) return source + answer
-  const end = cap - 2
-  const edge = answer.charCodeAt(end - 1)
-  return source + answer.slice(0, edge >= 0xd800 && edge <= 0xdbff ? end - 1 : end).trimEnd() + '…'
+  const end = Math.max(0, cap - 2)
+  return source + textPrefix(answer, end).trimEnd() + '…'
 }

@@ -6,12 +6,11 @@ import {
 } from '../../constants.ts'
 import type { ZoteroNoteTextEdit, ZoteroNoteTextFormatting } from '../../types.ts'
 import { refFieldsOf } from '../../ref-grammar.ts'
+import { isCharacterBoundary } from './text-boundary.ts'
 
 const MAX_MEMORY_DRAFTS = 16
 // This map is local to the browser tab. A cleared draft shadows inaccessible storage.
 const memoryDrafts = new Map<string, string | null>()
-const splitsSurrogate = (text: string, offset: number) =>
-  /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(text.slice(Math.max(0, offset - 1), offset + 1))
 
 export interface NoteDraft {
   readonly version?: number
@@ -41,8 +40,8 @@ export function noteDraftFormat(
     start < 0 ||
     start >= end ||
     end > text.length ||
-    splitsSurrogate(text, start) ||
-    splitsSurrogate(text, end)
+    !isCharacterBoundary(text, start) ||
+    !isCharacterBoundary(text, end)
   )
     return undefined
   return { format, formatRange: { start, end } }
@@ -80,8 +79,8 @@ export function noteDraftFormats(
         (start as number) < 0 ||
         (start as number) >= (end as number) ||
         (end as number) > text.length ||
-        splitsSurrogate(text, start as number) ||
-        splitsSurrogate(text, end as number)
+        !isCharacterBoundary(text, start as number) ||
+        !isCharacterBoundary(text, end as number)
       )
         return []
       return [

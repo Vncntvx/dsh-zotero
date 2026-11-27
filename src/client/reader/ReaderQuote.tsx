@@ -18,6 +18,7 @@ import {
   type PdfExcerpt,
 } from './pdf-excerpt.ts'
 import type { PdfOutline, PdfView } from './pdf-runtime.ts'
+import { isCharacterBoundary } from './text-boundary.ts'
 import { useReturnFocus } from './return-focus.ts'
 import css from './reader.module.css'
 
@@ -57,12 +58,6 @@ const REVIEW_CHARS = MAX_EXCERPT_TEXT * 2
 const REVIEW_PROVENANCE_CHARS = 16_000
 const emptyReview: readonly ReviewSource[] = []
 const noSubscription = () => () => undefined
-
-function isCharacterBoundary(text: string, index: number): boolean {
-  const char = text.charCodeAt(index)
-  const previous = text.charCodeAt(index - 1)
-  return !(char >= 0xdc00 && char <= 0xdfff && previous >= 0xd800 && previous <= 0xdbff)
-}
 
 interface ReaderQuoteProps extends PropsLocale<'zoteroReader'> {
   readonly source: PdfQuoteSource
