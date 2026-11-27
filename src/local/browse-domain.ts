@@ -46,6 +46,7 @@ import {
 import {
   nextOffsetOf,
   nextOffsetOrFail,
+  readPagesConcurrentlyFolded,
   requireArrayBody,
   requireLibraryVersionHeader,
   requireTotalResults,
@@ -67,6 +68,7 @@ import type {
   ZoteroItemFieldInfo,
   ZoteroItemTypeInfo,
   ZoteroLibraryInfo,
+  ZoteroTagInfo,
 } from '../types.js'
 
 export async function runBrowse(
@@ -414,7 +416,7 @@ async function browseSavedSearches(
  * narrow" a server-side round trip instead of client-side guessing.
  */
 async function browseTags(
-  deps: { client: ZoteroHttpClient },
+  deps: { client: ZoteroHttpClient; limits: LocalApiLimits },
   directory: ScopeDirectory,
   request: ZoteroBrowseRequest,
   signal?: AbortSignal,
@@ -449,6 +451,34 @@ async function browseTags(
     }
   }
   const params = new URLSearchParams()
+  // The whole-library /tags endpoint ignores q and qmode (DN-52).
+  if (request.scope === undefined && request.q) {
+    const query = request.q.toLowerCase()
+    const { pages, serverId } = await readPagesConcurrentlyFolded(
+      deps.client,
+      path,
+      params,
+      undefined,
+      signal,
+      { body: 'tags', page: 'tag search' },
+      deps.limits.searchConcurrency,
+      (rows) =>
+        rows.map(readTag).filter(({ tag }) => {
+          const name = tag.toLowerCase()
+          return request.match === 'startsWith' ? name.startsWith(query) : name.includes(query)
+        }),
+    )
+    const matches = pages.flatMap(({ value }) => value)
+    const items = matches.slice(request.offset, request.offset + request.limit)
+    return browsePage('tags', {
+      items,
+      total: matches.length,
+      offset: request.offset,
+      next: nextOffsetOf(request.offset, items.length, matches.length),
+      library,
+      ...(serverId !== undefined ? { serverId } : {}),
+    })
+  }
   if (request.q !== undefined && request.q !== '') {
     params.set('q', request.q)
     params.set('qmode', request.match === 'startsWith' ? 'startsWith' : 'contains')
@@ -465,25 +495,7 @@ async function browseTags(
   const serverId = serverIdFromHeaders(headers, serverIdClaim)
   const rawRows = requireArrayBody(json, 'tags')
   const total = requireTotalResults(headers, 'tags')
-  const items = rawRows.map((row) => {
-    const rec = asRecord(row)
-    const tag = asString(rec?.tag) ?? asString(asRecord(rec?.data)?.tag)
-    if (tag === undefined) {
-      throw new ZoteroError(
-        'Zotero returned a malformed tag row without a tag name',
-        ZOTERO_UNEXPECTED,
-      )
-    }
-    const metaCount = asRecord(rec?.meta)?.numItems
-    const directCount = rec?.numItems
-    const count =
-      typeof metaCount === 'number'
-        ? metaCount
-        : typeof directCount === 'number'
-          ? directCount
-          : undefined
-    return { tag, ...(count !== undefined ? { count } : {}) }
-  })
+  const items = rawRows.map(readTag)
   return browsePage('tags', {
     items,
     total,
@@ -494,6 +506,26 @@ async function browseTags(
     library,
     ...(serverId !== undefined ? { serverId } : {}),
   })
+}
+
+function readTag(row: unknown): ZoteroTagInfo {
+  const rec = asRecord(row)
+  const tag = asString(rec?.tag) ?? asString(asRecord(rec?.data)?.tag)
+  if (tag === undefined) {
+    throw new ZoteroError(
+      'Zotero returned a malformed tag row without a tag name',
+      ZOTERO_UNEXPECTED,
+    )
+  }
+  const metaCount = asRecord(rec?.meta)?.numItems
+  const directCount = rec?.numItems
+  const count =
+    typeof metaCount === 'number'
+      ? metaCount
+      : typeof directCount === 'number'
+        ? directCount
+        : undefined
+  return { tag, ...(count !== undefined ? { count } : {}) }
 }
 
 async function browseItemTypes(

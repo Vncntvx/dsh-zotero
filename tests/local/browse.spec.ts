@@ -257,50 +257,35 @@ describe('browse: savedSearches', () => {
 })
 
 describe('browse: tags', () => {
-  it('lists tags and filters by q', async () => {
+  it('filters across whole-library tag pages when Zotero ignores q', async () => {
     const allTags = [
-      { tag: 'alpha', meta: { numItems: 5 } },
-      { tag: 'beta' },
-      { tag: 'alphabeta', numItems: 2 },
+      { tag: 'Alpha', meta: { numItems: 5 } },
+      ...Array.from({ length: 100 }, (_, i) => ({ tag: `beta${i}` })),
+      { tag: 'not-alpha', numItems: 2 },
     ]
     mock.route('GET', `${apiPath()}/tags`, (req, res, helpers, search) => {
-      const q = search.get('q') ?? ''
-      const qmode = search.get('qmode') ?? 'contains'
-      let filtered = allTags
-      if (q !== '') {
-        const lower = q.toLowerCase()
-        filtered = allTags.filter((t) =>
-          qmode === 'startsWith'
-            ? t.tag.toLowerCase().startsWith(lower)
-            : t.tag.toLowerCase().includes(lower),
-        )
-      }
       const start = Number(search.get('start') ?? '0')
-      const limit = Number(search.get('limit') ?? '10')
-      const slice = filtered.slice(start, start + limit)
-      helpers.json(slice, {
+      const limit = Number(search.get('limit') ?? '100')
+      helpers.json(allTags.slice(start, start + limit), {
         'Last-Modified-Version': '1',
-        'Total-Results': String(filtered.length),
+        'Total-Results': String(allTags.length),
       })
     })
-    const all = await provider.browse({ kind: 'tags', offset: 0, limit: 10 })
-    expect(all.total).toBe(3)
-    const filtered = await provider.browse({
-      kind: 'tags',
-      q: 'alpha',
-      match: 'contains',
-      offset: 0,
-      limit: 10,
-    })
-    expect(filtered.total).toBe(2)
+    const search = { kind: 'tags', q: 'ALPHA', offset: 0, limit: 1 } as const
+    const first = await provider.browse(search)
+    expect(first).toMatchObject({ total: 2, nextOffset: 1, items: [{ tag: 'Alpha', count: 5 }] })
+    const second = await provider.browse({ ...search, offset: 1 })
+    expect(second).toMatchObject({ total: 2, items: [{ tag: 'not-alpha', count: 2 }] })
+    expect(second.nextOffset).toBeUndefined()
     const starts = await provider.browse({
-      kind: 'tags',
-      q: 'alp',
+      ...search,
       match: 'startsWith',
-      offset: 0,
-      limit: 10,
     })
-    expect(starts.total).toBe(2)
+    expect(starts).toMatchObject({ total: 1, items: [{ tag: 'Alpha' }] })
+    expect(await provider.browse({ ...search, q: 'missing' })).toMatchObject({
+      total: 0,
+      items: [],
+    })
   })
   it('paginates tags with exactly one request per page', async () => {
     const tags = Array.from({ length: 5 }, (_, i) => ({ tag: `t${i}` }))

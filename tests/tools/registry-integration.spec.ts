@@ -346,35 +346,20 @@ describe('registry integration: browse render exposes structured fields', () => 
   })
 })
 
-describe('registry integration: browseTags server pagination', () => {
-  it('uses q/qmode and Total-Results via tool', async () => {
+describe('registry integration: tag search', () => {
+  it('applies q and match to whole-library tags via the tool', async () => {
     const tags = [{ tag: 'alpha' }, { tag: 'beta' }, { tag: 'gamma' }]
-    mock.route('GET', '/api/users/0/tags', (req, res, helpers, search) => {
-      const q = search.get('q') ?? ''
-      const qmode = search.get('qmode') ?? 'contains'
-      const start = Number(search.get('start') ?? '0')
-      const limit = Number(search.get('limit') ?? '10')
-      let filtered = tags
-      if (q !== '') {
-        const lower = q.toLowerCase()
-        filtered = tags.filter((t) =>
-          qmode === 'startsWith' ? t.tag.startsWith(lower) : t.tag.includes(lower),
-        )
-      }
-      const slice = filtered.slice(start, start + limit)
-      helpers.json(slice, {
+    mock.route('GET', '/api/users/0/tags', (req, res, helpers) => {
+      helpers.json(tags, {
         'Last-Modified-Version': '1',
-        'Total-Results': String(filtered.length),
+        'Total-Results': String(tags.length),
       })
     })
     const r = expectValue(
-      await run('zotero_browse', { kind: 'tags', q: 'alp', match: 'contains', limit: 10 }),
+      await run('zotero_browse', { kind: 'tags', q: 'PHA', match: 'contains', limit: 10 }),
       'zotero_browse',
     )
     expect((r.value as { total: number }).total).toBe(1)
     expect((r.content[0] as { text: string }).text).toContain('alpha')
-    // verify the request actually sent qmode
-    const lastReq = mock.requests[mock.requests.length - 1]!
-    expect(lastReq.search.get('qmode')).toBe('contains')
   })
 })

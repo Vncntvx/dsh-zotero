@@ -205,3 +205,15 @@ On every harness pin bump, check each entry's "upstream expectation": if it is n
 - **Review trigger**: after Zotero changes item scopes or CSL JSON serialization, recheck the raw response and the export body with a parent that has an attachment and a note.
 - **Verification**: `tests/local/export-item-scope.spec.ts` covers scope expansion, duplicate keys, explicitly requested children, and CSL JSON entry alignment.
 - **Follow-up**: remove the adaptation when Zotero offers exact batch reads and batch exports with entry identities.
+
+## DN-52: Search whole-library tags by name
+
+- **Upstream**: the Zotero desktop Local API's personal and group library `/tags` endpoints.
+- **Upstream feature**: `/tags` pages the whole library's tags, and the item-scoped `/items/.../tags` endpoints support name queries.
+- **Upstream defect**: whole-library `/tags` ignores `q` and `qmode` and returns the unfiltered tags and total.
+- **Local patch**: whole-library tag search reads the complete paged listing, matches names case-insensitively, then returns the filtered page and total.
+- **Why this is a compromise**: each whole-library tag search scans the tag listing.
+- **Upstream expectation**: the whole-library endpoint supports tag name matching and reports the filtered total.
+- **Review trigger**: after a Zotero upgrade, query whole-library `/tags` for a subset of tags and check the results and total.
+- **Verification**: `tests/local/browse.spec.ts` simulates the endpoint ignoring the query and checks matches on later pages, prefix matching, and empty results.
+- **Follow-up**: once upstream supports whole-library search, check case and paging semantics before removing local filtering.
