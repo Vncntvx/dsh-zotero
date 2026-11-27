@@ -109,7 +109,7 @@ export const MAX_SPEC_LINES = 726
 export const STANDARD_SPEC_LINES = 400
 
 export const SPEC_SIZE_BASELINE = Object.freeze({
-  'tests/client/apply.spec.ts': 679,
+  'tests/client/apply.spec.ts': 661,
   'tests/client/enrichment/enrichment-model-controller.spec.ts': 451,
   'tests/client/enrichment/enrichment-model-form.spec.tsx': 486,
   'tests/client/enrichment/parse-dialog.spec.tsx': 403,

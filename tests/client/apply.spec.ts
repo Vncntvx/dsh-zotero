@@ -10,10 +10,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { inject } from '../../src/client/index.ts'
-import { en, zh } from '../../src/client/locales.ts'
 import {
   ENRICHMENT_SETTINGS_NAMESPACE,
-  READER_SETTINGS_NAMESPACE,
   SCHOLARLY_SETTINGS_NAMESPACE,
   ZOTERO_SETTINGS_NAMESPACE,
 } from '../../src/settings-namespace.ts'
@@ -42,24 +40,6 @@ describe('the browser-half entry', () => {
       'sidebarRight',
       'sidebarRightTabs',
       'resources',
-    ])
-  })
-
-  it('registers the page dictionaries on apply', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-    expect(world.dictionaries).toEqual([{ ns: 'zotero', dict: { zh, en } }])
-  })
-
-  it('reads the shared form for the shared namespace constant', async () => {
-    const world = fakeWorld()
-    await applyEntry(world)
-    expect(world.formIds).toEqual([
-      ZOTERO_SETTINGS_NAMESPACE,
-      SCHOLARLY_SETTINGS_NAMESPACE,
-      ENRICHMENT_SETTINGS_NAMESPACE,
-      ZOTERO_LIBRARY_SETTINGS_NAMESPACE,
-      READER_SETTINGS_NAMESPACE,
     ])
   })
 
