@@ -71,6 +71,16 @@ import { discoverLibraries, runBrowse } from './browse-domain.js'
 import { ItemSchemaDirectory } from './item-schema-directory.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import {
+  createAnnotations as createAnnotationsDomain,
+  deleteAnnotation as deleteAnnotationDomain,
+} from './write-annotations.js'
+import type {
+  ZoteroCreateAnnotationsRequest,
+  ZoteroCreateAnnotationsResult,
+  ZoteroDeleteAnnotationRequest,
+  ZoteroDeleteAnnotationResult,
+} from '../types.js'
+import {
   createItem as createItemDomain,
   updateItem as updateItemDomain,
   writeCapabilityUnavailableMessage,
@@ -79,7 +89,11 @@ import {
   deleteLibraryTags as deleteLibraryTagsDomain,
   restoreItems as restoreItemsDomain,
 } from './write-library-maintenance.js'
-import { createNote as createNoteDomain, updateNote as updateNoteDomain } from './write-notes.js'
+import {
+  createNote as createNoteDomain,
+  updateNote as updateNoteDomain,
+  modifyNote as modifyNoteDomain,
+} from './write-notes.js'
 import {
   updateItemCollections as updateItemCollectionsDomain,
   updateItemTags as updateItemTagsDomain,
@@ -150,6 +164,7 @@ import type {
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsOutcome,
   ZoteroUpdateNoteRequest,
+  ZoteroModifyNoteRequest,
   ZoteroUpdateNoteOutcome,
   ZoteroUpdateCollectionRequest,
   ZoteroUpdateCollectionOutcome,
@@ -674,6 +689,10 @@ export class LocalApiProvider implements ZoteroProvider {
     return updateNoteDomain(this.writeDeps(), request, signal)
   }
 
+  async modifyNote(request: ZoteroModifyNoteRequest, signal?: AbortSignal) {
+    return modifyNoteDomain(this.writeDeps(), request, signal)
+  }
+
   /**
    * Update one item's collection membership (add/remove in one write). The
    * domain logic lives in `local/write-item-lists`; this is the seam.
@@ -727,6 +746,20 @@ export class LocalApiProvider implements ZoteroProvider {
     signal?: AbortSignal,
   ): Promise<ZoteroCreateItemCommittedOutcome> {
     return createItemDomain(this.writeDeps(), request, signal)
+  }
+
+  async createAnnotations(
+    request: ZoteroCreateAnnotationsRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroCreateAnnotationsResult> {
+    return createAnnotationsDomain(this.writeDeps(), request, signal)
+  }
+
+  async deleteAnnotation(
+    request: ZoteroDeleteAnnotationRequest,
+    signal?: AbortSignal,
+  ): Promise<ZoteroDeleteAnnotationResult> {
+    return deleteAnnotationDomain(this.writeDeps(), request, signal)
   }
 
   /**

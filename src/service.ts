@@ -90,6 +90,13 @@ import {
 import { ConcurrencyGate } from './concurrency.js'
 import { raceWithSignal } from './race-signal.js'
 import { LocalApiProvider } from './local/provider.js'
+import { annotationCreateEntries } from './local/write-annotations.js'
+import type {
+  ZoteroCreateAnnotationsRequest,
+  ZoteroCreateAnnotationsResult,
+  ZoteroDeleteAnnotationRequest,
+  ZoteroDeleteAnnotationResult,
+} from './types.js'
 import { bm25EvidenceRanker, type EvidenceRanker } from './local/evidence-ranker.js'
 import { installParameterCorrection } from './parameter-correction.js'
 import { localProviderLimits } from './service-config.js'
@@ -157,6 +164,7 @@ import type {
   ZoteroUpdateItemTagsRequest,
   ZoteroUpdateItemTagsOutcome,
   ZoteroUpdateNoteRequest,
+  ZoteroModifyNoteRequest,
   ZoteroUpdateNoteOutcome,
   ZoteroUpdateCollectionRequest,
   ZoteroUpdateCollectionOutcome,
@@ -179,6 +187,7 @@ import type { ZoteroWritePreflight } from './types.js'
 type ZoteroWriteMethod =
   | 'createNote'
   | 'updateNote'
+  | 'modifyNote'
   | 'updateItemTags'
   | 'updateItemCollections'
   | 'batchItems'
@@ -186,6 +195,8 @@ type ZoteroWriteMethod =
   | 'updateCollection'
   | 'deleteCollection'
   | 'createItem'
+  | 'createAnnotations'
+  | 'deleteAnnotation'
   | 'updateItem'
   | 'deleteLibraryTags'
   | 'restoreItems'
@@ -910,6 +921,7 @@ export class ZoteroService extends Service {
     const loc = await this.attachment(parsedRef, signal)
     return {
       ref: loc.ref,
+      ...(loc.parentRef === undefined ? {} : { parentRef: loc.parentRef }),
       kind: loc.kind,
       title: loc.title,
       contentType: loc.contentType,
@@ -1096,6 +1108,10 @@ export class ZoteroService extends Service {
     })
   }
 
+  async modifyNote(request: ZoteroModifyNoteRequest, call: ZoteroWriteCall) {
+    return await this.dispatchWrite(call, 'modifyNote', request)
+  }
+
   /**
    * Update one item's collection membership (add/remove in one write).
    * @param request - the item ref and the collections to add/remove.
@@ -1160,6 +1176,21 @@ export class ZoteroService extends Service {
     call: ZoteroWriteCall,
   ): Promise<ZoteroCreateItemCommittedOutcome | ZoteroWriteDeclined> {
     return await this.dispatchWrite(call, 'createItem', request)
+  }
+
+  async createAnnotations(
+    request: ZoteroCreateAnnotationsRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroCreateAnnotationsResult | ZoteroWriteDeclined> {
+    annotationCreateEntries(request)
+    return await this.dispatchWrite(call, 'createAnnotations', request)
+  }
+
+  async deleteAnnotation(
+    request: ZoteroDeleteAnnotationRequest,
+    call: ZoteroWriteCall,
+  ): Promise<ZoteroDeleteAnnotationResult | ZoteroWriteDeclined> {
+    return await this.dispatchWrite(call, 'deleteAnnotation', request)
   }
 
   /**

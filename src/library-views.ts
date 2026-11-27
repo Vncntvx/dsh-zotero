@@ -367,6 +367,9 @@ function annotationRowOf(row: ZoteroAnnotationRecord): ZoteroAnnotationRowView {
     ...(row.comment !== undefined ? { comment: row.comment } : {}),
     ...(row.color !== undefined ? { color: row.color } : {}),
     ...(row.pageLabel !== undefined ? { pageLabel: row.pageLabel } : {}),
+    ...(row.version !== undefined ? { version: row.version } : {}),
+    ...(row.tags !== undefined ? { tags: row.tags } : {}),
+    ...(row.position !== undefined ? { position: row.position } : {}),
     ...(row.parentRef !== undefined ? { parentRef: row.parentRef } : {}),
   }
 }

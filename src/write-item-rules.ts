@@ -16,12 +16,19 @@ import {
   ZOTERO_INVALID_ARGUMENT,
   ZoteroError,
 } from './errors.js'
-import { ZOTERO_CREATABLE_ITEM_TYPES, ZOTERO_UPDATABLE_ITEM_FIELDS } from './constants.js'
+import {
+  ZOTERO_CREATABLE_ITEM_TYPES,
+  ZOTERO_UPDATABLE_ANNOTATION_FIELDS,
+  ZOTERO_UPDATABLE_ITEM_FIELDS,
+} from './constants.js'
+import { isNonNegativeSafeInteger } from './json.js'
 import type { ZoteroCreatableItemType, ZoteroCreator, ZoteroUpdatableItemField } from './types.js'
 
 const CREATABLE_ITEM_TYPES: ReadonlySet<string> = new Set(ZOTERO_CREATABLE_ITEM_TYPES)
 
 const UPDATABLE_FIELDS: ReadonlySet<string> = new Set(ZOTERO_UPDATABLE_ITEM_FIELDS)
+const UPDATABLE_ANNOTATION_FIELDS: ReadonlySet<string> = new Set(ZOTERO_UPDATABLE_ANNOTATION_FIELDS)
+type UpdateField = ZoteroUpdatableItemField | (typeof ZOTERO_UPDATABLE_ANNOTATION_FIELDS)[number]
 
 /** Reject repeated targets within one batch operation. */
 export function requireUniqueBatchItemKey(
@@ -96,36 +103,60 @@ export function normalizeCreator(creator: ZoteroCreator, index: number): ZoteroC
   }
 }
 
-/** Refuse an update field outside the closed updatable set. */
+/** Refuse an ordinary item update field outside the closed updatable set. */
 export function requireUpdatableField(field: string): asserts field is ZoteroUpdatableItemField {
-  if (!UPDATABLE_FIELDS.has(field)) {
+  if (!UPDATABLE_FIELDS.has(field))
     throw new ZoteroError(writeFieldNotUpdatableMessage(field), ZOTERO_INVALID_ARGUMENT)
-  }
 }
 
 /**
  * Validate and normalize the fields of an item update (`set`).
- * Enforces non-empty set, updatable fields whitelist, and non-blank values.
+ * Item fields require non-blank values. Annotation comments and labels can be cleared.
  */
 export function validateItemUpdateFields(
   set: Record<string, unknown> | undefined,
-): Map<ZoteroUpdatableItemField, string> {
+  annotation: boolean,
+  expectedVersion: number | undefined,
+  hasTagChanges = false,
+): [UpdateField, string][] {
   const entries = Object.entries(set ?? {})
-  if (entries.length === 0) {
+  if (entries.length === 0 && !hasTagChanges) {
     throw new ZoteroError(writeListEmptyMessage('set'), ZOTERO_INVALID_ARGUMENT)
   }
-  const updates = new Map<ZoteroUpdatableItemField, string>()
+  if ((annotation || expectedVersion !== undefined) && !isNonNegativeSafeInteger(expectedVersion))
+    throw new ZoteroError(
+      'expectedVersion must be a non-negative integer.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  const updates: [UpdateField, string][] = []
   for (const [field, value] of entries) {
-    requireUpdatableField(field)
-    if (typeof value !== 'string' || value.trim() === '') {
+    if (!annotation) requireUpdatableField(field)
+    else if (!UPDATABLE_ANNOTATION_FIELDS.has(field))
+      throw new ZoteroError(`set.${field} is invalid for an annotation.`, ZOTERO_INVALID_ARGUMENT)
+    const mayClear = field === 'annotationComment' || field === 'annotationPageLabel'
+    if (typeof value !== 'string' || (!mayClear && value.trim() === '')) {
       throw new ZoteroError(writeNonBlankMessage(`set.${field}`), ZOTERO_INVALID_ARGUMENT)
     }
-    updates.set(field, value.trim())
+    const normalized = annotation ? value.trim().normalize() : value.trim()
+    if (field === 'annotationColor' && !/^#[0-9a-f]{6}$/i.test(normalized))
+      throw new ZoteroError(
+        'annotationColor must be a six-digit hex color.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    if (field === 'annotationType' && normalized !== 'highlight' && normalized !== 'underline')
+      throw new ZoteroError(
+        'annotationType must be highlight or underline.',
+        ZOTERO_INVALID_ARGUMENT,
+      )
+    updates.push([
+      field as UpdateField,
+      field === 'annotationColor' ? normalized.toLowerCase() : normalized,
+    ])
   }
   return updates
 }
 
 /** Zotero's wire name for one updatable field (`doi` rides as `DOI`). */
-export function wireFieldOf(field: ZoteroUpdatableItemField): string {
+export function wireFieldOf(field: UpdateField): string {
   return field === 'doi' ? 'DOI' : field
 }

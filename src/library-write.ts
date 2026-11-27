@@ -52,25 +52,69 @@ export async function executeLibraryWrite(
 ): Promise<ZoteroLibraryWriteResultView> {
   signal.throwIfAborted()
   const request = zoteroLibraryWriteRequestSchema.parse(input)
+  return await executeZoteroSessionWrite(
+    ctx,
+    request.sessionId,
+    'zotero/write',
+    TOOLS[request.operation],
+    request.operation === 'trash' ? { delete: request.args.refs } : request.args,
+    signal,
+  )
+}
+
+export async function requireZoteroWriteSession(
+  ctx: Context,
+  session: string,
+  action:
+    | 'zotero/write'
+    | 'zotero/readerUpdateAnnotation'
+    | 'zotero/readerCreateAnnotations'
+    | 'zotero/readerDeleteAnnotation'
+    | 'zotero/readerWriteNote',
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const service = requireZoteroService(ctx, signal)
   if (service.config.writeEnabled !== true)
     throw new ZoteroError('Zotero writes are disabled.', ZOTERO_CAPABILITY_UNAVAILABLE)
-  const sessionId = SessionId(request.sessionId)
-  if (!ctx.get('remoteAccess')?.allows({ kind: 'session', id: sessionId })) {
-    throw new RemoteError(
-      'remote-access/denied',
-      'Zotero writes are not authorized for this session.',
-      { action: 'zotero/write', reason: 'no-allow' },
-    )
+  const sessionId = SessionId(session)
+  const requireAccess = () => {
+    if (!ctx.get('remoteAccess')?.allows({ kind: 'session', id: sessionId })) {
+      throw new RemoteError(
+        'remote-access/denied',
+        'Zotero writes are not authorized for this session.',
+        { action, reason: 'no-allow' },
+      )
+    }
   }
+  requireAccess()
   const sessions = ctx.get('sessionController')
   const resolved = await sessions?.resolveAgent(sessionId)
-  if (resolved === undefined || 'error' in resolved || resolved.agent.status !== 'running') {
+  signal.throwIfAborted()
+  requireAccess()
+  if (resolved === undefined || 'error' in resolved) {
     throw new ZoteroError(WRITE_APPROVAL_UNAVAILABLE_MESSAGE, ZOTERO_WRITE_APPROVAL_UNAVAILABLE)
   }
-  const name = TOOLS[request.operation]
+  if (resolved.agent.status === 'idle') {
+    throw new ZoteroError(
+      'Zotero write approval requires an active conversation turn. You can make this change in Zotero.',
+      ZOTERO_WRITE_APPROVAL_UNAVAILABLE,
+    )
+  }
+  return { service, agent: resolved.agent }
+}
+
+export async function executeZoteroSessionWrite(
+  ctx: Context,
+  session: string,
+  action: 'zotero/write' | 'zotero/readerUpdateAnnotation',
+  name: (typeof ZOTERO_WRITE_TOOL_NAMES)[number],
+  args: object,
+  signal: AbortSignal,
+): Promise<ZoteroLibraryWriteResultView> {
+  const { agent } = await requireZoteroWriteSession(ctx, session, action, signal)
   const tools = ctx.get('tools')
-  if (tools?.get(name, resolved.agent) === undefined) {
+  if (tools?.get(name, agent) === undefined) {
     throw new ZoteroError(
       'The requested Zotero write tool is unavailable in this session.',
       ZOTERO_CAPABILITY_UNAVAILABLE,
@@ -78,16 +122,14 @@ export async function executeLibraryWrite(
   }
   // No retry: even an interrupted or unverified result may already have committed.
   const batch = await tools.execute({
-    agent: resolved.agent,
+    agent,
     signal,
     calls: [
       {
         type: 'tool-call',
         id: ToolCallId(`zotero-panel-${randomUUID()}`),
         name,
-        arguments: JSON.stringify(
-          request.operation === 'trash' ? { delete: request.args.refs } : request.args,
-        ),
+        arguments: JSON.stringify(args),
       },
     ],
   })

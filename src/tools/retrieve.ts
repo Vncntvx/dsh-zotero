@@ -162,6 +162,27 @@ const EVIDENCE_RECORD = {
     chunkCount: { type: 'integer' },
     comment: { type: 'string' },
     pageLabel: { type: 'string' },
+    position: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        pageIndex: { type: 'integer', required: true },
+        rects: {
+          type: 'array',
+          required: true,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              x: { type: 'number', required: true },
+              y: { type: 'number', required: true },
+              width: { type: 'number', required: true },
+              height: { type: 'number', required: true },
+            },
+          },
+        },
+      },
+    },
     attachmentRef: { type: 'string' },
     matchKind: {
       type: 'string',

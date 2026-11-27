@@ -11,8 +11,8 @@ import { asRecord, asString, isObjectKey, stringArrayOf } from './json.js'
 import { refStringFor } from './refs.js'
 import {
   ITEM_WITHOUT_KEY_MESSAGE,
+  itemTitleOf,
   parentKeyOf,
-  plainNoteText,
   resolveNormalizeContext,
   type NormalizeContext,
 } from './normalize-context.js'
@@ -39,17 +39,9 @@ export function normalizeSearchItem(json: unknown, context?: NormalizeContext): 
   const attachment = asRecord(asRecord(record.links)?.attachment)
   const attachmentKey = extractAttachmentKey(asString(attachment?.href))
   const itemType = asString(data?.itemType) ?? asString(record.itemType) ?? ''
-  let title = asString(data?.title) ?? ''
-  if (itemType === 'note' && title === '') {
-    title =
-      plainNoteText(data?.note)
-        .split('\n')
-        .map((line) => line.trim())
-        .find((line) => line !== '') ?? '(untitled note)'
-  }
   const item: ZoteroSearchItem = {
     ref: refStringFor(resolved.library, 'item', key, resolved.serverId),
-    title,
+    title: itemTitleOf(data, itemType),
     creatorSummary: asString(meta?.creatorSummary) ?? '',
     itemType,
   }

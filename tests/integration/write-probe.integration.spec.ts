@@ -21,11 +21,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { ZoteroHttpClient } from '../../src/http-client.js'
 import type { ZoteroWriteHttpClient } from '../../src/write-http.js'
 import { WriteAuthorizer } from '../../src/write-auth.js'
-import { PERSONAL_LIBRARY } from '../../src/refs.js'
+import { parseSupportedRef, PERSONAL_LIBRARY, requireWritableRef } from '../../src/refs.js'
 import { resolveCollectionsMixed, ScopeDirectory } from '../../src/local/scope-directory.js'
-import { createItem } from '../../src/local/write-domain.js'
+import { createItem, updateItem } from '../../src/local/write-domain.js'
+import { createAnnotations, deleteAnnotation } from '../../src/local/write-annotations.js'
 import type { WriteDomainDeps } from '../../src/local/write-deps.js'
-import { createNote, updateNote } from '../../src/local/write-notes.js'
+import { createNote, modifyNote, updateNote } from '../../src/local/write-notes.js'
+import { noteTextRuns } from '../../src/local/note-text-edits.js'
 import { restoreItems } from '../../src/local/write-library-maintenance.js'
 import { updateItemTags } from '../../src/local/write-item-lists.js'
 import { batchItems } from '../../src/local/write-batch.js'
@@ -35,6 +37,8 @@ import { testHttpClient, testWriteClient } from '../helpers/test-clients.js'
 
 const BASE_URL = process.env.ZOTERO_BASE_URL ?? 'http://127.0.0.1:23119/api'
 const PROBE_COLLECTION = '[dsh-zotero-probe]'
+const READER_PROBE_TITLE = '[dsh-zotero-reader-probe]'
+const readerProbeRef = process.env.ZOTERO_READER_PROBE_ATTACHMENT
 
 describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRITE_PROBE === '1')(
   'live write probe (ZOTERO_INTEGRATION=1 AND ZOTERO_WRITE_PROBE=1)',
@@ -66,6 +70,8 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       await client.get('', undefined, {})
       serverId = client.serverId ?? ''
       expect(serverId).not.toBe('')
+      // The desktop prompt uses the write client's human-paced deadline.
+      await expect(authorizer.keyFor(serverId)).resolves.toBeDefined()
       const itemSchema = new ItemSchemaDirectory(client)
       deps = {
         client,
@@ -83,10 +89,9 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
           resolveCollectionsMixed(directory, inputs, PERSONAL_LIBRARY, signal, client.serverId),
         itemTypeFields: (itemType, signal) => itemSchema.getWritableItemFields(itemType, signal),
       }
-    })
+    }, 180_000)
 
-    it('authorizes through the Zotero dialog and prepares the probe collection', async () => {
-      await expect(authorizer.keyFor(serverId)).resolves.toBeDefined()
+    it('prepares the probe collection through the authorized Local API', async () => {
       const listing = await directory.scopeListingOf(
         'collections',
         { library: PERSONAL_LIBRARY, serverId },
@@ -194,5 +199,141 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1' && process.env.ZOTERO_WRIT
       expect(Number.isFinite(version)).toBe(true)
       expect(version).toBeGreaterThan(0)
     })
+
+    it.runIf(readerProbeRef !== undefined)(
+      'creates, edits, and deletes a version-pinned Reader note on the probe PDF’s parent',
+      async () => {
+        const fixture = parseSupportedRef(readerProbeRef!, ['attachment'])
+        expect(fixture.serverId).toBe(serverId)
+        const read = async (key: string) =>
+          (
+            await client.getJson<{ data: Record<string, unknown>; version: number }>(
+              `users/0/items/${key}`,
+              undefined,
+              { serverId },
+            )
+          ).json
+        const { data } = await read(fixture.key)
+        expect(data).toMatchObject({ itemType: 'attachment', title: READER_PROBE_TITLE })
+        const parentItem = requireWritableRef(
+          parseSupportedRef(`zotero://user/0/item/${data.parentItem}?server=${serverId}`, ['item']),
+          ['item'],
+        )
+        const note = await createNote(deps, {
+          parentItem,
+          markdown: `**Original finding**\n\n[Source](zotero://open-pdf/library/items/${fixture.key}?page=1)`,
+        })
+        if (note.kind !== 'applied') throw new Error('Reconcile the probe note in Zotero')
+        const item = parseSupportedRef(note.ref, ['item'])
+        const before = await read(item.key)
+        expect(before.data.parentItem).toBe(parentItem.key)
+        const original = String(before.data.note)
+        const target = noteTextRuns(original).find(({ text }) => text === 'Original finding')
+        if (!target) throw new Error('The saved probe text is missing')
+        const result = await modifyNote(deps, {
+          operation: 'edit',
+          item,
+          expectedVersion: before.version,
+          edits: [{ offset: target.offset, text: 'Revised <finding>' }],
+        })
+        expect(result.kind).toBe('applied')
+        const after = await read(item.key)
+        expect(after.data.note).toBe(
+          original.replace('Original finding', 'Revised &lt;finding&gt;'),
+        )
+        const deletion = { operation: 'delete', item, expectedVersion: before.version } as const
+        await expect(modifyNote(deps, deletion)).rejects.toMatchObject({
+          code: 'ZOTERO_WRITE_CONFLICT',
+        })
+        await expect(
+          modifyNote(deps, { ...deletion, expectedVersion: after.version }),
+        ).resolves.toMatchObject({ kind: 'applied' })
+        await expect(read(item.key)).rejects.toMatchObject({ code: 'ZOTERO_NOT_FOUND' })
+      },
+      180_000,
+    )
+
+    it.runIf(readerProbeRef !== undefined)(
+      'creates, edits, and deletes Zotero Reader annotations on the designated probe PDF',
+      async () => {
+        const ref = requireWritableRef(parseSupportedRef(readerProbeRef!, ['attachment']), [
+          'attachment',
+        ])
+        expect(ref.serverId, 'Supply an attachment ref pinned to this live instance').toBe(serverId)
+        const read = async (key: string) =>
+          (
+            await client.getJson<{ data: Record<string, unknown>; version: number }>(
+              `users/0/items/${key}`,
+              undefined,
+              { serverId },
+            )
+          ).json
+        const attachment = (await read(ref.key)).data
+        expect(attachment).toMatchObject({
+          itemType: 'attachment',
+          contentType: 'application/pdf',
+          title: READER_PROBE_TITLE,
+        })
+
+        const created = await createAnnotations(deps, {
+          attachment: ref,
+          type: 'highlight',
+          color: '#ffd400',
+          comment: 'Reader integration probe',
+          pages: [0, 1].map((pageIndex) => ({
+            pageIndex,
+            text: 'Sample reader text',
+            pageLabel: String(pageIndex + 1),
+            textOffset: 0,
+            top: 35,
+            rects: [{ x: 28, y: 40, width: 46, height: 15 }],
+          })),
+        })
+        expect(created.failed).toEqual([])
+        expect(created.unverified).toEqual([])
+        expect(created.created).toHaveLength(2)
+
+        for (const { key, ref: annotationRef, index, version } of created.created) {
+          const annotation = parseSupportedRef(annotationRef, ['annotation'])
+          const saved = await read(key)
+          expect(saved.version).toBe(version)
+          expect(saved.data).toMatchObject({
+            itemType: 'annotation',
+            parentItem: ref.key,
+            annotationType: 'highlight',
+            annotationPosition: JSON.stringify({ pageIndex: index, rects: [[28, 40, 74, 55]] }),
+          })
+
+          const updated = await updateItem(deps, {
+            item: annotation,
+            expectedVersion: version,
+            set: { annotationType: 'underline', annotationComment: 'Reviewed fixture' },
+            tagChanges: { add: ['reader-probe'] },
+          })
+          expect(updated.kind).toBe('applied')
+          if (updated.kind !== 'applied')
+            throw new Error('Reconcile the probe annotation in Zotero')
+          const current = await read(key)
+          expect(current.data).toMatchObject({
+            annotationType: 'underline',
+            annotationComment: 'Reviewed fixture',
+            tags: [expect.objectContaining({ tag: 'reader-probe' })],
+          })
+          await expect(
+            deleteAnnotation(deps, { annotation, expectedVersion: version }),
+          ).rejects.toMatchObject({
+            code: 'ZOTERO_WRITE_CONFLICT',
+          })
+          await expect(
+            deleteAnnotation(deps, { annotation, expectedVersion: current.version }),
+          ).resolves.toMatchObject({
+            kind: 'deleted',
+            ref: annotationRef,
+          })
+          await expect(read(key)).rejects.toMatchObject({ code: 'ZOTERO_NOT_FOUND' })
+        }
+      },
+      180_000,
+    )
   },
 )

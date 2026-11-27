@@ -9,6 +9,16 @@
 
 import type { FulltextArtifactProvenance } from './local/fulltext-enhancer.js'
 
+export interface EvidencePageRegion {
+  pageIndex: number
+  rects: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }[]
+}
+
 /** Evidence sources `zotero_retrieve` can rank against the query. */
 export type EvidenceSource = 'annotation' | 'note' | 'fulltext' | 'abstract'
 
@@ -67,6 +77,8 @@ export interface EvidenceItem {
   readonly end?: number
   /** Zotero-owned page label (annotations only); never invented. */
   readonly pageLabel?: string
+  /** Native Zotero annotation position in PDF page coordinates. */
+  readonly position?: EvidencePageRegion
   /** The annotation passage's parent attachment ref (its own PDF's deep-link key). */
   readonly attachmentRef?: string
   /**

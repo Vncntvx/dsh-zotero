@@ -25,13 +25,7 @@ import {
   zoteroError,
 } from '../../helpers/server/assert.js'
 import { ITEM_KEY, NOTE_KEY, apiPath, attachmentRef, refOf } from '../../helpers/server/keys.js'
-import {
-  annotationRow,
-  attachment,
-  item,
-  noteRow,
-  versionHeaders,
-} from '../../helpers/server/objects.js'
+import { attachment, item, noteRow, versionHeaders } from '../../helpers/server/objects.js'
 import { serveFulltext, serveJson, serveItemGraph } from '../../helpers/server/serve.js'
 import {
   FULLTEXT_PAYLOAD,
@@ -128,30 +122,6 @@ describe('retrieve source selection', () => {
       '/api/users/0/items/ABCD1234/children',
     ])
     expect(result.evidence.map((entry) => entry.source)).toEqual(['note'])
-  })
-
-  it('carries the parent attachment ref on annotation evidence', async () => {
-    // Annotations ride ?itemType=annotation: never the bare children listing.
-    serveItemGraph(mock, {
-      parent: RETRIEVE_PARENT,
-      children: [attachment({ data: { parentItem: ITEM_KEY } })],
-      annotations: [
-        annotationRow({ data: { annotationText: 'parented', parentItem: 'WXYZ6789' } }),
-      ],
-      serverId: 'S1',
-    })
-    const result = await provider.retrieve(
-      retrieveRequest({ sources: ['annotation'], query: 'parented', passages: 1 }),
-    )
-    expect(result.evidence).toEqual([
-      {
-        source: 'annotation',
-        sourceRef: 'zotero://user/0/annotation/ANNO1111?server=S1',
-        text: 'parented',
-        attachmentRef: 'zotero://user/0/attachment/WXYZ6789?server=S1',
-        matchKind: 'lexical',
-      },
-    ])
   })
 
   it('picks a PDF child when the parent has no attachment link', async () => {

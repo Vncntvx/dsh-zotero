@@ -22,7 +22,7 @@ import {
   ZOTERO_FILE_UNREADABLE,
   ZoteroError,
 } from '../errors.js'
-import { ZOTERO_CHILD_PAGE_MAX_ROWS } from '../constants.js'
+import { ZOTERO_CHILD_PAGE_MAX_ROWS, ZOTERO_READER_NOTE_HTML_CHARS } from '../constants.js'
 import type { NormalizeContext } from '../normalize-context.js'
 import { type ZoteroChildKind } from '../normalize-children.js'
 import {
@@ -186,7 +186,16 @@ export async function getItem(
     })
   const detail = normalize()
   detail.ref = refStringFor(library, ref.kind, ref.key, serverId)
+  if (request.includeNoteHtml && itemType === 'note') {
+    const html = asString(data?.note)
+    if (html !== undefined && html.length <= ZOTERO_READER_NOTE_HTML_CHARS) detail.noteHtml = html
+  }
   if (itemType === 'attachment') {
+    if (request.includeParentRef) {
+      const parentKey = asString(data?.parentItem)
+      if (parentKey !== undefined && isObjectKey(parentKey))
+        detail.parentRef = refStringFor(library, 'item', parentKey, serverId)
+    }
     detail.contentType = asString(data?.contentType) ?? ''
     detail.children.total = 0
     detail.bestAttachment = attachmentRecordOf(normalizeAttachmentRecord(parent.json), context)
@@ -487,6 +496,7 @@ export async function getChildPage(
       ctx,
       deps.limits.maxNoteChars,
       new Set<ZoteroChildKind>(['annotation']),
+      request.includeAnnotationPosition,
     )
     return {
       kind: 'annotations',

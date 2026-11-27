@@ -1052,6 +1052,7 @@ export class SourceWorkspaceIndex {
                 ? {}
                 : { start: item.start, end: item.end }),
               ...(item.pageLabel === undefined ? {} : { pageLabel: item.pageLabel }),
+              ...(item.position === undefined ? {} : { position: item.position }),
               ...(item.attachmentRef === undefined ? {} : { attachmentRef: item.attachmentRef }),
               ...(item.matchKind === undefined ? {} : { matchKind: item.matchKind }),
               ...(item.matchedFields === undefined

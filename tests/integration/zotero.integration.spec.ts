@@ -651,39 +651,39 @@ describe.runIf(process.env.ZOTERO_INTEGRATION === '1')('live Zotero local API', 
     )
     const rows = Array.isArray(notes.json) ? notes.json : []
     let noteKey: string | undefined
-    let parentKey: string | undefined
+    let collectionKey: string | undefined
     let token: string | undefined
+    const unfiledParents = new Set<string>()
     for (const row of rows) {
       const record = row as { key?: string; data?: { parentItem?: string; note?: string } }
-      if (record.key === undefined || record.data?.parentItem === undefined) continue
-      const body = String(record.data.note ?? '').replace(/<[^>]*>/g, ' ')
+      const parentKey = record.data?.parentItem
+      if (record.key === undefined || parentKey === undefined || unfiledParents.has(parentKey))
+        continue
+      const body = String(record.data?.note ?? '').replace(/<[^>]*>/g, ' ')
       const ascii = body.match(/[A-Za-z]{5,}/)
       const cjk = body.match(/[\u4e00-\u9fff]{2}/)
       const candidate = ascii?.[0]?.toLowerCase() ?? cjk?.[0]
       if (candidate === undefined) continue
+      const parent = await client.getJson<unknown>(`users/0/items/${parentKey}`)
+      const collections = (parent.json as { data?: { collections?: unknown[] } })?.data?.collections
+      collectionKey = collections?.find((entry): entry is string => typeof entry === 'string')
+      if (collectionKey === undefined) {
+        unfiledParents.add(parentKey)
+        continue
+      }
       noteKey = record.key
-      parentKey = record.data.parentItem
       token = candidate
       break
     }
-    if (noteKey === undefined || parentKey === undefined || token === undefined) {
+    if (noteKey === undefined || collectionKey === undefined || token === undefined) {
       throw new Error(
-        '[integration] no child note with a searchable body found; to exercise this ' +
+        '[integration] no child note with a searchable body and a filed parent found; to exercise this ' +
           'check, add a child note with text to an item inside a collection and rerun',
-      )
-    }
-    const parent = await client.getJson<unknown>(`users/0/items/${parentKey}`)
-    const collections = (
-      (parent.json as { data?: { collections?: unknown[] } })?.data?.collections ?? []
-    ).filter((entry): entry is string => typeof entry === 'string')
-    if (collections.length === 0) {
-      throw new Error(
-        `[integration] parent ${parentKey} of note ${noteKey} sits in no collection; fixture prerequisite missing for`,
       )
     }
     const result = await provider.search(
       {
-        scope: { kind: 'collection', refOrName: `zotero://user/0/collection/${collections[0]}` },
+        scope: { kind: 'collection', refOrName: `zotero://user/0/collection/${collectionKey}` },
         mode: 'metadata',
         query: token,
         sort: 'dateModified',

@@ -37,10 +37,13 @@ import { expectRequestCount, expectRequestPaths, zoteroError } from '../helpers/
 import { testHttpClient } from '../helpers/test-clients.js'
 import {
   ATTACHMENT_KEY,
+  GROUP_LIBRARY,
   ITEM_KEY,
+  SERVER_ID,
   apiPath,
   attachmentRef,
   itemRef,
+  refOf,
 } from '../helpers/server/keys.js'
 import { attachment, item, noteRow, paperItem, versionHeaders } from '../helpers/server/objects.js'
 import { serveJson, serveText } from '../helpers/server/serve.js'
@@ -65,23 +68,19 @@ afterEach(async () => {
 const FILE_ATTACHMENT = attachment()
 
 describe('getAttachmentLocation', () => {
-  it('resolves an imported file through /file/view/url and verifies it on disk', async () => {
+  it('resolves a group PDF and qualifies the parent with the same library and instance', async () => {
     const filePath = join(tempDir, 'paper.pdf')
     writeFileSync(filePath, '%PDF stub')
-    serveJson(mock, `${apiPath()}/items/${ATTACHMENT_KEY}`, FILE_ATTACHMENT, versionHeaders())
+    const path = `${apiPath(GROUP_LIBRARY)}/items/${ATTACHMENT_KEY}`
+    serveJson(mock, path, attachment({ data: { parentItem: ITEM_KEY } }), versionHeaders())
     // `/file/view/url` answers plain text, so it needs `serveText`, not `serveJson`.
-    serveText(
-      mock,
-      `${apiPath()}/items/${ATTACHMENT_KEY}/file/view/url`,
-      pathToFileURL(filePath).href,
-    )
-    const location = await provider.getAttachmentLocation(parseRef(attachmentRef()))
-    expectRequestPaths(mock, [
-      '/api/users/0/items/WXYZ6789',
-      '/api/users/0/items/WXYZ6789/file/view/url',
-    ])
+    serveText(mock, `${path}/file/view/url`, pathToFileURL(filePath).href)
+    const ref = refOf('attachment', ATTACHMENT_KEY, GROUP_LIBRARY)
+    const location = await provider.getAttachmentLocation(parseRef(ref))
+    expectRequestPaths(mock, [path, `${path}/file/view/url`])
     expect(location).toEqual({
-      ref: 'zotero://user/0/attachment/WXYZ6789?server=S1',
+      ref: `${ref}?server=${SERVER_ID}`,
+      parentRef: `${refOf('item', ITEM_KEY, GROUP_LIBRARY)}?server=${SERVER_ID}`,
       title: 'Full Text PDF',
       contentType: 'application/pdf',
       kind: 'file',

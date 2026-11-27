@@ -758,19 +758,23 @@ scholarly_save_to_zotero(itemType="journalArticle", title="Attention Is All You 
 
 标量更新先校验全部字段适用于条目类型，再严格比较规范化 wire 值，仅 PATCH 差异。已满足请求返回 `{kind: "applied", unchanged: true, changed: []}` 及实际读取的条目 `version`，不报告新的 `libraryVersion`，不获取写凭据。能力门与两级审批仍适用。
 
+编辑 Zotero 原生高亮或下划线时，使用标注 ref 和已读到的版本，可修改评论、颜色、页码标签及高亮或下划线类型。将评论或页码标签设为空字符串可清除该字段。同一次版本化 PATCH 可按名称添加或移除标签。
+
 ### 参数
 
-| 参数  | 类型   | 必填 | 说明                                                                                     |
-| ----- | ------ | ---- | ---------------------------------------------------------------------------------------- |
-| `ref` | string | ✓    | 目标条目 ref（`zotero://user/0/item/<KEY>`）                                             |
-| `set` | object | ✓    | 至少一个字段：`title`、`date`、`url`、`doi`、`abstractNote`、`publicationTitle`、`extra` |
+| 参数              | 类型    | 必填     | 说明                                                                                                                                                                                                             |
+| ----------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`             | string  | ✓        | 目标条目 ref（`zotero://user/0/item/<KEY>`）                                                                                                                                                                     |
+| `set`             | object  | ✓        | 至少一个字段：`title`、`date`、`url`、`doi`、`abstractNote`、`publicationTitle`、`extra`                                                                                                                         |
+| `expectedVersion` | integer | 标注必填 | 编辑前读到的版本。使用 `zotero://user/0/annotation/<KEY>` 时，`set` 可包含 `annotationComment`、`annotationColor`（六位十六进制颜色）、`annotationPageLabel` 或 `annotationType`（`highlight` 或 `underline`）。 |
+| `tagChanges`      | object  |          | 要添加（`add`）或移除（`remove`）的标注标签，两者均为名称列表。仅修改标签时传 `set={}`。                                                                                                                         |
 
 ### 输出
 
 - 实际发生变更：`{kind: "applied", ref, version, changed, libraryVersion, serverId?}`（`changed` 为实际提交的字段名，按字典序）；
 - 无需变更：`{kind: "applied", unchanged: true, changed: []}`；
 - 计划卡拒绝：`{kind: "declined"}`；
-- 版本前置失败：`ZOTERO_WRITE_CONFLICT`。对象已被并发修改，重跑一次工具即可（重跑会重新读取版本）。
+- 版本前置失败：`ZOTERO_WRITE_CONFLICT`。读取当前版本并重新核对编辑内容，再提交新计划。
 
 提交后无法核验时返回 `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`。须视为已经提交，在 Zotero 中核对，不可重试。
 

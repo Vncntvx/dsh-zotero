@@ -114,6 +114,7 @@ export interface EvidencePassage extends Pick<
   readonly previewTruncated: boolean
   /** Zotero-owned page label (annotations only); never invented. */
   readonly pageLabel?: string
+  readonly position?: EvidenceItem['position']
   /** The annotation passage's parent attachment ref; lets the jump target the annotation's own PDF. */
   readonly attachmentRef?: string
   readonly matchKind?: EvidenceItem['matchKind']

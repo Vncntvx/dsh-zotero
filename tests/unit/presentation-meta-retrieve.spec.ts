@@ -61,6 +61,10 @@ describe('projectRetrieveMeta', () => {
             text: 'highlighted claim',
             pageLabel: '7',
             attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+            position: {
+              pageIndex: 6,
+              rects: [{ x: 10, y: 20, width: 20, height: 20 }],
+            },
           },
           { source: 'note', sourceRef: 'zotero://user/0/item/NOTE0001', text: 'my note' },
           {
@@ -87,6 +91,10 @@ describe('projectRetrieveMeta', () => {
       matchKind: 'lexical',
       pageLabel: '7',
       attachmentRef: 'zotero://user/0/attachment/WXYZ6789',
+      position: {
+        pageIndex: 6,
+        rects: [{ x: 10, y: 20, width: 20, height: 20 }],
+      },
     })
     // Fulltext passages never gain an invented page locator.
     expect(meta.items[2]!.pageLabel).toBeUndefined()

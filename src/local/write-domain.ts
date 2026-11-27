@@ -32,15 +32,19 @@ import { numericHeader } from './wire.js'
 import { ZOTERO_LIBRARY_VERSION_HEADER } from '../constants.js'
 import {
   WRITE_IDENTITY_UNSUPPORTED_MESSAGE,
+  WRITE_CONFLICT_MESSAGE,
   WRITE_PRECONDITION_READ_LIBRARY_VERSION_MESSAGE,
   WRITE_UNAUTHORIZED_AFTER_AUTH_MESSAGE,
   WRITE_ITEM_TYPE_MISSING_MESSAGE,
+  WRITE_LIST_SELECTION_MESSAGE,
   WRITE_VERSION_MISSING_MESSAGE,
   writeFieldNotForItemTypeMessage,
   writeObjectStateMissingMessage,
   requireNonBlank,
   ZOTERO_INVALID_ARGUMENT,
+  ZOTERO_NOT_FOUND,
   ZOTERO_UNEXPECTED,
+  ZOTERO_WRITE_CONFLICT,
   ZOTERO_WRITE_UNAUTHORIZED,
   ZoteroError,
 } from '../errors.js'
@@ -51,6 +55,7 @@ import {
   libraryPrefix,
   parseRef,
   PERSONAL_LIBRARY,
+  refStringFor,
   requireSupportedLocalRef,
   requireWritableRef,
 } from '../refs.js'
@@ -429,7 +434,7 @@ export async function withItemStateWrite<S, T>(
   plan: (context: ItemWriteContext<S>) => Promise<T>,
 ): Promise<T> {
   const serverId = await ensureServerId(deps, signal)
-  const ref = requireWritableRefAtServer(item, ['item'], serverId)
+  const ref = requireWritableRefAtServer(item, ['item', 'annotation'], serverId)
   const snapshot = await readItemForWrite(deps, ref, serverId, readState, signal)
   // The read pins the serving instance and always reports it, so the write
   // carries the identity the item was actually read under.
@@ -449,7 +454,7 @@ export async function withItemStateWrite<S, T>(
   return await plan({
     snapshot,
     serverId: snapshot.serverId,
-    resultRef: itemRef(ref.key, snapshot.serverId),
+    resultRef: refStringFor(PERSONAL_LIBRARY, ref.kind, ref.key, snapshot.serverId),
     send,
   })
 }
@@ -597,36 +602,91 @@ export async function createItem(
   })
 }
 
+export function annotationWriteState(data: Record<string, unknown>) {
+  return {
+    annotationType: data.annotationType,
+    deleted: data.deleted === true || data.deleted === 1,
+  }
+}
+
+export function assertCurrentTextAnnotation(
+  snapshot: ItemSnapshot & ReturnType<typeof annotationWriteState>,
+  expectedVersion: number | undefined,
+): void {
+  if (
+    snapshot.itemType !== 'annotation' ||
+    (snapshot.annotationType !== 'highlight' && snapshot.annotationType !== 'underline')
+  )
+    throw new ZoteroError('The target must be a highlight or underline.', ZOTERO_INVALID_ARGUMENT)
+  if (snapshot.deleted) throw new ZoteroError('The annotation has been deleted.', ZOTERO_NOT_FOUND)
+  if (expectedVersion !== snapshot.version)
+    throw new ZoteroError(WRITE_CONFLICT_MESSAGE, ZOTERO_WRITE_CONFLICT)
+}
+
+export function normalizeAnnotationTagChanges(
+  changes: ZoteroUpdateItemRequest['tagChanges'],
+  annotation: boolean,
+) {
+  if (changes === undefined) return undefined
+  if (!annotation)
+    throw new ZoteroError(
+      'Use zotero_update_item_tags to change item tags.',
+      ZOTERO_INVALID_ARGUMENT,
+    )
+  const add = normalizeWriteList('tagChanges.add', changes.add ?? [])
+  const remove = normalizeWriteList('tagChanges.remove', changes.remove ?? [])
+  if (add.length === 0 && remove.length === 0)
+    throw new ZoteroError(WRITE_LIST_SELECTION_MESSAGE, ZOTERO_INVALID_ARGUMENT)
+  return { add, remove }
+}
+
 /**
  * Update one item's scalar metadata. Every requested field must belong to the
  * closed set and be valid for the item's own type (checked against the
  * injected `itemTypeFields` reader); the PATCH then carries only wire names
- * under the version precondition. `creators`, `itemType`, `tags`, and
- * `collections` have their own tools and never enter here.
+ * under the version precondition. Native annotation tags can share that PATCH.
  */
 export async function updateItem(
   deps: WriteDomainDeps,
   request: ZoteroUpdateItemRequest,
   signal?: AbortSignal,
 ): Promise<ZoteroUpdateItemResult | ZoteroWriteCommittedUnverified> {
-  const localRef = requireWritableRef(request.item, ['item'])
-  const updates = validateItemUpdateFields(request.set)
+  const localRef = requireWritableRef(request.item, ['item', 'annotation'])
+  const annotation = localRef.kind === 'annotation'
+  const { expectedVersion } = request
+  const tagChanges = normalizeAnnotationTagChanges(request.tagChanges, annotation)
+  const updates = validateItemUpdateFields(
+    request.set,
+    annotation,
+    expectedVersion,
+    tagChanges !== undefined,
+  )
   return await withItemStateWrite(
     deps,
     localRef,
     signal,
     (data) => ({
+      ...annotationWriteState(data),
       fields: Object.fromEntries(
-        [...updates].map(([field]) => [wireFieldOf(field), data[wireFieldOf(field)]]),
+        updates.map(([field]) => [wireFieldOf(field), data[wireFieldOf(field)]]),
       ),
+      ...(tagChanges === undefined ? {} : { tags: data.tags }),
     }),
     async ({ snapshot, serverId, resultRef, send }) => {
-      const valid = await deps.itemTypeFields(snapshot.itemType, signal)
-      const patch: Record<string, string> = {}
+      if (annotation) assertCurrentTextAnnotation(snapshot, expectedVersion)
+      else if (snapshot.itemType === 'annotation') {
+        throw new ZoteroError(
+          'Use an annotation ref to edit this annotation.',
+          ZOTERO_INVALID_ARGUMENT,
+        )
+      } else if (expectedVersion !== undefined && expectedVersion !== snapshot.version)
+        throw new ZoteroError(WRITE_CONFLICT_MESSAGE, ZOTERO_WRITE_CONFLICT)
+      const valid = annotation ? undefined : await deps.itemTypeFields(snapshot.itemType, signal)
+      const patch: Record<string, unknown> = {}
       const changed: string[] = []
       for (const [field, value] of updates) {
         const wire = wireFieldOf(field)
-        if (!valid.has(wire)) {
+        if (valid !== undefined && !valid.has(wire)) {
           throw new ZoteroError(
             writeFieldNotForItemTypeMessage(field, snapshot.itemType),
             ZOTERO_INVALID_ARGUMENT,
@@ -635,6 +695,14 @@ export async function updateItem(
         if (snapshot.fields[wire] !== value) {
           patch[wire] = value
           changed.push(field)
+        }
+      }
+      if (tagChanges) {
+        const { tags } = tagState({ tags: snapshot.tags })
+        const next = mergeTagList(tags, tagChanges.remove, tagChanges.add)
+        if (next.changed) {
+          patch.tags = next.merged
+          changed.push('tags')
         }
       }
       if (changed.length === 0)
@@ -649,9 +717,15 @@ export async function updateItem(
       changed.sort()
       let libraryVersion: number
       try {
-        ;({ libraryVersion } = await send(patch))
+        ;({ libraryVersion } = await send(
+          expectedVersion === undefined ? patch : { ...patch, version: expectedVersion },
+        ))
       } catch (error) {
-        return receiptOfCommitUnknown(error, { kind: 'item', key: localRef.key, serverId })
+        return receiptOfCommitUnknown(error, {
+          kind: annotation ? 'annotation' : 'item',
+          key: localRef.key,
+          serverId,
+        })
       }
       return {
         kind: 'applied',

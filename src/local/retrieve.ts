@@ -111,6 +111,7 @@ interface RetrievePassage extends Pick<
   chunkCount?: number
   comment?: string
   pageLabel?: string
+  position?: ZoteroEvidence['position']
   attachmentRef?: string
   /** The text ranking scores, when it differs from the text returned. */
   rankText?: string
@@ -674,6 +675,7 @@ async function retrieveWithScope(
           ...(wantsNotes ? (['note'] as const) : []),
           ...(wantsAnnotations ? (['annotation'] as const) : []),
         ]),
+        wantsAnnotations,
       )
     : { notes: [], annotations: [], attachments: [] }
   if (wantsAnnotations) {
@@ -685,6 +687,14 @@ async function retrieveWithScope(
         text: annotation.text,
         ...(annotation.comment !== undefined ? { comment: annotation.comment } : {}),
         ...(annotation.pageLabel !== undefined ? { pageLabel: annotation.pageLabel } : {}),
+        ...(annotation.position === undefined
+          ? {}
+          : {
+              position: {
+                pageIndex: annotation.position.pageIndex,
+                rects: [...annotation.position.rects],
+              },
+            }),
         ...(annotation.parentRef === undefined ? {} : { attachmentRef: annotation.parentRef }),
         // A reader's comment is part of what the annotation says about the
         // paper ("the method looks biased here" is a finding in its own
@@ -781,6 +791,7 @@ async function retrieveWithScope(
       ...(passage.chunkCount !== undefined ? { chunkCount: passage.chunkCount } : {}),
       ...(passage.comment !== undefined ? { comment: passage.comment } : {}),
       ...(passage.pageLabel !== undefined ? { pageLabel: passage.pageLabel } : {}),
+      ...(passage.position === undefined ? {} : { position: passage.position }),
       ...(passage.attachmentRef !== undefined ? { attachmentRef: passage.attachmentRef } : {}),
       matchKind: entry.matchKind,
       ...(matchedFields !== undefined ? { matchedFields } : {}),

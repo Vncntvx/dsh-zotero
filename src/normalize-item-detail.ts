@@ -10,7 +10,13 @@ import { ZOTERO_UNEXPECTED, ZoteroError } from './errors.js'
 import { PDF_CONTENT_TYPE } from './media-types.js'
 import { asJsonValue, asRecord, asString, isObjectKey } from './json.js'
 import { refStringFor, relationTargetRef } from './refs.js'
-import { ITEM_WITHOUT_KEY_MESSAGE, plainNoteText, truncateText } from './normalize-context.js'
+import {
+  ITEM_WITHOUT_KEY_MESSAGE,
+  itemTitleOf,
+  normalizeTags,
+  plainNoteText,
+  truncateText,
+} from './normalize-context.js'
 import type { NormalizeContext } from './normalize-context.js'
 import {
   attachmentRecordOf,
@@ -168,16 +174,6 @@ function normalizeRelations(
   return relations.length > 0 ? relations : undefined
 }
 
-function normalizeTags(data: Record<string, unknown> | undefined): string[] {
-  const rawTags = Array.isArray(data?.tags) ? data.tags : []
-  const tags: string[] = []
-  for (const raw of rawTags) {
-    const tag = asString(asRecord(raw)?.tag)
-    if (tag !== undefined && tag !== '') tags.push(tag)
-  }
-  return tags
-}
-
 function childrenTotal(
   meta: Record<string, unknown> | undefined,
   rows: readonly unknown[] | undefined,
@@ -314,7 +310,7 @@ export function normalizeItemDetail(input: NormalizeItemDetailInput): ZoteroItem
   return {
     ref: refStringFor(context.library, 'item', key, context.serverId),
     itemType,
-    title: asString(data?.title) ?? '',
+    title: itemTitleOf(data, itemType),
     creators: normalizeCreators(data),
     ...(extra !== undefined && extra !== '' ? { extra } : {}),
     ...citationKey,

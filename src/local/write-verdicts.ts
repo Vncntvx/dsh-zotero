@@ -15,6 +15,7 @@ import {
 import { asRecord, asString, isNonNegativeSafeInteger, isObjectKey } from '../json.js'
 import type { WriteDomainDeps } from './write-deps.js'
 import { collectionRef, itemRef, searchRef } from './write-refs.js'
+import { PERSONAL_LIBRARY, refStringFor } from '../refs.js'
 import { ZoteroWriteCommitUnknownError } from '../errors.js'
 import { type ZoteroBatchWrite, type ZoteroWriteObjectFailure } from '../write-http.js'
 import type {
@@ -29,7 +30,7 @@ import type {
  * The object vocabulary a committed-unverified receipt can name. A `tag`
  * settles a library-wide tag write, which names no object and carries no ref.
  */
-type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search'
+type CommittedUnverifiedKind = 'note' | 'item' | 'tag' | 'collection' | 'search' | 'annotation'
 
 export function isWriteReceiptIndex(index: string, length: number): boolean {
   return /^(?:0|[1-9][0-9]*)$/.test(index) && Number(index) < length
@@ -94,7 +95,9 @@ export function committedUnverified(
         ? collectionRef(safeKey, serverId)
         : kind === 'search'
           ? searchRef(safeKey, serverId)
-          : itemRef(safeKey, serverId)
+          : kind === 'annotation'
+            ? refStringFor(PERSONAL_LIBRARY, 'annotation', safeKey, serverId)
+            : itemRef(safeKey, serverId)
   return {
     kind: 'committed-unverified',
     committed: true,
@@ -309,6 +312,7 @@ export function settleBatchCreates(
   created: ZoteroBatchCreateItemResult[],
   unverified: ZoteroBatchOperationUnverified[],
   failed: ZoteroBatchOperationFailure[],
+  kind: 'item' | 'annotation' = 'item',
 ): void {
   const buckets = [batch.successful, batch.success, batch.failed, batch.unchanged]
   const unexpectedIndex = buckets.some((bucket) =>
@@ -342,7 +346,7 @@ export function settleBatchCreates(
           unchanged: at(batch.unchanged, index),
           libraryVersion: batch.libraryVersion,
         },
-        'item',
+        kind,
         serverId,
         (data) => {
           const itemType = asString(data.itemType)
@@ -360,7 +364,7 @@ export function settleBatchCreates(
         const { key, version, payload } = settled.entry
         created.push({
           index,
-          ref: itemRef(key, serverId),
+          ref: refStringFor(PERSONAL_LIBRARY, kind, key, serverId),
           key,
           version,
           itemType: payload.itemType,

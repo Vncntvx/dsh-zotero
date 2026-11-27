@@ -102,6 +102,47 @@ describe('plainNoteText', () => {
 })
 
 describe('normalizeAnnotationRecord', () => {
+  it('keeps the native version and finite PDF rectangles when a position is reported', () => {
+    const row = {
+      key: 'ANNO1111',
+      version: 9,
+      data: {
+        annotationType: 'highlight',
+        annotationPosition: '{"pageIndex":2,"rects":[[30,40,10,60],[10,2,10,8],[null,2,10,8]]}',
+      },
+    }
+    expect(normalizeAnnotationRecord(row, undefined, true)).toMatchObject({
+      position: { pageIndex: 2, rects: [{ x: 10, y: 40, width: 20, height: 20 }] },
+      version: 9,
+    })
+  })
+
+  it('keeps an annotation readable when its stored position is invalid', () => {
+    const row = {
+      key: 'ANNO1111',
+      data: { annotationText: 'Recorded passage', annotationPosition: '{' },
+    }
+    expect(normalizeAnnotationRecord(row)).toEqual(
+      expect.objectContaining({ text: 'Recorded passage' }),
+    )
+    expect(normalizeAnnotationRecord(row, undefined, true).position).toBeUndefined()
+  })
+
+  it('retains page precision and the nested version when rectangle data is unavailable', () => {
+    const row = {
+      key: 'ANNO1111',
+      version: -1,
+      data: {
+        version: 12,
+        annotationPosition: { pageIndex: 4 },
+      },
+    }
+    expect(normalizeAnnotationRecord(row, undefined, true)).toMatchObject({
+      version: 12,
+      position: { pageIndex: 4, rects: [] },
+    })
+  })
+
   it('normalizes an annotation child and omits empty optionals', () => {
     const row = {
       key: 'ANNO1111',

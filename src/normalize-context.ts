@@ -3,7 +3,7 @@
  * @module dsh-zotero/normalize-context
  */
 
-import { asString, detachUtf16, isObjectKey } from './json.js'
+import { asRecord, asString, detachUtf16, isObjectKey } from './json.js'
 import type { SupportedLocalLibrary } from './types.js'
 
 export interface NormalizeContext {
@@ -22,6 +22,16 @@ export const ITEM_WITHOUT_KEY_MESSAGE = 'Zotero returned an item without a valid
 export function parentKeyOf(data: Record<string, unknown> | undefined): string | undefined {
   const parentKey = asString(data?.parentItem)
   return parentKey !== undefined && isObjectKey(parentKey) ? parentKey : undefined
+}
+
+export function normalizeTags(data: Record<string, unknown> | undefined): string[] {
+  const rawTags = Array.isArray(data?.tags) ? data.tags : []
+  const tags: string[] = []
+  for (const raw of rawTags) {
+    const tag = asString(asRecord(raw)?.tag)
+    if (tag !== undefined && tag !== '') tags.push(tag)
+  }
+  return tags
 }
 
 const HTML_ENTITIES: Readonly<Record<string, string>> = {
@@ -44,6 +54,17 @@ export function plainNoteText(value: unknown): string {
     .replace(/<[^>]*>/g, '')
     .replace(HTML_ENTITY_PATTERN, (match) => HTML_ENTITIES[match.toLowerCase()] ?? match)
     .trim()
+}
+
+export function itemTitleOf(data: Record<string, unknown> | undefined, itemType: string): string {
+  const title = asString(data?.title) ?? ''
+  if (itemType !== 'note' || title !== '') return title
+  return (
+    plainNoteText(data?.note)
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? '(untitled note)'
+  )
 }
 
 export function truncateText(text: string, max: number): { text: string; truncated: boolean } {

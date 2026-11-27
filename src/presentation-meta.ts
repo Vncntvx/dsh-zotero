@@ -542,6 +542,7 @@ export function projectRetrieveMeta(
           }),
       matchKind: entry.matchKind,
       ...(entry.pageLabel === undefined ? {} : { pageLabel: entry.pageLabel }),
+      ...(entry.position === undefined ? {} : { position: entry.position }),
       ...(entry.attachmentRef === undefined ? {} : { attachmentRef: entry.attachmentRef }),
       ...(entry.matchedFields === undefined
         ? {}

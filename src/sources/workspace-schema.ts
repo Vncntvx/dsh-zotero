@@ -93,6 +93,24 @@ const evidencePassageSchema = lazySchema(() =>
       start: z.number().int().nonnegative().optional(),
       end: z.number().int().nonnegative().optional(),
       pageLabel: z.string().optional(),
+      position: z
+        .object({
+          pageIndex: z.number().int().nonnegative(),
+          rects: z
+            .array(
+              z
+                .object({
+                  x: z.number(),
+                  y: z.number(),
+                  width: z.number().positive(),
+                  height: z.number().positive(),
+                })
+                .strict(),
+            )
+            .max(1024),
+        })
+        .strict()
+        .optional(),
       attachmentRef: z.string().optional(),
       matchKind: z.enum(['lexical', 'semantic', 'hybrid']).optional(),
       matchedFields: z.array(z.enum(['text', 'comment'])).optional(),

@@ -170,6 +170,8 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
     if (!isEvidenceSource(source)) return null
     const previewTruncated = boolField(item, 'previewTruncated') === true
     const pageLabel = stringField(item, 'pageLabel')
+    const position = evidencePositionOf(item['position'])
+    if (item['position'] !== undefined && position === undefined) return null
     const attachmentRef = stringField(item, 'attachmentRef')
     const matchKind = matchKindOf(item['matchKind'])
     const matchedFields = matchedFieldsOf(item['matchedFields'])
@@ -182,12 +184,41 @@ export function evidenceItemsOf(meta: Record<string, unknown>): EvidenceItem[] |
       previewTruncated,
       ...fulltextFacts,
       ...(pageLabel === undefined ? {} : { pageLabel }),
+      ...(position === undefined ? {} : { position }),
       ...(attachmentRef === undefined ? {} : { attachmentRef }),
       ...(matchKind === undefined ? {} : { matchKind }),
       ...(matchedFields === undefined ? {} : { matchedFields }),
     })
   }
   return rows
+}
+
+function evidencePositionOf(value: unknown): EvidenceItem['position'] | undefined {
+  if (!isRecord(value) || typeof value['pageIndex'] !== 'number' || !Array.isArray(value['rects']))
+    return undefined
+  const pageIndex = value['pageIndex']
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || value['rects'].length > 1024)
+    return undefined
+  const rects = value['rects'].flatMap((rect) => {
+    if (!isRecord(rect)) return []
+    const { x, y, width, height } = rect
+    if (
+      typeof x !== 'number' ||
+      !Number.isFinite(x) ||
+      typeof y !== 'number' ||
+      !Number.isFinite(y) ||
+      typeof width !== 'number' ||
+      !Number.isFinite(width) ||
+      width <= 0 ||
+      typeof height !== 'number' ||
+      !Number.isFinite(height) ||
+      height <= 0
+    )
+      return []
+    return [{ x, y, width, height }]
+  })
+  if (rects.length !== value['rects'].length) return undefined
+  return { pageIndex, rects }
 }
 
 /** Decode optional fulltext facts without accepting partial or conflicting provenance. */

@@ -22,6 +22,7 @@ import { ARTIFACT_IMAGE_NAME_PATTERN } from './artifact-images.js'
 import { ARCHIVE_MAX_IMAGES } from './artifact-images.js'
 import {
   zoteroReadUrlPdfInvocation,
+  zoteroReaderInvocation,
   zoteroJournalMetricsInvocation,
   zoteroRefreshJournalMetricsInvocation,
   zoteroReleaseUrlPdfInvocation,
@@ -51,6 +52,9 @@ import {
   zoteroDocumentParseInvocation,
   ZOTERO_ARTIFACT_ID_PATTERN,
   ZOTERO_ARTIFACT_IMAGE_BYTES,
+  ZOTERO_ARTIFACT_LOCATION_LABEL_CHARS,
+  ZOTERO_ARTIFACT_REGION_TEXT_CHARS,
+  ZOTERO_ARTIFACT_LOCATION_LIMIT,
   ZOTERO_ARTIFACT_PAGE_CHARS,
   ZOTERO_START_DOCUMENT_PARSE_METHOD,
   ZOTERO_DOCUMENT_ARTIFACT_METHOD,
@@ -109,7 +113,6 @@ import {
 import { z } from 'zod'
 import type { InvocationDescriptor, TypertCodec } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  ZoteroChildRowsView,
   ZoteroLibraryExportFormatView,
   ZoteroLibraryExportRequestView,
   ZoteroLibraryExportResultView,
@@ -158,6 +161,15 @@ import {
 } from './contract.js'
 import {
   ZOTERO_CHILD_PAGE_MAX_ROWS,
+  ZOTERO_READER_NOTE_HTML_CHARS,
+  ZOTERO_READER_NOTE_EDIT_RUNS,
+  ZOTERO_READER_NOTE_FORMATS,
+  ZOTERO_READER_NOTE_TEXT_CHARS,
+  ZOTERO_READER_TRANSLATION_LANGUAGES,
+  ZOTERO_READER_ANNOTATION_SUGGESTION_CHARS,
+  ZOTERO_READER_TRANSLATION_RESULT_CHARS,
+  ZOTERO_READER_TRANSLATION_SOURCE_CHARS,
+  ZOTERO_WRITE_OBJECT_BATCH,
   ZOTERO_SOURCE_WORKSPACE_MAX_SOURCES,
   ZOTERO_SOURCE_WORKSPACE_MAX_ITEM_ROWS,
   ZOTERO_EXPORT_FORMATS,
@@ -246,6 +258,7 @@ const zoteroAttachmentLocationSchema = lazySchema(() =>
   z
     .object({
       ref: z.string(),
+      parentRef: z.string().optional(),
       kind: z.enum(['file', 'url']),
       title: z.string(),
       contentType: z.string(),
@@ -673,7 +686,7 @@ const zoteroLibraryItemRequestSchema = lazySchema(() =>
 ) satisfies z.ZodType<Contract.ZoteroLibraryItemRequestView>
 
 /** Wire schema: one child listing the detail view serves. */
-function childRowsSchema<T>(item: z.ZodType<T>): z.ZodType<ZoteroChildRowsView<T>> {
+function childRowsSchema<T>(item: z.ZodType<T>) {
   return z
     .object({
       total: z.number().int().nonnegative(),
@@ -699,6 +712,18 @@ const zoteroNoteRowSchema = lazySchema(() =>
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroNoteRowView>
 
+const pdfRectSchema = lazySchema(() =>
+  z
+    .object({
+      x: z.number(),
+      y: z.number(),
+      width: z.number().positive(),
+      height: z.number().positive(),
+    })
+    .strict()
+    .readonly(),
+)
+
 const zoteroAnnotationRowSchema = lazySchema(() =>
   z
     .object({
@@ -708,6 +733,16 @@ const zoteroAnnotationRowSchema = lazySchema(() =>
       comment: z.string().optional(),
       color: z.string().optional(),
       pageLabel: z.string().optional(),
+      version: z.number().int().nonnegative().optional(),
+      tags: z.array(z.string()).readonly().optional(),
+      position: z
+        .object({
+          pageIndex: z.number().int().nonnegative(),
+          rects: z.array(pdfRectSchema).max(1024).readonly(),
+        })
+        .strict()
+        .readonly()
+        .optional(),
       parentRef: z.string().optional(),
     })
     .strict()
@@ -737,6 +772,212 @@ const zoteroLibraryChildPageRequestSchema = lazySchema(() =>
     .strict()
     .readonly(),
 ) satisfies z.ZodType<Contract.ZoteroLibraryChildPageRequestView>
+
+const zoteroReaderAnnotationsRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1),
+      ref: z.string().refine((ref) => refFieldsOf(ref)?.kind === 'attachment'),
+      offset: z.number().int().nonnegative(),
+      limit: z.number().int().positive().max(ZOTERO_CHILD_PAGE_MAX_ROWS),
+    })
+    .strict()
+    .readonly(),
+) satisfies z.ZodType<Contract.ZoteroReaderAnnotationsRequest>
+
+const zoteroReaderAnnotationsResultSchema = lazySchema(() =>
+  childRowsSchema(zoteroAnnotationRowSchema)
+    .unwrap()
+    .extend({ writeEnabled: z.boolean() })
+    .readonly(),
+) satisfies z.ZodType<Contract.ZoteroReaderAnnotationsView>
+
+const zoteroReaderDetailsRequestSchema = lazySchema(() =>
+  zoteroReaderAnnotationsRequestSchema
+    .unwrap()
+    .unwrap()
+    .omit({ limit: true })
+    .extend({ notesOffset: z.number().int().nonnegative().optional() })
+    .readonly(),
+) satisfies z.ZodType<Contract.ZoteroReaderDetailsRequest>
+
+const readerNoteRequest = () =>
+  z.strictObject({
+    sessionId: z.string().min(1),
+    ref: z.string().refine((ref) => refFieldsOf(ref)?.kind === 'item'),
+  })
+const zoteroReaderNoteRequestSchema = lazySchema(() =>
+  readerNoteRequest().readonly(),
+) satisfies z.ZodType<Contract.ZoteroReaderNoteRequest>
+const noteRuns = () =>
+  z
+    .array(
+      z.strictObject({
+        offset: z.number().int().nonnegative().lt(ZOTERO_READER_NOTE_HTML_CHARS),
+        text: z.string().max(ZOTERO_READER_NOTE_TEXT_CHARS),
+      }),
+    )
+    .min(1)
+    .max(ZOTERO_READER_NOTE_EDIT_RUNS)
+
+const zoteroReaderWriteNoteRequestSchema = lazySchema(() => {
+  const base = readerNoteRequest()
+  const expectedVersion = z.number().int().nonnegative()
+  return z.discriminatedUnion('operation', [
+    base.extend({ operation: z.literal('create'), markdown: z.string().min(1) }),
+    base.extend({
+      operation: z.literal('edit'),
+      expectedVersion,
+      edits: noteRuns()
+        .unwrap()
+        .extend({
+          format: z.enum(ZOTERO_READER_NOTE_FORMATS).optional(),
+          formatRange: z
+            .strictObject({
+              start: z.number().int().nonnegative(),
+              end: z.number().int().positive().max(ZOTERO_READER_NOTE_TEXT_CHARS),
+            })
+            .readonly()
+            .optional(),
+          formatting: z
+            .array(
+              z.strictObject({
+                format: z.enum(ZOTERO_READER_NOTE_FORMATS),
+                range: z
+                  .strictObject({
+                    start: z.number().int().nonnegative(),
+                    end: z.number().int().positive().max(ZOTERO_READER_NOTE_TEXT_CHARS),
+                  })
+                  .readonly()
+                  .optional(),
+              }),
+            )
+            .min(1)
+            .max(ZOTERO_READER_NOTE_EDIT_RUNS)
+            .readonly()
+            .optional(),
+        })
+        .refine(({ format, formatRange, formatting, text }) => {
+          if (formatting !== undefined) {
+            if (format !== undefined || formatRange !== undefined) return false
+            return formatting.every(
+              ({ range }) =>
+                range === undefined || (range.start < range.end && range.end <= text.length),
+            )
+          }
+          return (
+            formatRange === undefined ||
+            (format !== undefined &&
+              formatRange.start < formatRange.end &&
+              formatRange.end <= text.length)
+          )
+        }, 'Formatting requires valid nonempty ranges in the note text.')
+        .array()
+        .min(1)
+        .max(ZOTERO_READER_NOTE_EDIT_RUNS)
+        .readonly(),
+    }),
+    base.extend({ operation: z.literal('delete'), expectedVersion }),
+  ])
+}) satisfies z.ZodType<Contract.ZoteroReaderWriteNoteRequest>
+
+const zoteroReaderNoteViewSchema = lazySchema(() =>
+  z
+    .object({
+      ref: z.string(),
+      title: z.string(),
+      html: z.string().max(ZOTERO_READER_NOTE_HTML_CHARS).optional(),
+      text: z.string().max(ZOTERO_READER_NOTE_TEXT_CHARS),
+      truncated: z.boolean(),
+      version: z.number().int().nonnegative().optional(),
+      editableRuns: noteRuns().readonly().optional(),
+    })
+    .strict()
+    .readonly(),
+) satisfies z.ZodType<Contract.ZoteroReaderNoteView>
+
+const zoteroReaderUpdateAnnotationRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1),
+      ref: z.string().refine((ref) => refFieldsOf(ref)?.kind === 'annotation'),
+      expectedVersion: z.number().int().nonnegative(),
+      tagChanges: z
+        .object({
+          add: z.array(z.string().min(1)).readonly().optional(),
+          remove: z.array(z.string().min(1)).readonly().optional(),
+        })
+        .strict()
+        .optional(),
+      set: z
+        .object({
+          annotationComment: z.string().optional(),
+          annotationColor: z.string().optional(),
+          annotationPageLabel: z.string().optional(),
+          annotationType: z.enum(['highlight', 'underline']).optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+) satisfies z.ZodType<Contract.ZoteroReaderUpdateAnnotationRequest>
+
+const zoteroReaderCreateAnnotationsRequestSchema = lazySchema(() =>
+  z
+    .object({
+      sessionId: z.string().min(1),
+      ref: z.string().refine((ref) => refFieldsOf(ref)?.kind === 'attachment'),
+      type: z.enum(['highlight', 'underline']),
+      color: z.string().regex(/^#[0-9a-f]{6}$/i),
+      comment: z.string().optional(),
+      pages: z
+        .array(
+          z
+            .object({
+              pageIndex: z.number().int().nonnegative().max(99999),
+              textOffset: z.number().int().nonnegative().max(999999),
+              top: z.number().int().nonnegative().max(99999),
+              text: z.string().min(1),
+              pageLabel: z.string(),
+              rects: z.array(pdfRectSchema).min(1).max(1024),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(ZOTERO_WRITE_OBJECT_BATCH),
+    })
+    .strict(),
+) satisfies z.ZodType<Contract.ZoteroReaderCreateAnnotationsRequest>
+
+const zoteroReaderDeleteAnnotationRequestSchema = lazySchema(() =>
+  zoteroReaderUpdateAnnotationRequestSchema
+    .unwrap()
+    .pick({ sessionId: true, ref: true, expectedVersion: true }),
+) satisfies z.ZodType<Contract.ZoteroReaderDeleteAnnotationRequest>
+
+const zoteroReaderCreateAnnotationsResultSchema = lazySchema(() => {
+  const pageIndex = z.number().int().nonnegative()
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('declined') }).strict(),
+    z
+      .object({
+        kind: z.literal('settled'),
+        pages: z.array(
+          z.discriminatedUnion('status', [
+            z.object({ pageIndex, status: z.literal('applied'), ref: z.string() }).strict(),
+            z
+              .object({
+                pageIndex,
+                status: z.literal('committed-unverified'),
+                ref: z.string().optional(),
+              })
+              .strict(),
+            z.object({ pageIndex, status: z.literal('failed'), message: z.string() }).strict(),
+          ]),
+        ),
+      })
+      .strict(),
+  ])
+}) satisfies z.ZodType<Contract.ZoteroReaderCreateAnnotationsView>
 
 /** Wire schema: one child page, discriminated by the kind it carries. */
 const zoteroChildPageSchema = lazySchema(() =>
@@ -790,6 +1031,7 @@ const zoteroItemDetailSchema = lazySchema(() =>
         .strict()
         .readonly()
         .optional(),
+      noteWriteEnabled: z.boolean().optional(),
       tags: z.array(z.string()).readonly(),
       collections: z
         .array(z.object({ ref: z.string(), name: z.string().optional() }).strict().readonly())
@@ -1312,6 +1554,19 @@ export const zoteroDocumentArtifactRequestSchema = lazySchema(() =>
         sessionId: artifactSession,
         op: z.literal('inspect'),
         target: zoteroParseTargetSchema,
+        regionText: z
+          .strictObject({
+            fingerprint: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+            regions: z
+              .array(z.strictObject({ pageIndex: artifactPageIndex, box: artifactBox }))
+              .min(1)
+              .max(16)
+              .refine(
+                (regions) =>
+                  new Set(regions.map(({ pageIndex }) => pageIndex)).size === regions.length,
+              ),
+          })
+          .optional(),
       })
       .strict(),
     z
@@ -1378,6 +1633,7 @@ const artifactImageMeta = lazySchema(() =>
 const artifactMetadata = lazySchema(() =>
   z.object({
     sourceId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
+    sourceRef: z.string().min(1).max(2048).optional(),
     targetLabel: z.string().min(1).max(2048),
     mode: z.enum(['free', 'pro']),
     artifactId: z.string().regex(ZOTERO_ARTIFACT_ID_PATTERN),
@@ -1394,6 +1650,29 @@ const artifactPage = lazySchema(() =>
       offset: z.number().int().nonnegative(),
       text: z.string().max(ZOTERO_ARTIFACT_PAGE_CHARS),
       totalChars: z.number().int().nonnegative(),
+    })
+    .strict(),
+)
+const artifactCoordinate = lazySchema(() => z.number().int().min(0).max(1000))
+const artifactPageIndex = lazySchema(() =>
+  z
+    .number()
+    .int()
+    .nonnegative()
+    .max(2 ** 31 - 1),
+)
+const artifactBox = lazySchema(() =>
+  z
+    .tuple([artifactCoordinate, artifactCoordinate, artifactCoordinate, artifactCoordinate])
+    .refine(([left, top, right, bottom]) => left < right && top < bottom),
+)
+const artifactLocation = lazySchema(() =>
+  z
+    .object({
+      kind: z.enum(['text', 'heading', 'image', 'chart', 'table', 'equation']),
+      pageIndex: artifactPageIndex,
+      box: artifactBox.optional(),
+      label: z.string().min(1).max(ZOTERO_ARTIFACT_LOCATION_LABEL_CHARS).optional(),
     })
     .strict(),
 )
@@ -1418,7 +1697,15 @@ export const zoteroDocumentArtifactResultSchema = lazySchema(() =>
     z.object({ kind: z.literal('released') }).strict(),
     artifactMetadata
       .unwrap()
-      .extend({ kind: z.literal('ready') })
+      .extend({
+        kind: z.literal('ready'),
+        regionText: z
+          .strictObject({
+            text: z.string().min(1).max(ZOTERO_ARTIFACT_REGION_TEXT_CHARS),
+            incomplete: z.boolean(),
+          })
+          .optional(),
+      })
       .strict(),
     artifactMetadata
       .unwrap()
@@ -1450,6 +1737,7 @@ export const zoteroDocumentArtifactResultSchema = lazySchema(() =>
         expiresAt: z.number().finite(),
         policy: artifactPolicy,
         page: artifactPage,
+        locations: z.array(artifactLocation).min(1).max(ZOTERO_ARTIFACT_LOCATION_LIMIT).optional(),
       })
       .strict(),
     z
@@ -1893,6 +2181,86 @@ export const ZOTERO_INVOCATION_BY_METHOD = Object.freeze({
   childPage: zoteroLibraryChildPageInvocation(
     strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_REQUEST_TYPE_SYMBOL, zoteroLibraryChildPageRequestSchema),
     strictCodec(ZOTERO_LIBRARY_CHILD_PAGE_RESULT_TYPE_SYMBOL, zoteroChildPageSchema),
+  ),
+  readerAnnotations: zoteroReaderInvocation(
+    'readerAnnotations',
+    strictCodec('dsh-zotero#ZoteroReaderAnnotationsRequest', zoteroReaderAnnotationsRequestSchema),
+    strictCodec('dsh-zotero#ZoteroReaderAnnotationsResult', zoteroReaderAnnotationsResultSchema),
+  ),
+  readerDetails: zoteroReaderInvocation(
+    'readerDetails',
+    strictCodec('dsh-zotero#ZoteroReaderDetailsRequest', zoteroReaderDetailsRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_ITEM_RESULT_TYPE_SYMBOL, zoteroItemDetailSchema),
+  ),
+  readerNote: zoteroReaderInvocation(
+    'readerNote',
+    strictCodec('dsh-zotero#ZoteroReaderNoteRequest', zoteroReaderNoteRequestSchema),
+    strictCodec('dsh-zotero#ZoteroReaderNoteView', zoteroReaderNoteViewSchema),
+  ),
+  readerTranslate: zoteroReaderInvocation(
+    'readerTranslate',
+    strictCodec(
+      'dsh-zotero#ZoteroReaderTranslateRequest',
+      lazySchema(() =>
+        z.strictObject({
+          sessionId: z.string().min(1),
+          text: z.string().max(ZOTERO_READER_TRANSLATION_SOURCE_CHARS).trim().min(1),
+          target: z.enum(ZOTERO_READER_TRANSLATION_LANGUAGES),
+        }),
+      ),
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroReaderTranslation',
+      lazySchema(() => z.string().min(1).max(ZOTERO_READER_TRANSLATION_RESULT_CHARS)),
+    ),
+  ),
+  readerSuggestAnnotation: zoteroReaderInvocation(
+    'readerSuggestAnnotation',
+    strictCodec(
+      'dsh-zotero#ZoteroReaderSuggestAnnotationRequest',
+      lazySchema(() =>
+        z.strictObject({
+          sessionId: z.string().min(1),
+          text: z.string().max(ZOTERO_READER_TRANSLATION_SOURCE_CHARS).trim().min(1),
+        }),
+      ),
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroReaderAnnotationSuggestion',
+      lazySchema(() => z.string().min(1).max(ZOTERO_READER_ANNOTATION_SUGGESTION_CHARS)),
+    ),
+  ),
+  readerWriteNote: zoteroReaderInvocation(
+    'readerWriteNote',
+    strictCodec('dsh-zotero#ZoteroReaderWriteNoteRequest', zoteroReaderWriteNoteRequestSchema),
+    strictCodec(ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL, zoteroLibraryWriteResultSchema),
+  ),
+  readerUpdateAnnotation: zoteroReaderInvocation(
+    'readerUpdateAnnotation',
+    strictCodec(
+      'dsh-zotero#ZoteroReaderUpdateAnnotationRequest',
+      zoteroReaderUpdateAnnotationRequestSchema,
+    ),
+    strictCodec(ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL, zoteroLibraryWriteResultSchema),
+  ),
+  readerCreateAnnotations: zoteroReaderInvocation(
+    'readerCreateAnnotations',
+    strictCodec(
+      'dsh-zotero#ZoteroReaderCreateAnnotationsRequest',
+      zoteroReaderCreateAnnotationsRequestSchema,
+    ),
+    strictCodec(
+      'dsh-zotero#ZoteroReaderCreateAnnotationsView',
+      zoteroReaderCreateAnnotationsResultSchema,
+    ),
+  ),
+  readerDeleteAnnotation: zoteroReaderInvocation(
+    'readerDeleteAnnotation',
+    strictCodec(
+      'dsh-zotero#ZoteroReaderDeleteAnnotationRequest',
+      zoteroReaderDeleteAnnotationRequestSchema,
+    ),
+    strictCodec(ZOTERO_LIBRARY_WRITE_RESULT_TYPE_SYMBOL, zoteroLibraryWriteResultSchema),
   ),
   export: zoteroLibraryExportInvocation(
     strictCodec(ZOTERO_LIBRARY_EXPORT_REQUEST_TYPE_SYMBOL, zoteroLibraryExportRequestSchema),

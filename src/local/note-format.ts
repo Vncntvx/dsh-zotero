@@ -34,7 +34,7 @@
  */
 
 /** Escape a text run so it can only ever render as text, never as markup. */
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

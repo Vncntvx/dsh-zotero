@@ -9,7 +9,7 @@ import { attachmentTypeMessage } from '../errors.js'
 import type { ZoteroHttpClient } from '../http-client.js'
 import { assertServerIdMatches, serverIdFromHeaders } from './identity.js'
 import { ZOTERO_NO_ATTACHMENT, ZoteroError } from '../errors.js'
-import { asRecord, asString } from '../json.js'
+import { asRecord, asString, isObjectKey } from '../json.js'
 import {
   normalizeAttachmentRecord,
   bestAttachmentFromLinks,
@@ -125,7 +125,8 @@ export async function resolveAttachmentRow(
   signal?: AbortSignal,
 ): Promise<ZoteroAttachmentLocation> {
   const attachmentKey = local.key
-  const prefix = libraryPrefix(local.library as SupportedLocalLibrary)
+  const library = local.library as SupportedLocalLibrary
+  const prefix = libraryPrefix(library)
   const data = asRecord(asRecord(row)?.data)
   const itemType = asString(data?.itemType)
   if (itemType !== undefined && itemType !== 'attachment') {
@@ -133,11 +134,15 @@ export async function resolveAttachmentRow(
   }
   const attachment = normalizeAttachmentRecord(row)
   const serverId = local.serverId
-  const formattedRef = formatRef(
-    refForLibrary(local.library as SupportedLocalLibrary, 'attachment', attachment.key, serverId),
-  )
-  const title = attachment.title
-  const contentType = attachment.contentType
+  const parentKey = asString(data?.parentItem)
+  const location = {
+    ref: formatRef(refForLibrary(library, 'attachment', attachment.key, serverId)),
+    ...(parentKey && isObjectKey(parentKey)
+      ? { parentRef: formatRef(refForLibrary(library, 'item', parentKey, serverId)) }
+      : {}),
+    title: attachment.title,
+    contentType: attachment.contentType,
+  }
   if (attachment.linkMode === 'linked_url') {
     if (attachment.url === undefined || attachment.url === '') {
       throw new ZoteroError(missingLinkedUrlMessage(attachmentKey), ZOTERO_NO_ATTACHMENT)
@@ -147,7 +152,7 @@ export async function resolveAttachmentRow(
       ['http:', 'https:'],
       notAWebLocationMessage(attachmentKey),
     )
-    return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
+    return { ...location, kind: 'url', url: target.toString() }
   }
   const file = await deps.client.get(`${prefix}/items/${attachmentKey}/file/view/url`, undefined, {
     signal,
@@ -164,9 +169,9 @@ export async function resolveAttachmentRow(
       ...deps.pathResolution,
       signal,
     })
-    return { ref: formattedRef, title, contentType, kind: 'file', path: resolved.path }
+    return { ...location, kind: 'file', path: resolved.path }
   }
-  return { ref: formattedRef, title, contentType, kind: 'url', url: target.toString() }
+  return { ...location, kind: 'url', url: target.toString() }
 }
 
 /**

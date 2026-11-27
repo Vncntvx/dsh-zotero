@@ -758,19 +758,23 @@ Correct an item's scalar metadata. Field validity follows Zotero's `itemTypeFiel
 
 Scalar updates validate every requested field against the item type, compare normalized wire values strictly, and PATCH only differences. A satisfied request returns `{kind: "applied", unchanged: true, changed: []}` with the observed item `version`, no new `libraryVersion`, and obtains no write key. Capability and both approval gates still apply.
 
+For a native highlight or underline, use its annotation ref and observed version to edit the comment, color, page label, or highlight/underline type. An empty comment or page label clears that field. Add or remove tags by name in the same versioned PATCH.
+
 ### Parameters
 
-| Parameter | Type   | Required | Description                                                                                 |
-| --------- | ------ | -------- | ------------------------------------------------------------------------------------------- |
-| `ref`     | string | ✓        | Target item ref (`zotero://user/0/item/<KEY>`)                                              |
-| `set`     | object | ✓        | At least one of: `title`, `date`, `url`, `doi`, `abstractNote`, `publicationTitle`, `extra` |
+| Parameter         | Type    | Required        | Description                                                                                                                                                                                                            |
+| ----------------- | ------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`             | string  | ✓               | Target item ref (`zotero://user/0/item/<KEY>`)                                                                                                                                                                         |
+| `set`             | object  | ✓               | At least one of: `title`, `date`, `url`, `doi`, `abstractNote`, `publicationTitle`, `extra`                                                                                                                            |
+| `expectedVersion` | integer | for annotations | Version observed before editing. Use `zotero://user/0/annotation/<KEY>` with `annotationComment`, `annotationColor` (six-digit hex), `annotationPageLabel`, or `annotationType` (`highlight` or `underline`) in `set`. |
+| `tagChanges`      | object  |                 | Annotation tags to `add` or `remove`, each a list of names. Use `set={}` for tag-only changes.                                                                                                                         |
 
 ### Output
 
 - Something changed: `{kind: "applied", ref, version, changed, libraryVersion, serverId?}` (`changed` lists the submitted field names in lexical order);
 - Unchanged: `{kind: "applied", unchanged: true, changed: []}`;
 - Declined on the plan card: `{kind: "declined"}`;
-- Version precondition lost: `ZOTERO_WRITE_CONFLICT`. The object was changed concurrently; run the tool once more (the re-run reads the version again).
+- Version precondition lost: `ZOTERO_WRITE_CONFLICT`. Read the current version and review the edit again before submitting a fresh plan.
 
 An unverifiable submitted write returns `{kind: "committed-unverified", committed: true, retryable: false, reason, key?, ref?, version?, libraryVersion?, serverId}`. Treat it as committed and reconcile it in Zotero; do not retry.
 

@@ -253,6 +253,41 @@ describe('evidenceItemsOf', () => {
     expect(evidenceItemsOf({ items: ['x'] })).toBeNull()
   })
 
+  it('preserves the physical page and signed PDF coordinates independently of the printed label', () => {
+    const position = { pageIndex: 0, rects: [{ x: -15, y: 8, width: 70, height: 12 }] }
+    const row = {
+      source: 'annotation',
+      sourceRef: 'zotero://user/0/annotation/ANN1',
+      preview: 'a',
+      pageLabel: 'iv',
+      position,
+    }
+    expect(evidenceItemsOf({ items: [row] })).toEqual([{ ...row, previewTruncated: false }])
+  })
+
+  it.each([
+    ['negative page index', { pageIndex: -1, rects: [] }],
+    ['missing coordinates', { pageIndex: 0 }],
+    [
+      'non-finite coordinate',
+      { pageIndex: 0, rects: [{ x: Infinity, y: 8, width: 70, height: 12 }] },
+    ],
+    ['empty rectangle', { pageIndex: 0, rects: [{ x: 0, y: 8, width: 70, height: 0 }] }],
+  ])('refuses evidence geometry with %s', (_label, position) => {
+    expect(
+      evidenceItemsOf({
+        items: [
+          {
+            source: 'annotation',
+            sourceRef: 'zotero://user/0/annotation/ANN1',
+            preview: 'a',
+            position,
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
   it('rejects an unknown source instead of mislabeling its provenance', () => {
     // A blind cast would pass the string through to the labels, which would
     // read it as full text; the vocabulary is closed, so the meta is malformed.
